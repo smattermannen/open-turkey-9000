@@ -46,12 +46,10 @@ try:
     for line in diag.splitlines():
         print("::notice::diag " + line)
     driver.get("about:policies");time.sleep(1)
-    print("::notice::policies " + driver.find_element("tag name", "body").text[:300].replace("
-", " | "))
+    print("::notice::policies " + driver.find_element("tag name", "body").text[:300].replace(chr(10), " | "))
     driver.get("about:support");time.sleep(2)
     print("::notice::addons " + driver.execute_script(
-        "return [...document.querySelectorAll('#addons-tbody tr')].map(r=>r.innerText).join(' ; ')")[:400].replace("
-", " "))
+        "return [...document.querySelectorAll('#addons-tbody tr')].map(r=>r.innerText).join(' ; ')")[:400].replace(chr(10), " "))
     print("::notice::version " + driver.capabilities.get("browserVersion", "?"))
     driver.get("https://example.org/secret/page")
     time.sleep(2)

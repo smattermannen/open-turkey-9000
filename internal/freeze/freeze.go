@@ -22,6 +22,18 @@ const (
 	BypassParam = "openturkey.nofreeze"
 )
 
+// The ways a freeze keeps the computer unusable.
+const (
+	ModeLock     = "lock"
+	ModeLogout   = "logout"
+	ModeShutdown = "shutdown"
+)
+
+// ValidMode reports whether mode is known.
+func ValidMode(mode string) bool {
+	return mode == ModeLock || mode == ModeLogout || mode == ModeShutdown
+}
+
 // Validate checks a requested freeze length.
 func Validate(d time.Duration) error {
 	if d < MinDuration || d > MaxDuration {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/brunodcdo/open-turkey/internal/blocker"
+	"github.com/brunodcdo/open-turkey/internal/enforce"
 	"github.com/brunodcdo/open-turkey/internal/freeze"
 	"github.com/brunodcdo/open-turkey/internal/quota"
 	"github.com/spf13/cobra"
@@ -26,6 +27,10 @@ Emergency exit: in GRUB, press e on the boot entry and add
 	RunE: func(cmd *cobra.Command, args []string) error {
 		forDur, _ := cmd.Flags().GetString("for")
 		yes, _ := cmd.Flags().GetBool("yes")
+		mode, _ := cmd.Flags().GetString("mode")
+		if !freeze.ValidMode(mode) {
+			return fmt.Errorf("unknown mode %q (use lock, logout or shutdown)", mode)
+		}
 
 		d, err := time.ParseDuration(forDur)
 		if err != nil {
@@ -52,11 +57,14 @@ Emergency exit: in GRUB, press e on the boot entry and add
 		if until <= current {
 			return fmt.Errorf("already frozen until %s; a freeze can only be extended", time.Unix(current, 0).Format("2006-01-02 15:04"))
 		}
-		if err := database.SetFreezeUntil(until); err != nil {
+		if err := database.SetFreeze(until, mode); err != nil {
 			return err
 		}
 		fmt.Printf("Frozen until %s\n", time.Unix(until, 0).Format("2006-01-02 15:04"))
-		return blocker.LockSessions()
+		if mode == freeze.ModeLock {
+			return blocker.LockSessions()
+		}
+		return nil
 	},
 }
 
@@ -71,6 +79,10 @@ type guiBlock struct {
 	Active      bool     `json:"active"`
 	Held        bool     `json:"held"`
 	CharLocked  bool     `json:"char_locked"`
+	Password    bool     `json:"password_locked"`
+	Restart     bool     `json:"restart_locked"`
+	Delay       int64    `json:"delay_seconds"`
+	StopSeconds int64    `json:"stop_seconds"`
 	Scheduled   bool     `json:"scheduled"`
 	LockSeconds int64    `json:"lock_seconds"`
 	QuotaLimit  int64    `json:"quota_limit"`
@@ -81,6 +93,7 @@ type guiBlock struct {
 
 type guiState struct {
 	FreezeSeconds int64      `json:"freeze_seconds"`
+	Strict        bool       `json:"strict"`
 	Blocks        []guiBlock `json:"blocks"`
 }
 
@@ -109,6 +122,12 @@ var guiStateCmd = &cobra.Command{
 		if until > now.Unix() {
 			state.FreezeSeconds = until - now.Unix()
 		}
+
+		strict, err := database.GetSetting(enforce.SettingStrict)
+		if err != nil {
+			return err
+		}
+		state.Strict = strict == "on"
 
 		blocks, err := database.ListBlocks()
 		if err != nil {
@@ -146,6 +165,10 @@ var guiStateCmd = &cobra.Command{
 					g.Limited = append(g.Limited, p)
 				}
 			}
+			g.Password, g.Restart, g.Delay = hold.passwordHash != "", hold.restartLocked, hold.extras.Delay
+			if hold.extras.StopAt > trusted {
+				g.StopSeconds = hold.extras.StopAt - trusted
+			}
 			g.QuotaNext = quota.NoPending
 			if q, err := database.GetQuota(b.Name); err != nil {
 				return err
@@ -168,6 +191,7 @@ var guiStateCmd = &cobra.Command{
 func init() {
 	freezeCmd.Flags().String("for", "", "How long to stay frozen (e.g. 30m, 2h; at most 24h)")
 	freezeCmd.Flags().Bool("yes", false, "Confirm the freeze")
+	freezeCmd.Flags().String("mode", freeze.ModeLock, "How to freeze: lock, logout or shutdown")
 	_ = freezeCmd.MarkFlagRequired("for")
 	rootCmd.AddCommand(freezeCmd, guiStateCmd)
 }

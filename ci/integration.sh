@@ -20,6 +20,19 @@ ot() { open-turkey "$@"; }
 check "sudo rule limited to group sudo" sudo grep -q '^%sudo ALL' /etc/sudoers.d/open-turkey
 check "daemon is running" systemctl is-active --quiet open-turkey
 
+ot block create strictblock
+ot block add strictblock example.dev
+ot strict on
+ot start strictblock --for 40s
+sleep 8
+check "strict mode denies sudo" fails sudo -n true
+check "open-turkey still works in strict mode" open-turkey status
+check "strict mode can't be turned off" fails open-turkey strict off
+sleep 42
+check "sudo returns after the lock" sudo -n true
+check "strict mode turns off" open-turkey strict off
+ot stop strictblock
+
 ot block create sites
 ot block add-site sites example.com
 ot start sites
@@ -110,6 +123,27 @@ ot start lists --for 1h
 check "exception refused while locked" fails open-turkey block add-exception lists example.info
 check "removing an exception stays allowed" open-turkey block remove-exception lists reddit.com/r/programming
 
+ot block create pw
+ot block add pw example.pw
+echo hemligt | ot start pw --password-stdin
+check "password lock refuses stop" fails open-turkey stop pw
+check "wrong password refused" fails bash -c 'echo fel | open-turkey unlock pw'
+check "right password unlocks" bash -c 'echo hemligt | open-turkey unlock pw'
+
+ot block create rs
+ot block add rs example.rs
+ot start rs --restart
+check "restart lock refuses stop" fails open-turkey stop rs
+
+ot block create dl
+ot block add dl example.dl
+ot start dl --delay 1m
+ot stop dl
+check "delay keeps the block on" grep -q 'example.dl' /etc/hosts
+sleep 68
+check "delay ends the block" fails grep -q 'example.dl' /etc/hosts
+
+check "unknown freeze mode rejected" fails open-turkey freeze --for 1m --mode nap --yes
 check "short freeze rejected" fails open-turkey freeze --for 10s --yes
 check "freeze needs confirmation" fails open-turkey freeze --for 1m
 ot freeze --for 2m --yes

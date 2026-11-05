@@ -23,12 +23,12 @@ def fmt_seconds(seconds):
     return f"{hours} h {rest // 60} min" if hours else f"{max(rest // 60, 1)} min"
 
 
-def run_cli(args):
+def run_cli(args, secret=None):
     """Return (ok, output) for one command."""
     try:
         result = subprocess.run(
-            [CLI, *args], stdin=subprocess.DEVNULL, capture_output=True,
-            text=True, timeout=120,
+            [CLI, *args], input=secret if secret else "",
+            capture_output=True, text=True, timeout=120,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         return False, str(error)
@@ -98,6 +98,7 @@ class Window(Gtk.ApplicationWindow):
         self.blocks = {}
         self.selected = None
         self.busy = False
+        self.strict = False
 
         header = Gtk.HeaderBar(show_close_button=True, title="Open Turkey")
         self.set_titlebar(header)
@@ -107,6 +108,9 @@ class Window(Gtk.ApplicationWindow):
         self.freeze_button = Gtk.Button(label="Frozen Turkey")
         self.freeze_button.connect("clicked", self.freeze)
         header.pack_end(self.freeze_button)
+        self.strict_button = Gtk.Button(label="Strikt läge")
+        self.strict_button.connect("clicked", self.toggle_strict)
+        header.pack_end(self.strict_button)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.add(root)
@@ -135,6 +139,14 @@ class Window(Gtk.ApplicationWindow):
         controls.pack_start(self.minutes, False, False, 0)
         self.typing_lock = Gtk.CheckButton(label="Skrivutmaning")
         controls.pack_start(self.typing_lock, False, False, 0)
+        self.restart_lock = Gtk.CheckButton(label="Till omstart")
+        controls.pack_start(self.restart_lock, False, False, 0)
+        controls.pack_start(Gtk.Label(label="Fördröjning (min):"), False, False, 0)
+        self.delay_minutes = Gtk.SpinButton.new_with_range(0, 57600, 5)
+        controls.pack_start(self.delay_minutes, False, False, 0)
+        self.password_entry = Gtk.Entry(
+            placeholder_text="Lösenordslås", visibility=False, width_chars=12)
+        controls.pack_start(self.password_entry, False, False, 0)
         self.start_button = Gtk.Button(label="Starta")
         self.start_button.connect("clicked", self.start_block)
         self.stop_button = Gtk.Button(label="Stoppa")
@@ -194,12 +206,12 @@ class Window(Gtk.ApplicationWindow):
         GLib.timeout_add_seconds(REFRESH_SECONDS, self.refresh)
 
     # Running commands ----------------------------------------------------
-    def run(self, args):
+    def run(self, args, secret=None):
         """Run a command in the background, then refresh."""
         self.set_sensitive(False)
 
         def work():
-            ok, output = run_cli(args)
+            ok, output = run_cli(args, secret)
             GLib.idle_add(self.finished, ok, output)
 
         threading.Thread(target=work, daemon=True).start()
@@ -256,6 +268,9 @@ class Window(Gtk.ApplicationWindow):
         state = json.loads(output)
         self.blocks = {block["name"]: block for block in state["blocks"]}
 
+        self.strict = state["strict"]
+        self.strict_button.set_label(
+            "Strikt läge: på" if self.strict else "Strikt läge: av")
         frozen = state["freeze_seconds"]
         self.banner.set_text(
             f"Frozen Turkey är aktivt i {fmt_seconds(frozen)} till."
@@ -303,6 +318,14 @@ class Window(Gtk.ApplicationWindow):
             parts.append(f"tidslåst i {fmt_seconds(block['lock_seconds'])} till")
         if block["char_locked"]:
             parts.append("skrivutmaning krävs")
+        if block["password_locked"]:
+            parts.append("lösenordslåst")
+        if block["restart_locked"]:
+            parts.append("låst till omstart")
+        if block["stop_seconds"]:
+            parts.append(f"stoppas om {fmt_seconds(block['stop_seconds'])}")
+        elif block["delay_seconds"]:
+            parts.append(f"fördröjning {fmt_seconds(block['delay_seconds'])}")
         if block["scheduled"]:
             parts.append("styrs av schema")
         limit = block["quota_limit"]
@@ -320,9 +343,14 @@ class Window(Gtk.ApplicationWindow):
             "Fungerar bara i Firefox: " + ", ".join(limited) if limited else "")
         self.apps.set_items(block["apps"])
         self.schedules.set_items(block["schedules"])
-        self.stop_button.set_sensitive(block["active"] and not block["held"])
+        self.stop_button.set_sensitive(
+            block["active"] and (not block["held"] or (
+                block["delay_seconds"] > 0 and not block["lock_seconds"]
+                and not block["char_locked"] and not block["password_locked"]
+                and not block["restart_locked"] and not block["quota_limit"])))
         self.unlock_button.set_sensitive(
-            block["char_locked"] and not block["lock_seconds"])
+            (block["char_locked"] or block["password_locked"])
+            and not block["lock_seconds"] and not block["restart_locked"])
         self.quota_start.set_sensitive(
             limit > 0 and not block["quota_open"]
             and block["quota_used"] < limit)
@@ -357,18 +385,36 @@ class Window(Gtk.ApplicationWindow):
             args += ["--for", f"{minutes}m"]
         if self.typing_lock.get_active():
             args.append("--lock")
+        if self.restart_lock.get_active():
+            args.append("--restart")
+        delay = self.delay_minutes.get_value_as_int()
+        if delay:
+            args += ["--delay", f"{delay}m"]
+        password = self.password_entry.get_text()
+        if password:
+            args.append("--password-stdin")
         if minutes and not self.confirm(
                 f"Tidslås i {minutes} minuter?",
                 "Blocket går inte att stoppa förrän tiden har gått ut. "
                 "Tid då datorn är avstängd räknas inte."):
             return
-        self.run(args)
+        self.password_entry.set_text("")
+        self.run(args, password + "\n" if password else None)
 
     def stop_block(self, _button):
         if self.selected:
             self.run(["stop", self.selected])
 
     def unlock_block(self, _button):
+        block = self.blocks.get(self.selected)
+        if block and block["password_locked"] and not block["char_locked"]:
+            password = self.password_entry.get_text()
+            if not password:
+                self.message("Skriv lösenordet i rutan Lösenordslås först.")
+                return
+            self.password_entry.set_text("")
+            self.run(["unlock", self.selected], password + "\n")
+            return
         if self.selected:
             command = f"{CLI} unlock {shlex.quote(self.selected)}"
             subprocess.Popen(["x-terminal-emulator", "-e", command])
@@ -434,6 +480,16 @@ class Window(Gtk.ApplicationWindow):
         except OSError as error:
             self.message(str(error))
 
+    def toggle_strict(self, _button):
+        if self.strict:
+            self.run(["strict", "off"])
+        elif self.confirm(
+                "Slå på strikt läge?",
+                "Under lås nekas sudo och pkexec för alla användare, och du "
+                "kan inte installera eller ändra systemet. Nödutgång: lägg "
+                "till openturkey.nofreeze på linux-raden i GRUB."):
+            self.run(["strict", "on"])
+
     def add_schedule(self, values):
         if len(values) != 3:
             self.message("Skriv dagar, start och slut, till exempel: "
@@ -453,6 +509,12 @@ class Window(Gtk.ApplicationWindow):
                            "från skrivbordet. Spara ditt arbete först.",
             message_type=Gtk.MessageType.WARNING,
             buttons=Gtk.ButtonsType.OK_CANCEL)
+        mode = Gtk.ComboBoxText()
+        mode.append("lock", "Lås skärmen")
+        mode.append("logout", "Logga ut")
+        mode.append("shutdown", "Stäng av datorn")
+        mode.set_active_id("lock")
+        dialog.get_message_area().pack_start(mode, False, False, 0)
         row = Gtk.Box(spacing=6)
         row.pack_start(Gtk.Label(label="Minuter (högst 1440):"), False, False, 0)
         minutes = Gtk.SpinButton.new_with_range(1, 1440, 5)
@@ -462,9 +524,10 @@ class Window(Gtk.ApplicationWindow):
         dialog.show_all()
         answer = dialog.run()
         value = minutes.get_value_as_int()
+        chosen = mode.get_active_id()
         dialog.destroy()
         if answer == Gtk.ResponseType.OK:
-            self.run(["freeze", "--for", f"{value}m", "--yes"])
+            self.run(["freeze", "--for", f"{value}m", "--mode", chosen, "--yes"])
 
 
 class App(Gtk.Application):

@@ -284,13 +284,30 @@ open-turkey quota remove social-media      # takes effect at midnight
 
 All time in an open session is spent, whether or not the sites are used, because Open Turkey cannot see inside a browser tab. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
 
+## Locks
+
+| Lock | Command | Ends when |
+|---|---|---|
+| Timer | `start b --for 2h` | the time has passed |
+| Time range | `start b --until 17:00` | the clock time is reached |
+| Random text | `start b --lock` | the challenge is typed with `unlock` |
+| Password | `start b --password-stdin` | someone enters it with `unlock`, from standard input |
+| Restart | `start b --restart` | the computer has restarted, then `stop` works |
+| Delay | `start b --delay 30m` | the delay has passed after `stop` |
+
+## Strict mode
+
+`open-turkey strict on` denies sudo and pkexec for every user while a block is locked or Frozen Turkey runs, in terminals and text consoles alike. Only `open-turkey` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
+
+**Emergency exit:** add `openturkey.nofreeze` to the `linux` line in GRUB for that boot, or remove `/etc/sudoers.d/zz-open-turkey-lockdown` and `/etc/polkit-1/rules.d/00-open-turkey-lockdown.rules` from recovery mode.
+
 ## Graphical interface
 
 `make install` adds **Open Turkey** to the application menu (or run `open-turkey-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). The interface manages blocks, sites, apps, schedules and locks through the same command-line rules, and opens a terminal for the typing challenge.
 
 ## Frozen Turkey
 
-`open-turkey freeze --for 2h --yes` (or the button in the interface) keeps every session locked until the time has passed. The daemon locks the screen again every 5 seconds, a freeze can only be extended, and the longest freeze is 24 hours. The time keeps counting while the computer is off.
+`open-turkey freeze --for 2h --yes` (or the button in the interface) keeps every session locked until the time has passed. Add `--mode logout` to end sessions or `--mode shutdown` to power off whenever the computer starts during the freeze. The daemon locks the screen again every 5 seconds, a freeze can only be extended, and the longest freeze is 24 hours. The time keeps counting while the computer is off.
 
 **Emergency exit:** hold Shift or press Esc at boot to open GRUB, press `e` on the boot entry, add `openturkey.nofreeze` to the line starting with `linux`, then press F10. The freeze is not enforced during that boot, and it returns on the next normal boot if time remains.
 

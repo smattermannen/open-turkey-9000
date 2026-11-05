@@ -165,7 +165,8 @@ var quotaStartCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if hold.active && (hold.charLocked || hold.timeLocked() || hold.scheduledNow) {
+		if hold.active && (hold.charLocked || hold.timeLocked() || hold.scheduledNow ||
+			hold.passwordHash != "" || hold.restartLocked || hold.extras.Delay > 0) {
 			return fmt.Errorf("block '%s' is locked or in a scheduled window, so its quota can't be used now", name)
 		}
 

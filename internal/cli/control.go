@@ -64,6 +64,38 @@ shortened or removed this way.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockName := args[0]
 
+		usePassword, _ := cmd.Flags().GetBool("password-stdin")
+		useRestart, _ := cmd.Flags().GetBool("restart")
+		delaySpec, _ := cmd.Flags().GetString("delay")
+		var extras db.LockExtras
+		if delaySpec != "" {
+			d, err := time.ParseDuration(delaySpec)
+			if err != nil {
+				return fmt.Errorf("invalid --delay duration %q: %w", delaySpec, err)
+			}
+			if d < time.Minute || d > 40*24*time.Hour {
+				return fmt.Errorf("--delay must be between 1 minute and 40 days")
+			}
+			extras.Delay = int64(d.Seconds())
+		}
+		if useRestart {
+			boot, err := db.BootID()
+			if err != nil {
+				return err
+			}
+			extras.RestartBoot = boot
+		}
+		if usePassword {
+			password, err := readPasswordStdin()
+			if err != nil {
+				return err
+			}
+			if extras.PasswordHash, err = db.HashPassword(password); err != nil {
+				return err
+			}
+		}
+		hasExtras := usePassword || useRestart || delaySpec != ""
+
 		useLock, err := cmd.Flags().GetBool("lock")
 		if err != nil {
 			return err
@@ -130,6 +162,9 @@ shortened or removed this way.`,
 		if len(detail.Sites) == 0 && len(detail.Apps) == 0 && len(detail.Patterns) == 0 {
 			return fmt.Errorf("block '%s' has nothing to enforce. Add sites, apps or patterns first", blockName)
 		}
+		if detail.Active && hasExtras {
+			return fmt.Errorf("block '%s' is already active; password, restart and delay locks are set when it starts", blockName)
+		}
 		if detail.Active {
 			return strengthenLocks(database, detail, useLock, lockChars, cmd.Flags().Changed("lock-chars"), lockedUntil)
 		}
@@ -140,6 +175,11 @@ shortened or removed this way.`,
 		}
 		if err := database.ActivateBlock(blockName, useLock, chars, lockedUntil, false); err != nil {
 			return err
+		}
+		if hasExtras {
+			if err := database.SetLockExtras(blockName, extras); err != nil {
+				return err
+			}
 		}
 
 		if err := enforce.ApplyFromDB(database); err != nil {
@@ -234,8 +274,21 @@ var stopCmd = &cobra.Command{
 		if hold.timeLocked() {
 			return fmt.Errorf("block '%s' is time-locked until %s and can't be stopped before then", blockName, hold.until())
 		}
-		if hold.charLocked {
+		if hold.restartLocked {
+			return fmt.Errorf("block '%s' stays on until the computer restarts", blockName)
+		}
+		if hold.charLocked || hold.passwordHash != "" {
 			return fmt.Errorf("block '%s' is locked. Use 'open-turkey unlock %s' first", blockName, blockName)
+		}
+		if hold.extras.Delay > 0 {
+			if hold.extras.StopAt == 0 {
+				hold.extras.StopAt = hold.trusted + hold.extras.Delay
+				if err := database.SetLockExtras(blockName, hold.extras); err != nil {
+					return err
+				}
+			}
+			fmt.Printf("Block '%s' stops in %s\n", blockName, time.Duration(hold.extras.StopAt-hold.trusted)*time.Second)
+			return nil
 		}
 
 		if err := database.DeactivateBlock(blockName); err != nil {
@@ -280,17 +333,31 @@ var unlockCmd = &cobra.Command{
 		if hold.timeLocked() {
 			return fmt.Errorf("block '%s' is time-locked until %s; it cannot be unlocked before then", blockName, hold.until())
 		}
-		if !hold.charLocked {
+		if hold.restartLocked {
+			return fmt.Errorf("block '%s' stays on until the computer restarts", blockName)
+		}
+		if !hold.charLocked && hold.passwordHash == "" {
 			return fmt.Errorf("block '%s' is not locked. Use 'open-turkey stop' to deactivate it", blockName)
 		}
 
-		success, err := lock.RunChallenge(hold.lockChars)
-		if err != nil {
-			return fmt.Errorf("failed to run unlock challenge: %w", err)
+		if hold.passwordHash != "" {
+			password, err := readPasswordStdin()
+			if err != nil {
+				return err
+			}
+			if !db.CheckPassword(hold.passwordHash, password) {
+				return fmt.Errorf("wrong password; block '%s' remains locked", blockName)
+			}
 		}
-		if !success {
-			fmt.Println("Unlock failed. The block remains active and locked.")
-			os.Exit(1)
+		if hold.charLocked {
+			success, err := lock.RunChallenge(hold.lockChars)
+			if err != nil {
+				return fmt.Errorf("failed to run unlock challenge: %w", err)
+			}
+			if !success {
+				fmt.Println("Unlock failed. The block remains active and locked.")
+				os.Exit(1)
+			}
 		}
 
 		if err := database.DeactivateBlock(blockName); err != nil {
@@ -397,6 +464,9 @@ type holdState struct {
 	// schedule.EditFreeze, whether or not the block is active yet.
 	scheduleFrozen bool
 	quota          bool // a daily quota keeps the block on
+	extras         db.LockExtras
+	passwordHash   string
+	restartLocked  bool
 	now            time.Time
 	trusted        int64 // see db.TrustedNow
 }
@@ -408,7 +478,8 @@ func (h holdState) until() string {
 
 // held reports whether the block currently can't be freely removed/edited.
 func (h holdState) held() bool {
-	return h.scheduleFrozen || h.quota || h.active && (h.charLocked || h.timeLocked() || h.scheduledNow)
+	return h.scheduleFrozen || h.quota || h.active && (h.charLocked || h.timeLocked() || h.scheduledNow ||
+		h.passwordHash != "" || h.restartLocked || h.extras.Delay > 0)
 }
 
 // blockHold gathers everything that determines whether a block may be removed
@@ -436,6 +507,17 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 			return holdState{}, err
 		}
 		h.scheduledNow = sched
+	}
+	if h.extras, err = database.GetLockExtras(name); err != nil {
+		return holdState{}, err
+	}
+	h.passwordHash = h.extras.PasswordHash
+	if h.extras.RestartBoot != "" {
+		boot, err := db.BootID()
+		if err != nil {
+			return holdState{}, err
+		}
+		h.restartLocked = h.extras.RestartBoot == boot
 	}
 	q, err := database.GetQuota(name)
 	if err != nil {
@@ -470,6 +552,9 @@ func untilToday(now time.Time, clock string) (time.Time, error) {
 func init() {
 	startCmd.Flags().Bool("lock", false, "Lock the block (requires a challenge to deactivate)")
 	startCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
+	startCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
+	startCmd.Flags().Bool("restart", false, "Restart lock: keep the block on until the computer restarts")
+	startCmd.Flags().String("delay", "", "Delay lock: stopping takes this long (1m to 960h)")
 	startCmd.Flags().String("for", "", "Time lock: keep the block un-removable for this duration (e.g. 2h, 90m)")
 	startCmd.Flags().String("until", "", "Time lock: keep the block un-removable until this clock time (HH:MM)")
 

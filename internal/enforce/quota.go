@@ -31,7 +31,13 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 			log.Printf("daemon: quota: %v", err)
 			continue
 		}
-		locked := detail.Active && (detail.Locked || detail.LockedUntil > trusted)
+		extras, err := d.GetLockExtras(name)
+		if err != nil {
+			log.Printf("daemon: quota: %v", err)
+			continue
+		}
+		boot, _ := db.BootID()
+		locked := BlockLocked(detail, extras, trusted, boot)
 
 		if s.Limit == 0 {
 			if err := d.DeleteQuota(name); err != nil {

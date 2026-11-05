@@ -23,10 +23,20 @@ func (d *DB) FreezeUntil() (int64, error) {
 	return until, nil
 }
 
-// SetFreezeUntil stores the end of Frozen Turkey.
-func (d *DB) SetFreezeUntil(until int64) error {
-	_, err := d.conn.Exec(`INSERT INTO freeze_state (id, until) VALUES (1, ?)
-		ON CONFLICT(id) DO UPDATE SET until = excluded.until`, until)
+// FreezeMode returns how Frozen Turkey keeps the computer unusable.
+func (d *DB) FreezeMode() (string, error) {
+	var mode string
+	err := d.conn.QueryRow("SELECT mode FROM freeze_state WHERE id = 1").Scan(&mode)
+	if err == sql.ErrNoRows {
+		return "lock", nil
+	}
+	return mode, err
+}
+
+// SetFreeze stores the end and mode of Frozen Turkey.
+func (d *DB) SetFreeze(until int64, mode string) error {
+	_, err := d.conn.Exec(`INSERT INTO freeze_state (id, until, mode) VALUES (1, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET until = excluded.until, mode = excluded.mode`, until, mode)
 	if err != nil {
 		return fmt.Errorf("failed to save freeze state: %w", err)
 	}

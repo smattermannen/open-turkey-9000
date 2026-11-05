@@ -21,7 +21,6 @@ import (
 
 	"github.com/brunodcdo/open-turkey/internal/blocker"
 	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/freeze"
 	"github.com/brunodcdo/open-turkey/internal/schedule"
 )
 
@@ -100,19 +99,17 @@ func ApplyFromDB(d *db.DB) error {
 // Tick runs one daemon cycle: apply due queued edits, reconcile schedules,
 // then re-apply drifted layers.
 func Tick(d *db.DB, now time.Time) error {
-	if until, err := d.FreezeUntil(); err != nil {
-		log.Printf("daemon: freeze state error: %v", err)
-	} else if freeze.Engaged(now.Unix(), until, blocker.KernelCmdline()) {
-		if err := blocker.LockSessions(); err != nil {
-			log.Printf("daemon: freeze: %v", err)
-		}
-	}
+	enforceFreeze(d, now)
 
 	trusted, err := d.TrustedNow(now)
 	if err != nil {
 		// Zero means no time lock counts as expired during this cycle.
 		log.Printf("daemon: trusted clock error: %v", err)
 		trusted = 0
+	}
+	if err == nil {
+		enforceLockdown(d, now, trusted)
+		finishDelayedStops(d, trusted)
 	}
 	if err := applyDueEditsAt(d, now, trusted); err != nil {
 		log.Printf("daemon: pending edits error: %v", err)

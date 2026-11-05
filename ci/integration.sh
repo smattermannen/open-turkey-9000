@@ -143,6 +143,32 @@ check "delay keeps the block on" grep -q 'example.dl' /etc/hosts
 sleep 68
 check "delay ends the block" fails grep -q 'example.dl' /etc/hosts
 
+mkdir -p /tmp/otdir
+cp /bin/sleep /tmp/otdir/anything
+ot block create folder
+check "system folder refused" fails open-turkey block add-app folder /usr/bin/
+ot block add-app folder /tmp/otdir/
+ot start folder
+/tmp/otdir/anything 60 &
+pid=$!
+sleep 8
+check "program in a blocked folder is killed" fails kill -0 "$pid"
+
+ot block duplicate folder folder2
+check "duplicate copies lists" bash -c 'open-turkey block info folder2 | grep -q otdir'
+ot block rename folder2 folder3
+check "rename works" bash -c 'open-turkey block info folder3 | grep -q otdir'
+
+ot block create pm
+ot block add pm example.pm
+ot pomodoro set pm 10s 30s
+ot start pm
+sleep 18
+check "Pomodoro break opens the block" fails grep -q 'example.pm' /etc/hosts
+sleep 29
+check "Pomodoro work blocks again" grep -q 'example.pm' /etc/hosts
+ot pomodoro off pm
+
 check "unknown freeze mode rejected" fails open-turkey freeze --for 1m --mode nap --yes
 check "short freeze rejected" fails open-turkey freeze --for 10s --yes
 check "freeze needs confirmation" fails open-turkey freeze --for 1m

@@ -79,6 +79,9 @@ type guiBlock struct {
 	Active      bool     `json:"active"`
 	Held        bool     `json:"held"`
 	CharLocked  bool     `json:"char_locked"`
+	PomodoroOn  int64    `json:"pomodoro_on"`
+	PomodoroOff int64    `json:"pomodoro_off"`
+	OnBreak     bool     `json:"on_break"`
 	Password    bool     `json:"password_locked"`
 	Restart     bool     `json:"restart_locked"`
 	Delay       int64    `json:"delay_seconds"`
@@ -168,6 +171,12 @@ var guiStateCmd = &cobra.Command{
 			g.Password, g.Restart, g.Delay = hold.passwordHash != "", hold.restartLocked, hold.extras.Delay
 			if hold.extras.StopAt > trusted {
 				g.StopSeconds = hold.extras.StopAt - trusted
+			}
+			if p, err := database.GetPomodoro(b.Name); err != nil {
+				return err
+			} else if p != nil {
+				g.PomodoroOn, g.PomodoroOff = p.On, p.Off
+				g.OnBreak = detail.Active && quota.OnBreak(p.On, p.Off, p.Anchor, trusted)
 			}
 			g.QuotaNext = quota.NoPending
 			if q, err := database.GetQuota(b.Name); err != nil {

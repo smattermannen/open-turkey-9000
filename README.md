@@ -295,6 +295,14 @@ All time in an open session is spent, whether or not the sites are used, because
 | Restart | `start b --restart` | the computer has restarted, then `stop` works |
 | Delay | `start b --delay 30m` | the delay has passed after `stop` |
 
+## Pomodoro
+
+`open-turkey pomodoro set work 25m 5m` alternates a block between work and breaks while it runs, with locks kept in place. Setting a cycle is refused while the block is held, and `pomodoro off` is always allowed.
+
+## Blocking folders
+
+`open-turkey block add-app games /opt/spel/` blocks every program under a folder, and a full path blocks one file. System folders such as `/usr/bin/` are refused.
+
 ## Strict mode
 
 `open-turkey strict on` denies sudo and pkexec for every user while a block is locked or Frozen Turkey runs, in terminals and text consoles alike. Only `open-turkey` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.

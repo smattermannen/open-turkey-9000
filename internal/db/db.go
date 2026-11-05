@@ -234,7 +234,7 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
-	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema); err != nil {
+	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + pomodoroSchema); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to create clock table: %w", err)
 	}

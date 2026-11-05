@@ -93,6 +93,9 @@ func ApplyFromDB(d *db.DB) error {
 	if err != nil {
 		return err
 	}
+	if trusted, err := d.TrustedNow(time.Now()); err == nil {
+		active = withoutBreaks(d, active, trusted)
+	}
 	return Apply(active)
 }
 
@@ -125,6 +128,7 @@ func Tick(d *db.DB, now time.Time) error {
 	if err != nil {
 		return err
 	}
+	active = withoutBreaks(d, active, trusted)
 	hosts, apps, bp := Inputs(active)
 
 	// Site layers, re-applied only on drift (so an idle system does no writes).

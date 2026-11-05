@@ -178,6 +178,29 @@ class Window(Gtk.ApplicationWindow):
         self.detail.pack_start(controls, False, False, 0)
         self.detail.pack_start(quota_row, False, False, 0)
 
+        pomodoro_row = Gtk.Box(spacing=6)
+        pomodoro_row.pack_start(Gtk.Label(label="Pomodoro, arbete:"), False, False, 0)
+        self.work_minutes = Gtk.SpinButton.new_with_range(1, 240, 5)
+        self.work_minutes.set_value(25)
+        pomodoro_row.pack_start(self.work_minutes, False, False, 0)
+        pomodoro_row.pack_start(Gtk.Label(label="paus:"), False, False, 0)
+        self.break_minutes = Gtk.SpinButton.new_with_range(1, 240, 5)
+        self.break_minutes.set_value(5)
+        pomodoro_row.pack_start(self.break_minutes, False, False, 0)
+        set_pomodoro = Gtk.Button(label="Spara")
+        set_pomodoro.connect("clicked", self.set_pomodoro)
+        clear_pomodoro = Gtk.Button(label="Stäng av")
+        clear_pomodoro.connect("clicked", self.clear_pomodoro)
+        rename = Gtk.Button(label="Byt namn")
+        rename.connect("clicked", self.rename_block)
+        duplicate = Gtk.Button(label="Duplicera")
+        duplicate.connect("clicked", self.duplicate_block)
+        for button in (set_pomodoro, clear_pomodoro):
+            pomodoro_row.pack_start(button, False, False, 0)
+        for button in (duplicate, rename):
+            pomodoro_row.pack_end(button, False, False, 0)
+        self.detail.pack_start(pomodoro_row, False, False, 0)
+
         self.sites = EditableList(
             "Blockerat", "reddit.com  reddit.com/r/funny  *.xxx  *.*",
             lambda values: self.block_cmd("add", values),
@@ -191,7 +214,7 @@ class Window(Gtk.ApplicationWindow):
             lambda: self.import_list("exceptions"),
             lambda: self.export_list("exceptions"))
         self.apps = EditableList(
-            "Program", "discord",
+            "Program", "discord  /opt/spel/",
             lambda values: self.block_cmd("add-app", values),
             lambda value, _num: self.block_cmd("remove-app", [value]))
         self.schedules = EditableList(
@@ -316,6 +339,11 @@ class Window(Gtk.ApplicationWindow):
         parts = ["Aktivt" if block["active"] else "Inaktivt"]
         if block["lock_seconds"]:
             parts.append(f"tidslåst i {fmt_seconds(block['lock_seconds'])} till")
+        if block["pomodoro_on"]:
+            parts.append(
+                f"Pomodoro {block['pomodoro_on'] // 60}+{block['pomodoro_off'] // 60} min")
+        if block["on_break"]:
+            parts.append("paus just nu")
         if block["char_locked"]:
             parts.append("skrivutmaning krävs")
         if block["password_locked"]:
@@ -360,7 +388,7 @@ class Window(Gtk.ApplicationWindow):
             not block["active"] and not block["held"])
 
     # Actions -------------------------------------------------------------
-    def create_block(self, _button):
+    def ask_name(self):
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text="Namn på blocket",
             message_type=Gtk.MessageType.QUESTION,
@@ -372,9 +400,34 @@ class Window(Gtk.ApplicationWindow):
         answer = dialog.run()
         name = entry.get_text().strip()
         dialog.destroy()
-        if answer == Gtk.ResponseType.OK and name:
+        return name if answer == Gtk.ResponseType.OK else ""
+
+    def create_block(self, _button):
+        name = self.ask_name()
+        if name:
             self.selected = name
             self.run(["block", "create", name])
+
+    def rename_block(self, _button):
+        name = self.ask_name()
+        if self.selected and name:
+            old, self.selected = self.selected, name
+            self.run(["block", "rename", old, name])
+
+    def duplicate_block(self, _button):
+        name = self.ask_name()
+        if self.selected and name:
+            self.run(["block", "duplicate", self.selected, name])
+
+    def set_pomodoro(self, _button):
+        if self.selected:
+            self.run(["pomodoro", "set", self.selected,
+                      f"{self.work_minutes.get_value_as_int()}m",
+                      f"{self.break_minutes.get_value_as_int()}m"])
+
+    def clear_pomodoro(self, _button):
+        if self.selected:
+            self.run(["pomodoro", "off", self.selected])
 
     def start_block(self, _button):
         if not self.selected:

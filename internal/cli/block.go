@@ -410,6 +410,12 @@ var blockAddAppCmd = &cobra.Command{
 		name := args[0]
 		// The names of the processes to block (e.g. "discord", "telegram").
 		processNames := args[1:]
+		for _, p := range processNames {
+			if err := blocker.ValidAppEntry(p); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		}
 
 		database, err := openDB()
 		if err != nil {

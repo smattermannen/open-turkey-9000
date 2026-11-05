@@ -66,6 +66,7 @@
 package blocker
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -234,7 +235,8 @@ func matchesBlockedProcess(pid int, processNames []string) bool {
 	// Strategy 1b: the real executable, which a process cannot rewrite the way
 	// it can rewrite comm or argv[0]. A renamed copy is still not caught.
 	if exe, err := os.Readlink(pidPath + "/exe"); err == nil {
-		if matchesName(baseName(strings.TrimSuffix(exe, " (deleted)")), processNames) {
+		exe = strings.TrimSuffix(exe, " (deleted)")
+		if matchesName(baseName(exe), processNames) || matchesPath(exe, processNames) {
 			return true
 		}
 	}
@@ -489,4 +491,34 @@ func indexByte(s []byte, b byte) int {
 		}
 	}
 	return -1
+}
+
+// matchesPath reports whether exe is a listed full path, or lies under a listed
+// folder (an entry ending in "/").
+func matchesPath(exe string, names []string) bool {
+	for _, target := range names {
+		if !strings.HasPrefix(target, "/") {
+			continue
+		}
+		if exe == target || (strings.HasSuffix(target, "/") && strings.HasPrefix(exe, target)) {
+			return true
+		}
+	}
+	return false
+}
+
+// protectedFolders hold programs the system needs, so blocking one would kill
+// the desktop.
+var protectedFolders = map[string]bool{
+	"/": true, "/bin/": true, "/sbin/": true, "/lib/": true, "/etc/": true, "/home/": true,
+	"/opt/": true, "/usr/": true, "/usr/bin/": true, "/usr/sbin/": true, "/usr/lib/": true,
+	"/usr/libexec/": true, "/usr/local/": true, "/usr/local/bin/": true,
+}
+
+// ValidAppEntry rejects folders that can't safely be blocked.
+func ValidAppEntry(entry string) error {
+	if protectedFolders[strings.TrimRight(entry, "/")+"/"] {
+		return fmt.Errorf("the folder %s can't be blocked, because the system needs it", entry)
+	}
+	return nil
 }

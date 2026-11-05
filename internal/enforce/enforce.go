@@ -113,6 +113,9 @@ func Tick(d *db.DB, now time.Time) error {
 	if err := reconcileSchedulesAt(d, now, trusted); err != nil {
 		log.Printf("daemon: schedule reconciliation error: %v", err)
 	}
+	if err := reconcileQuotas(d, now, trusted); err != nil {
+		log.Printf("daemon: quota error: %v", err)
+	}
 
 	active, err := d.GetActiveBlocks()
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/brunodcdo/open-turkey/internal/blocker"
 	"github.com/brunodcdo/open-turkey/internal/freeze"
+	"github.com/brunodcdo/open-turkey/internal/quota"
 	"github.com/spf13/cobra"
 )
 
@@ -70,6 +71,10 @@ type guiBlock struct {
 	CharLocked  bool     `json:"char_locked"`
 	Scheduled   bool     `json:"scheduled"`
 	LockSeconds int64    `json:"lock_seconds"`
+	QuotaLimit  int64    `json:"quota_limit"`
+	QuotaUsed   int64    `json:"quota_used"`
+	QuotaOpen   bool     `json:"quota_open"`
+	QuotaNext   int64    `json:"quota_next"`
 }
 
 type guiState struct {
@@ -132,6 +137,13 @@ var guiStateCmd = &cobra.Command{
 			}
 			for _, s := range schedules {
 				g.Schedules = append(g.Schedules, s.Window().String())
+			}
+			g.QuotaNext = quota.NoPending
+			if q, err := database.GetQuota(b.Name); err != nil {
+				return err
+			} else if q != nil {
+				s := q.Step(now.Unix(), quota.DayOf(now))
+				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 			}
 			state.Blocks = append(state.Blocks, g)
 		}

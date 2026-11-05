@@ -225,6 +225,9 @@ var stopCmd = &cobra.Command{
 		if !hold.active {
 			return fmt.Errorf("block '%s' is not active", blockName)
 		}
+		if hold.quota {
+			return fmt.Errorf("block '%s' has a daily quota and stays on. Use 'open-turkey quota start %s'", blockName, blockName)
+		}
 		if hold.scheduledNow {
 			return fmt.Errorf("block '%s' is in a scheduled window and can't be stopped until it closes", blockName)
 		}
@@ -393,6 +396,7 @@ type holdState struct {
 	// scheduleFrozen: a schedule window is open now or opens within
 	// schedule.EditFreeze, whether or not the block is active yet.
 	scheduleFrozen bool
+	quota          bool // a daily quota keeps the block on
 	now            time.Time
 	trusted        int64 // see db.TrustedNow
 }
@@ -404,7 +408,7 @@ func (h holdState) until() string {
 
 // held reports whether the block currently can't be freely removed/edited.
 func (h holdState) held() bool {
-	return h.scheduleFrozen || h.active && (h.charLocked || h.timeLocked() || h.scheduledNow)
+	return h.scheduleFrozen || h.quota || h.active && (h.charLocked || h.timeLocked() || h.scheduledNow)
 }
 
 // blockHold gathers everything that determines whether a block may be removed
@@ -433,6 +437,11 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 		}
 		h.scheduledNow = sched
 	}
+	q, err := database.GetQuota(name)
+	if err != nil {
+		return holdState{}, err
+	}
+	h.quota = q != nil
 	frozen, err := enforce.ScheduleFrozen(database, name, now)
 	if err != nil {
 		return holdState{}, err

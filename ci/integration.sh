@@ -63,6 +63,20 @@ sudo date -s '-2 hours' >/dev/null
 sleep 65
 check "time lock ends after real time" open-turkey stop locked
 
+ot block create daily
+ot block add-site daily example.net
+ot quota set daily 2m
+check "quota turns the block on" grep -q 'example.net' /etc/hosts
+check "stop refused on a quota block" fails open-turkey stop daily
+check "removing a site refused" fails open-turkey block remove-site daily example.net
+ot quota start daily --for 15s
+check "session opens the block" fails grep -q 'example.net' /etc/hosts
+sleep 25
+check "block returns after the session" grep -q 'example.net' /etc/hosts
+check "time was spent" bash -c 'open-turkey gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_used\"] >= 10 and not b[\"quota_open\"] else 1)"'
+ot quota set daily 10m
+check "a raise waits for midnight" bash -c 'open-turkey gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_limit\"]==120 and b[\"quota_next\"]==600 else 1)"'
+
 check "short freeze rejected" fails open-turkey freeze --for 10s --yes
 check "freeze needs confirmation" fails open-turkey freeze --for 1m
 ot freeze --for 2m --yes

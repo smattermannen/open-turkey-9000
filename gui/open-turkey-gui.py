@@ -139,7 +139,25 @@ class Window(Gtk.ApplicationWindow):
         for button in (self.start_button, self.stop_button, self.unlock_button):
             controls.pack_start(button, False, False, 0)
         controls.pack_end(self.delete_button, False, False, 0)
+        quota_row = Gtk.Box(spacing=6)
+        quota_row.pack_start(
+            Gtk.Label(label="Dagskvot (minuter):"), False, False, 0)
+        self.quota_minutes = Gtk.SpinButton.new_with_range(1, 1440, 5)
+        self.quota_minutes.set_value(30)
+        quota_row.pack_start(self.quota_minutes, False, False, 0)
+        self.quota_set = Gtk.Button(label="Spara kvot")
+        self.quota_set.connect("clicked", self.set_quota)
+        self.quota_start = Gtk.Button(label="Använd kvot")
+        self.quota_start.connect("clicked", self.start_quota)
+        self.quota_end = Gtk.Button(label="Avsluta")
+        self.quota_end.connect("clicked", self.end_quota)
+        self.quota_remove = Gtk.Button(label="Ta bort vid midnatt")
+        self.quota_remove.connect("clicked", self.remove_quota)
+        for button in (self.quota_set, self.quota_start, self.quota_end,
+                       self.quota_remove):
+            quota_row.pack_start(button, False, False, 0)
         self.detail.pack_start(controls, False, False, 0)
+        self.detail.pack_start(quota_row, False, False, 0)
 
         self.sites = EditableList(
             "Webbplatser", "youtube.com reddit.com",
@@ -268,6 +286,11 @@ class Window(Gtk.ApplicationWindow):
             parts.append("skrivutmaning krävs")
         if block["scheduled"]:
             parts.append("styrs av schema")
+        limit = block["quota_limit"]
+        if limit:
+            parts.append(f"kvot {block['quota_used'] // 60} av {limit // 60} min")
+        if block["quota_open"]:
+            parts.append("kvot används nu")
         if block["mode"] == "allowlist":
             parts.append("tillåtelselista")
         self.status_label.set_text(" · ".join(parts))
@@ -277,6 +300,11 @@ class Window(Gtk.ApplicationWindow):
         self.stop_button.set_sensitive(block["active"] and not block["held"])
         self.unlock_button.set_sensitive(
             block["char_locked"] and not block["lock_seconds"])
+        self.quota_start.set_sensitive(
+            limit > 0 and not block["quota_open"]
+            and block["quota_used"] < limit)
+        self.quota_end.set_sensitive(block["quota_open"])
+        self.quota_remove.set_sensitive(limit > 0)
         self.delete_button.set_sensitive(
             not block["active"] and not block["held"])
 
@@ -327,6 +355,23 @@ class Window(Gtk.ApplicationWindow):
                 f"Radera {self.selected}?", "Blocket och dess listor tas bort."):
             name, self.selected = self.selected, None
             self.run(["block", "remove", name])
+
+    def set_quota(self, _button):
+        if self.selected:
+            minutes = self.quota_minutes.get_value_as_int()
+            self.run(["quota", "set", self.selected, f"{minutes}m"])
+
+    def start_quota(self, _button):
+        if self.selected:
+            self.run(["quota", "start", self.selected])
+
+    def end_quota(self, _button):
+        if self.selected:
+            self.run(["quota", "end", self.selected])
+
+    def remove_quota(self, _button):
+        if self.selected:
+            self.run(["quota", "remove", self.selected])
 
     def add_schedule(self, values):
         if len(values) != 3:

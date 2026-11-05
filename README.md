@@ -259,6 +259,17 @@ sudo make uninstall
 
 Uninstalling first runs a guard that **refuses while any block is held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening) **or has allow windows**, so uninstalling can't be used to sidestep a lock — clear the hold first, and remove allow windows (queued or `--now`, see above). When it proceeds, it deactivates all blocks and removes every blocking layer (`/etc/hosts` entries, firewall rules, browser policies) so the system is left clean rather than blocked-with-no-tool.
 
+## Daily quotas
+
+```bash
+open-turkey quota set social-media 30m     # the block now stays on
+open-turkey quota start social-media       # open it and spend the quota
+open-turkey quota end social-media         # close it early
+open-turkey quota remove social-media      # takes effect at midnight
+```
+
+All time in an open session is spent, whether or not the sites are used, because Open Turkey cannot see inside a browser tab. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
+
 ## Graphical interface
 
 `make install` adds **Open Turkey** to the application menu (or run `open-turkey-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). The interface manages blocks, sites, apps, schedules and locks through the same command-line rules, and opens a terminal for the typing challenge.

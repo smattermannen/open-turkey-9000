@@ -54,6 +54,30 @@ func (d *DB) SaveQuota(name string, s quota.State) error {
 	return nil
 }
 
+// UpdateQuotaIfUnchanged saves next only if the row still equals prev, and
+// reports whether it did. The daemon uses it so a slow cycle can't overwrite a
+// session the CLI opened or closed in the meantime.
+func (d *DB) UpdateQuotaIfUnchanged(name string, prev, next quota.State) (bool, error) {
+	blockID, err := d.getBlockID(name)
+	if err != nil {
+		return false, err
+	}
+	result, err := d.conn.Exec(`UPDATE quotas SET limit_seconds = ?, used_seconds = ?, day = ?, open = ?,
+		session_end = ?, last_tick = ?, pending_limit = ?
+		WHERE block_id = ? AND limit_seconds = ? AND used_seconds = ? AND day = ? AND open = ?
+		AND session_end = ? AND last_tick = ? AND pending_limit = ?`,
+		next.Limit, next.Used, next.Day, next.Open, next.SessionEnd, next.LastTick, next.PendingLimit,
+		blockID, prev.Limit, prev.Used, prev.Day, prev.Open, prev.SessionEnd, prev.LastTick, prev.PendingLimit)
+	if err != nil {
+		return false, fmt.Errorf("failed to update quota of '%s': %w", name, err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
 // DeleteQuota removes a block's quota.
 func (d *DB) DeleteQuota(name string) error {
 	blockID, err := d.getBlockID(name)

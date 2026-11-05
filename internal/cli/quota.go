@@ -35,6 +35,26 @@ func currentQuota(database *db.DB, name string, now time.Time) (quota.State, err
 	return state.Step(now.Unix(), quota.DayOf(now)), nil
 }
 
+// ensureBlockActive turns a quota block on or off. The daemon may make the same
+// change at the same moment, so losing that race is not an error.
+func ensureBlockActive(database *db.DB, name string, want bool) error {
+	active, err := database.IsBlockActive(name)
+	if err != nil || active == want {
+		return err
+	}
+	if want {
+		err = database.ActivateBlock(name, false, 0, 0, true)
+	} else {
+		err = database.DeactivateBlock(name)
+	}
+	if err != nil {
+		if now, checkErr := database.IsBlockActive(name); checkErr == nil && now == want {
+			return nil
+		}
+	}
+	return err
+}
+
 var quotaSetCmd = &cobra.Command{
 	Use:   "set [block] [duration]",
 	Short: "Set a block's daily quota (e.g. 30m)",
@@ -80,7 +100,7 @@ var quotaSetCmd = &cobra.Command{
 			return err
 		}
 		if !detail.Active && !s.Open {
-			if err := database.ActivateBlock(name, false, 0, 0, true); err != nil {
+			if err := ensureBlockActive(database, name, true); err != nil {
 				return err
 			}
 			if err := enforce.ApplyFromDB(database); err != nil {
@@ -163,10 +183,8 @@ var quotaStartCmd = &cobra.Command{
 		if err := database.SaveQuota(name, s); err != nil {
 			return err
 		}
-		if hold.active {
-			if err := database.DeactivateBlock(name); err != nil {
-				return err
-			}
+		if err := ensureBlockActive(database, name, false); err != nil {
+			return err
 		}
 		if err := enforce.ApplyFromDB(database); err != nil {
 			return err
@@ -199,14 +217,8 @@ var quotaEndCmd = &cobra.Command{
 		if err := database.SaveQuota(name, s); err != nil {
 			return err
 		}
-		active, err := database.IsBlockActive(name)
-		if err != nil {
+		if err := ensureBlockActive(database, name, true); err != nil {
 			return err
-		}
-		if !active {
-			if err := database.ActivateBlock(name, false, 0, 0, true); err != nil {
-				return err
-			}
 		}
 		if err := enforce.ApplyFromDB(database); err != nil {
 			return err

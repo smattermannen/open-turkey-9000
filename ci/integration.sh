@@ -77,6 +77,18 @@ check "time was spent" bash -c 'open-turkey gui-state | python3 -c "import json,
 ot quota set daily 10m
 check "a raise waits for midnight" bash -c 'open-turkey gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_limit\"]==120 and b[\"quota_next\"]==600 else 1)"'
 
+ot block create race
+ot block add-site race example.edu
+ot quota set race 10m
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    ot quota start race
+    sleep 1.7
+    check "session $i survives a daemon cycle" fails grep -q 'example.edu' /etc/hosts
+    ot quota end race
+    sleep 1.7
+    check "block $i stays on" grep -q 'example.edu' /etc/hosts
+done
+
 check "short freeze rejected" fails open-turkey freeze --for 10s --yes
 check "freeze needs confirmation" fails open-turkey freeze --for 1m
 ot freeze --for 2m --yes

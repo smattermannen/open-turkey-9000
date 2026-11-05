@@ -53,6 +53,15 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 			s.Open = false
 		}
 
+		saved, err := d.UpdateQuotaIfUnchanged(name, *state, s)
+		if err != nil {
+			log.Printf("daemon: quota: %v", err)
+			continue
+		}
+		if !saved {
+			continue // the CLI changed it; the next cycle sees the new state
+		}
+
 		switch {
 		case s.Open && detail.Active:
 			err = d.DeactivateBlock(name)
@@ -62,9 +71,6 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 			err = nil
 		}
 		if err != nil {
-			log.Printf("daemon: quota: %v", err)
-		}
-		if err := d.SaveQuota(name, s); err != nil {
 			log.Printf("daemon: quota: %v", err)
 		}
 	}

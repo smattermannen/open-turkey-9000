@@ -30,30 +30,45 @@ ot("browser", "images", "on")
 ot("browser", "web-only", "on")
 time.sleep(8)
 
-options = Options()
-options.binary_location = "/usr/bin/librewolf"
-options.add_argument("-headless")
-service = Service(os.path.join(os.environ["GECKOWEBDRIVER"], "geckodriver"))
-driver = webdriver.Firefox(options=options, service=service)
-driver.set_page_load_timeout(40)
-try:
+def start(signatures_required=True):
+    options = Options()
+    options.binary_location = "/usr/bin/librewolf"
+    options.add_argument("-headless")
+    options.add_argument("-remote-allow-system-access")
+    if not signatures_required:
+        options.set_preference("xpinstall.signatures.required", False)
+    service = Service(os.path.join(os.environ["GECKOWEBDRIVER"], "geckodriver"))
+    browser = webdriver.Firefox(options=options, service=service)
+    browser.set_page_load_timeout(40)
+    return browser
+
+
+def report(browser, label):
     time.sleep(10)
-    diag = subprocess.run(
-        "ls -d /usr/lib/librewolf* /usr/share/librewolf* /opt/librewolf* 2>&1; "
-        "readlink -f /usr/bin/librewolf; ls -l /etc/librewolf/policies /usr/share/open-turkey 2>&1; "
-        "curl -s 127.0.0.1:47613/rules",
-        shell=True, capture_output=True, text=True).stdout
-    print("::notice::diag " + " ; ".join(diag.splitlines())[-900:])
-    print("::notice::version " + driver.capabilities.get("browserVersion", "?"))
-    for page, script in (
-            ("about:policies", "return document.body.innerText"),
-            ("about:support", "return [...document.querySelectorAll('#addons-tbody tr')].map(r=>r.innerText).join(' ; ')")):
-        try:
-            driver.get(page)
-            time.sleep(2)
-            print("::notice::" + page + " " + driver.execute_script(script)[:500].replace(chr(10), " | "))
-        except Exception as error:
-            print("::notice::" + page + " failed " + str(error)[:200].replace(chr(10), " "))
+    with browser.context(browser.CONTEXT_CHROME):
+        policies = browser.execute_script(
+            "return Services.policies.status + ' ' + Object.keys(Services.policies.getActivePolicies() || {}).join(',')")
+        addons = browser.execute_async_script("""
+            const done = arguments[arguments.length - 1];
+            const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
+            AddonManager.getAllAddons().then(list => done(list.map(
+                a => a.id + ' active=' + a.isActive + ' sign=' + a.signedState + ' disabled=' + a.userDisabled + ' ' + (a.appDisabled ? 'appDisabled' : '')).join(' ; ')));
+        """)
+    print(f"::notice::{label} policies: {policies}"[:600])
+    print(f"::notice::{label} addons: {addons}"[:600])
+
+
+for label, required in (("signed-default", True), ("signatures-off", False)):
+    probe = start(required)
+    try:
+        report(probe, label)
+    finally:
+        probe.quit()
+
+driver = start(False)
+try:
+    driver.install_addon("/usr/share/open-turkey/open-turkey.xpi", temporary=True)
+    time.sleep(10)
     driver.get("https://example.org/secret/page")
     time.sleep(2)
     print("blocked url:", driver.current_url)

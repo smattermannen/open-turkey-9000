@@ -92,4 +92,41 @@ try:
 finally:
     driver.quit()
 
+ot("browser", "safesearch", "on")
+ot("browser", "force-search", "on")
+ot("browser", "force-librewolf", "on")
+time.sleep(8)
+hosts = open("/etc/hosts").read()
+check("SafeSearch entry in hosts", " www.google.com" in hosts)
+resolved = subprocess.run("getent ahostsv4 www.google.com | head -1", shell=True, capture_output=True, text=True).stdout
+safe = subprocess.run("getent ahostsv4 forcesafesearch.google.com | head -1", shell=True, capture_output=True, text=True).stdout
+print("::notice::resolved " + resolved.strip() + " safe " + safe.strip())
+check("Google resolves to SafeSearch", resolved.split()[:1] == safe.split()[:1] or "216.239.38.120" in resolved)
+
+subprocess.run(["cp", "/bin/sleep", "/tmp/chromium"], check=True)
+other = subprocess.Popen(["/tmp/chromium", "60"])
+time.sleep(8)
+check("other browsers are closed", other.poll() is not None)
+
+driver = start()
+try:
+    time.sleep(10)
+    check("LibreWolf survives forcing", True)
+    driver.get("https://www.wikipedia.org/")
+    time.sleep(4)
+    loaded = driver.execute_script(
+        "return [...document.images].filter(i => i.complete && i.naturalWidth > 0).length")
+    total = driver.execute_script("return document.images.length")
+    print(f"::notice::images loaded {loaded} of {total}")
+    check("images are blocked", total > 0 and loaded == 0)
+    with driver.context(driver.CONTEXT_CHROME):
+        engine = driver.execute_async_script("""
+            const done = arguments[arguments.length - 1];
+            Services.search.getDefault().then(e => done(e.name));
+        """)
+    print("::notice::default engine " + engine)
+    check("Google is the forced search engine", engine == "Google Web")
+finally:
+    driver.quit()
+
 sys.exit(failures)

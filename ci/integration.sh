@@ -89,6 +89,27 @@ for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
     check "block $i stays on" grep -q 'example.edu' /etc/hosts
 done
 
+ot block create lists
+ot block add lists reddit.com 'reddit.com/r/funny' '*.xxx' example.info
+ot block add-exception lists reddit.com/r/programming
+ot start lists
+CR=/etc/opt/chrome/policies/managed/open-turkey.json
+check "exception reaches Chromium" sudo grep -q 'reddit.com/r/programming' "$CR"
+check "wildcard reaches Chromium" sudo grep -q '"xxx"' "$CR"
+check "excepted domain leaves hosts" fails grep -q ' reddit.com' /etc/hosts
+check "other domain stays in hosts" grep -q 'example.info' /etc/hosts
+check "blocked export" bash -c 'open-turkey block export-list lists blocked | grep -qx "\*.xxx"'
+check "exceptions export" bash -c '[ "$(open-turkey block export-list lists exceptions)" = reddit.com/r/programming ]'
+printf 'a.example.com\n# comment\nb.example.com/path\n' > /tmp/blocked.txt
+printf 'c.example.com\n' > /tmp/exceptions.txt
+ot block create lists2
+check "import blocked" open-turkey block import-list lists2 blocked /tmp/blocked.txt
+check "import exceptions" open-turkey block import-list lists2 exceptions /tmp/exceptions.txt
+check "imports stay separate" bash -c '[ "$(open-turkey block export-list lists2 blocked | wc -l)" = 2 ] && [ "$(open-turkey block export-list lists2 exceptions)" = c.example.com ]'
+ot start lists --for 1h
+check "exception refused while locked" fails open-turkey block add-exception lists example.info
+check "removing an exception stays allowed" open-turkey block remove-exception lists reddit.com/r/programming
+
 check "short freeze rejected" fails open-turkey freeze --for 10s --yes
 check "freeze needs confirmation" fails open-turkey freeze --for 1m
 ot freeze --for 2m --yes

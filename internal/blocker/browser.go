@@ -71,6 +71,8 @@ type BrowserPolicy struct {
 	AllowMode bool
 	// AllowDomains are the hosts permitted when AllowMode is set.
 	AllowDomains []string
+	// Exceptions are entries that stay reachable despite the block.
+	Exceptions []string
 }
 
 // empty reports whether the policy would block nothing.
@@ -125,38 +127,47 @@ func BlockDomainsPolicy(domains []string) BrowserPolicy {
 func firefoxBlockSet(p BrowserPolicy) []string {
 	if p.AllowMode {
 		// Block all http/https URLs; allowed sites go in Exceptions.
-		set := []string{"*://*/*"}
-		return dedupSort(append(set, ValidPatterns(p.BlockPatterns)...))
+		ffPatterns, _ := translated(p.BlockPatterns)
+		return dedupSort(append([]string{"*://*/*"}, ffPatterns...))
 	}
-	set := firefoxPatterns(ValidDomains(p.BlockDomains))
-	return dedupSort(append(set, ValidPatterns(p.BlockPatterns)...))
+	ffPatterns, _ := translated(p.BlockPatterns)
+	return dedupSort(append(firefoxPatterns(ValidDomains(p.BlockDomains)), ffPatterns...))
 }
 
 // firefoxExceptionSet builds Firefox's WebsiteFilter.Exceptions array (only
 // meaningful in allowlist mode).
 func firefoxExceptionSet(p BrowserPolicy) []string {
-	if !p.AllowMode {
+	set, _ := translated(p.Exceptions)
+	if p.AllowMode {
+		set = append(set, firefoxPatterns(ValidDomains(p.AllowDomains))...)
+	}
+	if len(set) == 0 {
 		return nil
 	}
-	return firefoxPatterns(ValidDomains(p.AllowDomains))
+	return dedupSort(set)
 }
 
 // chromiumBlockSet builds the URLBlocklist array for a policy.
 func chromiumBlockSet(p BrowserPolicy) []string {
 	if p.AllowMode {
-		return dedupSort(append([]string{"*"}, ValidPatterns(p.BlockPatterns)...))
+		_, crPatterns := translated(p.BlockPatterns)
+		return dedupSort(append([]string{"*"}, crPatterns...))
 	}
-	set := chromiumFilters(ValidDomains(p.BlockDomains))
-	return dedupSort(append(set, ValidPatterns(p.BlockPatterns)...))
+	_, crPatterns := translated(p.BlockPatterns)
+	return dedupSort(append(chromiumFilters(ValidDomains(p.BlockDomains)), crPatterns...))
 }
 
 // chromiumAllowSet builds the URLAllowlist array (only meaningful in allowlist
 // mode).
 func chromiumAllowSet(p BrowserPolicy) []string {
-	if !p.AllowMode {
+	_, set := translated(p.Exceptions)
+	if p.AllowMode {
+		set = append(set, chromiumFilters(ValidDomains(p.AllowDomains))...)
+	}
+	if len(set) == 0 {
 		return nil
 	}
-	return chromiumFilters(ValidDomains(p.AllowDomains))
+	return dedupSort(set)
 }
 
 // dedupSort returns the sorted, deduplicated set of the input.

@@ -20,6 +20,7 @@ const (
 	EditRemoveSites    = "remove-site"
 	EditRemoveApps     = "remove-app"
 	EditRemovePatterns = "remove-pattern"
+	EditAddExceptions  = "add-exception"
 	EditSetMode        = "set-mode"
 	EditRemoveBlock    = "remove-block"
 	EditAddSchedule    = "add-schedule"
@@ -130,6 +131,8 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 		err = d.RemoveApps(blockName, e.Values)
 	case EditRemovePatterns:
 		err = d.RemovePatterns(blockName, e.Values)
+	case EditAddExceptions:
+		err = d.AddExceptions(blockName, e.Values)
 	case EditSetMode:
 		if len(e.Values) != 1 {
 			return fmt.Errorf("set-mode needs exactly one mode")

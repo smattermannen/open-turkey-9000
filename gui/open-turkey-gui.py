@@ -38,7 +38,8 @@ def run_cli(args):
 class EditableList(Gtk.Box):
     """A titled list with an entry for adding and a button for removing."""
 
-    def __init__(self, title, placeholder, on_add, on_remove):
+    def __init__(self, title, placeholder, on_add, on_remove,
+                 on_import=None, on_export=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
         label = Gtk.Label(xalign=0)
@@ -64,6 +65,12 @@ class EditableList(Gtk.Box):
         row.pack_start(self.entry, True, True, 0)
         row.pack_start(add, False, False, 0)
         row.pack_start(remove, False, False, 0)
+        for label_text, handler in (("Importera …", on_import),
+                                    ("Exportera …", on_export)):
+            if handler:
+                button = Gtk.Button(label=label_text)
+                button.connect("clicked", lambda _b, h=handler: h())
+                row.pack_start(button, False, False, 0)
         self.pack_start(row, False, False, 0)
 
     def set_items(self, items):
@@ -160,9 +167,17 @@ class Window(Gtk.ApplicationWindow):
         self.detail.pack_start(quota_row, False, False, 0)
 
         self.sites = EditableList(
-            "Webbplatser", "youtube.com reddit.com",
-            lambda values: self.block_cmd("add-site", values),
-            lambda value, _num: self.block_cmd("remove-site", [value]))
+            "Blockerat", "reddit.com  reddit.com/r/funny  *.xxx  *.*",
+            lambda values: self.block_cmd("add", values),
+            lambda value, _num: self.block_cmd("remove-entry", [value]),
+            lambda: self.import_list("blocked"),
+            lambda: self.export_list("blocked"))
+        self.exceptions = EditableList(
+            "Undantag", "reddit.com/r/programming",
+            lambda values: self.block_cmd("add-exception", values),
+            lambda value, _num: self.block_cmd("remove-exception", [value]),
+            lambda: self.import_list("exceptions"),
+            lambda: self.export_list("exceptions"))
         self.apps = EditableList(
             "Program", "discord",
             lambda values: self.block_cmd("add-app", values),
@@ -170,8 +185,10 @@ class Window(Gtk.ApplicationWindow):
         self.schedules = EditableList(
             "Scheman", "weekdays 09:00 17:00",
             self.add_schedule, self.remove_schedule)
-        for widget in (self.sites, self.apps, self.schedules):
+        for widget in (self.sites, self.exceptions, self.apps, self.schedules):
             self.detail.pack_start(widget, True, True, 0)
+        self.limited_label = Gtk.Label(xalign=0, wrap=True)
+        self.detail.pack_start(self.limited_label, False, False, 0)
 
         self.refresh()
         GLib.timeout_add_seconds(REFRESH_SECONDS, self.refresh)
@@ -274,8 +291,10 @@ class Window(Gtk.ApplicationWindow):
         if block is None:
             self.title_label.set_text("Skapa ett block för att börja")
             self.status_label.set_text("")
-            for widget in (self.sites, self.apps, self.schedules):
+            for widget in (self.sites, self.exceptions, self.apps,
+                           self.schedules):
                 widget.set_items([])
+            self.limited_label.set_text("")
             return
         self.title_label.set_markup(
             f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
@@ -295,6 +314,10 @@ class Window(Gtk.ApplicationWindow):
             parts.append("tillåtelselista")
         self.status_label.set_text(" · ".join(parts))
         self.sites.set_items(block["sites"])
+        self.exceptions.set_items(block["exceptions"])
+        limited = block["firefox_only"]
+        self.limited_label.set_text(
+            "Fungerar bara i Firefox: " + ", ".join(limited) if limited else "")
         self.apps.set_items(block["apps"])
         self.schedules.set_items(block["schedules"])
         self.stop_button.set_sensitive(block["active"] and not block["held"])
@@ -372,6 +395,44 @@ class Window(Gtk.ApplicationWindow):
     def remove_quota(self, _button):
         if self.selected:
             self.run(["quota", "remove", self.selected])
+
+    def choose_file(self, title, action, button):
+        dialog = Gtk.FileChooserDialog(
+            title=title, transient_for=self, action=action)
+        dialog.add_buttons("Avbryt", Gtk.ResponseType.CANCEL,
+                           button, Gtk.ResponseType.OK)
+        if action == Gtk.FileChooserAction.SAVE:
+            dialog.set_do_overwrite_confirmation(True)
+            dialog.set_current_name(f"{self.selected}.txt")
+        answer = dialog.run()
+        path = dialog.get_filename()
+        dialog.destroy()
+        return path if answer == Gtk.ResponseType.OK else None
+
+    def import_list(self, kind):
+        if not self.selected:
+            return
+        path = self.choose_file(
+            "Importera lista", Gtk.FileChooserAction.OPEN, "Importera")
+        if path:
+            self.run(["block", "import-list", self.selected, kind, path])
+
+    def export_list(self, kind):
+        if not self.selected:
+            return
+        path = self.choose_file(
+            "Exportera lista", Gtk.FileChooserAction.SAVE, "Spara")
+        if not path:
+            return
+        ok, output = run_cli(["block", "export-list", self.selected, kind])
+        if not ok:
+            self.message(output)
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(output + "\n" if output else "")
+        except OSError as error:
+            self.message(str(error))
 
     def add_schedule(self, values):
         if len(values) != 3:

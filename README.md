@@ -259,6 +259,20 @@ sudo make uninstall
 
 Uninstalling first runs a guard that **refuses while any block is held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening) **or has allow windows**, so uninstalling can't be used to sidestep a lock — clear the hold first, and remove allow windows (queued or `--now`, see above). When it proceeds, it deactivates all blocks and removes every blocking layer (`/etc/hosts` entries, firewall rules, browser policies) so the system is left clean rather than blocked-with-no-tool.
 
+## Blocked lists and exceptions
+
+Each block has a list of what is blocked and a list of exceptions, and an exception beats the block:
+
+```bash
+open-turkey block add work reddit.com 'reddit.com/r/funny' '*.xxx' '*.*'
+open-turkey block add-exception work reddit.com/r/programming
+open-turkey block export-list work blocked > blocked.txt
+open-turkey block export-list work exceptions > exceptions.txt
+open-turkey block import-list work blocked blocked.txt
+```
+
+Files hold one entry per line, and `#` starts a comment. `*.*` blocks every website, so combine it with exceptions to allow only what you need. A domain with an exception leaves `/etc/hosts` and the firewall, because those block whole hosts, so only browser policy enforces it. Chromium-based browsers cannot match wildcards inside a path or keywords in policy, so those entries work only in Firefox for now, and the interface says which ones.
+
 ## Daily quotas
 
 ```bash

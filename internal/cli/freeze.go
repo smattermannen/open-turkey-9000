@@ -64,6 +64,8 @@ type guiBlock struct {
 	Name        string   `json:"name"`
 	Mode        string   `json:"mode"`
 	Sites       []string `json:"sites"`
+	Exceptions  []string `json:"exceptions"`
+	Limited     []string `json:"firefox_only"`
 	Apps        []string `json:"apps"`
 	Schedules   []string `json:"schedules"`
 	Active      bool     `json:"active"`
@@ -127,7 +129,8 @@ var guiStateCmd = &cobra.Command{
 			}
 			g := guiBlock{
 				Name: detail.Name, Mode: detail.Mode,
-				Sites: append([]string{}, detail.Sites...), Apps: append([]string{}, detail.Apps...),
+				Sites: append(append([]string{}, detail.Sites...), detail.Patterns...), Apps: append([]string{}, detail.Apps...),
+				Exceptions: append([]string{}, detail.Exceptions...), Limited: []string{},
 				Schedules: []string{},
 				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && detail.Locked,
 				Scheduled: detail.Scheduled,
@@ -137,6 +140,11 @@ var guiStateCmd = &cobra.Command{
 			}
 			for _, s := range schedules {
 				g.Schedules = append(g.Schedules, s.Window().String())
+			}
+			for _, p := range append(append([]string{}, detail.Patterns...), detail.Exceptions...) {
+				if blocker.BrowserLimited(p) {
+					g.Limited = append(g.Limited, p)
+				}
 			}
 			g.QuotaNext = quota.NoPending
 			if q, err := database.GetQuota(b.Name); err != nil {

@@ -28,11 +28,12 @@ import (
 
 // blockExport is the JSON shape for export/import.
 type blockExport struct {
-	Name     string   `json:"name"`
-	Mode     string   `json:"mode"`
-	Sites    []string `json:"sites"`
-	Apps     []string `json:"apps"`
-	Patterns []string `json:"patterns"`
+	Name       string   `json:"name"`
+	Mode       string   `json:"mode"`
+	Sites      []string `json:"sites"`
+	Apps       []string `json:"apps"`
+	Patterns   []string `json:"patterns"`
+	Exceptions []string `json:"exceptions,omitempty"`
 }
 
 // reapplyIfActive re-applies all layers when the named block is currently
@@ -181,11 +182,12 @@ var blockExportCmd = &cobra.Command{
 			return err
 		}
 		out := blockExport{
-			Name:     detail.Name,
-			Mode:     detail.Mode,
-			Sites:    detail.Sites,
-			Apps:     detail.Apps,
-			Patterns: detail.Patterns,
+			Name:       detail.Name,
+			Mode:       detail.Mode,
+			Sites:      detail.Sites,
+			Apps:       detail.Apps,
+			Patterns:   detail.Patterns,
+			Exceptions: detail.Exceptions,
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
@@ -247,6 +249,11 @@ var blockImportCmd = &cobra.Command{
 		}
 		if len(in.Apps) > 0 {
 			if err := database.AddApps(in.Name, in.Apps); err != nil {
+				return err
+			}
+		}
+		if len(in.Exceptions) > 0 {
+			if err := database.AddExceptions(in.Name, in.Exceptions); err != nil {
 				return err
 			}
 		}

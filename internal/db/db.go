@@ -78,6 +78,7 @@ type BlockDetail struct {
 	Sites       []string
 	Apps        []string
 	Patterns    []string
+	Exceptions  []string
 	Active      bool
 	Locked      bool
 	LockChars   int
@@ -94,6 +95,7 @@ type ActiveBlockDetail struct {
 	Sites       []string
 	Apps        []string
 	Patterns    []string
+	Exceptions  []string
 	Locked      bool
 	LockChars   int
 	LockedUntil int64
@@ -232,7 +234,7 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
-	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema); err != nil {
+	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema + exceptionsSchema); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to create clock table: %w", err)
 	}
@@ -541,6 +543,10 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 	if err != nil {
 		return nil, err
 	}
+	detail.Exceptions, err = d.getBlockExceptions(detail.ID)
+	if err != nil {
+		return nil, err
+	}
 
 	return &detail, nil
 }
@@ -734,6 +740,9 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 			return nil, err
 		}
 		if activeBlocks[i].Patterns, err = d.getBlockPatterns(ids[i]); err != nil {
+			return nil, err
+		}
+		if activeBlocks[i].Exceptions, err = d.getBlockExceptions(ids[i]); err != nil {
 			return nil, err
 		}
 	}

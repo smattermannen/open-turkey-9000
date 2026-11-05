@@ -30,7 +30,7 @@ func TestBlocklistSets(t *testing.T) {
 		BlockPatterns: []string{"*casino*"},
 	}
 	cr := chromiumBlockSet(p)
-	want := []string{"*casino*", "facebook.com", "reddit.com"}
+	want := []string{"facebook.com", "reddit.com"}
 	if !reflect.DeepEqual(cr, want) {
 		t.Errorf("chromiumBlockSet = %v; want %v", cr, want)
 	}
@@ -40,7 +40,7 @@ func TestBlocklistSets(t *testing.T) {
 
 	ff := firefoxBlockSet(p)
 	// Must contain the pattern and both facebook match-patterns.
-	assertContains(t, ff, "*casino*")
+	assertContains(t, ff, "*://*/*casino*")
 	assertContains(t, ff, "*://facebook.com/*")
 	assertContains(t, ff, "*://*.facebook.com/*")
 	if len(firefoxExceptionSet(p)) != 0 {
@@ -56,7 +56,6 @@ func TestAllowlistSets(t *testing.T) {
 	}
 	cr := chromiumBlockSet(p)
 	assertContains(t, cr, "*")
-	assertContains(t, cr, "*ads*")
 	allow := chromiumAllowSet(p)
 	if !reflect.DeepEqual(allow, []string{"work.example.com"}) {
 		t.Errorf("chromiumAllowSet = %v; want [work.example.com]", allow)

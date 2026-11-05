@@ -36,17 +36,23 @@ import (
 // Everything is unioned across active blocks, including allowlists: with two
 // allowlist blocks active, a site allowed by either one is reachable.
 func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp blocker.BrowserPolicy) {
-	var blockDomains, allowDomains, patterns, appList []string
+	var blockDomains, hostDomains, allowDomains, patterns, exceptions, appList []string
 	allowMode := false
 
 	for _, b := range active {
 		appList = append(appList, b.Apps...)
 		patterns = append(patterns, b.Patterns...)
+		exceptions = append(exceptions, b.Exceptions...)
 		if b.Mode == db.ModeAllowlist {
 			allowMode = true
 			allowDomains = append(allowDomains, b.Sites...)
 		} else {
 			blockDomains = append(blockDomains, b.Sites...)
+			for _, site := range b.Sites {
+				if !blocker.HasExceptionUnder(site, b.Exceptions) {
+					hostDomains = append(hostDomains, site)
+				}
+			}
 		}
 	}
 
@@ -55,8 +61,9 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 		BlockPatterns: patterns,
 		AllowMode:     allowMode,
 		AllowDomains:  allowDomains,
+		Exceptions:    exceptions,
 	}
-	return blocker.ValidDomains(blockDomains), dedup(appList), bp
+	return blocker.ValidDomains(hostDomains), dedup(appList), bp
 }
 
 // Apply forces every layer to match the active blocks. Used by the CLI right

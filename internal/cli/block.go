@@ -609,7 +609,12 @@ var blockInfoCmd = &cobra.Command{
 			if block.Locked {
 				status += fmt.Sprintf(" [Locked - %d characters]", block.LockChars)
 			}
-			if block.LockedUntil > time.Now().Unix() {
+			trusted, err := database.TrustedNow(time.Now())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			if block.LockedUntil > trusted {
 				status += fmt.Sprintf(" [Time-locked until %s]", time.Unix(block.LockedUntil, 0).Format("2006-01-02 15:04"))
 			}
 			fmt.Printf("Status: %s\n", status)

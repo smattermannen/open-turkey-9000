@@ -23,7 +23,8 @@ import (
 // application data (following the Filesystem Hierarchy Standard — FHS).
 const DefaultDBPath = "/var/lib/open-turkey/open-turkey.db"
 
-// dbPathEnv, when set, overrides the database path. This exists mainly so the
+// dbPathEnv, when set by a non-root process, overrides the database path. Root
+// always uses DefaultDBPath, so the override can never redirect enforcement. This exists mainly so the
 // CLI and tests can run against a scratch database without root. The installed
 // systemd unit never sets it, so the daemon always uses DefaultDBPath in
 // production — a user can't point the daemon at an empty database without
@@ -33,7 +34,7 @@ const dbPathEnv = "OPEN_TURKEY_DB"
 // ResolveDBPath returns the database path to use: the OPEN_TURKEY_DB override
 // if set, otherwise DefaultDBPath.
 func ResolveDBPath() string {
-	if p := os.Getenv(dbPathEnv); p != "" {
+	if p := os.Getenv(dbPathEnv); p != "" && os.Geteuid() != 0 {
 		return p
 	}
 	return DefaultDBPath
@@ -231,6 +232,10 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
+	if _, err := conn.Exec(clockSchema); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to create clock table: %w", err)
+	}
 	if err := upgradeSchema(conn); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to upgrade database schema: %w", err)

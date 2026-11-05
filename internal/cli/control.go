@@ -115,6 +115,14 @@ shortened or removed this way.`,
 		}
 		defer database.Close()
 
+		if lockedUntil != 0 {
+			trusted, err := database.TrustedNow(now)
+			if err != nil {
+				return err
+			}
+			lockedUntil += trusted - now.Unix()
+		}
+
 		detail, err := database.GetBlock(blockName)
 		if err != nil {
 			return err
@@ -316,7 +324,10 @@ var statusCmd = &cobra.Command{
 			return nil
 		}
 
-		now := time.Now()
+		trusted, err := database.TrustedNow(time.Now())
+		if err != nil {
+			return err
+		}
 		var active, inactive []string
 		for _, block := range blocks {
 			detail, err := database.GetBlock(block.Name)
@@ -334,7 +345,7 @@ var statusCmd = &cobra.Command{
 				if detail.Locked {
 					tags += fmt.Sprintf(" [LOCKED - %d chars]", detail.LockChars)
 				}
-				if detail.LockedUntil > now.Unix() {
+				if detail.LockedUntil > trusted {
 					tags += fmt.Sprintf(" [TIME-LOCKED until %s]", time.Unix(detail.LockedUntil, 0).Format("2006-01-02 15:04"))
 				}
 				active = append(active, fmt.Sprintf("  %s%s", detail.Name, tags))
@@ -383,9 +394,10 @@ type holdState struct {
 	// schedule.EditFreeze, whether or not the block is active yet.
 	scheduleFrozen bool
 	now            time.Time
+	trusted        int64 // see db.TrustedNow
 }
 
-func (h holdState) timeLocked() bool { return h.lockedUntil > h.now.Unix() }
+func (h holdState) timeLocked() bool { return h.lockedUntil > h.trusted }
 func (h holdState) until() string {
 	return time.Unix(h.lockedUntil, 0).Format("2006-01-02 15:04")
 }
@@ -398,6 +410,10 @@ func (h holdState) held() bool {
 // blockHold gathers everything that determines whether a block may be removed
 // or edited right now.
 func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
+	trusted, err := database.TrustedNow(now)
+	if err != nil {
+		return holdState{}, err
+	}
 	detail, err := database.GetBlock(name)
 	if err != nil {
 		return holdState{}, err
@@ -408,6 +424,7 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 		lockChars:   detail.LockChars,
 		lockedUntil: detail.LockedUntil,
 		now:         now,
+		trusted:     trusted,
 	}
 	if detail.Active {
 		sched, err := enforce.ScheduleActiveNow(database, name, now)

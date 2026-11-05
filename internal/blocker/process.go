@@ -231,6 +231,14 @@ func matchesBlockedProcess(pid int, processNames []string) bool {
 		}
 	}
 
+	// Strategy 1b: the real executable, which a process cannot rewrite the way
+	// it can rewrite comm or argv[0]. A renamed copy is still not caught.
+	if exe, err := os.Readlink(pidPath + "/exe"); err == nil {
+		if matchesName(baseName(strings.TrimSuffix(exe, " (deleted)")), processNames) {
+			return true
+		}
+	}
+
 	// Strategy 2: basename of argv[0] from /proc/<pid>/cmdline.
 	cmdlineBytes, err := os.ReadFile(pidPath + "/cmdline")
 	if err != nil {

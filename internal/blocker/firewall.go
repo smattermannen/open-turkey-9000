@@ -179,7 +179,20 @@ func IsFirewallApplied() bool {
 	}
 	// "iptables -L CHAIN" prints two header lines; rules start on line 3.
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	return len(lines) > 2
+	if len(lines) <= 2 {
+		return false
+	}
+	// A populated chain does nothing unless OUTPUT still jumps to it.
+	if runFW("iptables", "-C", "OUTPUT", "-j", chainName) != nil {
+		return false
+	}
+	if ip6tablesAvailable() {
+		if _, err := runFWOutput("ip6tables", "-L", chainName, "-n"); err == nil &&
+			runFW("ip6tables", "-C", "OUTPUT", "-j", chainName) != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // ip6tablesAvailable reports whether the ip6tables binary is present.

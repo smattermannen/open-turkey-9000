@@ -15,7 +15,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/brunodcdo/open-turkey/internal/blocker"
 	"github.com/brunodcdo/open-turkey/internal/db"
@@ -198,7 +201,7 @@ var blockImportCmd = &cobra.Command{
 	Short: "Create a block from a JSON file (from 'block export')",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		data, err := os.ReadFile(args[0])
+		data, err := readAsCaller(args[0])
 		if err != nil {
 			return fmt.Errorf("failed to read %s: %w", args[0], err)
 		}
@@ -266,4 +269,29 @@ func init() {
 	blockCmd.AddCommand(blockSetModeCmd)
 	blockCmd.AddCommand(blockExportCmd)
 	blockCmd.AddCommand(blockImportCmd)
+}
+
+// readAsCaller reads a user-supplied path with the invoking user's permissions.
+// The CLI runs as root through sudo, so a plain read could reach files the user
+// may not open. Without SUDO_UID the process really is the user or root.
+func readAsCaller(path string) ([]byte, error) {
+	uidStr, gidStr := os.Getenv("SUDO_UID"), os.Getenv("SUDO_GID")
+	if uidStr == "" || gidStr == "" || os.Geteuid() != 0 {
+		return os.ReadFile(path)
+	}
+	uid, err := strconv.ParseUint(uidStr, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SUDO_UID: %w", err)
+	}
+	gid, err := strconv.ParseUint(gidStr, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SUDO_GID: %w", err)
+	}
+	c := exec.Command("/bin/cat", "--", path)
+	c.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}}
+	data, err := c.Output()
+	if err != nil {
+		return nil, fmt.Errorf("cannot read file as user %d: %w", uid, err)
+	}
+	return data, nil
 }

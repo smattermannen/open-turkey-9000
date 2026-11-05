@@ -75,18 +75,18 @@ exec sudo $(INSTALL_PATH)/$(BINARY_INSTALLED) "$$@"\n' > $(INSTALL_PATH)/$(BINAR
 	chmod 755 $(INSTALL_PATH)/$(BINARY_NAME)
 
 	@echo ">> Configuring sudoers for passwordless execution..."
-	# sudoers rule: allows ANY user to run open-turkey-bin
+	# sudoers rule: allows administrators (group sudo) to run open-turkey-bin
 	# as root, without typing a password.
-	#   ALL ALL=(root) NOPASSWD: /usr/local/bin/open-turkey-bin
+	#   %sudo ALL=(root) NOPASSWD: /usr/local/bin/open-turkey-bin
 	#    |   |    |       |
 	#    |   |    |       +-- doesn't ask for a password
 	#    |   |    +---------- runs as root
-	#    |   +--------------- any user
-	#    +------------------- on any host
+	#    |   +--------------- on any host
+	#    +------------------- members of group sudo
 	#
 	# chmod 440: only root and the root group can read the file.
 	# This is mandatory — sudo refuses files with open permissions.
-	printf 'ALL ALL=(root) NOPASSWD: $(INSTALL_PATH)/$(BINARY_INSTALLED)\n' > $(SUDOERS_FILE)
+	printf '%%sudo ALL=(root) NOPASSWD: $(INSTALL_PATH)/$(BINARY_INSTALLED)\n' > $(SUDOERS_FILE)
 	chmod 440 $(SUDOERS_FILE)
 
 	@echo ">> Installing the systemd service..."

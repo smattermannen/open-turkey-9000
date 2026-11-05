@@ -92,10 +92,16 @@ func ApplyFromDB(d *db.DB) error {
 // Tick runs one daemon cycle: apply due queued edits, reconcile schedules,
 // then re-apply drifted layers.
 func Tick(d *db.DB, now time.Time) error {
-	if err := applyDueEdits(d, now); err != nil {
+	trusted, err := d.TrustedNow(now)
+	if err != nil {
+		// Zero means no time lock counts as expired during this cycle.
+		log.Printf("daemon: trusted clock error: %v", err)
+		trusted = 0
+	}
+	if err := applyDueEditsAt(d, now, trusted); err != nil {
 		log.Printf("daemon: pending edits error: %v", err)
 	}
-	if err := reconcileSchedules(d, now); err != nil {
+	if err := reconcileSchedulesAt(d, now, trusted); err != nil {
 		log.Printf("daemon: schedule reconciliation error: %v", err)
 	}
 
@@ -169,6 +175,11 @@ func Tick(d *db.DB, now time.Time) error {
 // until the lock lifts, so the queue can't get past a manual lock. An edit
 // that fails (e.g. the app was already removed) is logged and dropped.
 func applyDueEdits(d *db.DB, now time.Time) error {
+	return applyDueEditsAt(d, now, now.Unix())
+}
+
+// applyDueEditsAt takes trusted time separately; see db.TrustedNow.
+func applyDueEditsAt(d *db.DB, now time.Time, trusted int64) error {
 	pending, err := d.ListPendingEdits()
 	if err != nil {
 		return err
@@ -182,7 +193,7 @@ func applyDueEdits(d *db.DB, now time.Time) error {
 			log.Printf("daemon: pending edit: %v", err)
 			continue
 		}
-		if detail.Active && (detail.Locked || detail.LockedUntil > now.Unix()) {
+		if detail.Active && (detail.Locked || detail.LockedUntil > trusted) {
 			continue
 		}
 		if err := d.ApplyEdit(p.BlockName, p.Edit); err != nil {
@@ -206,6 +217,11 @@ func applyDueEdits(d *db.DB, now time.Time) error {
 // char-locked one stays on until it is unlocked. A scheduled block whose
 // schedules have all been removed is deactivated like one whose window closed.
 func reconcileSchedules(d *db.DB, now time.Time) error {
+	return reconcileSchedulesAt(d, now, now.Unix())
+}
+
+// reconcileSchedulesAt takes trusted time separately; see db.TrustedNow.
+func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 	all, err := d.AllSchedules()
 	if err != nil {
 		return err
@@ -245,7 +261,7 @@ func reconcileSchedules(d *db.DB, now time.Time) error {
 			} else {
 				log.Printf("daemon: schedule: activated %s", name)
 			}
-		case !within && detail.Active && detail.Scheduled && !detail.Locked && detail.LockedUntil <= now.Unix():
+		case !within && detail.Active && detail.Scheduled && !detail.Locked && detail.LockedUntil <= trusted:
 			if err := d.DeactivateBlock(name); err != nil {
 				log.Printf("daemon: schedule: failed to deactivate %s: %v", name, err)
 			} else {

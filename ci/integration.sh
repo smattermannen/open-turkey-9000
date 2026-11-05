@@ -23,15 +23,17 @@ check "daemon is running" systemctl is-active --quiet kc9k
 ot block create strictblock
 ot block add strictblock example.dev
 ot strict on
-ot start strictblock --for 40s
-sleep 8
+started=$(date +%s)
+ot start strictblock --for 90s
+echo "::notice::start took $(($(date +%s) - started))s"
+for _ in $(seq 1 30); do sudo -n true 2>/dev/null || break; sleep 1; done
 check "strict mode denies sudo" fails sudo -n true
 cp /bin/sleep /tmp/otportable
 chmod +x /tmp/otportable
 check "portable programs can't start" fails /tmp/otportable 0
 check "kc9k still works in strict mode" kc9k status
 check "strict mode can't be turned off" fails kc9k strict off
-sleep 42
+for _ in $(seq 1 120); do sudo -n true 2>/dev/null && break; sleep 1; done
 check "sudo returns after the lock" sudo -n true
 check "portable programs start again" /tmp/otportable 0
 check "strict mode turns off" kc9k strict off

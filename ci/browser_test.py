@@ -38,6 +38,21 @@ driver = webdriver.Firefox(options=options, service=service)
 driver.set_page_load_timeout(40)
 try:
     time.sleep(10)
+    diag = subprocess.run(
+        "ls -d /usr/lib/librewolf* /usr/share/librewolf* /opt/librewolf* 2>&1; "
+        "readlink -f /usr/bin/librewolf; ls -l /etc/librewolf/policies /usr/share/open-turkey 2>&1; "
+        "find /usr -type d -name distribution 2>/dev/null; curl -s 127.0.0.1:47613/rules",
+        shell=True, capture_output=True, text=True).stdout
+    for line in diag.splitlines():
+        print("::notice::diag " + line)
+    driver.get("about:policies");time.sleep(1)
+    print("::notice::policies " + driver.find_element("tag name", "body").text[:300].replace("
+", " | "))
+    driver.get("about:support");time.sleep(2)
+    print("::notice::addons " + driver.execute_script(
+        "return [...document.querySelectorAll('#addons-tbody tr')].map(r=>r.innerText).join(' ; ')")[:400].replace("
+", " "))
+    print("::notice::version " + driver.capabilities.get("browserVersion", "?"))
     driver.get("https://example.org/secret/page")
     time.sleep(2)
     print("blocked url:", driver.current_url)

@@ -103,6 +103,7 @@ func ApplyFromDB(d *db.DB) error {
 // then re-apply drifted layers.
 func Tick(d *db.DB, now time.Time) error {
 	enforceFreeze(d, now)
+	enforceBrowser(d)
 
 	trusted, err := d.TrustedNow(now)
 	if err != nil {
@@ -130,6 +131,7 @@ func Tick(d *db.DB, now time.Time) error {
 	}
 	active = withoutBreaks(d, active, trusted)
 	hosts, apps, bp := Inputs(active)
+	apps = append(apps, forcedKills(d)...)
 
 	// Site layers, re-applied only on drift (so an idle system does no writes).
 	if len(hosts) > 0 {

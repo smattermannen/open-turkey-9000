@@ -295,6 +295,21 @@ All time in an open session is spent, whether or not the sites are used, because
 | Restart | `start b --restart` | the computer has restarted, then `stop` works |
 | Delay | `start b --delay 30m` | the delay has passed after `stop` |
 
+## Browser options
+
+The daemon force-installs the bundled extension in Firefox-family browsers through policy, so it can't be removed or disabled. It enforces wildcards and keywords, shows a block page, and reads its rules from the daemon on `127.0.0.1:47613`.
+
+```bash
+open-turkey browser force-librewolf on   # close other browsers
+open-turkey browser force-search on      # Google as the only search engine
+open-turkey browser safesearch on        # lock Google SafeSearch
+open-turkey browser web-only on          # web results only: no images, shopping or AI
+open-turkey browser images on            # block images
+open-turkey browser greyscale on         # show pages in greyscale
+```
+
+Options can always be turned on, and can't be turned off during a lock. Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
+
 ## Pomodoro
 
 `open-turkey pomodoro set work 25m 5m` alternates a block between work and breaks while it runs, with locks kept in place. Setting a cycle is refused while the block is held, and `pomodoro off` is always allowed.

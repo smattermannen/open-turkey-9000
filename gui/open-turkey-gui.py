@@ -99,6 +99,7 @@ class Window(Gtk.ApplicationWindow):
         self.selected = None
         self.busy = False
         self.strict = False
+        self.browser = {}
 
         header = Gtk.HeaderBar(show_close_button=True, title="Open Turkey")
         self.set_titlebar(header)
@@ -108,6 +109,9 @@ class Window(Gtk.ApplicationWindow):
         self.freeze_button = Gtk.Button(label="Frozen Turkey")
         self.freeze_button.connect("clicked", self.freeze)
         header.pack_end(self.freeze_button)
+        browser_button = Gtk.Button(label="Webbläsare")
+        browser_button.connect("clicked", self.browser_options)
+        header.pack_end(browser_button)
         self.strict_button = Gtk.Button(label="Strikt läge")
         self.strict_button.connect("clicked", self.toggle_strict)
         header.pack_end(self.strict_button)
@@ -292,6 +296,7 @@ class Window(Gtk.ApplicationWindow):
         self.blocks = {block["name"]: block for block in state["blocks"]}
 
         self.strict = state["strict"]
+        self.browser = state["browser"]
         self.strict_button.set_label(
             "Strikt läge: på" if self.strict else "Strikt läge: av")
         frozen = state["freeze_seconds"]
@@ -532,6 +537,40 @@ class Window(Gtk.ApplicationWindow):
                 file.write(output + "\n" if output else "")
         except OSError as error:
             self.message(str(error))
+
+    def browser_options(self, _button):
+        labels = (
+            ("extension", "Tvinga webbläsartillägget"),
+            ("force-librewolf", "Tvinga LibreWolf (stäng andra webbläsare)"),
+            ("force-search", "Tvinga Google som sökmotor"),
+            ("safesearch", "Tvinga Googles SafeSearch"),
+            ("web-only", "Bara webbresultat (inga bilder, köp eller AI)"),
+            ("images", "Blockera bilder"),
+            ("greyscale", "Gråskala"),
+        )
+        dialog = Gtk.Dialog(title="Webbläsare", transient_for=self, modal=True)
+        dialog.add_button("Stäng", Gtk.ResponseType.CLOSE)
+        box = dialog.get_content_area()
+        box.set_spacing(6)
+        note = Gtk.Label(
+            label="Under lås går inställningarna inte att stänga av.", xalign=0)
+        box.pack_start(note, False, False, 6)
+        checks = {}
+        for name, label in labels:
+            check = Gtk.CheckButton(label=label)
+            check.set_active(self.browser.get(name, False))
+            box.pack_start(check, False, False, 0)
+            checks[name] = check
+        dialog.show_all()
+        dialog.run()
+        changes = [(name, check.get_active()) for name, check in checks.items()
+                   if check.get_active() != self.browser.get(name, False)]
+        dialog.destroy()
+        for name, enabled in changes:
+            ok, output = run_cli(["browser", name, "on" if enabled else "off"])
+            if not ok:
+                self.message(output)
+        self.refresh()
 
     def toggle_strict(self, _button):
         if self.strict:

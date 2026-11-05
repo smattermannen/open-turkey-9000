@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "Open Turkey 9000",
+  "version": "1.0.0",
+  "description": "Enforces Open Turkey blocks inside the browser.",
+  "browser_specific_settings": {
+    "gecko": { "id": "blocker@open-turkey-9000" }
+  },
+  "incognito": "spanning",
+  "permissions": ["webRequest", "webRequestBlocking", "storage", "tabs", "<all_urls>", "http://127.0.0.1/*"],
+  "background": { "scripts": ["background.js"] },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": ["blocked.html"]
+}

@@ -95,9 +95,10 @@ type guiBlock struct {
 }
 
 type guiState struct {
-	FreezeSeconds int64      `json:"freeze_seconds"`
-	Strict        bool       `json:"strict"`
-	Blocks        []guiBlock `json:"blocks"`
+	FreezeSeconds int64           `json:"freeze_seconds"`
+	Strict        bool            `json:"strict"`
+	Browser       map[string]bool `json:"browser"`
+	Blocks        []guiBlock      `json:"blocks"`
 }
 
 var guiStateCmd = &cobra.Command{
@@ -131,6 +132,10 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 		state.Strict = strict == "on"
+		state.Browser = map[string]bool{}
+		for _, name := range enforce.BrowserSettings {
+			state.Browser[name] = enforce.BrowserOn(database, name)
+		}
 
 		blocks, err := database.ListBlocks()
 		if err != nil {

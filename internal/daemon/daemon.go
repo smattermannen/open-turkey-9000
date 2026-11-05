@@ -31,6 +31,12 @@ func Run() error {
 	}
 	defer database.Close()
 
+	go func() {
+		if err := enforce.ServeRules(database); err != nil {
+			log.Printf("daemon: rules server: %v", err)
+		}
+	}()
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 

@@ -27,6 +27,15 @@ jobs:
         run: bash ci/integration.sh
       - name: Interface screenshot
         run: bash ci/screenshot.sh
+      - name: Install LibreWolf
+        run: |
+          sudo apt-get install -y extrepo
+          sudo extrepo enable librewolf
+          sudo apt-get update
+          sudo apt-get install -y librewolf
+          python3 -m pip install --break-system-packages selenium
+      - name: Browser tests
+        run: python3 ci/browser_test.py
       - name: Daemon log
         if: always()
         run: sudo journalctl -u open-turkey --no-pager | tail -100

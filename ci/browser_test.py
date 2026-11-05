@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import time
+from urllib.parse import unquote
 
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
@@ -58,7 +59,7 @@ def report(browser, label):
     print(f"::notice::{label} addons: {addons}"[:600])
 
 
-for label, required in (("signed-default", True), ("signatures-off", False)):
+for label, required in (("default-profile", True),):
     try:
         probe = start(required)
         try:
@@ -68,12 +69,8 @@ for label, required in (("signed-default", True), ("signatures-off", False)):
     except Exception as error:
         print("::notice::" + label + " failed: " + str(error)[:300].replace(chr(10), " "))
 
-driver = start(False)
+driver = start()
 try:
-    try:
-        driver.install_addon("/usr/share/open-turkey/open-turkey.xpi", temporary=True)
-    except Exception as error:
-        print("::error::temporary install failed: " + str(error)[:300].replace(chr(10), " "))
     time.sleep(10)
     driver.get("https://example.org/secret/page")
     time.sleep(2)
@@ -91,7 +88,7 @@ try:
     driver.get("https://www.google.com/search?q=test&tbm=isch")
     time.sleep(3)
     print("search url:", driver.current_url)
-    check("search is forced to web results", "udm=14" in driver.current_url)
+    check("search is forced to web results", "udm=14" in unquote(driver.current_url))
 finally:
     driver.quit()
 

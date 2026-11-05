@@ -175,3 +175,43 @@ func SyncSafeSearch(on bool) error {
 	}
 	return atomicWriteFile(hostsPath, []byte(want), 0644)
 }
+
+const signingPref = `lockPref("xpinstall.signatures.required", false); // open-turkey`
+
+var librewolfConfigs = []string{"/usr/share/librewolf/librewolf.cfg", "/usr/lib/librewolf/librewolf.cfg"}
+
+// withSigningPref adds or removes the line that lets the bundled unsigned
+// extension load.
+func withSigningPref(config string, on bool) string {
+	var lines []string
+	for _, line := range strings.Split(strings.TrimRight(config, "\n"), "\n") {
+		if line != signingPref {
+			lines = append(lines, line)
+		}
+	}
+	if on {
+		lines = append(lines, signingPref)
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// SyncLibreWolfSigning keeps the setting in place, since a LibreWolf update can
+// replace the file.
+func SyncLibreWolfSigning(on bool) error {
+	for _, path := range librewolfConfigs {
+		data, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		want := withSigningPref(string(data), on)
+		if want != string(data) {
+			if err := atomicWriteFile(path, []byte(want), 0644); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

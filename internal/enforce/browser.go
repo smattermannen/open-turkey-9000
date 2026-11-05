@@ -124,6 +124,9 @@ func enforceBrowser(d *db.DB) {
 			setup.ExtensionID, setup.ExtensionXPI = webext.ID, webext.Path
 		}
 	}
+	if err := blocker.SyncLibreWolfSigning(setup.ExtensionID != ""); err != nil {
+		log.Printf("browser: %v", err)
+	}
 	if err := blocker.EnsureBrowserSetup(setup); err != nil {
 		log.Printf("browser: %v", err)
 	}

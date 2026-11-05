@@ -33,3 +33,14 @@ func TestSetupPolicies(t *testing.T) {
 		t.Errorf("only unrelated policies should remain: %v", policies)
 	}
 }
+
+func TestSigningPref(t *testing.T) {
+	base := "// config\n"
+	on := withSigningPref(base, true)
+	if !strings.Contains(on, signingPref) || withSigningPref(on, true) != on {
+		t.Fatalf("adding is not stable: %q", on)
+	}
+	if off := withSigningPref(on, false); off != base {
+		t.Fatalf("not removed: %q", off)
+	}
+}

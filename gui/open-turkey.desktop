@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Open Turkey
+Comment=Blockera webbplatser och program
+Exec=open-turkey-gui
+Icon=changes-prevent
+Terminal=false
+Categories=Utility;

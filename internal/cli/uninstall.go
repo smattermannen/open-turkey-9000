@@ -51,6 +51,12 @@ var prepareUninstallCmd = &cobra.Command{
 			return err
 		}
 
+		if until, err := database.FreezeUntil(); err != nil {
+			return err
+		} else if until > time.Now().Unix() {
+			return fmt.Errorf("cannot uninstall during Frozen Turkey")
+		}
+
 		// Refuse while any block is held (char-locked, time-locked, or in or
 		// about to enter a scheduled window) — uninstalling must not be a way
 		// around a lock. Inactive blocks are checked too, for upcoming windows.

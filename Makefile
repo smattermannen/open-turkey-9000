@@ -60,6 +60,10 @@ install: build
 	chmod 755 "$$tmp"; \
 	mv -f "$$tmp" $(INSTALL_PATH)/$(BINARY_INSTALLED)
 
+	@echo ">> Installing the graphical interface..."
+	install -m 755 gui/open-turkey-gui.py $(INSTALL_PATH)/open-turkey-gui
+	install -m 644 gui/open-turkey.desktop /usr/share/applications/open-turkey.desktop
+
 	@echo ">> Creating wrapper script at $(INSTALL_PATH)/$(BINARY_NAME)..."
 	# The wrapper script is what the user runs when typing "open-turkey".
 	# It calls "sudo open-turkey-bin" under the hood.
@@ -132,6 +136,7 @@ uninstall:
 	@echo ">> Removing the wrapper script and the real binary..."
 	rm -f $(INSTALL_PATH)/$(BINARY_NAME)
 	rm -f $(INSTALL_PATH)/$(BINARY_INSTALLED)
+	rm -f $(INSTALL_PATH)/open-turkey-gui /usr/share/applications/open-turkey.desktop
 
 	@echo ">> Removing sudoers rule..."
 	rm -f $(SUDOERS_FILE)

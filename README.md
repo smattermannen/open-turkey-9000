@@ -259,9 +259,19 @@ sudo make uninstall
 
 Uninstalling first runs a guard that **refuses while any block is held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening) **or has allow windows**, so uninstalling can't be used to sidestep a lock — clear the hold first, and remove allow windows (queued or `--now`, see above). When it proceeds, it deactivates all blocks and removes every blocking layer (`/etc/hosts` entries, firewall rules, browser policies) so the system is left clean rather than blocked-with-no-tool.
 
-## Intentionally not implemented
+## Graphical interface
 
-Cold Turkey's "Frozen Turkey" locks you out of the whole computer (screen lock / forced logout) for a set time. Open Turkey deliberately does **not** do this: a bug or a mistimed lock could leave you unable to use your own machine with no safe recovery. Time-locked blocks give most of the benefit — un-removable focus for a fixed window — without the lock-out risk. IPv6 is covered by the firewall's IP rules, but those rules are best-effort (shared CDN IPs, changing addresses); `/etc/hosts` and browser policy remain the authoritative layers.
+`make install` adds **Open Turkey** to the application menu (or run `open-turkey-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). The interface manages blocks, sites, apps, schedules and locks through the same command-line rules, and opens a terminal for the typing challenge.
+
+## Frozen Turkey
+
+`open-turkey freeze --for 2h --yes` (or the button in the interface) keeps every session locked until the time has passed. The daemon locks the screen again every 5 seconds, a freeze can only be extended, and the longest freeze is 24 hours. The time keeps counting while the computer is off.
+
+**Emergency exit:** hold Shift or press Esc at boot to open GRUB, press `e` on the boot entry, add `openturkey.nofreeze` to the line starting with `linux`, then press F10. The freeze is not enforced during that boot, and it returns on the next normal boot if time remains.
+
+## Limits
+
+IPv6 is covered by the firewall's IP rules, but those rules are best-effort (shared CDN IPs, changing addresses); `/etc/hosts` and browser policy remain the authoritative layers.
 
 ## License
 

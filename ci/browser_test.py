@@ -41,16 +41,19 @@ try:
     diag = subprocess.run(
         "ls -d /usr/lib/librewolf* /usr/share/librewolf* /opt/librewolf* 2>&1; "
         "readlink -f /usr/bin/librewolf; ls -l /etc/librewolf/policies /usr/share/open-turkey 2>&1; "
-        "find /usr -type d -name distribution 2>/dev/null; curl -s 127.0.0.1:47613/rules",
+        "curl -s 127.0.0.1:47613/rules",
         shell=True, capture_output=True, text=True).stdout
-    for line in diag.splitlines():
-        print("::notice::diag " + line)
-    driver.get("about:policies");time.sleep(1)
-    print("::notice::policies " + driver.find_element("tag name", "body").text[:300].replace(chr(10), " | "))
-    driver.get("about:support");time.sleep(2)
-    print("::notice::addons " + driver.execute_script(
-        "return [...document.querySelectorAll('#addons-tbody tr')].map(r=>r.innerText).join(' ; ')")[:400].replace(chr(10), " "))
+    print("::notice::diag " + " ; ".join(diag.splitlines())[-900:])
     print("::notice::version " + driver.capabilities.get("browserVersion", "?"))
+    for page, script in (
+            ("about:policies", "return document.body.innerText"),
+            ("about:support", "return [...document.querySelectorAll('#addons-tbody tr')].map(r=>r.innerText).join(' ; ')")):
+        try:
+            driver.get(page)
+            time.sleep(2)
+            print("::notice::" + page + " " + driver.execute_script(script)[:500].replace(chr(10), " | "))
+        except Exception as error:
+            print("::notice::" + page + " failed " + str(error)[:200].replace(chr(10), " "))
     driver.get("https://example.org/secret/page")
     time.sleep(2)
     print("blocked url:", driver.current_url)

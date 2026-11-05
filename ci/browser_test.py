@@ -34,10 +34,10 @@ def start(signatures_required=True):
     options = Options()
     options.binary_location = "/usr/bin/librewolf"
     options.add_argument("-headless")
-    options.add_argument("-remote-allow-system-access")
     if not signatures_required:
         options.set_preference("xpinstall.signatures.required", False)
-    service = Service(os.path.join(os.environ["GECKOWEBDRIVER"], "geckodriver"))
+    service = Service(os.path.join(os.environ["GECKOWEBDRIVER"], "geckodriver"),
+                      service_args=["--allow-system-access"])
     browser = webdriver.Firefox(options=options, service=service)
     browser.set_page_load_timeout(40)
     return browser

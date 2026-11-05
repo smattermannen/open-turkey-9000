@@ -10,7 +10,7 @@ check() {
     if "$@"; then
         echo "PASS: $name"
     else
-        echo "FAIL: $name"
+        echo "::error::FAIL: $name"
         failures=$((failures + 1))
     fi
 }

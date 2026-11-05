@@ -1,0 +1,38 @@
+name: Test
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Unit tests
+        run: CGO_ENABLED=0 go test ./...
+      - name: Check the interface syntax
+        run: python3 -m py_compile gui/open-turkey-gui.py
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iptables python3-gi gir1.2-gtk-3.0 xvfb imagemagick dbus-x11
+      - name: Install Open Turkey
+        run: sudo env "PATH=$PATH" ./install.sh
+      - name: Integration tests
+        run: bash ci/integration.sh
+      - name: Interface screenshot
+        run: bash ci/screenshot.sh
+      - name: Daemon log
+        if: always()
+        run: sudo journalctl -u open-turkey --no-pager | tail -100
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: ignore

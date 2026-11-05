@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/schedule"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
 // TestReconcileSchedules checks the daemon's scheduling core (no layers, so no

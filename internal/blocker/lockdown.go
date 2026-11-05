@@ -13,9 +13,9 @@ import (
 // to block terminal programs. Recovery mode and booting another system still
 // work; see freeze.BypassParam for the exit the daemon itself honours.
 const (
-	lockdownSudoers = "/etc/sudoers.d/zz-open-turkey-lockdown"
-	lockdownPolkit  = "/etc/polkit-1/rules.d/00-open-turkey-lockdown.rules"
-	binaryPath      = "/usr/local/bin/open-turkey-bin"
+	lockdownSudoers = "/etc/sudoers.d/zz-kc9k-lockdown"
+	lockdownPolkit  = "/etc/polkit-1/rules.d/00-kc9k-lockdown.rules"
+	binaryPath      = "/usr/local/bin/kc9k-bin"
 )
 
 // lockdownPolkitRule denies every privileged desktop action except power,
@@ -55,7 +55,7 @@ func ApplyLockdown(user string) error {
 		return err
 	}
 	if !fileHas(lockdownSudoers, rules) {
-		check, err := os.CreateTemp("", "open-turkey-sudoers-*")
+		check, err := os.CreateTemp("", "kc9k-sudoers-*")
 		if err != nil {
 			return err
 		}

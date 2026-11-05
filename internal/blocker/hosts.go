@@ -30,10 +30,10 @@
 // To avoid messing up the original /etc/hosts entries (which may include
 // important system settings), we use special markers:
 //
-//	# BEGIN OPEN-TURKEY
+//	# BEGIN KC9K
 //	0.0.0.0 facebook.com
 //	0.0.0.0 www.facebook.com
-//	# END OPEN-TURKEY
+//	# END KC9K
 //
 // That way, when we need to remove the block, we know exactly which lines are
 // ours and which are the system's. We never touch anything outside the markers.
@@ -50,13 +50,13 @@ import (
 // the operating system before any DNS query.
 const hostsPath = "/etc/hosts"
 
-// beginMarker and endMarker delimit the section Open Turkey manages.
+// beginMarker and endMarker delimit the section Killer Chicken 9000 manages.
 // Everything BETWEEN these two lines was written by us and can be safely
 // removed. Everything OUTSIDE these lines belongs to the system and must
 // NEVER be changed.
 const (
-	beginMarker = "# BEGIN OPEN-TURKEY"
-	endMarker   = "# END OPEN-TURKEY"
+	beginMarker = "# BEGIN KC9K"
+	endMarker   = "# END KC9K"
 )
 
 // ApplyHosts takes a list of domains and blocks all of them in /etc/hosts.
@@ -64,7 +64,7 @@ const (
 // The process is:
 //  1. Normalize and validate the domains (invalid entries are dropped)
 //  2. Read the current contents of /etc/hosts (to preserve system entries)
-//  3. Remove any previous Open Turkey section (avoids duplicates)
+//  3. Remove any previous Killer Chicken 9000 section (avoids duplicates)
 //  4. Build a new section with every domain pointing to 0.0.0.0
 //  5. Write the file back atomically with the correct permissions (0644)
 //
@@ -94,9 +94,9 @@ func ApplyHosts(domains []string) error {
 		return fmt.Errorf("failed to read file %s: %w", hostsPath, err)
 	}
 
-	// Remove any previous Open Turkey section so we don't leave duplicates
+	// Remove any previous Killer Chicken 9000 section so we don't leave duplicates
 	// when the list of blocked sites changes.
-	cleanContent := removeOpenTurkeySection(string(content))
+	cleanContent := removeKC9KSection(string(content))
 
 	// Build the new section with the blocked domains.
 	var section strings.Builder
@@ -136,7 +136,7 @@ func ApplyHosts(domains []string) error {
 	return nil
 }
 
-// RemoveHosts removes every Open Turkey block from the /etc/hosts file.
+// RemoveHosts removes every Killer Chicken 9000 block from the /etc/hosts file.
 //
 // It is a no-op when our section isn't present, so the daemon can call it on
 // every idle tick without rewriting the file.
@@ -155,7 +155,7 @@ func RemoveHosts() error {
 		return nil
 	}
 
-	cleanContent := removeOpenTurkeySection(text)
+	cleanContent := removeKC9KSection(text)
 
 	if err := atomicWriteFile(hostsPath, []byte(cleanContent), 0644); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", hostsPath, err)
@@ -178,7 +178,7 @@ func HostsSectionPresent() bool {
 // IsHostsApplied checks whether ALL the given domains are blocked in /etc/hosts.
 //
 // Returns true ONLY if:
-//  1. Open Turkey's BEGIN/END markers exist in the file
+//  1. Killer Chicken 9000's BEGIN/END markers exist in the file
 //  2. EVERY expected domain is present in the section (both with and without "www.")
 //     with the exact "0.0.0.0 <domain>" mapping
 //
@@ -205,7 +205,7 @@ func IsHostsApplied(domains []string) bool {
 	}
 
 	// Check the domains INSIDE our section only.
-	section := extractOpenTurkeySection(text)
+	section := extractKC9KSection(text)
 
 	// No extra entries either: a domain whose block was turned off must not
 	// linger in the section.
@@ -261,11 +261,11 @@ func containsLine(text, want string) bool {
 	return false
 }
 
-// removeOpenTurkeySection removes everything between the BEGIN and END markers (inclusive).
+// removeKC9KSection removes everything between the BEGIN and END markers (inclusive).
 //
 // This is a helper used both by ApplyHosts (to clean up before rewriting)
 // and by RemoveHosts (to remove the block).
-func removeOpenTurkeySection(content string) string {
+func removeKC9KSection(content string) string {
 	lines := strings.Split(content, "\n")
 	var result []string
 
@@ -292,8 +292,8 @@ func removeOpenTurkeySection(content string) string {
 	return finalText
 }
 
-// extractOpenTurkeySection returns only the contents between the markers.
-func extractOpenTurkeySection(content string) string {
+// extractKC9KSection returns only the contents between the markers.
+func extractKC9KSection(content string) string {
 	lines := strings.Split(content, "\n")
 	var section []string
 	inSection := false

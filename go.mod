@@ -1,4 +1,4 @@
-module github.com/brunodcdo/open-turkey
+module github.com/smattermannen/kc9k
 
 go 1.25.6
 

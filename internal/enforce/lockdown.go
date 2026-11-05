@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/blocker"
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/freeze"
+	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/freeze"
 )
 
 // Settings that control strict mode.

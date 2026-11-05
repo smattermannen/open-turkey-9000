@@ -1,9 +1,9 @@
 // schedule.go — recurring block schedules.
 //
-//	open-turkey schedule add <block> --days weekdays --from 09:00 --to 17:00
-//	open-turkey schedule add <block> --allow --days fri,sat --from 18:00 --to 24:00
-//	open-turkey schedule list <block>
-//	open-turkey schedule remove <block> <number>
+//	kc9k schedule add <block> --days weekdays --from 09:00 --to 17:00
+//	kc9k schedule add <block> --allow --days fri,sat --from 18:00 --to 24:00
+//	kc9k schedule list <block>
+//	kc9k schedule remove <block> <number>
 //
 // A block's schedules are either block windows (the block is on while one is
 // open) or allow windows (the block is on at all times except while one is
@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/schedule"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 )
 

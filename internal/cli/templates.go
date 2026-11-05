@@ -1,6 +1,6 @@
 // templates.go — ready-made site lists for quick block setup.
 //
-// "open-turkey block create focus --template social-media" seeds a new block
+// "kc9k block create focus --template social-media" seeds a new block
 // with a curated list instead of making the user type every domain. Templates
 // are intentionally small and mainstream; users extend them with add-site.
 package cli

@@ -5,7 +5,7 @@ import (
 	"syscall"
 )
 
-const applyLockPath = "/run/open-turkey.lock"
+const applyLockPath = "/run/kc9k.lock"
 
 // applyLock makes the daemon and the CLI take turns writing the layers.
 // Otherwise a daemon cycle that read the state just before a CLI change could

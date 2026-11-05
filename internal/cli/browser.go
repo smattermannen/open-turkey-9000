@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +15,7 @@ var browserCmd = &cobra.Command{
 	Use:   "browser [setting] [on|off]",
 	Short: "Set browser options: " + strings.Join(enforce.BrowserSettings, ", "),
 	Long: `Options are always allowed to be turned on. While a block is locked or
-Frozen Turkey runs, they can't be turned off.`,
+Frozen Chicken runs, they can't be turned off.`,
 	Args: cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		name, value := args[0], args[1]

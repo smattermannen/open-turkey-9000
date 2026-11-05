@@ -1,15 +1,15 @@
 # =============================================================================
-# Open Turkey - Makefile
+# Killer Chicken 9000 - Makefile
 # Productivity blocker for Linux
 # =============================================================================
 
 # Name of the final binary (compiled by Go)
-BINARY_NAME=open-turkey
+BINARY_NAME=kc9k
 
 # Name of the binary installed on the system
-# We rename it to "open-turkey-bin" to separate the real binary
+# We rename it to "kc9k-bin" to separate the real binary
 # from the wrapper script the user runs directly
-BINARY_INSTALLED=open-turkey-bin
+BINARY_INSTALLED=kc9k-bin
 
 # Binary install path
 INSTALL_PATH=/usr/local/bin
@@ -17,13 +17,13 @@ INSTALL_PATH=/usr/local/bin
 # Path of the sudoers file that allows running without a password
 # We use /etc/sudoers.d/ (a "drop-in" directory) instead of editing
 # /etc/sudoers directly — that way the rule is isolated and easy to remove
-SUDOERS_FILE=/etc/sudoers.d/open-turkey
+SUDOERS_FILE=/etc/sudoers.d/kc9k
 
 # Path to install the systemd service file
 SERVICE_PATH=/etc/systemd/system
 
 # Directory to store the SQLite database
-DB_DIR=/var/lib/open-turkey
+DB_DIR=/var/lib/kc9k
 
 # Set TAGS=devmaster for a testing build with the master password
 TAGS?=
@@ -39,7 +39,7 @@ export PATH := /usr/local/go/bin:$(PATH)
 .PHONY: build
 build:
 	@echo ">> Compiling $(BINARY_NAME)..."
-	CGO_ENABLED=0 go build -tags "$(TAGS)" -o $(BINARY_NAME) ./cmd/open-turkey
+	CGO_ENABLED=0 go build -tags "$(TAGS)" -o $(BINARY_NAME) ./cmd/kc9k
 
 # -------------------------------------------------------
 # install: compiles, copies the binary, installs the systemd
@@ -47,14 +47,14 @@ build:
 #          configures sudoers and creates the wrapper script
 #
 # After installation, the user can run:
-#   open-turkey start ...
+#   kc9k start ...
 # without having to type "sudo" or a password.
 # -------------------------------------------------------
 .PHONY: install
 install: build
 	@echo ">> Installing the real binary as $(BINARY_INSTALLED)..."
 	# The real binary gets a different name so that the wrapper
-	# script can take the "open-turkey" name
+	# script can take the "kc9k" name
 	# We copy to a temporary file and do an atomic rename.
 	# This avoids the "Text file busy" (ETXTBSY) error when the daemon
 	# is running the current binary.
@@ -64,27 +64,27 @@ install: build
 	mv -f "$$tmp" $(INSTALL_PATH)/$(BINARY_INSTALLED)
 
 	@echo ">> Installing the graphical interface..."
-	install -m 755 gui/open-turkey-gui.py $(INSTALL_PATH)/open-turkey-gui
-	install -m 644 gui/open-turkey.desktop /usr/share/applications/open-turkey.desktop
+	install -m 755 gui/kc9k-gui.py $(INSTALL_PATH)/kc9k-gui
+	install -m 644 gui/kc9k.desktop /usr/share/applications/kc9k.desktop
 
 	@echo ">> Creating wrapper script at $(INSTALL_PATH)/$(BINARY_NAME)..."
-	# The wrapper script is what the user runs when typing "open-turkey".
-	# It calls "sudo open-turkey-bin" under the hood.
+	# The wrapper script is what the user runs when typing "kc9k".
+	# It calls "sudo kc9k-bin" under the hood.
 	# "exec" replaces the shell process with sudo, avoiding an
 	# unnecessary intermediate process in the process tree.
 	# "$$@" passes through all of the user's arguments (e.g. start, block, etc.)
 	printf '#!/bin/bash\n\
-# Open Turkey wrapper script\n\
-# Calls the real binary (open-turkey-bin) with sudo, transparently.\n\
-# The rule in /etc/sudoers.d/open-turkey allows this without a password.\n\
+# Killer Chicken 9000 wrapper script\n\
+# Calls the real binary (kc9k-bin) with sudo, transparently.\n\
+# The rule in /etc/sudoers.d/kc9k allows this without a password.\n\
 # "exec" replaces this process with sudo — no leftover shell.\n\
 exec sudo $(INSTALL_PATH)/$(BINARY_INSTALLED) "$$@"\n' > $(INSTALL_PATH)/$(BINARY_NAME)
 	chmod 755 $(INSTALL_PATH)/$(BINARY_NAME)
 
 	@echo ">> Configuring sudoers for passwordless execution..."
-	# sudoers rule: allows administrators (group sudo) to run open-turkey-bin
+	# sudoers rule: allows administrators (group sudo) to run kc9k-bin
 	# as root, without typing a password.
-	#   %sudo ALL=(root) NOPASSWD: /usr/local/bin/open-turkey-bin
+	#   %sudo ALL=(root) NOPASSWD: /usr/local/bin/kc9k-bin
 	#    |   |    |       |
 	#    |   |    |       +-- doesn't ask for a password
 	#    |   |    +---------- runs as root
@@ -97,8 +97,8 @@ exec sudo $(INSTALL_PATH)/$(BINARY_INSTALLED) "$$@"\n' > $(INSTALL_PATH)/$(BINAR
 	chmod 440 $(SUDOERS_FILE)
 
 	@echo ">> Installing the systemd service..."
-	cp systemd/open-turkey.service $(SERVICE_PATH)/open-turkey.service
-	chmod 644 $(SERVICE_PATH)/open-turkey.service
+	cp systemd/kc9k.service $(SERVICE_PATH)/kc9k.service
+	chmod 644 $(SERVICE_PATH)/kc9k.service
 
 	@echo ">> Creating database directory at $(DB_DIR)..."
 	mkdir -p $(DB_DIR)
@@ -108,8 +108,8 @@ exec sudo $(INSTALL_PATH)/$(BINARY_INSTALLED) "$$@"\n' > $(INSTALL_PATH)/$(BINAR
 	# binary, and "start" would leave it that way. Stopping the daemon never
 	# lifts blocks, so the restart leaves no gap in enforcement.
 	systemctl daemon-reload
-	systemctl enable open-turkey.service
-	systemctl restart open-turkey.service
+	systemctl enable kc9k.service
+	systemctl restart kc9k.service
 
 	@echo ">> Installation completed successfully!"
 
@@ -127,19 +127,19 @@ uninstall:
 	if [ -x $(INSTALL_PATH)/$(BINARY_INSTALLED) ]; then $(INSTALL_PATH)/$(BINARY_INSTALLED) prepare-uninstall; fi
 
 	@echo ">> Stopping the service..."
-	-systemctl stop open-turkey.service
+	-systemctl stop kc9k.service
 
 	@echo ">> Disabling the service..."
-	-systemctl disable open-turkey.service
+	-systemctl disable kc9k.service
 
 	@echo ">> Removing the service file..."
-	rm -f $(SERVICE_PATH)/open-turkey.service
+	rm -f $(SERVICE_PATH)/kc9k.service
 	systemctl daemon-reload
 
 	@echo ">> Removing the wrapper script and the real binary..."
 	rm -f $(INSTALL_PATH)/$(BINARY_NAME)
 	rm -f $(INSTALL_PATH)/$(BINARY_INSTALLED)
-	rm -f $(INSTALL_PATH)/open-turkey-gui /usr/share/applications/open-turkey.desktop
+	rm -f $(INSTALL_PATH)/kc9k-gui /usr/share/applications/kc9k.desktop
 
 	@echo ">> Removing sudoers rule..."
 	rm -f $(SUDOERS_FILE)

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
-	"github.com/brunodcdo/open-turkey/internal/quota"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/quota"
 	"github.com/spf13/cobra"
 )
 

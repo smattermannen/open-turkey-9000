@@ -11,7 +11,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/brunodcdo/open-turkey/internal/schedule"
+	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
 // upgradeSchema adds any columns that older databases are missing. New tables

@@ -2,7 +2,7 @@
 //
 // A block with a quota stays on all the time. Its owner opens it with a quota
 // session, and every minute of an open session is spent, whether or not the
-// sites are actually used: without a browser extension Open Turkey cannot see
+// sites are actually used: without a browser extension Killer Chicken 9000 cannot see
 // what happens inside a tab.
 package quota
 

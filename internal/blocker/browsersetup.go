@@ -116,8 +116,8 @@ func EnsureFile(path string, data []byte) error {
 }
 
 const (
-	safeSearchBegin = "# OPEN-TURKEY-SAFESEARCH-BEGIN"
-	safeSearchEnd   = "# OPEN-TURKEY-SAFESEARCH-END"
+	safeSearchBegin = "# KC9K-SAFESEARCH-BEGIN"
+	safeSearchEnd   = "# KC9K-SAFESEARCH-END"
 	// safeSearchFallback is the address in Google's documentation, used when
 	// looking up forcesafesearch.google.com fails.
 	safeSearchFallback = "216.239.38.120"
@@ -176,7 +176,7 @@ func SyncSafeSearch(on bool) error {
 	return atomicWriteFile(hostsPath, []byte(want), 0644)
 }
 
-const signingPref = `lockPref("xpinstall.signatures.required", false); // open-turkey`
+const signingPref = `lockPref("xpinstall.signatures.required", false); // kc9k`
 
 var librewolfConfigs = []string{"/usr/share/librewolf/librewolf.cfg", "/usr/lib/librewolf/librewolf.cfg"}
 

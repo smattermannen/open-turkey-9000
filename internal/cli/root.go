@@ -1,9 +1,9 @@
-// Package cli defines Open Turkey's command-line commands using Cobra.
+// Package cli defines Killer Chicken 9000's command-line commands using Cobra.
 //
 // Cobra is a popular Go library for building CLIs. It organizes the
 // application into "commands" that can have subcommands, flags and arguments.
-// For example: "open-turkey block create social-media" has:
-//   - "open-turkey" as the root command
+// For example: "kc9k block create social-media" has:
+//   - "kc9k" as the root command
 //   - "block" as a subcommand
 //   - "create" as a sub-subcommand
 //   - "social-media" as an argument
@@ -21,10 +21,10 @@ import (
 
 // rootCmd is the application's root command. Every other command (block,
 // start, etc.) is added as a child of this command. When the user types
-// "open-turkey" with no arguments, Cobra shows this command's help
+// "kc9k" with no arguments, Cobra shows this command's help
 // automatically.
 var rootCmd = &cobra.Command{
-	Use:   "open-turkey",
+	Use:   "kc9k",
 	Short: "A command-line productivity blocker for Linux",
 	// Execute() prints errors itself, so tell Cobra not to also print the
 	// error and dump usage on a runtime failure (that produced noisy,

@@ -1,4 +1,4 @@
-// Package daemon implements the main loop of Open Turkey's background service.
+// Package daemon implements the main loop of Killer Chicken 9000's background service.
 //
 // The daemon runs as a systemd service and has one crucial job: making sure
 // every blocking layer always matches what the active blocks require, and that
@@ -19,8 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
 // Run starts the enforcement loop and blocks until a shutdown signal arrives.
@@ -43,7 +43,7 @@ func Run() error {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	log.Println("daemon: starting Open Turkey enforcement loop")
+	log.Println("daemon: starting Killer Chicken 9000 enforcement loop")
 
 	// Enforce immediately so blocks are in place the moment the daemon starts.
 	if err := enforce.Tick(database, time.Now()); err != nil {

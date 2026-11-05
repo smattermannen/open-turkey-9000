@@ -29,10 +29,10 @@ func TestEngaged(t *testing.T) {
 	if Engaged(20, 20, "quiet splash") {
 		t.Error("should end at the end time")
 	}
-	if Engaged(10, 20, "quiet openturkey.nofreeze splash") {
+	if Engaged(10, 20, "quiet kc9k.nofreeze splash") {
 		t.Error("the kernel parameter should bypass the freeze")
 	}
-	if !Engaged(10, 20, "xopenturkey.nofreeze") {
+	if !Engaged(10, 20, "xkc9k.nofreeze") {
 		t.Error("only the exact parameter should bypass the freeze")
 	}
 }

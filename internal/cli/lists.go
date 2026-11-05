@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brunodcdo/open-turkey/internal/blocker"
-	"github.com/brunodcdo/open-turkey/internal/db"
+	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/spf13/cobra"
 )
 

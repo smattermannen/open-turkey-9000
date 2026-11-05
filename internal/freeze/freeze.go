@@ -1,7 +1,7 @@
-// Package freeze holds the pure rules of Frozen Turkey: the daemon keeps every
+// Package freeze holds the pure rules of Frozen Chicken: the daemon keeps every
 // session locked until a set time.
 //
-// Frozen Turkey uses the wall clock, not db.TrustedNow. Trusted time ignores
+// Frozen Chicken uses the wall clock, not db.TrustedNow. Trusted time ignores
 // time powered off, which would turn "frozen for 2 hours" into an open-ended
 // lockout for someone who shuts the computer down. Two limits keep a mistake
 // recoverable: MaxDuration, and the BypassParam kernel parameter.
@@ -19,7 +19,7 @@ const (
 
 	// BypassParam on the kernel command line (edit the boot entry in GRUB)
 	// stops the freeze from being enforced during that boot.
-	BypassParam = "openturkey.nofreeze"
+	BypassParam = "kc9k.nofreeze"
 )
 
 // The ways a freeze keeps the computer unusable.

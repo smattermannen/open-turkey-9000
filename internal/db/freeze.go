@@ -10,7 +10,7 @@ const freezeSchema = `CREATE TABLE IF NOT EXISTS freeze_state (
     until INTEGER NOT NULL
 );`
 
-// FreezeUntil returns the stored end of Frozen Turkey in unix seconds, or 0.
+// FreezeUntil returns the stored end of Frozen Chicken in unix seconds, or 0.
 func (d *DB) FreezeUntil() (int64, error) {
 	var until int64
 	err := d.conn.QueryRow("SELECT until FROM freeze_state WHERE id = 1").Scan(&until)
@@ -23,7 +23,7 @@ func (d *DB) FreezeUntil() (int64, error) {
 	return until, nil
 }
 
-// FreezeMode returns how Frozen Turkey keeps the computer unusable.
+// FreezeMode returns how Frozen Chicken keeps the computer unusable.
 func (d *DB) FreezeMode() (string, error) {
 	var mode string
 	err := d.conn.QueryRow("SELECT mode FROM freeze_state WHERE id = 1").Scan(&mode)
@@ -33,7 +33,7 @@ func (d *DB) FreezeMode() (string, error) {
 	return mode, err
 }
 
-// SetFreeze stores the end and mode of Frozen Turkey.
+// SetFreeze stores the end and mode of Frozen Chicken.
 func (d *DB) SetFreeze(until int64, mode string) error {
 	_, err := d.conn.Exec(`INSERT INTO freeze_state (id, until, mode) VALUES (1, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET until = excluded.until, mode = excluded.mode`, until, mode)

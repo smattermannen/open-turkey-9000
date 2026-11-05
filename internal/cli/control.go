@@ -2,10 +2,10 @@
 //
 // Lifecycle:
 //
-//	open-turkey start <block>   → Activate a block (start blocking)
-//	open-turkey stop <block>    → Deactivate a block (stop blocking)
-//	open-turkey unlock <block>  → Unlock a char-locked block via the challenge
-//	open-turkey status          → Show the status of every block
+//	kc9k start <block>   → Activate a block (start blocking)
+//	kc9k stop <block>    → Deactivate a block (stop blocking)
+//	kc9k unlock <block>  → Unlock a char-locked block via the challenge
+//	kc9k status          → Show the status of every block
 //
 // WAYS A BLOCK CAN BE "HELD" (not freely removable)
 // -------------------------------------------------
@@ -33,9 +33,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
-	"github.com/brunodcdo/open-turkey/internal/lock"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/lock"
 	"github.com/spf13/cobra"
 )
 
@@ -194,7 +194,7 @@ shortened or removed this way.`,
 			msg += fmt.Sprintf(" [TIME-LOCKED until %s]", time.Unix(lockedUntil, 0).Format("2006-01-02 15:04"))
 		}
 		fmt.Println(msg)
-		notify("Open Turkey", fmt.Sprintf("Block '%s' is now active", blockName))
+		notify("Killer Chicken 9000", fmt.Sprintf("Block '%s' is now active", blockName))
 		return nil
 	},
 }
@@ -266,7 +266,7 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' is not active", blockName)
 		}
 		if hold.quota {
-			return fmt.Errorf("block '%s' has a daily quota and stays on. Use 'open-turkey quota start %s'", blockName, blockName)
+			return fmt.Errorf("block '%s' has a daily quota and stays on. Use 'kc9k quota start %s'", blockName, blockName)
 		}
 		if hold.scheduledNow {
 			return fmt.Errorf("block '%s' is in a scheduled window and can't be stopped until it closes", blockName)
@@ -278,7 +278,7 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' stays on until the computer restarts", blockName)
 		}
 		if hold.charLocked || hold.passwordHash != "" {
-			return fmt.Errorf("block '%s' is locked. Use 'open-turkey unlock %s' first", blockName, blockName)
+			return fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", blockName, blockName)
 		}
 		if hold.extras.Delay > 0 {
 			if hold.extras.StopAt == 0 {
@@ -298,7 +298,7 @@ var stopCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("Block '%s' deactivated successfully\n", blockName)
-		notify("Open Turkey", fmt.Sprintf("Block '%s' deactivated", blockName))
+		notify("Killer Chicken 9000", fmt.Sprintf("Block '%s' deactivated", blockName))
 		return nil
 	},
 }
@@ -337,7 +337,7 @@ var unlockCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' stays on until the computer restarts", blockName)
 		}
 		if !hold.charLocked && hold.passwordHash == "" {
-			return fmt.Errorf("block '%s' is not locked. Use 'open-turkey stop' to deactivate it", blockName)
+			return fmt.Errorf("block '%s' is not locked. Use 'kc9k stop' to deactivate it", blockName)
 		}
 
 		if hold.passwordHash != "" {
@@ -390,7 +390,7 @@ var statusCmd = &cobra.Command{
 			return err
 		}
 		if len(blocks) == 0 {
-			fmt.Println("No blocks registered. Create one with 'open-turkey block create'.")
+			fmt.Println("No blocks registered. Create one with 'kc9k block create'.")
 			return nil
 		}
 
@@ -424,7 +424,7 @@ var statusCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Println("=== Open Turkey Status ===")
+		fmt.Println("=== Killer Chicken 9000 Status ===")
 		fmt.Println()
 		fmt.Println("Active blocks:")
 		printLinesOrNone(active)
@@ -434,7 +434,7 @@ var statusCmd = &cobra.Command{
 		fmt.Println()
 		fmt.Printf("Total: %d blocks (%d active, %d inactive)\n", len(active)+len(inactive), len(active), len(inactive))
 		if pending, err := database.ListPendingEdits(); err == nil && len(pending) > 0 {
-			fmt.Printf("Pending changes: %d (see 'open-turkey pending')\n", len(pending))
+			fmt.Printf("Pending changes: %d (see 'kc9k pending')\n", len(pending))
 		}
 		return nil
 	},

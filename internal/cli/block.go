@@ -1,4 +1,4 @@
-// This file defines the CLI commands for managing blocks in Open Turkey.
+// This file defines the CLI commands for managing blocks in Killer Chicken 9000.
 //
 // A "block" is a named group of sites and applications that the user wants to
 // block together. For example, a "social-media" block might contain the
@@ -10,15 +10,15 @@
 //  2. Call the matching function in the db package
 //  3. Print the result or the error message
 //
-// Every subcommand lives under "open-turkey block":
-//   - open-turkey block create [name]
-//   - open-turkey block add-site [block] [domains...]
-//   - open-turkey block remove-site [block] [domains...]
-//   - open-turkey block add-app [block] [processes...]
-//   - open-turkey block remove-app [block] [processes...]
-//   - open-turkey block list
-//   - open-turkey block info [name]
-//   - open-turkey block remove [name]
+// Every subcommand lives under "kc9k block":
+//   - kc9k block create [name]
+//   - kc9k block add-site [block] [domains...]
+//   - kc9k block remove-site [block] [domains...]
+//   - kc9k block add-app [block] [processes...]
+//   - kc9k block remove-app [block] [processes...]
+//   - kc9k block list
+//   - kc9k block info [name]
+//   - kc9k block remove [name]
 //
 // A held block (locked, time-locked or held by its schedule) only accepts
 // edits that make it stricter; see ensureEditable. A block with allow windows
@@ -32,10 +32,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/blocker"
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
-	"github.com/brunodcdo/open-turkey/internal/schedule"
+	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +56,7 @@ func openDB() (*db.DB, error) {
 	path := db.ResolveDBPath()
 
 	// filepath.Dir() extracts the parent directory from the full path.
-	// Example: "/var/lib/open-turkey/open-turkey.db" → "/var/lib/open-turkey"
+	// Example: "/var/lib/kc9k/kc9k.db" → "/var/lib/kc9k"
 	dir := filepath.Dir(path)
 
 	// os.MkdirAll creates the directory and every required parent.
@@ -157,7 +157,7 @@ func normalizeDomains(raw []string) ([]string, error) {
 
 // blockCmd is the parent command of every block subcommand.
 // It does nothing on its own — it only serves as a grouping.
-// When the user types "open-turkey block" without a subcommand,
+// When the user types "kc9k block" without a subcommand,
 // Cobra shows the help automatically.
 var blockCmd = &cobra.Command{
 	Use:   "block",
@@ -174,9 +174,9 @@ var blockCmd = &cobra.Command{
 //
 // Usage:
 //
-//	open-turkey block create social-media
-//	open-turkey block create focus --template social-media
-//	open-turkey block create work --allowlist
+//	kc9k block create social-media
+//	kc9k block create focus --template social-media
+//	kc9k block create work --allowlist
 var blockCreateCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a new block",
@@ -247,7 +247,7 @@ var blockCreateCmd = &cobra.Command{
 // blockAddSiteCmd adds one or more domains (sites) to an existing block.
 // The first argument is the block name, and the rest are the domains.
 //
-// Usage: open-turkey block add-site social-media facebook.com instagram.com
+// Usage: kc9k block add-site social-media facebook.com instagram.com
 var blockAddSiteCmd = &cobra.Command{
 	Use:   "add-site [block] [domains...]",
 	Short: "Add sites to a block",
@@ -316,7 +316,7 @@ var blockAddSiteCmd = &cobra.Command{
 
 // blockRemoveSiteCmd removes one or more domains (sites) from an existing block.
 //
-// Usage: open-turkey block remove-site social-media facebook.com instagram.com
+// Usage: kc9k block remove-site social-media facebook.com instagram.com
 var blockRemoveSiteCmd = &cobra.Command{
 	Use:   "remove-site [block] [domains...]",
 	Short: "Remove sites from a block",
@@ -400,7 +400,7 @@ var blockRemoveSiteCmd = &cobra.Command{
 // blockAddAppCmd adds one or more process names (apps) to an existing block.
 // The first argument is the block name, and the rest are the process names.
 //
-// Usage: open-turkey block add-app social-media discord telegram
+// Usage: kc9k block add-app social-media discord telegram
 var blockAddAppCmd = &cobra.Command{
 	Use:   "add-app [block] [processes...]",
 	Short: "Add applications to a block",
@@ -454,7 +454,7 @@ var blockAddAppCmd = &cobra.Command{
 
 // blockRemoveAppCmd removes one or more process names (apps) from an existing block.
 //
-// Usage: open-turkey block remove-app social-media discord telegram
+// Usage: kc9k block remove-app social-media discord telegram
 var blockRemoveAppCmd = &cobra.Command{
 	Use:   "remove-app [block] [processes...]",
 	Short: "Remove applications from a block",
@@ -530,7 +530,7 @@ var blockRemoveAppCmd = &cobra.Command{
 // Shows a formatted table with the block name, number of sites,
 // number of apps and the creation date.
 //
-// Usage: open-turkey block list
+// Usage: kc9k block list
 var blockListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all blocks",
@@ -579,7 +579,7 @@ var blockListCmd = &cobra.Command{
 // Shows the name, creation date, activation status, and the lists
 // of blocked sites and applications.
 //
-// Usage: open-turkey block info social-media
+// Usage: kc9k block info social-media
 var blockInfoCmd = &cobra.Command{
 	Use:   "info [name]",
 	Short: "Show details of a block",
@@ -678,7 +678,7 @@ var blockInfoCmd = &cobra.Command{
 				}
 				if first {
 					fmt.Println()
-					fmt.Println("Pending changes (see 'open-turkey pending'):")
+					fmt.Println("Pending changes (see 'kc9k pending'):")
 					first = false
 				}
 				fmt.Printf("  [%d] %s (at %s)\n", p.Num, p.Edit, time.Unix(p.ApplyAt, 0).Format("2006-01-02 15:04"))
@@ -697,7 +697,7 @@ var blockInfoCmd = &cobra.Command{
 // refused while a schedule window is open or about to open (see
 // ensureEditable), since deleting the block deletes its schedules.
 //
-// Usage: open-turkey block remove social-media
+// Usage: kc9k block remove social-media
 var blockRemoveCmd = &cobra.Command{
 	Use:   "remove [name]",
 	Short: "Remove a block",
@@ -759,7 +759,7 @@ var blockRemoveCmd = &cobra.Command{
 //
 // Resulting hierarchy:
 //
-//	open-turkey (rootCmd)
+//	kc9k (rootCmd)
 //	└── block (blockCmd)
 //	    ├── create   (blockCreateCmd)
 //	    ├── add-site (blockAddSiteCmd)

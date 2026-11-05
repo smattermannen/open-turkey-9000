@@ -1,4 +1,4 @@
-// freeze.go — Frozen Turkey and the JSON state used by the graphical interface.
+// freeze.go — Frozen Chicken and the JSON state used by the graphical interface.
 package cli
 
 import (
@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/blocker"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
-	"github.com/brunodcdo/open-turkey/internal/freeze"
-	"github.com/brunodcdo/open-turkey/internal/quota"
+	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/freeze"
+	"github.com/smattermannen/kc9k/internal/quota"
 	"github.com/spf13/cobra"
 )
 
 var freezeCmd = &cobra.Command{
 	Use:   "freeze",
-	Short: "Frozen Turkey: keep the screen locked for a set time",
+	Short: "Frozen Chicken: keep the screen locked for a set time",
 	Long: `Lock every session and keep it locked until the time has passed.
 
 There is no way to cancel from the desktop. A running freeze can only be

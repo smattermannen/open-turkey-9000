@@ -25,7 +25,7 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 
 	// Create the temp file in the SAME directory so the rename stays on one
 	// filesystem (cross-filesystem renames are not atomic and would fail).
-	tmp, err := os.CreateTemp(dir, ".open-turkey-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".kc9k-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file in %s: %w", dir, err)
 	}

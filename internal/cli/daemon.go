@@ -1,4 +1,4 @@
-// daemon.go — Command to start the Open Turkey daemon.
+// daemon.go — Command to start the Killer Chicken 9000 daemon.
 //
 // WHAT IS A DAEMON?
 // -----------------
@@ -32,20 +32,20 @@
 //
 // Manual usage example (for debugging):
 //
-//	sudo open-turkey daemon
+//	sudo kc9k daemon
 //
 // Usage via systemd (the right way):
 //
-//	sudo systemctl start open-turkey
-//	sudo systemctl enable open-turkey   # starts automatically at boot
+//	sudo systemctl start kc9k
+//	sudo systemctl enable kc9k   # starts automatically at boot
 package cli
 
 import (
-	"github.com/brunodcdo/open-turkey/internal/daemon"
+	"github.com/smattermannen/kc9k/internal/daemon"
 	"github.com/spf13/cobra"
 )
 
-// daemonCmd starts the Open Turkey daemon.
+// daemonCmd starts the Killer Chicken 9000 daemon.
 //
 // The daemon runs in an infinite loop, monitoring and reapplying the blocks.
 // It only stops when it receives a shutdown signal (SIGTERM/SIGINT)
@@ -56,7 +56,7 @@ import (
 // (the CLI framework) and the daemon package.
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
-	Short: "Start the Open Turkey daemon (use via systemd)",
+	Short: "Start the Killer Chicken 9000 daemon (use via systemd)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// daemon.Run() starts the daemon's main loop.
 		// This call is BLOCKING — it only returns when the daemon shuts down
@@ -70,7 +70,7 @@ var daemonCmd = &cobra.Command{
 //
 // After this registration, the user can run:
 //
-//	open-turkey daemon
+//	kc9k daemon
 //
 // Go calls init() automatically when the package is loaded.
 // Since every file in the "cli" package is loaded together,

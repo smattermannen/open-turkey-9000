@@ -4,8 +4,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/quota"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/quota"
 )
 
 // reconcileQuotas spends open sessions and keeps each quota block on, except

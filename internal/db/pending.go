@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/brunodcdo/open-turkey/internal/schedule"
+	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
 // Edit actions that can be queued.

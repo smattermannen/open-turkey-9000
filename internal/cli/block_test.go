@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
+	"github.com/smattermannen/kc9k/internal/db"
 )
 
 func TestSiteEditStrengthens(t *testing.T) {

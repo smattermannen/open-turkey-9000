@@ -10,7 +10,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/brunodcdo/open-turkey/internal/lock"
+	"github.com/smattermannen/kc9k/internal/lock"
 )
 
 func main() {

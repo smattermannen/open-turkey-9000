@@ -1,4 +1,4 @@
-# Open Turkey
+# Killer Chicken 9000 (KC9K)
 
 A command-line (CLI) productivity blocker for Linux, backed by a `systemd` service.
 
@@ -10,7 +10,7 @@ continuously ensures the blocking layers stay applied.
 
 ```bash
 export PATH="/usr/local/go/bin:$PATH"
-make build            # CGO_ENABLED=0 go build -o open-turkey ./cmd/open-turkey
+make build            # CGO_ENABLED=0 go build -o kc9k ./cmd/kc9k
 sudo ./install.sh     # compiles + installs binary, wrapper, sudoers, systemd and DB
 ```
 
@@ -19,7 +19,7 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
 
 ## Architecture
 
-- **Entrypoint** (`cmd/open-turkey/main.go`): lean, just delegates to `cli.Execute()`.
+- **Entrypoint** (`cmd/kc9k/main.go`): lean, just delegates to `cli.Execute()`.
 - **CLI** (`internal/cli/`): Cobra commands. `block.go` (block CRUD),
   `control.go` (`start`/`stop`/`unlock`/`status`).
 - **Blocking layers** (`internal/blocker/`): `/etc/hosts` (atomic writes),
@@ -47,8 +47,8 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   for `LoosenDelay` (24h, applied by the daemon) or, with `--now`, runs the
   typing challenge first.
 - **Daemon** (`internal/daemon/`): systemd service, calls `enforce.Tick` every 5s.
-- **DB** (`internal/db/`): SQLite at `/var/lib/open-turkey/open-turkey.db` (WAL);
-  `OPEN_TURKEY_DB` overrides the path (tests only; the unit never sets it).
+- **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL);
+  `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (modes, patterns, schedules, time locks, schema
   upgrades) + `pending.go` (queued loosening edits).
 - **Lock** (`internal/lock/`): raw-mode, paste-resistant typing challenge (random
@@ -58,9 +58,9 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
 ## System installation
 
 `make install` copies everything outside the source directory: the real binary to
-`/usr/local/bin/open-turkey-bin`, the `open-turkey` wrapper (does `exec sudo`), a rule
-in `/etc/sudoers.d/open-turkey`, the `open-turkey.service` unit and the DB in
-`/var/lib/open-turkey/`. The installed program doesn't depend on the project folder.
+`/usr/local/bin/kc9k-bin`, the `kc9k` wrapper (does `exec sudo`), a rule
+in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
+`/var/lib/kc9k/`. The installed program doesn't depend on the project folder.
 
 ## Commands
 

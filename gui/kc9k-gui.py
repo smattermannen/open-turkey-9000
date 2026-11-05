@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Graphical interface for Open Turkey (GTK 3).
+"""Graphical interface for Killer Chicken 9000 (GTK 3).
 
-All changes go through the open-turkey command, so the interface follows the
+All changes go through the kc9k command, so the interface follows the
 same lock rules as the terminal and needs no privileges of its own.
 """
 import json
@@ -14,7 +14,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk  # noqa: E402
 
-CLI = "open-turkey"
+CLI = "kc9k"
 REFRESH_SECONDS = 5
 
 
@@ -92,7 +92,7 @@ class EditableList(Gtk.Box):
 
 class Window(Gtk.ApplicationWindow):
     def __init__(self, app):
-        super().__init__(application=app, title="Open Turkey")
+        super().__init__(application=app, title="Killer Chicken 9000")
         self.set_default_size(820, 620)
         self.state_json = None
         self.blocks = {}
@@ -101,12 +101,12 @@ class Window(Gtk.ApplicationWindow):
         self.strict = False
         self.browser = {}
 
-        header = Gtk.HeaderBar(show_close_button=True, title="Open Turkey")
+        header = Gtk.HeaderBar(show_close_button=True, title="Killer Chicken 9000")
         self.set_titlebar(header)
         new_block = Gtk.Button(label="Nytt block")
         new_block.connect("clicked", self.create_block)
         header.pack_start(new_block)
-        self.freeze_button = Gtk.Button(label="Frozen Turkey")
+        self.freeze_button = Gtk.Button(label="Frozen Chicken")
         self.freeze_button.connect("clicked", self.freeze)
         header.pack_end(self.freeze_button)
         browser_button = Gtk.Button(label="Webbläsare")
@@ -301,7 +301,7 @@ class Window(Gtk.ApplicationWindow):
             "Strikt läge: på" if self.strict else "Strikt läge: av")
         frozen = state["freeze_seconds"]
         self.banner.set_text(
-            f"Frozen Turkey är aktivt i {fmt_seconds(frozen)} till."
+            f"Frozen Chicken är aktivt i {fmt_seconds(frozen)} till."
             if frozen else f"{sum(b['active'] for b in state['blocks'])} block aktiva")
 
         for row in self.block_list.get_children():
@@ -579,7 +579,7 @@ class Window(Gtk.ApplicationWindow):
                 "Slå på strikt läge?",
                 "Under lås nekas sudo och pkexec för alla användare, och du "
                 "kan inte installera eller ändra systemet. Nödutgång: lägg "
-                "till openturkey.nofreeze på linux-raden i GRUB."):
+                "till kc9k.nofreeze på linux-raden i GRUB."):
             self.run(["strict", "on"])
 
     def add_schedule(self, values):
@@ -595,7 +595,7 @@ class Window(Gtk.ApplicationWindow):
 
     def freeze(self, _button):
         dialog = Gtk.MessageDialog(
-            transient_for=self, modal=True, text="Frozen Turkey",
+            transient_for=self, modal=True, text="Frozen Chicken",
             secondary_text="Skärmen låses om och om igen tills tiden är slut, "
                            "även om du startar om. Det går inte att avbryta "
                            "från skrivbordet. Spara ditt arbete först.",
@@ -624,7 +624,7 @@ class Window(Gtk.ApplicationWindow):
 
 class App(Gtk.Application):
     def __init__(self):
-        super().__init__(application_id="io.github.openturkey.Gui")
+        super().__init__(application_id="io.github.kc9k.Gui")
 
     def do_activate(self):
         window = self.get_active_window() or Window(self)

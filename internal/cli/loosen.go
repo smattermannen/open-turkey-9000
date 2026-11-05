@@ -6,7 +6,7 @@
 // loosening edit to such a block never applies on its own:
 //
 //   - by default it is queued, and the daemon applies it LoosenDelay later
-//     (open-turkey pending lists the queue; pending cancel drops an entry);
+//     (kc9k pending lists the queue; pending cancel drops an entry);
 //   - with --now it applies immediately, after the same typing challenge as
 //     unlock.
 //
@@ -15,16 +15,16 @@
 // stricter are never gated. Blocks without allow windows keep the plain rule:
 // loosening edits are refused while the block is held (see ensureEditable).
 //
-//	open-turkey pending
-//	open-turkey pending cancel <number>
+//	kc9k pending
+//	kc9k pending cancel <number>
 package cli
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/lock"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/lock"
 	"github.com/spf13/cobra"
 )
 
@@ -57,7 +57,7 @@ func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool
 		return false, fmt.Errorf("block '%s' is time-locked until %s and can't be loosened before then", name, hold.until())
 	}
 	if hold.active && hold.charLocked {
-		return false, fmt.Errorf("block '%s' is locked. Use 'open-turkey unlock %s' first", name, name)
+		return false, fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", name, name)
 	}
 
 	if now, _ := cmd.Flags().GetBool("now"); now {
@@ -77,7 +77,7 @@ func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool
 		return false, err
 	}
 	fmt.Printf("Block '%s' has allow windows, so this change is queued: %s\n", name, e)
-	fmt.Printf("It takes effect at %s. See 'open-turkey pending'; to apply it now instead, cancel it and rerun with --now (typing challenge).\n",
+	fmt.Printf("It takes effect at %s. See 'kc9k pending'; to apply it now instead, cancel it and rerun with --now (typing challenge).\n",
 		applyAt.Format("2006-01-02 15:04"))
 	return false, nil
 }

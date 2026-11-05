@@ -10,10 +10,10 @@ if ! command -v update-grub >/dev/null || [ ! -d /boot/grub ]; then
 fi
 
 # Earlier tests leave long locks running, so 'off' is refused here on purpose.
-open-turkey no-escape on --yes
-sudo grep -q '^password_pbkdf2 openturkey grub.pbkdf2' /boot/grub/grub.cfg
+kc9k no-escape on --yes
+sudo grep -q '^password_pbkdf2 kc9k grub.pbkdf2' /boot/grub/grub.cfg
 sudo grep -q -- '--unrestricted' /boot/grub/grub.cfg
-if open-turkey no-escape off; then
+if kc9k no-escape off; then
     echo "::error::FAIL: no-escape turned off during a lock"
     exit 1
 fi

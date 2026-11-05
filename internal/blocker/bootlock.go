@@ -14,11 +14,11 @@ import (
 // keeps normal entries bootable. Nobody can then edit a boot entry, including
 // the owner, so the only way past it is booting other media or reinstalling.
 const (
-	grubPasswordFile = "/etc/grub.d/09_open_turkey"
-	grubDefaultsFile = "/etc/default/grub.d/99-open-turkey.cfg"
+	grubPasswordFile = "/etc/grub.d/09_kc9k"
+	grubDefaultsFile = "/etc/default/grub.d/99-kc9k.cfg"
 	grubLinuxScript  = "/etc/grub.d/10_linux"
 	grubProberScript = "/etc/grub.d/30_os-prober"
-	grubBackupSuffix = ".open-turkey-backup"
+	grubBackupSuffix = ".kc9k-backup"
 )
 
 // unrestrict makes a script's menu entries bootable without the password.
@@ -32,7 +32,7 @@ func unrestrict(script string) string {
 }
 
 func grubPasswordScript(hash string) string {
-	return "#!/bin/sh\ncat <<'EOF'\nset superusers=\"openturkey\"\npassword_pbkdf2 openturkey " + hash + "\nEOF\n"
+	return "#!/bin/sh\ncat <<'EOF'\nset superusers=\"kc9k\"\npassword_pbkdf2 kc9k " + hash + "\nEOF\n"
 }
 
 func randomGrubHash() (string, error) {

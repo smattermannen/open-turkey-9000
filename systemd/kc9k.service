@@ -1,21 +1,21 @@
-# systemd unit file for Open Turkey
+# systemd unit file for Killer Chicken 9000
 # This service manages the productivity blocker daemon
 
 [Unit]
 # Service description shown in commands like 'systemctl status'
-Description=Open Turkey - Productivity Blocker
+Description=Killer Chicken 9000 - Productivity Blocker
 # Link to the project's official documentation
-Documentation=https://github.com/brunodcdo/open-turkey
+Documentation=https://github.com/smattermannen/kc9k
 # Ensures the service only starts after the network is available
 After=network.target
 
 [Service]
 # Type 'simple': the main process is ExecStart itself
 Type=simple
-# Command to start the Open Turkey daemon
-# Uses the real binary (open-turkey-bin), not the wrapper script,
+# Command to start the Killer Chicken 9000 daemon
+# Uses the real binary (kc9k-bin), not the wrapper script,
 # since systemd already runs as root — no sudo needed
-ExecStart=/usr/local/bin/open-turkey-bin daemon
+ExecStart=/usr/local/bin/kc9k-bin daemon
 # Automatically restarts the service on failure
 Restart=always
 # Waits 5 seconds before restarting the service

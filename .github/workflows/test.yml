@@ -16,12 +16,12 @@ jobs:
       - name: Unit tests
         run: CGO_ENABLED=0 go test ./...
       - name: Check the interface syntax
-        run: python3 -m py_compile gui/open-turkey-gui.py
+        run: python3 -m py_compile gui/kc9k-gui.py
       - name: Install system packages
         run: |
           sudo apt-get update
           sudo apt-get install -y iptables python3-gi gir1.2-gtk-3.0 xvfb imagemagick dbus-x11
-      - name: Install Open Turkey
+      - name: Install Killer Chicken 9000
         run: sudo env "PATH=$PATH" ./install.sh
       - name: Integration tests
         run: bash ci/integration.sh
@@ -42,7 +42,7 @@ jobs:
         run: python3 ci/browser_test.py
       - name: Daemon log
         if: always()
-        run: sudo journalctl -u open-turkey --no-pager | tail -100
+        run: sudo journalctl -u kc9k --no-pager | tail -100
       - uses: actions/upload-artifact@v4
         if: always()
         with:

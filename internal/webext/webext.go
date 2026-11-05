@@ -13,10 +13,10 @@ import (
 var files embed.FS
 
 // ID is the extension's id in browser policies.
-const ID = "blocker@open-turkey-9000"
+const ID = "blocker@kc9k"
 
 // Path is where the packed extension is installed.
-const Path = "/usr/share/open-turkey/open-turkey.xpi"
+const Path = "/usr/share/kc9k/kc9k.xpi"
 
 // Pack returns the extension as an .xpi. The output is the same on every call,
 // so the daemon can tell whether the installed file is current.

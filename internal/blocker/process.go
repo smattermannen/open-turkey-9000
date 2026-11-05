@@ -1,5 +1,5 @@
 // =============================================================================
-// Package blocker — Open Turkey's process termination module
+// Package blocker — Killer Chicken 9000's process termination module
 // =============================================================================
 //
 // This file kills blocked application processes. It runs as root (needed for

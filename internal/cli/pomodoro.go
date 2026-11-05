@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
+	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/spf13/cobra"
 )
 

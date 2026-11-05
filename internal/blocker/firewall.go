@@ -1,5 +1,5 @@
 // =============================================================================
-// Package blocker — Open Turkey's firewall module
+// Package blocker — Killer Chicken 9000's firewall module
 // =============================================================================
 //
 // This file blocks sites at the network layer using iptables (IPv4) and
@@ -44,7 +44,7 @@ import (
 )
 
 // chainName is the name of our custom chain in both iptables and ip6tables.
-const chainName = "OPEN-TURKEY"
+const chainName = "KC9K"
 
 // dohServersIPv4 and dohServersIPv6 hold the addresses of well-known
 // DNS-over-HTTPS resolvers. We drop TCP port 443 to these so browsers can't
@@ -75,7 +75,7 @@ var dohServersIPv6 = []string{
 
 // ApplyFirewall configures the firewall to block the given domains.
 //
-// It rebuilds the OPEN-TURKEY chain from scratch (simpler and safer than
+// It rebuilds the KC9K chain from scratch (simpler and safer than
 // diffing), inserts a jump from OUTPUT, drops the resolved IPs of each domain,
 // and drops the DoH resolvers. IPv6 rules are applied the same way when
 // ip6tables is available; IPv6 failures are best-effort and never abort the
@@ -112,7 +112,7 @@ func ApplyFirewall(domains []string) error {
 	return nil
 }
 
-// applyFamily builds the OPEN-TURKEY chain for one address family (iptables or
+// applyFamily builds the KC9K chain for one address family (iptables or
 // ip6tables): create/flush the chain, ensure the OUTPUT jump, drop each IP, and
 // drop the DoH resolvers on port 443.
 func applyFamily(cmd string, ips, dohServers []string) error {
@@ -148,7 +148,7 @@ func applyFamily(cmd string, ips, dohServers []string) error {
 	return nil
 }
 
-// RemoveFirewall tears down the OPEN-TURKEY chain in both families.
+// RemoveFirewall tears down the KC9K chain in both families.
 //
 // Order matters: remove the OUTPUT jump, flush the chain, then delete it —
 // iptables refuses to delete a chain that is still referenced or non-empty.

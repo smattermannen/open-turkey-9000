@@ -1,4 +1,4 @@
-// Package lock implements Open Turkey's "typing challenge" mechanism.
+// Package lock implements Killer Chicken 9000's "typing challenge" mechanism.
 //
 // === WHAT IS THIS? ===
 //
@@ -9,7 +9,7 @@
 // === WHY DOES THIS WORK? ===
 //
 // It isn't cryptographic security — a determined user with root can always get
-// around Open Turkey. The point is PSYCHOLOGICAL: the tedious transcription
+// around Killer Chicken 9000. The point is PSYCHOLOGICAL: the tedious transcription
 // gives the impulse time to pass. The friction comes from TIME and attention:
 //
 //   - The text is random printable ASCII (crypto/rand): mostly letters of both

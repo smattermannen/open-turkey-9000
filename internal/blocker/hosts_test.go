@@ -2,7 +2,7 @@ package blocker
 
 import "testing"
 
-func TestRemoveOpenTurkeySection(t *testing.T) {
+func TestRemoveKC9KSection(t *testing.T) {
 	input := "127.0.0.1 localhost\n" +
 		beginMarker + "\n" +
 		"0.0.0.0 facebook.com\n" +
@@ -10,10 +10,10 @@ func TestRemoveOpenTurkeySection(t *testing.T) {
 		endMarker + "\n" +
 		"192.168.0.1 printer\n"
 
-	got := removeOpenTurkeySection(input)
+	got := removeKC9KSection(input)
 	want := "127.0.0.1 localhost\n192.168.0.1 printer\n"
 	if got != want {
-		t.Errorf("removeOpenTurkeySection() = %q; want %q", got, want)
+		t.Errorf("removeKC9KSection() = %q; want %q", got, want)
 	}
 }
 
@@ -23,10 +23,10 @@ func TestExtractOpenTurkeySection(t *testing.T) {
 		"0.0.0.0 facebook.com\n" +
 		endMarker + "\n"
 
-	got := extractOpenTurkeySection(input)
+	got := extractKC9KSection(input)
 	want := "0.0.0.0 facebook.com"
 	if got != want {
-		t.Errorf("extractOpenTurkeySection() = %q; want %q", got, want)
+		t.Errorf("extractKC9KSection() = %q; want %q", got, want)
 	}
 }
 

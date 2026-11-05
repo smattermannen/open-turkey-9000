@@ -1,6 +1,6 @@
 "use strict";
 
-// Rules come from the Open Turkey daemon. The last rules are kept, so blocking
+// Rules come from the Killer Chicken 9000 daemon. The last rules are kept, so blocking
 // survives a daemon restart.
 const RULES_URL = "http://127.0.0.1:47613/rules";
 const POLL_MS = 3000;

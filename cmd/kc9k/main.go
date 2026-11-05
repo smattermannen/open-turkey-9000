@@ -1,4 +1,4 @@
-// Package main is the entry point of Open Turkey — a command-line
+// Package main is the entry point of Killer Chicken 9000 — a command-line
 // productivity blocker for Linux.
 //
 // Why is main.go so lean?
@@ -19,7 +19,7 @@
 package main
 
 import (
-	"github.com/brunodcdo/open-turkey/internal/cli"
+	"github.com/smattermannen/kc9k/internal/cli"
 )
 
 // main is the application's entry point. We call cli.Execute(), which

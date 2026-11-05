@@ -19,7 +19,7 @@ def check(name, passed):
 
 
 def ot(*args):
-    subprocess.run(["open-turkey", *args], check=True)
+    subprocess.run(["kc9k", *args], check=True)
 
 
 ot("block", "create", "browsertest")

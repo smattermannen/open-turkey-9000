@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/brunodcdo/open-turkey/internal/blocker"
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 
-const masterHashPath = "/var/lib/open-turkey/master.hash"
+const masterHashPath = "/var/lib/kc9k/master.hash"
 
 var masterCmd = &cobra.Command{
 	Use:   "master",
@@ -23,7 +23,7 @@ var masterCmd = &cobra.Command{
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		stored, err := os.ReadFile(masterHashPath)
 		if err != nil {
-			return fmt.Errorf("no master password set; run 'open-turkey master-set' first")
+			return fmt.Errorf("no master password set; run 'kc9k master-set' first")
 		}
 		password, err := readPasswordStdin()
 		if err != nil {

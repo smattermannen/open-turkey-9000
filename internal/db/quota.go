@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/brunodcdo/open-turkey/internal/quota"
+	"github.com/smattermannen/kc9k/internal/quota"
 )
 
 const quotaSchema = `CREATE TABLE IF NOT EXISTS quotas (

@@ -1,16 +1,16 @@
 #!/bin/bash
 # =============================================================================
-# Open Turkey - Install Script
+# Killer Chicken 9000 - Install Script
 # Productivity blocker for Linux
 #
-# This script automates compiling and installing Open Turkey.
+# This script automates compiling and installing Killer Chicken 9000.
 # It must be run as root (or via sudo).
 # =============================================================================
 
 set -euo pipefail
 
 # --- Check that the script is running as root ---
-# Open Turkey needs root privileges to:
+# Killer Chicken 9000 needs root privileges to:
 #   - copy the binary to /usr/local/bin
 #   - install the systemd service
 #   - create the database directory
@@ -26,29 +26,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # --- Compile the binary ---
-echo "==> Step 1/2: Compiling Open Turkey..."
+echo "==> Step 1/2: Compiling Killer Chicken 9000..."
 make build
 
 # --- Install the binary and service, and configure systemd ---
-echo "==> Step 2/2: Installing Open Turkey..."
+echo "==> Step 2/2: Installing Killer Chicken 9000..."
 make install
 
 # --- Success message with usage instructions ---
 echo ""
 echo "============================================="
-echo "  Open Turkey installed successfully!"
+echo "  Killer Chicken 9000 installed successfully!"
 echo "============================================="
 echo ""
 echo "Useful commands:"
-echo "  open-turkey block create <block>                    - Create a block"
-echo "  open-turkey block add-site <block> <domains...>     - Add sites to the block"
-echo "  open-turkey block remove-site <block> <domains...>  - Remove sites from the block"
-echo "  open-turkey start <block>                           - Activate a block"
-echo "  open-turkey stop <block>                            - Deactivate a block (if not locked)"
-echo "  open-turkey status                                  - Show the status of the blocks"
+echo "  kc9k block create <block>                    - Create a block"
+echo "  kc9k block add-site <block> <domains...>     - Add sites to the block"
+echo "  kc9k block remove-site <block> <domains...>  - Remove sites from the block"
+echo "  kc9k start <block>                           - Activate a block"
+echo "  kc9k stop <block>                            - Deactivate a block (if not locked)"
+echo "  kc9k status                                  - Show the status of the blocks"
 echo ""
 echo "Service management:"
-echo "  systemctl status open-turkey   - View service status"
-echo "  systemctl restart open-turkey  - Restart the service"
-echo "  journalctl -u open-turkey -f   - Follow logs in real time"
+echo "  systemctl status kc9k   - View service status"
+echo "  systemctl restart kc9k  - Restart the service"
+echo "  journalctl -u kc9k -f   - Follow logs in real time"
 echo ""

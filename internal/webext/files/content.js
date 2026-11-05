@@ -1,6 +1,6 @@
 "use strict";
 
-const STYLE_ID = "open-turkey-page-style";
+const STYLE_ID = "kc9k-page-style";
 
 function render(page) {
   let css = "";

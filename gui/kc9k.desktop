@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Open Turkey
+Name=Killer Chicken 9000
 Comment=Blockera webbplatser och program
-Exec=open-turkey-gui
+Exec=kc9k-gui
 Icon=changes-prevent
 Terminal=false
 Categories=Utility;

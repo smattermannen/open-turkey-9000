@@ -86,7 +86,7 @@ func TestFlatpakAppFromCgroup(t *testing.T) {
 		"12:pids:/user.slice\n1:name=systemd:/user.slice/app.slice/app-flatpak-com.discordapp.Discord-7.scope\n": "com.discordapp.Discord",
 		// Not a Flatpak.
 		"0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.konsole-15233.scope/tab(16862).scope\n": "",
-		"0::/system.slice/open-turkey.service\n": "",
+		"0::/system.slice/kc9k.service\n": "",
 		// Malformed instance suffix.
 		"0::/app.slice/app-flatpak-com.example.App-abc.scope\n": "",
 		"": "",
@@ -154,7 +154,7 @@ func TestAppScopeIDs(t *testing.T) {
 		// Nested scope: only the app- element counts.
 		"0::/user.slice/app.slice/app-org.kde.konsole-15233.scope/tab(16862).scope\n": {"org.kde.konsole"},
 		// Not an app unit.
-		"0::/system.slice/open-turkey.service\n":                                    nil,
+		"0::/system.slice/kc9k.service\n":                                    nil,
 		"0::/user.slice/user@1000.service/app.slice/app-org.gnome.Terminal.slice\n": nil,
 		"": nil,
 	}

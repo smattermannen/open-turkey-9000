@@ -3,8 +3,8 @@ package enforce
 import (
 	"log"
 
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/quota"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/quota"
 )
 
 // withoutBreaks drops blocks in a Pomodoro break. They stay active, with their

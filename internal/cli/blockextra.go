@@ -1,11 +1,11 @@
 // blockextra.go — additional block subcommands: browser patterns, mode
 // switching, and JSON export/import.
 //
-//	open-turkey block add-pattern <block> '*casino*' '*://*/*ads*'
-//	open-turkey block remove-pattern <block> '*casino*'
-//	open-turkey block set-mode <block> allowlist|blocklist
-//	open-turkey block export <block>            # prints JSON to stdout
-//	open-turkey block import <file>             # creates a block from JSON
+//	kc9k block add-pattern <block> '*casino*' '*://*/*ads*'
+//	kc9k block remove-pattern <block> '*casino*'
+//	kc9k block set-mode <block> allowlist|blocklist
+//	kc9k block export <block>            # prints JSON to stdout
+//	kc9k block import <file>             # creates a block from JSON
 //
 // Patterns are wildcard/keyword URL filters enforced ONLY at the browser layer
 // (they can't be expressed in /etc/hosts or iptables).
@@ -20,9 +20,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/brunodcdo/open-turkey/internal/blocker"
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 

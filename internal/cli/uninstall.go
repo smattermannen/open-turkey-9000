@@ -27,7 +27,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +54,7 @@ var prepareUninstallCmd = &cobra.Command{
 		if until, err := database.FreezeUntil(); err != nil {
 			return err
 		} else if until > time.Now().Unix() {
-			return fmt.Errorf("cannot uninstall during Frozen Turkey")
+			return fmt.Errorf("cannot uninstall during Frozen Chicken")
 		}
 
 		// Refuse while any block is held (char-locked, time-locked, or in or
@@ -112,7 +112,7 @@ var prepareUninstallCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "warning: failed to clean browser policies: %v\n", err)
 		}
 
-		fmt.Println("Open Turkey blocking layers removed; ready to uninstall.")
+		fmt.Println("Killer Chicken 9000 blocking layers removed; ready to uninstall.")
 		return nil
 	},
 }

@@ -1,5 +1,5 @@
 // =============================================================================
-// Package blocker — Open Turkey's browser policy module
+// Package blocker — Killer Chicken 9000's browser policy module
 // =============================================================================
 //
 // This file implements site blocking using browser "enterprise policies" for
@@ -12,7 +12,7 @@
 // the OS administrator controls. Because the OS enforces them, the user cannot
 // disable them from inside the browser — not through settings, not in private
 // mode, not by removing an extension. Removing a policy requires root, which
-// (in Open Turkey's model) only the daemon has.
+// (in Killer Chicken 9000's model) only the daemon has.
 //
 // WHAT WE SET
 // -----------
@@ -27,7 +27,7 @@
 // -----------
 // Firefox uses a single shared policies.json, so we MERGE our keys and remove
 // only our keys on cleanup. Each Chromium-family browser reads every .json in
-// its managed/ directory, so we drop our own open-turkey.json per browser and
+// its managed/ directory, so we drop our own kc9k.json per browser and
 // simply delete it on cleanup.
 //
 // =============================================================================
@@ -50,12 +50,12 @@ const firefoxPolicyPath = "/etc/firefox/policies/policies.json"
 // yet is fine — os.MkdirAll creates it, so the policy is ready if the user
 // installs that browser later.
 var chromiumPolicyPaths = []string{
-	"/etc/chromium/policies/managed/open-turkey.json",   // Chromium
-	"/etc/opt/chrome/policies/managed/open-turkey.json", // Google Chrome
-	"/etc/brave/policies/managed/open-turkey.json",      // Brave
-	"/etc/opt/edge/policies/managed/open-turkey.json",   // Microsoft Edge
-	"/etc/opt/opera/policies/managed/open-turkey.json",  // Opera
-	"/etc/vivaldi/policies/managed/open-turkey.json",    // Vivaldi
+	"/etc/chromium/policies/managed/kc9k.json",   // Chromium
+	"/etc/opt/chrome/policies/managed/kc9k.json", // Google Chrome
+	"/etc/brave/policies/managed/kc9k.json",      // Brave
+	"/etc/opt/edge/policies/managed/kc9k.json",   // Microsoft Edge
+	"/etc/opt/opera/policies/managed/kc9k.json",  // Opera
+	"/etc/vivaldi/policies/managed/kc9k.json",    // Vivaldi
 }
 
 // BrowserPolicy describes what the browser layer should enforce. It is richer

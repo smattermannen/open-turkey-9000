@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brunodcdo/open-turkey/internal/blocker"
-	"github.com/brunodcdo/open-turkey/internal/db"
-	"github.com/brunodcdo/open-turkey/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 
@@ -19,12 +19,12 @@ var strictCmd = &cobra.Command{
 	Short:     "Take away sudo and pkexec while a block is locked",
 	ValidArgs: []string{"on", "off"},
 	Long: `With strict mode on, the daemon denies sudo and pkexec for every user while
-a block is locked or Frozen Turkey runs. Only open-turkey itself keeps working.
+a block is locked or Frozen Chicken runs. Only kc9k itself keeps working.
 Rights come back by themselves when the lock ends, and strict mode can't be
 turned off during a lock.
 
-If something goes wrong, add openturkey.nofreeze to the kernel line in GRUB,
-or remove /etc/sudoers.d/zz-open-turkey-lockdown from recovery mode.`,
+If something goes wrong, add kc9k.nofreeze to the kernel line in GRUB,
+or remove /etc/sudoers.d/zz-kc9k-lockdown from recovery mode.`,
 	Args: cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		switch args[0] {

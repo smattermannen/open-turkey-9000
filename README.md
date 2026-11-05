@@ -1,10 +1,10 @@
 This repository was originally forked from [bdcdo/open-turkey](https://github.com/bdcdo/open-turkey). The README below comes directly from that repo. This repo adds some changes to that repo that I added while testing out AI coding tools that I found particularly useful.
 
-# Open Turkey
+# Killer Chicken 9000 (KC9K)
 
 A command-line productivity blocker for Linux, backed by a `systemd` service.
 
-Open Turkey is an open-source, Linux-native alternative to [Cold Turkey](https://getcoldturkey.com/): it blocks distracting websites and applications and keeps them blocked, even against your own attempts to undo it on impulse. Where Cold Turkey is paid and centered on Windows/macOS, Open Turkey is free, built in Go, and designed around the way Linux actually enforces policy.
+Killer Chicken 9000 is an open-source, Linux-native alternative to [Cold Turkey](https://getcoldturkey.com/): it blocks distracting websites and applications and keeps them blocked, even against your own attempts to undo it on impulse. Where Cold Turkey is paid and centered on Windows/macOS, Killer Chicken 9000 is free, built in Go, and designed around the way Linux actually enforces policy.
 
 It organizes blocking into **blocks** — named groups of:
 
@@ -15,7 +15,7 @@ When you **activate** a block, a daemon continuously ensures the blocking layers
 
 ## How it works — 4 enforcement layers
 
-Open Turkey doesn't rely on a single, easily-bypassed mechanism. Each active block is enforced on four independent layers, and a `systemd` daemon re-applies them every 5 seconds if anything is tampered with:
+Killer Chicken 9000 doesn't rely on a single, easily-bypassed mechanism. Each active block is enforced on four independent layers, and a `systemd` daemon re-applies them every 5 seconds if anything is tampered with:
 
 1. **`/etc/hosts`** — resolves blocked domains to `0.0.0.0` (affects every program, not just browsers). Written atomically, and every entry is validated so a crafted domain can't inject extra lines.
 2. **Firewall (`iptables` + `ip6tables`)** — drops packets to the blocked sites' real IPv4 and IPv6 addresses, and drops DNS-over-HTTPS (DoH) to well-known resolvers so browsers can't resolve names over HTTPS and slip past `/etc/hosts`. The real addresses are looked up directly from public resolvers, bypassing the poisoned `/etc/hosts`.
@@ -24,7 +24,7 @@ Open Turkey doesn't rely on a single, easily-bypassed mechanism. Each active blo
 
 Because the hosts and firewall layers act below the browser, blocking works even for browsers installed via Snap or Flatpak (where the system-wide browser policy file may not be read).
 
-> **Threat model.** Open Turkey creates *friction*, not a security boundary. Anyone with root can, with enough determination, tear the blocks down — that's intentional: it's your machine, and there is always a recovery path so you can't lock yourself out. The layers, the locked-block rules and the typing challenge exist to outlast an *impulse*, not a deliberate root-level effort. Blocking is IPv4/IPv6 by IP, but IP rules are best-effort: addresses change and CDNs are shared, so `/etc/hosts` and browser policy are the authoritative layers.
+> **Threat model.** Killer Chicken 9000 creates *friction*, not a security boundary. Anyone with root can, with enough determination, tear the blocks down — that's intentional: it's your machine, and there is always a recovery path so you can't lock yourself out. The layers, the locked-block rules and the typing challenge exist to outlast an *impulse*, not a deliberate root-level effort. Blocking is IPv4/IPv6 by IP, but IP rules are best-effort: addresses change and CDNs are shared, so `/etc/hosts` and browser policy are the authoritative layers.
 
 ## Installation
 
@@ -43,10 +43,10 @@ sudo ./install.sh
 This:
 
 - compiles the binary (`CGO_ENABLED=0`, pure-Go SQLite via `modernc.org/sqlite`)
-- installs `open-turkey` (a wrapper) and `open-turkey-bin` (the real binary) into `/usr/local/bin`
-- adds a rule in `/etc/sudoers.d/open-turkey` so it runs without a password prompt
-- installs and starts the `systemd` service `open-turkey.service`
-- creates the database at `/var/lib/open-turkey/open-turkey.db`
+- installs `kc9k` (a wrapper) and `kc9k-bin` (the real binary) into `/usr/local/bin`
+- adds a rule in `/etc/sudoers.d/kc9k` so it runs without a password prompt
+- installs and starts the `systemd` service `kc9k.service`
+- creates the database at `/var/lib/kc9k/kc9k.db`
 
 The installed program is independent of the source directory — once installed, you can remove the project folder and it keeps working.
 
@@ -66,9 +66,9 @@ While a block is *held* (char-locked, time-locked, in a schedule window, or with
 ### 1) Create and configure a block
 
 ```bash
-open-turkey block create social-media
-open-turkey block add-site social-media instagram.com x.com facebook.com
-open-turkey block add-app  social-media discord telegram
+kc9k block create social-media
+kc9k block add-site social-media instagram.com x.com facebook.com
+kc9k block add-app  social-media discord telegram
 ```
 
 Blocking an app also kills everything it launched — block `lutris` and the games started from Lutris close too.
@@ -76,41 +76,41 @@ Blocking an app also kills everything it launched — block `lutris` and the gam
 For a Flatpak app, block it by its app ID (see `flatpak list --app`). This is more reliable than guessing the process name, since many Flatpaks run under generic names like `python3` or `electron`:
 
 ```bash
-open-turkey block add-app social-media com.discordapp.Discord
+kc9k block add-app social-media com.discordapp.Discord
 ```
 
 Seed from a built-in template (`social-media`, `news`, `video`, `shopping`), or make an allowlist block:
 
 ```bash
-open-turkey block create focus --template social-media
-open-turkey block create work  --allowlist
-open-turkey block set-mode work allowlist   # or blocklist
+kc9k block create focus --template social-media
+kc9k block create work  --allowlist
+kc9k block set-mode work allowlist   # or blocklist
 ```
 
 Add keyword/wildcard URL patterns (browser layer only):
 
 ```bash
-open-turkey block add-pattern social-media '*casino*' '*://*/*ads*'
-open-turkey block remove-pattern social-media '*casino*'
+kc9k block add-pattern social-media '*casino*' '*://*/*ads*'
+kc9k block remove-pattern social-media '*casino*'
 ```
 
 Share a block between machines:
 
 ```bash
-open-turkey block export social-media > social.json
-open-turkey block import social.json
+kc9k block export social-media > social.json
+kc9k block import social.json
 ```
 
 Show details:
 
 ```bash
-open-turkey block info social-media
+kc9k block info social-media
 ```
 
 List all blocks:
 
 ```bash
-open-turkey block list
+kc9k block list
 ```
 
 ### 2) Activate / deactivate
@@ -118,31 +118,31 @@ open-turkey block list
 Activate:
 
 ```bash
-open-turkey start social-media
+kc9k start social-media
 ```
 
 Activate with a character lock, or a time lock:
 
 ```bash
-open-turkey start social-media --lock              # typing challenge to remove
-open-turkey start social-media --lock --lock-chars 200
-open-turkey start social-media --for 2h            # can't be removed for 2 hours
-open-turkey start social-media --until 17:00       # can't be removed until 17:00
+kc9k start social-media --lock              # typing challenge to remove
+kc9k start social-media --lock --lock-chars 200
+kc9k start social-media --for 2h            # can't be removed for 2 hours
+kc9k start social-media --until 17:00       # can't be removed until 17:00
 ```
 
 Recurring schedule (the daemon activates/deactivates it automatically):
 
 ```bash
-open-turkey schedule add social-media --days weekdays --from 09:00 --to 17:00
-open-turkey schedule add social-media --days sat,sun --from 10:00 --to 12:00
-open-turkey schedule list social-media
-open-turkey schedule remove social-media 1
+kc9k schedule add social-media --days weekdays --from 09:00 --to 17:00
+kc9k schedule add social-media --days sat,sun --from 10:00 --to 12:00
+kc9k schedule list social-media
+kc9k schedule remove social-media 1
 ```
 
 Allow windows invert this: the block is on at all times **except** while one of its allow windows is open. For example, to allow a `games` block only on Friday and Saturday evenings:
 
 ```bash
-open-turkey schedule add games --allow --days fri,sat --from 18:00 --to 24:00
+kc9k schedule add games --allow --days fri,sat --from 18:00 --to 24:00
 ```
 
 A block's schedules must be all block windows or all allow windows. `--to 24:00` means midnight, so a window can run to the end of the day without a one-minute gap.
@@ -164,10 +164,10 @@ A block with allow windows is meant to stay blocked outside them, so it can't be
 Such a change is **queued** and applied by the daemon **24 hours** later. Add `--now` to apply it immediately instead, after passing the same typing challenge as `unlock`:
 
 ```bash
-open-turkey block remove-app games steam          # queued; takes effect in 24h
-open-turkey block remove-app games steam --now    # typing challenge, then immediate
-open-turkey pending                               # list queued changes
-open-turkey pending cancel 1                      # drop one
+kc9k block remove-app games steam          # queued; takes effect in 24h
+kc9k block remove-app games steam --now    # typing challenge, then immediate
+kc9k pending                               # list queued changes
+kc9k pending cancel 1                      # drop one
 ```
 
 Queued changes also show in `block info` and `status`. If the block is also character- or time-locked (from `start --lock/--for/--until`), loosening is refused, and an already-queued change waits until those locks lift. Changes that make the block stricter (adding apps, sites to a blocklist, patterns, locks) always apply immediately.
@@ -175,19 +175,19 @@ Queued changes also show in `block info` and `status`. If the block is also char
 Show status:
 
 ```bash
-open-turkey status
+kc9k status
 ```
 
 Deactivate (only if the block isn't held — see Concepts):
 
 ```bash
-open-turkey stop social-media
+kc9k stop social-media
 ```
 
 Unlock a character-locked block (this also **deactivates** it). Time locks and open schedule windows can't be unlocked — they lift on their own:
 
 ```bash
-open-turkey unlock social-media
+kc9k unlock social-media
 ```
 
 To practice or test the challenge without touching any block (no root needed), run this from the source directory, optionally with a length:
@@ -202,12 +202,12 @@ To practice or test the challenge without touching any block (no root needed), r
 Remove a domain from a block:
 
 ```bash
-open-turkey block remove-site social-media instagram.com
+kc9k block remove-site social-media instagram.com
 ```
 
 Notes:
 
-- If the block is **active**, Open Turkey re-applies the layers so the change takes effect immediately.
+- If the block is **active**, Killer Chicken 9000 re-applies the layers so the change takes effect immediately.
 - If the block is **held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening), you **cannot** loosen it: removing apps or patterns, removing sites from a blocklist, adding sites to an allowlist, and changing its mode are refused. Clear the hold first (unlock, or wait for the time lock / schedule window to end), make your changes, then activate again. Edits that only make it stricter are always allowed (next section).
 
 #### Strengthening a held block
@@ -223,8 +223,8 @@ A held block can always be made stricter, since that can't be used to escape it:
 | `start <block> --for D` / `--until HH:MM` on an **active** block | adds a time lock, or extends it (an earlier end is refused) |
 
 ```bash
-open-turkey start social-media --for 3h       # already active: extend its time lock
-open-turkey block add-site social-media reddit.com
+kc9k start social-media --for 3h       # already active: extend its time lock
+kc9k block add-site social-media reddit.com
 ```
 
 If you lock a block that its schedule switched on, the lock outlives the schedule: when the window closes, a time-locked block stays on until its time lock expires (the daemon then switches it off), and a char-locked one stays on until you `unlock` it.
@@ -232,13 +232,13 @@ If you lock a block that its schedule switched on, the lock outlives the schedul
 Remove an app (process) from a block:
 
 ```bash
-open-turkey block remove-app social-media discord
+kc9k block remove-app social-media discord
 ```
 
 Remove an entire block (must be inactive, and not within 2 hours of a schedule window):
 
 ```bash
-open-turkey block remove social-media
+kc9k block remove social-media
 ```
 
 ## Service (daemon) and logs
@@ -246,9 +246,9 @@ open-turkey block remove social-media
 The daemon is managed by `systemd`:
 
 ```bash
-systemctl status open-turkey
-systemctl restart open-turkey
-journalctl -u open-turkey -f
+systemctl status kc9k
+systemctl restart kc9k
+journalctl -u kc9k -f
 ```
 
 ## Uninstall
@@ -264,11 +264,11 @@ Uninstalling first runs a guard that **refuses while any block is held** (charac
 Each block has a list of what is blocked and a list of exceptions, and an exception beats the block:
 
 ```bash
-open-turkey block add work reddit.com 'reddit.com/r/funny' '*.xxx' '*.*'
-open-turkey block add-exception work reddit.com/r/programming
-open-turkey block export-list work blocked > blocked.txt
-open-turkey block export-list work exceptions > exceptions.txt
-open-turkey block import-list work blocked blocked.txt
+kc9k block add work reddit.com 'reddit.com/r/funny' '*.xxx' '*.*'
+kc9k block add-exception work reddit.com/r/programming
+kc9k block export-list work blocked > blocked.txt
+kc9k block export-list work exceptions > exceptions.txt
+kc9k block import-list work blocked blocked.txt
 ```
 
 Files hold one entry per line, and `#` starts a comment. `*.*` blocks every website, so combine it with exceptions to allow only what you need. A domain with an exception leaves `/etc/hosts` and the firewall, because those block whole hosts, so only browser policy enforces it. Chromium-based browsers cannot match wildcards inside a path or keywords in policy, so those entries work only in Firefox for now, and the interface says which ones.
@@ -276,13 +276,13 @@ Files hold one entry per line, and `#` starts a comment. `*.*` blocks every webs
 ## Daily quotas
 
 ```bash
-open-turkey quota set social-media 30m     # the block now stays on
-open-turkey quota start social-media       # open it and spend the quota
-open-turkey quota end social-media         # close it early
-open-turkey quota remove social-media      # takes effect at midnight
+kc9k quota set social-media 30m     # the block now stays on
+kc9k quota start social-media       # open it and spend the quota
+kc9k quota end social-media         # close it early
+kc9k quota remove social-media      # takes effect at midnight
 ```
 
-All time in an open session is spent, whether or not the sites are used, because Open Turkey cannot see inside a browser tab. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
+All time in an open session is spent, whether or not the sites are used, because Killer Chicken 9000 cannot see inside a browser tab. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
 
 ## Locks
 
@@ -300,47 +300,47 @@ All time in an open session is spent, whether or not the sites are used, because
 The daemon force-installs the bundled extension in Firefox-family browsers through policy, so it can't be removed or disabled. It enforces wildcards and keywords, shows a block page, and reads its rules from the daemon on `127.0.0.1:47613`.
 
 ```bash
-open-turkey browser force-librewolf on   # close other browsers
-open-turkey browser force-search on      # Google as the only search engine
-open-turkey browser safesearch on        # lock Google SafeSearch
-open-turkey browser web-only on          # web results only: no images, shopping or AI
-open-turkey browser images on            # block images
-open-turkey browser greyscale on         # show pages in greyscale
+kc9k browser force-librewolf on   # close other browsers
+kc9k browser force-search on      # Google as the only search engine
+kc9k browser safesearch on        # lock Google SafeSearch
+kc9k browser web-only on          # web results only: no images, shopping or AI
+kc9k browser images on            # block images
+kc9k browser greyscale on         # show pages in greyscale
 ```
 
 Options can always be turned on, and can't be turned off during a lock. Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
 
 ## Pomodoro
 
-`open-turkey pomodoro set work 25m 5m` alternates a block between work and breaks while it runs, with locks kept in place. Setting a cycle is refused while the block is held, and `pomodoro off` is always allowed.
+`kc9k pomodoro set work 25m 5m` alternates a block between work and breaks while it runs, with locks kept in place. Setting a cycle is refused while the block is held, and `pomodoro off` is always allowed.
 
 ## Blocking folders
 
-`open-turkey block add-app games /opt/spel/` blocks every program under a folder, and a full path blocks one file. System folders such as `/usr/bin/` are refused.
+`kc9k block add-app games /opt/spel/` blocks every program under a folder, and a full path blocks one file. System folders such as `/usr/bin/` are refused.
 
 ## Strict mode
 
-`open-turkey strict on` denies sudo and pkexec for every user while a block is locked or Frozen Turkey runs, in terminals and text consoles alike. Only `open-turkey` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
+`kc9k strict on` denies sudo and pkexec for every user while a block is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
 
 During a lock, programs also can't start from `/home`, `/tmp`, `/var/tmp` or `/dev/shm`, which stops AppImages and downloaded browsers. Programs already running continue.
 
-`open-turkey no-escape on --yes` removes the remaining exits: the kernel parameter stops working, recovery entries disappear, and GRUB gets a random password nobody knows. After that, only other boot media or a reinstall gets past a lock, even if a bug caused it. Test it in a virtual machine first. It can't stop booting a USB stick unless the firmware has a password.
+`kc9k no-escape on --yes` removes the remaining exits: the kernel parameter stops working, recovery entries disappear, and GRUB gets a random password nobody knows. After that, only other boot media or a reinstall gets past a lock, even if a bug caused it. Test it in a virtual machine first. It can't stop booting a USB stick unless the firmware has a password.
 
-**Emergency exit without no-escape:** add `openturkey.nofreeze` to the `linux` line in GRUB for that boot, or remove `/etc/sudoers.d/zz-open-turkey-lockdown` and `/etc/polkit-1/rules.d/00-open-turkey-lockdown.rules` from recovery mode.
+**Emergency exit without no-escape:** add `kc9k.nofreeze` to the `linux` line in GRUB for that boot, or remove `/etc/sudoers.d/zz-kc9k-lockdown` and `/etc/polkit-1/rules.d/00-kc9k-lockdown.rules` from recovery mode.
 
 ## Master password for testing
 
-A build made with `sudo make install TAGS=devmaster` adds a master password. Set it once with `open-turkey master-set`, then `open-turkey master` lifts every lock, Frozen Turkey, strict mode and no-escape. Both commands read from standard input, and both work from a text console during a freeze. A normal build has no such commands, so a release only needs to leave out the tag.
+A build made with `sudo make install TAGS=devmaster` adds a master password. Set it once with `kc9k master-set`, then `kc9k master` lifts every lock, Frozen Chicken, strict mode and no-escape. Both commands read from standard input, and both work from a text console during a freeze. A normal build has no such commands, so a release only needs to leave out the tag.
 
 ## Graphical interface
 
-`make install` adds **Open Turkey** to the application menu (or run `open-turkey-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). The interface manages blocks, sites, apps, schedules and locks through the same command-line rules, and opens a terminal for the typing challenge.
+`make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). The interface manages blocks, sites, apps, schedules and locks through the same command-line rules, and opens a terminal for the typing challenge.
 
-## Frozen Turkey
+## Frozen Chicken
 
-`open-turkey freeze --for 2h --yes` (or the button in the interface) keeps every session locked until the time has passed. Add `--mode logout` to end sessions or `--mode shutdown` to power off whenever the computer starts during the freeze. The daemon locks the screen again every 5 seconds, a freeze can only be extended, and the longest freeze is 24 hours. The time keeps counting while the computer is off.
+`kc9k freeze --for 2h --yes` (or the button in the interface) keeps every session locked until the time has passed. Add `--mode logout` to end sessions or `--mode shutdown` to power off whenever the computer starts during the freeze. The daemon locks the screen again every 5 seconds, a freeze can only be extended, and the longest freeze is 24 hours. The time keeps counting while the computer is off.
 
-**Emergency exit:** hold Shift or press Esc at boot to open GRUB, press `e` on the boot entry, add `openturkey.nofreeze` to the line starting with `linux`, then press F10. The freeze is not enforced during that boot, and it returns on the next normal boot if time remains.
+**Emergency exit:** hold Shift or press Esc at boot to open GRUB, press `e` on the boot entry, add `kc9k.nofreeze` to the line starting with `linux`, then press F10. The freeze is not enforced during that boot, and it returns on the next normal boot if time remains.
 
 ## Limits
 

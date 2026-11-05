@@ -1,10 +1,10 @@
 {
   "manifest_version": 2,
-  "name": "Open Turkey 9000",
+  "name": "Killer Chicken 9000",
   "version": "1.0.0",
-  "description": "Enforces Open Turkey blocks inside the browser.",
+  "description": "Enforces Killer Chicken 9000 blocks inside the browser.",
   "browser_specific_settings": {
-    "gecko": { "id": "blocker@open-turkey-9000" }
+    "gecko": { "id": "blocker@kc9k" }
   },
   "incognito": "spanning",
   "permissions": ["webRequest", "webRequestBlocking", "storage", "tabs", "<all_urls>", "http://127.0.0.1/*"],

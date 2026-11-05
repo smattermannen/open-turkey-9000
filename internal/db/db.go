@@ -1,4 +1,4 @@
-// Package db provides the SQLite database access layer for Open Turkey.
+// Package db provides the SQLite database access layer for Killer Chicken 9000.
 //
 // We use the "modernc.org/sqlite" driver because it's a pure Go
 // implementation, meaning it needs neither CGo nor C libraries installed on
@@ -21,7 +21,7 @@ import (
 // DefaultDBPath is the default path where the database is stored.
 // We use /var/lib/ because it's the standard Linux directory for persistent
 // application data (following the Filesystem Hierarchy Standard — FHS).
-const DefaultDBPath = "/var/lib/open-turkey/open-turkey.db"
+const DefaultDBPath = "/var/lib/kc9k/kc9k.db"
 
 // dbPathEnv, when set by a non-root process, overrides the database path. Root
 // always uses DefaultDBPath, so the override can never redirect enforcement. This exists mainly so the
@@ -29,9 +29,9 @@ const DefaultDBPath = "/var/lib/open-turkey/open-turkey.db"
 // systemd unit never sets it, so the daemon always uses DefaultDBPath in
 // production — a user can't point the daemon at an empty database without
 // already having root (in which case the whole tool is bypassable anyway).
-const dbPathEnv = "OPEN_TURKEY_DB"
+const dbPathEnv = "KC9K_DB"
 
-// ResolveDBPath returns the database path to use: the OPEN_TURKEY_DB override
+// ResolveDBPath returns the database path to use: the KC9K_DB override
 // if set, otherwise DefaultDBPath.
 func ResolveDBPath() string {
 	if p := os.Getenv(dbPathEnv); p != "" && os.Geteuid() != 0 {

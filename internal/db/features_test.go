@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/brunodcdo/open-turkey/internal/schedule"
+	"github.com/smattermannen/kc9k/internal/schedule"
 	"testing"
 )
 

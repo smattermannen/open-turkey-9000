@@ -25,6 +25,10 @@ jobs:
         run: sudo env "PATH=$PATH" ./install.sh
       - name: Integration tests
         run: bash ci/integration.sh
+      - name: Boot lock
+        run: bash ci/bootlock.sh
+      - name: Master password
+        run: bash ci/master.sh
       - name: Interface screenshot
         run: bash ci/screenshot.sh
       - name: Install LibreWolf

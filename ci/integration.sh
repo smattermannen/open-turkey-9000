@@ -26,10 +26,14 @@ ot strict on
 ot start strictblock --for 40s
 sleep 8
 check "strict mode denies sudo" fails sudo -n true
+cp /bin/sleep /tmp/otportable
+chmod +x /tmp/otportable
+check "portable programs can't start" fails /tmp/otportable 0
 check "open-turkey still works in strict mode" open-turkey status
 check "strict mode can't be turned off" fails open-turkey strict off
 sleep 42
 check "sudo returns after the lock" sudo -n true
+check "portable programs start again" /tmp/otportable 0
 check "strict mode turns off" open-turkey strict off
 ot stop strictblock
 

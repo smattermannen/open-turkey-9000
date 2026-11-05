@@ -322,7 +322,15 @@ Options can always be turned on, and can't be turned off during a lock. Web-only
 
 `open-turkey strict on` denies sudo and pkexec for every user while a block is locked or Frozen Turkey runs, in terminals and text consoles alike. Only `open-turkey` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
 
-**Emergency exit:** add `openturkey.nofreeze` to the `linux` line in GRUB for that boot, or remove `/etc/sudoers.d/zz-open-turkey-lockdown` and `/etc/polkit-1/rules.d/00-open-turkey-lockdown.rules` from recovery mode.
+During a lock, programs also can't start from `/home`, `/tmp`, `/var/tmp` or `/dev/shm`, which stops AppImages and downloaded browsers. Programs already running continue.
+
+`open-turkey no-escape on --yes` removes the remaining exits: the kernel parameter stops working, recovery entries disappear, and GRUB gets a random password nobody knows. After that, only other boot media or a reinstall gets past a lock, even if a bug caused it. Test it in a virtual machine first. It can't stop booting a USB stick unless the firmware has a password.
+
+**Emergency exit without no-escape:** add `openturkey.nofreeze` to the `linux` line in GRUB for that boot, or remove `/etc/sudoers.d/zz-open-turkey-lockdown` and `/etc/polkit-1/rules.d/00-open-turkey-lockdown.rules` from recovery mode.
+
+## Master password for testing
+
+A build made with `sudo make install TAGS=devmaster` adds a master password. Set it once with `open-turkey master-set`, then `open-turkey master` lifts every lock, Frozen Turkey, strict mode and no-escape. Both commands read from standard input, and both work from a text console during a freeze. A normal build has no such commands, so a release only needs to leave out the tag.
 
 ## Graphical interface
 

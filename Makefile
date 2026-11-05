@@ -25,6 +25,9 @@ SERVICE_PATH=/etc/systemd/system
 # Directory to store the SQLite database
 DB_DIR=/var/lib/open-turkey
 
+# Set TAGS=devmaster for a testing build with the master password
+TAGS?=
+
 # Include the Go installed at /usr/local/go/bin in PATH
 export PATH := /usr/local/go/bin:$(PATH)
 
@@ -36,7 +39,7 @@ export PATH := /usr/local/go/bin:$(PATH)
 .PHONY: build
 build:
 	@echo ">> Compiling $(BINARY_NAME)..."
-	CGO_ENABLED=0 go build -o $(BINARY_NAME) ./cmd/open-turkey
+	CGO_ENABLED=0 go build -tags "$(TAGS)" -o $(BINARY_NAME) ./cmd/open-turkey
 
 # -------------------------------------------------------
 # install: compiles, copies the binary, installs the systemd

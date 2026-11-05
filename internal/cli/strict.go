@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/brunodcdo/open-turkey/internal/blocker"
 	"github.com/brunodcdo/open-turkey/internal/db"
 	"github.com/brunodcdo/open-turkey/internal/enforce"
 	"github.com/spf13/cobra"
@@ -68,6 +69,51 @@ func readPasswordStdin() (string, error) {
 	return password, nil
 }
 
+var noEscapeCmd = &cobra.Command{
+	Use:   "no-escape [on|off]",
+	Short: "Remove every way out of a lock short of reinstalling",
+	Long: `With no-escape on, the kernel parameter stops working, recovery entries are
+removed from GRUB, and GRUB gets a random password that is never stored, so boot
+entries can't be edited. It can't be turned off during a lock.
+
+If a bug leaves the computer locked, the only fix is booting other media or
+reinstalling, which erases the system. Test it in a virtual machine first.
+Booting a USB stick still works unless the firmware is locked with a password.`,
+	Args: cobra.ExactArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		switch args[0] {
+		case "on":
+			yes, _ := cmd.Flags().GetBool("yes")
+			if !yes {
+				return fmt.Errorf("the only way out will be reinstalling; add --yes to confirm")
+			}
+			if err := blocker.ApplyBootLock(); err != nil {
+				return err
+			}
+		case "off":
+			now := time.Now()
+			trusted, err := database.TrustedNow(now)
+			if err != nil {
+				return err
+			}
+			locked, err := enforce.AnyLock(database, now, trusted)
+			if err != nil {
+				return err
+			}
+			if locked {
+				return fmt.Errorf("no-escape can't be turned off during a lock")
+			}
+			if err := blocker.RemoveBootLock(); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("use 'on' or 'off'")
+		}
+		return database.SetSetting(enforce.SettingNoEscape, args[0])
+	}),
+}
+
 func init() {
-	rootCmd.AddCommand(strictCmd)
+	noEscapeCmd.Flags().Bool("yes", false, "Confirm")
+	rootCmd.AddCommand(strictCmd, noEscapeCmd)
 }

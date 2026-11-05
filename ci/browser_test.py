@@ -59,15 +59,21 @@ def report(browser, label):
 
 
 for label, required in (("signed-default", True), ("signatures-off", False)):
-    probe = start(required)
     try:
-        report(probe, label)
-    finally:
-        probe.quit()
+        probe = start(required)
+        try:
+            report(probe, label)
+        finally:
+            probe.quit()
+    except Exception as error:
+        print("::notice::" + label + " failed: " + str(error)[:300].replace(chr(10), " "))
 
 driver = start(False)
 try:
-    driver.install_addon("/usr/share/open-turkey/open-turkey.xpi", temporary=True)
+    try:
+        driver.install_addon("/usr/share/open-turkey/open-turkey.xpi", temporary=True)
+    except Exception as error:
+        print("::error::temporary install failed: " + str(error)[:300].replace(chr(10), " "))
     time.sleep(10)
     driver.get("https://example.org/secret/page")
     time.sleep(2)

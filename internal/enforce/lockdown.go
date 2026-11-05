@@ -14,6 +14,7 @@ import (
 const (
 	SettingStrict     = "strict"
 	SettingStrictUser = "strict_user"
+	SettingNoEscape   = "no_escape"
 )
 
 // BlockLocked reports whether an active block has a lock in force. Quotas and
@@ -59,13 +60,22 @@ func AnyLock(d *db.DB, now time.Time, trusted int64) (bool, error) {
 	return false, nil
 }
 
+// escapeHonoured reports whether the kernel parameter may lift enforcement.
+func escapeHonoured(d *db.DB) bool {
+	noEscape, err := d.GetSetting(SettingNoEscape)
+	if err != nil {
+		return false
+	}
+	return noEscape != "on" && freeze.Bypassed(blocker.KernelCmdline())
+}
+
 func enforceFreeze(d *db.DB, now time.Time) {
 	until, err := d.FreezeUntil()
 	if err != nil {
 		log.Printf("daemon: freeze state error: %v", err)
 		return
 	}
-	if !freeze.Engaged(now.Unix(), until, blocker.KernelCmdline()) {
+	if now.Unix() >= until || escapeHonoured(d) {
 		return
 	}
 	mode, err := d.FreezeMode()
@@ -93,7 +103,7 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 		return
 	}
 	want := false
-	if strict == "on" && !freeze.Bypassed(blocker.KernelCmdline()) {
+	if strict == "on" && !escapeHonoured(d) {
 		if want, err = AnyLock(d, now, trusted); err != nil {
 			log.Printf("daemon: lockdown: %v", err)
 			return
@@ -102,6 +112,9 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 	if !want {
 		if err := blocker.RemoveLockdown(); err != nil {
 			log.Printf("daemon: lockdown: %v", err)
+		}
+		if err := blocker.RemoveNoexec(); err != nil {
+			log.Printf("daemon: noexec: %v", err)
 		}
 		return
 	}
@@ -112,6 +125,9 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 	}
 	if err := blocker.ApplyLockdown(user); err != nil {
 		log.Printf("daemon: lockdown: %v", err)
+	}
+	if err := blocker.ApplyNoexec(); err != nil {
+		log.Printf("daemon: noexec: %v", err)
 	}
 }
 

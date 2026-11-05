@@ -89,6 +89,7 @@ func Apply(active []db.ActiveBlockDetail) error {
 
 // ApplyFromDB reads the active blocks and applies them. Convenience for the CLI.
 func ApplyFromDB(d *db.DB) error {
+	defer applyLock()()
 	active, err := d.GetActiveBlocks()
 	if err != nil {
 		return err
@@ -102,6 +103,7 @@ func ApplyFromDB(d *db.DB) error {
 // Tick runs one daemon cycle: apply due queued edits, reconcile schedules,
 // then re-apply drifted layers.
 func Tick(d *db.DB, now time.Time) error {
+	defer applyLock()()
 	enforceFreeze(d, now)
 	enforceBrowser(d)
 

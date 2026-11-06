@@ -28,7 +28,23 @@ func unrestrict(script string) string {
 	}
 	script = strings.Replace(script, `CLASS="--class gnu-linux --class gnu --class os`,
 		`CLASS="--class gnu-linux --class gnu --class os --unrestricted`, 1)
+	// os-prober builds the class at runtime ($CLASS is e.g. "--class windows"),
+	// so Windows and other chainloaded systems only match on "$CLASS --class os ".
+	script = strings.ReplaceAll(script, "$CLASS --class os ", "$CLASS --class os --unrestricted ")
 	return strings.ReplaceAll(script, "--class windows --class os", "--class windows --class os --unrestricted")
+}
+
+// restrictedEntries lists the top-level boot entries that would need the
+// password. Entries inside submenus or conditionals are indented and may stay
+// restricted (recovery, advanced options, firmware settings).
+func restrictedEntries(config string) []string {
+	var restricted []string
+	for _, line := range strings.Split(config, "\n") {
+		if strings.HasPrefix(line, "menuentry ") && !strings.Contains(line, "--unrestricted") {
+			restricted = append(restricted, line)
+		}
+	}
+	return restricted
 }
 
 func grubPasswordScript(hash string) string {
@@ -103,6 +119,9 @@ func grubAcceptsConfig() error {
 	text := string(config)
 	if !strings.Contains(text, "--unrestricted") || !strings.Contains(text, "password_pbkdf2") {
 		return fmt.Errorf("the boot menu lacks unrestricted entries or the password")
+	}
+	if restricted := restrictedEntries(text); len(restricted) > 0 {
+		return fmt.Errorf("boot entries would need the password: %s", strings.Join(restricted, "; "))
 	}
 	if output, err := exec.Command("grub-script-check", "/boot/grub/grub.cfg").CombinedOutput(); err != nil {
 		return fmt.Errorf("grub-script-check: %s (error: %w)", strings.TrimSpace(string(output)), err)

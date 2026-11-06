@@ -32,8 +32,12 @@ LIBREWOLF_OPTIONS = (
      "Adds the bundled extension to LibreWolf (and other Firefox-family browsers that accept "
      "it) so it can't be removed or turned off. It enforces wildcards and keywords, and "
      "measures website time for Statistics."),
+    ("require-extension", "Close browsers without the extension",
+     "While a block is on, any browser that has run for 60 seconds without a working Killer "
+     "Chicken extension is closed. Today that is every browser except LibreWolf: Firefox only "
+     "accepts signed extensions, and Chrome-family browsers have none."),
     ("force-librewolf", "Allow only LibreWolf",
-     "Closes every other browser, so the extension can't be avoided."),
+     "Closes every other browser at once, even when no block is on."),
 )
 
 BROWSER_OPTIONS = (
@@ -1330,8 +1334,9 @@ class Window(Gtk.ApplicationWindow):
                 "browser would be closed.")
         self.librewolf_install.set_visible(not version)
         # Turning it on needs LibreWolf; turning it off must stay possible.
-        forced = self.browser_switches["force-librewolf"]
-        forced.set_sensitive(bool(version) or forced.get_active())
+        for name in ("force-librewolf", "require-extension"):
+            switch = self.browser_switches[name]
+            switch.set_sensitive(bool(version) or switch.get_active())
         set_switch(self.stats_switch, self.state["stats"])
 
     def install_librewolf(self, _button):

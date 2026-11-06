@@ -79,7 +79,7 @@ installs it from its official repository (via extrepo).`,
 				return fmt.Errorf("%s can't be turned off during a lock", name)
 			}
 		}
-		if name == "force-librewolf" && value == "on" && blocker.LibreWolfVersion() == "" {
+		if (name == "force-librewolf" || name == "require-extension") && value == "on" && blocker.LibreWolfVersion() == "" {
 			return fmt.Errorf("LibreWolf isn't installed, so every browser would be closed; run 'kc9k browser install-librewolf' first")
 		}
 		return database.SetSetting("browser."+name, value)

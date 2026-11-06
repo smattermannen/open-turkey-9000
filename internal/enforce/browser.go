@@ -15,9 +15,16 @@ import (
 // RulesAddress is where the extension reads its rules.
 const RulesAddress = "127.0.0.1:47613"
 
+// rulesPort is the port in RulesAddress.
+const rulesPort = 47613
+
 // BrowserSettings lists the browser options, each stored as "on" or "off".
 // "extension" counts as on until it is turned off.
-var BrowserSettings = []string{"extension", "images", "greyscale", "web-only", "safesearch", "force-search", "force-librewolf"}
+var BrowserSettings = []string{"extension", "images", "greyscale", "web-only", "safesearch", "force-search", "force-librewolf", "require-extension"}
+
+// extensionGuard closes browsers whose extension doesn't check in (see
+// require-extension). It lives in the daemon; the rules server feeds it.
+var extensionGuard = blocker.NewExtensionGuard(rulesPort)
 
 // IsBrowserSetting reports whether name is a browser option.
 func IsBrowserSetting(name string) bool {
@@ -99,6 +106,7 @@ func ServeRules(d *db.DB) error {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		extensionGuard.CheckIn(r.RemoteAddr)
 		rules, err := BuildRules(d)
 		if err != nil {
 			log.Printf("rules: %v", err)
@@ -134,6 +142,16 @@ func enforceBrowser(d *db.DB) {
 	if err := blocker.SyncSafeSearch(BrowserOn(d, "safesearch")); err != nil {
 		log.Printf("browser: safesearch: %v", err)
 	}
+}
+
+// enforceExtension closes browsers without a working extension while a block
+// is active, as long as require-extension is on and LibreWolf is there to use
+// instead.
+func enforceExtension(d *db.DB, now time.Time, anyActive bool) {
+	if !anyActive || !BrowserOn(d, "require-extension") || blocker.LibreWolfVersion() == "" {
+		return
+	}
+	extensionGuard.Enforce(now)
 }
 
 func forcedKills(d *db.DB) []string {

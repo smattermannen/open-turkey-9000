@@ -69,6 +69,16 @@ func escapeHonoured(d *db.DB) bool {
 	return noEscape != "on" && freeze.Bypassed(blocker.KernelCmdline())
 }
 
+// LockFreezeEngaged reports whether a lock-mode freeze is being enforced now.
+func LockFreezeEngaged(d *db.DB, now time.Time) bool {
+	until, err := d.FreezeUntil()
+	if err != nil || now.Unix() >= until || escapeHonoured(d) {
+		return false
+	}
+	mode, err := d.FreezeMode()
+	return err != nil || mode == freeze.ModeLock
+}
+
 func enforceFreeze(d *db.DB, now time.Time) {
 	until, err := d.FreezeUntil()
 	if err != nil {

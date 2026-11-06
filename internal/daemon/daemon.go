@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 )
@@ -34,6 +35,18 @@ func Run() error {
 	go func() {
 		if err := enforce.ServeRules(database); err != nil {
 			log.Printf("daemon: rules server: %v", err)
+		}
+	}()
+
+	// During a lock freeze, catch an unlocked screen within half a second
+	// instead of waiting for the next enforcement cycle.
+	go func() {
+		relock := time.NewTicker(500 * time.Millisecond)
+		defer relock.Stop()
+		for range relock.C {
+			if enforce.LockFreezeEngaged(database, time.Now()) {
+				blocker.RelockUnlocked()
+			}
 		}
 	}()
 

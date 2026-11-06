@@ -12,6 +12,7 @@ import (
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
 var strictCmd = &cobra.Command{
@@ -57,7 +58,21 @@ or remove /etc/sudoers.d/zz-kc9k-lockdown from recovery mode.`,
 }
 
 // readPasswordStdin reads one line, so a password never shows in a process list.
-func readPasswordStdin() (string, error) {
+// On a terminal it shows the prompt and hides what is typed; piped input (the
+// graphical interface) is read as is, without a prompt.
+func readPasswordStdin(prompt string) (string, error) {
+	fd := int(os.Stdin.Fd())
+	if old, err := unix.IoctlGetTermios(fd, unix.TCGETS); err == nil {
+		fmt.Fprint(os.Stderr, prompt+": ")
+		quiet := *old
+		quiet.Lflag &^= unix.ECHO
+		if err := unix.IoctlSetTermios(fd, unix.TCSETS, &quiet); err == nil {
+			defer func() {
+				_ = unix.IoctlSetTermios(fd, unix.TCSETS, old)
+				fmt.Fprintln(os.Stderr)
+			}()
+		}
+	}
 	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	password := strings.TrimRight(line, "\r\n")
 	if password == "" {

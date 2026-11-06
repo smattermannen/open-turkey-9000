@@ -86,7 +86,7 @@ shortened or removed this way.`,
 			extras.RestartBoot = boot
 		}
 		if usePassword {
-			password, err := readPasswordStdin()
+			password, err := readPasswordStdin("Block password")
 			if err != nil {
 				return err
 			}
@@ -341,7 +341,7 @@ var unlockCmd = &cobra.Command{
 		}
 
 		if hold.passwordHash != "" {
-			password, err := readPasswordStdin()
+			password, err := readPasswordStdin("Block password")
 			if err != nil {
 				return err
 			}

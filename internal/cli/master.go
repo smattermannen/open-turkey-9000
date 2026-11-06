@@ -12,6 +12,7 @@ import (
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
 const masterHashPath = "/var/lib/kc9k/master.hash"
@@ -25,7 +26,7 @@ var masterCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("no master password set; run 'kc9k master-set' first")
 		}
-		password, err := readPasswordStdin()
+		password, err := readPasswordStdin("Master password")
 		if err != nil {
 			return err
 		}
@@ -73,6 +74,9 @@ var masterCmd = &cobra.Command{
 			return err
 		}
 		fmt.Println("All locks lifted.")
+		if _, err := unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TCGETS); err == nil {
+			fmt.Println("On a text console: type 'exit', then press Ctrl+Alt+F7 (or Ctrl+Alt+F1) to get back to the desktop.")
+		}
 		return nil
 	}),
 }
@@ -85,7 +89,7 @@ var masterSetCmd = &cobra.Command{
 		if _, err := os.Stat(masterHashPath); err == nil {
 			return fmt.Errorf("the master password is already set")
 		}
-		password, err := readPasswordStdin()
+		password, err := readPasswordStdin("New master password")
 		if err != nil {
 			return err
 		}

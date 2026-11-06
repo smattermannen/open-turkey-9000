@@ -137,8 +137,14 @@ func enforceBrowser(d *db.DB) {
 }
 
 func forcedKills(d *db.DB) []string {
-	if BrowserOn(d, "force-librewolf") {
-		return blocker.ForcedBrowserKillList
+	if !BrowserOn(d, "force-librewolf") {
+		return nil
 	}
-	return nil
+	// Never leave the computer without any browser: if LibreWolf is gone, the
+	// others stay open until it is installed again.
+	if blocker.LibreWolfVersion() == "" {
+		log.Printf("browser: force-librewolf is on but LibreWolf isn't installed; not closing other browsers")
+		return nil
+	}
+	return blocker.ForcedBrowserKillList
 }

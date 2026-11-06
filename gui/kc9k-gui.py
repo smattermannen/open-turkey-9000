@@ -17,6 +17,7 @@ import threading
 import gi
 
 gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
 gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 
@@ -26,11 +27,16 @@ STATS_REFRESH_SECONDS = 30
 # Pointer events for the charts' hover.
 POINTER_EVENTS = Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK
 
-BROWSER_OPTIONS = (
-    ("extension", "Force the browser extension",
-     "Installs the bundled extension in Firefox-family browsers so it can't be removed."),
+LIBREWOLF_OPTIONS = (
+    ("extension", "Install the Killer Chicken extension",
+     "Adds the bundled extension to LibreWolf (and other Firefox-family browsers that accept "
+     "it) so it can't be removed or turned off. It enforces wildcards and keywords, and "
+     "measures website time for Statistics."),
     ("force-librewolf", "Allow only LibreWolf",
-     "Closes every other browser."),
+     "Closes every other browser, so the extension can't be avoided."),
+)
+
+BROWSER_OPTIONS = (
     ("force-search", "Force Google as the search engine", ""),
     ("safesearch", "Force Google SafeSearch", ""),
     ("web-only", "Web results only",
@@ -58,12 +64,12 @@ def fmt_spent(seconds):
     return f"{seconds // 3600}h {seconds % 3600 // 60:02d}m"
 
 
-def run_cli(args, secret=None):
+def run_cli(args, secret=None, timeout=120):
     """Return (ok, output) for one command."""
     try:
         result = subprocess.run(
             [CLI, *args], input=secret if secret else "",
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         return False, str(error)
@@ -475,12 +481,12 @@ class Window(Gtk.ApplicationWindow):
         GLib.timeout_add_seconds(STATS_REFRESH_SECONDS, self.refresh_stats)
 
     # Running commands ----------------------------------------------------
-    def run(self, args, secret=None, then=None):
+    def run(self, args, secret=None, then=None, timeout=120):
         """Run a command in the background, then refresh."""
         self.set_sensitive(False)
 
         def work():
-            ok, output = run_cli(args, secret)
+            ok, output = run_cli(args, secret, timeout)
             GLib.idle_add(self.finished, ok, output, then)
 
         threading.Thread(target=work, daemon=True).start()
@@ -1273,6 +1279,22 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(heading("Settings", "x-large"), False, False, 0)
 
         self.browser_switches = {}
+        self.librewolf_status = Gtk.Label(xalign=0)
+        self.librewolf_install = Gtk.Button(label="Install LibreWolf", halign=Gtk.Align.START)
+        self.librewolf_install.get_style_context().add_class("suggested-action")
+        self.librewolf_install.connect("clicked", self.install_librewolf)
+        librewolf_rows = [self.librewolf_status, self.librewolf_install]
+        for name, title, detail in LIBREWOLF_OPTIONS:
+            switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+            switch.connect("state-set", self.toggle_browser, name)
+            self.browser_switches[name] = switch
+            librewolf_rows.append(self.switch_row(switch, title, detail))
+        box.pack_start(section(
+            "LibreWolf",
+            dim("LibreWolf is a privacy-focused Firefox that, unlike Firefox, accepts the "
+                "bundled extension."),
+            *librewolf_rows), False, False, 0)
+
         rows = []
         for name, title, detail in BROWSER_OPTIONS:
             switch = Gtk.Switch(valign=Gtk.Align.CENTER)
@@ -1280,7 +1302,8 @@ class Window(Gtk.ApplicationWindow):
             self.browser_switches[name] = switch
             rows.append(self.switch_row(switch, title, detail))
         box.pack_start(section(
-            "Browser", dim("These can always be turned on, but not off during a lock."), *rows),
+            "Browser options", dim("These, like the LibreWolf switches, can always be turned on, "
+                                   "but not off during a lock."), *rows),
             False, False, 0)
 
         self.stats_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
@@ -1298,7 +1321,27 @@ class Window(Gtk.ApplicationWindow):
     def update_settings(self):
         for name, switch in self.browser_switches.items():
             set_switch(switch, self.state["browser"].get(name, False))
+        version = self.state.get("librewolf", "")
+        if version:
+            self.librewolf_status.set_markup(f"<b>Installed</b> (version {GLib.markup_escape_text(version)}).")
+        else:
+            self.librewolf_status.set_markup(
+                "<b>Not installed.</b> Install it before allowing only LibreWolf, or every "
+                "browser would be closed.")
+        self.librewolf_install.set_visible(not version)
+        # Turning it on needs LibreWolf; turning it off must stay possible.
+        forced = self.browser_switches["force-librewolf"]
+        forced.set_sensitive(bool(version) or forced.get_active())
         set_switch(self.stats_switch, self.state["stats"])
+
+    def install_librewolf(self, _button):
+        if self.confirm("Install LibreWolf?",
+                        "It is installed from LibreWolf's official repository through extrepo. "
+                        "This needs an internet connection and can take a few minutes.",
+                        "Install"):
+            self.librewolf_status.set_text("Installing LibreWolf, this can take a few minutes…")
+            self.run(["browser", "install-librewolf"], timeout=900,
+                     then=lambda output: self.message(output, Gtk.MessageType.INFO))
 
     def toggle_browser(self, _switch, wanted, name):
         if self.updating:

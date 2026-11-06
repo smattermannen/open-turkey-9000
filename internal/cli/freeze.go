@@ -100,6 +100,7 @@ type guiState struct {
 	Strict        bool            `json:"strict"`
 	NoEscape      bool            `json:"no_escape"`
 	Stats         bool            `json:"stats"`
+	LibreWolf     string          `json:"librewolf"`
 	Browser       map[string]bool `json:"browser"`
 	Blocks        []guiBlock      `json:"blocks"`
 }
@@ -146,6 +147,7 @@ var guiStateCmd = &cobra.Command{
 		}
 		state.NoEscape = noEscape == "on"
 		state.Stats = enforce.StatsOn(database)
+		state.LibreWolf = blocker.LibreWolfVersion()
 		state.Browser = map[string]bool{}
 		for _, name := range enforce.BrowserSettings {
 			state.Browser[name] = enforce.BrowserOn(database, name)

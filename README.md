@@ -300,7 +300,8 @@ All time in an open session is spent, whether or not the sites are used, because
 The daemon force-installs the bundled extension in Firefox-family browsers through policy, so it can't be removed or disabled. It enforces wildcards and keywords, shows a block page, and reads its rules from the daemon on `127.0.0.1:47613`.
 
 ```bash
-kc9k browser force-librewolf on   # close other browsers
+kc9k browser install-librewolf    # install LibreWolf (official repository, via extrepo)
+kc9k browser force-librewolf on   # close other browsers (needs LibreWolf installed)
 kc9k browser force-search on      # Google as the only search engine
 kc9k browser safesearch on        # lock Google SafeSearch
 kc9k browser web-only on          # web results only: no images, shopping or AI

@@ -10,6 +10,7 @@ Statistics and Settings.
 import datetime
 import json
 import math
+import os
 import shlex
 import subprocess
 import threading
@@ -98,6 +99,73 @@ def dim(text, wrap=True):
 
 
 CHALLENGE_MIN, CHALLENGE_MAX, CHALLENGE_DEFAULT = 10, 5000, 300
+
+# Appearance is a preference of whoever runs the interface, so it lives in
+# their own config, not in the KC9K database.
+PREFS_PATH = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+                          "kc9k", "gui.json")
+THEMES = (("system", "Same as the system"), ("light", "Light"), ("dark", "Dark"))
+THEME_DIRS = ("/usr/share/themes", os.path.expanduser("~/.themes"),
+              os.path.expanduser("~/.local/share/themes"))
+
+
+def load_prefs():
+    try:
+        with open(PREFS_PATH) as f:
+            prefs = json.load(f)
+        return prefs if isinstance(prefs, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_prefs(prefs):
+    try:
+        os.makedirs(os.path.dirname(PREFS_PATH), exist_ok=True)
+        with open(PREFS_PATH, "w") as f:
+            json.dump(prefs, f)
+    except OSError:
+        pass  # the choice still applies until the interface closes
+
+
+def theme_file(name, css):
+    """Whether the GTK 3 theme `name` is installed with the stylesheet `css`."""
+    if name == "Adwaita":
+        return True  # built into GTK, with a dark variant
+    return any(os.path.isfile(os.path.join(d, name, "gtk-3.0", css)) for d in THEME_DIRS)
+
+
+def themed(base, dark):
+    """The theme name and prefer-dark flag that make `base` light or dark.
+    Themes with a dark stylesheet (gtk-dark.css) switch with the flag; others,
+    like Mint-Y-Dark-Aqua, come as separate light and dark themes."""
+    if dark:
+        if theme_file(base, "gtk-dark.css") or "dark" in base.lower():
+            return base, True
+        parts = base.split("-")
+        for i in range(len(parts), 0, -1):
+            candidate = "-".join(parts[:i] + ["Dark"] + parts[i:])
+            if theme_file(candidate, "gtk.css"):
+                return candidate, True
+        return "Adwaita", True
+    for token in ("-Darker", "-Dark", "-dark"):
+        candidate = base.replace(token, "", 1)
+        if token in base and theme_file(candidate, "gtk.css"):
+            return candidate, False
+    return base, False
+
+
+class Theme:
+    """Applies the light, dark or system appearance to the whole interface."""
+
+    def __init__(self):
+        self.settings = Gtk.Settings.get_default()
+        self.system = (self.settings.props.gtk_theme_name,
+                       self.settings.props.gtk_application_prefer_dark_theme)
+
+    def apply(self, choice):
+        name, dark = self.system if choice not in ("light", "dark") else themed(self.system[0], choice == "dark")
+        self.settings.props.gtk_theme_name = name
+        self.settings.props.gtk_application_prefer_dark_theme = dark
 
 
 def challenge_length(typing):
@@ -1339,9 +1407,25 @@ class Window(Gtk.ApplicationWindow):
         self.top_empty.set_visible(not top)
 
     # Settings ------------------------------------------------------------
+    def choose_theme(self, combo):
+        app = self.get_application()
+        app.prefs["theme"] = combo.get_active_id()
+        app.theme.apply(app.prefs["theme"])
+        save_prefs(app.prefs)
+
     def build_settings(self):
         scroll, box = page_box()
         box.pack_start(heading("Settings", "x-large"), False, False, 0)
+
+        theme = Gtk.ComboBoxText(valign=Gtk.Align.CENTER)
+        for key, label in THEMES:
+            theme.append(key, label)
+        theme.set_active_id(self.get_application().prefs.get("theme", "system"))
+        theme.connect("changed", self.choose_theme)
+        row = Gtk.Box(spacing=16)
+        row.pack_start(Gtk.Label(label="Theme", xalign=0), True, True, 0)
+        row.pack_end(theme, False, False, 0)
+        box.pack_start(section("Appearance", row), False, False, 0)
 
         self.browser_switches = {}
         self.librewolf_status = Gtk.Label(xalign=0)
@@ -1535,6 +1619,14 @@ class Window(Gtk.ApplicationWindow):
 class App(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="io.github.kc9k.Gui")
+        self.prefs = {}
+        self.theme = None
+
+    def do_startup(self):
+        Gtk.Application.do_startup(self)
+        self.prefs = load_prefs()
+        self.theme = Theme()
+        self.theme.apply(self.prefs.get("theme", "system"))
 
     def do_activate(self):
         window = self.get_active_window() or Window(self)

@@ -180,6 +180,17 @@ func TestEchoWrapping(t *testing.T) {
 	}
 }
 
+func TestCheckLockChars(t *testing.T) {
+	for n, ok := range map[int]bool{9: false, 10: true, 300: true, 5000: true, 5001: false} {
+		if got := CheckLockChars(n) == nil; got != ok {
+			t.Errorf("CheckLockChars(%d) ok = %v, want %v", n, got, ok)
+		}
+	}
+	if _, err := GenerateChallenge(MaxLockChars); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestMinLockChars(t *testing.T) {
 	if MinLockChars <= 0 {
 		t.Errorf("MinLockChars = %d; must be positive", MinLockChars)

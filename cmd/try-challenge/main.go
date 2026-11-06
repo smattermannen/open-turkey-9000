@@ -17,8 +17,8 @@ func main() {
 	length := lock.DefaultLockChars
 	if len(os.Args) > 1 {
 		n, err := strconv.Atoi(os.Args[1])
-		if err != nil || n < lock.MinLockChars {
-			fmt.Fprintf(os.Stderr, "usage: ./try-challenge.sh [length]  (length >= %d, default %d)\n", lock.MinLockChars, lock.DefaultLockChars)
+		if err != nil || lock.CheckLockChars(n) != nil {
+			fmt.Fprintf(os.Stderr, "usage: ./try-challenge.sh [length]  (%d to %d, default %d)\n", lock.MinLockChars, lock.MaxLockChars, lock.DefaultLockChars)
 			os.Exit(2)
 		}
 		length = n

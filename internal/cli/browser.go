@@ -30,7 +30,7 @@ independently of any block, when it is turned on:
   --for DURATION    Time lock: can't be turned off for this long (e.g. 2h, 7d is 168h).
   --until HH:MM     Time lock until a clock time today (or tomorrow if already past).
   --lock            Typing challenge ('kc9k browser unlock <setting>') to turn it off.
-  --lock-chars N    Challenge length in characters (default 300, minimum 30).
+  --lock-chars N    Challenge length in characters (default 300, 10 to 5000).
   --password-stdin  Password ('kc9k browser unlock <setting>') to turn it off.
   --restart         Stays on until the computer restarts.
 
@@ -205,8 +205,8 @@ func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.
 	}
 	if useLock, _ := cmd.Flags().GetBool("lock"); useLock {
 		want.LockChars, _ = cmd.Flags().GetInt("lock-chars")
-		if want.LockChars < lock.MinLockChars {
-			return want, fmt.Errorf("--lock-chars must be at least %d (got %d)", lock.MinLockChars, want.LockChars)
+		if err := lock.CheckLockChars(want.LockChars); err != nil {
+			return want, err
 		}
 	} else if cmd.Flags().Changed("lock-chars") {
 		return want, fmt.Errorf("--lock-chars goes with --lock")

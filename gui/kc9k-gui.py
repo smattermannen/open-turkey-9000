@@ -97,6 +97,25 @@ def dim(text, wrap=True):
     return label
 
 
+CHALLENGE_MIN, CHALLENGE_MAX, CHALLENGE_DEFAULT = 10, 5000, 300
+
+
+def challenge_length(typing):
+    """The challenge length chooser, usable only while typing is ticked."""
+    chars = Gtk.SpinButton.new_with_range(CHALLENGE_MIN, CHALLENGE_MAX, 10)
+    chars.set_value(CHALLENGE_DEFAULT)
+    chars.set_sensitive(False)
+    typing.connect("toggled", lambda button: chars.set_sensitive(button.get_active()))
+    return chars
+
+
+def attach_challenge_length(grid, chars, row):
+    grid.attach(Gtk.Label(label="Challenge length (characters)", xalign=0), 0, row, 1, 1)
+    grid.attach(chars, 1, row, 1, 1)
+    grid.attach(dim(f"{CHALLENGE_MIN} to {CHALLENGE_MAX}. About 300 characters take a few "
+                    "minutes to type; 5000 take about an hour."), 1, row + 1, 1, 1)
+
+
 def set_switch(switch, value):
     """Show a switch's real state, also after a refused change (set_state alone
     is a no-op when the state didn't change, leaving the knob where it was)."""
@@ -961,6 +980,7 @@ class Window(Gtk.ApplicationWindow):
         delay = Gtk.SpinButton.new_with_range(0, 57600, 5)
         password = Gtk.Entry(visibility=False, placeholder_text="optional")
         typing = Gtk.CheckButton(label="Typing challenge to stop")
+        chars = challenge_length(typing)
         restart = Gtk.CheckButton(label="Stay on until the computer restarts")
         rows = (
             ("Time lock (minutes)", minutes, "Can't be stopped at all until the time has passed."),
@@ -972,12 +992,14 @@ class Window(Gtk.ApplicationWindow):
             grid.attach(widget, 1, i * 2, 1, 1)
             grid.attach(dim(note), 1, i * 2 + 1, 1, 1)
         grid.attach(typing, 0, 6, 2, 1)
-        grid.attach(restart, 0, 7, 2, 1)
+        attach_challenge_length(grid, chars, 7)
+        grid.attach(restart, 0, 9, 2, 1)
         box.pack_start(grid, False, False, 0)
         dialog.show_all()
         answer = dialog.run()
         values = (minutes.get_value_as_int(), delay.get_value_as_int(), password.get_text(),
                   typing.get_active(), restart.get_active())
+        lock_chars = chars.get_value_as_int()
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
             return
@@ -987,7 +1009,7 @@ class Window(Gtk.ApplicationWindow):
         if lock_minutes:
             args += ["--for", f"{lock_minutes}m"]
         if use_typing:
-            args.append("--lock")
+            args += ["--lock", "--lock-chars", str(lock_chars)]
         if use_restart:
             args.append("--restart")
         if delay_minutes:
@@ -1438,6 +1460,7 @@ class Window(Gtk.ApplicationWindow):
         minutes = Gtk.SpinButton.new_with_range(0, 57600, 5)
         password = Gtk.Entry(visibility=False, placeholder_text="optional")
         typing = Gtk.CheckButton(label="Typing challenge to turn it off")
+        chars = challenge_length(typing)
         restart = Gtk.CheckButton(label="Stay on until the computer restarts")
         rows = (
             ("Time lock (minutes)", minutes, "Can't be turned off at all until the time has passed."),
@@ -1448,12 +1471,14 @@ class Window(Gtk.ApplicationWindow):
             grid.attach(widget, 1, i * 2, 1, 1)
             grid.attach(dim(note), 1, i * 2 + 1, 1, 1)
         grid.attach(typing, 0, 4, 2, 1)
-        grid.attach(restart, 0, 5, 2, 1)
+        attach_challenge_length(grid, chars, 5)
+        grid.attach(restart, 0, 7, 2, 1)
         box.pack_start(grid, False, False, 0)
         dialog.show_all()
         answer = dialog.run()
         lock_minutes, secret = minutes.get_value_as_int(), password.get_text()
         use_typing, use_restart = typing.get_active(), restart.get_active()
+        lock_chars = chars.get_value_as_int()
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
             return
@@ -1461,7 +1486,7 @@ class Window(Gtk.ApplicationWindow):
         if lock_minutes:
             args += ["--for", f"{lock_minutes}m"]
         if use_typing:
-            args.append("--lock")
+            args += ["--lock", "--lock-chars", str(lock_chars)]
         if use_restart:
             args.append("--restart")
         if secret:

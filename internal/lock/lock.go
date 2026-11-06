@@ -47,9 +47,20 @@ import (
 // for an impulse to pass.
 const DefaultLockChars = 300
 
-// MinLockChars is the smallest challenge length we allow. It stops a lock from
-// being configured with a trivially short (or empty) challenge.
-const MinLockChars = 30
+// MinLockChars and MaxLockChars bound the challenge length, as in Cold
+// Turkey: from a token 10 characters to 5000, about an hour of typing.
+const (
+	MinLockChars = 10
+	MaxLockChars = 5000
+)
+
+// CheckLockChars returns an error unless n is an allowed challenge length.
+func CheckLockChars(n int) error {
+	if n < MinLockChars || n > MaxLockChars {
+		return fmt.Errorf("--lock-chars must be from %d to %d (got %d)", MinLockChars, MaxLockChars, n)
+	}
+	return nil
+}
 
 // MinAccuracy is the share of the challenge that must be typed correctly,
 // measured as 1 - editDistance/challengeLength.

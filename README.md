@@ -87,6 +87,16 @@ kc9k block create work  --allowlist
 kc9k block set-mode work allowlist   # or blocklist
 ```
 
+Choose what a block does to its websites. Each block has three boxes to tick, in any combination: **block** them (the default), show them in **greyscale**, and block their **images**. In allowlist mode the actions apply to every site except the listed ones. A block without `block` leaves its sites reachable and only changes how they look; its apps are still blocked. Greyscale and no-images work in browsers with the extension (see Browser options). The interface shows the same three boxes on a block's Websites tab.
+
+```bash
+kc9k block action social-media greyscale on   # greyscale as well as blocked
+kc9k block action reddit block off            # reachable, but grey and without images
+kc9k block action reddit                      # list the block's actions
+```
+
+Ticking a box is always allowed. Unticking one loosens the block, so it is refused while the block is held, and queued for a block with allow windows. At least one action stays on.
+
 Add keyword/wildcard URL patterns (browser layer only):
 
 ```bash
@@ -157,7 +167,7 @@ Whenever its schedule has the block on, or will within 2 hours, the block itself
 
 A block with allow windows is meant to stay blocked outside them, so it can't be loosened directly **at any time** — not even during an allow window, which would otherwise be the moment to dismantle it. Loosening changes are:
 
-- removing apps or patterns, `remove-site` on a blocklist block, `add-site` on an allowlist block (or `remove-site` that would empty it), and `set-mode`;
+- removing apps or patterns, `remove-site` on a blocklist block, `add-site` on an allowlist block (or `remove-site` that would empty it), `set-mode`, and turning a website action off (`block action <block> <action> off`);
 - `block remove`;
 - adding another allow window, or removing the **last** one (removing one of several only makes the block stricter, so that's immediate).
 
@@ -208,7 +218,7 @@ kc9k block remove-site social-media instagram.com
 Notes:
 
 - If the block is **active**, Killer Chicken 9000 re-applies the layers so the change takes effect immediately.
-- If the block is **held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening), you **cannot** loosen it: removing apps or patterns, removing sites from a blocklist, adding sites to an allowlist, and changing its mode are refused. Clear the hold first (unlock, or wait for the time lock / schedule window to end), make your changes, then activate again. Edits that only make it stricter are always allowed (next section).
+- If the block is **held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening), you **cannot** loosen it: removing apps or patterns, removing sites from a blocklist, adding sites to an allowlist, changing its mode, and turning a website action off are refused. Clear the hold first (unlock, or wait for the time lock / schedule window to end), make your changes, then activate again. Edits that only make it stricter are always allowed (next section).
 
 #### Strengthening a held block
 
@@ -218,6 +228,7 @@ A held block can always be made stricter, since that can't be used to escape it:
 |---|---|
 | `block add-app`, `block add-pattern` | apps and patterns are blocked in both modes |
 | `block add-site` on a **blocklist** block | blocks more sites |
+| `block action <block> <action> on` | blocks, greys out or strips images from more |
 | `block remove-site` on an **allowlist** block | allows fewer sites — refused if it would leave the block with nothing at all, since an empty block is switched off |
 | `start <block> --lock [--lock-chars N]` on an **active** block | adds a char lock, or lengthens the challenge (a shorter `--lock-chars` is refused) |
 | `start <block> --for D` / `--until HH:MM` on an **active** block | adds a time lock, or extends it (an earlier end is refused) |
@@ -305,12 +316,10 @@ kc9k browser force-librewolf on   # close other browsers (needs LibreWolf instal
 kc9k browser force-search on      # Google as the only search engine
 kc9k browser safesearch on        # lock Google SafeSearch
 kc9k browser web-only on          # web results only: no images, shopping or AI
-kc9k browser images on            # block images
-kc9k browser greyscale on         # show pages in greyscale
 kc9k browser                      # list every option and whether it's on
 ```
 
-Options can always be turned on, and can't be turned off during a lock. Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
+Options can always be turned on, and can't be turned off during a lock. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
 
 ## Pomodoro
 

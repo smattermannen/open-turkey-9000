@@ -75,6 +75,7 @@ type BlockDetail struct {
 	ID          int
 	Name        string
 	Mode        string
+	Actions     Actions // what happens to the sites: block, greyscale, no images
 	Sites       []string
 	Apps        []string
 	Patterns    []string
@@ -92,6 +93,7 @@ type BlockDetail struct {
 type ActiveBlockDetail struct {
 	BlockName   string
 	Mode        string
+	Actions     Actions
 	Sites       []string
 	Apps        []string
 	Patterns    []string
@@ -126,6 +128,9 @@ CREATE TABLE IF NOT EXISTS blocks (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT UNIQUE NOT NULL,
     mode       TEXT NOT NULL DEFAULT 'blocklist',
+    act_block     BOOLEAN NOT NULL DEFAULT 1,
+    act_greyscale BOOLEAN NOT NULL DEFAULT 0,
+    act_no_images BOOLEAN NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -499,6 +504,9 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 			b.id,
 			b.name,
 			b.mode,
+			b.act_block,
+			b.act_greyscale,
+			b.act_no_images,
 			b.created_at,
 			CASE WHEN ab.id IS NOT NULL THEN 1 ELSE 0 END AS active,
 			COALESCE(ab.locked, 0) AS locked,
@@ -512,6 +520,9 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 		&detail.ID,
 		&detail.Name,
 		&detail.Mode,
+		&detail.Actions.Block,
+		&detail.Actions.Greyscale,
+		&detail.Actions.NoImages,
 		&detail.CreatedAt,
 		&detail.Active,
 		&detail.Locked,
@@ -706,7 +717,8 @@ func (d *DB) IsBlockLocked(name string) (bool, error) {
 // The daemon uses this to know what to block.
 func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 	rows, err := d.conn.Query(`
-		SELECT b.id, b.name, b.mode, ab.locked, ab.lock_chars, ab.locked_until, ab.scheduled
+		SELECT b.id, b.name, b.mode, b.act_block, b.act_greyscale, b.act_no_images,
+			ab.locked, ab.lock_chars, ab.locked_until, ab.scheduled
 		FROM active_blocks ab
 		JOIN blocks b ON b.id = ab.block_id
 	`)
@@ -721,7 +733,8 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 		var blockID int
 		var abd ActiveBlockDetail
 
-		if err := rows.Scan(&blockID, &abd.BlockName, &abd.Mode, &abd.Locked, &abd.LockChars, &abd.LockedUntil, &abd.Scheduled); err != nil {
+		if err := rows.Scan(&blockID, &abd.BlockName, &abd.Mode,
+			&abd.Actions.Block, &abd.Actions.Greyscale, &abd.Actions.NoImages, &abd.Locked, &abd.LockChars, &abd.LockedUntil, &abd.Scheduled); err != nil {
 			return nil, fmt.Errorf("failed to read active block: %w", err)
 		}
 		activeBlocks = append(activeBlocks, abd)

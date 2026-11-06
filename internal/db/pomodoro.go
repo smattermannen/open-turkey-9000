@@ -83,6 +83,9 @@ func (d *DB) DuplicateBlock(name, copyName string) error {
 	if err := d.CreateBlock(copyName, detail.Mode); err != nil {
 		return err
 	}
+	if err := d.SetBlockActions(copyName, detail.Actions); err != nil {
+		return err
+	}
 	if len(detail.Sites) > 0 {
 		if err := d.AddSites(copyName, detail.Sites); err != nil {
 			return err

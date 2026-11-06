@@ -5,42 +5,29 @@
 const RULES_URL = "http://127.0.0.1:47613/rules";
 const POLL_MS = 3000;
 
-let blocked = [];
-let exceptions = [];
-let images = false;
+// Compiled filters (see match.js). blocking holds the blocked sites and their
+// exceptions; noImages the sites of blocks with the no-images action. The
+// content script handles greyscale on its own.
+const EMPTY = { match: [], except: [] };
+let blocking = kc9kFilter(EMPTY);
+let noImages = kc9kFilter(EMPTY);
 let webOnly = false;
 
-function escapeRegex(text) {
-  return text.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Entries work as in Cold Turkey: reddit.com, reddit.com/r/funny, *.xxx, *.*,
-// and keywords such as *casino*.
-function compile(entry) {
-  const value = entry.replace(/^[a-z*]+:\/\//i, "").replace(/^www\./, "").toLowerCase();
-  if (value === "*" || value === "*.*") {
-    return /.*/;
-  }
-  const pattern = escapeRegex(value).replace(/\*/g, ".*");
-  if (value.startsWith("*.")) {
-    return new RegExp("^[^/]*\\." + pattern.slice(4) + (value.includes("/") ? "" : "(/|$)"));
-  }
-  if (value.startsWith("*")) {
-    return new RegExp("^" + pattern);
-  }
-  return new RegExp("^([^/]*\\.)?" + pattern + (value.includes("/") ? "" : "(/|$)"));
-}
-
-function target(url) {
-  return url.replace(/^[a-z-]+:\/\//i, "").replace(/^www\./i, "").toLowerCase();
-}
-
 function isBlocked(url) {
-  if (!/^(https?|ftp):/i.test(url)) {
-    return false;
+  return kc9kMatches(blocking, url);
+}
+
+// pageUrl is the address of the tab a request belongs to, so images are
+// judged by the page showing them, not by the server they come from.
+function pageUrl(details) {
+  if (details.type === "main_frame") {
+    return details.url;
   }
-  const text = target(url);
-  return blocked.some((rule) => rule.test(text)) && !exceptions.some((rule) => rule.test(text));
+  const ancestors = details.frameAncestors || [];
+  if (ancestors.length > 0) {
+    return ancestors[ancestors.length - 1].url;
+  }
+  return details.documentUrl || details.originUrl || "";
 }
 
 function isGoogleSearch(url) {
@@ -75,7 +62,7 @@ browser.webRequest.onBeforeRequest.addListener(
       return {};
     }
     if (details.type === "image" || details.type === "imageset" || details.type === "media") {
-      return images ? { cancel: true } : {};
+      return kc9kMatches(noImages, pageUrl(details)) ? { cancel: true } : {};
     }
     if (isBlocked(details.url)) {
       return blockedPage(details.url);
@@ -95,10 +82,29 @@ browser.webRequest.onBeforeRequest.addListener(
   ["blocking"]
 );
 
+// stillBlocked tells the block page whether its site is still blocked, so it
+// can go back to the site once the block ends.
+function stillBlocked(url) {
+  if (isBlocked(url)) {
+    return true;
+  }
+  if (webOnly && /^https?:/i.test(url)) {
+    const action = webOnlyAction(url);
+    return Boolean(action && action.block);
+  }
+  return false;
+}
+
+browser.runtime.onMessage.addListener((message) => {
+  if (message && message.type === "still-blocked" && typeof message.url === "string") {
+    return Promise.resolve(stillBlocked(message.url));
+  }
+  return undefined;
+});
+
 function apply(rules) {
-  blocked = (rules.block || []).map(compile);
-  exceptions = (rules.exceptions || []).map(compile);
-  images = Boolean(rules.images);
+  blocking = kc9kFilter({ match: rules.block, except: rules.exceptions });
+  noImages = kc9kFilter(rules.no_image_sites);
   webOnly = Boolean(rules.web_only);
 }
 
@@ -117,7 +123,10 @@ async function poll() {
     if (response.ok) {
       const rules = await response.json();
       apply(rules);
-      await browser.storage.local.set({ rules, page: { images: rules.images, greyscale: rules.greyscale } });
+      await browser.storage.local.set({
+        rules,
+        page: { greyscale: rules.greyscale_sites || EMPTY, no_images: rules.no_image_sites || EMPTY },
+      });
       await closeNewlyBlockedTabs();
     }
   } catch (error) {

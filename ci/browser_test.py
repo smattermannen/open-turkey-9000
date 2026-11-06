@@ -32,8 +32,9 @@ def browser_settings():
 
 
 def remove_test_block():
-    ot_quiet("stop", "browsertest")
-    ot_quiet("block", "remove", "browsertest")
+    for name in ("browsertest", "looks"):
+        ot_quiet("stop", name)
+        ot_quiet("block", "remove", name)
 
 
 def cleanup(saved):
@@ -82,8 +83,14 @@ try:
     ot("block", "add", "browsertest", "*example.org/secret*")
     ot("block", "add-exception", "browsertest", "example.org/secret/allowed")
     ot("start", "browsertest")
-    ot("browser", "greyscale", "on")
-    ot("browser", "images", "on")
+    # Greyscale and images are chosen per block: this one leaves Wikipedia
+    # reachable, but grey and without images.
+    ot("block", "create", "looks")
+    ot("block", "add", "looks", "wikipedia.org")
+    ot("block", "action", "looks", "greyscale", "on")
+    ot("block", "action", "looks", "no-images", "on")
+    ot("block", "action", "looks", "block", "off")
+    ot("start", "looks")
     ot("browser", "web-only", "on")
     time.sleep(8)
 
@@ -110,8 +117,15 @@ try:
         check("exception opens the page", "example.org" in driver.current_url)
         styles = driver.execute_script(
             "return getComputedStyle(document.documentElement).filter")
+        check("pages outside greyscale blocks keep their colour", "grayscale" not in styles)
+
+        driver.get("https://www.wikipedia.org/")
+        time.sleep(3)
+        check("a greyscale-only block leaves the site reachable", "wikipedia.org" in driver.current_url)
+        styles = driver.execute_script(
+            "return getComputedStyle(document.documentElement).filter")
         print("filter:", styles)
-        check("greyscale applies", "grayscale" in styles)
+        check("greyscale applies to the block's sites", "grayscale" in styles)
 
         driver.get("https://www.google.com/search?q=test&tbm=isch")
         time.sleep(3)

@@ -348,7 +348,13 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 
 ## Graphical interface
 
-`make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). The interface manages blocks, sites, apps, schedules and locks through the same command-line rules, and opens a terminal for the typing challenge.
+`make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). Everything goes through the same command-line rules, so the interface can't do anything a lock forbids. It has five sections:
+
+- **Dashboard**: active blocks and their locks, the state of Frozen Chicken, strict mode and no-escape, and today's most used websites and apps.
+- **Blocks**: websites and exceptions, apps and folders, schedules, quota and Pomodoro per block; starting a block with optional locks (time, typing challenge, until restart, delay, password). The typing challenge opens in a terminal.
+- **Device Blocks**: whole-computer locks: Frozen Chicken, strict mode and no-escape.
+- **Statistics**: time per day and the most used websites or apps, for today or the last 7, 30 or 90 days.
+- **Settings**: browser options and statistics.
 
 ## Frozen Chicken
 

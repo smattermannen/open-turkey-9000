@@ -9,5 +9,7 @@ Tested on a real Mint/Windows dual boot: the LibreWolf extension (`ci/browser_te
 3. Measure real quota time in the extension (the statistics sampling in background.js can be reused).
 4. Weekly calendar, notifications and settings password.
 
+Retest `ci/browser_test.py` in LibreWolf: greyscale and images are now chosen per block (`kc9k block action`), and the block page returns to the site when its block ends.
+
 ## Before release
 Build without `TAGS=devmaster`. Remove `ci/vm.sh`. Rename the GitHub repository to `kc9k`.

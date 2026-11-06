@@ -248,8 +248,8 @@ func TestReconcileAllowSchedule(t *testing.T) {
 
 func TestInputsBlocklist(t *testing.T) {
 	active := []db.ActiveBlockDetail{
-		{BlockName: "a", Mode: db.ModeBlocklist, Sites: []string{"facebook.com"}, Apps: []string{"discord"}, Patterns: []string{"*ads*"}},
-		{BlockName: "b", Mode: db.ModeBlocklist, Sites: []string{"reddit.com"}, Apps: []string{"discord", "slack"}},
+		{BlockName: "a", Mode: db.ModeBlocklist, Actions: db.DefaultActions, Sites: []string{"facebook.com"}, Apps: []string{"discord"}, Patterns: []string{"*ads*"}},
+		{BlockName: "b", Mode: db.ModeBlocklist, Actions: db.DefaultActions, Sites: []string{"reddit.com"}, Apps: []string{"discord", "slack"}},
 	}
 	hosts, apps, bp := Inputs(active)
 
@@ -269,8 +269,8 @@ func TestInputsBlocklist(t *testing.T) {
 
 func TestInputsAllowlist(t *testing.T) {
 	active := []db.ActiveBlockDetail{
-		{BlockName: "block", Mode: db.ModeBlocklist, Sites: []string{"facebook.com"}},
-		{BlockName: "allow", Mode: db.ModeAllowlist, Sites: []string{"work.com", "docs.com"}},
+		{BlockName: "block", Mode: db.ModeBlocklist, Actions: db.DefaultActions, Sites: []string{"facebook.com"}},
+		{BlockName: "allow", Mode: db.ModeAllowlist, Actions: db.DefaultActions, Sites: []string{"work.com", "docs.com"}},
 	}
 	hosts, _, bp := Inputs(active)
 

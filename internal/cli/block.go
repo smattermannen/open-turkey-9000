@@ -100,7 +100,7 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 }
 
 // strengtheningEdits lists, for error messages, the edits a held block allows.
-const strengtheningEdits = "add apps or patterns, add sites to a blocklist, remove sites from an allowlist, or extend its locks with 'start'"
+const strengtheningEdits = "add apps or patterns, add sites to a blocklist, remove sites from an allowlist, turn website actions on, or extend its locks with 'start'"
 
 // siteEditStrengthens reports whether adding (or removing) the given sites
 // can only make the block stricter: adding to a blocklist, or removing from an
@@ -604,6 +604,7 @@ var blockInfoCmd = &cobra.Command{
 		// Show the block's basic information.
 		fmt.Printf("Block: %s\n", block.Name)
 		fmt.Printf("Mode: %s\n", block.Mode)
+		fmt.Printf("Actions: %s\n", block.Actions)
 		fmt.Printf("Created at: %s\n", block.CreatedAt)
 
 		// Status line: inactive, or active with any holds.

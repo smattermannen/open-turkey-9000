@@ -71,6 +71,7 @@ Emergency exit: in GRUB, press e on the boot entry and add
 type guiBlock struct {
 	Name        string   `json:"name"`
 	Mode        string   `json:"mode"`
+	Actions     []string `json:"actions"`
 	Sites       []string `json:"sites"`
 	Exceptions  []string `json:"exceptions"`
 	Limited     []string `json:"firefox_only"`
@@ -171,7 +172,7 @@ var guiStateCmd = &cobra.Command{
 				return err
 			}
 			g := guiBlock{
-				Name: detail.Name, Mode: detail.Mode,
+				Name: detail.Name, Mode: detail.Mode, Actions: detail.Actions.List(),
 				Sites: append(append([]string{}, detail.Sites...), detail.Patterns...), Apps: append([]string{}, detail.Apps...),
 				Exceptions: append([]string{}, detail.Exceptions...), Limited: []string{},
 				Schedules: []string{},

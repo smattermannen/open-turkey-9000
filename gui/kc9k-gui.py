@@ -45,8 +45,13 @@ BROWSER_OPTIONS = (
     ("safesearch", "Force Google SafeSearch", ""),
     ("web-only", "Web results only",
      "No image, shopping or AI results in Google."),
-    ("images", "Block images", ""),
-    ("greyscale", "Show pages in greyscale", ""),
+)
+
+# What a block does to the websites on its list; any combination.
+SITE_ACTIONS = (
+    ("block", "Block"),
+    ("greyscale", "Greyscale"),
+    ("no-images", "Block images"),
 )
 
 
@@ -143,6 +148,10 @@ def block_summary(block):
         parts.append("quota in use")
     if block["mode"] == "allowlist":
         parts.append("allowlist")
+    actions = block.get("actions", ["block"])
+    if actions != ["block"]:
+        titles = dict(SITE_ACTIONS)
+        parts.append("websites: " + ", ".join(titles.get(a, a).lower() for a in actions))
     return " · ".join(parts)
 
 
@@ -726,6 +735,20 @@ class Window(Gtk.ApplicationWindow):
         self.detail.pack_start(tabs, True, True, 0)
 
         websites = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin=12)
+        self.action_checks = {}
+        self.filling_actions = False
+        action_row = Gtk.Box(spacing=12)
+        action_row.pack_start(Gtk.Label(label="These websites are:"), False, False, 0)
+        for name, title in SITE_ACTIONS:
+            check = Gtk.CheckButton(label=title)
+            check.connect("toggled", self.toggle_action, name)
+            self.action_checks[name] = check
+            action_row.pack_start(check, False, False, 0)
+        websites.pack_start(action_row, False, False, 0)
+        websites.pack_start(dim(
+            "Tick any combination. Greyscale and Block images work in browsers with the "
+            "extension. Unticking loosens the block, so it isn't possible while it is locked."),
+            False, False, 0)
         self.sites = EditableList(
             "Blocked", "reddit.com  reddit.com/r/funny  *.xxx  *casino*",
             lambda values: self.block_cmd("add", values),
@@ -856,6 +879,11 @@ class Window(Gtk.ApplicationWindow):
             return
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
         self.status_label.set_text(block_summary(block))
+        self.filling_actions = True
+        actions = block.get("actions", ["block"])
+        for name, check in self.action_checks.items():
+            check.set_active(name in actions)
+        self.filling_actions = False
         self.sites.set_items(block["sites"])
         self.exceptions.set_items(block["exceptions"])
         limited = block["firefox_only"]
@@ -882,6 +910,17 @@ class Window(Gtk.ApplicationWindow):
         self.quota_label.set_text(
             f"Used today: {block['quota_used'] // 60} of {limit // 60} min"
             + (" · session open" if block["quota_open"] else "") if limit else "No quota set.")
+
+    def toggle_action(self, check, name):
+        if self.filling_actions or self.updating or not self.selected:
+            return
+
+        def queued(output):
+            if "queued" in output:
+                self.message(output, Gtk.MessageType.INFO)
+
+        self.run(["block", "action", self.selected, name, "on" if check.get_active() else "off"],
+                 then=queued)
 
     # Block actions -------------------------------------------------------
     def create_block(self, _button):

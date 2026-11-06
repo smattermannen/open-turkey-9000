@@ -48,6 +48,11 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   typing challenge first.
 - **Daemon** (`internal/daemon/`): systemd service, calls `enforce.Tick` every 5s; also samples the foreground app for statistics every 5s and relocks the screen every 0.5s during a lock freeze.
 - **GUI** (`gui/kc9k-gui.py`): GTK 3 Python, English; Dashboard, Blocks, Device Blocks, Statistics, Settings. Reads `kc9k gui-state` and `kc9k stats --json`; every change runs a `kc9k` command.
+- **Website actions** (`internal/db/actions.go`): each block ticks any of
+  block / greyscale / no-images for its sites. Only `block` feeds hosts,
+  firewall and browser policy; greyscale and no-images go to the extension
+  (`enforce.BuildRules`, `internal/webext/files/match.js`). Unticking is a
+  loosening edit (gated and queueable like the others).
 - **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL);
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (modes, patterns, schedules, time locks, schema
@@ -67,7 +72,7 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 
 Full usage and examples in `README.md`. Summary:
 `block create [--allowlist] [--template T] | add-site | add-app | remove-site |
-remove-app | add-pattern | remove-pattern | set-mode | export | import | list |
+remove-app | add-pattern | remove-pattern | set-mode | action | export | import | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
 `pending [cancel N]` (loosening edits take `--now`), `stats [on|off|clear] [--days N] [--json]`, and the hidden

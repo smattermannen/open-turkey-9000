@@ -22,13 +22,14 @@ const (
 	EditRemovePatterns = "remove-pattern"
 	EditAddExceptions  = "add-exception"
 	EditSetMode        = "set-mode"
+	EditUnsetAction    = "unset-action"
 	EditRemoveBlock    = "remove-block"
 	EditAddSchedule    = "add-schedule"
 	EditRemoveSchedule = "remove-schedule"
 )
 
 // Edit is one change to a block. Values holds the sites, apps or patterns (or
-// the mode, for EditSetMode); Window the schedule, for the schedule actions.
+// the mode, for EditSetMode; the action, for EditUnsetAction); Window the schedule, for the schedule actions.
 type Edit struct {
 	Action string          `json:"-"`
 	Values []string        `json:"values,omitempty"`
@@ -138,6 +139,11 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 			return fmt.Errorf("set-mode needs exactly one mode")
 		}
 		err = d.SetBlockMode(blockName, e.Values[0])
+	case EditUnsetAction:
+		if len(e.Values) != 1 {
+			return fmt.Errorf("unset-action needs exactly one action")
+		}
+		err = d.SetBlockAction(blockName, e.Values[0], false)
 	case EditAddSchedule:
 		err = d.AddSchedule(blockName, e.Window)
 	case EditRemoveSchedule:

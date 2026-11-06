@@ -33,13 +33,19 @@ import (
 //     mode/domains if any active block is an allowlist).
 //
 // Everything is unioned across active blocks, including allowlists: with two
-// allowlist blocks active, a site allowed by either one is reachable.
+// allowlist blocks active, a site allowed by either one is reachable. Only
+// blocks with the block action contribute websites: a block that only greys
+// out or strips images leaves its sites reachable, and the extension does the
+// rest (see BuildRules). Apps are blocked whatever the actions.
 func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp blocker.BrowserPolicy) {
 	var blockDomains, hostDomains, allowDomains, patterns, exceptions, appList []string
 	allowMode := false
 
 	for _, b := range active {
 		appList = append(appList, b.Apps...)
+		if !b.Actions.Block {
+			continue
+		}
 		patterns = append(patterns, b.Patterns...)
 		exceptions = append(exceptions, b.Exceptions...)
 		if b.Mode == db.ModeAllowlist {

@@ -59,6 +59,9 @@ installs it from its official repository (via extrepo).`,
 			return nil
 		}
 		name, value := args[0], args[1]
+		if name == "images" || name == "greyscale" {
+			return fmt.Errorf("%s is now chosen per block: 'kc9k block action <block> %s on'", name, map[string]string{"images": db.ActionNoImages, "greyscale": db.ActionGreyscale}[name])
+		}
 		if !enforce.IsBrowserSetting(name) {
 			return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))
 		}

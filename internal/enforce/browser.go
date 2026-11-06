@@ -20,7 +20,9 @@ const rulesPort = 47613
 
 // BrowserSettings lists the browser options, each stored as "on" or "off".
 // "extension" counts as on until it is turned off.
-var BrowserSettings = []string{"extension", "images", "greyscale", "web-only", "safesearch", "force-search", "force-librewolf", "require-extension"}
+// Greyscale and image blocking are not here: each block chooses them for its
+// own sites (see db.Actions).
+var BrowserSettings = []string{"extension", "web-only", "safesearch", "force-search", "force-librewolf", "require-extension"}
 
 // extensionGuard closes browsers whose extension doesn't check in (see
 // require-extension). It lives in the daemon; the rules server feeds it.
@@ -54,12 +56,36 @@ var otherSearchEngines = []string{
 	"mojeek.com", "metager.org",
 }
 
-// Rules is what the extension enforces.
+// Filter is a set of sites a block action applies to: an entry in Match that
+// no entry in Except matches.
+type Filter struct {
+	Match  []string `json:"match"`
+	Except []string `json:"except"`
+}
+
+// add adds a block's sites to the filter: its sites and patterns, or in
+// allowlist mode every site except its listed ones.
+func (f *Filter) add(b db.ActiveBlockDetail) {
+	f.Match = append(f.Match, b.Patterns...)
+	f.Except = append(f.Except, b.Exceptions...)
+	if b.Mode == db.ModeAllowlist {
+		f.Match = append(f.Match, "*.*")
+		f.Except = append(f.Except, b.Sites...)
+	} else {
+		f.Match = append(f.Match, b.Sites...)
+	}
+}
+
+// Rules is what the extension enforces. Block and Exceptions come from blocks
+// that block their sites; Greyscale and NoImages from blocks with those
+// actions. The keys differ from the old global greyscale/images switches, so
+// an extension from before per-block actions ignores them instead of
+// misreading them.
 type Rules struct {
 	Block      []string `json:"block"`
 	Exceptions []string `json:"exceptions"`
-	Images     bool     `json:"images"`
-	Greyscale  bool     `json:"greyscale"`
+	Greyscale  Filter   `json:"greyscale_sites"`
+	NoImages   Filter   `json:"no_image_sites"`
 	WebOnly    bool     `json:"web_only"`
 }
 
@@ -67,7 +93,9 @@ type Rules struct {
 func BuildRules(d *db.DB) (Rules, error) {
 	rules := Rules{
 		Block: []string{}, Exceptions: []string{},
-		Images: BrowserOn(d, "images"), Greyscale: BrowserOn(d, "greyscale"), WebOnly: BrowserOn(d, "web-only"),
+		Greyscale: Filter{Match: []string{}, Except: []string{}},
+		NoImages:  Filter{Match: []string{}, Except: []string{}},
+		WebOnly:   BrowserOn(d, "web-only"),
 	}
 	active, err := d.GetActiveBlocks()
 	if err != nil {
@@ -77,16 +105,19 @@ func BuildRules(d *db.DB) (Rules, error) {
 	if err != nil {
 		return rules, err
 	}
+	blocking := Filter{Match: rules.Block, Except: rules.Exceptions}
 	for _, b := range withoutBreaks(d, active, trusted) {
-		rules.Block = append(rules.Block, b.Patterns...)
-		rules.Exceptions = append(rules.Exceptions, b.Exceptions...)
-		if b.Mode == db.ModeAllowlist {
-			rules.Block = append(rules.Block, "*.*")
-			rules.Exceptions = append(rules.Exceptions, b.Sites...)
-		} else {
-			rules.Block = append(rules.Block, b.Sites...)
+		if b.Actions.Block {
+			blocking.add(b)
+		}
+		if b.Actions.Greyscale {
+			rules.Greyscale.add(b)
+		}
+		if b.Actions.NoImages {
+			rules.NoImages.add(b)
 		}
 	}
+	rules.Block, rules.Exceptions = blocking.Match, blocking.Except
 	if BrowserOn(d, "force-search") {
 		rules.Block = append(rules.Block, otherSearchEngines...)
 	}

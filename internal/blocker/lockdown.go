@@ -10,7 +10,8 @@ import (
 
 // Lockdown takes root away from the desktop user while a block is held. sudo
 // and pkexec cover every terminal, including text consoles, so there is no need
-// to block terminal programs. Recovery mode and booting another system still
+// to block terminal programs. Root-equivalent group sockets (docker, lxd,
+// libvirt) are closed too; see sockets.go. Recovery mode and booting another system still
 // work; see freeze.BypassParam for the exit the daemon itself honours.
 const (
 	lockdownSudoers = "/etc/sudoers.d/zz-kc9k-lockdown"
@@ -77,7 +78,7 @@ func ApplyLockdown(user string) error {
 			return err
 		}
 	}
-	return nil
+	return LockPrivilegedSockets()
 }
 
 // RemoveLockdown restores normal administrator rights.
@@ -87,7 +88,7 @@ func RemoveLockdown() error {
 			return err
 		}
 	}
-	return nil
+	return UnlockPrivilegedSockets()
 }
 
 // LogoutUsers ends the sessions of every regular user.

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/user"
 	"strings"
 	"time"
 
@@ -53,8 +54,43 @@ or remove /etc/sudoers.d/zz-kc9k-lockdown from recovery mode.`,
 			return err
 		}
 		fmt.Printf("Strict mode is %s\n", args[0])
+		if args[0] == "on" {
+			warnRootGroups(os.Getenv("SUDO_USER"))
+		}
 		return nil
 	}),
+}
+
+// rootGroups are groups strict mode can't take away whose members can still
+// act as root: disk gives raw access to the drives, where any file can be
+// changed. (docker, lxd, incus and libvirt are handled by closing their
+// sockets during a lock.)
+var rootGroups = []string{"disk"}
+
+// warnRootGroups tells the user which of those groups they are in.
+func warnRootGroups(name string) {
+	if name == "" {
+		return
+	}
+	u, err := user.Lookup(name)
+	if err != nil {
+		return
+	}
+	ids, err := u.GroupIds()
+	if err != nil {
+		return
+	}
+	for _, id := range ids {
+		g, err := user.LookupGroupId(id)
+		if err != nil {
+			continue
+		}
+		for _, risky := range rootGroups {
+			if g.Name == risky {
+				fmt.Printf("Warning: %s is in the %s group, which can get around strict mode. Remove it with: sudo gpasswd -d %s %s\n", name, risky, name, risky)
+			}
+		}
+	}
 }
 
 // readPasswordStdin reads one line, so a password never shows in a process list.

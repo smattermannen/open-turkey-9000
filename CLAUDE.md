@@ -31,6 +31,11 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   `app-[<launcher>-]<ID>-<n>.scope`/`@….service` whose ID is or ends in `.<name>`); every
   descendant of a matched process is killed too, except under shells/session processes. Domain
   validation (`validate.go`) guards against `/etc/hosts` injection.
+  The firewall's jump comes first in both OUTPUT and FORWARD (containers/VMs)
+  and the drift check re-tops it. The extension guard (`extguard.go`) knows
+  browsers by name, or by engine (`browserdetect.go`: libxul.so or Chromium's
+  icudtl.dat/V8 snapshot mapped by a user-owned executable, minus Electron).
+  Strict mode also closes docker/lxd/incus/libvirt sockets (`sockets.go`).
 - **Enforce** (`internal/enforce/`): turns the active blocks into layer inputs
   (everything, allowlists included, unioned across active blocks); `Apply`
   (CLI, on state change) and `Tick` (daemon, per cycle: due queued edits +

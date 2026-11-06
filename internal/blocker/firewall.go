@@ -76,7 +76,7 @@ var dohServersIPv6 = []string{
 // ApplyFirewall configures the firewall to block the given domains.
 //
 // It rebuilds the KC9K chain from scratch (simpler and safer than
-// diffing), inserts a jump from OUTPUT, drops the resolved IPs of each domain,
+// diffing), jumps to it first from OUTPUT and FORWARD, drops the resolved IPs of each domain,
 // and drops the DoH resolvers. IPv6 rules are applied the same way when
 // ip6tables is available; IPv6 failures are best-effort and never abort the
 // IPv4 rules.
@@ -124,10 +124,11 @@ func applyFamily(cmd string, ips, dohServers []string) error {
 		return fmt.Errorf("failed to flush %s chain %s: %w", cmd, chainName, err)
 	}
 
-	// Ensure OUTPUT jumps to our chain (insert at the top so it wins).
-	if err := runFW(cmd, "-C", "OUTPUT", "-j", chainName); err != nil {
-		if err := runFW(cmd, "-I", "OUTPUT", "-j", chainName); err != nil {
-			return fmt.Errorf("failed to insert %s jump to %s: %w", cmd, chainName, err)
+	// Jump to our chain first from OUTPUT (this computer's own traffic) and
+	// FORWARD (containers and virtual machines behind a bridge or NAT).
+	for _, hook := range hookChains {
+		if err := ensureFirstJump(cmd, hook); err != nil {
+			return err
 		}
 	}
 
@@ -150,7 +151,7 @@ func applyFamily(cmd string, ips, dohServers []string) error {
 
 // RemoveFirewall tears down the KC9K chain in both families.
 //
-// Order matters: remove the OUTPUT jump, flush the chain, then delete it —
+// Order matters: remove the OUTPUT and FORWARD jumps, flush the chain, then delete it —
 // iptables refuses to delete a chain that is still referenced or non-empty.
 // The function is idempotent and swallows errors (a missing chain is the
 // desired end state).
@@ -163,9 +164,56 @@ func RemoveFirewall() error {
 }
 
 func removeFamily(cmd string) {
-	_ = runFW(cmd, "-D", "OUTPUT", "-j", chainName)
+	for _, hook := range hookChains {
+		removeJumps(cmd, hook)
+	}
 	_ = runFW(cmd, "-F", chainName)
 	_ = runFW(cmd, "-X", chainName)
+}
+
+// hookChains are the built-in chains that jump to ours. OUTPUT carries this
+// computer's own traffic. FORWARD carries traffic of Docker containers and
+// libvirt virtual machines, which have their own /etc/hosts and would
+// otherwise pass the firewall untouched. (Rootless Podman and VirtualBox NAT
+// send through this computer's own sockets, so OUTPUT covers them.)
+var hookChains = []string{"OUTPUT", "FORWARD"}
+
+// removeJumps deletes every jump from hook to our chain.
+func removeJumps(cmd, hook string) {
+	for i := 0; i < 10 && runFW(cmd, "-D", hook, "-j", chainName) == nil; i++ {
+	}
+}
+
+// ensureFirstJump makes the jump to our chain the first rule of hook. Docker,
+// ufw and others insert their own rules at the top, and an ACCEPT placed
+// before our jump would let blocked traffic through.
+func ensureFirstJump(cmd, hook string) error {
+	if jumpIsFirst(cmd, hook) {
+		return nil
+	}
+	removeJumps(cmd, hook)
+	if err := runFW(cmd, "-I", hook, "1", "-j", chainName); err != nil {
+		return fmt.Errorf("failed to insert %s jump from %s to %s: %w", cmd, hook, chainName, err)
+	}
+	return nil
+}
+
+// jumpIsFirst reports whether hook's first rule jumps to our chain.
+func jumpIsFirst(cmd, hook string) bool {
+	output, err := runFWOutput(cmd, "-S", hook)
+	return err == nil && firstRuleJumps(output, hook)
+}
+
+// firstRuleJumps reads "iptables -S <hook>" output: policy lines ("-P") come
+// first, then the rules ("-A") in order.
+func firstRuleJumps(listing, hook string) bool {
+	for _, line := range strings.Split(listing, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "-A "+hook+" ") {
+			return line == "-A "+hook+" -j "+chainName
+		}
+	}
+	return false
 }
 
 // IsFirewallApplied reports whether our firewall is active. We treat the IPv4
@@ -182,14 +230,20 @@ func IsFirewallApplied() bool {
 	if len(lines) <= 2 {
 		return false
 	}
-	// A populated chain does nothing unless OUTPUT still jumps to it.
-	if runFW("iptables", "-C", "OUTPUT", "-j", chainName) != nil {
-		return false
+	// A populated chain does nothing unless OUTPUT and FORWARD jump to it
+	// before anything else can accept the traffic.
+	for _, hook := range hookChains {
+		if !jumpIsFirst("iptables", hook) {
+			return false
+		}
 	}
 	if ip6tablesAvailable() {
-		if _, err := runFWOutput("ip6tables", "-L", chainName, "-n"); err == nil &&
-			runFW("ip6tables", "-C", "OUTPUT", "-j", chainName) != nil {
-			return false
+		if _, err := runFWOutput("ip6tables", "-L", chainName, "-n"); err == nil {
+			for _, hook := range hookChains {
+				if !jumpIsFirst("ip6tables", hook) {
+					return false
+				}
+			}
 		}
 	}
 	return true

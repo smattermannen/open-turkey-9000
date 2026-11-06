@@ -19,7 +19,9 @@ import (
 const ExtensionGrace = 60 * time.Second
 
 // guardedBrowsers are the executables treated as browsers that must run the
-// extension. "tor" is left out: it is also the name of the Tor daemon.
+// extension. "tor" is left out: it is also the name of the Tor daemon. Tor
+// Browser and other portable or renamed browsers are recognised by their
+// engine instead (see browserdetect.go).
 var guardedBrowsers = map[string]bool{
 	"firefox": true, "firefox-bin": true, "firefox-esr": true, "librewolf": true,
 	"chrome": true, "google-chrome": true, "chromium": true, "chromium-browser": true,
@@ -35,15 +37,16 @@ var guardedBrowsers = map[string]bool{
 // connection. Enforce closes every browser that hasn't checked in within
 // ExtensionGrace.
 type ExtensionGuard struct {
-	mu      sync.Mutex
-	seen    map[int]time.Time // main browser PID -> last check-in
-	started time.Time
-	port    int // the daemon's port, the remote end of the extension's socket
+	mu       sync.Mutex
+	seen     map[int]time.Time // main browser PID -> last check-in
+	started  time.Time
+	port     int // the daemon's port, the remote end of the extension's socket
+	browsers *browserCache
 }
 
 // NewExtensionGuard returns a guard for extensions connecting to port.
 func NewExtensionGuard(port int) *ExtensionGuard {
-	return &ExtensionGuard{seen: map[int]time.Time{}, started: time.Now(), port: port}
+	return &ExtensionGuard{seen: map[int]time.Time{}, started: time.Now(), port: port, browsers: newBrowserCache()}
 }
 
 // CheckIn records that the browser owning the connection from remoteAddr has
@@ -61,7 +64,7 @@ func (g *ExtensionGuard) CheckIn(remoteAddr string) {
 	if inode == "" {
 		return
 	}
-	pid := socketOwner(inode)
+	pid := socketOwner(inode, g.browsers.guarded)
 	if pid == 0 {
 		return
 	}
@@ -86,8 +89,8 @@ func (g *ExtensionGuard) Enforce(now time.Time) int {
 	var targets []int
 	for pid := range parent {
 		name := exeName(pid)
-		if !guardedBrowsers[name] || exeName(parent[pid]) == name {
-			continue // not a browser, or a child process of one
+		if exeName(parent[pid]) == name || !g.browsers.guarded(pid) {
+			continue // a child process of a browser, or not a browser
 		}
 		if age, ok := processAge(pid, uptime); !ok || age < ExtensionGrace {
 			continue
@@ -103,6 +106,7 @@ func (g *ExtensionGuard) Enforce(now time.Time) int {
 			delete(g.seen, pid)
 		}
 	}
+	g.browsers.forget(parent)
 	for _, pid := range append(targets, descendants(targets, children)...) {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
@@ -133,8 +137,8 @@ func socketInode(clientPort, daemonPort int) string {
 }
 
 // socketOwner returns the PID of a browser process holding the socket inode,
-// or 0. Only browser processes are searched.
-func socketOwner(inode string) int {
+// or 0. Only processes isBrowser accepts are searched.
+func socketOwner(inode string, isBrowser func(int) bool) int {
 	target := "socket:[" + inode + "]"
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -142,7 +146,7 @@ func socketOwner(inode string) int {
 	}
 	for _, entry := range entries {
 		pid, err := strconv.Atoi(entry.Name())
-		if err != nil || !guardedBrowsers[exeName(pid)] {
+		if err != nil || !isBrowser(pid) {
 			continue
 		}
 		fds, err := os.ReadDir("/proc/" + entry.Name() + "/fd")

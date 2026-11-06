@@ -18,7 +18,7 @@ When you **activate** a block, a daemon continuously ensures the blocking layers
 Killer Chicken 9000 doesn't rely on a single, easily-bypassed mechanism. Each active block is enforced on four independent layers, and a `systemd` daemon re-applies them every 5 seconds if anything is tampered with:
 
 1. **`/etc/hosts`** — resolves blocked domains to `0.0.0.0` (affects every program, not just browsers). Written atomically, and every entry is validated so a crafted domain can't inject extra lines.
-2. **Firewall (`iptables` + `ip6tables`)** — drops packets to the blocked sites' real IPv4 and IPv6 addresses, and drops DNS-over-HTTPS (DoH) to well-known resolvers so browsers can't resolve names over HTTPS and slip past `/etc/hosts`. The real addresses are looked up directly from public resolvers, bypassing the poisoned `/etc/hosts`.
+2. **Firewall (`iptables` + `ip6tables`)** — drops packets to the blocked sites' real IPv4 and IPv6 addresses, from this computer and from Docker containers and virtual machines it hosts (its rules come first in `OUTPUT` and `FORWARD`, and are put back on top if another program inserts rules above them), and drops DNS-over-HTTPS (DoH) to well-known resolvers so browsers can't resolve names over HTTPS and slip past `/etc/hosts`. The real addresses are looked up directly from public resolvers, bypassing the poisoned `/etc/hosts`.
 3. **Browser enterprise policies** — managed `URLBlocklist`/`WebsiteFilter` policies for Firefox, Chromium, Google Chrome, Brave, Edge, Opera and Vivaldi, plus DoH turned off and locked in the browser itself. The user cannot disable these from inside the browser, not even in private/incognito mode.
 4. **Process kill** — terminates blocked apps that are running (SIGKILL), matched by exact executable name so unrelated processes aren't caught. A Flatpak app ID matches every process in that app's sandbox, whatever its executables are called. Everything a blocked app has launched is killed with it — e.g. blocking `lutris` (or `steam`, `heroic`) also kills the games started from it. And when an app was opened from your desktop's menu or dock, every process in its desktop app unit is killed too, even ones that were detached from it, as long as the unit's app ID is the blocked name or ends in `.<name>` (so `lutris` covers `net.lutris.Lutris`, and `discord` covers the `com.discordapp.Discord` Flatpak). If you block a shell or session process itself (`bash`, `tmux`, `plasmashell`, …), only that process is killed, not everything started from it.
 
@@ -333,9 +333,9 @@ kc9k browser unlock web-only                   # challenge/password, then turns 
 
 Like a block's locks, an option's locks can be added later but only made stronger: a time lock can only be extended, a challenge only lengthened, and a password can't be replaced. Time locks use the same tamper-proof clock as block time locks. While an option is locked, strict mode and no-escape hold and `make uninstall` is refused. In the interface, each option has **Lock…** and **Unlock…** buttons under Settings.
 
-With `require-extension` on and a block active, any browser that has run for 60 seconds without the extension checking in is closed, like Cold Turkey does. The extension checks in each time it fetches its rules; the daemon traces the connection to the browser process. Today that closes every browser except LibreWolf, so it needs LibreWolf installed.
+With `require-extension` on and a block active, any browser that has run for 60 seconds without the extension checking in is closed, like Cold Turkey does. The extension checks in each time it fetches its rules; the daemon traces the connection to the browser process. Today that closes every browser except LibreWolf, so it needs LibreWolf installed. Browsers are recognised by name, and portable, renamed or copied browsers (a Firefox or Chrome download, Tor Browser) by their engine: a program you put in place yourself that loads Firefox's or Chromium's engine counts as a browser. Installed apps built on those engines, such as Thunderbird, Spotify, Steam or Electron apps, are left alone.
 
-`extension`, `force-librewolf` and `require-extension` also can't be turned off while a block is locked or Frozen Chicken runs, because blocks rely on them. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
+`extension`, `force-librewolf` and `require-extension` also can't be turned off while a block is locked or Frozen Chicken runs, because blocks rely on them. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. The extension also blocks a site when it's shown through Google Translate's proxy (`www-reddit-com.translate.goog`) or a web archive (`web.archive.org`, `archive.ph`). Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
 
 ## Pomodoro
 
@@ -350,6 +350,8 @@ With `require-extension` on and a block active, any browser that has run for 60 
 `kc9k strict on` denies sudo and pkexec for every user while a block or browser option is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
 
 During a lock, programs also can't start from `/home`, `/tmp`, `/var/tmp` or `/dev/shm`, which stops AppImages and downloaded browsers. Programs already running continue.
+
+Some groups are root in all but name: members of `docker`, `lxd`, `incus` or `libvirt` can start a container or virtual machine with the computer's disk inside it. During a lock, their control sockets are closed to everyone but root, and reopened when the lock ends. Members of `disk` can edit the drives directly, which strict mode can't prevent; `kc9k strict on` warns if you're in it.
 
 `kc9k no-escape on --yes` removes the remaining exits: the kernel parameter stops working, recovery entries disappear, and GRUB gets a random password nobody knows. After that, only other boot media or a reinstall gets past a lock, even if a bug caused it. Test it in a virtual machine first. It can't stop booting a USB stick unless the firmware has a password.
 
@@ -390,7 +392,7 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 
 ## Limits
 
-IPv6 is covered by the firewall's IP rules, but those rules are best-effort (shared CDN IPs, changing addresses); `/etc/hosts` and browser policy remain the authoritative layers.
+IPv6 is covered by the firewall's IP rules, but those rules are best-effort (shared CDN IPs, changing addresses); `/etc/hosts` and browser policy remain the authoritative layers. Containers and virtual machines have their own `/etc/hosts` and browsers, so for them only the firewall applies.
 
 ## License
 

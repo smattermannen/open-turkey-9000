@@ -17,6 +17,8 @@ jobs:
         run: CGO_ENABLED=0 go test ./...
       - name: Check the interface syntax
         run: python3 -m py_compile gui/kc9k-gui.py
+      - name: Extension matching
+        run: node ci/match_test.js
       - name: Install system packages
         run: |
           sudo apt-get update

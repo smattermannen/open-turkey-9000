@@ -12,12 +12,28 @@ import (
 )
 
 var browserCmd = &cobra.Command{
-	Use:   "browser [setting] [on|off]",
+	Use:   "browser [setting on|off]",
 	Short: "Set browser options: " + strings.Join(enforce.BrowserSettings, ", "),
 	Long: `Options are always allowed to be turned on. While a block is locked or
-Frozen Chicken runs, they can't be turned off.`,
-	Args: cobra.ExactArgs(2),
+Frozen Chicken runs, they can't be turned off. Without arguments, lists
+every option and whether it is on.`,
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 0 && len(args) != 2 {
+			return fmt.Errorf("give no arguments to list options, or a setting and on|off")
+		}
+		return nil
+	},
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if len(args) == 0 {
+			for _, name := range enforce.BrowserSettings {
+				state := "off"
+				if enforce.BrowserOn(database, name) {
+					state = "on"
+				}
+				fmt.Printf("%s %s\n", name, state)
+			}
+			return nil
+		}
 		name, value := args[0], args[1]
 		if !enforce.IsBrowserSetting(name) {
 			return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))

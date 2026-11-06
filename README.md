@@ -306,6 +306,7 @@ kc9k browser safesearch on        # lock Google SafeSearch
 kc9k browser web-only on          # web results only: no images, shopping or AI
 kc9k browser images on            # block images
 kc9k browser greyscale on         # show pages in greyscale
+kc9k browser                      # list every option and whether it's on
 ```
 
 Options can always be turned on, and can't be turned off during a lock. Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.

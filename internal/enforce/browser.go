@@ -108,6 +108,7 @@ func ServeRules(d *db.DB) error {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(rules)
 	})
+	mux.HandleFunc("/usage", usageHandler(d))
 	return http.Serve(listener, mux)
 }
 

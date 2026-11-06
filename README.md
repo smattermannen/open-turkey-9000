@@ -333,6 +333,19 @@ During a lock, programs also can't start from `/home`, `/tmp`, `/var/tmp` or `/d
 
 A build made with `sudo make install TAGS=devmaster` adds a master password. Set it once with `kc9k master-set`, then `kc9k master` lifts every lock, Frozen Chicken, strict mode and no-escape. Both commands read from standard input, and both work from a text console during a freeze. A normal build has no such commands, so a release only needs to leave out the tag.
 
+## Statistics
+
+The daemon counts how long each app is in the foreground, and the bundled extension counts the time on each website in LibreWolf and other Firefox-family browsers. Time behind a locked screen, or after two minutes without input, isn't counted. Everything stays on this computer and is kept for a year.
+
+```bash
+kc9k stats              # totals for the last 7 days
+kc9k stats --days 30    # the last 30 days
+kc9k stats off          # stop recording ('on' to start again)
+kc9k stats clear        # delete all statistics
+```
+
+App time needs an X11 session (Cinnamon's default). Website time is sent every 30 seconds, so up to half a minute is lost when the browser closes.
+
 ## Graphical interface
 
 `make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). The interface manages blocks, sites, apps, schedules and locks through the same command-line rules, and opens a terminal for the typing challenge.

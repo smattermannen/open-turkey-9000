@@ -50,6 +50,22 @@ func Run() error {
 		}
 	}()
 
+	// Statistics: count the app in the foreground every 5 seconds, and drop
+	// old days once a day.
+	go func() {
+		sample := time.NewTicker(5 * time.Second)
+		defer sample.Stop()
+		last, pruned := time.Now(), ""
+		for now := range sample.C {
+			enforce.RecordApps(database, now, now.Sub(last))
+			last = now
+			if day := enforce.Day(now); day != pruned {
+				enforce.PruneStats(database, now)
+				pruned = day
+			}
+		}
+	}()
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 

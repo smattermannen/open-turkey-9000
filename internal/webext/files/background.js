@@ -132,3 +132,51 @@ browser.storage.local.get("rules").then((stored) => {
   poll();
   setInterval(poll, POLL_MS);
 });
+
+// Statistics: every 5 seconds, count the site in the active tab of the focused
+// window, unless the user has been idle for a minute, and send the totals to
+// the daemon every 30 seconds. The daemon drops them if statistics are off.
+const USAGE_URL = "http://127.0.0.1:47613/usage";
+const SAMPLE_SECONDS = 5;
+const REPORT_MS = 30000;
+let usage = {};
+
+async function sampleUsage() {
+  try {
+    if ((await browser.idle.queryState(60)) !== "active") {
+      return;
+    }
+    const win = await browser.windows.getLastFocused();
+    if (!win || !win.focused) {
+      return;
+    }
+    const [tab] = await browser.tabs.query({ active: true, windowId: win.id });
+    if (!tab || !tab.url || !/^https?:/i.test(tab.url)) {
+      return;
+    }
+    const site = new URL(tab.url).hostname.replace(/^www\./, "");
+    usage[site] = (usage[site] || 0) + SAMPLE_SECONDS;
+  } catch (error) {
+    // A closed window or tab between the calls: skip this sample.
+  }
+}
+
+async function reportUsage() {
+  if (Object.keys(usage).length === 0) {
+    return;
+  }
+  const sites = usage;
+  usage = {};
+  try {
+    await fetch(USAGE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-KC9K-Usage": "1" },
+      body: JSON.stringify({ sites }),
+    });
+  } catch (error) {
+    // The daemon is down: this report is lost, which only costs statistics.
+  }
+}
+
+setInterval(sampleUsage, SAMPLE_SECONDS * 1000);
+setInterval(reportUsage, REPORT_MS);

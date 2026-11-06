@@ -88,10 +88,14 @@ func desktopUsers() []*user.User {
 	return users
 }
 
-// asUser runs a command as u on u's session bus.
+// asUser runs a command as u on u's session bus and X display.
 func asUser(u *user.User, name string, args ...string) *exec.Cmd {
 	cmd := exec.Command(name, args...)
-	cmd.Env = []string{"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/" + u.Uid + "/bus"}
+	cmd.Env = []string{
+		"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/" + u.Uid + "/bus",
+		"DISPLAY=:0",
+		"XAUTHORITY=" + u.HomeDir + "/.Xauthority",
+	}
 	uid, _ := strconv.ParseUint(u.Uid, 10, 32)
 	gid, _ := strconv.ParseUint(u.Gid, 10, 32)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}}

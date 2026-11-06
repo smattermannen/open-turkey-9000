@@ -1,13 +1,13 @@
 {
   "manifest_version": 2,
   "name": "Killer Chicken 9000",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Enforces Killer Chicken 9000 blocks inside the browser.",
   "browser_specific_settings": {
     "gecko": { "id": "blocker@kc9k" }
   },
   "incognito": "spanning",
-  "permissions": ["webRequest", "webRequestBlocking", "storage", "tabs", "<all_urls>", "http://127.0.0.1/*"],
+  "permissions": ["webRequest", "webRequestBlocking", "storage", "tabs", "idle", "<all_urls>", "http://127.0.0.1/*"],
   "background": { "scripts": ["background.js"] },
   "content_scripts": [
     {

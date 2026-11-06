@@ -28,6 +28,15 @@ var BrowserSettings = []string{"extension", "web-only", "safesearch", "force-sea
 // require-extension). It lives in the daemon; the rules server feeds it.
 var extensionGuard = blocker.NewExtensionGuard(rulesPort)
 
+// GuardsBlocks reports whether a setting helps enforce blocks: without the
+// extension, wildcards and keywords go unenforced, and without forcing
+// LibreWolf or requiring the extension another browser can skip it. These
+// three also can't be turned off while a block is locked. The others only
+// answer to their own locks (see db.SettingLock).
+func GuardsBlocks(name string) bool {
+	return name == "extension" || name == "force-librewolf" || name == "require-extension"
+}
+
 // IsBrowserSetting reports whether name is a browser option.
 func IsBrowserSetting(name string) bool {
 	for _, s := range BrowserSettings {

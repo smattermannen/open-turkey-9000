@@ -1,6 +1,6 @@
 // clock.go — a time source for time locks that survives clock changes.
 //
-// While a time lock is active, trusted time only moves with CLOCK_BOOTTIME,
+// While a time lock (on a block or a browser setting) is active, trusted time only moves with CLOCK_BOOTTIME,
 // which keeps counting during suspend and which `date` cannot change. Time
 // spent powered off is not counted: after a reboot nothing distinguishes real
 // downtime from a clock moved forward. With no time lock active, trusted time
@@ -69,7 +69,9 @@ func (d *DB) TrustedNow(wall time.Time) (int64, error) {
 	lockActive := false
 	if prevPtr != nil {
 		var n int
-		if err := d.conn.QueryRow("SELECT COUNT(*) FROM active_blocks WHERE locked_until > ?", prev.Trusted).Scan(&n); err != nil {
+		// Setting locks count too, or moving the clock forward would end them.
+		if err := d.conn.QueryRow(`SELECT (SELECT COUNT(*) FROM active_blocks WHERE locked_until > ?) +
+			(SELECT COUNT(*) FROM setting_locks WHERE locked_until > ?)`, prev.Trusted, prev.Trusted).Scan(&n); err != nil {
 			return 0, fmt.Errorf("failed to check time locks: %w", err)
 		}
 		lockActive = n > 0

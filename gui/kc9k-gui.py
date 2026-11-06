@@ -1327,26 +1327,21 @@ class Window(Gtk.ApplicationWindow):
         self.librewolf_install.get_style_context().add_class("suggested-action")
         self.librewolf_install.connect("clicked", self.install_librewolf)
         librewolf_rows = [self.librewolf_status, self.librewolf_install]
+        self.setting_locks = {}
         for name, title, detail in LIBREWOLF_OPTIONS:
-            switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-            switch.connect("state-set", self.toggle_browser, name)
-            self.browser_switches[name] = switch
-            librewolf_rows.append(self.switch_row(switch, title, detail))
+            librewolf_rows.append(self.setting_row(name, title, detail))
         box.pack_start(section(
             "LibreWolf",
             dim("LibreWolf is a privacy-focused Firefox that, unlike Firefox, accepts the "
                 "bundled extension."),
             *librewolf_rows), False, False, 0)
 
-        rows = []
-        for name, title, detail in BROWSER_OPTIONS:
-            switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-            switch.connect("state-set", self.toggle_browser, name)
-            self.browser_switches[name] = switch
-            rows.append(self.switch_row(switch, title, detail))
+        rows = [self.setting_row(name, title, detail) for name, title, detail in BROWSER_OPTIONS]
         box.pack_start(section(
-            "Browser options", dim("These, like the LibreWolf switches, can always be turned on, "
-                                   "but not off during a lock."), *rows),
+            "Browser options", dim("Each option can be locked on its own with Lock…, independently "
+                                   "of your blocks. A locked option can't be turned off until its "
+                                   "lock ends or is unlocked. The LibreWolf switches also can't be "
+                                   "turned off while a block is locked."), *rows),
             False, False, 0)
 
         self.stats_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
@@ -1364,18 +1359,37 @@ class Window(Gtk.ApplicationWindow):
     def update_settings(self):
         for name, switch in self.browser_switches.items():
             set_switch(switch, self.state["browser"].get(name, False))
+        for name, (label, unlock) in self.setting_locks.items():
+            info = self.state.get("browser_locks", {}).get(name, {})
+            parts = []
+            if info.get("lock_seconds"):
+                parts.append(f"for {fmt_seconds(info['lock_seconds'])}")
+            if info.get("restart_locked"):
+                parts.append("until restart")
+            if info.get("char_locked"):
+                parts.append("typing challenge")
+            if info.get("password_locked"):
+                parts.append("password")
+            label.set_text("Locked: " + ", ".join(parts) if parts else "")
+            label.set_visible(bool(parts))
+            unlock.set_visible(info.get("char_locked", False) or info.get("password_locked", False))
+            unlock.set_sensitive(not info.get("lock_seconds") and not info.get("restart_locked"))
+            # A locked option is on and stays on, so its switch can't be used.
+            self.browser_switches[name].set_sensitive(
+                not parts and name not in ("force-librewolf", "require-extension"))
         version = self.state.get("librewolf", "")
         if version:
             self.librewolf_status.set_markup(f"<b>Installed</b> (version {GLib.markup_escape_text(version)}).")
         else:
             self.librewolf_status.set_markup(
-                "<b>Not installed.</b> Install it before allowing only LibreWolf, or every "
-                "browser would be closed.")
+                "<b>Not installed.</b> Install it before allowing only LibreWolf or closing "
+                "browsers without the extension, or every browser would be closed.")
         self.librewolf_install.set_visible(not version)
         # Turning it on needs LibreWolf; turning it off must stay possible.
         for name in ("force-librewolf", "require-extension"):
             switch = self.browser_switches[name]
-            switch.set_sensitive(bool(version) or switch.get_active())
+            locked = bool(self.setting_locks[name][0].get_text())
+            switch.set_sensitive(not locked and (bool(version) or switch.get_active()))
         set_switch(self.stats_switch, self.state["stats"])
 
     def install_librewolf(self, _button):
@@ -1386,6 +1400,94 @@ class Window(Gtk.ApplicationWindow):
             self.librewolf_status.set_text("Installing LibreWolf, this can take a few minutes…")
             self.run(["browser", "install-librewolf"], timeout=900,
                      then=lambda output: self.message(output, Gtk.MessageType.INFO))
+
+    def setting_row(self, name, title, detail):
+        """A browser option: its switch, plus its lock state and buttons."""
+        switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        switch.connect("state-set", self.toggle_browser, name)
+        self.browser_switches[name] = switch
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        box.pack_start(self.switch_row(switch, title, detail), False, False, 0)
+        line = Gtk.Box(spacing=8)
+        status = dim("", wrap=False)
+        status.set_no_show_all(True)
+        lock = Gtk.Button(label="Lock…")
+        lock.connect("clicked", self.lock_setting, name, title)
+        unlock = Gtk.Button(label="Unlock…")
+        unlock.set_no_show_all(True)
+        unlock.connect("clicked", self.unlock_setting, name, title)
+        line.pack_start(status, False, False, 0)
+        line.pack_end(unlock, False, False, 0)
+        line.pack_end(lock, False, False, 0)
+        box.pack_start(line, False, False, 0)
+        self.setting_locks[name] = (status, unlock)
+        return box
+
+    def lock_setting(self, _button, name, title):
+        dialog = Gtk.Dialog(title=f"Lock: {title}", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Turn on and lock", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        for side in ("start", "end", "top", "bottom"):
+            getattr(box, f"set_margin_{side}")(16)
+        box.pack_start(dim("The option is turned on and can't be turned off until the lock ends. "
+                           "Locks can be added later, but only made stronger."), False, False, 0)
+        grid = Gtk.Grid(column_spacing=10, row_spacing=8)
+        minutes = Gtk.SpinButton.new_with_range(0, 57600, 5)
+        password = Gtk.Entry(visibility=False, placeholder_text="optional")
+        typing = Gtk.CheckButton(label="Typing challenge to turn it off")
+        restart = Gtk.CheckButton(label="Stay on until the computer restarts")
+        rows = (
+            ("Time lock (minutes)", minutes, "Can't be turned off at all until the time has passed."),
+            ("Password", password, "Needed to turn it off. Give it to someone else to keep."),
+        )
+        for i, (label, widget, note) in enumerate(rows):
+            grid.attach(Gtk.Label(label=label, xalign=0), 0, i * 2, 1, 1)
+            grid.attach(widget, 1, i * 2, 1, 1)
+            grid.attach(dim(note), 1, i * 2 + 1, 1, 1)
+        grid.attach(typing, 0, 4, 2, 1)
+        grid.attach(restart, 0, 5, 2, 1)
+        box.pack_start(grid, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        lock_minutes, secret = minutes.get_value_as_int(), password.get_text()
+        use_typing, use_restart = typing.get_active(), restart.get_active()
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK:
+            return
+        args = ["browser", name, "on"]
+        if lock_minutes:
+            args += ["--for", f"{lock_minutes}m"]
+        if use_typing:
+            args.append("--lock")
+        if use_restart:
+            args.append("--restart")
+        if secret:
+            args.append("--password-stdin")
+        if len(args) == 3:
+            self.message("Choose at least one lock.", Gtk.MessageType.INFO)
+            return
+        if lock_minutes and not self.confirm(
+                f"Lock {title} for {lock_minutes} minutes?",
+                "It can't be turned off until the time has passed, not even with the typing "
+                "challenge. Time the computer is off doesn't count.", "Lock"):
+            return
+        self.run(args, secret + "\n" if secret else None)
+
+    def unlock_setting(self, _button, name, title):
+        info = self.state.get("browser_locks", {}).get(name, {})
+        if info.get("password_locked") and not info.get("char_locked"):
+            password = self.ask_text(f"Unlock {title}", "Enter the option's password.", password=True)
+            if password:
+                self.run(["browser", "unlock", name], password + "\n")
+            return
+        command = f"{CLI} browser unlock {shlex.quote(name)}"
+        try:
+            subprocess.Popen(["x-terminal-emulator", "-e", command])
+        except OSError as error:
+            self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
 
     def toggle_browser(self, _switch, wanted, name):
         if self.updating:

@@ -27,8 +27,35 @@ func BlockLocked(detail *db.BlockDetail, extras db.LockExtras, trusted int64, bo
 		extras.Delay > 0 || (extras.RestartBoot != "" && extras.RestartBoot == bootID)
 }
 
-// AnyLock reports whether any block is locked or a freeze is running.
+// AnyLock reports whether any block or browser setting is locked, or a freeze
+// is running. Strict mode and no-escape hold while it is true.
 func AnyLock(d *db.DB, now time.Time, trusted int64) (bool, error) {
+	if locked, err := BlocksLocked(d, now, trusted); err != nil || locked {
+		return locked, err
+	}
+	return AnySettingLocked(d, trusted)
+}
+
+// AnySettingLocked reports whether a lock holds any browser setting.
+func AnySettingLocked(d *db.DB, trusted int64) (bool, error) {
+	bootID, err := db.BootID()
+	if err != nil {
+		return false, err
+	}
+	locks, err := d.SettingLocks()
+	if err != nil {
+		return false, err
+	}
+	for _, l := range locks {
+		if l.InForce(trusted, bootID) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// BlocksLocked reports whether any block is locked or a freeze is running.
+func BlocksLocked(d *db.DB, now time.Time, trusted int64) (bool, error) {
 	until, err := d.FreezeUntil()
 	if err != nil {
 		return false, err

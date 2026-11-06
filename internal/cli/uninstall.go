@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 
@@ -55,6 +56,17 @@ var prepareUninstallCmd = &cobra.Command{
 			return err
 		} else if until > time.Now().Unix() {
 			return fmt.Errorf("cannot uninstall during Frozen Chicken")
+		}
+
+		// A locked browser setting can't be undone by uninstalling either.
+		trusted, err := database.TrustedNow(time.Now())
+		if err != nil {
+			return err
+		}
+		if locked, err := enforce.AnySettingLocked(database, trusted); err != nil {
+			return err
+		} else if locked {
+			return fmt.Errorf("cannot uninstall while a browser setting is locked (see 'kc9k browser')")
 		}
 
 		// Refuse while any block is held (char-locked, time-locked, or in or

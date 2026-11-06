@@ -313,13 +313,29 @@ The daemon force-installs the bundled extension in Firefox-family browsers throu
 ```bash
 kc9k browser install-librewolf    # install LibreWolf (official repository, via extrepo)
 kc9k browser force-librewolf on   # close other browsers (needs LibreWolf installed)
+kc9k browser require-extension on # while a block is on, close browsers without the extension
 kc9k browser force-search on      # Google as the only search engine
 kc9k browser safesearch on        # lock Google SafeSearch
 kc9k browser web-only on          # web results only: no images, shopping or AI
-kc9k browser                      # list every option and whether it's on
+kc9k browser                      # list every option, whether it's on, and its locks
 ```
 
-Options can always be turned on, and can't be turned off during a lock. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
+Options can always be turned on. Each one can be **locked on its own**, independently of your blocks, with the same kinds of lock as a block (except the delay lock). A locked option can't be turned off until the lock ends or is unlocked:
+
+```bash
+kc9k browser safesearch on --for 168h         # can't be turned off for a week
+kc9k browser web-only on --until 17:00         # until a clock time
+kc9k browser force-search on --lock            # typing challenge to turn it off
+kc9k browser web-only on --password-stdin      # password to turn it off
+kc9k browser safesearch on --restart           # on until the computer restarts
+kc9k browser unlock web-only                   # challenge/password, then turns it off
+```
+
+Like a block's locks, an option's locks can be added later but only made stronger: a time lock can only be extended, a challenge only lengthened, and a password can't be replaced. Time locks use the same tamper-proof clock as block time locks. While an option is locked, strict mode and no-escape hold and `make uninstall` is refused. In the interface, each option has **Lock…** and **Unlock…** buttons under Settings.
+
+With `require-extension` on and a block active, any browser that has run for 60 seconds without the extension checking in is closed, like Cold Turkey does. The extension checks in each time it fetches its rules; the daemon traces the connection to the browser process. Today that closes every browser except LibreWolf, so it needs LibreWolf installed.
+
+`extension`, `force-librewolf` and `require-extension` also can't be turned off while a block is locked or Frozen Chicken runs, because blocks rely on them. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
 
 ## Pomodoro
 
@@ -331,7 +347,7 @@ Options can always be turned on, and can't be turned off during a lock. Greyscal
 
 ## Strict mode
 
-`kc9k strict on` denies sudo and pkexec for every user while a block is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
+`kc9k strict on` denies sudo and pkexec for every user while a block or browser option is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
 
 During a lock, programs also can't start from `/home`, `/tmp`, `/var/tmp` or `/dev/shm`, which stops AppImages and downloaded browsers. Programs already running continue.
 

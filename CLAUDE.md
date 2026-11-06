@@ -53,6 +53,15 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   firewall and browser policy; greyscale and no-images go to the extension
   (`enforce.BuildRules`, `internal/webext/files/match.js`). Unticking is a
   loosening edit (gated and queueable like the others).
+- **Browser setting locks** (`internal/db/settinglocks.go`, `internal/cli/browser.go`):
+  each browser option locks on its own (time, typing challenge, password,
+  restart), independently of blocks; `enforce.AnyLock` counts them (strict
+  mode, no-escape) and trusted time freezes for their time locks. Only
+  `extension`/`force-librewolf`/`require-extension` are also held by block
+  locks (`GuardsBlocks`).
+- **Extension guard** (`internal/blocker/extguard.go`): with `require-extension`
+  on and a block active, the daemon closes browsers whose extension hasn't
+  fetched `/rules` within 60 s (connection traced via `/proc/net/tcp` to the PID).
 - **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL);
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (modes, patterns, schedules, time locks, schema
@@ -75,7 +84,7 @@ Full usage and examples in `README.md`. Summary:
 remove-app | add-pattern | remove-pattern | set-mode | action | export | import | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N]` (loosening edits take `--now`), `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N]` (loosening edits take `--now`), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

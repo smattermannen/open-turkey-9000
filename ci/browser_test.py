@@ -28,7 +28,7 @@ def ot_quiet(*args):
 
 def browser_settings():
     out = subprocess.run(["kc9k", "browser"], check=True, capture_output=True, text=True).stdout
-    return dict(line.split() for line in out.splitlines() if line.strip())
+    return dict(line.split()[:2] for line in out.splitlines() if line.strip())
 
 
 def remove_test_block():

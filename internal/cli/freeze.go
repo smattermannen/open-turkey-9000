@@ -95,15 +95,25 @@ type guiBlock struct {
 	QuotaNext   int64    `json:"quota_next"`
 }
 
+// guiSettingLock is a browser setting's locks for the interface.
+type guiSettingLock struct {
+	Seconds      int64 `json:"lock_seconds"`
+	CharLocked   bool  `json:"char_locked"`
+	Password     bool  `json:"password_locked"`
+	Restart      bool  `json:"restart_locked"`
+	GuardsBlocks bool  `json:"guards_blocks"`
+}
+
 type guiState struct {
-	FreezeSeconds int64           `json:"freeze_seconds"`
-	FreezeMode    string          `json:"freeze_mode"`
-	Strict        bool            `json:"strict"`
-	NoEscape      bool            `json:"no_escape"`
-	Stats         bool            `json:"stats"`
-	LibreWolf     string          `json:"librewolf"`
-	Browser       map[string]bool `json:"browser"`
-	Blocks        []guiBlock      `json:"blocks"`
+	FreezeSeconds int64                     `json:"freeze_seconds"`
+	FreezeMode    string                    `json:"freeze_mode"`
+	Strict        bool                      `json:"strict"`
+	NoEscape      bool                      `json:"no_escape"`
+	Stats         bool                      `json:"stats"`
+	LibreWolf     string                    `json:"librewolf"`
+	Browser       map[string]bool           `json:"browser"`
+	BrowserLocks  map[string]guiSettingLock `json:"browser_locks"`
+	Blocks        []guiBlock                `json:"blocks"`
 }
 
 var guiStateCmd = &cobra.Command{
@@ -150,8 +160,21 @@ var guiStateCmd = &cobra.Command{
 		state.Stats = enforce.StatsOn(database)
 		state.LibreWolf = blocker.LibreWolfVersion()
 		state.Browser = map[string]bool{}
+		state.BrowserLocks = map[string]guiSettingLock{}
 		for _, name := range enforce.BrowserSettings {
 			state.Browser[name] = enforce.BrowserOn(database, name)
+			s, err := loadSettingLock(database, name)
+			if err != nil {
+				return err
+			}
+			g := guiSettingLock{
+				CharLocked: s.lock.LockChars > 0, Password: s.lock.PasswordHash != "",
+				Restart: s.lock.RestartLocked(s.bootID), GuardsBlocks: enforce.GuardsBlocks(name),
+			}
+			if s.lock.TimeLocked(s.trusted) {
+				g.Seconds = s.lock.LockedUntil - s.trusted
+			}
+			state.BrowserLocks[name] = g
 		}
 
 		blocks, err := database.ListBlocks()

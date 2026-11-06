@@ -52,6 +52,15 @@ var masterCmd = &cobra.Command{
 				return err
 			}
 		}
+		locks, err := database.SettingLocks()
+		if err != nil {
+			return err
+		}
+		for _, l := range locks {
+			if err := database.ClearSettingLock(l.Name); err != nil {
+				return err
+			}
+		}
 		if err := database.SetFreeze(0, "lock"); err != nil {
 			return err
 		}

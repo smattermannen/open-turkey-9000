@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Killer Chicken 9000",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Enforces Killer Chicken 9000 blocks inside the browser.",
   "browser_specific_settings": {
     "gecko": { "id": "blocker@kc9k" }

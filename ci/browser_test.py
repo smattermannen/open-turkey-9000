@@ -44,11 +44,18 @@ def cleanup(saved):
     subprocess.run(["pkill", "-f", "^/tmp/chromium"], stderr=subprocess.DEVNULL)
     if os.path.exists("/tmp/chromium"):
         os.remove("/tmp/chromium")
+    subprocess.run(["sudo", "rm", "-f", REMOTE_CONTROL_MARKER])
 
+
+# WebDriver drives LibreWolf through remote control, which the daemon closes
+# during website blocks. Testing builds (TAGS=devmaster) allow it while this
+# root-owned file exists; normal builds ignore it.
+REMOTE_CONTROL_MARKER = "/var/lib/kc9k/allow-remote-control"
 
 # Leave the machine as we found it so the test can run again on real hardware.
 remove_test_block()
 saved_settings = browser_settings()
+subprocess.run(["sudo", "touch", REMOTE_CONTROL_MARKER], check=True)
 
 def start(signatures_required=True):
     options = Options()

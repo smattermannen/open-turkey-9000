@@ -119,7 +119,9 @@ async function closeNewlyBlockedTabs() {
 
 async function poll() {
   try {
-    const response = await fetch(RULES_URL, { cache: "no-store" });
+    // The header marks this as the extension checking in (see the daemon's
+    // ExtensionHeader); web pages can't send it.
+    const response = await fetch(RULES_URL, { cache: "no-store", headers: { "X-KC9K-Extension": "1" } });
     if (response.ok) {
       const rules = await response.json();
       apply(rules);

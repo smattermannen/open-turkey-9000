@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -141,12 +142,31 @@ func ServeRules(d *db.DB) error {
 		return err
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/rules", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/rules", rulesHandler(d, extensionGuard.CheckIn))
+	mux.HandleFunc("/usage", usageHandler(d))
+	return http.Serve(listener, mux)
+}
+
+// ExtensionHeader marks a request as coming from the KC9K extension. Only
+// requests carrying it count as the extension checking in: a web page can
+// make any browser fetch /rules, but it can't add a custom header to a
+// request to another address without the browser asking first (a CORS
+// preflight), which the daemon never answers. Without this, a page left
+// open in Firefox could keep Firefox alive without the extension.
+const ExtensionHeader = "X-KC9K-Extension"
+
+// rulesHandler serves the rules, and passes requests from the extension to
+// checkIn. Older extensions without the header still get the rules, so they
+// keep enforcing until the browser installs the update.
+func rulesHandler(d *db.DB, checkIn func(remoteAddr string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Host != RulesAddress || r.Method != http.MethodGet {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		extensionGuard.CheckIn(r.RemoteAddr)
+		if r.Header.Get(ExtensionHeader) == "1" {
+			checkIn(r.RemoteAddr)
+		}
 		rules, err := BuildRules(d)
 		if err != nil {
 			log.Printf("rules: %v", err)
@@ -155,9 +175,7 @@ func ServeRules(d *db.DB) error {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(rules)
-	})
-	mux.HandleFunc("/usage", usageHandler(d))
-	return http.Serve(listener, mux)
+	}
 }
 
 func enforceBrowser(d *db.DB) {
@@ -165,12 +183,17 @@ func enforceBrowser(d *db.DB) {
 	if BrowserOn(d, "extension") {
 		xpi, err := webext.Pack()
 		if err == nil {
-			err = blocker.EnsureFile(webext.Path, xpi)
+			err = blocker.EnsureFile(webext.Path(), xpi)
 		}
 		if err != nil {
 			log.Printf("browser: failed to install the extension file: %v", err)
 		} else {
-			setup.ExtensionID, setup.ExtensionXPI = webext.ID, webext.Path
+			setup.ExtensionID, setup.ExtensionXPI = webext.ID, webext.Path()
+			for _, old := range webext.StaleFiles() {
+				if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
+					log.Printf("browser: removing old extension file: %v", err)
+				}
+			}
 		}
 	}
 	if err := blocker.SyncLibreWolfSigning(setup.ExtensionID != ""); err != nil {

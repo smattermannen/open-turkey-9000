@@ -92,6 +92,11 @@ func (g *ExtensionGuard) Enforce(now time.Time) int {
 		if exeName(parent[pid]) == name || !ownedByUser(pid) || !g.browsers.guarded(pid) {
 			continue // a child process of a browser, a system program, or not a browser
 		}
+		if remoteControlled(pid) && !remoteControlAllowed() {
+			log.Printf("browser: closing %s (pid %d): started for remote control", name, pid)
+			targets = append(targets, pid)
+			continue
+		}
 		if age, ok := processAge(pid, uptime); !ok || age < ExtensionGrace {
 			continue
 		}

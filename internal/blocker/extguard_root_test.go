@@ -1,7 +1,8 @@
 //go:build roottest
 
 // Run as root on a disposable machine with Playwright's Chromium:
-//   go test -tags roottest -run Guard ./internal/blocker
+//
+//	go test -tags roottest -run Guard ./internal/blocker
 package blocker
 
 import (

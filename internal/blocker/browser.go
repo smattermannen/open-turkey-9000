@@ -117,12 +117,6 @@ func ApplyBrowserPolicies(p BrowserPolicy) error {
 	return nil
 }
 
-// BlockDomainsPolicy is a convenience constructor for the common case of a
-// plain blocklist of domains (no patterns, no allowlist).
-func BlockDomainsPolicy(domains []string) BrowserPolicy {
-	return BrowserPolicy{BlockDomains: domains}
-}
-
 // firefoxBlockSet builds Firefox's WebsiteFilter.Block array for a policy.
 func firefoxBlockSet(p BrowserPolicy) []string {
 	if p.AllowMode {

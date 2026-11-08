@@ -37,27 +37,10 @@ func lockCinnamon() error {
 	if err != nil {
 		return nil // another desktop: logind's signal covers it
 	}
-	output, err := exec.Command("loginctl", "list-users", "--no-legend").Output()
-	if err != nil {
-		return err
-	}
 	var firstErr error
-	for _, line := range strings.Split(string(output), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		uid, err := strconv.ParseUint(fields[0], 10, 32)
-		if err != nil || uid < 1000 {
-			continue
-		}
-		cmd := exec.Command(path, "--lock")
-		cmd.Env = []string{
-			"DISPLAY=:0",
-			"HOME=/home/" + fields[1],
-			fmt.Sprintf("DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%d/bus", uid),
-		}
-		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(uid)}}
+	for _, u := range desktopUsers() {
+		cmd := asUser(u, path, "--lock")
+		cmd.Env = append(cmd.Env, "HOME="+u.HomeDir)
 		if err := cmd.Run(); err != nil && firstErr == nil {
 			firstErr = err
 		}

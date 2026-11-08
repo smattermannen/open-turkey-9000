@@ -690,25 +690,6 @@ func (d *DB) IsBlockActive(name string) (bool, error) {
 	return count > 0, nil
 }
 
-// IsBlockLocked checks whether an active block is locked.
-// If the block isn't active, it returns false (not locked).
-func (d *DB) IsBlockLocked(name string) (bool, error) {
-	var locked bool
-	err := d.conn.QueryRow(`
-		SELECT COALESCE(ab.locked, 0) FROM active_blocks ab
-		JOIN blocks b ON b.id = ab.block_id
-		WHERE b.name = ?
-	`, name).Scan(&locked)
-	if err == sql.ErrNoRows {
-		// If it's not active, it's not locked.
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to check whether block '%s' is locked: %w", name, err)
-	}
-	return locked, nil
-}
-
 // --------------------------------------------------------------------------
 // Queries for the daemon (active blocks)
 // --------------------------------------------------------------------------
@@ -765,104 +746,6 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 	}
 
 	return activeBlocks, nil
-}
-
-// GetAllBlockedDomains returns every domain from every active block.
-// The daemon uses this to update /etc/hosts or the firewall.
-// We return a "flat" list because the daemon doesn't need to know which block
-// each domain belongs to — it only needs the full list.
-func (d *DB) GetAllBlockedDomains() ([]string, error) {
-	rows, err := d.conn.Query(`
-		SELECT DISTINCT s.domain
-		FROM sites s
-		JOIN active_blocks ab ON ab.block_id = s.block_id
-		ORDER BY s.domain
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch blocked domains: %w", err)
-	}
-	defer rows.Close()
-
-	var domains []string
-	for rows.Next() {
-		var domain string
-		if err := rows.Scan(&domain); err != nil {
-			return nil, fmt.Errorf("failed to read blocked domain: %w", err)
-		}
-		domains = append(domains, domain)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate blocked domains: %w", err)
-	}
-
-	return domains, nil
-}
-
-// GetAllBlockedApps returns every process name from every active block.
-// The daemon uses this to kill processes the user wants to block.
-func (d *DB) GetAllBlockedApps() ([]string, error) {
-	rows, err := d.conn.Query(`
-		SELECT DISTINCT a.process_name
-		FROM apps a
-		JOIN active_blocks ab ON ab.block_id = a.block_id
-		ORDER BY a.process_name
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch blocked apps: %w", err)
-	}
-	defer rows.Close()
-
-	var apps []string
-	for rows.Next() {
-		var app string
-		if err := rows.Scan(&app); err != nil {
-			return nil, fmt.Errorf("failed to read blocked app: %w", err)
-		}
-		apps = append(apps, app)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate blocked apps: %w", err)
-	}
-
-	return apps, nil
-}
-
-// --------------------------------------------------------------------------
-// Data maintenance
-// --------------------------------------------------------------------------
-
-// SiteRow represents a row of the sites table (ID + domain).
-type SiteRow struct {
-	ID     int
-	Domain string
-}
-
-// GetAllSitesRaw returns every site from every block (ID + domain).
-// Used for migrating/normalizing existing data.
-func (d *DB) GetAllSitesRaw() ([]SiteRow, error) {
-	rows, err := d.conn.Query("SELECT id, domain FROM sites")
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch sites: %w", err)
-	}
-	defer rows.Close()
-
-	var sites []SiteRow
-	for rows.Next() {
-		var s SiteRow
-		if err := rows.Scan(&s.ID, &s.Domain); err != nil {
-			return nil, fmt.Errorf("failed to read site: %w", err)
-		}
-		sites = append(sites, s)
-	}
-	return sites, rows.Err()
-}
-
-// UpdateSiteDomain updates a site's domain by ID.
-func (d *DB) UpdateSiteDomain(id int, domain string) error {
-	_, err := d.conn.Exec("UPDATE sites SET domain = ? WHERE id = ?", domain, id)
-	return err
 }
 
 // --------------------------------------------------------------------------

@@ -95,6 +95,7 @@ var noDescend = map[string]bool{
 // executable name, Flatpak app ID or desktop app scope) together with all of
 // its descendants. It returns the number of processes killed.
 func KillBlocked(processNames []string) (int, error) {
+	processNames = withoutEssentialApps(processNames)
 	if len(processNames) == 0 {
 		return 0, nil
 	}
@@ -145,7 +146,9 @@ func KillBlocked(processNames []string) (int, error) {
 
 	killed := 0
 	for _, pid := range targets {
-		if protected[pid] {
+		// System programs (root, service accounts) are never killed: see
+		// owners.go.
+		if protected[pid] || !ownedByUser(pid) {
 			continue
 		}
 		protected[pid] = true // a root may also be another root's descendant
@@ -515,10 +518,10 @@ var protectedFolders = map[string]bool{
 	"/usr/libexec/": true, "/usr/local/": true, "/usr/local/bin/": true,
 }
 
-// ValidAppEntry rejects folders that can't safely be blocked.
+// ValidAppEntry rejects folders and programs that can't safely be blocked.
 func ValidAppEntry(entry string) error {
 	if protectedFolders[strings.TrimRight(entry, "/")+"/"] {
 		return fmt.Errorf("the folder %s can't be blocked, because the system needs it", entry)
 	}
-	return nil
+	return checkEssentialApp(entry)
 }

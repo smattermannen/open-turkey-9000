@@ -307,6 +307,11 @@ var blockImportCmd = &cobra.Command{
 				return fmt.Errorf("invalid pattern %q in import", p)
 			}
 		}
+		for _, app := range in.Apps {
+			if err := blocker.ValidAppEntry(app); err != nil {
+				return fmt.Errorf("in import: %w", err)
+			}
+		}
 
 		database, err := openDB()
 		if err != nil {

@@ -11,8 +11,8 @@
 // must not be closed. They are installed by root, while a copy that dodges the
 // name list has to be put somewhere by the user, so only executables the user
 // owns are judged by their engine; root-owned ones are judged by name, as
-// before. Electron apps keep their app.asar open, which no browser does, so
-// a user-installed Electron app isn't mistaken for a browser either.
+// before. Electron apps keep their app.asar open or mapped, which no browser
+// does, so a user-installed Electron app isn't mistaken for a browser either.
 package blocker
 
 import (
@@ -89,7 +89,8 @@ func engineBrowser(pid int) bool {
 	if err != nil || !mapsBrowserEngine(string(maps)) {
 		return false
 	}
-	return !holdsAsar(pid)
+	// Electron reads its app.asar through an open file or a memory map.
+	return !strings.Contains(string(maps), ".asar") && !holdsAsar(pid)
 }
 
 // browserVerdict caches whether a process is a guarded browser, keyed by its

@@ -345,6 +345,8 @@ With `require-extension` on and a block active, any browser that has run for 60 
 
 `kc9k block add-app games /opt/spel/` blocks every program under a folder, and a full path blocks one file. System folders such as `/usr/bin/` are refused.
 
+Blocked apps are only ever closed when they run as a regular user, so a block can't kill system programs that happen to share a name (an update running in Python, say). Programs the desktop needs, such as `Xorg`, `cinnamon`, `pipewire` or `python3`, can't be added at all, since blocking them would close your session over and over for as long as the block lasts.
+
 ## Strict mode
 
 `kc9k strict on` denies sudo and pkexec for every user while a block or browser option is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.

@@ -89,8 +89,8 @@ func (g *ExtensionGuard) Enforce(now time.Time) int {
 	var targets []int
 	for pid := range parent {
 		name := exeName(pid)
-		if exeName(parent[pid]) == name || !g.browsers.guarded(pid) {
-			continue // a child process of a browser, or not a browser
+		if exeName(parent[pid]) == name || !ownedByUser(pid) || !g.browsers.guarded(pid) {
+			continue // a child process of a browser, a system program, or not a browser
 		}
 		if age, ok := processAge(pid, uptime); !ok || age < ExtensionGrace {
 			continue

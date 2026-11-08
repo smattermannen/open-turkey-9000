@@ -353,6 +353,157 @@ class StatTile(Gtk.Box):
         self.value.set_markup(f"<span size='xx-large' weight='bold'>{GLib.markup_escape_text(text)}</span>")
 
 
+DAY_NAMES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+class WeekCalendar(Gtk.DrawingArea):
+    """A block's schedule as a week: Monday to Sunday across, 00:00 to 24:00
+    down. Drag down a day to add a window (snapped to 15 minutes); click a
+    window to remove it."""
+
+    SNAP = 15
+
+    def __init__(self, on_create, on_pick):
+        super().__init__()
+        self.on_create, self.on_pick = on_create, on_pick
+        self.windows = []  # dicts: days (bit 0 Sunday), start, end, allow
+        self.drag = None  # (column, start minute, current minute)
+        self.press_y = 0
+        self.set_size_request(-1, 380)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
+                        | Gdk.EventMask.POINTER_MOTION_MASK)
+        self.connect("draw", self.on_draw)
+        self.connect("button-press-event", self.on_press)
+        self.connect("motion-notify-event", self.on_motion)
+        self.connect("button-release-event", self.on_release)
+
+    def set_windows(self, windows):
+        self.windows = windows
+        self.queue_draw()
+
+    def geometry(self):
+        left, top, right, bottom = 44, 22, 4, 4
+        width = self.get_allocated_width() - left - right
+        height = self.get_allocated_height() - top - bottom
+        return left, top, width / 7, height
+
+    def at(self, x, y):
+        """The column and minute (snapped) under a point, clamped to the grid."""
+        left, top, column_width, height = self.geometry()
+        column = min(max(int((x - left) // column_width), 0), 6)
+        minute = (y - top) / height * 1440
+        minute = int(round(minute / self.SNAP) * self.SNAP)
+        return column, min(max(minute, 0), 1440)
+
+    @staticmethod
+    def weekday_bit(column):
+        """Monday is column 0; the day bits start at Sunday."""
+        return 1 << ((column + 1) % 7)
+
+    def window_at(self, column, minute):
+        for index, w in enumerate(self.windows):
+            if w["days"] & self.weekday_bit(column) and w["start"] <= minute < w["end"]:
+                return index
+        return None
+
+    def on_press(self, _widget, event):
+        if event.button != 1:
+            return False
+        column, minute = self.at(event.x, event.y)
+        self.drag = (column, minute, minute)
+        self.press_y = event.y
+        return True
+
+    def on_motion(self, _widget, event):
+        if self.drag:
+            column, start, _ = self.drag
+            _, minute = self.at(event.x, event.y)
+            self.drag = (column, start, minute)
+            self.queue_draw()
+        return False
+
+    def on_release(self, _widget, event):
+        if not self.drag:
+            return False
+        column, start, _ = self.drag
+        _, end = self.at(event.x, event.y)
+        self.drag = None
+        self.queue_draw()
+        start, end = min(start, end), max(start, end)
+        if abs(event.y - self.press_y) >= 5:  # a drag, not a click that wobbled
+            if end - start >= self.SNAP:
+                self.on_create(column, start, end)
+        else:
+            exact = (event.y - self.geometry()[1]) / self.geometry()[3] * 1440
+            index = self.window_at(column, exact)
+            if index is not None:
+                self.on_pick(index)
+        return True
+
+    def on_draw(self, widget, cr):
+        accent, text, muted, faint = theme_colors(widget)
+        left, top, column_width, height = self.geometry()
+        layout = widget.create_pango_layout("")
+        layout.set_font_description(Pango.FontDescription("Sans 8"))
+
+        def y_of(minute):
+            return top + height * minute / 1440
+
+        # Hours: a faint line every 3 hours, labels every 6.
+        for hour in range(0, 25, 3):
+            y = round(y_of(hour * 60)) + 0.5
+            cr.set_source_rgba(*faint)
+            cr.set_line_width(1)
+            cr.move_to(left, y)
+            cr.line_to(left + 7 * column_width, y)
+            cr.stroke()
+            if hour % 6 == 0:
+                layout.set_text(f"{hour:02d}:00", -1)
+                w, h = layout.get_pixel_size()
+                cr.set_source_rgba(*muted)
+                cr.move_to(left - 6 - w, y - h / 2)
+                PangoCairo.show_layout(cr, layout)
+        for column in range(8):
+            x = round(left + column * column_width) + 0.5
+            cr.set_source_rgba(*faint)
+            cr.move_to(x, top)
+            cr.line_to(x, top + height)
+            cr.stroke()
+        for column, name in enumerate(DAY_NAMES):
+            layout.set_text(name.capitalize(), -1)
+            w, _h = layout.get_pixel_size()
+            cr.set_source_rgba(*text)
+            cr.move_to(left + column * column_width + column_width / 2 - w / 2, 4)
+            PangoCairo.show_layout(cr, layout)
+
+        r, g, b, _a = accent
+        for w in self.windows:
+            for column in range(7):
+                if not w["days"] & self.weekday_bit(column):
+                    continue
+                x = left + column * column_width + 2
+                y0, y1 = y_of(w["start"]), y_of(w["end"])
+                cr.rectangle(x, y0, column_width - 4, max(y1 - y0, 2))
+                if w["allow"]:
+                    # Allow windows are gaps in an always-on block: outlined.
+                    cr.set_source_rgba(r, g, b, 0.15)
+                    cr.fill_preserve()
+                    cr.set_source_rgba(r, g, b, 0.9)
+                    cr.set_line_width(1.5)
+                    cr.stroke()
+                else:
+                    cr.set_source_rgba(r, g, b, 0.8)
+                    cr.fill()
+        if self.drag:
+            column, start, end = self.drag
+            start, end = min(start, end), max(start, end)
+            cr.set_source_rgba(*text[:3], 0.35)
+            cr.rectangle(left + column * column_width + 2, y_of(start), column_width - 4,
+                         max(y_of(end) - y_of(start), 2))
+            cr.fill()
+        return False
+
+
 class DailyChart(Gtk.DrawingArea):
     """Time spent per day: one series of vertical bars, hover for the value."""
 
@@ -890,7 +1041,11 @@ class Window(Gtk.ApplicationWindow):
         apps.pack_start(self.titles, True, True, 0)
         tabs.append_page(apps, Gtk.Label(label="Apps"))
 
-        schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=12)
+        schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        self.calendar = WeekCalendar(self.create_window_from_calendar, self.remove_window_from_calendar)
+        schedule.pack_start(dim("Drag down a day to add a window; click one to remove it. Filled: the "
+                                "block is on. Outlined: an allow window."), False, False, 0)
+        schedule.pack_start(self.calendar, False, False, 0)
         self.schedules = EditableList(
             "Schedule", "weekdays 09:00 17:00", self.add_schedule, self.remove_schedule,
             help_text="Days, start and end: weekdays 09:00 17:00, or mon,wed,fri 18:00 22:00. "
@@ -990,6 +1145,7 @@ class Window(Gtk.ApplicationWindow):
             self.status_label.set_text("Create a block, add sites or apps, then start it.")
             for widget in (self.sites, self.exceptions, self.apps, self.titles, self.schedules):
                 widget.set_items([])
+            self.calendar.set_windows([])
             self.limited_label.set_text("")
             self.quota_label.set_text("")
             return
@@ -1008,6 +1164,7 @@ class Window(Gtk.ApplicationWindow):
         self.apps.set_items(block["apps"])
         self.titles.set_items(block.get("titles", []))
         self.schedules.set_items(block["schedules"])
+        self.calendar.set_windows(block.get("schedule_windows", []))
 
         self.start_button.set_label("Add locks…" if block["active"] else "Start…")
         self.stop_button.set_sensitive(
@@ -1179,6 +1336,24 @@ class Window(Gtk.ApplicationWindow):
             return
         self.run(["schedule", "add", self.selected, "--days", values[0],
                   "--from", values[1], "--to", values[2]])
+
+    def create_window_from_calendar(self, column, start, end):
+        if not self.selected:
+            return
+        day, frm, to = DAY_NAMES[column], f"{start // 60:02d}:{start % 60:02d}", f"{end // 60:02d}:{end % 60:02d}"
+        if self.confirm(f"Add {day.capitalize()} {frm}-{to} to {self.selected}?",
+                        "The block turns on by itself then. To repeat it on other days, type "
+                        "them in the list below, e.g. weekdays " + frm + " " + to + ".", "Add"):
+            self.run(["schedule", "add", self.selected, "--days", day, "--from", frm, "--to", to])
+
+    def remove_window_from_calendar(self, index):
+        block = self.blocks.get(self.selected)
+        if not block or index >= len(block["schedules"]):
+            return
+        if self.confirm(f"Remove {block['schedules'][index]}?",
+                        "This can't be done from 2 hours before the window opens until it closes.",
+                        "Remove", destructive=True):
+            self.run(["schedule", "remove", self.selected, str(index + 1)])
 
     def remove_schedule(self, _value, number):
         self.run(["schedule", "remove", self.selected, str(number)])

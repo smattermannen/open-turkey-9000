@@ -71,6 +71,14 @@ Emergency exit: in GRUB, press e on the boot entry and add
 	},
 }
 
+// guiWin is a schedule window for the interface's week calendar.
+type guiWin struct {
+	Days  int  `json:"days"` // bit 0 is Sunday
+	Start int  `json:"start"`
+	End   int  `json:"end"`
+	Allow bool `json:"allow"`
+}
+
 type guiBlock struct {
 	Name        string   `json:"name"`
 	Mode        string   `json:"mode"`
@@ -81,6 +89,7 @@ type guiBlock struct {
 	Apps        []string `json:"apps"`
 	Titles      []string `json:"titles"`
 	Schedules   []string `json:"schedules"`
+	Windows     []guiWin `json:"schedule_windows"`
 	Active      bool     `json:"active"`
 	Held        bool     `json:"held"`
 	CharLocked  bool     `json:"char_locked"`
@@ -221,8 +230,11 @@ var guiStateCmd = &cobra.Command{
 			if detail.Active && detail.LockedUntil > trusted {
 				g.LockSeconds = detail.LockedUntil - trusted
 			}
+			g.Windows = []guiWin{}
 			for _, s := range schedules {
 				g.Schedules = append(g.Schedules, s.Window().String())
+				w := s.Window()
+				g.Windows = append(g.Windows, guiWin{Days: w.Days, Start: w.Start, End: w.End, Allow: w.Allow})
 			}
 			for _, p := range append(append([]string{}, detail.Patterns...), detail.Exceptions...) {
 				if blocker.BrowserLimited(p) {

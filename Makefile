@@ -81,20 +81,7 @@ install: build
 exec sudo $(INSTALL_PATH)/$(BINARY_INSTALLED) "$$@"\n' > $(INSTALL_PATH)/$(BINARY_NAME)
 	chmod 755 $(INSTALL_PATH)/$(BINARY_NAME)
 
-	@echo ">> Configuring sudoers for passwordless execution..."
-	# sudoers rule: allows administrators (group sudo) to run kc9k-bin
-	# as root, without typing a password.
-	#   %sudo ALL=(root) NOPASSWD: /usr/local/bin/kc9k-bin
-	#    |   |    |       |
-	#    |   |    |       +-- doesn't ask for a password
-	#    |   |    +---------- runs as root
-	#    |   +--------------- on any host
-	#    +------------------- members of group sudo
-	#
-	# chmod 440: only root and the root group can read the file.
-	# This is mandatory — sudo refuses files with open permissions.
-	printf '%%sudo ALL=(root) NOPASSWD: $(INSTALL_PATH)/$(BINARY_INSTALLED)\n' > $(SUDOERS_FILE)
-	chmod 440 $(SUDOERS_FILE)
+	@$(MAKE) --no-print-directory install-sudoers
 
 	@echo ">> Installing the systemd service..."
 	cp systemd/kc9k.service $(SERVICE_PATH)/kc9k.service
@@ -112,6 +99,36 @@ exec sudo $(INSTALL_PATH)/$(BINARY_INSTALLED) "$$@"\n' > $(INSTALL_PATH)/$(BINAR
 	systemctl restart kc9k.service
 
 	@echo ">> Installation completed successfully!"
+
+# -------------------------------------------------------
+# install-sudoers: lets administrators (group sudo) run kc9k-bin as root
+#                  without a password:
+#
+#   %sudo ALL=(root) NOPASSWD: /usr/local/bin/kc9k-bin
+#
+# The interface asks for its state every 5 seconds (gui-state) and for its
+# statistics every 30 (stats --json ...). sudo logs every command it runs and
+# opens a PAM session for it: about 2,500 log lines an hour while the
+# interface is open. Those two read-only commands are kept out of the log;
+# every other kc9k command is still logged.
+#
+# visudo checks the rules before they are installed, because a broken
+# sudoers file would break sudo altogether. sudo requires mode 440.
+# -------------------------------------------------------
+.PHONY: install-sudoers
+install-sudoers:
+	@echo ">> Configuring sudoers for passwordless execution..."
+	@tmp=$$(mktemp) || exit 1; \
+	bin="$(INSTALL_PATH)/$(BINARY_INSTALLED)"; \
+	printf '%%sudo ALL=(root) NOPASSWD: %s\nCmnd_Alias KC9K_POLL = %s gui-state, %s stats --json *\nDefaults!KC9K_POLL !log_allowed, !pam_session\n' \
+		"$$bin" "$$bin" "$$bin" > "$$tmp"; \
+	if visudo -cf "$$tmp" >/dev/null; then \
+		install -m 440 -o root -g root "$$tmp" "$(SUDOERS_FILE)"; status=$$?; \
+	else \
+		echo "visudo rejected the sudoers rule; $(SUDOERS_FILE) is unchanged" >&2; status=1; \
+	fi; \
+	[ -n "$$tmp" ] && rm -f -- "$$tmp"; \
+	exit $$status
 
 # -------------------------------------------------------
 # uninstall: stops the service, disables it, removes the binary

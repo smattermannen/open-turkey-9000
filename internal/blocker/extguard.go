@@ -50,28 +50,29 @@ func NewExtensionGuard(port int) *ExtensionGuard {
 }
 
 // CheckIn records that the browser owning the connection from remoteAddr has
-// a working extension.
-func (g *ExtensionGuard) CheckIn(remoteAddr string) {
+// a working extension, and reports whether it found that browser.
+func (g *ExtensionGuard) CheckIn(remoteAddr string) bool {
 	_, portText, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return
+		return false
 	}
 	clientPort, err := strconv.Atoi(portText)
 	if err != nil {
-		return
+		return false
 	}
 	inode := socketInode(clientPort, g.port)
 	if inode == "" {
-		return
+		return false
 	}
 	pid := socketOwner(inode, g.browsers.guarded)
 	if pid == 0 {
-		return
+		return false
 	}
 	main := browserMain(pid)
 	g.mu.Lock()
 	g.seen[main] = time.Now()
 	g.mu.Unlock()
+	return true
 }
 
 // Enforce closes, with all their child processes, the browsers that have run

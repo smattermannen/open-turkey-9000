@@ -308,12 +308,13 @@ All time in an open session is spent, whether or not the sites are used, because
 
 ## Browser options
 
-The daemon force-installs the bundled extension in Firefox-family browsers through policy, so it can't be removed or disabled. It enforces wildcards and keywords, shows a block page, and reads its rules from the daemon on `127.0.0.1:47613`.
+The daemon force-installs the bundled extension in Firefox-family browsers through policy, so it can't be removed or disabled. It enforces wildcards, keywords, greyscale, images and web-only, shows a block page, and reads its rules from the daemon on `127.0.0.1:47613`. It runs in LibreWolf, which installing KC9K installs; Firefox only accepts signed extensions, and Chrome-family browsers have none.
+
+**The extension is not optional.** While an active block has websites (sites, patterns or allowlist mode), or web-only or force-search is on, any browser that has run for 60 seconds without the extension checking in is closed, like Cold Turkey does; a block of apps alone leaves browsers alone. `kc9k status` shows whether the extension is needed right now and when it last checked in. Without LibreWolf nothing is closed, since there would be no browser left, and `kc9k status` says so.
 
 ```bash
 kc9k browser install-librewolf    # install LibreWolf (official repository, via extrepo)
 kc9k browser force-librewolf on   # close other browsers (needs LibreWolf installed)
-kc9k browser require-extension on # while a block is on, close browsers without the extension
 kc9k browser force-search on      # Google as the only search engine
 kc9k browser safesearch on        # lock Google SafeSearch
 kc9k browser web-only on          # web results only: no images, shopping or AI
@@ -333,9 +334,9 @@ kc9k browser unlock web-only                   # challenge/password, then turns 
 
 Like a block's locks, an option's locks can be added later but only made stronger: a time lock can only be extended, a challenge only lengthened, and a password can't be replaced. Time locks use the same tamper-proof clock as block time locks. While an option is locked, strict mode and no-escape hold and `make uninstall` is refused. In the interface, each option has **Lock…** and **Unlock…** buttons under Settings.
 
-With `require-extension` on and a block active, any browser that has run for 60 seconds without the extension checking in is closed, like Cold Turkey does. The extension checks in each time it fetches its rules; the daemon traces the connection to the browser process. Today that closes every browser except LibreWolf, so it needs LibreWolf installed. Browsers are recognised by name, and portable, renamed or copied browsers (a Firefox or Chrome download, Tor Browser) by their engine: a program you put in place yourself that loads Firefox's or Chromium's engine counts as a browser. Installed apps built on those engines, such as Thunderbird, Spotify, Steam or Electron apps, are left alone. A browser started for remote control (`--marionette`, `--remote-debugging-port` and the like) is closed straight away during website blocks, since those switches let a script turn the extension off while it keeps checking in.
+The extension checks in each time it fetches its rules, with a header web pages can't send; the daemon traces the connection to the browser process. Browsers are recognised by name, and portable, renamed or copied browsers (a Firefox or Chrome download, Tor Browser) by their engine: a program you put in place yourself that loads Firefox's or Chromium's engine counts as a browser. Installed apps built on those engines, such as Thunderbird, Spotify, Steam or Electron apps, are left alone. A browser started for remote control (`--marionette`, `--remote-debugging-port` and the like) is closed straight away during website blocks, since those switches let a script turn the extension off while it keeps checking in.
 
-`extension`, `force-librewolf` and `require-extension` also can't be turned off while a block is locked or Frozen Chicken runs, because blocks rely on them. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. The extension also blocks a site when it's shown through Google Translate's proxy (`www-reddit-com.translate.goog`) or a web archive (`web.archive.org`, `archive.ph`). Web-only relies on Google's unofficial `udm=14` parameter, which may change. Firefox only accepts signed extensions, so the bundled unsigned one needs signing to work there.
+`force-librewolf` also can't be turned off while a block is locked or Frozen Chicken runs, because blocks rely on it. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. The extension also blocks a site when it's shown through Google Translate's proxy (`www-reddit-com.translate.goog`) or a web archive (`web.archive.org`, `archive.ph`). Web-only relies on Google's unofficial `udm=14` parameter, which may change.
 
 ## Pomodoro
 

@@ -47,7 +47,9 @@ func AnySettingLocked(d *db.DB, trusted int64) (bool, error) {
 		return false, err
 	}
 	for _, l := range locks {
-		if l.InForce(trusted, bootID) {
+		// A lock on a retired option (see RetiredBrowserSettings) can no
+		// longer be unlocked, so it no longer counts.
+		if IsBrowserSetting(l.Name) && l.InForce(trusted, bootID) {
 			return true, nil
 		}
 	}

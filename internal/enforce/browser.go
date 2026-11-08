@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -20,22 +22,95 @@ const RulesAddress = "127.0.0.1:47613"
 const rulesPort = 47613
 
 // BrowserSettings lists the browser options, each stored as "on" or "off".
-// "extension" counts as on until it is turned off.
 // Greyscale and image blocking are not here: each block chooses them for its
-// own sites (see db.Actions).
-var BrowserSettings = []string{"extension", "web-only", "safesearch", "force-search", "force-librewolf", "require-extension"}
+// own sites (see db.Actions). Neither is the extension: it is always
+// installed, and browsers without it are closed while it is needed (see
+// ExtensionRequired).
+var BrowserSettings = []string{"web-only", "safesearch", "force-search", "force-librewolf"}
 
-// extensionGuard closes browsers whose extension doesn't check in (see
-// require-extension). It lives in the daemon; the rules server feeds it.
+// RetiredBrowserSettings were switches before the extension became
+// mandatory.
+var RetiredBrowserSettings = []string{"extension", "require-extension"}
+
+// extensionGuard closes browsers whose extension doesn't check in. It lives
+// in the daemon; the rules server feeds it.
 var extensionGuard = blocker.NewExtensionGuard(rulesPort)
 
-// GuardsBlocks reports whether a setting helps enforce blocks: without the
-// extension, wildcards and keywords go unenforced, and without forcing
-// LibreWolf or requiring the extension another browser can skip it. These
-// three also can't be turned off while a block is locked. The others only
-// answer to their own locks (see db.SettingLock).
+// GuardsBlocks reports whether a setting helps enforce blocks: without forcing
+// LibreWolf, another browser can be used while no website block is on. It
+// also can't be turned off while a block is locked. The others only answer
+// to their own locks (see db.SettingLock).
 func GuardsBlocks(name string) bool {
-	return name == "extension" || name == "force-librewolf" || name == "require-extension"
+	return name == "force-librewolf"
+}
+
+// SettingExtensionCheckIn holds when the extension last checked in (unix
+// seconds), written at most every checkInRecordEvery.
+const SettingExtensionCheckIn = "extension.last_checkin"
+
+const checkInRecordEvery = 30 * time.Second
+
+// ExtensionRequired reports whether browsers must run the extension now:
+// while an active block has websites (sites, patterns, or allowlist mode)
+// or an option only the extension enforces (web-only, force-search) is on.
+// A block of apps alone doesn't need it.
+func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
+	for _, b := range active {
+		if b.Mode == db.ModeAllowlist || len(b.Sites) > 0 || len(b.Patterns) > 0 {
+			return true
+		}
+	}
+	return BrowserOn(d, "web-only") || BrowserOn(d, "force-search")
+}
+
+// ExtensionRequiredNow is ExtensionRequired for the blocks in force now,
+// leaving out blocks on a Pomodoro break.
+func ExtensionRequiredNow(d *db.DB) (bool, error) {
+	active, err := d.GetActiveBlocks()
+	if err != nil {
+		return false, err
+	}
+	trusted, err := d.TrustedNow(time.Now())
+	if err != nil {
+		return false, err
+	}
+	return ExtensionRequired(d, withoutBreaks(d, active, trusted)), nil
+}
+
+// LastExtensionCheckIn returns when the extension last checked in, if ever.
+func LastExtensionCheckIn(d *db.DB) (time.Time, bool) {
+	value, err := d.GetSetting(SettingExtensionCheckIn)
+	if err != nil || value == "" {
+		return time.Time{}, false
+	}
+	unix, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return time.Unix(unix, 0), true
+}
+
+// checkInRecorder passes check-ins to the guard and notes the latest one
+// from a real browser in the database, at most every checkInRecordEvery, so
+// 'kc9k status' and the interface can show the extension is working.
+func checkInRecorder(d *db.DB) func(remoteAddr string) {
+	var mu sync.Mutex
+	var last time.Time
+	return func(remoteAddr string) {
+		if !extensionGuard.CheckIn(remoteAddr) {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		now := time.Now()
+		if now.Sub(last) < checkInRecordEvery {
+			return
+		}
+		last = now
+		if err := d.SetSetting(SettingExtensionCheckIn, strconv.FormatInt(now.Unix(), 10)); err != nil {
+			log.Printf("rules: %v", err)
+		}
+	}
 }
 
 // IsBrowserSetting reports whether name is a browser option.
@@ -142,7 +217,7 @@ func ServeRules(d *db.DB) error {
 		return err
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/rules", rulesHandler(d, extensionGuard.CheckIn))
+	mux.HandleFunc("/rules", rulesHandler(d, checkInRecorder(d)))
 	mux.HandleFunc("/usage", usageHandler(d))
 	return http.Serve(listener, mux)
 }
@@ -180,19 +255,17 @@ func rulesHandler(d *db.DB, checkIn func(remoteAddr string)) http.HandlerFunc {
 
 func enforceBrowser(d *db.DB) {
 	setup := blocker.BrowserSetup{ForceSearch: BrowserOn(d, "force-search")}
-	if BrowserOn(d, "extension") {
-		xpi, err := webext.Pack()
-		if err == nil {
-			err = blocker.EnsureFile(webext.Path(), xpi)
-		}
-		if err != nil {
-			log.Printf("browser: failed to install the extension file: %v", err)
-		} else {
-			setup.ExtensionID, setup.ExtensionXPI = webext.ID, webext.Path()
-			for _, old := range webext.StaleFiles() {
-				if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
-					log.Printf("browser: removing old extension file: %v", err)
-				}
+	xpi, err := webext.Pack()
+	if err == nil {
+		err = blocker.EnsureFile(webext.Path(), xpi)
+	}
+	if err != nil {
+		log.Printf("browser: failed to install the extension file: %v", err)
+	} else {
+		setup.ExtensionID, setup.ExtensionXPI = webext.ID, webext.Path()
+		for _, old := range webext.StaleFiles() {
+			if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
+				log.Printf("browser: removing old extension file: %v", err)
 			}
 		}
 	}
@@ -207,11 +280,11 @@ func enforceBrowser(d *db.DB) {
 	}
 }
 
-// enforceExtension closes browsers without a working extension while a block
-// is active, as long as require-extension is on and LibreWolf is there to use
-// instead.
-func enforceExtension(d *db.DB, now time.Time, anyActive bool) {
-	if !anyActive || !BrowserOn(d, "require-extension") || blocker.LibreWolfVersion() == "" {
+// enforceExtension closes browsers without a working extension while it is
+// required (see ExtensionRequired), as long as LibreWolf is there to use
+// instead: without it, every browser would be closed.
+func enforceExtension(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
+	if !ExtensionRequired(d, active) || blocker.LibreWolfVersion() == "" {
 		return
 	}
 	extensionGuard.Enforce(now)

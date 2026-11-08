@@ -29,14 +29,6 @@ STATS_REFRESH_SECONDS = 30
 POINTER_EVENTS = Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK
 
 LIBREWOLF_OPTIONS = (
-    ("extension", "Install the Killer Chicken extension",
-     "Adds the bundled extension to LibreWolf (and other Firefox-family browsers that accept "
-     "it) so it can't be removed or turned off. It enforces wildcards and keywords, and "
-     "measures website time for Statistics."),
-    ("require-extension", "Close browsers without the extension",
-     "While a block is on, any browser that has run for 60 seconds without a working Killer "
-     "Chicken extension is closed. Today that is every browser except LibreWolf: Firefox only "
-     "accepts signed extensions, and Chrome-family browsers have none."),
     ("force-librewolf", "Allow only LibreWolf",
      "Closes every other browser at once, even when no block is on."),
 )
@@ -892,13 +884,16 @@ class Window(Gtk.ApplicationWindow):
         self.quota_end.connect("clicked", self.end_quota)
         self.quota_remove = Gtk.Button(label="Remove at midnight")
         self.quota_remove.connect("clicked", self.remove_quota)
-        for button in (self.quota_set, self.quota_start, self.quota_end, self.quota_remove):
-            quota_row.pack_start(button, False, False, 0)
+        quota_row.pack_start(self.quota_set, False, False, 0)
+        # The session buttons get their own row, so the page fits a narrow screen.
+        session_row = Gtk.Box(spacing=6)
+        for button in (self.quota_start, self.quota_end, self.quota_remove):
+            session_row.pack_start(button, False, False, 0)
         self.quota_label = dim("")
         box.pack_start(section(
             "Daily quota",
             dim("The block stays on, except during sessions you open, until the day's minutes are spent."),
-            quota_row, self.quota_label), False, False, 0)
+            quota_row, session_row, self.quota_label), False, False, 0)
 
         pomodoro_row = Gtk.Box(spacing=6)
         pomodoro_row.pack_start(Gtk.Label(label="Work:"), False, False, 0)
@@ -1428,25 +1423,28 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(section("Appearance", row), False, False, 0)
 
         self.browser_switches = {}
-        self.librewolf_status = Gtk.Label(xalign=0)
+        self.librewolf_status = Gtk.Label(xalign=0, wrap=True)
         self.librewolf_install = Gtk.Button(label="Install LibreWolf", halign=Gtk.Align.START)
         self.librewolf_install.get_style_context().add_class("suggested-action")
         self.librewolf_install.connect("clicked", self.install_librewolf)
-        librewolf_rows = [self.librewolf_status, self.librewolf_install]
+        self.extension_status = dim("")
+        librewolf_rows = [self.librewolf_status, self.librewolf_install, self.extension_status]
         self.setting_locks = {}
         for name, title, detail in LIBREWOLF_OPTIONS:
             librewolf_rows.append(self.setting_row(name, title, detail))
         box.pack_start(section(
             "LibreWolf",
-            dim("LibreWolf is a privacy-focused Firefox that, unlike Firefox, accepts the "
-                "bundled extension."),
+            dim("LibreWolf is a privacy-focused Firefox that, unlike Firefox, runs the Killer "
+                "Chicken extension. The extension is always on: it enforces wildcards, keywords, "
+                "greyscale, images and web-only, and while a block has websites, browsers "
+                "without it are closed."),
             *librewolf_rows), False, False, 0)
 
         rows = [self.setting_row(name, title, detail) for name, title, detail in BROWSER_OPTIONS]
         box.pack_start(section(
             "Browser options", dim("Each option can be locked on its own with Lock…, independently "
                                    "of your blocks. A locked option can't be turned off until its "
-                                   "lock ends or is unlocked. The LibreWolf switches also can't be "
+                                   "lock ends or is unlocked. \"Allow only LibreWolf\" also can't be "
                                    "turned off while a block is locked."), *rows),
             False, False, 0)
 
@@ -1481,21 +1479,22 @@ class Window(Gtk.ApplicationWindow):
             unlock.set_visible(info.get("char_locked", False) or info.get("password_locked", False))
             unlock.set_sensitive(not info.get("lock_seconds") and not info.get("restart_locked"))
             # A locked option is on and stays on, so its switch can't be used.
-            self.browser_switches[name].set_sensitive(
-                not parts and name not in ("force-librewolf", "require-extension"))
+            self.browser_switches[name].set_sensitive(not parts and name != "force-librewolf")
         version = self.state.get("librewolf", "")
         if version:
             self.librewolf_status.set_markup(f"<b>Installed</b> (version {GLib.markup_escape_text(version)}).")
         else:
             self.librewolf_status.set_markup(
-                "<b>Not installed.</b> Install it before allowing only LibreWolf or closing "
-                "browsers without the extension, or every browser would be closed.")
+                "<b>Not installed.</b> Until it is, the extension can't run, so wildcards, "
+                "keywords, greyscale, images and web-only aren't enforced in the browser.")
         self.librewolf_install.set_visible(not version)
+        # Without LibreWolf the line above already says the extension can't run.
+        self.extension_status.set_text("Extension: " + self.state.get("extension_status", ""))
+        self.extension_status.set_visible(bool(version))
         # Turning it on needs LibreWolf; turning it off must stay possible.
-        for name in ("force-librewolf", "require-extension"):
-            switch = self.browser_switches[name]
-            locked = bool(self.setting_locks[name][0].get_text())
-            switch.set_sensitive(not locked and (bool(version) or switch.get_active()))
+        switch = self.browser_switches["force-librewolf"]
+        locked = bool(self.setting_locks["force-librewolf"][0].get_text())
+        switch.set_sensitive(not locked and (bool(version) or switch.get_active()))
         set_switch(self.stats_switch, self.state["stats"])
 
     def install_librewolf(self, _button):

@@ -33,6 +33,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/lock"
@@ -438,8 +439,43 @@ var statusCmd = &cobra.Command{
 		if pending, err := database.ListPendingEdits(); err == nil && len(pending) > 0 {
 			fmt.Printf("Pending changes: %d (see 'kc9k pending')\n", len(pending))
 		}
+		fmt.Println()
+		fmt.Println("Browser extension:", extensionStatus(database))
 		return nil
 	},
+}
+
+// extensionStatus describes whether the browser extension is working, for
+// 'kc9k status' and the interface.
+func extensionStatus(database *db.DB) string {
+	if blocker.LibreWolfVersion() == "" {
+		return "LibreWolf isn't installed, so wildcards, keywords, greyscale, images and web-only aren't enforced in the browser. Run 'kc9k browser install-librewolf'."
+	}
+	required, err := enforce.ExtensionRequiredNow(database)
+	if err != nil {
+		return "unknown: " + err.Error()
+	}
+	status := "not needed right now"
+	if required {
+		status = "needed now: browsers without it are closed after 60 seconds"
+	}
+	if last, ok := enforce.LastExtensionCheckIn(database); ok {
+		return fmt.Sprintf("%s; last checked in %s ago", status, fmtAgo(time.Since(last)))
+	}
+	return status + "; no check-in yet (open LibreWolf)"
+}
+
+// fmtAgo formats an elapsed time roughly: "12 s", "5 min", "3 h", "2 days".
+func fmtAgo(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%d s", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%d min", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%d h", int(d.Hours()))
+	}
+	return fmt.Sprintf("%d days", int(d.Hours()/24))
 }
 
 func printLinesOrNone(lines []string) {

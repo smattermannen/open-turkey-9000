@@ -62,11 +62,14 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   each browser option locks on its own (time, typing challenge, password,
   restart), independently of blocks; `enforce.AnyLock` counts them (strict
   mode, no-escape) and trusted time freezes for their time locks. Only
-  `extension`/`force-librewolf`/`require-extension` are also held by block
-  locks (`GuardsBlocks`).
-- **Extension guard** (`internal/blocker/extguard.go`): with `require-extension`
-  on and a block active, the daemon closes browsers whose extension hasn't
-  fetched `/rules` within 60 s (connection traced via `/proc/net/tcp` to the PID).
+  `force-librewolf` is also held by block locks (`GuardsBlocks`).
+- **Extension guard** (`internal/blocker/extguard.go`): the extension is
+  mandatory. While `enforce.ExtensionRequired` (an active block with
+  websites, or web-only/force-search on) and LibreWolf is installed, the
+  daemon closes browsers whose extension hasn't fetched `/rules` with the
+  `X-KC9K-Extension` header within 60 s (connection traced via
+  `/proc/net/tcp` to the PID), and at once those started for remote control
+  (`remotecontrol.go`). The last check-in is kept for `kc9k status`.
 - **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL);
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (modes, patterns, schedules, time locks, schema

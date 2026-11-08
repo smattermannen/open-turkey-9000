@@ -39,12 +39,15 @@ time lock can only be extended and a challenge only lengthened. unlock runs the
 challenge and asks for the password, then turns the setting off; time and
 restart locks can't be unlocked, only waited out.
 
-extension, force-librewolf and require-extension also can't be turned off while a block is locked
-or Frozen Chicken runs, since blocks rely on them. Without arguments, lists
-every option, its locks, and the installed LibreWolf version.
+force-librewolf also can't be turned off while a block is locked or Frozen
+Chicken runs, since blocks rely on it. Without arguments, lists every option,
+its locks, and the installed LibreWolf version.
 
-force-librewolf and require-extension need LibreWolf installed; 'kc9k browser install-librewolf'
-installs it from its official repository (via extrepo).`,
+The Killer Chicken extension isn't an option: it is always installed, and
+while a block has websites (or web-only or force-search is on), browsers
+without it are closed. That needs LibreWolf, the one browser that runs it;
+'kc9k browser install-librewolf' installs it from its official repository
+(via extrepo), as installing KC9K does.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 1 && args[0] == "install-librewolf" {
 			return nil
@@ -64,6 +67,9 @@ installs it from its official repository (via extrepo).`,
 			return unlockBrowserSetting(database, args[1])
 		}
 		name, value := args[0], args[1]
+		if name == "extension" || name == "require-extension" {
+			return fmt.Errorf("the extension is always on: while a block has websites, browsers without it are closed (see 'kc9k status')")
+		}
 		if name == "images" || name == "greyscale" {
 			return fmt.Errorf("%s is now chosen per block: 'kc9k block action <block> %s on'", name, map[string]string{"images": db.ActionNoImages, "greyscale": db.ActionGreyscale}[name])
 		}
@@ -278,7 +284,7 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 }
 
 func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
-	if (name == "force-librewolf" || name == "require-extension") && blocker.LibreWolfVersion() == "" {
+	if name == "force-librewolf" && blocker.LibreWolfVersion() == "" {
 		return fmt.Errorf("LibreWolf isn't installed, so every browser would be closed; run 'kc9k browser install-librewolf' first")
 	}
 	if !lockFlagsGiven(cmd) {

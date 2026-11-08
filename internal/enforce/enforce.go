@@ -140,7 +140,7 @@ func Tick(d *db.DB, now time.Time) error {
 	active = withoutBreaks(d, active, trusted)
 	hosts, apps, bp := Inputs(active)
 	apps = append(apps, forcedKills(d)...)
-	enforceExtension(d, now, len(active) > 0)
+	enforceExtension(d, now, active)
 
 	// Site layers, re-applied only on drift (so an idle system does no writes).
 	if len(hosts) > 0 {

@@ -103,7 +103,7 @@ Full usage and examples in `README.md`. Summary:
 remove-app | add-pattern | remove-pattern | set-mode | action | export | import | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N]` (loosening edits take `--now`), `password set|remove`, `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N]` (loosening edits take `--now`), `password set|remove`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

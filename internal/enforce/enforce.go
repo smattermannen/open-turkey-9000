@@ -110,6 +110,9 @@ func ApplyFromDB(d *db.DB) error {
 // then re-apply drifted layers.
 func Tick(d *db.DB, now time.Time) error {
 	defer applyLock()()
+	if err := reconcileFreezeSchedules(d, now); err != nil {
+		log.Printf("daemon: freeze schedule error: %v", err)
+	}
 	enforceFreeze(d, now)
 	enforceBrowser(d)
 

@@ -116,6 +116,7 @@ type guiState struct {
 	LibreWolf     string                    `json:"librewolf"`
 	Extension     string                    `json:"extension_status"`
 	SettingsPass  bool                      `json:"settings_password"`
+	FreezeSched   []string                  `json:"freeze_schedules"`
 	Browser       map[string]bool           `json:"browser"`
 	BrowserLocks  map[string]guiSettingLock `json:"browser_locks"`
 	Blocks        []guiBlock                `json:"blocks"`
@@ -166,6 +167,12 @@ var guiStateCmd = &cobra.Command{
 		state.LibreWolf = blocker.LibreWolfVersion()
 		state.Extension = extensionStatus(database)
 		state.SettingsPass, _ = settingsPasswordSet(database)
+		state.FreezeSched = []string{}
+		if schedules, err := database.ListFreezeSchedules(); err == nil {
+			for _, s := range schedules {
+				state.FreezeSched = append(state.FreezeSched, fmt.Sprintf("%s (%s)", s.Window, s.Mode))
+			}
+		}
 		state.Browser = map[string]bool{}
 		state.BrowserLocks = map[string]guiSettingLock{}
 		for _, name := range enforce.BrowserSettings {

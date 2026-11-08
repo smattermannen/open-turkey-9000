@@ -61,6 +61,15 @@ var masterCmd = &cobra.Command{
 				return err
 			}
 		}
+		freezeSchedules, err := database.ListFreezeSchedules()
+		if err != nil {
+			return err
+		}
+		for _, s := range freezeSchedules {
+			if err := database.RemoveFreezeSchedule(s.ID); err != nil {
+				return err
+			}
+		}
 		if err := database.SetFreeze(0, "lock"); err != nil {
 			return err
 		}

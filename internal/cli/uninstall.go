@@ -62,6 +62,15 @@ var prepareUninstallCmd = &cobra.Command{
 		} else if until > time.Now().Unix() {
 			return fmt.Errorf("cannot uninstall during Frozen Chicken")
 		}
+		freezeSchedules, err := database.ListFreezeSchedules()
+		if err != nil {
+			return err
+		}
+		for _, s := range freezeSchedules {
+			if enforce.FreezeScheduleHeld(s.Window, time.Now()) {
+				return fmt.Errorf("cannot uninstall: freeze schedule %d (%s) runs now or within 2 hours", s.Num, s.Window)
+			}
+		}
 
 		// A locked browser setting can't be undone by uninstalling either.
 		trusted, err := database.TrustedNow(time.Now())

@@ -187,6 +187,20 @@ check "loosening an edit needs it" fails kc9k block remove-site pwtest example.p
 check "status shows the settings password" bash -c 'kc9k status | grep -q "Settings password: on"'
 echo secret1 | ot password remove
 
+later=$(date -d '+6 hours' +%H:%M); laterend=$(date -d '+6 hours 30 minutes' +%H:%M)
+if [ "$later" \< "$laterend" ]; then
+    check "freeze schedule needs confirmation" fails kc9k freeze schedule add --from "$later" --to "$laterend"
+    ot freeze schedule add --days daily --from "$later" --to "$laterend" --mode logout --yes
+    check "freeze schedule listed" bash -c 'kc9k freeze schedule list | grep -q logout'
+    check "a far-off freeze schedule can be removed" kc9k freeze schedule remove 1
+fi
+soon=$(date -d '+1 hour' +%H:%M); soonend=$(date -d '+1 hour 30 minutes' +%H:%M)
+if [ "$soon" \< "$soonend" ]; then
+    ot freeze schedule add --days daily --from "$soon" --to "$soonend" --yes
+    check "a freeze schedule starting within 2 hours can't be removed" fails kc9k freeze schedule remove 1
+    check "uninstall refused before a scheduled freeze" fails sudo kc9k-bin prepare-uninstall
+fi
+
 check "unknown freeze mode rejected" fails kc9k freeze --for 1m --mode nap --yes
 check "short freeze rejected" fails kc9k freeze --for 10s --yes
 check "freeze needs confirmation" fails kc9k freeze --for 1m

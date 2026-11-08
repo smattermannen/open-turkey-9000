@@ -411,7 +411,18 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 
 ## Frozen Chicken
 
-`kc9k freeze --for 2h --yes` (or the button in the interface) keeps every session locked until the time has passed. Add `--mode logout` to end sessions or `--mode shutdown` to power off whenever the computer starts during the freeze. The daemon locks the screen again every 5 seconds, a freeze can only be extended, and the longest freeze is 24 hours. The time keeps counting while the computer is off.
+`kc9k freeze --for 2h --yes` (or the button in the interface) keeps every session locked until the time has passed.
+
+Frozen Chicken can also run on a schedule, for example every night:
+
+```bash
+kc9k freeze schedule add --days daily --from 23:00 --to 24:00 --yes
+kc9k freeze schedule add --days daily --from 00:00 --to 06:00 --mode shutdown --yes
+kc9k freeze schedule list
+kc9k freeze schedule remove 2
+```
+
+While a window is open, the computer stays frozen until the window ends, in that schedule's mode; back-to-back windows run on from one into the other, and a longer freeze already running is never shortened. A schedule can't be removed from 2 hours before its window opens until it closes, and uninstalling is refused then too. The interface has the same list under Device Blocks. Add `--mode logout` to end sessions or `--mode shutdown` to power off whenever the computer starts during the freeze. The daemon locks the screen again every 5 seconds, a freeze can only be extended, and the longest freeze is 24 hours. The time keeps counting while the computer is off.
 
 **Emergency exit:** hold Shift or press Esc at boot to open GRUB, press `e` on the boot entry, add `kc9k.nofreeze` to the line starting with `linux`, then press F10. The freeze is not enforced during that boot, and it returns on the next normal boot if time remains.
 

@@ -19,7 +19,8 @@ state=$(kc9k gui-state)
 python3 - "$state" <<'EOF'
 import json, sys
 state = json.loads(sys.argv[1])
-locked = state["freeze_seconds"] or state["strict"] or any(b["active"] for b in state["blocks"])
+locked = (state["freeze_seconds"] or state["strict"] or state.get("freeze_schedules")
+          or any(b["active"] for b in state["blocks"]))
 if locked:
     print("::error::FAIL: the master password left locks in place")
     sys.exit(1)

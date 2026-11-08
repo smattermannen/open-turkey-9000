@@ -9,6 +9,7 @@ package freeze
 
 import (
 	"fmt"
+	"github.com/smattermannen/kc9k/internal/schedule"
 	"strings"
 	"time"
 )
@@ -55,4 +56,28 @@ func Bypassed(cmdline string) bool {
 // Engaged reports whether sessions must be locked right now.
 func Engaged(now, until int64, cmdline string) bool {
 	return now < until && !Bypassed(cmdline)
+}
+
+// WindowEnd returns when the window w, open at t, closes: the same day at
+// w.End, where 24:00 is the next midnight.
+func WindowEnd(w schedule.Window, t time.Time) time.Time {
+	midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	return midnight.Add(time.Duration(w.End) * time.Minute)
+}
+
+// Scheduled returns how long a scheduled freeze must run at t: until the
+// latest end among the windows open at t, with that window's mode. ok is
+// false when no window is open. Back-to-back windows (Monday 23:00-24:00,
+// Tuesday 00:00-06:00) chain, because the next one is open when the first
+// ends.
+func Scheduled(windows []schedule.Window, modes []string, t time.Time) (until time.Time, mode string, ok bool) {
+	for i, w := range windows {
+		if !w.ActiveAt(t) {
+			continue
+		}
+		if end := WindowEnd(w, t); !ok || end.After(until) {
+			until, mode, ok = end, modes[i], true
+		}
+	}
+	return until, mode, ok
 }

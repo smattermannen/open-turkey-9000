@@ -1231,13 +1231,18 @@ class Window(Gtk.ApplicationWindow):
         row.pack_start(self.freeze_minutes, False, False, 0)
         row.pack_start(Gtk.Label(label="minutes (at most 1440)"), False, False, 0)
         row.pack_end(self.freeze_button, False, False, 0)
+        self.freeze_schedules = EditableList(
+            "Scheduled", "daily 23:00 24:00", self.add_freeze_schedule, self.remove_freeze_schedule,
+            help_text="Freeze at set times in the mode chosen above, for example every night. "
+                      "Days, start and end; for overnight add two (23:00 24:00 and 00:00 06:00). "
+                      "A schedule can't be removed from 2 hours before it starts until it ends.")
         box.pack_start(section(
             "Frozen Chicken",
             dim("Keeps the computer unusable until the time is up, even across restarts: the "
                 "screen is locked again right away, sessions are logged out, or the computer "
                 "shuts down. It can't be cancelled from the desktop, only extended. The time "
                 "keeps counting while the computer is off."),
-            row, self.freeze_status), False, False, 0)
+            row, self.freeze_status, self.freeze_schedules), False, False, 0)
 
         self.strict_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.strict_switch.connect("state-set", self.toggle_strict)
@@ -1269,7 +1274,22 @@ class Window(Gtk.ApplicationWindow):
         row.pack_end(switch, False, False, 0)
         return row
 
+    def add_freeze_schedule(self, values):
+        if len(values) != 3:
+            self.message("Enter days, start and end, for example: daily 23:00 24:00")
+            return
+        mode = self.freeze_mode.get_active_id()
+        if self.confirm(f"Freeze {values[0]} {values[1]}-{values[2]}?",
+                        f"The computer will be frozen then ({self.freeze_mode.get_active_text().lower()}), "
+                        "and the schedule can't be removed from 2 hours before it starts.", "Schedule"):
+            self.run(["freeze", "schedule", "add", "--days", values[0], "--from", values[1],
+                      "--to", values[2], "--mode", mode, "--yes"])
+
+    def remove_freeze_schedule(self, _value, number):
+        self.run(["freeze", "schedule", "remove", str(number)])
+
     def update_device(self):
+        self.freeze_schedules.set_items(self.state.get("freeze_schedules", []))
         frozen = self.state["freeze_seconds"]
         modes = {"lock": "locking the screen", "logout": "logging out", "shutdown": "shutting down"}
         self.freeze_status.set_markup(

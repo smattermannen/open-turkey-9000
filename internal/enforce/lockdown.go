@@ -8,6 +8,7 @@ import (
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/freeze"
+	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
 // Settings that control strict mode.
@@ -87,6 +88,41 @@ func BlocksLocked(d *db.DB, now time.Time, trusted int64) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// reconcileFreezeSchedules starts or extends Frozen Chicken while a freeze
+// schedule's window is open, until the window ends. It never shortens a
+// freeze, so a longer manual freeze carries on.
+func reconcileFreezeSchedules(d *db.DB, now time.Time) error {
+	schedules, err := d.ListFreezeSchedules()
+	if err != nil || len(schedules) == 0 {
+		return err
+	}
+	windows := make([]schedule.Window, len(schedules))
+	modes := make([]string, len(schedules))
+	for i, s := range schedules {
+		windows[i], modes[i] = s.Window, s.Mode
+	}
+	until, mode, ok := freeze.Scheduled(windows, modes, now)
+	if !ok {
+		return nil
+	}
+	current, err := d.FreezeUntil()
+	if err != nil {
+		return err
+	}
+	if until.Unix() <= current {
+		return nil
+	}
+	log.Printf("daemon: scheduled freeze (%s) until %s", mode, until.Format("2006-01-02 15:04"))
+	return d.SetFreeze(until.Unix(), mode)
+}
+
+// FreezeScheduleHeld reports whether a freeze schedule's window is open now
+// or opens within schedule.EditFreeze: then it can't be removed, since that
+// would cancel a freeze that is running or about to start.
+func FreezeScheduleHeld(w schedule.Window, now time.Time) bool {
+	return w.ActiveWithin(now, schedule.EditFreeze)
 }
 
 // escapeHonoured reports whether the kernel parameter may lift enforcement.

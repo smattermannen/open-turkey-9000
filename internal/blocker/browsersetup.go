@@ -13,6 +13,11 @@ type BrowserSetup struct {
 	ExtensionID  string // force-installed when set
 	ExtensionXPI string
 	ForceSearch  bool
+	// RemoveExtensionID is set when uninstalling: browsers remove that
+	// extension at their next start. Without it, a policy-installed
+	// extension would stay behind and keep enforcing its last rules forever,
+	// with no daemon to update them.
+	RemoveExtensionID string
 }
 
 const googleWebEngine = "Google Web"
@@ -34,6 +39,11 @@ var ForcedBrowserKillList = []string{
 func setupPolicies(s BrowserSetup, policies map[string]interface{}) {
 	delete(policies, "ExtensionSettings")
 	delete(policies, "SearchEngines")
+	if s.RemoveExtensionID != "" {
+		policies["ExtensionSettings"] = map[string]interface{}{
+			s.RemoveExtensionID: map[string]interface{}{"installation_mode": "blocked"},
+		}
+	}
 	if s.ExtensionID != "" {
 		policies["ExtensionSettings"] = map[string]interface{}{
 			s.ExtensionID: map[string]interface{}{

@@ -32,6 +32,16 @@ func TestSetupPolicies(t *testing.T) {
 	if len(policies) != 1 {
 		t.Errorf("only unrelated policies should remain: %v", policies)
 	}
+	// Uninstalling: the extension is blocked, which removes it, and nothing
+	// else of ours stays.
+	setupPolicies(BrowserSetup{RemoveExtensionID: "x"}, policies)
+	settings, ok := policies["ExtensionSettings"].(map[string]interface{})
+	if !ok || len(policies) != 2 {
+		t.Fatalf("after uninstall: %v", policies)
+	}
+	if mode := settings["x"].(map[string]interface{})["installation_mode"]; mode != "blocked" {
+		t.Errorf("extension mode after uninstall = %v, want blocked", mode)
+	}
 }
 
 func TestSigningPref(t *testing.T) {

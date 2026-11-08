@@ -165,6 +165,12 @@ func ApplyBootLock() error {
 	return nil
 }
 
+// BootLockInstalled reports whether the boot lock is in place.
+func BootLockInstalled() bool {
+	_, err := os.Stat(grubPasswordFile)
+	return err == nil
+}
+
 // RemoveBootLock restores normal GRUB behaviour.
 func RemoveBootLock() error {
 	for _, path := range []string{grubPasswordFile, grubDefaultsFile} {

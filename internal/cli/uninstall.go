@@ -24,7 +24,9 @@ package cli
 
 import (
 	"fmt"
+	"github.com/smattermannen/kc9k/internal/webext"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -123,10 +125,46 @@ var prepareUninstallCmd = &cobra.Command{
 		if err := blocker.RemoveBrowserPolicies(); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to clean browser policies: %v\n", err)
 		}
+		for _, warning := range undoSystemChanges() {
+			fmt.Fprintf(os.Stderr, "warning: %s\n", warning)
+		}
 
 		fmt.Println("Killer Chicken 9000 blocking layers removed; ready to uninstall.")
 		return nil
 	},
+}
+
+// undoSystemChanges reverts what KC9K changes outside its blocks, so an
+// uninstall leaves nothing behind:
+//   - the extension: browsers are told to remove it, since a leftover copy
+//     would keep enforcing its last rules forever with no daemon to update it;
+//   - the forced search engine, and LibreWolf's permission for the unsigned
+//     extension;
+//   - the SafeSearch lines in /etc/hosts, which pin Google to one address;
+//   - the no-escape boot lock, whose GRUB password nobody knows;
+//   - the extension files.
+//
+// It returns a warning for each step that failed.
+func undoSystemChanges() []string {
+	var warnings []string
+	note := func(what string, err error) {
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to %s: %v", what, err))
+		}
+	}
+	note("remove the extension from browsers", blocker.EnsureBrowserSetup(blocker.BrowserSetup{RemoveExtensionID: webext.ID}))
+	note("restore LibreWolf's extension signing", blocker.SyncLibreWolfSigning(false))
+	note("remove forced SafeSearch", blocker.SyncSafeSearch(false))
+	if blocker.BootLockInstalled() {
+		note("remove the no-escape boot lock", blocker.RemoveBootLock())
+	}
+	files, _ := filepath.Glob(filepath.Join(webext.Dir, "kc9k*.xpi"))
+	for _, f := range files {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			note("remove "+f, err)
+		}
+	}
+	return warnings
 }
 
 func init() {

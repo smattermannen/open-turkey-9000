@@ -154,7 +154,7 @@ func TestAppScopeIDs(t *testing.T) {
 		// Nested scope: only the app- element counts.
 		"0::/user.slice/app.slice/app-org.kde.konsole-15233.scope/tab(16862).scope\n": {"org.kde.konsole"},
 		// Not an app unit.
-		"0::/system.slice/kc9k.service\n":                                    nil,
+		"0::/system.slice/kc9k.service\n":                                           nil,
 		"0::/user.slice/user@1000.service/app.slice/app-org.gnome.Terminal.slice\n": nil,
 		"": nil,
 	}

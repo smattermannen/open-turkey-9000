@@ -1,3 +1,4 @@
 *.tar.gz
 kc9k
 /try-challenge
+__pycache__/

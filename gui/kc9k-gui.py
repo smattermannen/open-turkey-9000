@@ -34,6 +34,9 @@ LIBREWOLF_OPTIONS = (
 )
 
 BROWSER_OPTIONS = (
+    ("block-devtools", "Block LibreWolf's developer tools",
+     "They can switch the extension off. Turn this off only to develop websites; "
+     "it applies when LibreWolf restarts."),
     ("force-search", "Force Google as the search engine", ""),
     ("safesearch", "Force Google SafeSearch", ""),
     ("web-only", "Web results only",
@@ -1444,8 +1447,9 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(section(
             "Browser options", dim("Each option can be locked on its own with Lock…, independently "
                                    "of your blocks. A locked option can't be turned off until its "
-                                   "lock ends or is unlocked. \"Allow only LibreWolf\" also can't be "
-                                   "turned off while a block is locked."), *rows),
+                                   "lock ends or is unlocked. \"Allow only LibreWolf\" and blocking "
+                                   "developer tools also can't be turned off while a block is "
+                                   "locked."), *rows),
             False, False, 0)
 
         self.stats_switch = Gtk.Switch(valign=Gtk.Align.CENTER)

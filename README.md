@@ -319,6 +319,7 @@ kc9k browser force-librewolf on   # close other browsers (needs LibreWolf instal
 kc9k browser force-search on      # Google as the only search engine
 kc9k browser safesearch on        # lock Google SafeSearch
 kc9k browser web-only on          # web results only: no images, shopping or AI
+kc9k browser block-devtools off   # allow LibreWolf's developer tools (on by default: blocked)
 kc9k browser                      # list every option, whether it's on, and its locks
 ```
 
@@ -337,7 +338,14 @@ Like a block's locks, an option's locks can be added later but only made stronge
 
 The extension checks in each time it fetches its rules, with a header web pages can't send; the daemon traces the connection to the browser process. Browsers are recognised by name, and portable, renamed or copied browsers (a Firefox or Chrome download, Tor Browser) by their engine: a program you put in place yourself that loads Firefox's or Chromium's engine counts as a browser. Installed apps built on those engines, such as Thunderbird, Spotify, Steam or Electron apps, are left alone. A browser started for remote control (`--marionette`, `--remote-debugging-port` and the like) is closed straight away during website blocks, since those switches let a script turn the extension off while it keeps checking in.
 
-`force-librewolf` also can't be turned off while a block is locked or Frozen Chicken runs, because blocks rely on it. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. The extension also blocks a site when it's shown through Google Translate's proxy (`www-reddit-com.translate.goog`) or a web archive (`web.archive.org`, `archive.ph`). Web-only relies on Google's unofficial `udm=14` parameter, which may change.
+`force-librewolf` and `block-devtools` also can't be turned off while a block is locked or Frozen Chicken runs, because blocks rely on them.
+
+**Protecting the extension inside LibreWolf.** A running extension isn't enough; it must also be unable to be switched off while it keeps checking in. So:
+
+- LibreWolf's developer tools are blocked by default (`block-devtools`), since from the extension's own block page or `about:debugging` they can switch it off. Web developers can turn this off; domain blocks still hold then, but wildcards, keywords, greyscale, images and web-only can be got around.
+- Five settings are locked in LibreWolf: `extensions.webextensions.restrictedDomains` and the two `extensions.quarantinedDomains` settings (sites extensions may not touch), and `devtools.chrome.enabled` and `devtools.debugger.remote-enabled` (privileged consoles). The rest of about:config stays open.
+- LibreWolf loads `~/.librewolf/librewolf.overrides.cfg` after its own settings, so it could unlock those. KC9K points LibreWolf at a cleaned copy instead (`/var/lib/kc9k/librewolf/<user>.cfg`) that keeps your plain `pref()`/`defaultPref()`/`lockPref()` lines and drops anything else. Edit your original file as usual; the copy follows within seconds.
+- Browsers read their settings when they start. When KC9K changes something that protects the extension (a new version of it, developer tools, the locks), LibreWolf windows opened before that are closed during website blocks, a minute after the change, so LibreWolf restarts with the new settings. Greyscale and image blocking are chosen per block instead (`kc9k block action`), so a block's own locks protect them. The extension also blocks a site when it's shown through Google Translate's proxy (`www-reddit-com.translate.goog`) or a web archive (`web.archive.org`, `archive.ph`). Web-only relies on Google's unofficial `udm=14` parameter, which may change.
 
 ## Pomodoro
 

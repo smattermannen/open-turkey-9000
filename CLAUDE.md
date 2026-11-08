@@ -69,7 +69,12 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   daemon closes browsers whose extension hasn't fetched `/rules` with the
   `X-KC9K-Extension` header within 60 s (connection traced via
   `/proc/net/tcp` to the PID), and at once those started for remote control
-  (`remotecontrol.go`). The last check-in is kept for `kc9k status`.
+  (`remotecontrol.go`), or started before KC9K last changed the settings
+  protecting the extension (`noteSettingsChange`). The last check-in is kept
+  for `kc9k status`. LibreWolf hardening: `block-devtools` (default on,
+  DisableDeveloperTools policy); five prefs locked at the end of
+  librewolf.cfg, with the user's overrides file replaced by a cleaned copy
+  (`librewolfprefs.go`).
 - **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL);
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (modes, patterns, schedules, time locks, schema

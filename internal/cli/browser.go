@@ -39,8 +39,10 @@ time lock can only be extended and a challenge only lengthened. unlock runs the
 challenge and asks for the password, then turns the setting off; time and
 restart locks can't be unlocked, only waited out.
 
-force-librewolf also can't be turned off while a block is locked or Frozen
-Chicken runs, since blocks rely on it. Without arguments, lists every option,
+force-librewolf and block-devtools also can't be turned off while a block is
+locked or Frozen Chicken runs, since blocks rely on them. block-devtools is on
+until you turn it off: LibreWolf's developer tools can switch the extension
+off, so turn it off only to develop websites. Browsers read it when they start. Without arguments, lists every option,
 its locks, and the installed LibreWolf version.
 
 The Killer Chicken extension isn't an option: it is always installed, and
@@ -78,12 +80,24 @@ without it are closed. That needs LibreWolf, the one browser that runs it;
 		}
 		switch value {
 		case "on":
-			return browserSettingOn(cmd, database, name)
+			if err := browserSettingOn(cmd, database, name); err != nil {
+				return err
+			}
+			if name == "block-devtools" {
+				fmt.Println("LibreWolf's developer tools are blocked from its next start; during website blocks, older LibreWolf windows are closed so it restarts.")
+			}
+			return nil
 		case "off":
 			if lockFlagsGiven(cmd) {
 				return fmt.Errorf("lock options only go with 'on'")
 			}
-			return browserSettingOff(database, name)
+			if err := browserSettingOff(database, name); err != nil {
+				return err
+			}
+			if name == "block-devtools" {
+				fmt.Println("LibreWolf's developer tools work from its next start. They can switch the extension off, so wildcards, keywords, greyscale, images and web-only can be got around while they're available; domain blocks still hold.")
+			}
+			return nil
 		}
 		return fmt.Errorf("use 'on' or 'off'")
 	}),

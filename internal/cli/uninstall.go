@@ -138,8 +138,9 @@ var prepareUninstallCmd = &cobra.Command{
 // uninstall leaves nothing behind:
 //   - the extension: browsers are told to remove it, since a leftover copy
 //     would keep enforcing its last rules forever with no daemon to update it;
-//   - the forced search engine, and LibreWolf's permission for the unsigned
-//     extension;
+//   - the forced search engine, blocked developer tools, LibreWolf's
+//     permission for the unsigned extension, and KC9K's locks in LibreWolf's
+//     settings (your own overrides file applies directly again);
 //   - the SafeSearch lines in /etc/hosts, which pin Google to one address;
 //   - the no-escape boot lock, whose GRUB password nobody knows;
 //   - the extension files.
@@ -154,6 +155,7 @@ func undoSystemChanges() []string {
 	}
 	note("remove the extension from browsers", blocker.EnsureBrowserSetup(blocker.BrowserSetup{RemoveExtensionID: webext.ID}))
 	note("restore LibreWolf's extension signing", blocker.SyncLibreWolfSigning(false))
+	note("remove KC9K's locks from LibreWolf's settings", blocker.SyncLibreWolfLocks(false))
 	note("remove forced SafeSearch", blocker.SyncSafeSearch(false))
 	if blocker.BootLockInstalled() {
 		note("remove the no-escape boot lock", blocker.RemoveBootLock())

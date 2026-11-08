@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +27,12 @@ const rulesPort = 47613
 // own sites (see db.Actions). Neither is the extension: it is always
 // installed, and browsers without it are closed while it is needed (see
 // ExtensionRequired).
-var BrowserSettings = []string{"web-only", "safesearch", "force-search", "force-librewolf"}
+var BrowserSettings = []string{"web-only", "safesearch", "force-search", "force-librewolf", "block-devtools"}
+
+// defaultOn are options that are on until turned off. LibreWolf's developer
+// tools can switch the extension off from its own pages or about:debugging,
+// so they are blocked unless you turn that off (to develop websites, say).
+var defaultOn = map[string]bool{"block-devtools": true}
 
 // RetiredBrowserSettings were switches before the extension became
 // mandatory.
@@ -37,11 +43,12 @@ var RetiredBrowserSettings = []string{"extension", "require-extension"}
 var extensionGuard = blocker.NewExtensionGuard(rulesPort)
 
 // GuardsBlocks reports whether a setting helps enforce blocks: without forcing
-// LibreWolf, another browser can be used while no website block is on. It
+// LibreWolf, another browser can be used while no website block is on, and
+// without blocking developer tools the extension can be switched off. These
 // also can't be turned off while a block is locked. The others only answer
 // to their own locks (see db.SettingLock).
 func GuardsBlocks(name string) bool {
-	return name == "force-librewolf"
+	return name == "force-librewolf" || name == "block-devtools"
 }
 
 // SettingExtensionCheckIn holds when the extension last checked in (unix
@@ -130,7 +137,7 @@ func BrowserOn(d *db.DB, name string) bool {
 		log.Printf("browser settings: %v", err)
 	}
 	if value == "" {
-		return name == "extension"
+		return defaultOn[name]
 	}
 	return value == "on"
 }
@@ -253,8 +260,49 @@ func rulesHandler(d *db.DB, checkIn func(remoteAddr string)) http.HandlerFunc {
 	}
 }
 
+// Settings that remember when KC9K last changed something in the browsers
+// that protects the extension (see noteSettingsChange).
+const (
+	settingProtectionFingerprint = "browser.protection_fingerprint"
+	settingProtectionChanged     = "browser.protection_changed"
+)
+
+// noteSettingsChange records when the browser settings that protect the
+// extension last changed: its version, blocked developer tools, or KC9K's
+// locks in LibreWolf. Browsers only read their settings when they start, so
+// the extension guard closes browsers older than that (see Enforce).
+func noteSettingsChange(d *db.DB, setup blocker.BrowserSetup) {
+	fingerprint := strings.Join([]string{setup.ExtensionXPI,
+		"devtools-blocked=" + strconv.FormatBool(setup.DisableDevTools),
+		"locks=" + blocker.LibreWolfLocksVersion()}, "|")
+	old, err := d.GetSetting(settingProtectionFingerprint)
+	if err != nil || old == fingerprint {
+		return
+	}
+	if err := d.SetSetting(settingProtectionFingerprint, fingerprint); err != nil {
+		log.Printf("browser: %v", err)
+		return
+	}
+	if err := d.SetSetting(settingProtectionChanged, strconv.FormatInt(time.Now().Unix(), 10)); err != nil {
+		log.Printf("browser: %v", err)
+	}
+}
+
+// protectionChanged returns when noteSettingsChange last saw a change.
+func protectionChanged(d *db.DB) time.Time {
+	value, err := d.GetSetting(settingProtectionChanged)
+	if err != nil || value == "" {
+		return time.Time{}
+	}
+	unix, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Unix(unix, 0)
+}
+
 func enforceBrowser(d *db.DB) {
-	setup := blocker.BrowserSetup{ForceSearch: BrowserOn(d, "force-search")}
+	setup := blocker.BrowserSetup{ForceSearch: BrowserOn(d, "force-search"), DisableDevTools: BrowserOn(d, "block-devtools")}
 	xpi, err := webext.Pack()
 	if err == nil {
 		err = blocker.EnsureFile(webext.Path(), xpi)
@@ -272,6 +320,10 @@ func enforceBrowser(d *db.DB) {
 	if err := blocker.SyncLibreWolfSigning(setup.ExtensionID != ""); err != nil {
 		log.Printf("browser: %v", err)
 	}
+	if err := blocker.SyncLibreWolfLocks(true); err != nil {
+		log.Printf("browser: locking LibreWolf settings: %v", err)
+	}
+	noteSettingsChange(d, setup)
 	if err := blocker.EnsureBrowserSetup(setup); err != nil {
 		log.Printf("browser: %v", err)
 	}
@@ -287,7 +339,7 @@ func enforceExtension(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
 	if !ExtensionRequired(d, active) || blocker.LibreWolfVersion() == "" {
 		return
 	}
-	extensionGuard.Enforce(now)
+	extensionGuard.Enforce(now, protectionChanged(d))
 }
 
 func forcedKills(d *db.DB) []string {

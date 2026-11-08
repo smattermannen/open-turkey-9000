@@ -13,6 +13,9 @@ type BrowserSetup struct {
 	ExtensionID  string // force-installed when set
 	ExtensionXPI string
 	ForceSearch  bool
+	// DisableDevTools blocks the developer tools, which can switch the
+	// extension off from its own pages or about:debugging.
+	DisableDevTools bool
 	// RemoveExtensionID is set when uninstalling: browsers remove that
 	// extension at their next start. Without it, a policy-installed
 	// extension would stay behind and keep enforcing its last rules forever,
@@ -39,6 +42,10 @@ var ForcedBrowserKillList = []string{
 func setupPolicies(s BrowserSetup, policies map[string]interface{}) {
 	delete(policies, "ExtensionSettings")
 	delete(policies, "SearchEngines")
+	delete(policies, "DisableDeveloperTools")
+	if s.DisableDevTools {
+		policies["DisableDeveloperTools"] = true
+	}
 	if s.RemoveExtensionID != "" {
 		policies["ExtensionSettings"] = map[string]interface{}{
 			s.RemoveExtensionID: map[string]interface{}{"installation_mode": "blocked"},
@@ -193,6 +200,11 @@ var librewolfConfigs = []string{"/usr/share/librewolf/librewolf.cfg", "/usr/lib/
 // withSigningPref adds or removes the line that lets the bundled unsigned
 // extension load.
 func withSigningPref(config string, on bool) string {
+	// Leave the file alone when the line is already there, wherever it is,
+	// so this and withLocks never take turns rewriting the file.
+	if on && strings.Contains(config, "\n"+signingPref+"\n") || on && strings.HasPrefix(config, signingPref+"\n") {
+		return config
+	}
 	var lines []string
 	for _, line := range strings.Split(strings.TrimRight(config, "\n"), "\n") {
 		if line != signingPref {

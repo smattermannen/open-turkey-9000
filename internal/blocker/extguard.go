@@ -78,10 +78,16 @@ func (g *ExtensionGuard) CheckIn(remoteAddr string) bool {
 // Enforce closes, with all their child processes, the browsers that have run
 // for longer than ExtensionGrace without a check-in in the last
 // ExtensionGrace. It returns how many browsers it closed.
-func (g *ExtensionGuard) Enforce(now time.Time) int {
+//
+// Browser settings only take effect when a browser starts, so browsers that
+// started before settingsChanged (KC9K changed something that protects the
+// extension: its version, blocked developer tools, locked settings) are
+// closed too, ExtensionGrace after the change. Zero means no such change.
+func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time) int {
 	if now.Sub(g.started) < ExtensionGrace {
 		return 0 // the daemon just started: give running browsers time to check in
 	}
+	restartDue := !settingsChanged.IsZero() && now.Sub(settingsChanged) >= ExtensionGrace
 	uptime := systemUptime()
 	parent, children := processTree()
 
@@ -97,6 +103,13 @@ func (g *ExtensionGuard) Enforce(now time.Time) int {
 			log.Printf("browser: closing %s (pid %d): started for remote control", name, pid)
 			targets = append(targets, pid)
 			continue
+		}
+		if restartDue {
+			if age, ok := processAge(pid, uptime); ok && time.Now().Add(-age).Before(settingsChanged) {
+				log.Printf("browser: closing %s (pid %d): started before KC9K changed its browser settings", name, pid)
+				targets = append(targets, pid)
+				continue
+			}
 		}
 		if age, ok := processAge(pid, uptime); !ok || age < ExtensionGrace {
 			continue

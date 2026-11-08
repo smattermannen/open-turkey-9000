@@ -106,3 +106,18 @@ func RelockUnlocked() {
 			"--object-path", path, "--method", iface+".Lock", "").Run()
 	}
 }
+
+// NotifyDesktop shows a notification in every desktop session, as its user.
+// It is best-effort: without notify-send or a session, nothing happens.
+func NotifyDesktop(title, body string) {
+	path, err := exec.LookPath("notify-send")
+	if err != nil {
+		return
+	}
+	for _, u := range desktopUsers() {
+		cmd := asUser(u, path, "--app-name=Killer Chicken 9000", "--icon=dialog-warning", title, body)
+		if err := cmd.Start(); err == nil {
+			go cmd.Wait() //nolint:errcheck // reap it; the result doesn't matter
+		}
+	}
+}

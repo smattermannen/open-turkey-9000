@@ -357,6 +357,10 @@ The extension checks in each time it fetches its rules, with a header web pages 
 
 Blocked apps are only ever closed when they run as a regular user, so a block can't kill system programs that happen to share a name (an update running in Python, say). Programs the desktop needs, such as `Xorg`, `cinnamon`, `pipewire` or `python3`, can't be added at all, since blocking them would close your session over and over for as long as the block lasts.
 
+## Notifications
+
+The daemon warns on the desktop 5 minutes ahead (or less, when something is set up closer than that) before a block's schedule turns it on, before a scheduled Frozen Chicken starts (saying whether the screen will lock, you'll be logged out or the computer shuts down), and when an open quota session has 5 minutes left. Each event is announced once. It needs `notify-send`, which Linux Mint has.
+
 ## Settings password
 
 `kc9k` runs as root without a password through sudo, so anything running as you could use it: loosen a block, or lock you out for a year with no-escape. A settings password guards against that, and lets someone else decide when your blocks may loosen:

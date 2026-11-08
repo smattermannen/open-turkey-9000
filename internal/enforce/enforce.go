@@ -135,6 +135,7 @@ func Tick(d *db.DB, now time.Time) error {
 	if err := reconcileQuotas(d, now, trusted); err != nil {
 		log.Printf("daemon: quota error: %v", err)
 	}
+	sendNotices(d, now)
 
 	active, err := d.GetActiveBlocks()
 	if err != nil {

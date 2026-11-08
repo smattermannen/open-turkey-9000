@@ -115,7 +115,8 @@ func NotifyDesktop(title, body string) {
 		return
 	}
 	for _, u := range desktopUsers() {
-		cmd := asUser(u, path, "--app-name=Killer Chicken 9000", "--icon=dialog-warning", title, body)
+		// "--" so a title starting with "-" (a block name) isn't an option.
+		cmd := asUser(u, path, "--app-name=Killer Chicken 9000", "--icon=dialog-warning", "--", title, body)
 		if err := cmd.Start(); err == nil {
 			go cmd.Wait() //nolint:errcheck // reap it; the result doesn't matter
 		}

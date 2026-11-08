@@ -15,6 +15,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -372,13 +373,22 @@ func init() {
 	blockCmd.AddCommand(blockImportCmd)
 }
 
+// maxImportSize bounds imported files: a link to /dev/zero mustn't keep the
+// root process reading forever.
+const maxImportSize = 4 << 20
+
 // readAsCaller reads a user-supplied path with the invoking user's permissions.
 // The CLI runs as root through sudo, so a plain read could reach files the user
 // may not open. Without SUDO_UID the process really is the user or root.
 func readAsCaller(path string) ([]byte, error) {
 	uidStr, gidStr := os.Getenv("SUDO_UID"), os.Getenv("SUDO_GID")
 	if uidStr == "" || gidStr == "" || os.Geteuid() != 0 {
-		return os.ReadFile(path)
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return readLimited(f)
 	}
 	uid, err := strconv.ParseUint(uidStr, 10, 32)
 	if err != nil {
@@ -390,9 +400,33 @@ func readAsCaller(path string) ([]byte, error) {
 	}
 	c := exec.Command("/bin/cat", "--", path)
 	c.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}}
-	data, err := c.Output()
+	out, err := c.StdoutPipe()
 	if err != nil {
+		return nil, err
+	}
+	if err := c.Start(); err != nil {
 		return nil, fmt.Errorf("cannot read file as user %d: %w", uid, err)
+	}
+	data, readErr := readLimited(out)
+	_ = c.Process.Kill() // stops cat if the file was too large
+	waitErr := c.Wait()
+	if readErr != nil {
+		return nil, readErr
+	}
+	if waitErr != nil && len(data) == 0 {
+		return nil, fmt.Errorf("cannot read file as user %d: %w", uid, waitErr)
+	}
+	return data, nil
+}
+
+// readLimited reads at most maxImportSize bytes, failing if there are more.
+func readLimited(r io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxImportSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxImportSize {
+		return nil, fmt.Errorf("the file is larger than %d MiB", maxImportSize>>20)
 	}
 	return data, nil
 }

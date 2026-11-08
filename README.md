@@ -47,6 +47,7 @@ This:
 - adds a rule in `/etc/sudoers.d/kc9k` so it runs without a password prompt
 - installs and starts the `systemd` service `kc9k.service`
 - creates the database at `/var/lib/kc9k/kc9k.db`
+- installs LibreWolf from its official repository (through `extrepo`), the browser that runs the Killer Chicken extension. This needs the internet; if it fails, the rest of the installation still completes, `kc9k status` reminds you, and `kc9k browser install-librewolf` tries again. Set `KC9K_NO_LIBREWOLF=1` to skip it.
 
 The installed program is independent of the source directory — once installed, you can remove the project folder and it keeps working.
 

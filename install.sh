@@ -26,12 +26,27 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # --- Compile the binary ---
-echo "==> Step 1/2: Compiling Killer Chicken 9000..."
+echo "==> Step 1/3: Compiling Killer Chicken 9000..."
 make build
 
 # --- Install the binary and service, and configure systemd ---
-echo "==> Step 2/2: Installing Killer Chicken 9000..."
+echo "==> Step 2/3: Installing Killer Chicken 9000..."
 make install
+
+# --- Install LibreWolf, the browser that runs the Killer Chicken extension ---
+# Without it, wildcards, keywords, greyscale, images and web-only aren't
+# enforced in the browser. It needs the internet, so a failure (offline, say)
+# doesn't stop the installation: 'kc9k status' keeps reminding, and
+# 'kc9k browser install-librewolf' tries again. Set KC9K_NO_LIBREWOLF=1 to skip.
+echo "==> Step 3/3: Installing LibreWolf..."
+if [ "${KC9K_NO_LIBREWOLF:-}" = "1" ]; then
+    echo "Skipped (KC9K_NO_LIBREWOLF=1)."
+elif ! /usr/local/bin/kc9k-bin browser install-librewolf; then
+    echo ""
+    echo "WARNING: LibreWolf couldn't be installed. Killer Chicken 9000 works, but"
+    echo "until LibreWolf is installed, website rules beyond plain domains aren't"
+    echo "enforced in the browser. Try again later with: kc9k browser install-librewolf"
+fi
 
 # --- Success message with usage instructions ---
 echo ""

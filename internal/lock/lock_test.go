@@ -199,3 +199,26 @@ func TestMinLockChars(t *testing.T) {
 		t.Errorf("DefaultLockChars (%d) must be >= MinLockChars (%d)", DefaultLockChars, MinLockChars)
 	}
 }
+
+func TestPages(t *testing.T) {
+	text := strings.Repeat("a", 130)
+	got := pages(text, 20, 3) // 60 characters a page
+	if len(got) != 3 || len(got[0]) != 60 || len(got[1]) != 60 || len(got[2]) != 10 {
+		t.Fatalf("pages of 130 at 60 a page: %d pages", len(got))
+	}
+	if strings.Join(got, "") != text {
+		t.Fatal("pages don't add up to the text")
+	}
+	if one := pages("abc", 20, 3); len(one) != 1 || one[0] != "abc" {
+		t.Fatalf("a short challenge isn't one page: %q", one)
+	}
+}
+
+func TestPageLinesForRows(t *testing.T) {
+	cases := map[int]int{0: defaultPageLines, 5: 1, 24: 8, 30: 10, 60: maxPageLines}
+	for rows, want := range cases {
+		if got := pageLinesForRows(rows); got != want {
+			t.Errorf("%d rows: %d lines, want %d", rows, got, want)
+		}
+	}
+}

@@ -66,6 +66,13 @@ func CheckLockChars(n int) error {
 // measured as 1 - editDistance/challengeLength.
 const MinAccuracy = 0.98
 
+// defaultPageLines and maxPageLines bound how many challenge lines a page
+// shows (see linesPerPageFor): 10 lines of 60 is 600 characters a page.
+const (
+	defaultPageLines = 5
+	maxPageLines     = 10
+)
+
 // maxLineWidth is the widest challenge line; narrower terminals get narrower
 // lines (see lineWidthFor).
 const maxLineWidth = 60
@@ -82,7 +89,9 @@ const pasteBurst = 4
 // ANSI sequences used while typing.
 const (
 	ansiClearLine = "\r\x1b[2K"
-	ansiUp        = "\x1b[A"
+	// ansiClearScreen clears the terminal and moves to its top left.
+	ansiClearScreen = "\x1b[2J\x1b[H"
+	ansiUp          = "\x1b[A"
 )
 
 // Character classes for the challenge. symbols is every printable ASCII
@@ -172,16 +181,13 @@ func RunChallenge(length int) (bool, error) {
 	return runChallengeLine(challenge)
 }
 
-// runChallengeRaw shows the whole challenge, then reads the user's
-// transcription of all of it in one go, in raw mode.
+// runChallengeRaw has the challenge typed in raw mode. A challenge longer
+// than fits the terminal is shown a page at a time: type a page, press Enter,
+// and the next one replaces it, so even 5000 characters never scroll away.
+// The whole transcription is scored at the end.
 func runChallengeRaw(fd int, challenge string) (bool, error) {
 	width := lineWidthFor(fd)
-
-	fmt.Println(strings.Join(splitLines(challenge, width), "\n"))
-	fmt.Println()
-	fmt.Printf("Type all %d characters above (do not paste), then press Enter.\n", len(challenge))
-	fmt.Printf("Line breaks are only for display; don't type them. Your input wraps at the\n")
-	fmt.Printf("same width. You need %.0f%% accuracy. Backspace works; Ctrl-C cancels.\n\n", MinAccuracy*100)
+	pageList := pages(challenge, width, linesPerPageFor(fd))
 
 	restore, err := makeRaw(fd)
 	if err != nil {
@@ -202,22 +208,83 @@ func runChallengeRaw(fd int, challenge string) (bool, error) {
 	}
 	defer finish()
 
-	input, outcome, err := readInputRaw(len(challenge)+inputSlack, width)
-	fmt.Print("\r\n")
-	if err != nil {
-		return false, fmt.Errorf("failed to read input: %w", err)
-	}
-	switch outcome {
-	case outcomePaste:
-		fmt.Print("Paste detected. Unlocking requires typing the text by hand.\r\n")
-		return false, nil
-	case outcomeCancel:
-		fmt.Print("Cancelled.\r\n")
-		return false, nil
+	var typed strings.Builder
+	for i, page := range pageList {
+		if len(pageList) > 1 {
+			fmt.Print(ansiClearScreen)
+			fmt.Printf("=== UNLOCK CHALLENGE === page %d of %d\r\n\r\n", i+1, len(pageList))
+		}
+		fmt.Print(strings.Join(splitLines(page, width), "\r\n") + "\r\n\r\n")
+		if len(pageList) > 1 {
+			fmt.Printf("Type the %d characters above (do not paste), then press Enter for the next page.\r\n", len(page))
+			fmt.Printf("All %d pages together need %.0f%% accuracy. Backspace works; Ctrl-C cancels.\r\n\r\n", len(pageList), MinAccuracy*100)
+		} else {
+			fmt.Printf("Type all %d characters above (do not paste), then press Enter.\r\n", len(page))
+			fmt.Printf("Line breaks are only for display; don't type them. Your input wraps at the\r\n")
+			fmt.Printf("same width. You need %.0f%% accuracy. Backspace works; Ctrl-C cancels.\r\n\r\n", MinAccuracy*100)
+		}
+
+		input, outcome, err := readInputRaw(len(page)+inputSlack, width)
+		fmt.Print("\r\n")
+		if err != nil {
+			return false, fmt.Errorf("failed to read input: %w", err)
+		}
+		switch outcome {
+		case outcomePaste:
+			fmt.Print("Paste detected. Unlocking requires typing the text by hand.\r\n")
+			return false, nil
+		case outcomeCancel:
+			fmt.Print("Cancelled.\r\n")
+			return false, nil
+		}
+		typed.WriteString(input)
 	}
 
 	finish() // back to cooked mode so the result prints normally
-	return reportAccuracy(score(input, challenge)), nil
+	return reportAccuracy(score(typed.String(), challenge)), nil
+}
+
+// pages splits the challenge into pages of at most linesPerPage lines of
+// width characters.
+func pages(challenge string, width, linesPerPage int) []string {
+	size := width * linesPerPage
+	var out []string
+	for len(challenge) > size {
+		out = append(out, challenge[:size])
+		challenge = challenge[size:]
+	}
+	if challenge != "" || len(out) == 0 {
+		out = append(out, challenge)
+	}
+	return out
+}
+
+// linesPerPageFor picks how many challenge lines fit the terminal at fd,
+// with room for the header, the instructions and the same number of typed
+// lines below them.
+func linesPerPageFor(fd int) int {
+	ws, err := unix.IoctlGetWinsize(fd, unix.TIOCGWINSZ)
+	if err != nil {
+		return defaultPageLines
+	}
+	return pageLinesForRows(int(ws.Row))
+}
+
+// pageLinesForRows is linesPerPageFor for a terminal of rows lines: the page
+// and its typed copy take two lines each, and 8 lines go to the header,
+// instructions and spacing.
+func pageLinesForRows(rows int) int {
+	if rows <= 0 {
+		return defaultPageLines
+	}
+	lines := (rows - 8) / 2
+	if lines < 1 {
+		return 1
+	}
+	if lines > maxPageLines {
+		return maxPageLines
+	}
+	return lines
 }
 
 // inputOutcome says how reading the input ended.

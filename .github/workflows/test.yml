@@ -19,6 +19,10 @@ jobs:
         run: python3 -m py_compile gui/kc9k-gui.py
       - name: Extension matching
         run: node ci/match_test.js
+      - name: Typing challenge in a terminal
+        run: |
+          CGO_ENABLED=0 go build -o /tmp/try-challenge ./cmd/try-challenge
+          python3 ci/challenge_test.py /tmp/try-challenge
       - name: Install system packages
         run: |
           sudo apt-get update

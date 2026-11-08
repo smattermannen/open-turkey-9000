@@ -195,7 +195,7 @@ Deactivate (only if the block isn't held — see Concepts):
 kc9k stop social-media
 ```
 
-Unlock a character-locked block (this also **deactivates** it). Time locks and open schedule windows can't be unlocked — they lift on their own:
+Unlock a character-locked block (this also **deactivates** it). Time locks and open schedule windows can't be unlocked — they lift on their own. A long challenge is shown a page at a time, sized to your terminal: type a page and press Enter for the next. Accuracy is counted over the whole text:
 
 ```bash
 kc9k unlock social-media

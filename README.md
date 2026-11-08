@@ -371,7 +371,7 @@ Some groups are root in all but name: members of `docker`, `lxd`, `incus` or `li
 
 ## Master password for testing
 
-A build made with `sudo make install TAGS=devmaster` adds a master password. Set it once with `kc9k master-set`, then `kc9k master` lifts every lock, Frozen Chicken, strict mode and no-escape. Both commands read from standard input, and both work from a text console during a freeze. A normal build has no such commands, so a release only needs to leave out the tag.
+A build made with `sudo make install TAGS=devmaster` adds a master password. Set it once with `kc9k master-set`, then `kc9k master` lifts every lock, Frozen Chicken, strict mode and no-escape. Both commands read from standard input. During a freeze in lock mode they also work from a text console (Ctrl+Alt+F3); in logout and shutdown modes the console session ends within seconds, so use the `kc9k.nofreeze` boot escape below instead. A normal build has no such commands, so a release only needs to leave out the tag.
 
 ## Statistics
 

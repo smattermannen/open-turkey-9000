@@ -175,8 +175,8 @@ shortened or removed this way.`,
 		if err != nil {
 			return err
 		}
-		if len(detail.Sites) == 0 && len(detail.Apps) == 0 && len(detail.Patterns) == 0 {
-			return fmt.Errorf("block '%s' has nothing to enforce. Add sites, apps or patterns first", blockName)
+		if blockEmpty(detail) {
+			return fmt.Errorf("block '%s' has nothing to enforce. Add sites, apps, patterns or window titles first", blockName)
 		}
 		if detail.Active && hasExtras {
 			return fmt.Errorf("block '%s' is already active; password, restart and delay locks are set when it starts", blockName)

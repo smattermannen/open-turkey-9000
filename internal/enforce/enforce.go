@@ -71,6 +71,18 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 	return blocker.ValidDomains(hostDomains), dedup(appList), bp
 }
 
+// titleGuard closes apps whose window titles contain blocked keywords.
+var titleGuard = blocker.NewTitleGuard()
+
+// activeTitles collects the window-title keywords of the active blocks.
+func activeTitles(active []db.ActiveBlockDetail) []string {
+	var out []string
+	for _, b := range active {
+		out = append(out, b.Titles...)
+	}
+	return dedup(out)
+}
+
 // Apply forces every layer to match the active blocks. Used by the CLI right
 // after the desired state changes (start, stop, unlock, edit), where the domain
 // set may have changed and we want the effect immediately.
@@ -145,6 +157,7 @@ func Tick(d *db.DB, now time.Time) error {
 	hosts, apps, bp := Inputs(active)
 	apps = append(apps, forcedKills(d)...)
 	enforceExtension(d, now, active)
+	titleGuard.Enforce(activeTitles(active), now)
 
 	// Site layers, re-applied only on drift (so an idle system does no writes).
 	if len(hosts) > 0 {

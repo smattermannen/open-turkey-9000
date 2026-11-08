@@ -36,6 +36,10 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   browsers by name, or by engine (`browserdetect.go`: libxul.so or Chromium's
   icudtl.dat/V8 snapshot mapped by a user-owned executable, minus Electron).
   Strict mode also closes docker/lxd/incus/libvirt sockets (`sockets.go`).
+  Window titles: `titles.go` asks matching windows to close, then kills the
+  program after `TitleCloseGrace`, via a cgo-free X11 client (`x11.go`:
+  Xauthority cookie, _NET_CLIENT_LIST or QueryTree, _NET_WM_NAME/_PID,
+  _NET_CLOSE_WINDOW). Browsers are left to the extension (tab titles).
 - **Enforce** (`internal/enforce/`): turns the active blocks into layer inputs
   (everything, allowlists included, unioned across active blocks); `Apply`
   (CLI, on state change) and `Tick` (daemon, per cycle: due queued edits +
@@ -99,7 +103,7 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 ## Commands
 
 Full usage and examples in `README.md`. Summary:
-`block create [--allowlist] [--template T] | add-site | add-app | remove-site |
+`block create [--allowlist] [--template T] | add-site | add-app | add-title | remove-title | remove-site |
 remove-app | add-pattern | remove-pattern | set-mode | action | export | import | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,

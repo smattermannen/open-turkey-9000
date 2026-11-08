@@ -101,6 +101,11 @@ func (d *DB) DuplicateBlock(name, copyName string) error {
 			return err
 		}
 	}
+	if len(detail.Titles) > 0 {
+		if err := d.AddTitles(copyName, detail.Titles); err != nil {
+			return err
+		}
+	}
 	if len(detail.Exceptions) > 0 {
 		return d.AddExceptions(copyName, detail.Exceptions)
 	}

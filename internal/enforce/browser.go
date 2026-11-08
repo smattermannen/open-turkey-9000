@@ -179,6 +179,7 @@ type Rules struct {
 	Greyscale  Filter   `json:"greyscale_sites"`
 	NoImages   Filter   `json:"no_image_sites"`
 	WebOnly    bool     `json:"web_only"`
+	Titles     []string `json:"titles"`
 }
 
 // BuildRules collects the rules for the extension right now.
@@ -188,6 +189,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 		Greyscale: Filter{Match: []string{}, Except: []string{}},
 		NoImages:  Filter{Match: []string{}, Except: []string{}},
 		WebOnly:   BrowserOn(d, "web-only"),
+		Titles:    []string{},
 	}
 	active, err := d.GetActiveBlocks()
 	if err != nil {
@@ -208,6 +210,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 		if b.Actions.NoImages {
 			rules.NoImages.add(b)
 		}
+		rules.Titles = append(rules.Titles, b.Titles...)
 	}
 	rules.Block, rules.Exceptions = blocking.Match, blocking.Except
 	if BrowserOn(d, "force-search") {

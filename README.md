@@ -351,6 +351,17 @@ The extension checks in each time it fetches its rules, with a header web pages 
 
 `kc9k pomodoro set work 25m 5m` alternates a block between work and breaks while it runs, with locks kept in place. Setting a cycle is refused while the block is held, and `pomodoro off` is always allowed.
 
+## Window titles
+
+Like Cold Turkey, a block can close apps by what their windows show:
+
+```bash
+kc9k block add-title social YouTube Twitch
+kc9k block remove-title social Twitch
+```
+
+While the block is on, any app whose window title contains one of the words (case-insensitive) is asked to close, as its close button would, so it can save or ask first; if it is still open a few seconds later, it is closed with everything it started. In LibreWolf, the extension sends just the matching tab to the block page instead. The usual rules apply: only your own programs, never ones the desktop needs. Window titles are read from X11 (Cinnamon on Linux Mint); under Wayland only apps running through XWayland are seen. Removing a word loosens the block, like removing an app.
+
 ## Blocking folders
 
 `kc9k block add-app games /opt/spel/` blocks every program under a folder, and a full path blocks one file. System folders such as `/usr/bin/` are refused.

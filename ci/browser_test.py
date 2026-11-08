@@ -32,7 +32,7 @@ def browser_settings():
 
 
 def remove_test_block():
-    for name in ("browsertest", "looks"):
+    for name in ("browsertest", "looks", "titles"):
         ot_quiet("stop", name)
         ot_quiet("block", "remove", name)
 
@@ -133,6 +133,17 @@ try:
             "return getComputedStyle(document.documentElement).filter")
         print("filter:", styles)
         check("greyscale applies to the block's sites", "grayscale" in styles)
+
+        ot("block", "create", "titles")
+        ot("block", "add-title", "titles", "Example Domain")
+        ot("start", "titles")
+        time.sleep(6)  # the extension fetches its rules every 3 seconds
+        driver.get("https://example.com/")
+        time.sleep(3)
+        print("titled url:", driver.current_url)
+        check("a tab whose title matches a block is sent to the block page",
+              driver.current_url.startswith("moz-extension:") and "reason=title" in driver.current_url)
+        ot("stop", "titles")
 
         driver.get("https://www.google.com/search?q=test&tbm=isch")
         time.sleep(3)

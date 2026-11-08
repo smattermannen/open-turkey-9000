@@ -80,6 +80,7 @@ type BlockDetail struct {
 	Apps        []string
 	Patterns    []string
 	Exceptions  []string
+	Titles      []string // window-title keywords
 	Active      bool
 	Locked      bool
 	LockChars   int
@@ -98,6 +99,7 @@ type ActiveBlockDetail struct {
 	Apps        []string
 	Patterns    []string
 	Exceptions  []string
+	Titles      []string
 	Locked      bool
 	LockChars   int
 	LockedUntil int64
@@ -239,7 +241,7 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
-	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + pomodoroSchema + usageSchema); err != nil {
+	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pomodoroSchema + usageSchema); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to create clock table: %w", err)
 	}
@@ -558,6 +560,10 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 	if err != nil {
 		return nil, err
 	}
+	detail.Titles, err = d.getBlockTitles(detail.ID)
+	if err != nil {
+		return nil, err
+	}
 
 	return &detail, nil
 }
@@ -737,6 +743,9 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 			return nil, err
 		}
 		if activeBlocks[i].Exceptions, err = d.getBlockExceptions(ids[i]); err != nil {
+			return nil, err
+		}
+		if activeBlocks[i].Titles, err = d.getBlockTitles(ids[i]); err != nil {
 			return nil, err
 		}
 	}

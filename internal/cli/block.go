@@ -103,7 +103,7 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 }
 
 // strengtheningEdits lists, for error messages, the edits a held block allows.
-const strengtheningEdits = "add apps or patterns, add sites to a blocklist, remove sites from an allowlist, turn website actions on, or extend its locks with 'start'"
+const strengtheningEdits = "add apps, patterns or window titles, add sites to a blocklist, remove sites from an allowlist, turn website actions on, or extend its locks with 'start'"
 
 // siteEditStrengthens reports whether adding (or removing) the given sites
 // can only make the block stricter: adding to a blocklist, or removing from an
@@ -126,12 +126,13 @@ func siteEditStrengthens(detail *db.BlockDetail, domains []string, adding bool) 
 			left++
 		}
 	}
-	return !isEmpty(left, len(detail.Apps), len(detail.Patterns))
+	return left > 0 || len(detail.Apps) > 0 || len(detail.Patterns) > 0 || len(detail.Titles) > 0
 }
 
-// isEmpty reports whether a block with these counts has nothing to enforce.
-func isEmpty(sites, apps, patterns int) bool {
-	return sites == 0 && apps == 0 && patterns == 0
+// blockEmpty reports whether a block has nothing to enforce: no sites, apps,
+// patterns or window titles.
+func blockEmpty(d *db.BlockDetail) bool {
+	return len(d.Sites) == 0 && len(d.Apps) == 0 && len(d.Patterns) == 0 && len(d.Titles) == 0
 }
 
 // freezeLead renders schedule.EditFreeze for messages ("2 hours").
@@ -379,7 +380,7 @@ var blockRemoveSiteCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			if isEmpty(len(detail.Sites), len(detail.Apps), len(detail.Patterns)) {
+			if blockEmpty(detail) {
 				if err := database.DeactivateBlock(name); err != nil {
 					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 					os.Exit(1)
@@ -508,7 +509,7 @@ var blockRemoveAppCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			if isEmpty(len(detail.Sites), len(detail.Apps), len(detail.Patterns)) {
+			if blockEmpty(detail) {
 				if err := database.DeactivateBlock(name); err != nil {
 					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 					os.Exit(1)
@@ -653,6 +654,15 @@ var blockInfoCmd = &cobra.Command{
 			}
 		} else {
 			fmt.Println("Blocked applications: none")
+		}
+
+		// Show window-title keywords, if any.
+		if len(block.Titles) > 0 {
+			fmt.Println()
+			fmt.Println("Window titles (apps showing them are closed):")
+			for _, k := range block.Titles {
+				fmt.Printf("  - %s\n", k)
+			}
 		}
 
 		// Show browser patterns, if any.

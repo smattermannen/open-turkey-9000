@@ -52,9 +52,31 @@ function webOnlyAction(rawUrl) {
   return null;
 }
 
-function blockedPage(url) {
-  return { redirectUrl: browser.runtime.getURL("blocked.html") + "?url=" + encodeURIComponent(url) };
+function blockedPage(url, reason) {
+  const page = browser.runtime.getURL("blocked.html") + "?url=" + encodeURIComponent(url);
+  return { redirectUrl: reason ? page + "&reason=" + reason : page };
 }
+
+// Window-title keywords from the active blocks: a tab whose title contains
+// one is sent to the block page, as the daemon closes other apps' windows.
+let titleWords = [];
+
+function titleBlocked(title) {
+  const text = (title || "").toLowerCase();
+  return titleWords.some((word) => text.includes(word));
+}
+
+function blockTitledTab(tab) {
+  if (tab.url && /^https?:/i.test(tab.url) && titleBlocked(tab.title)) {
+    browser.tabs.update(tab.id, { url: blockedPage(tab.url, "title").redirectUrl });
+  }
+}
+
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.title !== undefined) {
+    blockTitledTab(tab);
+  }
+});
 
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
@@ -106,13 +128,16 @@ function apply(rules) {
   blocking = kc9kFilter({ match: rules.block, except: rules.exceptions });
   noImages = kc9kFilter(rules.no_image_sites);
   webOnly = Boolean(rules.web_only);
+  titleWords = (rules.titles || []).map((word) => String(word).toLowerCase()).filter(Boolean);
 }
 
 async function closeNewlyBlockedTabs() {
   const tabs = await browser.tabs.query({});
   for (const tab of tabs) {
     if (tab.url && isBlocked(tab.url)) {
-      browser.tabs.update(tab.id, blockedPage(tab.url).redirectUrl ? { url: blockedPage(tab.url).redirectUrl } : {});
+      browser.tabs.update(tab.id, { url: blockedPage(tab.url).redirectUrl });
+    } else {
+      blockTitledTab(tab);
     }
   }
 }

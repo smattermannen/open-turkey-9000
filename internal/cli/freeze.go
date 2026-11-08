@@ -79,6 +79,7 @@ type guiBlock struct {
 	Exceptions  []string `json:"exceptions"`
 	Limited     []string `json:"firefox_only"`
 	Apps        []string `json:"apps"`
+	Titles      []string `json:"titles"`
 	Schedules   []string `json:"schedules"`
 	Active      bool     `json:"active"`
 	Held        bool     `json:"held"`
@@ -212,6 +213,7 @@ var guiStateCmd = &cobra.Command{
 				Name: detail.Name, Mode: detail.Mode, Actions: detail.Actions.List(),
 				Sites: append(append([]string{}, detail.Sites...), detail.Patterns...), Apps: append([]string{}, detail.Apps...),
 				Exceptions: append([]string{}, detail.Exceptions...), Limited: []string{},
+				Titles:    append([]string{}, detail.Titles...),
 				Schedules: []string{},
 				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && detail.Locked,
 				Scheduled: detail.Scheduled,

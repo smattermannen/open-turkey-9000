@@ -880,6 +880,14 @@ class Window(Gtk.ApplicationWindow):
             help_text="Executable names, Flatpak app IDs (see 'flatpak list --app'), or folders "
                       "whose programs can't run. Everything a blocked app started is closed too.")
         apps.pack_start(self.apps, True, True, 0)
+        self.titles = EditableList(
+            "Window titles", "YouTube  Twitch",
+            lambda values: self.block_cmd("add-title", values),
+            lambda value, _num: self.block_cmd("remove-title", [value]),
+            help_text="Any app whose window title contains one of these words is closed while "
+                      "the block is on; in LibreWolf, just that tab. Separate words with spaces.")
+        apps.set_spacing(14)
+        apps.pack_start(self.titles, True, True, 0)
         tabs.append_page(apps, Gtk.Label(label="Apps"))
 
         schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=12)
@@ -980,7 +988,7 @@ class Window(Gtk.ApplicationWindow):
         if block is None:
             self.title_label.set_markup("<big><b>No blocks yet</b></big>")
             self.status_label.set_text("Create a block, add sites or apps, then start it.")
-            for widget in (self.sites, self.exceptions, self.apps, self.schedules):
+            for widget in (self.sites, self.exceptions, self.apps, self.titles, self.schedules):
                 widget.set_items([])
             self.limited_label.set_text("")
             self.quota_label.set_text("")
@@ -998,6 +1006,7 @@ class Window(Gtk.ApplicationWindow):
         self.limited_label.set_text(
             "Only enforced in browsers with the extension: " + ", ".join(limited) if limited else "")
         self.apps.set_items(block["apps"])
+        self.titles.set_items(block.get("titles", []))
         self.schedules.set_items(block["schedules"])
 
         self.start_button.set_label("Add locks…" if block["active"] else "Start…")

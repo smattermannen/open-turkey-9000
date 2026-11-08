@@ -2,11 +2,20 @@
 
 // Goes back to the blocked site once its block ends, so a tab doesn't stay on
 // this page after the block is stopped.
-const target = new URLSearchParams(location.search).get("url") || "";
+const params = new URLSearchParams(location.search);
+const target = params.get("url") || "";
+// A page blocked for its title would come straight back here, so it stays.
+const byTitle = params.get("reason") === "title";
+if (byTitle) {
+  const note = document.getElementById("note");
+  if (note) {
+    note.textContent = "Its title contains a word one of your blocks closes.";
+  }
+}
 
 async function check() {
   // Only web addresses: anything else in the query could run as script.
-  if (!/^https?:\/\//i.test(target)) {
+  if (byTitle || !/^https?:\/\//i.test(target)) {
     return;
   }
   try {

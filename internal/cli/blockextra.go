@@ -36,6 +36,7 @@ type blockExport struct {
 	Apps       []string `json:"apps"`
 	Patterns   []string `json:"patterns"`
 	Exceptions []string `json:"exceptions,omitempty"`
+	Titles     []string `json:"titles,omitempty"`
 }
 
 // reapplyIfActive re-applies all layers when the named block is currently
@@ -258,6 +259,7 @@ var blockExportCmd = &cobra.Command{
 			Apps:       detail.Apps,
 			Patterns:   detail.Patterns,
 			Exceptions: detail.Exceptions,
+			Titles:     detail.Titles,
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
@@ -312,6 +314,9 @@ var blockImportCmd = &cobra.Command{
 				return fmt.Errorf("in import: %w", err)
 			}
 		}
+		if err := checkTitleKeywords(in.Titles); err != nil {
+			return fmt.Errorf("in import: %w", err)
+		}
 
 		database, err := openDB()
 		if err != nil {
@@ -337,6 +342,11 @@ var blockImportCmd = &cobra.Command{
 		}
 		if len(in.Exceptions) > 0 {
 			if err := database.AddExceptions(in.Name, in.Exceptions); err != nil {
+				return err
+			}
+		}
+		if len(in.Titles) > 0 {
+			if err := database.AddTitles(in.Name, in.Titles); err != nil {
 				return err
 			}
 		}

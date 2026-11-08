@@ -23,6 +23,7 @@ const (
 	EditAddExceptions  = "add-exception"
 	EditSetMode        = "set-mode"
 	EditUnsetAction    = "unset-action"
+	EditRemoveTitles   = "remove-title"
 	EditRemoveBlock    = "remove-block"
 	EditAddSchedule    = "add-schedule"
 	EditRemoveSchedule = "remove-schedule"
@@ -139,6 +140,8 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 			return fmt.Errorf("set-mode needs exactly one mode")
 		}
 		err = d.SetBlockMode(blockName, e.Values[0])
+	case EditRemoveTitles:
+		err = d.RemoveTitles(blockName, e.Values)
 	case EditUnsetAction:
 		if len(e.Values) != 1 {
 			return fmt.Errorf("unset-action needs exactly one action")
@@ -170,7 +173,7 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 	if err != nil {
 		return err
 	}
-	if detail.Active && len(detail.Sites) == 0 && len(detail.Apps) == 0 && len(detail.Patterns) == 0 {
+	if detail.Active && len(detail.Sites) == 0 && len(detail.Apps) == 0 && len(detail.Patterns) == 0 && len(detail.Titles) == 0 {
 		return d.DeactivateBlock(blockName)
 	}
 	return nil

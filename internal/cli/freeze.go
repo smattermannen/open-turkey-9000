@@ -48,6 +48,9 @@ Emergency exit: in GRUB, press e on the boot entry and add
 			return err
 		}
 		defer database.Close()
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 
 		until := time.Now().Add(d).Unix()
 		current, err := database.FreezeUntil()
@@ -112,6 +115,7 @@ type guiState struct {
 	Stats         bool                      `json:"stats"`
 	LibreWolf     string                    `json:"librewolf"`
 	Extension     string                    `json:"extension_status"`
+	SettingsPass  bool                      `json:"settings_password"`
 	Browser       map[string]bool           `json:"browser"`
 	BrowserLocks  map[string]guiSettingLock `json:"browser_locks"`
 	Blocks        []guiBlock                `json:"blocks"`
@@ -161,6 +165,7 @@ var guiStateCmd = &cobra.Command{
 		state.Stats = enforce.StatsOn(database)
 		state.LibreWolf = blocker.LibreWolfVersion()
 		state.Extension = extensionStatus(database)
+		state.SettingsPass, _ = settingsPasswordSet(database)
 		state.Browser = map[string]bool{}
 		state.BrowserLocks = map[string]guiSettingLock{}
 		for _, name := range enforce.BrowserSettings {

@@ -72,6 +72,9 @@ var scheduleAddCmd = &cobra.Command{
 			return err
 		}
 		defer database.Close()
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 
 		// ListSchedules also confirms the block exists.
 		schedules, err := database.ListSchedules(name)

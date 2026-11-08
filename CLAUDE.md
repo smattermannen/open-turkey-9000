@@ -75,6 +75,12 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   DisableDeveloperTools policy); five prefs locked at the end of
   librewolf.cfg, with the user's overrides file replaced by a cleaned copy
   (`librewolfprefs.go`).
+- **Settings password** (`internal/cli/settingspassword.go`): when set,
+  `requireSettingsPassword` guards every loosening (it sits in `gateEdit` and
+  `ensureEditable`), stop/unlock, anything creating a lock, browser options
+  off, strict, no-escape and prepare-uninstall. Passwords come one per line
+  from `stdinLines` (settings password first). The GUI retries a refused
+  command once after asking for it.
 - **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL);
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (modes, patterns, schedules, time locks, schema
@@ -97,7 +103,7 @@ Full usage and examples in `README.md`. Summary:
 remove-app | add-pattern | remove-pattern | set-mode | action | export | import | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N]` (loosening edits take `--now`), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N]` (loosening edits take `--now`), `password set|remove`, `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

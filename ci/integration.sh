@@ -175,6 +175,18 @@ sleep 29
 check "Pomodoro work blocks again" grep -q 'example.pm' /etc/hosts
 ot pomodoro off pm
 
+echo secret1 | ot password set
+ot block create pwtest
+ot block add pwtest example.pw
+check "plain start needs no settings password" kc9k start pwtest </dev/null
+check "stop needs the settings password" fails kc9k stop pwtest </dev/null
+check "wrong settings password refused" fails bash -c 'echo wrong | kc9k stop pwtest'
+check "settings password, then the lock's own" bash -c "printf 'secret1\nlockpw\n' | kc9k start pwtest --password-stdin"
+check "unlock takes both passwords" bash -c "printf 'secret1\nlockpw\n' | kc9k unlock pwtest"
+check "loosening an edit needs it" fails kc9k block remove-site pwtest example.pw </dev/null
+check "status shows the settings password" bash -c 'kc9k status | grep -q "Settings password: on"'
+echo secret1 | ot password remove
+
 check "unknown freeze mode rejected" fails kc9k freeze --for 1m --mode nap --yes
 check "short freeze rejected" fails kc9k freeze --for 10s --yes
 check "freeze needs confirmation" fails kc9k freeze --for 1m

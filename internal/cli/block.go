@@ -86,6 +86,9 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 	if strengthens {
 		return nil
 	}
+	if err := requireSettingsPassword(database); err != nil {
+		return err
+	}
 	hold, err := blockHold(database, name, time.Now())
 	if err != nil {
 		return err

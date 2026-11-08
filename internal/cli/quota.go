@@ -75,6 +75,9 @@ var quotaSetCmd = &cobra.Command{
 			return err
 		}
 		defer database.Close()
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 
 		now := time.Now()
 		existing, err := database.GetQuota(name)
@@ -122,6 +125,9 @@ var quotaRemoveCmd = &cobra.Command{
 			return err
 		}
 		defer database.Close()
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 
 		s, err := currentQuota(database, args[0], time.Now())
 		if err != nil {

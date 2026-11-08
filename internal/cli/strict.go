@@ -29,6 +29,9 @@ If something goes wrong, add kc9k.nofreeze to the kernel line in GRUB,
 or remove /etc/sudoers.d/zz-kc9k-lockdown from recovery mode.`,
 	Args: cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 		switch args[0] {
 		case "on":
 			if err := database.SetSetting(enforce.SettingStrictUser, os.Getenv("SUDO_USER")); err != nil {
@@ -93,6 +96,17 @@ func warnRootGroups(name string) {
 	}
 }
 
+// stdinLines reads standard input a line at a time for every password a
+// command asks for, so a second password piped after the first (the settings
+// password, then a lock's) isn't lost in a buffer.
+var stdinLines = bufio.NewReader(os.Stdin)
+
+// isTerminalInput reports whether standard input is a terminal.
+func isTerminalInput() bool {
+	_, err := unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TCGETS)
+	return err == nil
+}
+
 // readPasswordStdin reads one line, so a password never shows in a process list.
 // On a terminal it shows the prompt and hides what is typed; piped input (the
 // graphical interface) is read as is, without a prompt.
@@ -109,7 +123,7 @@ func readPasswordStdin(prompt string) (string, error) {
 			}()
 		}
 	}
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	line, err := stdinLines.ReadString('\n')
 	password := strings.TrimRight(line, "\r\n")
 	if password == "" {
 		if err != nil {
@@ -132,6 +146,9 @@ reinstalling, which erases the system. Test it in a virtual machine first.
 Booting a USB stick still works unless the firmware is locked with a password.`,
 	Args: cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 		switch args[0] {
 		case "on":
 			yes, _ := cmd.Flags().GetBool("yes")

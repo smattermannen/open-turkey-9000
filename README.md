@@ -357,6 +357,19 @@ The extension checks in each time it fetches its rules, with a header web pages 
 
 Blocked apps are only ever closed when they run as a regular user, so a block can't kill system programs that happen to share a name (an update running in Python, say). Programs the desktop needs, such as `Xorg`, `cinnamon`, `pipewire` or `python3`, can't be added at all, since blocking them would close your session over and over for as long as the block lasts.
 
+## Settings password
+
+`kc9k` runs as root without a password through sudo, so anything running as you could use it: loosen a block, or lock you out for a year with no-escape. A settings password guards against that, and lets someone else decide when your blocks may loosen:
+
+```bash
+kc9k password set        # asks for the current one first, if there is one
+kc9k password remove
+```
+
+With it set, these ask for it: any loosening edit, `stop`, `unlock`, starting a block with any lock, schedules, quotas (setting or removing), Pomodoro, Frozen Chicken, turning browser options off or locking them, strict mode, no-escape, and uninstalling. These stay free: reading the state, starting a block without a lock, adding sites, apps and patterns, ticking a website action on, and opening a quota session. The interface asks for it the first time a change needs it and remembers it until it closes.
+
+Passwords are read from standard input, hidden on a terminal; when a command also takes a lock's own password, the settings password comes first. If it's lost, root can remove it while nothing is locked (`kc9k password --help` shows how), and the testing build's master password clears it too.
+
 ## Strict mode
 
 `kc9k strict on` denies sudo and pkexec for every user while a block or browser option is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.

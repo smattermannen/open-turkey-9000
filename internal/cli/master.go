@@ -19,7 +19,7 @@ const masterHashPath = "/var/lib/kc9k/master.hash"
 
 var masterCmd = &cobra.Command{
 	Use:   "master",
-	Short: "Testing only: lift every lock with the master password from standard input",
+	Short: "Testing only: lift every lock, and the settings password, with the master password from standard input",
 	Args:  cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		stored, err := os.ReadFile(masterHashPath)
@@ -62,6 +62,9 @@ var masterCmd = &cobra.Command{
 			}
 		}
 		if err := database.SetFreeze(0, "lock"); err != nil {
+			return err
+		}
+		if err := database.SetSetting(SettingSettingsPassword, ""); err != nil {
 			return err
 		}
 		if err := database.SetSetting(enforce.SettingStrict, "off"); err != nil {

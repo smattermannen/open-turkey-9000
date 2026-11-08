@@ -541,6 +541,7 @@ class Window(Gtk.ApplicationWindow):
         self.selected = None
         self.busy = False
         self.updating = False  # set while widgets are filled from the state
+        self.settings_password = None  # remembered for this session once given
         self.stats_rows = []
         self.stats_on = True
 
@@ -577,17 +578,39 @@ class Window(Gtk.ApplicationWindow):
 
     # Running commands ----------------------------------------------------
     def run(self, args, secret=None, then=None, timeout=120):
-        """Run a command in the background, then refresh."""
+        """Run a command in the background, then refresh.
+
+        With a settings password set, the password remembered for this
+        session goes first on standard input; commands that don't need it
+        never read it. A command that needs it and doesn't have it fails,
+        and finished() asks for it and runs the command again."""
         self.set_sensitive(False)
+        stdin = secret
+        if self.settings_password and self.state and self.state.get("settings_password"):
+            stdin = self.settings_password + "\n" + (secret or "")
 
         def work():
-            ok, output = run_cli(args, secret, timeout)
-            GLib.idle_add(self.finished, ok, output, then)
+            ok, output = run_cli(args, stdin, timeout)
+            GLib.idle_add(self.finished, ok, output, then, (args, secret, timeout))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def finished(self, ok, output, then):
+    def finished(self, ok, output, then, request=None):
         self.set_sensitive(True)
+        if not ok and request and ("needs the settings password" in output
+                                   or "wrong settings password" in output):
+            wrong = "wrong settings password" in output and self.settings_password
+            self.settings_password = None
+            password = self.ask_text(
+                "Settings password",
+                "That password was wrong. Try again." if wrong else
+                "This change needs the settings password.", password=True)
+            if password:
+                self.settings_password = password
+                args, secret, timeout = request
+                self.state = dict(self.state or {}, settings_password=True)
+                self.run(args, secret, then, timeout)
+            return False
         if not ok:
             self.message(output or "The command failed.")
         elif then:
@@ -1462,7 +1485,39 @@ class Window(Gtk.ApplicationWindow):
             self.switch_row(self.stats_switch, "Record time spent on websites and apps",
                             "Stored only on this computer and kept for a year."),
             clear), False, False, 0)
+
+        self.password_status = Gtk.Label(xalign=0, wrap=True)
+        password_row = Gtk.Box(spacing=6)
+        self.password_set_button = Gtk.Button(label="Set password…")
+        self.password_set_button.connect("clicked", self.set_settings_password)
+        self.password_remove_button = Gtk.Button(label="Remove password…")
+        self.password_remove_button.connect("clicked", self.remove_settings_password)
+        password_row.pack_start(self.password_set_button, False, False, 0)
+        password_row.pack_start(self.password_remove_button, False, False, 0)
+        box.pack_start(section(
+            "Settings password",
+            dim("Guards Killer Chicken 9000 against anything running as you, and lets someone "
+                "else decide when your blocks may loosen: loosening, stopping, unlocking, "
+                "creating locks, turning browser options off, strict mode, no-escape and "
+                "uninstalling all ask for it. Starting a block without a lock and adding sites "
+                "don't."),
+            self.password_status, password_row), False, False, 0)
         return scroll
+
+    def set_settings_password(self, _button):
+        new = self.ask_text("New settings password", "At least 4 characters.", password=True)
+        if not new:
+            return
+        if self.ask_text("Repeat the new password", password=True) != new:
+            self.message("The two passwords differ; nothing changed.", Gtk.MessageType.INFO)
+            return
+        self.run(["password", "set"], new + "\n",
+                 then=lambda _o: setattr(self, "settings_password", new))
+
+    def remove_settings_password(self, _button):
+        if self.confirm("Remove the settings password?",
+                        "Loosening and locks won't ask for it any more.", "Remove"):
+            self.run(["password", "remove"], then=lambda _o: setattr(self, "settings_password", None))
 
     def update_settings(self):
         for name, switch in self.browser_switches.items():
@@ -1500,6 +1555,10 @@ class Window(Gtk.ApplicationWindow):
         locked = bool(self.setting_locks["force-librewolf"][0].get_text())
         switch.set_sensitive(not locked and (bool(version) or switch.get_active()))
         set_switch(self.stats_switch, self.state["stats"])
+        has_password = self.state.get("settings_password", False)
+        self.password_status.set_markup("<b>On.</b>" if has_password else "Not set.")
+        self.password_set_button.set_label("Change password…" if has_password else "Set password…")
+        self.password_remove_button.set_visible(has_password)
 
     def install_librewolf(self, _button):
         if self.confirm("Install LibreWolf?",

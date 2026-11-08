@@ -44,6 +44,9 @@ var prepareUninstallCmd = &cobra.Command{
 			return err
 		}
 		defer database.Close()
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 
 		active, err := database.GetActiveBlocks()
 		if err != nil {

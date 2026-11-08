@@ -41,6 +41,9 @@ func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool
 	if strengthens {
 		return true, nil
 	}
+	if err := requireSettingsPassword(database); err != nil {
+		return false, err
+	}
 	allowBlock, err := database.HasAllowWindows(name)
 	if err != nil {
 		return false, err

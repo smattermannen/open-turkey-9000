@@ -65,6 +65,19 @@ shortened or removed this way.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockName := args[0]
 
+		// A lock needs the settings password, asked before any lock password.
+		if startLockRequested(cmd) {
+			database, err := openDB()
+			if err != nil {
+				return err
+			}
+			err = requireSettingsPassword(database)
+			database.Close()
+			if err != nil {
+				return err
+			}
+		}
+
 		usePassword, _ := cmd.Flags().GetBool("password-stdin")
 		useRestart, _ := cmd.Flags().GetBool("restart")
 		delaySpec, _ := cmd.Flags().GetString("delay")
@@ -202,6 +215,16 @@ shortened or removed this way.`,
 	},
 }
 
+// startLockRequested reports whether a start asks for any kind of lock.
+func startLockRequested(cmd *cobra.Command) bool {
+	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay"} {
+		if cmd.Flags().Changed(f) {
+			return true
+		}
+	}
+	return false
+}
+
 // strengthenLocks handles "start" on a block that is already active: it can add
 // or lengthen a char lock and add or extend a time lock, but refuses anything
 // that would weaken the current locks. This is safe on a held block, since it
@@ -260,6 +283,9 @@ var stopCmd = &cobra.Command{
 			return err
 		}
 		defer database.Close()
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 
 		hold, err := blockHold(database, blockName, time.Now())
 		if err != nil {
@@ -322,6 +348,9 @@ var unlockCmd = &cobra.Command{
 			return err
 		}
 		defer database.Close()
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
 
 		hold, err := blockHold(database, blockName, time.Now())
 		if err != nil {
@@ -441,6 +470,9 @@ var statusCmd = &cobra.Command{
 		}
 		fmt.Println()
 		fmt.Println("Browser extension:", extensionStatus(database))
+		if set, err := settingsPasswordSet(database); err == nil && set {
+			fmt.Println("Settings password: on (loosening, locks and browser options ask for it)")
+		}
 		return nil
 	},
 }

@@ -7,7 +7,9 @@
 // program is killed, with everything it started. Browsers are left alone
 // here: the extension closes just the tab whose title matches. The same
 // rules as app blocking apply: only regular users' programs, and never ones
-// the desktop needs.
+// the desktop needs. A window names its own process (_NET_WM_PID), so the
+// name is believed only for a process of the desktop's own user: no one can
+// title a window to get someone else's program killed.
 //
 // Window titles come from X11 (Linux Mint's Cinnamon). Under Wayland only
 // apps running through XWayland are seen.
@@ -17,6 +19,7 @@ import (
 	"log"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -27,10 +30,12 @@ import (
 // program is killed.
 const TitleCloseGrace = 4 * time.Second
 
-// titleSession is one desktop to watch: its X display and Xauthority file.
+// titleSession is one desktop to watch: its X display, and the Xauthority
+// file and user ID of the user it belongs to.
 type titleSession struct {
 	display string
 	xauth   string
+	uid     uint64
 }
 
 // TitleGuard closes apps whose window titles contain blocked keywords.
@@ -57,7 +62,8 @@ func NewTitleGuard() *TitleGuard {
 }
 
 func sessionFor(u *user.User) titleSession {
-	return titleSession{display: ":0", xauth: filepath.Join(u.HomeDir, ".Xauthority")}
+	uid, _ := strconv.ParseUint(u.Uid, 10, 32)
+	return titleSession{display: ":0", xauth: filepath.Join(u.HomeDir, ".Xauthority"), uid: uid}
 }
 
 // matchingKeyword returns the keyword title contains (case-insensitive), or "".
@@ -81,9 +87,9 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) int {
 		return 0
 	}
 	seen := map[uint32]bool{}
-	var kill []int
+	kill := map[int]uint64{} // process -> the user it must still belong to
 	for _, s := range g.sessions() {
-		c, err := openUserDisplay(s.display, s.xauth)
+		c, err := openUserDisplay(s.display, s.xauth, s.uid)
 		if err != nil {
 			continue // no X session there (a text console, or Wayland)
 		}
@@ -94,7 +100,7 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) int {
 		}
 		for _, w := range windows {
 			keyword := matchingKeyword(w.Title, keywords)
-			if keyword == "" || w.PID <= 1 || !ownedByUser(w.PID) {
+			if keyword == "" || w.PID <= 1 || !ownedBy(w.PID, s.uid) {
 				continue
 			}
 			if isEssentialApp(exeName(w.PID)) || g.browsers.guarded(w.PID) {
@@ -109,7 +115,7 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) int {
 				g.asked[w.ID] = now
 			case now.Sub(first) >= TitleCloseGrace:
 				log.Printf("titles: closing %s (pid %d): %q is still open", exeName(w.PID), w.PID, w.Title)
-				kill = append(kill, w.PID)
+				kill[w.PID] = s.uid
 			}
 		}
 		c.Close()
@@ -122,10 +128,11 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) int {
 	return killTrees(kill)
 }
 
-// killTrees kills processes and everything they started, under the same
-// rules as app blocking: regular users' programs only, never init or this
-// process and its ancestors.
-func killTrees(roots []int) int {
+// killTrees kills each process in roots and everything it started, as long
+// as they run as the user given for it (so a program another user started
+// under it, through su, is spared). Init, this process and its ancestors are
+// never killed.
+func killTrees(roots map[int]uint64) int {
 	if len(roots) == 0 {
 		return 0
 	}
@@ -135,13 +142,15 @@ func killTrees(roots []int) int {
 		protected[pid] = true
 	}
 	killed := 0
-	for _, pid := range append(roots, descendants(roots, children)...) {
-		if protected[pid] || !ownedByUser(pid) {
-			continue
-		}
-		protected[pid] = true
-		if syscall.Kill(pid, syscall.SIGKILL) == nil {
-			killed++
+	for root, uid := range roots {
+		for _, pid := range append([]int{root}, descendants([]int{root}, children)...) {
+			if protected[pid] || !ownedBy(pid, uid) {
+				continue
+			}
+			protected[pid] = true
+			if syscall.Kill(pid, syscall.SIGKILL) == nil {
+				killed++
+			}
 		}
 	}
 	return killed

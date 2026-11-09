@@ -17,6 +17,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -73,6 +74,22 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 
 // titleGuard closes apps whose window titles contain blocked keywords.
 var titleGuard = blocker.NewTitleGuard()
+
+// titleGuardBusy is set while the title guard runs. It talks to X servers,
+// and anyone can start one, so it runs beside the daemon's cycle, once at a
+// time, rather than in it: a slow server delays only the next title check.
+var titleGuardBusy atomic.Bool
+
+// enforceTitles starts a title guard cycle unless one is still running.
+func enforceTitles(keywords []string, now time.Time) {
+	if !titleGuardBusy.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer titleGuardBusy.Store(false)
+		titleGuard.Enforce(keywords, now)
+	}()
+}
 
 // activeTitles collects the window-title keywords of the active blocks.
 func activeTitles(active []db.ActiveBlockDetail) []string {
@@ -157,7 +174,7 @@ func Tick(d *db.DB, now time.Time) error {
 	hosts, apps, bp := Inputs(active)
 	apps = append(apps, forcedKills(d)...)
 	enforceExtension(d, now, active)
-	titleGuard.Enforce(activeTitles(active), now)
+	enforceTitles(activeTitles(active), now)
 
 	// Site layers, re-applied only on drift (so an idle system does no writes).
 	if len(hosts) > 0 {

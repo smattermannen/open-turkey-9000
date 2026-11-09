@@ -39,7 +39,13 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   Window titles: `titles.go` asks matching windows to close, then kills the
   program after `TitleCloseGrace`, via a cgo-free X11 client (`x11.go`:
   Xauthority cookie, _NET_CLIENT_LIST or QueryTree, _NET_WM_NAME/_PID,
-  _NET_CLOSE_WINDOW). Browsers are left to the extension (tab titles).
+  _NET_CLOSE_WINDOW then a sync). The client trusts nothing a user can
+  plant: it reads only the user's own regular Xauthority file, sends the
+  cookie only to a root- or user-owned socket, caps replies and gives each
+  connection one 3 s budget; a window's PID is believed only for the
+  session user's own processes. It runs beside the daemon cycle
+  (`enforceTitles`), never inside it. Browsers are left to the extension
+  (tab titles).
 - **Enforce** (`internal/enforce/`): turns the active blocks into layer inputs
   (everything, allowlists included, unioned across active blocks); `Apply`
   (CLI, on state change) and `Tick` (daemon, per cycle: due queued edits +

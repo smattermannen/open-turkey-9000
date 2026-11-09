@@ -51,16 +51,28 @@ func parseStatusUIDs(status string) (real, effective uint64, ok bool) {
 	return 0, 0, false
 }
 
+// processUIDs returns a process's real and effective user IDs.
+func processUIDs(pid int) (real, effective uint64, ok bool) {
+	data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/status")
+	if err != nil {
+		return 0, 0, false
+	}
+	return parseStatusUIDs(string(data))
+}
+
 // ownedByUser reports whether a process runs as a regular user, by both its
 // real and effective user ID: a setuid program a user started (sudo,
 // passwd) is running with system rights and is left alone.
 func ownedByUser(pid int) bool {
-	data, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/status")
-	if err != nil {
-		return false
-	}
-	real, effective, ok := parseStatusUIDs(string(data))
+	real, effective, ok := processUIDs(pid)
 	return ok && regularUser(real) && regularUser(effective)
+}
+
+// ownedBy reports whether a process runs as the regular user uid, by both
+// its real and effective user ID.
+func ownedBy(pid int, uid uint64) bool {
+	real, effective, ok := processUIDs(pid)
+	return ok && regularUser(uid) && real == uid && effective == uid
 }
 
 // essentialApps are programs the desktop session can't do without (names in

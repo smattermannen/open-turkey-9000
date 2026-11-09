@@ -3,10 +3,13 @@ package blocker
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -43,12 +46,20 @@ func startX(t *testing.T) (display, xauth string) {
 			t.Skipf("%s not installed", tool)
 		}
 	}
-	display = "77"
+	// A display with neither a socket nor a lock file: a server that died
+	// without cleaning up leaves both, and its socket only looks alive.
+	display = ""
 	for i := 77; i < 99; i++ {
-		if _, err := os.Stat("/tmp/.X11-unix/X" + strings.TrimPrefix(display, ":")); os.IsNotExist(err) {
+		n := strconv.Itoa(i)
+		_, sockErr := os.Stat("/tmp/.X11-unix/X" + n)
+		_, lockErr := os.Stat("/tmp/.X" + n + "-lock")
+		if os.IsNotExist(sockErr) && os.IsNotExist(lockErr) {
+			display = n
 			break
 		}
-		display = string(rune('0'+i/10)) + string(rune('0'+i%10))
+	}
+	if display == "" {
+		t.Skip("no free X display between :77 and :98")
 	}
 	xauth = filepath.Join(t.TempDir(), "Xauthority")
 	key := make([]byte, 16)
@@ -60,9 +71,16 @@ func startX(t *testing.T) (display, xauth string) {
 	if err := server.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { server.Process.Kill(); server.Wait() })
+	t.Cleanup(func() {
+		// SIGTERM lets Xvfb remove its socket and lock file.
+		server.Process.Signal(syscall.SIGTERM)
+		server.Wait()
+		os.Remove("/tmp/.X11-unix/X" + display)
+		os.Remove("/tmp/.X" + display + "-lock")
+	})
 	for i := 0; i < 50; i++ {
-		if _, err := os.Stat("/tmp/.X11-unix/X" + display); err == nil {
+		if conn, err := net.Dial("unix", "/tmp/.X11-unix/X"+display); err == nil {
+			conn.Close()
 			return ":" + display, xauth
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -82,10 +100,20 @@ func startClient(t *testing.T, display, xauth string, args ...string) *exec.Cmd 
 	return cmd
 }
 
+// fileOwner returns the user ID owning path.
+func fileOwner(t *testing.T, path string) uint64 {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return uint64(info.Sys().(*syscall.Stat_t).Uid)
+}
+
 func findWindow(t *testing.T, display, xauth, title string) (X11Window, bool) {
 	t.Helper()
 	for i := 0; i < 40; i++ {
-		c, err := openUserDisplay(display, xauth)
+		c, err := openUserDisplay(display, xauth, fileOwner(t, xauth))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -132,7 +160,7 @@ func TestX11ListsAndClosesWindows(t *testing.T) {
 	if !ok {
 		t.Fatal("window not found through the window manager's client list")
 	}
-	c, err := openUserDisplay(display, xauth)
+	c, err := openUserDisplay(display, xauth, fileOwner(t, xauth))
 	if err != nil {
 		t.Fatal(err)
 	}

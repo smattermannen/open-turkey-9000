@@ -43,6 +43,12 @@ func TestOwnedByUserSelf(t *testing.T) {
 	if ownedByUser(-1) {
 		t.Error("a missing process counted as a user's")
 	}
+	if got, want := ownedBy(os.Getpid(), uid), regularUser(uid); got != want {
+		t.Errorf("ownedBy(self, %d) = %v, want %v", uid, got, want)
+	}
+	if ownedBy(os.Getpid(), uid+1) {
+		t.Error("a process counted as another user's")
+	}
 }
 
 func TestEssentialApps(t *testing.T) {

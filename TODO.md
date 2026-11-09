@@ -24,6 +24,14 @@ Still to try:
 ## Next
 - The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
 - Hotkeys only work in Cinnamon; GNOME keeps custom shortcuts under another dconf path.
+- Blocks tab: a "+" button for a new block.
+- Several lists per block, so one block can hold several layers: one section of allowlists, one of blocklists. Each list has a name. The threshold (strictness) only applies to lists set to "Keyword", the kind that searches a page's rendered text.
+- More actions per list: open a custom link instead of the block page; close the tab; close the browser; close the browser and log out; close the browser and shut down; close the browser and start monk mode for a custom time.
+- Monk mode: a quick button that blocks and locks `*.*` for a set time.
+- Nepsis mode (optional, lockable like the other options): when many block rules trigger within a short time (likely hunting for loopholes), take an action the user chooses, e.g. shut down for 1 hour, or start and lock monk mode for 1 hour, so the user really shifts mental state. Think about more ways to notice attempts to bypass KC9K or find loopholes.
+- The terms in a list are hidden until the list's terms area is clicked, like sensitive content on Reddit.
+- A search box in each list to find terms in it.
+- Remove every note saying some parts only work with the extension: it is forced by default, so they no longer apply (interface, README, command help).
 
 ## Later
 - Count quota time only while a block's sites or apps are in use, measured by the extension (its statistics sampling in background.js can be reused) and the daemon's foreground-app sampling. Watch for loopholes: a muted video beside another window, and browsers without the extension while a session is open.

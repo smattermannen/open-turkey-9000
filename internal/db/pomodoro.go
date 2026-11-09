@@ -71,6 +71,10 @@ func (d *DB) RenameBlock(oldName, newName string) error {
 	if _, err := d.conn.Exec("UPDATE blocks SET name = ? WHERE id = ?", newName, blockID); err != nil {
 		return fmt.Errorf("failed to rename '%s': %w", oldName, err)
 	}
+	// Hotkeys name their block, so they follow it.
+	if _, err := d.conn.Exec("UPDATE hotkeys SET block = ? WHERE block = ?", newName, oldName); err != nil {
+		return fmt.Errorf("failed to update hotkeys for '%s': %w", newName, err)
+	}
 	return nil
 }
 
@@ -104,6 +108,18 @@ func (d *DB) DuplicateBlock(name, copyName string) error {
 	if len(detail.Titles) > 0 {
 		if err := d.AddTitles(copyName, detail.Titles); err != nil {
 			return err
+		}
+	}
+	if len(detail.Keywords) > 0 {
+		if err := d.AddPageKeywords(copyName, detail.Keywords); err != nil {
+			return err
+		}
+	}
+	for _, action := range ActionNames {
+		if n := detail.Thresholds.Get(action); n != DefaultThresholds.Get(action) {
+			if err := d.SetThreshold(copyName, action, n); err != nil {
+				return err
+			}
 		}
 	}
 	if len(detail.Exceptions) > 0 {

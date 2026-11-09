@@ -176,7 +176,7 @@ shortened or removed this way.`,
 			return err
 		}
 		if blockEmpty(detail) {
-			return fmt.Errorf("block '%s' has nothing to enforce. Add sites, apps, patterns or window titles first", blockName)
+			return fmt.Errorf("block '%s' has nothing to enforce. Add sites, apps, patterns, window titles or page keywords first", blockName)
 		}
 		if detail.Active && hasExtras {
 			return fmt.Errorf("block '%s' is already active; password, restart and delay locks are set when it starts", blockName)

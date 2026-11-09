@@ -21,9 +21,12 @@ func TestSafeSearchSection(t *testing.T) {
 
 func TestSetupPolicies(t *testing.T) {
 	policies := map[string]interface{}{"DNSOverHTTPS": true}
-	setupPolicies(BrowserSetup{ExtensionID: "x", ExtensionXPI: "/a.xpi", ForceSearch: true, DisableDevTools: true}, policies)
+	setupPolicies(BrowserSetup{ExtensionID: "x", ExtensionXPI: "/a.xpi", ForceSearch: true, DisableDevTools: true, DisablePrivate: true}, policies)
 	if policies["DisableDeveloperTools"] != true {
 		t.Error("developer tools should be blocked")
+	}
+	if policies["DisablePrivateBrowsing"] != true {
+		t.Error("private windows should be off")
 	}
 	if _, ok := policies["ExtensionSettings"]; !ok {
 		t.Error("the extension should be forced")

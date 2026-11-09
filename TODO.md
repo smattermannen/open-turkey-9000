@@ -16,13 +16,14 @@ Still to try:
 1. Notification before the end of a quota session.
 2. Scheduled Frozen Chicken in logout and shutdown modes.
 3. Strict mode (`unshare -Urm` gives no way out, `--user` Flatpak apps are killed, Electron apps aren't taken for browsers). Needs a moment when the `test` block can be unlocked: strict mode denies sudo while any block is locked.
-4. From before: shutdown mode and the `kc9k.nofreeze` GRUB escape; measure the fast relock (89c71bf); run `ci/browser_test.py` in LibreWolf again (per-block greyscale and images, title blocking).
+4. From before: shutdown mode and the `kc9k.nofreeze` GRUB escape; measure the fast relock (89c71bf).
+5. Page keywords on real sites over a few days (false hits, slow pages), and a hotkey pressed on the real keyboard (tested with xdotool).
 
-## Next: new features
-- Page keyword threshold: match keywords in a page's text, and act once enough of them are found. A threshold per block and per action (block page, greyscale, no images). Distinct keywords count, not repeat hits. A plain keyword matches whole words only (`porn` misses `pornhub`; `18+` misses `1118+`); wildcards match inside words (`*porn*` hits `pornhub`). Raising a threshold is a loosening edit.
-- Keybinds: a key combination that starts a chosen block, optionally with a preset time lock (e.g. one hour), for studying.
-- Browser option `disable-private-browsing`, lockable like the other options.
-- The interface looks rough throughout and needs a design pass.
+`ci/browser_test.py` passed in LibreWolf on 2026-11-09 (all checks, with page keywords and no-private added). It could not run while block-devtools was on: the DisableDeveloperTools policy turns off Marionette, so testing builds now leave that policy out while the remote-control marker exists.
+
+## Next
+- The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
+- Hotkeys only work in Cinnamon; GNOME keeps custom shortcuts under another dconf path.
 
 ## Later
 - Count quota time only while a block's sites or apps are in use, measured by the extension (its statistics sampling in background.js can be reused) and the daemon's foreground-app sampling. Watch for loopholes: a muted video beside another window, and browsers without the extension while a session is open.

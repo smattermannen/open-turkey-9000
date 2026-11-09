@@ -16,6 +16,8 @@ type BrowserSetup struct {
 	// DisableDevTools blocks the developer tools, which can switch the
 	// extension off from its own pages or about:debugging.
 	DisableDevTools bool
+	// DisablePrivate turns off private windows (no-private).
+	DisablePrivate bool
 	// RemoveExtensionID is set when uninstalling: browsers remove that
 	// extension at their next start. Without it, a policy-installed
 	// extension would stay behind and keep enforcing its last rules forever,
@@ -43,8 +45,12 @@ func setupPolicies(s BrowserSetup, policies map[string]interface{}) {
 	delete(policies, "ExtensionSettings")
 	delete(policies, "SearchEngines")
 	delete(policies, "DisableDeveloperTools")
+	delete(policies, "DisablePrivateBrowsing")
 	if s.DisableDevTools {
 		policies["DisableDeveloperTools"] = true
+	}
+	if s.DisablePrivate {
+		policies["DisablePrivateBrowsing"] = true
 	}
 	if s.RemoveExtensionID != "" {
 		policies["ExtensionSettings"] = map[string]interface{}{

@@ -100,3 +100,61 @@ function kc9kMatchesOne(filter, url) {
 function kc9kMatches(filter, url) {
   return kc9kMatchesOne(filter, url) || kc9kUnwrap(url).some((inner) => kc9kMatchesOne(filter, inner));
 }
+
+// Page keywords. A plain keyword counts only as a whole word: "porn" misses
+// "pornhub" and "18+" misses "1118+". A * stands for any letters or digits,
+// so "*porn*" hits "pornhub". Spaces match any run of whitespace. Case is
+// ignored.
+const KC9K_WORD = "[\\p{L}\\p{N}]";
+
+function kc9kKeywordRegex(keyword) {
+  const value = String(keyword).trim().toLowerCase();
+  const body = value
+    .split("*")
+    .map((part) => kc9kEscapeRegex(part).replace(/\s+/g, "\\s+"))
+    .join(KC9K_WORD + "*");
+  const before = /^[\p{L}\p{N}]/u.test(value) ? "(?<!" + KC9K_WORD + ")" : "";
+  const after = /[\p{L}\p{N}]$/u.test(value) ? "(?!" + KC9K_WORD + ")" : "";
+  return new RegExp(before + body + after, "iu");
+}
+
+// kc9kCountKeywords returns how many of the keywords occur in text; a keyword
+// found many times counts once.
+function kc9kCountKeywords(text, keywords) {
+  let found = 0;
+  for (const keyword of keywords) {
+    if (String(keyword).replace(/\*/g, "").trim() && kc9kKeywordRegex(keyword).test(text)) {
+      found++;
+    }
+  }
+  return found;
+}
+
+// kc9kKeywordActions works out which actions the page keyword rules take on
+// a page at url with this text: { block, greyscale, noImages }. Each rule is
+// one block's keywords with, per action, how many different ones it takes
+// (0: the block doesn't take that action).
+function kc9kKeywordActions(rules, url, text) {
+  const out = { block: false, greyscale: false, noImages: false };
+  if (!url || !/^https?:/i.test(url)) {
+    return out;
+  }
+  for (const rule of rules || []) {
+    const keywords = rule.keywords || [];
+    if (keywords.length === 0) {
+      continue;
+    }
+    const except = kc9kFilter({ match: rule.except || [] });
+    if (except.match.length > 0 && kc9kMatches(except, url)) {
+      continue;
+    }
+    const found = kc9kCountKeywords(text, keywords);
+    if (found === 0) {
+      continue;
+    }
+    out.block = out.block || (rule.block > 0 && found >= rule.block);
+    out.greyscale = out.greyscale || (rule.greyscale > 0 && found >= rule.greyscale);
+    out.noImages = out.noImages || (rule.no_images > 0 && found >= rule.no_images);
+  }
+  return out;
+}

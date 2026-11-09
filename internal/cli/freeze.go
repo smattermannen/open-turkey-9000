@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/freeze"
 	"github.com/smattermannen/kc9k/internal/quota"
@@ -80,32 +81,34 @@ type guiWin struct {
 }
 
 type guiBlock struct {
-	Name        string   `json:"name"`
-	Mode        string   `json:"mode"`
-	Actions     []string `json:"actions"`
-	Sites       []string `json:"sites"`
-	Exceptions  []string `json:"exceptions"`
-	Limited     []string `json:"firefox_only"`
-	Apps        []string `json:"apps"`
-	Titles      []string `json:"titles"`
-	Schedules   []string `json:"schedules"`
-	Windows     []guiWin `json:"schedule_windows"`
-	Active      bool     `json:"active"`
-	Held        bool     `json:"held"`
-	CharLocked  bool     `json:"char_locked"`
-	PomodoroOn  int64    `json:"pomodoro_on"`
-	PomodoroOff int64    `json:"pomodoro_off"`
-	OnBreak     bool     `json:"on_break"`
-	Password    bool     `json:"password_locked"`
-	Restart     bool     `json:"restart_locked"`
-	Delay       int64    `json:"delay_seconds"`
-	StopSeconds int64    `json:"stop_seconds"`
-	Scheduled   bool     `json:"scheduled"`
-	LockSeconds int64    `json:"lock_seconds"`
-	QuotaLimit  int64    `json:"quota_limit"`
-	QuotaUsed   int64    `json:"quota_used"`
-	QuotaOpen   bool     `json:"quota_open"`
-	QuotaNext   int64    `json:"quota_next"`
+	Name        string        `json:"name"`
+	Mode        string        `json:"mode"`
+	Actions     []string      `json:"actions"`
+	Sites       []string      `json:"sites"`
+	Exceptions  []string      `json:"exceptions"`
+	Limited     []string      `json:"firefox_only"`
+	Apps        []string      `json:"apps"`
+	Titles      []string      `json:"titles"`
+	Keywords    []string      `json:"page_keywords"`
+	Thresholds  db.Thresholds `json:"keyword_thresholds"`
+	Schedules   []string      `json:"schedules"`
+	Windows     []guiWin      `json:"schedule_windows"`
+	Active      bool          `json:"active"`
+	Held        bool          `json:"held"`
+	CharLocked  bool          `json:"char_locked"`
+	PomodoroOn  int64         `json:"pomodoro_on"`
+	PomodoroOff int64         `json:"pomodoro_off"`
+	OnBreak     bool          `json:"on_break"`
+	Password    bool          `json:"password_locked"`
+	Restart     bool          `json:"restart_locked"`
+	Delay       int64         `json:"delay_seconds"`
+	StopSeconds int64         `json:"stop_seconds"`
+	Scheduled   bool          `json:"scheduled"`
+	LockSeconds int64         `json:"lock_seconds"`
+	QuotaLimit  int64         `json:"quota_limit"`
+	QuotaUsed   int64         `json:"quota_used"`
+	QuotaOpen   bool          `json:"quota_open"`
+	QuotaNext   int64         `json:"quota_next"`
 }
 
 // guiSettingLock is a browser setting's locks for the interface.
@@ -130,6 +133,7 @@ type guiState struct {
 	Browser       map[string]bool           `json:"browser"`
 	BrowserLocks  map[string]guiSettingLock `json:"browser_locks"`
 	Blocks        []guiBlock                `json:"blocks"`
+	Hotkeys       []db.Hotkey               `json:"hotkeys"`
 }
 
 var guiStateCmd = &cobra.Command{
@@ -222,7 +226,8 @@ var guiStateCmd = &cobra.Command{
 				Name: detail.Name, Mode: detail.Mode, Actions: detail.Actions.List(),
 				Sites: append(append([]string{}, detail.Sites...), detail.Patterns...), Apps: append([]string{}, detail.Apps...),
 				Exceptions: append([]string{}, detail.Exceptions...), Limited: []string{},
-				Titles:    append([]string{}, detail.Titles...),
+				Titles:   append([]string{}, detail.Titles...),
+				Keywords: append([]string{}, detail.Keywords...), Thresholds: detail.Thresholds,
 				Schedules: []string{},
 				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && detail.Locked,
 				Scheduled: detail.Scheduled,
@@ -259,6 +264,10 @@ var guiStateCmd = &cobra.Command{
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 			}
 			state.Blocks = append(state.Blocks, g)
+		}
+
+		if state.Hotkeys, err = database.Hotkeys(); err != nil {
+			return err
 		}
 
 		out, err := json.Marshal(state)

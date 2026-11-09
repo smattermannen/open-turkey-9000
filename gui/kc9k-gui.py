@@ -37,6 +37,8 @@ BROWSER_OPTIONS = (
     ("block-devtools", "Block LibreWolf's developer tools",
      "They can switch the extension off. Turn this off only to develop websites; "
      "it applies when LibreWolf restarts."),
+    ("no-private", "Disable private windows",
+     "No private browsing in LibreWolf; it applies when LibreWolf restarts."),
     ("force-search", "Force Google as the search engine", ""),
     ("safesearch", "Force Google SafeSearch", ""),
     ("web-only", "Web results only",
@@ -802,6 +804,23 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return value if answer == Gtk.ResponseType.OK else ""
 
+    def save_thresholds(self, _button):
+        block = self.blocks.get(self.selected)
+        if not block:
+            return
+        current = block.get("keyword_thresholds", {})
+        changed = [(name, spin.get_value_as_int()) for name, spin in self.threshold_spins.items()
+                   if spin.get_value_as_int() != current.get(name, 1)]
+        self.run_thresholds(self.selected, changed)
+
+    def run_thresholds(self, block_name, changes):
+        """Set each (action, number) in turn: one command at a time."""
+        if not changes:
+            return
+        (name, value), rest = changes[0], changes[1:]
+        self.run(["block", "threshold", block_name, name, str(value)],
+                 then=lambda _o: self.run_thresholds(block_name, rest))
+
     def block_cmd(self, command, values):
         if self.selected:
             self.run(["block", command, self.selected, *values])
@@ -960,7 +979,10 @@ class Window(Gtk.ApplicationWindow):
 
         self.detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
                               margin_start=20, margin_end=20, margin_top=16, margin_bottom=16)
-        paned.pack2(self.detail, True, False)
+        # The details scroll, so the window fits small and scaled screens.
+        detail_scroll = Gtk.ScrolledWindow(propagate_natural_width=True)
+        detail_scroll.add(self.detail)
+        paned.pack2(detail_scroll, True, False)
         self.title_label = Gtk.Label(xalign=0)
         self.status_label = dim("")
         self.detail.pack_start(self.title_label, False, False, 0)
@@ -1040,6 +1062,31 @@ class Window(Gtk.ApplicationWindow):
         apps.set_spacing(14)
         apps.pack_start(self.titles, True, True, 0)
         tabs.append_page(apps, Gtk.Label(label="Apps"))
+
+        words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        self.keywords = EditableList(
+            "Page words", "nsfw  18+  *porn*",
+            lambda values: self.block_cmd("add-keyword", values),
+            lambda value, _num: self.block_cmd("remove-keyword", [value]),
+            help_text="Looked for in the text of every page. A plain word counts only on its own "
+                      "(porn misses pornhub, 18+ misses 1118+); * matches inside words (*porn* "
+                      "hits pornhub). Separate words with spaces.")
+        words.pack_start(self.keywords, True, True, 0)
+        words.pack_start(dim("How many different words a page needs before each action applies "
+                             "(repeats count once). Only the actions ticked on the Websites tab "
+                             "apply. Raising a number loosens the block."), False, False, 0)
+        threshold_row = Gtk.Box(spacing=12)
+        self.threshold_spins = {}
+        for name, title in SITE_ACTIONS:
+            threshold_row.pack_start(Gtk.Label(label=title), False, False, 0)
+            spin = Gtk.SpinButton.new_with_range(1, 1000, 1)
+            self.threshold_spins[name] = spin
+            threshold_row.pack_start(spin, False, False, 0)
+        save = Gtk.Button(label="Save numbers")
+        save.connect("clicked", self.save_thresholds)
+        threshold_row.pack_start(save, False, False, 0)
+        words.pack_start(threshold_row, False, False, 0)
+        tabs.append_page(words, Gtk.Label(label="Page words"))
 
         schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
         self.calendar = WeekCalendar(self.create_window_from_calendar, self.remove_window_from_calendar)
@@ -1143,7 +1190,7 @@ class Window(Gtk.ApplicationWindow):
         if block is None:
             self.title_label.set_markup("<big><b>No blocks yet</b></big>")
             self.status_label.set_text("Create a block, add sites or apps, then start it.")
-            for widget in (self.sites, self.exceptions, self.apps, self.titles, self.schedules):
+            for widget in (self.sites, self.exceptions, self.apps, self.titles, self.keywords, self.schedules):
                 widget.set_items([])
             self.calendar.set_windows([])
             self.limited_label.set_text("")
@@ -1163,6 +1210,10 @@ class Window(Gtk.ApplicationWindow):
             "Only enforced in browsers with the extension: " + ", ".join(limited) if limited else "")
         self.apps.set_items(block["apps"])
         self.titles.set_items(block.get("titles", []))
+        self.keywords.set_items(block.get("page_keywords", []))
+        thresholds = block.get("keyword_thresholds", {})
+        for name, spin in self.threshold_spins.items():
+            spin.set_value(thresholds.get(name, 1))
         self.schedules.set_items(block["schedules"])
         self.calendar.set_windows(block.get("schedule_windows", []))
 
@@ -1706,7 +1757,27 @@ class Window(Gtk.ApplicationWindow):
                 "uninstalling all ask for it. Starting a block without a lock and adding sites "
                 "don't."),
             self.password_status, password_row), False, False, 0)
+
+        self.hotkey_ids = []
+        self.hotkeys = EditableList(
+            "Hotkeys", "ctrl+alt+s  study  1h", self.add_hotkey,
+            lambda _value, number: self.run(["hotkey", "remove", str(self.hotkey_ids[number - 1])]),
+            help_text="Keys, a block, and optionally how long to lock it: pressing ctrl+alt+s "
+                      "then starts 'study' locked for an hour. Use ctrl, alt, shift or super with "
+                      "a key; F1 to F24 also work alone. A lock needs the settings password when "
+                      "you add the hotkey, not when you press it.")
+        box.pack_start(self.hotkeys, False, False, 0)
         return scroll
+
+    def add_hotkey(self, values):
+        if len(values) not in (2, 3):
+            self.message("Enter keys, a block and optionally a lock: ctrl+alt+s study 1h",
+                         Gtk.MessageType.INFO)
+            return
+        args = ["hotkey", "add", values[0], values[1]]
+        if len(values) == 3:
+            args += ["--for", values[2]]
+        self.run(args)
 
     def set_settings_password(self, _button):
         new = self.ask_text("New settings password", "At least 4 characters.", password=True)
@@ -1763,6 +1834,11 @@ class Window(Gtk.ApplicationWindow):
         self.password_status.set_markup("<b>On.</b>" if has_password else "Not set.")
         self.password_set_button.set_label("Change password…" if has_password else "Set password…")
         self.password_remove_button.set_visible(has_password)
+        hotkeys = self.state.get("hotkeys") or []
+        self.hotkey_ids = [h["id"] for h in hotkeys]
+        self.hotkeys.set_items([
+            f"{h['keys']}  starts {h['block']}" + (f", locked for {h['lock_for']}" if h["lock_for"] else "")
+            for h in hotkeys])
 
     def install_librewolf(self, _button):
         if self.confirm("Install LibreWolf?",

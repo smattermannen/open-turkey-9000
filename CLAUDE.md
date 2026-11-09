@@ -68,6 +68,16 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   firewall and browser policy; greyscale and no-images go to the extension
   (`enforce.BuildRules`, `internal/webext/files/match.js`). Unticking is a
   loosening edit (gated and queueable like the others).
+- **Page keywords** (`internal/db/pagekeywords.go`, `internal/cli/keywords.go`):
+  per block, with a threshold per action (distinct keywords needed; raising
+  one is a loosening edit). Sent as `page_keywords` rules; the extension's
+  content script scans the top frame's text (`kc9kKeywordActions` in
+  `match.js`: plain keywords are whole words, `*` matches inside words) and
+  the background blocks the tab or cancels its images.
+- **Hotkeys** (`internal/db/hotkeys.go`, `internal/cli/hotkeys.go`,
+  `internal/blocker/hotkeys.go`): Cinnamon custom keybindings in dconf named
+  `kc9k<id>`, running `kc9k hotkey run <id>` (starts the block in-process with
+  the preset `--for`; the settings password is asked at `hotkey add`).
 - **Browser setting locks** (`internal/db/settinglocks.go`, `internal/cli/browser.go`):
   each browser option locks on its own (time, typing challenge, password,
   restart), independently of blocks; `enforce.AnyLock` counts them (strict
@@ -113,7 +123,7 @@ Full usage and examples in `README.md`. Summary:
 remove-app | add-pattern | remove-pattern | set-mode | action | export | import | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N]` (loosening edits take `--now`), `password set|remove`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

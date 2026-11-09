@@ -42,7 +42,10 @@ restart locks can't be unlocked, only waited out.
 force-librewolf and block-devtools also can't be turned off while a block is
 locked or Frozen Chicken runs, since blocks rely on them. block-devtools is on
 until you turn it off: LibreWolf's developer tools can switch the extension
-off, so turn it off only to develop websites. Browsers read it when they start. Without arguments, lists every option,
+off, so turn it off only to develop websites. Browsers read it when they start.
+no-private turns off private windows in LibreWolf (and Firefox), from the
+browser's next start; during website blocks, older LibreWolf windows are
+closed so it restarts. Without arguments, lists every option,
 its locks, and the installed LibreWolf version.
 
 The Killer Chicken extension isn't an option: it is always installed, and
@@ -85,6 +88,9 @@ without it are closed. That needs LibreWolf, the one browser that runs it;
 			}
 			if name == "block-devtools" {
 				fmt.Println("LibreWolf's developer tools are blocked from its next start; during website blocks, older LibreWolf windows are closed so it restarts.")
+			}
+			if name == "no-private" {
+				fmt.Println("Private windows are off from LibreWolf's next start; during website blocks, older LibreWolf windows are closed so it restarts.")
 			}
 			return nil
 		case "off":

@@ -10,6 +10,7 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
@@ -24,6 +25,8 @@ const (
 	EditSetMode        = "set-mode"
 	EditUnsetAction    = "unset-action"
 	EditRemoveTitles   = "remove-title"
+	EditRemoveKeywords = "remove-keyword"
+	EditSetThreshold   = "set-threshold"
 	EditRemoveBlock    = "remove-block"
 	EditAddSchedule    = "add-schedule"
 	EditRemoveSchedule = "remove-schedule"
@@ -142,6 +145,17 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 		err = d.SetBlockMode(blockName, e.Values[0])
 	case EditRemoveTitles:
 		err = d.RemoveTitles(blockName, e.Values)
+	case EditRemoveKeywords:
+		err = d.RemovePageKeywords(blockName, e.Values)
+	case EditSetThreshold:
+		if len(e.Values) != 2 {
+			return fmt.Errorf("set-threshold needs an action and a number")
+		}
+		n, convErr := strconv.Atoi(e.Values[1])
+		if convErr != nil {
+			return fmt.Errorf("bad threshold %q", e.Values[1])
+		}
+		err = d.SetThreshold(blockName, e.Values[0], n)
 	case EditUnsetAction:
 		if len(e.Values) != 1 {
 			return fmt.Errorf("unset-action needs exactly one action")
@@ -173,7 +187,7 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 	if err != nil {
 		return err
 	}
-	if detail.Active && len(detail.Sites) == 0 && len(detail.Apps) == 0 && len(detail.Patterns) == 0 && len(detail.Titles) == 0 {
+	if detail.Active && detail.Empty() {
 		return d.DeactivateBlock(blockName)
 	}
 	return nil

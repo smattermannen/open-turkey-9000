@@ -7,6 +7,15 @@
 const STYLE_ID = "kc9k-page-style";
 let filters = null;
 let shownFor = null;
+// What the page keyword rules decided for the page at keywordsFor. Once a
+// rule applies to a page it stays until the address changes, so a page can't
+// shake it off by changing its text.
+let keywordRules = [];
+let keywordHits = { block: false, greyscale: false, noImages: false };
+let keywordsFor = null;
+let textChanged = true;
+// Only so much of a page's text is read, so a huge page can't slow it down.
+const MAX_TEXT = 2000000;
 
 // topUrl is the address of the tab, so a frame follows the page around it.
 function topUrl() {
@@ -27,8 +36,12 @@ function render() {
     return;
   }
   const url = topUrl();
-  const greyscale = kc9kMatches(filters.greyscale, url);
-  const noImages = kc9kMatches(filters.noImages, url);
+  if (keywordsFor !== url) {
+    keywordHits = { block: false, greyscale: false, noImages: false };
+    keywordsFor = url;
+  }
+  const greyscale = kc9kMatches(filters.greyscale, url) || keywordHits.greyscale;
+  const noImages = kc9kMatches(filters.noImages, url) || keywordHits.noImages;
   shownFor = url;
   let css = "";
   if (greyscale) {
@@ -58,8 +71,56 @@ function load(page) {
     greyscale: kc9kFilter(page && page.greyscale),
     noImages: kc9kFilter(page && page.no_images),
   };
+  keywordRules = (page && page.keywords) || [];
+  textChanged = true;
   render();
+  scanKeywords();
 }
+
+// scanKeywords reads the page's text (in the top frame only: a frame's text
+// is part of what the page shows, but is scanned as its own page would be)
+// and applies the page keyword rules. Blocking goes through the background
+// script, which sends the tab to the block page and also hides images in
+// the page's frames.
+function scanKeywords() {
+  if (window !== window.top || !filters || keywordRules.length === 0 || !textChanged) {
+    return;
+  }
+  const body = document.body || document.documentElement;
+  if (!body) {
+    return;
+  }
+  textChanged = false;
+  const text = (document.title + "\n" + (body.innerText || body.textContent || "")).slice(0, MAX_TEXT);
+  const url = location.href;
+  if (keywordsFor !== url) {
+    keywordHits = { block: false, greyscale: false, noImages: false };
+    keywordsFor = url;
+  }
+  const hits = kc9kKeywordActions(keywordRules, url, text);
+  const before = JSON.stringify(keywordHits);
+  keywordHits = {
+    block: keywordHits.block || hits.block,
+    greyscale: keywordHits.greyscale || hits.greyscale,
+    noImages: keywordHits.noImages || hits.noImages,
+  };
+  if (JSON.stringify(keywordHits) === before) {
+    return;
+  }
+  render();
+  browser.runtime.sendMessage({ type: "keyword-hits", url, hits: keywordHits }).catch(() => {});
+}
+
+// Pages that fill in their text later (most of them) are scanned again when
+// it changes, at most every second and a half.
+new MutationObserver(() => {
+  textChanged = true;
+}).observe(document.documentElement || document, { childList: true, subtree: true, characterData: true });
+setInterval(scanKeywords, 1500);
+document.addEventListener("DOMContentLoaded", () => {
+  textChanged = true;
+  scanKeywords();
+});
 
 browser.storage.local.get("page").then((stored) => load(stored.page));
 browser.storage.onChanged.addListener((changes) => {
@@ -72,6 +133,8 @@ browser.storage.onChanged.addListener((changes) => {
 // script, so follow their address.
 setInterval(() => {
   if (filters && topUrl() !== shownFor) {
+    textChanged = true;
     render();
+    scanKeywords();
   }
 }, 1000);

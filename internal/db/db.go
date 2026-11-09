@@ -80,7 +80,9 @@ type BlockDetail struct {
 	Apps        []string
 	Patterns    []string
 	Exceptions  []string
-	Titles      []string // window-title keywords
+	Titles      []string   // window-title keywords
+	Keywords    []string   // page keywords
+	Thresholds  Thresholds // distinct page keywords needed per action
 	Active      bool
 	Locked      bool
 	LockChars   int
@@ -100,6 +102,8 @@ type ActiveBlockDetail struct {
 	Patterns    []string
 	Exceptions  []string
 	Titles      []string
+	Keywords    []string
+	Thresholds  Thresholds
 	Locked      bool
 	LockChars   int
 	LockedUntil int64
@@ -241,7 +245,7 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
-	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pomodoroSchema + usageSchema); err != nil {
+	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to create clock table: %w", err)
 	}
@@ -564,6 +568,12 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 	if err != nil {
 		return nil, err
 	}
+	if detail.Keywords, err = d.getBlockPageKeywords(detail.ID); err != nil {
+		return nil, err
+	}
+	if detail.Thresholds, err = d.getBlockThresholds(detail.ID); err != nil {
+		return nil, err
+	}
 
 	return &detail, nil
 }
@@ -748,6 +758,12 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 		if activeBlocks[i].Titles, err = d.getBlockTitles(ids[i]); err != nil {
 			return nil, err
 		}
+		if activeBlocks[i].Keywords, err = d.getBlockPageKeywords(ids[i]); err != nil {
+			return nil, err
+		}
+		if activeBlocks[i].Thresholds, err = d.getBlockThresholds(ids[i]); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := rows.Err(); err != nil {
@@ -823,4 +839,10 @@ func (d *DB) getBlockApps(blockID int) ([]string, error) {
 	}
 
 	return apps, nil
+}
+
+// Empty reports whether a block has nothing to enforce: no sites, apps,
+// patterns, window titles or page keywords.
+func (b *BlockDetail) Empty() bool {
+	return len(b.Sites) == 0 && len(b.Apps) == 0 && len(b.Patterns) == 0 && len(b.Titles) == 0 && len(b.Keywords) == 0
 }

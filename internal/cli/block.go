@@ -103,7 +103,7 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 }
 
 // strengtheningEdits lists, for error messages, the edits a held block allows.
-const strengtheningEdits = "add apps, patterns or window titles, add sites to a blocklist, remove sites from an allowlist, turn website actions on, or extend its locks with 'start'"
+const strengtheningEdits = "add apps, patterns, window titles or page keywords, lower keyword thresholds, add sites to a blocklist, remove sites from an allowlist, turn website actions on, or extend its locks with 'start'"
 
 // siteEditStrengthens reports whether adding (or removing) the given sites
 // can only make the block stricter: adding to a blocklist, or removing from an
@@ -126,14 +126,12 @@ func siteEditStrengthens(detail *db.BlockDetail, domains []string, adding bool) 
 			left++
 		}
 	}
-	return left > 0 || len(detail.Apps) > 0 || len(detail.Patterns) > 0 || len(detail.Titles) > 0
+	return left > 0 || len(detail.Apps) > 0 || len(detail.Patterns) > 0 || len(detail.Titles) > 0 || len(detail.Keywords) > 0
 }
 
 // blockEmpty reports whether a block has nothing to enforce: no sites, apps,
-// patterns or window titles.
-func blockEmpty(d *db.BlockDetail) bool {
-	return len(d.Sites) == 0 && len(d.Apps) == 0 && len(d.Patterns) == 0 && len(d.Titles) == 0
-}
+// patterns, window titles or page keywords.
+func blockEmpty(d *db.BlockDetail) bool { return d.Empty() }
 
 // freezeLead renders schedule.EditFreeze for messages ("2 hours").
 func freezeLead() string {
@@ -661,6 +659,16 @@ var blockInfoCmd = &cobra.Command{
 			fmt.Println()
 			fmt.Println("Window titles (apps showing them are closed):")
 			for _, k := range block.Titles {
+				fmt.Printf("  - %s\n", k)
+			}
+		}
+
+		// Show page keywords and their thresholds, if any.
+		if len(block.Keywords) > 0 {
+			fmt.Println()
+			fmt.Printf("Page keywords (different ones needed: block %d, greyscale %d, no-images %d):\n",
+				block.Thresholds.Block, block.Thresholds.Greyscale, block.Thresholds.NoImages)
+			for _, k := range block.Keywords {
 				fmt.Printf("  - %s\n", k)
 			}
 		}

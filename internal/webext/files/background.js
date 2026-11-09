@@ -72,11 +72,36 @@ function blockTitledTab(tab) {
   }
 }
 
+// Tabs whose page met a page keyword rule's no-images threshold, with the
+// address it was met at: their images are cancelled like those of a
+// no-images site, frames included, until the tab goes somewhere else.
+const keywordNoImages = new Map();
+
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.url !== undefined && keywordNoImages.get(tabId) !== changeInfo.url) {
+    keywordNoImages.delete(tabId);
+  }
   if (changeInfo.title !== undefined) {
     blockTitledTab(tab);
   }
 });
+browser.tabs.onRemoved.addListener((tabId) => keywordNoImages.delete(tabId));
+
+// keywordHit acts on a content script's report that its page met a page
+// keyword rule. Only the tab's own page counts, and only web pages.
+function keywordHit(message, sender) {
+  const tab = sender && sender.tab;
+  if (!tab || sender.frameId !== 0 || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
+    return;
+  }
+  const hits = message.hits || {};
+  if (hits.noImages) {
+    keywordNoImages.set(tab.id, message.url);
+  }
+  if (hits.block) {
+    browser.tabs.update(tab.id, { url: blockedPage(message.url, "keyword").redirectUrl });
+  }
+}
 
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
@@ -84,6 +109,9 @@ browser.webRequest.onBeforeRequest.addListener(
       return {};
     }
     if (details.type === "image" || details.type === "imageset" || details.type === "media") {
+      if (keywordNoImages.has(details.tabId)) {
+        return { cancel: true };
+      }
       return kc9kMatches(noImages, pageUrl(details)) ? { cancel: true } : {};
     }
     if (isBlocked(details.url)) {
@@ -117,9 +145,12 @@ function stillBlocked(url) {
   return false;
 }
 
-browser.runtime.onMessage.addListener((message) => {
+browser.runtime.onMessage.addListener((message, sender) => {
   if (message && message.type === "still-blocked" && typeof message.url === "string") {
     return Promise.resolve(stillBlocked(message.url));
+  }
+  if (message && message.type === "keyword-hits") {
+    keywordHit(message, sender);
   }
   return undefined;
 });
@@ -152,7 +183,11 @@ async function poll() {
       apply(rules);
       await browser.storage.local.set({
         rules,
-        page: { greyscale: rules.greyscale_sites || EMPTY, no_images: rules.no_image_sites || EMPTY },
+        page: {
+          greyscale: rules.greyscale_sites || EMPTY,
+          no_images: rules.no_image_sites || EMPTY,
+          keywords: rules.page_keywords || [],
+        },
       });
       await closeNewlyBlockedTabs();
     }

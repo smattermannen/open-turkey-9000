@@ -69,3 +69,8 @@ func remoteControlled(pid int) bool {
 	environ, _ := os.ReadFile(dir + "/environ")
 	return parseRemoteControl(cmdline, environ)
 }
+
+// RemoteControlAllowed is remoteControlAllowed for other packages. While it
+// holds, KC9K also leaves LibreWolf's developer tools policy out: that
+// policy turns off Marionette, which WebDriver needs (testing builds only).
+func RemoteControlAllowed() bool { return remoteControlAllowed() }

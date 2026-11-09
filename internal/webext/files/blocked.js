@@ -4,12 +4,18 @@
 // this page after the block is stopped.
 const params = new URLSearchParams(location.search);
 const target = params.get("url") || "";
-// A page blocked for its title would come straight back here, so it stays.
-const byTitle = params.get("reason") === "title";
-if (byTitle) {
+// A page blocked for its title or its text would come straight back here,
+// so it stays.
+const reason = params.get("reason");
+const byTitle = reason === "title" || reason === "keyword";
+const notes = {
+  title: "Its title contains a word one of your blocks closes.",
+  keyword: "Its text contains words one of your blocks looks for.",
+};
+if (notes[reason]) {
   const note = document.getElementById("note");
   if (note) {
-    note.textContent = "Its title contains a word one of your blocks closes.";
+    note.textContent = notes[reason];
   }
 }
 

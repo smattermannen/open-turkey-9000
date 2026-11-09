@@ -32,7 +32,7 @@ def browser_settings():
 
 
 def remove_test_block():
-    for name in ("browsertest", "looks", "titles"):
+    for name in ("browsertest", "looks", "titles", "words"):
         ot_quiet("stop", name)
         ot_quiet("block", "remove", name)
 
@@ -99,6 +99,7 @@ try:
     ot("block", "action", "looks", "block", "off")
     ot("start", "looks")
     ot("browser", "web-only", "on")
+    ot("browser", "no-private", "on")
     time.sleep(8)
 
     for label, required in (("default-profile", True),):
@@ -138,12 +139,45 @@ try:
         ot("block", "add-title", "titles", "Example Domain")
         ot("start", "titles")
         time.sleep(6)  # the extension fetches its rules every 3 seconds
-        driver.get("https://example.com/")
+        driver.get("https://example.net/")
         time.sleep(3)
         print("titled url:", driver.current_url)
         check("a tab whose title matches a block is sent to the block page",
               driver.current_url.startswith("moz-extension:") and "reason=title" in driver.current_url)
         ot("stop", "titles")
+
+        # Page keywords: example.net says "This domain is for use in
+        # documentation examples". Two of the three words are there, so
+        # greyscale (1) applies and the block page (3) doesn't, until the
+        # block threshold comes down to 2.
+        ot("block", "create", "words")
+        ot("block", "add-keyword", "words", "domain", "documentation", "zzqqxx")
+        ot("block", "action", "words", "greyscale", "on")
+        ot("block", "threshold", "words", "block", "3")
+        ot("start", "words")
+        time.sleep(6)
+        driver.get("https://example.net/")
+        time.sleep(4)
+        styles = driver.execute_script("return getComputedStyle(document.documentElement).filter")
+        check("one page keyword greys the page", "grayscale" in styles)
+        check("two of three keywords don't block at threshold 3", "example.net" in driver.current_url)
+        ot("block", "threshold", "words", "block", "2")
+        time.sleep(8)  # the rules reach the page, which is scanned again
+        print("keyword url:", driver.current_url)
+        check("two different keywords block at threshold 2",
+              driver.current_url.startswith("moz-extension:") and "reason=keyword" in driver.current_url)
+        ot("block", "remove-keyword", "words", "domain")
+        ot("block", "add-keyword", "words", "doma")
+        time.sleep(6)
+        driver.get("https://example.net/")
+        time.sleep(4)
+        check("a plain keyword only counts as a whole word", "example.net" in driver.current_url)
+        ot("stop", "words")
+
+        with driver.context(driver.CONTEXT_CHROME):
+            private = driver.execute_script(
+                "return Services.policies.isAllowed('privatebrowsing')")
+        check("no-private turns private windows off", private is False)
 
         driver.get("https://www.google.com/search?q=test&tbm=isch")
         time.sleep(3)

@@ -320,6 +320,7 @@ kc9k browser force-search on      # Google as the only search engine
 kc9k browser safesearch on        # lock Google SafeSearch
 kc9k browser web-only on          # web results only: no images, shopping or AI
 kc9k browser block-devtools off   # allow LibreWolf's developer tools (on by default: blocked)
+kc9k browser no-private on        # no private windows in LibreWolf (from its next start)
 kc9k browser                      # list every option, whether it's on, and its locks
 ```
 
@@ -362,6 +363,33 @@ kc9k block remove-title social Twitch
 
 While the block is on, any app whose window title contains one of the words (case-insensitive) is asked to close, as its close button would, so it can save or ask first; if it is still open a few seconds later, it is closed with everything it started. In LibreWolf, the extension sends just the matching tab to the block page instead. The usual rules apply: only your own programs, never ones the desktop needs. Window titles are read from X11 (Cinnamon on Linux Mint); under Wayland only apps running through XWayland are seen. Removing a word loosens the block, like removing an app.
 
+## Page keywords
+
+A block can also act on what pages say, not just where they are:
+
+```bash
+kc9k block add-keyword adult nsfw 18+ "*porn*"
+kc9k block threshold adult greyscale 1   # one keyword greys the page
+kc9k block threshold adult block 3       # three different ones block it
+kc9k block remove-keyword adult nsfw
+```
+
+The extension reads the text of every page (and its title). A plain keyword counts only as a whole word: `porn` doesn't count in "pornhub", and `18+` doesn't count in "1118+". A `*` matches inside words: `*porn*` counts in "pornhub", `porn*` in "pornstar". Case is ignored.
+
+Each of the block's actions (`kc9k block action`: block, greyscale, no-images) has a **threshold**: how many *different* keywords a page must contain before that action applies. Repeats of one keyword count once. Thresholds start at 1. Lowering one is always allowed; raising one loosens the block, so it is refused while the block is held, like removing a keyword. Pages on the block's exception list are spared. Once a page meets a threshold it stays greyed or blocked until you leave it, even if its text changes. A block with page keywords needs the extension, so other browsers are closed while it is on.
+
+## Hotkeys
+
+A key combination can start a block, optionally with a time lock, for example to study:
+
+```bash
+kc9k hotkey add ctrl+alt+s study --for 1h   # Ctrl+Alt+S: 'study' on, locked for an hour
+kc9k hotkey list
+kc9k hotkey remove 1
+```
+
+Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon keyboard shortcuts (they show up in Cinnamon's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password when you add it, not each time you press it. The interface has them under Settings.
+
 ## Blocking folders
 
 `kc9k block add-app games /opt/spel/` blocks every program under a folder, and a full path blocks one file. System folders such as `/usr/bin/` are refused.
@@ -399,7 +427,7 @@ Some groups are root in all but name: members of `docker`, `lxd`, `incus` or `li
 
 ## Master password for testing
 
-A build made with `sudo make install TAGS=devmaster` adds a master password. Set it once with `kc9k master-set`, then `kc9k master` lifts every lock, Frozen Chicken, strict mode and no-escape. Both commands read from standard input. During a freeze in lock mode they also work from a text console (Ctrl+Alt+F3); in logout and shutdown modes the console session ends within seconds, so use the `kc9k.nofreeze` boot escape below instead. A normal build has no such commands, so a release only needs to leave out the tag.
+A build made with `sudo make install TAGS=devmaster` adds a master password. Set it once with `kc9k master-set`, then `kc9k master` lifts every lock, Frozen Chicken, strict mode and no-escape. Both commands read from standard input. During a freeze in lock mode they also work from a text console (Ctrl+Alt+F3); in logout and shutdown modes the console session ends within seconds, so use the `kc9k.nofreeze` boot escape below instead. A normal build has no such commands, so a release only needs to leave out the tag. A testing build also lets `ci/browser_test.py` drive LibreWolf while the root-owned file `/var/lib/kc9k/allow-remote-control` exists: browsers started for remote control aren't closed, and the developer-tools policy is left out, since it turns off the Marionette protocol WebDriver uses. Switching that policy closes open LibreWolf windows once during website blocks.
 
 ## Statistics
 

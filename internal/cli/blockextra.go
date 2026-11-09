@@ -30,14 +30,16 @@ import (
 
 // blockExport is the JSON shape for export/import.
 type blockExport struct {
-	Name       string   `json:"name"`
-	Mode       string   `json:"mode"`
-	Actions    []string `json:"actions,omitempty"`
-	Sites      []string `json:"sites"`
-	Apps       []string `json:"apps"`
-	Patterns   []string `json:"patterns"`
-	Exceptions []string `json:"exceptions,omitempty"`
-	Titles     []string `json:"titles,omitempty"`
+	Name       string         `json:"name"`
+	Mode       string         `json:"mode"`
+	Actions    []string       `json:"actions,omitempty"`
+	Sites      []string       `json:"sites"`
+	Apps       []string       `json:"apps"`
+	Patterns   []string       `json:"patterns"`
+	Exceptions []string       `json:"exceptions,omitempty"`
+	Titles     []string       `json:"titles,omitempty"`
+	Keywords   []string       `json:"page_keywords,omitempty"`
+	Thresholds *db.Thresholds `json:"keyword_thresholds,omitempty"`
 }
 
 // reapplyIfActive re-applies all layers when the named block is currently
@@ -261,6 +263,8 @@ var blockExportCmd = &cobra.Command{
 			Patterns:   detail.Patterns,
 			Exceptions: detail.Exceptions,
 			Titles:     detail.Titles,
+			Keywords:   detail.Keywords,
+			Thresholds: &detail.Thresholds,
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
@@ -318,6 +322,9 @@ var blockImportCmd = &cobra.Command{
 		if err := checkTitleKeywords(in.Titles); err != nil {
 			return fmt.Errorf("in import: %w", err)
 		}
+		if err := checkPageKeywords(in.Keywords); err != nil {
+			return fmt.Errorf("in import: %w", err)
+		}
 
 		database, err := openDB()
 		if err != nil {
@@ -349,6 +356,20 @@ var blockImportCmd = &cobra.Command{
 		if len(in.Titles) > 0 {
 			if err := database.AddTitles(in.Name, in.Titles); err != nil {
 				return err
+			}
+		}
+		if len(in.Keywords) > 0 {
+			if err := database.AddPageKeywords(in.Name, in.Keywords); err != nil {
+				return err
+			}
+		}
+		if in.Thresholds != nil {
+			for _, action := range db.ActionNames {
+				if n := in.Thresholds.Get(action); n >= 1 {
+					if err := database.SetThreshold(in.Name, action, n); err != nil {
+						return fmt.Errorf("in import: %w", err)
+					}
+				}
 			}
 		}
 		if len(in.Patterns) > 0 {

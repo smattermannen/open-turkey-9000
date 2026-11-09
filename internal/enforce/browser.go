@@ -27,7 +27,7 @@ const rulesPort = 47613
 // own sites (see db.Actions). Neither is the extension: it is always
 // installed, and browsers without it are closed while it is needed (see
 // ExtensionRequired).
-var BrowserSettings = []string{"web-only", "safesearch", "force-search", "force-librewolf", "block-devtools"}
+var BrowserSettings = []string{"web-only", "safesearch", "force-search", "force-librewolf", "block-devtools", "no-private"}
 
 // defaultOn are options that are on until turned off. LibreWolf's developer
 // tools can switch the extension off from its own pages or about:debugging,
@@ -63,7 +63,7 @@ const checkInRecordEvery = 30 * time.Second
 // A block of apps alone doesn't need it.
 func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
 	for _, b := range active {
-		if b.Mode == db.ModeAllowlist || len(b.Sites) > 0 || len(b.Patterns) > 0 {
+		if b.Mode == db.ModeAllowlist || len(b.Sites) > 0 || len(b.Patterns) > 0 || len(b.Keywords) > 0 {
 			return true
 		}
 	}
@@ -174,12 +174,43 @@ func (f *Filter) add(b db.ActiveBlockDetail) {
 // an extension from before per-block actions ignores them instead of
 // misreading them.
 type Rules struct {
-	Block      []string `json:"block"`
-	Exceptions []string `json:"exceptions"`
-	Greyscale  Filter   `json:"greyscale_sites"`
-	NoImages   Filter   `json:"no_image_sites"`
-	WebOnly    bool     `json:"web_only"`
-	Titles     []string `json:"titles"`
+	Block      []string      `json:"block"`
+	Exceptions []string      `json:"exceptions"`
+	Greyscale  Filter        `json:"greyscale_sites"`
+	NoImages   Filter        `json:"no_image_sites"`
+	WebOnly    bool          `json:"web_only"`
+	Titles     []string      `json:"titles"`
+	Keywords   []KeywordRule `json:"page_keywords"`
+}
+
+// KeywordRule is one block's page keywords. Each action counts how many of
+// the different keywords a page must contain before it applies to the page;
+// 0 means the block doesn't take that action. Pages on Except are spared.
+type KeywordRule struct {
+	Keywords  []string `json:"keywords"`
+	Block     int      `json:"block"`
+	Greyscale int      `json:"greyscale"`
+	NoImages  int      `json:"no_images"`
+	Except    []string `json:"except"`
+}
+
+// keywordRule turns a block into its KeywordRule, or false if it has no page
+// keywords.
+func keywordRule(b db.ActiveBlockDetail) (KeywordRule, bool) {
+	if len(b.Keywords) == 0 {
+		return KeywordRule{}, false
+	}
+	rule := KeywordRule{Keywords: append([]string{}, b.Keywords...), Except: append([]string{}, b.Exceptions...)}
+	if b.Actions.Block {
+		rule.Block = b.Thresholds.Block
+	}
+	if b.Actions.Greyscale {
+		rule.Greyscale = b.Thresholds.Greyscale
+	}
+	if b.Actions.NoImages {
+		rule.NoImages = b.Thresholds.NoImages
+	}
+	return rule, true
 }
 
 // BuildRules collects the rules for the extension right now.
@@ -190,6 +221,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 		NoImages:  Filter{Match: []string{}, Except: []string{}},
 		WebOnly:   BrowserOn(d, "web-only"),
 		Titles:    []string{},
+		Keywords:  []KeywordRule{},
 	}
 	active, err := d.GetActiveBlocks()
 	if err != nil {
@@ -211,6 +243,9 @@ func BuildRules(d *db.DB) (Rules, error) {
 			rules.NoImages.add(b)
 		}
 		rules.Titles = append(rules.Titles, b.Titles...)
+		if rule, ok := keywordRule(b); ok {
+			rules.Keywords = append(rules.Keywords, rule)
+		}
 	}
 	rules.Block, rules.Exceptions = blocking.Match, blocking.Except
 	if BrowserOn(d, "force-search") {
@@ -278,6 +313,10 @@ func noteSettingsChange(d *db.DB, setup blocker.BrowserSetup) {
 	fingerprint := strings.Join([]string{setup.ExtensionXPI,
 		"devtools-blocked=" + strconv.FormatBool(setup.DisableDevTools),
 		"locks=" + blocker.LibreWolfLocksVersion()}, "|")
+	if setup.DisablePrivate {
+		// Open private windows only close when the browser restarts.
+		fingerprint += "|no-private"
+	}
 	old, err := d.GetSetting(settingProtectionFingerprint)
 	if err != nil || old == fingerprint {
 		return
@@ -305,7 +344,9 @@ func protectionChanged(d *db.DB) time.Time {
 }
 
 func enforceBrowser(d *db.DB) {
-	setup := blocker.BrowserSetup{ForceSearch: BrowserOn(d, "force-search"), DisableDevTools: BrowserOn(d, "block-devtools")}
+	setup := blocker.BrowserSetup{ForceSearch: BrowserOn(d, "force-search"),
+		DisableDevTools: BrowserOn(d, "block-devtools") && !blocker.RemoteControlAllowed(),
+		DisablePrivate:  BrowserOn(d, "no-private")}
 	xpi, err := webext.Pack()
 	if err == nil {
 		err = blocker.EnsureFile(webext.Path(), xpi)

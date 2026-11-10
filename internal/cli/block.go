@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -234,6 +235,13 @@ var blockAddAppCmd = &cobra.Command{
 		// Blocked apps are killed in both modes, so adding one only
 		// strengthens the block: no ensureEditable/gateEdit check needed.
 
+		// A program given by its full path is also remembered by its
+		// contents, so a renamed or moved copy of it is blocked too.
+		for _, p := range args[1:] {
+			if entry, ok := blocker.HashEntry(p); ok {
+				processNames = append(processNames, entry)
+			}
+		}
 		if err := database.AddApps(name, processNames); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -285,6 +293,14 @@ var blockRemoveAppCmd = &cobra.Command{
 		if err := requireAll("app", name, detail.Apps, processNames); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
+		}
+		// A path's contents entry (see add-app) goes with it.
+		for _, p := range args[1:] {
+			for _, app := range detail.Apps {
+				if blocker.HashEntryFor(app, p) {
+					processNames = append(processNames, app)
+				}
+			}
 		}
 		proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditRemoveApps, Values: processNames})
 		if err != nil {
@@ -450,7 +466,7 @@ var blockInfoCmd = &cobra.Command{
 		fmt.Println()
 		if len(block.Apps) > 0 {
 			fmt.Println("Blocked applications:")
-			for _, app := range block.Apps {
+			for _, app := range visibleApps(block.Apps) {
 				fmt.Printf("  - %s\n", app)
 			}
 		} else {
@@ -592,4 +608,16 @@ func init() {
 	blockCmd.AddCommand(blockListCmd)
 	blockCmd.AddCommand(blockInfoCmd)
 	blockCmd.AddCommand(blockRemoveCmd)
+}
+
+// visibleApps leaves out the contents entries that go with full paths (see
+// blocker.HashEntry): they are kept alongside, not shown.
+func visibleApps(apps []string) []string {
+	out := make([]string, 0, len(apps))
+	for _, a := range apps {
+		if !strings.HasPrefix(a, blocker.HashPrefix) {
+			out = append(out, a)
+		}
+	}
+	return out
 }

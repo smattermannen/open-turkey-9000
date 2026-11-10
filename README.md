@@ -510,6 +510,14 @@ kc9k hotkey remove 1
 
 Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password when you add it, not each time you press it. The interface has them under Settings.
 
+## How apps are recognised
+
+An app is matched by its program's name, by a full path or a folder (below), by its Flatpak or desktop app ID, and:
+
+- **By contents.** `kc9k block add-app games /home/me/bin/game` also remembers what the file contains, so a renamed or moved copy of it is closed too. A program rebuilt or updated is a different file; add it again. The system's own programs (root-owned, under `/usr`, `/opt` and the like) are never matched this way.
+- **Python programs by their script.** `kc9k block add-app games play.py` (or `play`, or the script's full path or folder) closes `python3 play.py`. Blocking `python3` itself stays refused, since the desktop runs on it. For window titles, a Python program is spared only when it runs one of the system's own scripts.
+- **Download and streaming tools by the address they are given.** While a block with websites is on, `yt-dlp`, `mpv`, `vlc`, `curl`, `wget`, `streamlink` and similar tools started with the address of one of its sites are closed, and it is logged as a `workaround` event. Editors, shells and everything else are never touched for what their command line says.
+
 ## Blocking folders
 
 `kc9k block add-app games /opt/spel/` blocks every program under a folder, and a full path blocks one file. System folders such as `/usr/bin/` are refused.

@@ -41,7 +41,7 @@ a block's own ladder already gives a stricter track where one is wanted.
 
 ## Phase 2: holes in blocking
 
-**2.1 Workaround guard (L). Extension part done 2026-11-10** (proxy addresses, canonical/front-end fingerprints, `workaround` events); command lines still to do. No per-mirror domain lists.
+**2.1 Workaround guard (L). Extension part done 2026-11-10** (proxy addresses, canonical/front-end fingerprints, `workaround` events); command lines done too (`KillNaming`, a fixed list of fetch tools; the strict-mode "kill every download tool" idea was dropped: it would close players of local files). No per-mirror domain lists.
 - URL carrying a blocked domain: extend the translate/archive decoder in
   `match.js` to any query parameter or path segment that parses as a URL or
   host (`?url=`, `?q=cache:`, base64 of a URL). Judge the inner address with
@@ -57,7 +57,7 @@ a block's own ladder already gives a stricter track where one is wanted.
   spared (a domain in a text file being edited is not a bypass).
 - Each detection is an event of kind `workaround`, a detector for the ladder.
 
-**2.2 Apps by path and hash (M).**
+**2.2 Apps by path and hash (M). Done 2026-11-10** (tried live: a renamed copy is closed, the system program with the same contents is not).
 - `apps` rows get optional `path` and `sha256`. `block add-app` given a path
   stores name, resolved path and hash. Matching: name, or `/proc/<pid>/exe`
   path, or hash of the executable (cached by inode + mtime + size).
@@ -65,7 +65,7 @@ a block's own ladder already gives a stricter track where one is wanted.
   stated in the README.
 - Window-title matching per app already exists (`titles.go`).
 
-**2.3 Python programs (S).** Spare a Python process only when its script is
+**2.3 Python programs (S). Done 2026-11-10** (tried live). Spare a Python process only when its script is
 root-owned and under `/usr`, `/opt` or `/snap`; judge everything else by the
 script's name and path like any program. Test with the Cinnamon applets that
 made the exception necessary.

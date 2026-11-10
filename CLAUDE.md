@@ -176,6 +176,12 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
 - **Keyword test mode** (`db/testmode.go`, `kc9k list test <block> on|off`):
   title/text lists of the block go out with `test: true`; the extension
   shows `kc9kTestReport` in a panel and skips them in `kc9kListMatches`.
+- **App matching beyond names** (`blocker/scripts.go`): Python programs by
+  script (`pythonScript`, `matchesScript`; `essentialProcess` spares only
+  system scripts), copies by contents (`HashEntry`: add-app stores
+  `sha256:<hex>:<size>:<path>` beside a path, hidden by `visibleApps`;
+  system programs never match), and `KillNaming` (fetch tools given a
+  blocked domain, per block in `Tick`, logged as workaround).
 - **Workarounds**: `kc9kUnwrap` reads any full address carried in a query or
   path; `checkMirror` (content.js) reports canonical addresses and known
   front-ends; `/hit` with `via` logs `EventWorkaround` (a detector).

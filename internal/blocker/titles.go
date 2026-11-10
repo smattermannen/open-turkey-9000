@@ -105,7 +105,7 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) (int, []string) {
 			if keyword == "" || w.PID <= 1 || !ownedBy(w.PID, s.uid) {
 				continue
 			}
-			if isEssentialApp(exeName(w.PID)) || g.browsers.guarded(w.PID) {
+			if essentialProcess(w.PID) || g.browsers.guarded(w.PID) {
 				continue // the desktop needs it, or the extension handles tabs
 			}
 			seen[w.ID] = true

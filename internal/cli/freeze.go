@@ -265,7 +265,7 @@ var guiStateCmd = &cobra.Command{
 				return err
 			}
 			g := guiBlock{
-				Name: detail.Name, Lists: []guiList{}, Apps: append([]string{}, detail.Apps...),
+				Name: detail.Name, Lists: []guiList{}, Apps: visibleApps(detail.Apps),
 				Titles:    append([]string{}, detail.Titles...),
 				Schedules: []string{},
 				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && detail.Locked,

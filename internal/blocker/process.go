@@ -288,7 +288,12 @@ func matchesBlockedProcess(pid int, processNames []string) bool {
 		argv0 = cmdlineBytes[:i]
 	}
 	base := baseName(string(argv0))
-	return matchesName(base, processNames)
+	if matchesName(base, processNames) {
+		return true
+	}
+	// Strategy 3: a Python program by its script, and any program by its
+	// contents (see scripts.go).
+	return matchesScript(pid, processNames) || matchesHash(pid, processNames)
 }
 
 // flatpakAppIDs returns the entries of names that look like Flatpak app IDs.

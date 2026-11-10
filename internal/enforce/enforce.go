@@ -314,6 +314,14 @@ func Tick(d *db.DB, now time.Time) error {
 	for _, b := range active {
 		killApps(d, b.Apps, db.EventApp, b.BlockName)
 	}
+	// Download and streaming tools given a blocked site's address.
+	for _, b := range active {
+		_, _, policy := Inputs([]db.ActiveBlockDetail{b})
+		if tools := blocker.KillNaming(policy.BlockDomains); len(tools) > 0 {
+			log.Printf("daemon: closed %s: given an address block '%s' stops", strings.Join(tools, ", "), b.BlockName)
+			logEvent(d, db.EventWorkaround, b.BlockName, strings.Join(tools, ", "))
+		}
+	}
 	killApps(d, forcedKills(d), db.EventBrowser, websiteBlocks(active)...)
 	enforceNepsis(d, now, active)
 	return nil

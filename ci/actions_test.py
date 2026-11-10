@@ -137,6 +137,30 @@ try:
         visit(driver, url)
     check("bypass prevention closes the browser after three blocked pages", closed(driver, 30))
     ot("nepsis", "off", "--block", "nepsistest")
+
+    # A ladder: two blocked pages close the tab of the second; two more close
+    # the browser.
+    ot("nepsis", "set", "--block", "nepsistest",
+       "--step", "2 in 5m: close-tab", "--step", "2 in 5m: close-browser")
+    driver = start()
+    try:
+        visit(driver, "https://example.net/")
+        driver.switch_to.new_window("tab")
+        before = len(driver.window_handles)
+        visit(driver, "https://example.org/")
+        check("a ladder's first step closes the tab", len(driver.window_handles) == before - 1)
+        driver.switch_to.window(driver.window_handles[0])
+        time.sleep(1)  # only events after the step fired count for the next
+        visit(driver, "https://example.edu/")
+        check("the browser stays open below the second step", not closed(driver, 3))
+        visit(driver, "https://example.org/")
+        check("a ladder's second step closes the browser", closed(driver, 30))
+    finally:
+        try:
+            driver.quit()
+        except WebDriverException:
+            pass
+    ot("nepsis", "off", "--block", "nepsistest")
     ot("stop", "nepsistest")
 
     # close-browser from a list: the extension closes every window itself.

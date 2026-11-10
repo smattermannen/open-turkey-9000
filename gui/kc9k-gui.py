@@ -20,13 +20,28 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("PangoCairo", "1.0")
-from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 
 CLI = "kc9k"
 REFRESH_SECONDS = 5
 STATS_REFRESH_SECONDS = 30
 # Pointer events for the charts' hover.
 POINTER_EVENTS = Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK
+
+# Ready-made site lists for a new block (internal/cli/templates.go).
+TEMPLATES = (
+    ("social-media", "Social media"), ("video", "Video"), ("streaming", "Streaming services"),
+    ("news", "News"), ("forums", "Forums"), ("games", "Games"), ("gambling", "Gambling"),
+    ("shopping", "Shopping"), ("music", "Music"), ("messaging", "Messaging"), ("dating", "Dating"),
+    ("ai-chat", "AI chat"), ("sports", "Sports"), ("finance", "Finance and trading"),
+)
+# Schedules added with one click: days, from, to.
+SCHEDULE_PRESETS = (
+    ("Work hours", "weekdays", "09:00", "17:00"),
+    ("Evenings", "daily", "18:00", "23:00"),
+    ("Weekends", "sat,sun", "00:00", "24:00"),
+    ("Nights", "daily", "00:00", "06:00"),
+)
 
 # The switches of 'kc9k option' (internal/enforce/options.go).
 OPTIONS = (
@@ -79,6 +94,8 @@ PARAM_ACTIONS = ("redirect", "image", "logout", "shutdown", "monk")
 
 # What bypass prevention can do, mildest first.
 CONSEQUENCES = (
+    ("warning", "Show a warning"),
+    ("close-tab", "Close the tab that tripped it"),
     ("close-browser", "Close the browser"),
     ("lock-screen", "Lock the screen"),
     ("logout", "Log out"),
@@ -95,25 +112,46 @@ def fmt_minutes(minutes):
     return f"{hours} h" + (f" {rest} min" if rest else "")
 
 
-def describe_nepsis(nepsis, count=None):
-    """One line for a bypass detection setting (its first step, and how many
-    steps follow; the full ladder is set with 'kc9k nepsis set --step')."""
-    steps = (nepsis or {}).get("steps") or []
-    if not steps:
-        return "Off."
-    first = steps[0]
+# What bypass detection can count (db.Detectors).
+DETECTORS = (
+    ("page", "Blocked pages"),
+    ("search", "Blocked pages opened from a search"),
+    ("app", "Closed apps"),
+    ("title", "Windows closed for their title"),
+    ("browser", "Browsers closed for lacking the extension"),
+    ("workaround", "Sites reached another way (proxies, mirrors, download tools)"),
+    ("tamper", "Tampering (daemon restarted, clock moved)"),
+    ("access", "Wrong access passwords"),
+)
+# Consequences that take a time, and whether they need one.
+TIMED = {"lock-screen": True, "logout": False, "shutdown": False, "monk": True}
+
+
+def describe_step(step):
     actions = []
-    for action in first["actions"]:
+    for action in step["actions"]:
         text = dict(CONSEQUENCES).get(action["action"], action["action"]).lower()
         if action.get("minutes"):
             text += f" for {fmt_minutes(action['minutes'])}"
         actions.append(text)
-    line = f"{first['count']} stopped things within {fmt_minutes(first['minutes'])}: {', '.join(actions)}."
-    if len(steps) > 1:
-        line += f" Then {len(steps) - 1} more step{'s' if len(steps) > 2 else ''}."
+    return f"{step['count']} stopped things within {fmt_minutes(step['minutes'])}: {', '.join(actions)}."
+
+
+def describe_nepsis(nepsis, count=None):
+    """A bypass detection setting in words: one line per step of its ladder."""
+    steps = (nepsis or {}).get("steps") or []
+    if not steps:
+        return "Off."
+    if len(steps) == 1:
+        text = describe_step(steps[0])
+    else:
+        text = "\n".join(f"Step {n}: {describe_step(step)}" for n, step in enumerate(steps, start=1))
+    quiet = (nepsis or {}).get("quiet_minutes")
+    if quiet and len(steps) > 1:
+        text += f"\nFalls back a step after {fmt_minutes(quiet)} without tripping."
     if count is not None:
-        line += f" {count} so far."
-    return line
+        text += f" {count} so far."
+    return text
 
 # Where a list looks.
 LIST_PLACES = (
@@ -363,6 +401,110 @@ def nice_step(maximum):
 
 
 # Widgets -----------------------------------------------------------------
+
+def installed_apps():
+    """The apps installed on this computer, as (name, what to block, icon):
+    the program's file name, or the app ID for a Flatpak."""
+    seen, out = set(), []
+    for info in Gio.AppInfo.get_all():
+        try:
+            exe = os.path.basename(info.get_executable() or "")
+            app_id = (info.get_id() or "").removesuffix(".desktop")
+            if exe == "flatpak" and app_id.count(".") >= 2:
+                entry = app_id
+            elif exe in ("", "env", "sh", "bash", "python3", "python", "flatpak", "snap", "gtk-launch"):
+                # Started through a launcher: the last word of its command names it.
+                words = [w for w in (info.get_commandline() or "").split() if not w.startswith(("-", "%"))]
+                entry = os.path.basename(words[-1]) if len(words) > 1 else ""
+            else:
+                entry = exe
+            if not entry or entry in seen or not info.should_show():
+                continue
+            seen.add(entry)
+            out.append((info.get_display_name() or entry, entry, info.get_icon()))
+        except Exception:  # one broken launcher mustn't hide the rest
+            continue
+    return sorted(out, key=lambda row: row[0].lower())
+
+
+def running_programs():
+    """The names of the programs this user is running now."""
+    names = set()
+    uid = os.getuid()
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            if os.stat(f"/proc/{pid}").st_uid != uid:
+                continue
+            with open(f"/proc/{pid}/comm", encoding="utf-8") as file:
+                name = file.read().strip()
+        except OSError:
+            continue
+        if name and not name.startswith(("kworker", "systemd", "dbus", "gvfs", "xdg-", "csd-", "at-spi", "cinnamon",
+                                         "pipewire", "wireplumber", "kc9k", "python", "bash", "sh", "(sd-pam)")):
+            names.add(name)
+    return sorted(names, key=str.lower)
+
+
+class AppPicker(Gtk.Dialog):
+    """Picks apps to block from the installed apps and the running programs,
+    with a search box."""
+
+    def __init__(self, parent):
+        super().__init__(title="Choose apps to block", transient_for=parent, modal=True)
+        self.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Add", Gtk.ResponseType.OK)
+        self.set_default_size(520, 560)
+        self.set_default_response(Gtk.ResponseType.OK)
+        box = self.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(12)
+        self.search = Gtk.SearchEntry(placeholder_text="Search apps and running programs")
+        box.pack_start(self.search, False, False, 0)
+        # ticked, icon, name, what is blocked, where it is from
+        self.store = Gtk.ListStore(bool, Gio.Icon, str, str, str)
+        for name, entry, icon in installed_apps():
+            self.store.append([False, icon, name, entry, "Installed"])
+        known = {row[3] for row in self.store}
+        for name in running_programs():
+            if name not in known:
+                self.store.append([False, None, name, name, "Running now"])
+        self.filtered = self.store.filter_new()
+        self.filtered.set_visible_func(self._visible)
+        view = Gtk.TreeView(model=self.filtered, headers_visible=True)
+        toggle = Gtk.CellRendererToggle()
+        toggle.connect("toggled", self._toggled)
+        view.append_column(Gtk.TreeViewColumn("", toggle, active=0))
+        column = Gtk.TreeViewColumn("App")
+        icon = Gtk.CellRendererPixbuf()
+        text = Gtk.CellRendererText(ellipsize=Pango.EllipsizeMode.END)
+        column.pack_start(icon, False)
+        column.pack_start(text, True)
+        column.add_attribute(icon, "gicon", 1)
+        column.add_attribute(text, "text", 2)
+        column.set_expand(True)
+        view.append_column(column)
+        view.append_column(Gtk.TreeViewColumn("Blocked as", Gtk.CellRendererText(), text=3))
+        view.append_column(Gtk.TreeViewColumn("", Gtk.CellRendererText(), text=4))
+        view.connect("row-activated", lambda _v, path, _c: self._toggled(None, path))
+        scroll = Gtk.ScrolledWindow()
+        scroll.add(view)
+        box.pack_start(scroll, True, True, 0)
+        self.search.connect("search-changed", lambda _e: self.filtered.refilter())
+        self.show_all()
+
+    def _visible(self, model, iterator, _data):
+        words = self.search.get_text().lower().split()
+        text = f"{model[iterator][2]} {model[iterator][3]}".lower()
+        return all(word in text for word in words)
+
+    def _toggled(self, _renderer, path):
+        child = self.filtered.convert_path_to_child_path(Gtk.TreePath(path) if isinstance(path, str) else path)
+        self.store[child][0] = not self.store[child][0]
+
+    def chosen(self):
+        return [row[3] for row in self.store if row[0]]
+
 
 class EditableList(Gtk.Box):
     """A titled list with an entry for adding and a button for removing.
@@ -1081,6 +1223,7 @@ class Window(Gtk.ApplicationWindow):
         for name, title, build in (
                 ("dashboard", "Dashboard", self.build_dashboard),
                 ("blocks", "Blocks", self.build_blocks),
+                ("clusters", "Clusters", self.build_clusters),
                 ("device", "Device Blocks", self.build_device),
                 ("stats", "Statistics", self.build_stats),
                 ("settings", "Settings", self.build_settings)):
@@ -1198,50 +1341,126 @@ class Window(Gtk.ApplicationWindow):
         return value if answer == Gtk.ResponseType.OK else None
 
     def ask_nepsis(self, title, current, allow_lock):
-        """Asks for a bypass prevention setting; returns the nepsis set
-        arguments, or None when cancelled."""
-        current = current if current and current.get("count") else {
-            "count": 10, "minutes": 5, "consequence": "monk", "action_minutes": 60}
+        """Asks for a bypass detection setting, its whole ladder; returns the
+        'nepsis set' arguments, or None when cancelled."""
+        current = current or {}
+        steps = [dict(step) for step in current.get("steps") or []] or [
+            {"count": 10, "minutes": 5, "actions": [{"action": "warning"}]}]
         dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
         dialog.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Save", Gtk.ResponseType.OK)
-        area = dialog.get_content_area()
-        area.set_spacing(10)
-        area.set_border_width(16)
-        area.pack_start(dim("When Killer Chicken stops this many things (pages, apps, "
-                            "windows) within this long, it does this. "
-                            "Making it stricter is always allowed; anything else loosens it."),
-                        False, False, 0)
-        grid = Gtk.Grid(column_spacing=10, row_spacing=8)
-        count = Gtk.SpinButton.new_with_range(1, 1000, 1)
-        count.set_value(current["count"])
-        within = Gtk.SpinButton.new_with_range(1, 24 * 60, 1)
-        within.set_value(current["minutes"])
-        then = Gtk.ComboBoxText()
-        for key, label in CONSEQUENCES:
-            then.append(key, label)
-        then.set_active_id(current["consequence"])
-        then_for = Gtk.SpinButton.new_with_range(0, 30 * 24 * 60, 5)
-        then_for.set_value(current.get("action_minutes", 0))
-        rows = [("Things stopped", count), ("Within (minutes)", within), ("Then", then),
-                ("For (minutes; 0 for once)", then_for)]
+        dialog.set_default_size(620, 560)
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        area = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, border_width=16)
+        scroll.add(area)
+        dialog.get_content_area().pack_start(scroll, True, True, 0)
+        intro = dim("A ladder of steps. The first time its number of things is stopped within its "
+                    "time, step 1 acts; the next time, step 2; and so on, staying on the last. "
+                    "Making it stricter is always allowed; anything else loosens it.")
+        intro.set_max_width_chars(70)
+        area.pack_start(intro, False, False, 0)
+        steps_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        area.pack_start(steps_box, False, False, 0)
+        cards = []
+
+        def add_card(step):
+            frame = Gtk.Frame(label=f"Step {len(cards) + 1}")
+            grid = Gtk.Grid(column_spacing=10, row_spacing=4, border_width=8)
+            count = Gtk.SpinButton.new_with_range(1, 1000, 1)
+            count.set_value(step.get("count", 3))
+            within = Gtk.SpinButton.new_with_range(1, 24 * 60, 1)
+            within.set_value(step.get("minutes", 10))
+            head = Gtk.Box(spacing=6)
+            head.pack_start(count, False, False, 0)
+            head.pack_start(Gtk.Label(label="things stopped within"), False, False, 0)
+            head.pack_start(within, False, False, 0)
+            head.pack_start(Gtk.Label(label="minutes:"), False, False, 0)
+            grid.attach(head, 0, 0, 3, 1)
+            chosen = {a["action"]: a.get("minutes", 0) for a in step.get("actions") or []}
+            actions = {}
+            for row, (key, label) in enumerate(CONSEQUENCES, start=1):
+                check = Gtk.CheckButton(label=label, active=key in chosen)
+                grid.attach(check, 0, row, 1, 1)
+                minutes = None
+                if key in TIMED:
+                    minutes = Gtk.SpinButton.new_with_range(1 if TIMED[key] else 0, 30 * 24 * 60, 5)
+                    minutes.set_value(chosen.get(key) or (30 if TIMED[key] else 0))
+                    grid.attach(minutes, 1, row, 1, 1)
+                    grid.attach(dim("minutes" if TIMED[key] else "minutes (0: once)"), 2, row, 1, 1)
+                actions[key] = (check, minutes)
+            frame.add(grid)
+            steps_box.pack_start(frame, False, False, 0)
+            frame.show_all()
+            cards.append((frame, count, within, actions))
+
+        for step in steps:
+            add_card(step)
+
+        def remove_card(_button):
+            if len(cards) > 1:
+                frame = cards.pop()[0]
+                steps_box.remove(frame)
+
+        buttons = Gtk.Box(spacing=6)
+        more = Gtk.Button(label="Add a step")
+        more.connect("clicked", lambda _b: len(cards) < 10 and add_card(
+            {"count": 3, "minutes": 10, "actions": [{"action": "close-browser"}]}))
+        fewer = Gtk.Button(label="Remove the last step")
+        fewer.connect("clicked", remove_card)
+        buttons.pack_start(more, False, False, 0)
+        buttons.pack_start(fewer, False, False, 0)
+        area.pack_start(buttons, False, False, 0)
+
+        quiet_row = Gtk.Box(spacing=6)
+        quiet = Gtk.SpinButton.new_with_range(0, 30 * 24 * 60, 30)
+        quiet.set_value(current.get("quiet_minutes", 0))
+        quiet_row.pack_start(Gtk.Label(label="Fall back a step after"), False, False, 0)
+        quiet_row.pack_start(quiet, False, False, 0)
+        quiet_row.pack_start(Gtk.Label(label="quiet minutes (0: never)"), False, False, 0)
+        area.pack_start(quiet_row, False, False, 0)
+
+        area.pack_start(heading("What counts", "medium"), False, False, 0)
+        counted = current.get("detectors") or []
+        detector_checks = {}
+        for key, label in DETECTORS:
+            check = Gtk.CheckButton(label=label, active=not counted or key in counted)
+            detector_checks[key] = check
+            area.pack_start(check, False, False, 0)
         lock = None
         if allow_lock:
+            lock_row = Gtk.Box(spacing=6)
             lock = Gtk.SpinButton.new_with_range(0, 24 * 30, 1)
-            rows.append(("Can't be loosened for (hours)", lock))
-        for row, (label, widget) in enumerate(rows):
-            grid.attach(Gtk.Label(label=label, xalign=0), 0, row, 1, 1)
-            grid.attach(widget, 1, row, 1, 1)
-        area.pack_start(grid, False, False, 0)
+            lock_row.pack_start(Gtk.Label(label="Can't be loosened for"), False, False, 0)
+            lock_row.pack_start(lock, False, False, 0)
+            lock_row.pack_start(Gtk.Label(label="hours (0: no lock)"), False, False, 0)
+            area.pack_start(lock_row, False, False, 0)
         dialog.show_all()
         answer = dialog.run()
-        args = ["--count", str(count.get_value_as_int()), "--within", f"{within.get_value_as_int()}m",
-                "--then", then.get_active_id() or "close-browser"]
-        if then.get_active_id() != "close-browser" and then_for.get_value_as_int():
-            args += ["--then-for", f"{then_for.get_value_as_int()}m"]
+        args, problem = [], ""
+        for number, (_frame, count, within, actions) in enumerate(cards, start=1):
+            parts = []
+            for key, (check, minutes) in actions.items():
+                if check.get_active():
+                    value = minutes.get_value_as_int() if minutes is not None else 0
+                    parts.append(f"{key} {value}m" if value else key)
+            if not parts:
+                problem = f"Step {number} does nothing: tick at least one thing for it to do."
+            args += ["--step", f"{count.get_value_as_int()} in {within.get_value_as_int()}m: {', '.join(parts)}"]
+        detectors = [key for key, check in detector_checks.items() if check.get_active()]
+        if not detectors:
+            problem = "Nothing is counted: tick at least one thing under What counts."
+        elif len(detectors) < len(DETECTORS):
+            args += ["--detect", ",".join(detectors)]
+        if quiet.get_value_as_int():
+            args += ["--quiet", f"{quiet.get_value_as_int()}m"]
         if lock is not None and lock.get_value_as_int():
             args += ["--for", f"{lock.get_value_as_int()}h"]
         dialog.destroy()
-        return args if answer == Gtk.ResponseType.OK else None
+        if answer != Gtk.ResponseType.OK:
+            return None
+        if problem:
+            self.message(problem, Gtk.MessageType.INFO)
+            return None
+        return args
 
     def monk_mode(self, _button):
         minutes = self.ask_minutes(
@@ -1333,6 +1552,7 @@ class Window(Gtk.ApplicationWindow):
                 self.banner.set_revealed(False)
             for area, update in (("dashboard", self.update_dashboard),
                                  ("blocks", self.update_block_list),
+                                 ("clusters", self.update_clusters),
                                  ("device", self.update_device),
                                  ("settings", self.update_settings)):
                 if not self.locked(area):
@@ -1377,7 +1597,8 @@ class Window(Gtk.ApplicationWindow):
         return stack
 
     def locked(self, area):
-        return self.access.get(area) == "locked"
+        # The Clusters page belongs to the Blocks area.
+        return self.access.get({"clusters": "blocks"}.get(area, area)) == "locked"
 
     def update_covers(self):
         app_locked = self.access.get("app") == "locked"
@@ -1680,6 +1901,16 @@ class Window(Gtk.ApplicationWindow):
             help_text="Executable names, Flatpak app IDs (see 'flatpak list --app'), or folders "
                       "whose programs can't run. Everything a blocked app started is closed too.",
             search=True)
+        pick_row = Gtk.Box(spacing=6)
+        choose_apps = Gtk.Button(label="Choose from installed apps…")
+        choose_apps.connect("clicked", self.pick_apps)
+        choose_folder = Gtk.Button(label="Add a folder…")
+        choose_folder.connect("clicked", self.pick_app_folder)
+        choose_file = Gtk.Button(label="Add a program file…")
+        choose_file.connect("clicked", self.pick_app_file)
+        for button in (choose_apps, choose_folder, choose_file):
+            pick_row.pack_start(button, False, False, 0)
+        apps.pack_start(pick_row, False, False, 0)
         apps.pack_start(self.apps, True, True, 0)
         self.titles = EditableList(
             "Window titles", "YouTube  Twitch",
@@ -1705,6 +1936,16 @@ class Window(Gtk.ApplicationWindow):
                       "The block turns on and off by itself, and can't be weakened from "
                       "2 hours before a window opens.")
         schedule.pack_start(self.schedules, True, True, 0)
+        preset_row = Gtk.Box(spacing=6)
+        preset_row.pack_start(Gtk.Label(label="Add:"), False, False, 0)
+        for label, days, start, end in SCHEDULE_PRESETS:
+            button = Gtk.Button(label=label, tooltip_text=f"{days} {start}-{end}")
+            button.connect("clicked", lambda _b, d=days, s=start, e=end: self.selected and self.run(
+                ["schedule", "add", self.selected, "--days", d, "--from", s, "--to", e], then=self.queued_note))
+            preset_row.pack_start(button, False, False, 0)
+        self.schedule_total = dim("")
+        preset_row.pack_end(self.schedule_total, False, False, 0)
+        schedule.pack_start(preset_row, False, False, 0)
         delay_row = Gtk.Box(spacing=6)
         delay_row.pack_start(Gtk.Label(label="With allow windows, loosening changes wait"), False, False, 0)
         self.loosen_hours = Gtk.SpinButton.new_with_range(1, 720, 1)
@@ -1956,6 +2197,13 @@ class Window(Gtk.ApplicationWindow):
         self.calendar.set_windows(block.get("schedule_windows", []))
         set_switch(self.keyword_test_switch, block.get("keyword_test", False))
         self.update_social(block)
+        covered = set()
+        for window in block.get("schedule_windows", []):
+            if not window.get("allow"):
+                for day in range(7):
+                    if window["days"] & (1 << day):
+                        covered.update((day, minute) for minute in range(window["start"], window["end"]))
+        self.schedule_total.set_text(f"{len(covered) / 60:.0f} of 168 hours a week" if covered else "")
         saved = [p["name"] for p in self.state.get("places") or []]
         if getattr(self, "places_shown", None) != saved:
             self.places_shown = saved
@@ -2053,11 +2301,29 @@ class Window(Gtk.ApplicationWindow):
 
     # Block actions -------------------------------------------------------
     def create_block(self, _button):
-        name = self.ask_text("New block", "A short name, such as social-media.")
-        if name:
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, text="New block",
+            secondary_text="A short name, such as social-media. Starting from a ready-made list fills "
+                           "its Blocked list with well-known sites of that kind; add and remove as you like.",
+            message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
+        entry = Gtk.Entry(activates_default=True, placeholder_text="Name")
+        combo = Gtk.ComboBoxText()
+        combo.append("", "Start empty")
+        for key, label in TEMPLATES:
+            combo.append(key, f"Start from: {label}")
+        combo.set_active_id("")
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        area = dialog.get_message_area()
+        area.pack_start(entry, False, False, 0)
+        area.pack_start(combo, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        name, template = entry.get_text().strip(), combo.get_active_id()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and name:
             self.selected = name
             self.stack.set_visible_child_name("blocks")
-            self.run(["block", "create", name])
+            self.run(["block", "create", name] + (["--template", template] if template else []))
 
     def rename_block(self, _button):
         name = self.ask_text("Rename block", initial=self.selected or "")
@@ -2304,6 +2570,175 @@ class Window(Gtk.ApplicationWindow):
         if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import"):
             self.run(["project", "import", path],
                      then=lambda result: self.message(result, Gtk.MessageType.INFO))
+
+    # Clusters ------------------------------------------------------------
+    def build_clusters(self):
+        scroll, box = page_box()
+        box.pack_start(heading("Clusters", "x-large"), False, False, 0)
+        intro = dim("Website lists kept outside any block: collect sites once, then copy them into "
+                    "the blocks that should have them. A cluster blocks nothing by itself and can "
+                    "always be edited; copying into a block follows that block's rules.")
+        intro.set_max_width_chars(80)
+        box.pack_start(intro, False, False, 0)
+
+        top = Gtk.Box(spacing=6)
+        self.cluster_combo = Gtk.ComboBoxText()
+        self.cluster_combo.connect("changed", lambda _c: self.updating or self.show_cluster())
+        top.pack_start(self.cluster_combo, False, False, 0)
+        for label, handler in (("New…", self.new_cluster), ("Rename…", self.rename_cluster),
+                               ("Delete…", self.delete_cluster), ("Copy into a block…", self.copy_cluster),
+                               ("Import…", self.import_cluster), ("Export…", self.export_cluster)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", handler)
+            top.pack_start(button, False, False, 0)
+        box.pack_start(top, False, False, 0)
+
+        where = Gtk.Box(spacing=12)
+        where.pack_start(Gtk.Label(label="Looks at:"), False, False, 0)
+        self.cluster_where = {}
+        for key, label in LIST_PLACES:
+            check = Gtk.CheckButton(label=label)
+            check.connect("toggled", self.toggle_cluster_where, key)
+            self.cluster_where[key] = check
+            where.pack_start(check, False, False, 0)
+        box.pack_start(where, False, False, 0)
+
+        self.cluster_entries = EditableList(
+            "Entries", "reddit.com  *casino*",
+            lambda values: self.cluster_name() and self.run(["cluster", "add", self.cluster_name(), *values]),
+            lambda value, _n: self.cluster_name() and self.run(["cluster", "remove", self.cluster_name(), value]),
+            search=True)
+        box.pack_start(self.cluster_entries, True, True, 0)
+
+        self.record_label = Gtk.Label(xalign=0, wrap=True)
+        record_row = Gtk.Box(spacing=6)
+        self.record_start = Gtk.Button(label="Record into this cluster")
+        self.record_start.connect("clicked", lambda _b: self.cluster_name() and self.run(
+            ["record", "start", "--cluster", self.cluster_name()]))
+        self.record_stop = Gtk.Button(label="Stop and add the sites")
+        self.record_stop.connect("clicked", lambda _b: self.run(
+            ["record", "stop"], then=lambda output: self.message(output, Gtk.MessageType.INFO)))
+        self.record_discard = Gtk.Button(label="Stop and discard")
+        self.record_discard.connect("clicked", lambda _b: self.run(["record", "stop", "--discard"]))
+        for button in (self.record_start, self.record_stop, self.record_discard):
+            record_row.pack_start(button, False, False, 0)
+        box.pack_start(section(
+            "Record the sites you open",
+            dim("While recording, every site opened in LibreWolf (pages and the frames inside "
+                "them, such as a login from another site) is noted. Stopping adds them to the "
+                "cluster. Use it to collect what a task needs, then copy the cluster into a "
+                "block's exceptions."),
+            self.record_label, record_row), False, False, 0)
+        return scroll
+
+    def cluster_name(self):
+        return self.cluster_combo.get_active_text()
+
+    def update_clusters(self):
+        names = [c["name"] for c in self.state.get("clusters") or []]
+        if getattr(self, "clusters_shown", None) != names:
+            current = self.cluster_name()
+            self.clusters_shown = names
+            self.cluster_combo.remove_all()
+            for name in names:
+                self.cluster_combo.append_text(name)
+            wanted = getattr(self, "cluster_wanted", None) or current
+            if names:
+                self.cluster_combo.set_active(names.index(wanted) if wanted in names else 0)
+            self.cluster_wanted = None
+        self.show_cluster()
+        recording = self.state.get("recording")
+        if recording:
+            target = (f"the cluster {recording['cluster']}" if recording.get("cluster")
+                      else f"the list {recording.get('list')} of {recording.get('block')}")
+            self.record_label.set_markup(
+                f"<b>Recording</b> into {GLib.markup_escape_text(target)}: {recording.get('sites', 0)} sites so far.")
+        else:
+            self.record_label.set_text("Not recording.")
+        self.record_start.set_sensitive(not recording and bool(self.cluster_name()))
+        self.record_stop.set_sensitive(bool(recording))
+        self.record_discard.set_sensitive(bool(recording))
+
+    def show_cluster(self):
+        cluster = next((c for c in self.state.get("clusters") or [] if c["name"] == self.cluster_name()), None)
+        was, self.updating = self.updating, True
+        try:
+            for key, check in self.cluster_where.items():
+                check.set_active(bool(cluster) and key in cluster["where"])
+                check.set_sensitive(bool(cluster))
+            self.cluster_entries.set_items(cluster["entries"] if cluster else [], self.cluster_name())
+        finally:
+            self.updating = was
+
+    def toggle_cluster_where(self, check, place):
+        if self.updating or not self.cluster_name():
+            return
+        self.run(["cluster", "where", self.cluster_name(), place, "on" if check.get_active() else "off"])
+
+    def new_cluster(self, _button):
+        name = self.ask_text("New cluster", "A name, such as study or shopping.")
+        if name:
+            self.cluster_wanted = name
+            self.run(["cluster", "create", name])
+
+    def rename_cluster(self, _button):
+        old = self.cluster_name()
+        name = old and self.ask_text(f"Rename {old}", initial=old)
+        if name and name != old:
+            self.cluster_wanted = name
+            self.run(["cluster", "rename", old, name])
+
+    def delete_cluster(self, _button):
+        name = self.cluster_name()
+        if name and self.confirm(f"Delete the cluster {name}?",
+                                 "Lists copied from it into blocks stay as they are.", "Delete", destructive=True):
+            self.run(["cluster", "delete", name])
+
+    def copy_cluster(self, _button):
+        name = self.cluster_name()
+        if not name or not self.blocks:
+            return
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, text=f"Copy {name} into a block",
+            secondary_text="It becomes a new list of the block, named after the cluster. As a blacklist it "
+                           "makes the block stricter; as exceptions it loosens it, which a held block refuses.",
+            message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
+        combo = Gtk.ComboBoxText()
+        for block in self.blocks:
+            combo.append_text(block)
+        combo.set_active(0)
+        exceptions = Gtk.CheckButton(label="As an exception list")
+        area = dialog.get_message_area()
+        area.pack_start(combo, False, False, 0)
+        area.pack_start(exceptions, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        block, as_exceptions = combo.get_active_text(), exceptions.get_active()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and block:
+            self.run(["cluster", "copy", name, block] + (["--exceptions"] if as_exceptions else []),
+                     then=self.queued_note)
+
+    def import_cluster(self, _button):
+        name = self.cluster_name()
+        path = name and self.choose_file("Import entries into the cluster", Gtk.FileChooserAction.OPEN, "Import")
+        if path:
+            self.run(["cluster", "import", name, path])
+
+    def export_cluster(self, _button):
+        name = self.cluster_name()
+        path = name and self.choose_file("Export the cluster", Gtk.FileChooserAction.SAVE, "Save")
+        if not path:
+            return
+        ok, output = cli_with_access(self.access_passwords, ["cluster", "export", name])
+        if not ok:
+            self.message(output)
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(output + "\n" if output else "")
+        except OSError as error:
+            self.message(str(error))
 
     # Device Blocks -------------------------------------------------------
     def build_device(self):
@@ -2907,6 +3342,26 @@ class Window(Gtk.ApplicationWindow):
         if name:
             self.run(["place", "add", name], timeout=60,
                      then=lambda output: self.message(output, Gtk.MessageType.INFO))
+
+    def pick_apps(self, _button):
+        if not self.selected:
+            return
+        dialog = AppPicker(self)
+        answer = dialog.run()
+        chosen = dialog.chosen()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and chosen:
+            self.block_cmd("add-app", chosen)
+
+    def pick_app_folder(self, _button):
+        path = self.choose_file("Block every program in a folder", Gtk.FileChooserAction.SELECT_FOLDER, "Add")
+        if path and self.selected:
+            self.block_cmd("add-app", [path.rstrip("/") + "/"])
+
+    def pick_app_file(self, _button):
+        path = self.choose_file("Block a program file (and copies of it)", Gtk.FileChooserAction.OPEN, "Add")
+        if path and self.selected:
+            self.block_cmd("add-app", [path])
 
     def toggle_social(self, check, name):
         if self.updating or not self.selected:

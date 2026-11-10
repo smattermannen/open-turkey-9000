@@ -597,7 +597,7 @@ func init() {
 
 	// Flags for "block create".
 	blockCreateCmd.Flags().Bool("allowlist", false, "Block every website except what you add to its Exceptions list")
-	blockCreateCmd.Flags().String("template", "", "Seed the block from a built-in list (social-media, news, video, shopping)")
+	blockCreateCmd.Flags().String("template", "", "Seed the block from a built-in list: "+availableTemplates())
 
 	// Add every subcommand as a child of "block".
 	addNowFlag(blockRemoveAppCmd, blockRemoveCmd)

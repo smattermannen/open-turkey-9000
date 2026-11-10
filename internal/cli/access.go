@@ -461,6 +461,9 @@ func (s *guiState) hideLocked() {
 	if !open(areaDashboard, areaBlocks) {
 		s.Blocks = nil
 	}
+	if !open(areaBlocks) {
+		s.Clusters, s.Recording, s.Places = nil, nil, nil
+	}
 	if !open(areaDashboard, areaDevice) {
 		s.FreezeSeconds, s.FreezeMode, s.Strict, s.NoEscape, s.FreezeSched = 0, "", false, false, nil
 	}

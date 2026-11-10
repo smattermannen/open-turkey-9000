@@ -215,7 +215,7 @@ there. GPS only behind an interface that real hardware can fill later
 
 ## Phase 8: hardening
 
-**8.1 Local paths to root (M).** First audit what no-escape's boot lock
+**8.1 Local paths to root (M). Not done.** It changes boot and login configuration (GRUB entries, PAM, TTY logins), which can lock the owner out and cannot be tried safely on a machine in daily use. It needs a disposable machine or VM. Original note: First audit what no-escape's boot lock
 covers. Then: recovery entries hidden and `init=`/`single` editing locked
 (GRUB superuser already there), root login on TTYs and `su` locked during a
 lock, and `strict on` warning about firmware password and boot order.
@@ -225,6 +225,18 @@ delay instead of the fixed 24 h (`LoosenDelay`); lowering it is itself a
 queued edit.
 
 ## Phase 9: interface
+
+**Mostly done 2026-11-10**: Clusters page with link recording, the whole
+bypass ladder in an editor, a searchable app picker (installed apps and
+running programs) plus folder and program-file choosers, schedule presets
+and hours per week, a template choice for new blocks (14 ready-made lists),
+pages for breaks, social media settings, places, options, access passwords
+and project export/import. Apps, window titles, website lists and clusters
+all have a search box. **Not done:** the design pass over every page (it
+needs eyes on a real screen), and the tray icon (left out for now: the
+toolbar button already shows time left where it matters, and a tray icon
+that is only there while the window is open adds little). Everything here
+was driven headlessly against a scratch database, not looked at.
 
 Done last, on top of settled functionality.
 
@@ -250,6 +262,8 @@ Done last, on top of settled functionality.
 
 ## Phase 10: trying by hand
 
+**Open.** These need a person at the dual-boot laptop; nothing here was done.
+
 The nine items under "Still to try" in `TODO.md` need a person at the dual
 boot laptop: quota-end notification, scheduled freeze in logout and shutdown
 modes, strict mode holes (`unshare -Urm`, `--user` Flatpak, Electron),
@@ -262,6 +276,8 @@ Leftovers on the test machine (`quotatest`, `hej`, the `Papers` list in
 `test`) are cleaned up here.
 
 ## Phase 11: release
+
+**Open**, by design: the test laptop still runs the `devmaster` build.
 
 Build without `TAGS=devmaster`, remove `ci/vm.sh`, rename the repository to
 `kc9k`, remove `/etc/sudoers.d/99-claude-test` from the test laptop, README

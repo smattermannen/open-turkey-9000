@@ -140,6 +140,21 @@ type guiSettingLock struct {
 	GuardsBlocks bool  `json:"guards_blocks"`
 }
 
+// guiCluster is a cluster for the interface.
+type guiCluster struct {
+	Name    string   `json:"name"`
+	Where   []string `json:"where"`
+	Entries []string `json:"entries"`
+}
+
+// guiRecording is the link recording in progress.
+type guiRecording struct {
+	Cluster string `json:"cluster"`
+	Block   string `json:"block"`
+	List    string `json:"list"`
+	Sites   int    `json:"sites"`
+}
+
 // guiPlace is a saved place for the interface.
 type guiPlace struct {
 	Name     string `json:"name"`
@@ -168,6 +183,8 @@ type guiState struct {
 	// the given passwords (by position) that opened nothing: wrong, or
 	// changed since.
 	Options       map[string]bool   `json:"options"`
+	Clusters      []guiCluster      `json:"clusters"`
+	Recording     *guiRecording     `json:"recording"`
 	Places        []guiPlace        `json:"places"`
 	SocialPresets []db.SocialPreset `json:"social_presets"`
 	Access        map[string]string `json:"access"`
@@ -262,6 +279,36 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 		testing := database.TestBlocks()
+		state.Clusters = []guiCluster{}
+		clusters, err := database.ListClusters()
+		if err != nil {
+			return err
+		}
+		for _, c := range clusters {
+			full, err := database.GetCluster(c.Name)
+			if err != nil {
+				return err
+			}
+			entries := full.Entries
+			if entries == nil {
+				entries = []string{}
+			}
+			state.Clusters = append(state.Clusters, guiCluster{Name: full.Name, Where: full.Where.List(), Entries: entries})
+		}
+		if rec, err := database.GetRecording(); err != nil {
+			return err
+		} else if rec != nil {
+			g := &guiRecording{Cluster: rec.Cluster, Block: rec.Block}
+			if rec.ListID != 0 {
+				if l, err := database.GetList(rec.ListID); err == nil {
+					g.List = l.Name
+				}
+			}
+			if sites, err := database.RecordedSites(); err == nil {
+				g.Sites = len(sites)
+			}
+			state.Recording = g
+		}
 		places, err := database.Places()
 		if err != nil {
 			return err

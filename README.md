@@ -82,7 +82,7 @@ For a Flatpak app, block it by its app ID (see `flatpak list --app`). This is mo
 kc9k block add-app social-media com.discordapp.Discord
 ```
 
-Seed from a built-in template (`social-media`, `news`, `video`, `shopping`), or block every website except the ones you add as exceptions:
+Seed from a built-in template (`social-media`, `video`, `streaming`, `news`, `forums`, `games`, `gambling`, `shopping`, `music`, `messaging`, `dating`, `ai-chat`, `sports`, `finance`), or block every website except the ones you add as exceptions:
 
 ```bash
 kc9k block create focus --template social-media
@@ -673,6 +673,8 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 
 - **Dashboard**: active blocks and their locks, the state of Frozen Chicken, strict mode and no-escape, today's most used websites and apps, and a Monk mode… button.
 - **Blocks**: website lists (blacklists and exceptions, each with its own boxes for where it looks and what it does, and import/export), apps, folders and window titles (with import/export), schedules, quota, Pomodoro and bypass prevention per block; starting a block with optional locks (time, typing challenge, until restart, delay, password, and the challenge length from 10 to 5000 characters). The typing challenge opens in a terminal. The Schedule tab shows the week as a calendar: drag down a day to add a window, click a window to remove it (filled windows turn the block on, outlined ones are allow windows).
+- **Blocks**, more: a new block can start from a ready-made list; apps are picked from a searchable list of installed apps and running programs, or as a folder or a program file; the Schedule tab has one-click windows (work hours, evenings, weekends, nights) and shows the hours covered per week; further tabs for breaks, social media settings and places; the bypass prevention editor shows and edits every step of the ladder and what it counts.
+- **Clusters**: website lists outside blocks, with a search box: create, edit, import and export them, copy one into a block, and record the sites you open into one.
 - **Device Blocks**: whole-computer locks: Frozen Chicken, strict mode and no-escape.
 - **Statistics**: time per day and the most used websites or apps, for today or the last 7, 30 or 90 days.
 - **Settings**: the theme (light, dark or the system's, saved in `~/.config/kc9k/gui.json`), browser options, statistics, the settings password, bypass prevention for the whole computer, and hotkeys.

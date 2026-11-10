@@ -117,8 +117,8 @@ periods, and quota sessions closed during a work period.
 
 ## Phase 4: access passwords
 
-**Done 2026-11-10** (CLI, interface, tests, README). Not built: relock
-after idle minutes. Not yet installed on the test laptop.
+**Done 2026-11-10** (CLI, interface, tests, README). Relock after idle
+minutes was added later the same day (an interface preference). Not yet installed on the test laptop.
 
 Optional passwords to open the interface and each main page. They can all be
 the same or all differ.

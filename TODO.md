@@ -12,7 +12,7 @@ The order of work and what is done is in `docs/PLAN.md` (agreed with the user 20
 - Left to do:
   1. Root-path hardening (`docs/PLAN.md` 8.1): needs a disposable machine or VM, it changes boot and login configuration.
   2. The interface's design pass: nothing new this session has been looked at on a real screen (layout of the access password covers and dialog, Breaks, Social media, Places, Clusters, the ladder editor, the app picker, the keyword test panel, the toolbar popup and badge, the block page's reason line).
-  3. Not tried with real use: polite closing with a real app, mute and declutter and dark on real sites, the social media settings beyond YouTube Shorts (selectors in `webext/files/social.js` are from memory of the sites' markup and will need checking), a playlist's videos actually playing, a block turning on and off when moving between places, relocking after a break, idle relock of access passwords (not built).
+  3. Not tried with real use: polite closing with a real app, mute and declutter and dark on real sites, the social media settings beyond YouTube Shorts (selectors in `webext/files/social.js` are from memory of the sites' markup and will need checking), a playlist's videos actually playing, a block turning on and off when moving between places, relocking after a break.
   4. The tray icon (left out; see `docs/PLAN.md` phase 9).
   5. "Still to try" below, and "Before release".
 - Good to know: the browser policy stops many blocked pages before the extension sees any request, so the extension then learns of them from the tab (every 3 s). Anything that needs the request itself (such as where a page was opened from) needs a fallback for that case (`trail` in `background.js`).

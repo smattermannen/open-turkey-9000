@@ -1194,6 +1194,8 @@ class Window(Gtk.ApplicationWindow):
         self.access_passwords = []  # access passwords given, until closed or locked
         self.access = {}  # area -> "none", "open" or "locked"
         self.covers = {}  # page name -> (stack, cover text, entry, title)
+        self.last_input = GLib.get_monotonic_time()  # for locking again when idle
+        self.connect("event-after", self.note_input)
         self.stats_rows = []
         self.stats_on = True
 
@@ -1508,6 +1510,7 @@ class Window(Gtk.ApplicationWindow):
 
     # State ---------------------------------------------------------------
     def refresh(self):
+        self.lock_when_idle()
         if self.busy:
             return True
         self.busy = True
@@ -1634,6 +1637,19 @@ class Window(Gtk.ApplicationWindow):
         self.apply_state(True, output, passwords)
         self.refresh_stats()
         return True
+
+    def note_input(self, _widget, event):
+        if event.type in (Gdk.EventType.KEY_PRESS, Gdk.EventType.BUTTON_PRESS, Gdk.EventType.SCROLL,
+                          Gdk.EventType.MOTION_NOTIFY):
+            self.last_input = GLib.get_monotonic_time()
+
+    def lock_when_idle(self):
+        """Forgets the access passwords after the idle minutes chosen under
+        Settings (0: never)."""
+        minutes = self.get_application().prefs.get("access_idle_minutes", 0)
+        idle = (GLib.get_monotonic_time() - self.last_input) / 60e6
+        if minutes and self.access_passwords and idle >= minutes:
+            self.lock_access()
 
     def lock_access(self, _button=None):
         self.access_passwords = []
@@ -3090,6 +3106,19 @@ class Window(Gtk.ApplicationWindow):
         self.access_remove_button.connect("clicked", self.remove_access_password)
         access_row.pack_start(access_set, False, False, 0)
         access_row.pack_start(self.access_remove_button, False, False, 0)
+        idle_row = Gtk.Box(spacing=6)
+        idle_row.pack_start(Gtk.Label(label="Lock the pages again after"), False, False, 0)
+        idle = Gtk.SpinButton.new_with_range(0, 240, 1)
+        idle.set_value(self.get_application().prefs.get("access_idle_minutes", 0))
+
+        def save_idle(spin):
+            prefs = self.get_application().prefs
+            prefs["access_idle_minutes"] = spin.get_value_as_int()
+            save_prefs(prefs)
+
+        idle.connect("value-changed", save_idle)
+        idle_row.pack_start(idle, False, False, 0)
+        idle_row.pack_start(Gtk.Label(label="minutes without using this window (0: never)"), False, False, 0)
         box.pack_start(section(
             "Access passwords",
             dim("Optional passwords to open Killer Chicken 9000 and each of its pages: "
@@ -3097,7 +3126,7 @@ class Window(Gtk.ApplicationWindow):
                 "for several, or a different one for each. A locked page shows nothing until "
                 "its password is given; the Lock button at the top locks them again. "
                 "Changing or removing one asks for the one it has."),
-            self.access_status, access_row), False, False, 0)
+            self.access_status, access_row, idle_row), False, False, 0)
 
         self.nepsis_label = Gtk.Label(xalign=0, wrap=True)
         nepsis_row = Gtk.Box(spacing=6)

@@ -630,7 +630,7 @@ kc9k access set settings        # and another for Settings
 kc9k access remove stats
 ```
 
-In the interface they are under Settings > Access passwords. A locked page shows a password box and nothing else; a password you type opens every page it belongs to, and stays remembered until you close the window or press Lock. With the `app` password set, nothing shows until it is given.
+In the interface they are under Settings > Access passwords. A locked page shows a password box and nothing else; a password you type opens every page it belongs to, and stays remembered until you close the window, press Lock, or leave the window unused for the minutes you set there (a convenience kept in your own settings file, not a lock). With the `app` password set, nothing shows until it is given.
 
 The check is made by `kc9k` itself, not by the interface, so the commands ask too: every command belongs to a page (`block`, `list`, `schedule`, `quota` … to Blocks; `freeze`, `strict`, `no-escape` to Device Blocks; `browser`, `hotkey`, `password`, `access` to Settings; `status`, `start`, `stop`, `unlock` to the Dashboard or Blocks, whichever is open) and runs only with the `app` password and that page's. On a terminal it asks; the interface passes them along. The daemon and hotkeys are not affected, so blocking goes on as before.
 

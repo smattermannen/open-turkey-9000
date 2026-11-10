@@ -156,6 +156,7 @@ function kc9kCompileLists(lists) {
     const except = list.except || {};
     return {
       id: list.id,
+      block: list.block,
       url: kc9kFilter({ match: list.url || [] }),
       title: kc9kKeywordRegexes(list.title),
       text: kc9kKeywordRegexes(list.text),

@@ -17,8 +17,13 @@ var quotaCmd = &cobra.Command{
 	Short: "Manage daily quotas",
 	Long: `Give a block a daily quota. The block stays on all the time, and
 'quota start' opens it until the session ends or the minutes run out. All time
-in an open session is spent, whether or not the sites are used. Unused time is
-not saved, and the quota refills at midnight.
+in an open session is spent only while the block is in use: one of its apps
+is in front, or one of its websites is in the focused tab (not while you are
+idle) or plays sound or video, even muted (address and title lists; page
+text lists don't count). While a session has websites, browsers without the
+extension are closed. Without LibreWolf the extension can't see tabs, so a
+session with websites spends all its time. Unused time is not saved, and the
+quota refills at midnight.
 
 Lowering a quota applies at once. Raising or removing it applies at midnight.`,
 }

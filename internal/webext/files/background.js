@@ -259,11 +259,15 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message && message.type === "page-hits") {
     pageHit(message, sender);
   }
+  if (message && message.type === "playing" && sender && sender.tab) {
+    playing.set(sender.tab.id, Date.now());
+  }
   return undefined;
 });
 
 function apply(rules) {
   lists = kc9kCompileLists(rules.lists);
+  quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
   titleWords = (rules.titles || []).map((word) => String(word).toLowerCase()).filter(Boolean);
 }
@@ -291,7 +295,10 @@ async function poll() {
     if (response.ok) {
       const rules = await response.json();
       apply(rules);
-      await browser.storage.local.set({ rules, page: { lists: rules.lists || [] } });
+      await browser.storage.local.set({
+        rules,
+        page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0 },
+      });
       await closeNewlyBlockedTabs();
     }
   } catch (error) {
@@ -354,3 +361,78 @@ async function reportUsage() {
 
 setInterval(sampleUsage, SAMPLE_SECONDS * 1000);
 setInterval(reportUsage, REPORT_MS);
+
+// Quota sessions: while a block's quota session is open, its lists come as
+// rules.quota, only to count the time its websites are in use. Every 5
+// seconds, a block counts once if one of its sites is in the focused tab
+// (unless the user is idle), or plays sound, or plays a video even muted
+// (content scripts report those). The daemon spends that time.
+const QUOTA_REPORT_MS = 10000;
+let quotaLists = [];
+let quotaUse = {};
+const playing = new Map(); // tab id -> when its content script last said it plays
+
+async function sampleQuota() {
+  if (quotaLists.length === 0) {
+    return;
+  }
+  const tabs = new Map();
+  try {
+    if ((await browser.idle.queryState(60)) === "active") {
+      const win = await browser.windows.getLastFocused();
+      if (win && win.focused) {
+        const [tab] = await browser.tabs.query({ active: true, windowId: win.id });
+        if (tab) {
+          tabs.set(tab.id, tab);
+        }
+      }
+    }
+    for (const tab of await browser.tabs.query({ audible: true })) {
+      tabs.set(tab.id, tab);
+    }
+    for (const [id, at] of playing) {
+      if (Date.now() - at > 3 * SAMPLE_SECONDS * 1000) {
+        playing.delete(id);
+        continue;
+      }
+      try {
+        tabs.set(id, await browser.tabs.get(id));
+      } catch (error) {
+        playing.delete(id);
+      }
+    }
+  } catch (error) {
+    // A window or tab closed between the calls: count what was found.
+  }
+  const blocks = new Set();
+  for (const tab of tabs.values()) {
+    if (tab.url && /^https?:/i.test(tab.url)) {
+      for (const match of kc9kListMatches(quotaLists, { url: tab.url, title: tab.title || "", text: "" })) {
+        blocks.add(match.list.block);
+      }
+    }
+  }
+  for (const block of blocks) {
+    quotaUse[block] = (quotaUse[block] || 0) + SAMPLE_SECONDS;
+  }
+}
+
+async function reportQuota() {
+  if (Object.keys(quotaUse).length === 0) {
+    return;
+  }
+  const quota = quotaUse;
+  quotaUse = {};
+  try {
+    await fetch(USAGE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-KC9K-Usage": "1" },
+      body: JSON.stringify({ sites: {}, quota }),
+    });
+  } catch (error) {
+    // The daemon is down: this time isn't spent.
+  }
+}
+
+setInterval(sampleQuota, SAMPLE_SECONDS * 1000);
+setInterval(reportQuota, QUOTA_REPORT_MS);

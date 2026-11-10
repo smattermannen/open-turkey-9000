@@ -58,11 +58,19 @@ const SettingExtensionCheckIn = "extension.last_checkin"
 const checkInRecordEvery = 30 * time.Second
 
 // ExtensionRequired reports whether browsers must run the extension now:
-// while an active block has a blacklist that does something, or an option
+// while an active block, or one in a quota session, has a blacklist that
+// does something, or an option
 // only the extension enforces (web-only, force-search) is on. A block of
 // apps alone doesn't need it.
 func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
 	for _, b := range active {
+		if b.Lists.Enforces() {
+			return true
+		}
+	}
+	// An open quota session counts the time on its websites, which only the
+	// extension sees: without it, another browser would be free.
+	for _, b := range openQuotaBlocks(d) {
 		if b.Lists.Enforces() {
 			return true
 		}
@@ -155,6 +163,7 @@ var otherSearchEngines = []string{
 // restarts with the new one.
 type Rules struct {
 	Lists      []ListRule `json:"lists"`
+	Quota      []ListRule `json:"quota"` // blocks in a quota session: only to count their time
 	Block      []string   `json:"block"`
 	Exceptions []string   `json:"exceptions"`
 	WebOnly    bool       `json:"web_only"`
@@ -236,7 +245,7 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 // BuildRules collects the rules for the extension right now.
 func BuildRules(d *db.DB) (Rules, error) {
 	rules := Rules{
-		Lists: []ListRule{}, Block: []string{}, Exceptions: []string{},
+		Lists: []ListRule{}, Quota: []ListRule{}, Block: []string{}, Exceptions: []string{},
 		WebOnly: BrowserOn(d, "web-only"),
 		Titles:  []string{},
 	}
@@ -261,6 +270,9 @@ func BuildRules(d *db.DB) (Rules, error) {
 				}
 			}
 		}
+	}
+	for _, b := range openQuotaBlocks(d) {
+		rules.Quota = append(rules.Quota, listRules(db.ActiveBlockDetail{BlockName: b.Name, Lists: b.Lists})...)
 	}
 	if BrowserOn(d, "force-search") {
 		rules.Lists = append(rules.Lists, ListRule{Block: "force-search", Name: "Other search engines",

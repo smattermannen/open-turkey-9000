@@ -335,7 +335,7 @@ kc9k quota end social-media         # close it early
 kc9k quota remove social-media      # takes effect at midnight
 ```
 
-All time in an open session is spent, whether or not the sites are used, because Killer Chicken 9000 cannot see inside a browser tab. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
+An open session spends only the time the block is in use: one of its apps is in the focused window, or one of its websites is in the focused tab (not while you are idle for a minute) or plays sound or video, even muted, in any tab. Websites are matched by the block's address and title lists; page text lists don't count here. While a session with websites is open, browsers without the extension are closed, so another browser can't be used for free. Without LibreWolf the extension can't see tabs, so a session with websites spends all of its time. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
 
 ## Locks
 

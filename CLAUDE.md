@@ -91,6 +91,12 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   extended; once at most every 10 min), monk mode (`StartMonk`: the ordinary
   block `monk-mode`, `*.*` by default, time-locked with StopAt ending it).
   Device effects go through replaceable vars so tests never touch the machine.
+- **Quota by use** (`internal/quota/`, `enforce/quota.go`): a session spends
+  only time in use (`Spend`; `Step` never spends): the daemon's foreground
+  sampler adds the block's apps, and the extension reports, from
+  `rules.quota` (lists of blocks in a session), seconds a site was in the
+  focused tab or played media (`/usage` `quota`). Without LibreWolf a session
+  with websites spends wall time; while one is open the extension is required.
 - **Events and bypass prevention** (`db/events.go`, `db/nepsis.go`,
   `enforce/nepsis.go`, `cli/nepsis.go`): what KC9K stops is logged (pages
   via `/hit`, app kills per block, title closes, browsers closed, refused

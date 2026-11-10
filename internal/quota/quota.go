@@ -1,9 +1,9 @@
 // Package quota holds the pure rules of daily quotas.
 //
 // A block with a quota stays on all the time. Its owner opens it with a quota
-// session, and every minute of an open session is spent, whether or not the
-// sites are actually used: without a browser extension Killer Chicken 9000 cannot see
-// what happens inside a tab.
+// session. The daemon spends only the time the block's sites or apps are in
+// use (see enforce/quota.go); without LibreWolf, which runs the extension that
+// sees tabs, a session with websites spends all of its time.
 package quota
 
 import (
@@ -70,8 +70,8 @@ func (s State) SetLimit(limit int64) State {
 	return s
 }
 
-// Step advances a quota to now: it starts a new day when the date changes,
-// spends elapsed session time and closes a finished session.
+// Step advances a quota to now: it starts a new day when the date changes
+// and closes a session that reached its end. It spends nothing: see Spend.
 func (s State) Step(now int64, day string) State {
 	if day != s.Day {
 		s.Day, s.Used, s.Open, s.SessionEnd = day, 0, false, 0
@@ -79,19 +79,28 @@ func (s State) Step(now int64, day string) State {
 			s.Limit, s.PendingLimit = s.PendingLimit, NoPending
 		}
 	}
-	if s.Open {
-		elapsed := now - s.LastTick
-		if elapsed < 0 {
-			elapsed = 0
-		}
-		if elapsed > MaxStep {
-			elapsed = MaxStep
-		}
-		s.Used += elapsed
-		if s.Used >= s.Limit || (s.SessionEnd != 0 && now >= s.SessionEnd) {
-			s.Open, s.SessionEnd = false, 0
-		}
+	if s.Open && s.SessionEnd != 0 && now >= s.SessionEnd {
+		s.Open, s.SessionEnd = false, 0
 	}
 	s.LastTick = now
+	return s
+}
+
+// Elapsed is the wall time since the last step, capped at MaxStep so suspend
+// or a clock jump doesn't burn the quota in one go.
+func (s State) Elapsed(now int64) int64 {
+	return min(max(now-s.LastTick, 0), MaxStep)
+}
+
+// Spend spends seconds of an open session (at most 2*MaxStep at once, so a
+// forged or stale report can't burn much), closing it when the quota runs out.
+func (s State) Spend(seconds int64) State {
+	if !s.Open || seconds <= 0 {
+		return s
+	}
+	s.Used += min(seconds, 2*MaxStep)
+	if s.Used >= s.Limit {
+		s.Open, s.SessionEnd = false, 0
+	}
 	return s
 }

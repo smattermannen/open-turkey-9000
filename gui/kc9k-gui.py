@@ -1533,7 +1533,9 @@ class Window(Gtk.ApplicationWindow):
         self.quota_label = dim("")
         box.pack_start(section(
             "Daily quota",
-            dim("The block stays on, except during sessions you open, until the day's minutes are spent."),
+            dim("The block stays on, except during sessions you open, until the day's minutes are "
+                "spent. A session only spends time while the block is in use: its app in front, "
+                "its site in the focused tab, or playing sound or video."),
             quota_row, session_row, self.quota_label), False, False, 0)
 
         pomodoro_row = Gtk.Box(spacing=6)

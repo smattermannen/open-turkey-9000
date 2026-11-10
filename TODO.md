@@ -21,15 +21,13 @@ Still to try:
 6. Website lists (extension 1.7.0): the upgrade turns the test blocks into lists (`kc9k list show <block>`); a title list, and an exception list by title (e.g. block youtube.com except pages titled "lecture"); a page that changes address without loading (YouTube) is caught by an address list; the interface's Websites tab on the laptop's screen.
 7. Extension 1.8.0 actions: redirect, a picture (does LibreWolf load it from 127.0.0.1?), close-tab, close-browser (the tab mustn't come back in the restored session), monk mode from a list, and a one-off logout. Bypass prevention firing (global and per block), and a locked global one refusing `nepsis off`. Monk mode from the Dashboard. `ci/browser_test.py` has new checks for a title exception and a redirect.
 8. Hotkeys under GNOME (written beside Cinnamon's; check they don't disturb Cinnamon), the hidden terms and search box in the interface, and a daemon restart (`sudo systemctl restart kc9k`) showing up in `kc9k nepsis` counts.
+9. Quota by use (extension 1.9.0): a session spends nothing while idle or on another site, counts a muted video playing in a background tab, counts the block's app in front; another browser is closed during a website session.
 
 `ci/browser_test.py` passed in LibreWolf on 2026-11-09 (all checks, with page keywords and no-private added). It could not run while block-devtools was on: the DisableDeveloperTools policy turns off Marionette, so testing builds now leave that policy out while the remote-control marker exists.
 
 ## Next
 - The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
 - Bypass prevention: more signs of loophole hunting to log as events. Logged so far: blocked pages, apps, window titles (per block), browsers closed (globally), refused loosening, the daemon restarting within a boot, clock jumps.
-
-## Later
-- Count quota time only while a block's sites or apps are in use, measured by the extension (its statistics sampling in background.js can be reused) and the daemon's foreground-app sampling. Watch for loopholes: a muted video beside another window, and browsers without the extension while a session is open.
 
 ## Before release
 Build without `TAGS=devmaster`. Remove `ci/vm.sh`. Rename the GitHub repository to `kc9k`. On the test laptop, remove `/etc/sudoers.d/99-claude-test`.

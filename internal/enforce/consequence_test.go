@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/quota"
 )
 
 // fakeDevice replaces what consequences do to the computer and records it.
@@ -221,5 +222,39 @@ func TestTamperSigns(t *testing.T) {
 	}
 	if got := clockDrift(0, 0, 5*time.Second, 5*time.Second); got != 0 {
 		t.Errorf("drift with both clocks moving = %s", got)
+	}
+}
+
+// An open quota session spends only the time its block was in use.
+func TestQuotaSpendsUse(t *testing.T) {
+	d := testDB(t)
+	if err := d.CreateBlock("games"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddApps("games", []string{"steam"}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	s := quota.New(600, now.Unix(), quota.DayOf(now))
+	s.Open = true
+	if err := d.SaveQuota("games", s); err != nil {
+		t.Fatal(err)
+	}
+	// Twenty seconds pass with nothing in use: nothing is spent.
+	if err := reconcileQuotas(d, now.Add(20*time.Second), now.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := d.GetQuota("games"); q.Used != 0 || !q.Open {
+		t.Fatalf("idle session: %+v", q)
+	}
+	// Steam in front for 5 seconds, then a forged report for a closed
+	// session's block.
+	noteQuotaApps(d, []string{"firefox", "steam"}, 5)
+	addQuotaUse("other", 50)
+	if err := reconcileQuotas(d, now.Add(25*time.Second), now.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := d.GetQuota("games"); q.Used != 5 {
+		t.Errorf("used = %d; want 5", q.Used)
 	}
 }

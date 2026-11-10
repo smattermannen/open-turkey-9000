@@ -2,11 +2,79 @@ package enforce
 
 import (
 	"log"
+	"slices"
+	"sync"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/quota"
 )
+
+// quotaUse collects, per block, the seconds its sites or apps were in use
+// since the daemon last spent them: the extension reports websites (tabs in
+// front, or playing sound or video), the foreground sampler reports apps.
+var quotaUse = struct {
+	sync.Mutex
+	seconds map[string]int64
+}{seconds: map[string]int64{}}
+
+func addQuotaUse(block string, seconds int64) {
+	quotaUse.Lock()
+	defer quotaUse.Unlock()
+	quotaUse.seconds[block] += seconds
+}
+
+func takeQuotaUse(block string) int64 {
+	quotaUse.Lock()
+	defer quotaUse.Unlock()
+	seconds := quotaUse.seconds[block]
+	delete(quotaUse.seconds, block)
+	return seconds
+}
+
+// openQuotaBlocks returns the blocks with a quota session open now.
+func openQuotaBlocks(d *db.DB) []*db.BlockDetail {
+	names, err := d.QuotaBlocks()
+	if err != nil {
+		log.Printf("quota: %v", err)
+		return nil
+	}
+	var out []*db.BlockDetail
+	for _, name := range names {
+		state, err := d.GetQuota(name)
+		if err != nil || state == nil || !state.Open {
+			continue
+		}
+		if detail, err := d.GetBlock(name); err == nil {
+			out = append(out, detail)
+		}
+	}
+	return out
+}
+
+// countsByUse reports whether a block's session can be spent by use: its
+// websites need the extension to be seen, which needs LibreWolf. Without
+// it, a session with websites spends all of its time.
+func countsByUse(detail *db.BlockDetail) bool {
+	return !detail.Lists.Enforces() || blocker.LibreWolfVersion() != ""
+}
+
+// noteQuotaApps adds seconds to the open sessions of blocks whose apps are
+// in the foreground.
+func noteQuotaApps(d *db.DB, foreground []string, seconds int64) {
+	if len(foreground) == 0 {
+		return
+	}
+	for _, b := range openQuotaBlocks(d) {
+		for _, app := range b.Apps {
+			if slices.Contains(foreground, app) {
+				addQuotaUse(b.Name, seconds)
+				break
+			}
+		}
+	}
+}
 
 // reconcileQuotas spends open sessions and keeps each quota block on, except
 // during a session. A lock or an enforcing schedule always beats a session.
@@ -24,13 +92,16 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		if state == nil {
 			continue
 		}
-		s := state.Step(now.Unix(), quota.DayOf(now))
-
 		detail, err := d.GetBlock(name)
 		if err != nil {
 			log.Printf("daemon: quota: %v", err)
 			continue
 		}
+		spent := takeQuotaUse(name)
+		if !countsByUse(detail) {
+			spent = state.Elapsed(now.Unix())
+		}
+		s := state.Spend(spent).Step(now.Unix(), quota.DayOf(now))
 		extras, err := d.GetLockExtras(name)
 		if err != nil {
 			log.Printf("daemon: quota: %v", err)
@@ -65,7 +136,8 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 			continue
 		}
 		if !saved {
-			continue // the CLI changed it; the next cycle sees the new state
+			addQuotaUse(name, spent) // the CLI changed it; spend this next cycle
+			continue
 		}
 
 		switch {

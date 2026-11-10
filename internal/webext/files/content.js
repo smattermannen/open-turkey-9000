@@ -69,8 +69,11 @@ function render() {
   style.textContent = css;
 }
 
+let quotaOpen = false;
+
 function load(page) {
   lists = kc9kCompileLists(page && page.lists);
+  quotaOpen = Boolean(page && page.quota);
   textChanged = true;
   render();
   scanKeywords();
@@ -148,3 +151,18 @@ setInterval(() => {
     scanKeywords();
   }
 }, 1000);
+
+// While a quota session is open, tell the background script when this page
+// (or frame) plays sound or video, even muted: that time counts as use.
+setInterval(() => {
+  if (!quotaOpen) {
+    return;
+  }
+  const media = document.querySelectorAll("video, audio");
+  for (const m of media) {
+    if (!m.paused && !m.ended && m.readyState > 2) {
+      browser.runtime.sendMessage({ type: "playing" }).catch(() => {});
+      return;
+    }
+  }
+}, 5000);

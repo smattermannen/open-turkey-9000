@@ -5,30 +5,33 @@ import "testing"
 func TestSpendAndClose(t *testing.T) {
 	s := New(20, 100, "d1")
 	s.Open = true
-	s = s.Step(110, "d1")
+	s = s.Step(110, "d1").Spend(10)
 	if s.Used != 10 || !s.Open {
 		t.Fatalf("after 10s: %+v", s)
 	}
-	s = s.Step(120, "d1")
+	s = s.Step(120, "d1").Spend(10)
 	if s.Remaining() != 0 || s.Open {
 		t.Fatalf("spent quota should close the session: %+v", s)
 	}
 }
 
 func TestClosedSessionSpendsNothing(t *testing.T) {
-	if s := New(20, 100, "d1").Step(500, "d1"); s.Used != 0 {
+	if s := New(20, 100, "d1").Step(500, "d1").Spend(30); s.Used != 0 {
 		t.Fatalf("used = %d", s.Used)
 	}
 }
 
-func TestStepIsCapped(t *testing.T) {
+func TestElapsedAndSpendAreCapped(t *testing.T) {
 	s := New(600, 100, "d1")
 	s.Open = true
-	if s = s.Step(100000, "d1"); s.Used != MaxStep {
-		t.Fatalf("forward jump: used = %d", s.Used)
+	if e := s.Elapsed(100000); e != MaxStep {
+		t.Fatalf("forward jump: elapsed = %d", e)
 	}
-	if s = s.Step(5, "d1"); s.Used != MaxStep {
-		t.Fatalf("backward jump: used = %d", s.Used)
+	if e := s.Elapsed(5); e != 0 {
+		t.Fatalf("backward jump: elapsed = %d", e)
+	}
+	if s = s.Spend(1000); s.Used != 2*MaxStep {
+		t.Fatalf("one report spent %d", s.Used)
 	}
 }
 

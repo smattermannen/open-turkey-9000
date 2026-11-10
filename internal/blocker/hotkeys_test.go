@@ -50,6 +50,9 @@ func TestHotkeyList(t *testing.T) {
 	if !reflect.DeepEqual(list, []string{dir + "custom0/", dir + "kc9k7/"}) || !reflect.DeepEqual(removed, []string{"kc9k3"}) {
 		t.Errorf("GNOME merge = %q, removed %q", list, removed)
 	}
+	if got := stringArray(nil); got != "@as []" {
+		t.Errorf("empty stringArray = %s", got)
+	}
 	if got := stringArray([]string{"a'b", `c\d`}); got != `['a\'b', 'c\\d']` {
 		t.Errorf("stringArray = %s", got)
 	}

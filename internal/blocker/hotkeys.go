@@ -129,7 +129,12 @@ func parseStringArray(text string) []string {
 	return out
 }
 
+// stringArray writes items as a GVariant string array. An empty one needs
+// its type spelled out, or dconf can't tell what "[]" is.
 func stringArray(items []string) string {
+	if len(items) == 0 {
+		return "@as []"
+	}
 	quoted := make([]string, len(items))
 	for i, s := range items {
 		quoted[i] = gvariantString(s)

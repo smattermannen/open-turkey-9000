@@ -248,6 +248,26 @@ func (d *DB) GlobalNepsis() (Nepsis, error) {
 	return n.normalize(), nil
 }
 
+// NepsisLadderKey names the setting holding a scope's place on its ladder
+// ("" is the global scope): "<level> <fired> <calm>", see enforce/nepsis.go.
+func NepsisLadderKey(scope string) string {
+	if scope == "" {
+		return "nepsis.ladder"
+	}
+	return "nepsis.ladder." + scope
+}
+
+// startLadder puts a scope at the bottom of its ladder when its bypass
+// detection is switched on, counting events from now on: what was stopped
+// before it was on doesn't trip it.
+func (d *DB) startLadder(scope string, old Nepsis) error {
+	if old.On() {
+		return nil
+	}
+	now := time.Now().Unix()
+	return d.SetSetting(NepsisLadderKey(scope), fmt.Sprintf("0 %d %d", now-1, now))
+}
+
 // SetGlobalNepsis stores the bypass detection for the whole computer.
 func (d *DB) SetGlobalNepsis(n Nepsis) error {
 	n = n.normalize()
@@ -255,6 +275,13 @@ func (d *DB) SetGlobalNepsis(n Nepsis) error {
 		return d.SetSetting(SettingNepsis, "")
 	}
 	if err := n.Check(); err != nil {
+		return err
+	}
+	old, err := d.GlobalNepsis()
+	if err != nil {
+		return err
+	}
+	if err := d.startLadder("", old); err != nil {
 		return err
 	}
 	data, err := json.Marshal(n)
@@ -302,6 +329,13 @@ func (d *DB) SetBlockNepsis(blockName string, n Nepsis) error {
 		return err
 	}
 	if err := n.Check(); err != nil {
+		return err
+	}
+	old, err := d.BlockNepsis(blockName)
+	if err != nil {
+		return err
+	}
+	if err := d.startLadder(blockName, old); err != nil {
 		return err
 	}
 	data, err := json.Marshal(n)

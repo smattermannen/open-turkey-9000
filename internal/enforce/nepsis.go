@@ -67,16 +67,9 @@ type ladder struct {
 	Calm  int64 // when the quiet clock last started: firing or falling back
 }
 
-func ladderKey(scope string) string {
-	if scope == "" {
-		return "nepsis.ladder"
-	}
-	return "nepsis.ladder." + scope
-}
-
 func loadLadder(d *db.DB, scope string) ladder {
 	var l ladder
-	value, _ := d.GetSetting(ladderKey(scope))
+	value, _ := d.GetSetting(db.NepsisLadderKey(scope))
 	parts := strings.Fields(value)
 	if len(parts) == 3 {
 		l.Level, _ = strconv.Atoi(parts[0])
@@ -87,7 +80,7 @@ func loadLadder(d *db.DB, scope string) ladder {
 }
 
 func saveLadder(d *db.DB, scope string, l ladder) {
-	if err := d.SetSetting(ladderKey(scope), fmt.Sprintf("%d %d %d", l.Level, l.Fired, l.Calm)); err != nil {
+	if err := d.SetSetting(db.NepsisLadderKey(scope), fmt.Sprintf("%d %d %d", l.Level, l.Fired, l.Calm)); err != nil {
 		log.Printf("nepsis: %v", err)
 	}
 }

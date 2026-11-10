@@ -282,6 +282,33 @@ func TestHitHandler(t *testing.T) {
 	}
 }
 
+// Switching bypass detection on doesn't count what was stopped before.
+func TestNepsisStartsFresh(t *testing.T) {
+	d := testDB(t)
+	did := fakeDevice(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	addEvents(t, d, db.EventPage, "b", 5)
+	time.Sleep(1100 * time.Millisecond)
+	one := db.Nepsis{Steps: []db.NepsisStep{{Count: 2, Minutes: 10, Actions: []db.NepsisAction{{Kind: db.ConsequenceCloseBrowser}}}}}
+	if err := d.SetBlockNepsis("b", one); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetGlobalNepsis(one); err != nil {
+		t.Fatal(err)
+	}
+	checkScopes(d, time.Now(), []string{"", "b"})
+	if len(*did) != 0 {
+		t.Fatalf("fired on events from before it was on: %q", *did)
+	}
+	addEvents(t, d, db.EventPage, "b", 2)
+	checkScopes(d, time.Now(), []string{"b"})
+	if len(*did) == 0 {
+		t.Fatal("didn't fire on new events")
+	}
+}
+
 func TestFromSearch(t *testing.T) {
 	for address, want := range map[string]bool{
 		"https://www.google.com/search?q=x":      true,
@@ -401,5 +428,37 @@ func TestQuotaSpendsUse(t *testing.T) {
 	}
 	if q, _ := d.GetQuota("games"); q.Used != 5 {
 		t.Errorf("used = %d; want 5", q.Used)
+	}
+}
+
+// A quota keeps its block on as a scheduled block without a schedule; the
+// schedule check must leave it on.
+func TestScheduleLeavesQuotaBlockOn(t *testing.T) {
+	d := testDB(t)
+	if err := d.CreateBlock("games"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if err := d.SaveQuota("games", quota.New(600, now.Unix(), quota.DayOf(now))); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ActivateBlock("games", false, 0, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileSchedules(d, now); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := d.GetBlock("games"); !b.Active {
+		t.Fatal("the schedule check turned a quota block off")
+	}
+	// Without the quota, a scheduled block with no schedules goes off.
+	if err := d.DeleteQuota("games"); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileSchedules(d, now); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := d.GetBlock("games"); b.Active {
+		t.Fatal("a scheduled block without schedules or a quota stayed on")
 	}
 }

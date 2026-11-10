@@ -15,6 +15,7 @@ package enforce
 
 import (
 	"log"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -388,6 +389,13 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 		}
 	}
 
+	// A quota keeps its block on outside its sessions (reconcileQuotas), as
+	// a scheduled block: leave turning those off to the quota.
+	quotas, err := d.QuotaBlocks()
+	if err != nil {
+		return err
+	}
+
 	for name, ws := range windows {
 		within := schedule.Enforced(ws, now)
 
@@ -406,7 +414,8 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 			} else {
 				log.Printf("daemon: schedule: activated %s", name)
 			}
-		case !within && detail.Active && detail.Scheduled && !detail.Locked && detail.LockedUntil <= trusted:
+		case !within && detail.Active && detail.Scheduled && !detail.Locked && detail.LockedUntil <= trusted &&
+			!slices.Contains(quotas, name):
 			if err := d.DeactivateBlock(name); err != nil {
 				log.Printf("daemon: schedule: failed to deactivate %s: %v", name, err)
 			} else {

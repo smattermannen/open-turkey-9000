@@ -1,8 +1,12 @@
-// hotkeys.go — KC9K's key combinations as Cinnamon custom keyboard
-// shortcuts. Cinnamon keeps them in dconf: a list of names under
-// /org/cinnamon/desktop/keybindings/custom-list, and for each name a folder
-// with its name, command and binding. KC9K's entries are named kc9k<id>, so
-// syncing replaces only those and leaves the user's own shortcuts alone.
+// hotkeys.go — KC9K's key combinations as custom keyboard shortcuts of
+// Cinnamon and GNOME. Both keep them in dconf: a list, and for each entry a
+// folder with its name, command and binding. Cinnamon's list holds names
+// (under /org/cinnamon/desktop/keybindings/custom-list) and a binding is an
+// array; GNOME's holds folder paths (media-keys/custom-keybindings) and a
+// binding is a string. KC9K's entries are named kc9k<id>, so syncing
+// replaces only those and leaves the user's own shortcuts alone. Both are
+// written in every session: a desktop ignores the other's keys, and
+// hotkeys then survive switching desktops.
 package blocker
 
 import (
@@ -14,12 +18,39 @@ import (
 	"strings"
 )
 
-const (
-	cinnamonKeysDir   = "/org/cinnamon/desktop/keybindings/"
-	cinnamonKeyList   = cinnamonKeysDir + "custom-list"
-	cinnamonKeyFolder = cinnamonKeysDir + "custom-keybindings/"
-	hotkeyPrefix      = "kc9k"
-)
+const hotkeyPrefix = "kc9k"
+
+// hotkeyDesktop is where one desktop keeps custom shortcuts.
+type hotkeyDesktop struct {
+	name      string
+	list      string // the dconf key listing the shortcuts
+	folder    string // the folder holding one folder per shortcut
+	listPaths bool   // the list holds folder paths rather than names
+	arrayKey  bool   // a binding is an array of accelerators
+}
+
+var hotkeyDesktops = []hotkeyDesktop{
+	{name: "Cinnamon", list: "/org/cinnamon/desktop/keybindings/custom-list",
+		folder: "/org/cinnamon/desktop/keybindings/custom-keybindings/", arrayKey: true},
+	{name: "GNOME", list: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings",
+		folder: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/", listPaths: true},
+}
+
+// entry is how the desktop's list names a shortcut.
+func (d hotkeyDesktop) entry(name string) string {
+	if d.listPaths {
+		return d.folder + name + "/"
+	}
+	return name
+}
+
+// nameOf is the shortcut's name for a list entry.
+func (d hotkeyDesktop) nameOf(entry string) string {
+	if d.listPaths {
+		return strings.TrimSuffix(strings.TrimPrefix(entry, d.folder), "/")
+	}
+	return entry
+}
 
 // DesktopHotkey is one shortcut to put on the desktop.
 type DesktopHotkey struct {
@@ -106,24 +137,24 @@ func stringArray(items []string) string {
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
-// mergeHotkeyList returns Cinnamon's custom list with KC9K's old entries
-// replaced by these IDs, and the KC9K entries that are gone.
-func mergeHotkeyList(current []string, ids []int) (list, removed []string) {
+// mergeHotkeyList returns a desktop's custom list with KC9K's old entries
+// replaced by these IDs, and the names of the KC9K entries that are gone.
+func mergeHotkeyList(d hotkeyDesktop, current []string, ids []int) (list, removed []string) {
 	want := map[string]bool{}
 	for _, id := range ids {
 		want[hotkeyPrefix+strconv.Itoa(id)] = true
 	}
-	for _, name := range current {
-		if strings.HasPrefix(name, hotkeyPrefix) {
+	for _, entry := range current {
+		if name := d.nameOf(entry); strings.HasPrefix(name, hotkeyPrefix) {
 			if !want[name] {
 				removed = append(removed, name)
 			}
 			continue
 		}
-		list = append(list, name)
+		list = append(list, entry)
 	}
 	for _, id := range ids {
-		list = append(list, hotkeyPrefix+strconv.Itoa(id))
+		list = append(list, d.entry(hotkeyPrefix+strconv.Itoa(id)))
 	}
 	return list, removed
 }
@@ -145,29 +176,36 @@ func SyncHotkeys(keys []DesktopHotkey) error {
 	}
 	var failures []string
 	for _, u := range users {
-		out, err := asUser(u, dconf, "read", cinnamonKeyList).Output()
-		if err != nil {
-			failures = append(failures, u.Username)
-			continue
-		}
-		list, removed := mergeHotkeyList(parseStringArray(string(out)), ids)
-		run := func(args ...string) {
-			if err == nil {
-				err = asUser(u, dconf, args...).Run()
+		ok := false
+		for _, d := range hotkeyDesktops {
+			out, err := asUser(u, dconf, "read", d.list).Output()
+			if err != nil {
+				continue
 			}
+			list, removed := mergeHotkeyList(d, parseStringArray(string(out)), ids)
+			run := func(args ...string) {
+				if err == nil {
+					err = asUser(u, dconf, args...).Run()
+				}
+			}
+			for _, name := range removed {
+				run("reset", "-f", d.folder+name+"/")
+			}
+			for _, k := range keys {
+				folder := d.folder + hotkeyPrefix + strconv.Itoa(k.ID) + "/"
+				binding := gvariantString(k.Accel)
+				if d.arrayKey {
+					binding = stringArray([]string{k.Accel})
+				}
+				run("write", folder+"name", gvariantString(k.Name))
+				run("write", folder+"command", gvariantString(k.Command))
+				run("write", folder+"binding", binding)
+			}
+			// The list goes last: the desktop picks the shortcuts up when it changes.
+			run("write", d.list, stringArray(list))
+			ok = ok || err == nil
 		}
-		for _, name := range removed {
-			run("reset", "-f", cinnamonKeyFolder+name+"/")
-		}
-		for _, k := range keys {
-			folder := cinnamonKeyFolder + hotkeyPrefix + strconv.Itoa(k.ID) + "/"
-			run("write", folder+"name", gvariantString(k.Name))
-			run("write", folder+"command", gvariantString(k.Command))
-			run("write", folder+"binding", stringArray([]string{k.Accel}))
-		}
-		// The list goes last: Cinnamon picks the shortcuts up when it changes.
-		run("write", cinnamonKeyList, stringArray(list))
-		if err != nil {
+		if !ok {
 			failures = append(failures, u.Username)
 		}
 	}

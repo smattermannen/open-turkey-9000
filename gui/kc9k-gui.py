@@ -326,25 +326,52 @@ def nice_step(maximum):
 # Widgets -----------------------------------------------------------------
 
 class EditableList(Gtk.Box):
-    """A titled list with an entry for adding and a button for removing."""
+    """A titled list with an entry for adding and a button for removing.
+
+    search adds a box that filters the list. hidden covers the terms until
+    the cover is clicked, like sensitive content on Reddit: lists of words
+    for adult sites shouldn't greet whoever opens the window. The cover
+    comes back when the list is shown for something else (see set_items)."""
 
     def __init__(self, title, placeholder, on_add, on_remove,
-                 on_import=None, on_export=None, help_text=""):
+                 on_import=None, on_export=None, help_text="", search=False, hidden=False):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
+        self.hidden, self.owner = hidden, None
         if title:
             self.pack_start(heading(title, "medium"), False, False, 0)
         if help_text:
             self.pack_start(dim(help_text), False, False, 0)
 
         self.store = Gtk.ListStore(str)
-        self.view = Gtk.TreeView(model=self.store, headers_visible=False)
+        self.filter_text = ""
+        self.filtered = self.store.filter_new()
+        self.filtered.set_visible_func(
+            lambda model, it, _data: self.filter_text in (model[it][0] or "").lower())
+        self.view = Gtk.TreeView(model=self.filtered, headers_visible=False)
         self.view.append_column(
             Gtk.TreeViewColumn("", Gtk.CellRendererText(), text=0))
         scroll = Gtk.ScrolledWindow(min_content_height=120)
         scroll.set_shadow_type(Gtk.ShadowType.IN)
         scroll.add(self.view)
-        self.pack_start(scroll, True, True, 0)
+
+        self.search = None
+        if search:
+            self.search = Gtk.SearchEntry(placeholder_text="Find in this list")
+            self.search.connect("search-changed", self._search)
+            self.pack_start(self.search, False, False, 0)
+
+        # The cover: a button over the list's place until clicked.
+        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
+        self.cover = Gtk.Button(relief=Gtk.ReliefStyle.NONE)
+        self.cover_label = Gtk.Label(justify=Gtk.Justification.CENTER)
+        self.cover.add(self.cover_label)
+        self.cover.connect("clicked", lambda _b: self.reveal())
+        frame = Gtk.Frame()
+        frame.add(self.cover)
+        self.stack.add_named(frame, "cover")
+        self.stack.add_named(scroll, "list")
+        self.pack_start(self.stack, True, True, 0)
 
         row = Gtk.Box(spacing=6)
         self.entry = Gtk.Entry(placeholder_text=placeholder)
@@ -362,14 +389,45 @@ class EditableList(Gtk.Box):
                 button.connect("clicked", lambda _b, h=handler: h())
                 row.pack_start(button, False, False, 0)
         self.pack_start(row, False, False, 0)
+        self.conceal()
 
-    def set_items(self, items):
+    def conceal(self):
+        """Covers the terms again (when the list hides them and has any)."""
+        self.revealed = not self.hidden
+        self._show_cover()
+
+    def reveal(self):
+        self.revealed = True
+        self._show_cover()
+
+    def _show_cover(self):
+        count = len(self.store)
+        covered = not self.revealed and count > 0
+        self.cover_label.set_markup(
+            f"<b>{count} {'term' if count == 1 else 'terms'} hidden</b>\n"
+            "<small>Click to show</small>")
+        self.stack.set_visible_child_name("cover" if covered else "list")
+        if self.search is not None:
+            self.search.set_sensitive(not covered)
+
+    def _search(self, entry):
+        self.filter_text = entry.get_text().strip().lower()
+        self.filtered.refilter()
+
+    def set_items(self, items, owner=None):
+        """Shows items. A different owner (another block, say) covers the
+        terms again."""
+        if owner != self.owner:
+            self.owner = owner
+            if self.search is not None:
+                self.search.set_text("")
+            self.conceal()
         current = [row[0] for row in self.store]
-        if current == list(items):
-            return
-        self.store.clear()
-        for item in items:
-            self.store.append([item])
+        if current != list(items):
+            self.store.clear()
+            for item in items:
+                self.store.append([item])
+        self._show_cover()
 
     def _add(self, _widget):
         values = self.entry.get_text().split()
@@ -380,7 +438,8 @@ class EditableList(Gtk.Box):
     def _remove(self, _button):
         model, iterator = self.view.get_selection().get_selected()
         if iterator:
-            self.on_remove(model[iterator][0], model.get_path(iterator)[0] + 1)
+            child = model.convert_iter_to_child_iter(iterator)
+            self.on_remove(self.store[child][0], self.store.get_path(child)[0] + 1)
 
 
 class ListCard(Gtk.Frame):
@@ -465,7 +524,8 @@ class ListCard(Gtk.Frame):
         self.entries = EditableList(
             "", "reddit.com  *casino*  nsfw", self.add_entries, self.remove_entry,
             lambda: window.import_list(["list", "import", window.selected, self.data["name"]]),
-            lambda: window.export_list(["list", "export", window.selected, self.data["name"]]))
+            lambda: window.export_list(["list", "export", window.selected, self.data["name"]]),
+            search=True, hidden=True)
         box.pack_start(self.entries, True, True, 0)
         self.update(data)
 
@@ -1311,14 +1371,18 @@ class Window(Gtk.ApplicationWindow):
         paned = Gtk.Paned()
 
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        header = Gtk.Box(spacing=6, margin_start=10, margin_end=6, margin_top=6, margin_bottom=6)
+        header.pack_start(heading("Blocks", "medium"), False, False, 0)
+        plus = Gtk.Button.new_from_icon_name("list-add-symbolic", Gtk.IconSize.BUTTON)
+        plus.set_tooltip_text("New block")
+        plus.connect("clicked", self.create_block)
+        header.pack_end(plus, False, False, 0)
+        left.pack_start(header, False, False, 0)
         self.block_list = Gtk.ListBox()
         self.block_list.connect("row-selected", self.block_selected)
         list_scroll = Gtk.ScrolledWindow(min_content_width=210, vexpand=True)
         list_scroll.add(self.block_list)
         left.pack_start(list_scroll, True, True, 0)
-        new_block = Gtk.Button(label="New block…", margin=8)
-        new_block.connect("clicked", self.create_block)
-        left.pack_start(new_block, False, False, 0)
         paned.pack1(left, False, False)
 
         self.detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
@@ -1395,7 +1459,8 @@ class Window(Gtk.ApplicationWindow):
             lambda: self.import_list(["block", "import-list", self.selected, "apps"]),
             lambda: self.export_list(["block", "export-list", self.selected, "apps"]),
             help_text="Executable names, Flatpak app IDs (see 'flatpak list --app'), or folders "
-                      "whose programs can't run. Everything a blocked app started is closed too.")
+                      "whose programs can't run. Everything a blocked app started is closed too.",
+            search=True)
         apps.pack_start(self.apps, True, True, 0)
         self.titles = EditableList(
             "Window titles", "YouTube  Twitch",
@@ -1404,7 +1469,8 @@ class Window(Gtk.ApplicationWindow):
             lambda: self.import_list(["block", "import-list", self.selected, "titles"]),
             lambda: self.export_list(["block", "export-list", self.selected, "titles"]),
             help_text="Any app whose window title contains one of these words is closed while "
-                      "the block is on; in LibreWolf, just that tab. Separate words with spaces.")
+                      "the block is on; in LibreWolf, just that tab. Separate words with spaces.",
+            search=True, hidden=True)
         apps.set_spacing(14)
         apps.pack_start(self.titles, True, True, 0)
         tabs.append_page(apps, Gtk.Label(label="Apps"))
@@ -1539,8 +1605,8 @@ class Window(Gtk.ApplicationWindow):
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
         self.status_label.set_text(block_summary(block))
         self.update_lists(block.get("lists", []))
-        self.apps.set_items(block["apps"])
-        self.titles.set_items(block.get("titles", []))
+        self.apps.set_items(block["apps"], owner=block["name"])
+        self.titles.set_items(block.get("titles", []), owner=block["name"])
         self.schedules.set_items(block["schedules"])
         self.calendar.set_windows(block.get("schedule_windows", []))
 

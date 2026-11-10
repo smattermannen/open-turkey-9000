@@ -205,3 +205,21 @@ func TestHitHandler(t *testing.T) {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+func TestTamperSigns(t *testing.T) {
+	d := testDB(t)
+	NoteDaemonStart(d)
+	if n, _ := d.CountEvents("", 0); n != 0 {
+		t.Fatal("the first start in a boot counted as tampering")
+	}
+	NoteDaemonStart(d)
+	if n, _ := d.CountEvents("", 0); n != 1 {
+		t.Errorf("a second start in the same boot logged %d events; want 1", n)
+	}
+	if got := clockDrift(0, 0, 10*time.Minute, 5*time.Second); got != 10*time.Minute-5*time.Second {
+		t.Errorf("drift = %s", got)
+	}
+	if got := clockDrift(0, 0, 5*time.Second, 5*time.Second); got != 0 {
+		t.Errorf("drift with both clocks moving = %s", got)
+	}
+}

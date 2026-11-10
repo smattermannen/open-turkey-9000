@@ -89,17 +89,34 @@ var titleGuard = blocker.NewTitleGuard()
 var titleGuardBusy atomic.Bool
 
 // enforceTitles starts a title guard cycle unless one is still running.
-// Closed windows are logged as one event.
-func enforceTitles(d *db.DB, keywords []string, now time.Time) {
+// Each window asked to close is logged as an event of every active block
+// listing its keyword.
+func enforceTitles(d *db.DB, active []db.ActiveBlockDetail, now time.Time) {
 	if !titleGuardBusy.CompareAndSwap(false, true) {
 		return
 	}
+	keywords := activeTitles(active)
+	owners := titleOwners(active)
 	go func() {
 		defer titleGuardBusy.Store(false)
-		if titleGuard.Enforce(keywords, now) > 0 {
-			logEvent(d, db.EventTitle, "", "")
+		_, asked := titleGuard.Enforce(keywords, now)
+		for _, keyword := range asked {
+			for _, block := range owners[keyword] {
+				logEvent(d, db.EventTitle, block, keyword)
+			}
 		}
 	}()
+}
+
+// titleOwners maps each window-title keyword to the active blocks listing it.
+func titleOwners(active []db.ActiveBlockDetail) map[string][]string {
+	owners := map[string][]string{}
+	for _, b := range active {
+		for _, k := range b.Titles {
+			owners[k] = append(owners[k], b.BlockName)
+		}
+	}
+	return owners
 }
 
 // logEvent records an event, logging a failure.
@@ -162,6 +179,7 @@ func Tick(d *db.DB, now time.Time) error {
 	}
 	enforceFreeze(d, now)
 	enforceBrowser(d)
+	watchClock(d, now)
 
 	trusted, err := d.TrustedNow(now)
 	if err != nil {
@@ -191,7 +209,7 @@ func Tick(d *db.DB, now time.Time) error {
 	active = withoutBreaks(d, active, trusted)
 	hosts, _, bp := Inputs(active)
 	enforceExtension(d, now, active)
-	enforceTitles(d, activeTitles(active), now)
+	enforceTitles(d, active, now)
 
 	// Site layers, re-applied only on drift (so an idle system does no writes).
 	if len(hosts) > 0 {

@@ -425,9 +425,9 @@ kc9k nepsis off [--block social]
 kc9k nepsis unlock                                                       # challenge or password lock
 ```
 
-What counts: pages a blacklist takes away (not greyscale or no-images alone), blocked apps closed, windows closed for their title, browsers closed for running without the extension, and refused attempts to stop, unlock or loosen a held block. Consequences: `close-browser`, `lock-screen` (`--then-for` required), `logout` and `shutdown` (`--then-for` to stay so; without it, once), and `monk` (`--then-for` required). Staying locked, logged out or off goes through Frozen Chicken, at most a day.
+What counts: pages a blacklist takes away (not greyscale or no-images alone), blocked apps closed, windows closed for their title, browsers closed for running without the extension, refused attempts to stop, unlock or loosen a held block, and signs of tampering: the daemon starting again within the same boot (killed, stopped or restarted; an upgrade counts once too), and the clock moving more than 2 minutes against the boot clock. Consequences: `close-browser`, `lock-screen` (`--then-for` required), `logout` and `shutdown` (`--then-for` to stay so; without it, once), and `monk` (`--then-for` required). Staying locked, logged out or off goes through Frozen Chicken, at most a day.
 
-The global one counts everything; a block's own counts that block's events while it is on (window titles and other browsers count only globally); when both are set, both apply. After firing, only newer events count. Making either stricter (fewer events, a longer window, the same consequence for longer) is always allowed. Anything else loosens it: a block's is gated like other edits to the block, and the global one can be locked like a browser option (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart` on `set`). Events are kept for a day. The interface has the global one under Settings and each block's on its Bypass prevention tab.
+The global one counts everything; a block's own counts that block's events while it is on (other browsers and tampering count only globally); when both are set, both apply. After firing, only newer events count. Making either stricter (fewer events, a longer window, the same consequence for longer) is always allowed. Anything else loosens it: a block's is gated like other edits to the block, and the global one can be locked like a browser option (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart` on `set`). Events are kept for a day. The interface has the global one under Settings and each block's on its Bypass prevention tab.
 
 ## Page keywords
 
@@ -450,7 +450,7 @@ kc9k hotkey list
 kc9k hotkey remove 1
 ```
 
-Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon keyboard shortcuts (they show up in Cinnamon's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password when you add it, not each time you press it. The interface has them under Settings.
+Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password when you add it, not each time you press it. The interface has them under Settings.
 
 ## Blocking folders
 

@@ -4,7 +4,7 @@
 //	kc9k hotkey list
 //	kc9k hotkey remove 2
 //
-// Each one becomes a Cinnamon keyboard shortcut running 'kc9k hotkey run N',
+// Each one becomes a Cinnamon and GNOME keyboard shortcut running 'kc9k hotkey run N',
 // which starts the block (time-locked when the hotkey says so) and shows a
 // notification.
 package cli
@@ -32,7 +32,7 @@ var hotkeyCmd = &cobra.Command{
 Pressing Ctrl+Alt+S then starts the block 'study' with a one-hour time lock
 (on a block that is already on, it only extends the lock). Keys are
 modifiers (ctrl, alt, shift, super) and a key joined with +; F1 to F24 also
-work alone. Hotkeys are set up as Cinnamon keyboard shortcuts.
+work alone. Hotkeys are set up as Cinnamon and GNOME keyboard shortcuts.
 
 A hotkey with a lock needs the settings password when you add it, not when
 you press it.`,

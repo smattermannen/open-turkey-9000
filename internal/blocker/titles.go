@@ -77,15 +77,17 @@ func matchingKeyword(title string, keywords []string) string {
 	return ""
 }
 
-// Enforce runs one cycle at now with the active blocks' keywords and
-// returns how many programs it killed.
-func (g *TitleGuard) Enforce(keywords []string, now time.Time) int {
+// Enforce runs one cycle at now with the active blocks' keywords. It returns
+// how many programs it killed, and the keyword of each window it newly asked
+// to close (so the caller can tell which block stopped something).
+func (g *TitleGuard) Enforce(keywords []string, now time.Time) (int, []string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if len(keywords) == 0 {
 		g.asked = map[uint32]time.Time{}
-		return 0
+		return 0, nil
 	}
+	var newlyAsked []string
 	seen := map[uint32]bool{}
 	kill := map[int]uint64{} // process -> the user it must still belong to
 	for _, s := range g.sessions() {
@@ -113,6 +115,7 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) int {
 				log.Printf("titles: asking %q (pid %d) to close: its title contains %q", w.Title, w.PID, keyword)
 				_ = c.closeWindow(w.ID)
 				g.asked[w.ID] = now
+				newlyAsked = append(newlyAsked, keyword)
 			case now.Sub(first) >= TitleCloseGrace:
 				log.Printf("titles: closing %s (pid %d): %q is still open", exeName(w.PID), w.PID, w.Title)
 				kill[w.PID] = s.uid
@@ -125,7 +128,7 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) int {
 			delete(g.asked, id)
 		}
 	}
-	return killTrees(kill)
+	return killTrees(kill), newlyAsked
 }
 
 // killTrees kills each process in roots and everything it started, as long

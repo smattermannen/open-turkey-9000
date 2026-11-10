@@ -98,7 +98,7 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   lockable as setting lock `nepsis`; per block, gated) fires a consequence
   when Count events fall within Minutes; only newer events count after.
 - **Hotkeys** (`internal/db/hotkeys.go`, `internal/cli/hotkeys.go`,
-  `internal/blocker/hotkeys.go`): Cinnamon custom keybindings in dconf named
+  `internal/blocker/hotkeys.go`): Cinnamon and GNOME custom keybindings in dconf named
   `kc9k<id>`, running `kc9k hotkey run <id>` (starts the block in-process with
   the preset `--for`; the settings password is asked at `hotkey add`).
 - **Browser setting locks** (`internal/db/settinglocks.go`, `internal/cli/browser.go`):

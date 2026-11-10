@@ -39,9 +39,16 @@ func TestHotkeyList(t *testing.T) {
 	if got := parseStringArray(""); len(got) != 0 {
 		t.Errorf("unset list parsed as %q", got)
 	}
-	list, removed := mergeHotkeyList([]string{"custom0", "kc9k3", "kc9k5"}, []int{5, 7})
+	cinnamon, gnome := hotkeyDesktops[0], hotkeyDesktops[1]
+	list, removed := mergeHotkeyList(cinnamon, []string{"custom0", "kc9k3", "kc9k5"}, []int{5, 7})
 	if !reflect.DeepEqual(list, []string{"custom0", "kc9k5", "kc9k7"}) || !reflect.DeepEqual(removed, []string{"kc9k3"}) {
 		t.Errorf("merge = %q, removed %q", list, removed)
+	}
+	// GNOME's list holds folder paths.
+	dir := "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/"
+	list, removed = mergeHotkeyList(gnome, []string{dir + "custom0/", dir + "kc9k3/"}, []int{7})
+	if !reflect.DeepEqual(list, []string{dir + "custom0/", dir + "kc9k7/"}) || !reflect.DeepEqual(removed, []string{"kc9k3"}) {
+		t.Errorf("GNOME merge = %q, removed %q", list, removed)
 	}
 	if got := stringArray([]string{"a'b", `c\d`}); got != `['a\'b', 'c\\d']` {
 		t.Errorf("stringArray = %s", got)

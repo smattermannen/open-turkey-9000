@@ -118,7 +118,7 @@ func TestTitleGuardSparesOtherUsersProcesses(t *testing.T) {
 	g.sessions = func() []titleSession { return []titleSession{{display: display, xauth: xauth, uid: 1500}} }
 	now := time.Now()
 	g.Enforce([]string{"youtube"}, now)
-	if killed := g.Enforce([]string{"youtube"}, now.Add(TitleCloseGrace)); killed != 0 {
+	if killed, _ := g.Enforce([]string{"youtube"}, now.Add(TitleCloseGrace)); killed != 0 {
 		t.Fatalf("killed %d processes for a window claiming another user's", killed)
 	}
 	if exited(victim, 500*time.Millisecond) {
@@ -139,12 +139,12 @@ func TestTitleGuardKillsWhenCloseIsIgnored(t *testing.T) {
 	g := NewTitleGuard()
 	g.sessions = func() []titleSession { return []titleSession{{display: display, xauth: xauth, uid: 1500}} }
 	now := time.Now()
-	if killed := g.Enforce([]string{"youtube"}, now); killed != 0 {
+	if killed, _ := g.Enforce([]string{"youtube"}, now); killed != 0 {
 		t.Fatalf("killed %d on the first cycle; it should only ask", killed)
 	}
 	// No window manager here, so the request is ignored: the next cycle
 	// after the grace period kills the program.
-	if killed := g.Enforce([]string{"youtube"}, now.Add(TitleCloseGrace)); killed == 0 {
+	if killed, _ := g.Enforce([]string{"youtube"}, now.Add(TitleCloseGrace)); killed == 0 {
 		t.Fatal("nothing killed after the grace period")
 	}
 	if !exited(blocked, 3*time.Second) {
@@ -176,7 +176,7 @@ func TestTitleGuardAsksPolitelyFirst(t *testing.T) {
 
 	g := NewTitleGuard()
 	g.sessions = func() []titleSession { return []titleSession{{display: display, xauth: xauth, uid: 1500}} }
-	if killed := g.Enforce([]string{"YOUTUBE"}, time.Now()); killed != 0 {
+	if killed, _ := g.Enforce([]string{"YOUTUBE"}, time.Now()); killed != 0 {
 		t.Fatalf("killed %d on the first cycle; it should only ask", killed)
 	}
 	_ = wm.conn.SetDeadline(time.Now().Add(3 * time.Second))

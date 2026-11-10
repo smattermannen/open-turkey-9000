@@ -32,6 +32,8 @@ func Run() error {
 	}
 	defer database.Close()
 
+	enforce.NoteDaemonStart(database)
+
 	go func() {
 		if err := enforce.ServeRules(database); err != nil {
 			log.Printf("daemon: rules server: %v", err)

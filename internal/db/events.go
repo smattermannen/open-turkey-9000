@@ -1,5 +1,6 @@
 // events.go — a log of what KC9K stopped: blocked pages, killed apps, closed
-// windows and browsers, and refused attempts to loosen a held block. Bypass
+// windows and browsers, refused attempts to loosen a held block, and signs of
+// tampering (the daemon restarted within a boot, the clock moved). Bypass
 // prevention (nepsis.go) counts recent events; they are kept for a day.
 package db
 
@@ -15,6 +16,7 @@ const (
 	EventTitle   = "title"   // a window was closed for its title
 	EventBrowser = "browser" // a browser without the extension was closed
 	EventRefused = "refused" // a loosening command was refused
+	EventTamper  = "tamper"  // the daemon restarted within a boot, or the clock jumped
 )
 
 // EventsKept is how long events are kept.

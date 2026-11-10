@@ -32,7 +32,7 @@ def browser_settings():
 
 
 def remove_test_block():
-    for name in ("browsertest", "looks", "titles", "words"):
+    for name in ("browsertest", "looks", "titles", "words", "lists"):
         ot_quiet("stop", name)
         ot_quiet("block", "remove", name)
 
@@ -173,6 +173,26 @@ try:
         time.sleep(4)
         check("a plain keyword only counts as a whole word", "example.net" in driver.current_url)
         ot("stop", "words")
+
+        # Lists: a title exception spares a page an address list blocks, and
+        # a redirect opens another page instead of the block page.
+        ot("block", "create", "lists")
+        ot("list", "add", "lists", "Blocked", "example.net")
+        ot("list", "create", "lists", "Docs", "--exceptions", "--title")
+        ot("list", "add", "lists", "Docs", "Example")
+        ot("start", "lists")
+        time.sleep(6)
+        driver.get("https://example.net/")
+        time.sleep(4)
+        check("a title exception spares the page", "example.net" in driver.current_url)
+        ot("list", "delete", "lists", "Docs")
+        ot("list", "action", "lists", "Blocked", "redirect", "on", "--url", "https://example.org/")
+        time.sleep(6)
+        driver.get("https://example.net/")
+        time.sleep(4)
+        print("redirect url:", driver.current_url)
+        check("a redirect opens the other page", "example.org" in driver.current_url)
+        ot("stop", "lists")
 
         with driver.context(driver.CONTEXT_CHROME):
             private = driver.execute_script(

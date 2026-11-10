@@ -21,6 +21,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -57,10 +58,10 @@ func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool
 		return false, err
 	}
 	if hold.active && hold.timeLocked() {
-		return false, fmt.Errorf("block '%s' is time-locked until %s and can't be loosened before then", name, hold.until())
+		return false, refused(database, name, fmt.Errorf("block '%s' is time-locked until %s and can't be loosened before then", name, hold.until()))
 	}
 	if hold.active && hold.charLocked {
-		return false, fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", name, name)
+		return false, refused(database, name, fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", name, name))
 	}
 
 	if now, _ := cmd.Flags().GetBool("now"); now {
@@ -83,6 +84,15 @@ func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool
 	fmt.Printf("It takes effect at %s. See 'kc9k pending'; to apply it now instead, cancel it and rerun with --now (typing challenge).\n",
 		applyAt.Format("2006-01-02 15:04"))
 	return false, nil
+}
+
+// refused logs a refused attempt to loosen or stop a held block as an event
+// (bypass prevention counts them), and returns err.
+func refused(database *db.DB, block string, err error) error {
+	if logErr := database.RecordEvent(db.EventRefused, block, err.Error()); logErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", logErr)
+	}
+	return err
 }
 
 // addNowFlag adds --now to commands whose edits gateEdit may queue.

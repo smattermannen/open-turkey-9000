@@ -89,14 +89,24 @@ var titleGuard = blocker.NewTitleGuard()
 var titleGuardBusy atomic.Bool
 
 // enforceTitles starts a title guard cycle unless one is still running.
-func enforceTitles(keywords []string, now time.Time) {
+// Closed windows are logged as one event.
+func enforceTitles(d *db.DB, keywords []string, now time.Time) {
 	if !titleGuardBusy.CompareAndSwap(false, true) {
 		return
 	}
 	go func() {
 		defer titleGuardBusy.Store(false)
-		titleGuard.Enforce(keywords, now)
+		if titleGuard.Enforce(keywords, now) > 0 {
+			logEvent(d, db.EventTitle, "", "")
+		}
 	}()
+}
+
+// logEvent records an event, logging a failure.
+func logEvent(d *db.DB, kind, block, detail string) {
+	if err := d.RecordEvent(kind, block, detail); err != nil {
+		log.Printf("daemon: %v", err)
+	}
 }
 
 // activeTitles collects the window-title keywords of the active blocks.
@@ -179,10 +189,9 @@ func Tick(d *db.DB, now time.Time) error {
 		return err
 	}
 	active = withoutBreaks(d, active, trusted)
-	hosts, apps, bp := Inputs(active)
-	apps = append(apps, forcedKills(d)...)
+	hosts, _, bp := Inputs(active)
 	enforceExtension(d, now, active)
-	enforceTitles(activeTitles(active), now)
+	enforceTitles(d, activeTitles(active), now)
 
 	// Site layers, re-applied only on drift (so an idle system does no writes).
 	if len(hosts) > 0 {
@@ -231,16 +240,28 @@ func Tick(d *db.DB, now time.Time) error {
 		}
 	}
 
-	// Kill blocked processes.
-	if len(apps) > 0 {
-		if killed, err := blocker.KillBlocked(apps); err != nil {
-			log.Printf("daemon: error killing blocked processes: %v", err)
-		} else if killed > 0 {
-			log.Printf("daemon: %d blocked processes terminated", killed)
-		}
+	// Kill blocked processes, block by block so each kill is logged as an
+	// event of its block.
+	for _, b := range active {
+		killApps(d, b.Apps, db.EventApp, b.BlockName)
 	}
-
+	killApps(d, forcedKills(d), db.EventBrowser, "")
+	enforceNepsis(d, now, active)
 	return nil
+}
+
+// killApps closes apps and logs an event when any were running.
+func killApps(d *db.DB, apps []string, kind, block string) {
+	if len(apps) == 0 {
+		return
+	}
+	killed, err := blocker.KillBlocked(apps)
+	if err != nil {
+		log.Printf("daemon: error killing blocked processes: %v", err)
+	} else if killed > 0 {
+		log.Printf("daemon: %d blocked processes terminated", killed)
+		logEvent(d, kind, block, "")
+	}
 }
 
 // applyDueEdits applies the queued edits (see db/pending.go) whose time has

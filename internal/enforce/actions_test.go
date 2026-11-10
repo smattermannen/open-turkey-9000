@@ -74,9 +74,9 @@ func TestBuildRulesLists(t *testing.T) {
 	}
 	except := RuleExcept{URL: []string{"facebook.com/help"}, Title: []string{}, Text: []string{}}
 	want := []ListRule{
-		{Block: "b", Name: "Blocked", URL: []string{"facebook.com"}, Title: []string{}, Text: []string{},
+		{ID: 1, Block: "b", Name: "Blocked", URL: []string{"facebook.com"}, Title: []string{}, Text: []string{},
 			Actions: []RuleAction{{Name: "block", Distinct: 1, Hits: 1}}, Except: except},
-		{Block: "b", Name: "Words", URL: []string{}, Title: []string{"nsfw", "18+"}, Text: []string{"nsfw", "18+"},
+		{ID: id, Block: "b", Name: "Words", URL: []string{}, Title: []string{"nsfw", "18+"}, Text: []string{"nsfw", "18+"},
 			Actions: []RuleAction{{Name: "block", Distinct: 2, Hits: 1}, {Name: "greyscale", Distinct: 1, Hits: 1}}, Except: except},
 	}
 	if !reflect.DeepEqual(rules.Lists, want) {

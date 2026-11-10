@@ -79,6 +79,24 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   `action`) are shortcuts to the default lists Blocked / Exceptions / Page
   words; `migrateWebLists` turned pre-list blocks (sites, patterns,
   exceptions, page keywords, allowlist mode) into those lists once.
+  More actions (`db/actions.go`, with Param/Minutes): redirect, image
+  (stored in `db.ImagesDir`, served at `/image/`), close-tab, and device
+  actions close-browser/logout/shutdown/monk. The extension (`kc9kOutcome`)
+  picks the strongest page action, closes the tab and browser itself, and
+  POSTs `/hit` (`enforce/hits.go`, extension header required) so the daemon
+  logs the event and runs logout/shutdown/monk.
+- **Consequences** (`internal/enforce/consequence.go`): one engine for list
+  device actions, bypass prevention and monk mode: close browsers, lock
+  screen/logout/shutdown (for a while through Frozen Chicken, only
+  extended; once at most every 10 min), monk mode (`StartMonk`: the ordinary
+  block `monk-mode`, `*.*` by default, time-locked with StopAt ending it).
+  Device effects go through replaceable vars so tests never touch the machine.
+- **Events and bypass prevention** (`db/events.go`, `db/nepsis.go`,
+  `enforce/nepsis.go`, `cli/nepsis.go`): what KC9K stops is logged (pages
+  via `/hit`, app kills per block, title closes, browsers closed, refused
+  loosening via `refused()` in the CLI), kept a day. Nepsis (global setting,
+  lockable as setting lock `nepsis`; per block, gated) fires a consequence
+  when Count events fall within Minutes; only newer events count after.
 - **Hotkeys** (`internal/db/hotkeys.go`, `internal/cli/hotkeys.go`,
   `internal/blocker/hotkeys.go`): Cinnamon custom keybindings in dconf named
   `kc9k<id>`, running `kc9k hotkey run <id>` (starts the block in-process with
@@ -126,7 +144,8 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 
 Full usage and examples in `README.md`. Summary:
 `list show | create [--exceptions --url --title --text] | rename | delete | add | remove | where | action |
-threshold | hits | export | import`,
+threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
+`nepsis [set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,
 `block create [--allowlist] [--template T] | add | add-exception | add-app | add-title | remove-title |
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,

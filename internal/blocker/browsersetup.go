@@ -243,3 +243,8 @@ func SyncLibreWolfSigning(on bool) error {
 	}
 	return nil
 }
+
+// BrowserNames names every browser, LibreWolf included, for closing them all.
+func BrowserNames() []string {
+	return append([]string{"librewolf"}, ForcedBrowserKillList...)
+}

@@ -125,6 +125,19 @@ check("title exception", kc9kListActions(spared, { url: "https://youtube.com/wat
 check("text exception", kc9kListActions(spared, { url: "https://youtube.com/watch", title: "X", text: "a tutorial" }), {});
 check("reads the page", [kc9kReadsPage(spared), kc9kReadsPage(kc9kCompileLists([{ url: ["a.com"], actions: [] }]))], [true, false]);
 
+// The strongest page action wins; device actions and the lists to report.
+const many = kc9kCompileLists([
+  { id: 1, url: ["a.com"], actions: [{ action: "block" }, { action: "greyscale" }] },
+  { id: 2, url: ["a.com/x"], actions: [{ action: "redirect", param: "https://calm.example/" }] },
+  { id: 3, url: ["a.com/x/y"], actions: [{ action: "monk", minutes: 30 }, { action: "image", param: "abc.png" }] },
+  { id: 4, url: ["grey.com"], actions: [{ action: "greyscale" }] },
+]);
+const outcome = (url) => kc9kOutcome(kc9kListMatches(many, { url }));
+check("block alone", outcome("https://a.com/"), { device: false, page: "block", param: "", lists: [{ id: 1, actions: ["block"] }] });
+check("redirect beats block", [outcome("https://a.com/x").page, outcome("https://a.com/x").param], ["redirect", "https://calm.example/"]);
+check("image and a device action", [outcome("https://a.com/x/y").page, outcome("https://a.com/x/y").device, outcome("https://a.com/x/y").lists.length], ["image", true, 3]);
+check("greyscale takes nothing away", kc9kTakesAway(outcome("https://grey.com/")), false);
+
 const total = cases.length + keywordCases.length + checks;
 console.log(failed ? `${failed} of ${total} failed` : `all ${total} passed`);
 process.exit(failed ? 1 : 0);

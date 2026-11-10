@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS web_list_actions (
     action   TEXT NOT NULL,
     distinct_min INTEGER NOT NULL DEFAULT 1,
     hits_min     INTEGER NOT NULL DEFAULT 1,
+    param        TEXT NOT NULL DEFAULT '',
+    minutes      INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (list_id, action),
     FOREIGN KEY (list_id) REFERENCES web_lists(id) ON DELETE CASCADE
 );`
@@ -138,11 +140,14 @@ func (w Where) String() string {
 // ListAction is one action a blacklist takes on the pages it matches. For
 // page text, Distinct is how many of the list's different entries a page must
 // contain, and Hits how many times they must occur in all (repeats counted);
-// both must be met. A match in the address or title always counts.
+// both must be met. A match in the address or title always counts. Param
+// and Minutes are what the action needs (see CheckActionParams).
 type ListAction struct {
 	Name     string `json:"action"`
 	Distinct int    `json:"distinct"`
 	Hits     int    `json:"hits"`
+	Param    string `json:"param,omitempty"`
+	Minutes  int    `json:"minutes,omitempty"`
 }
 
 // WebList is one of a block's website lists.
@@ -314,7 +319,7 @@ func listEntries(q querier, listID int) ([]string, error) {
 }
 
 func listActions(q querier, listID int) ([]ListAction, error) {
-	rows, err := q.Query("SELECT action, distinct_min, hits_min FROM web_list_actions WHERE list_id = ?", listID)
+	rows, err := q.Query("SELECT action, distinct_min, hits_min, param, minutes FROM web_list_actions WHERE list_id = ?", listID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch list actions: %w", err)
 	}
@@ -322,7 +327,7 @@ func listActions(q querier, listID int) ([]ListAction, error) {
 	found := map[string]ListAction{}
 	for rows.Next() {
 		var a ListAction
-		if err := rows.Scan(&a.Name, &a.Distinct, &a.Hits); err != nil {
+		if err := rows.Scan(&a.Name, &a.Distinct, &a.Hits, &a.Param, &a.Minutes); err != nil {
 			return nil, fmt.Errorf("failed to read a list action: %w", err)
 		}
 		a.Distinct, a.Hits = max(a.Distinct, 1), max(a.Hits, 1)
@@ -483,17 +488,39 @@ func (d *DB) RemoveListEntries(listID int, entries []string) error {
 }
 
 // SetListAction turns one of a blacklist's actions on or off. Turning one on
-// starts it at one entry for page text.
+// starts it at one entry for page text; an action that needs an address,
+// an image or minutes is turned on with SetListActionParams instead.
 func (d *DB) SetListAction(listID int, action string, on bool) error {
 	if !IsAction(action) {
 		return fmt.Errorf("unknown action %q (use %s)", action, strings.Join(ActionNames, ", "))
 	}
 	var err error
 	if on {
+		if err := CheckActionParams(action, "", 0); err != nil {
+			return err
+		}
 		_, err = d.conn.Exec("INSERT OR IGNORE INTO web_list_actions (list_id, action, distinct_min) VALUES (?, ?, 1)", listID, action)
 	} else {
 		_, err = d.conn.Exec("DELETE FROM web_list_actions WHERE list_id = ? AND action = ?", listID, action)
 	}
+	if err != nil {
+		return fmt.Errorf("failed to set the %s action: %w", action, err)
+	}
+	return nil
+}
+
+// SetListActionParams turns an action on with its address, image or minutes,
+// or changes them if it is on.
+func (d *DB) SetListActionParams(listID int, action, param string, minutes int) error {
+	if !IsAction(action) {
+		return fmt.Errorf("unknown action %q (use %s)", action, strings.Join(ActionNames, ", "))
+	}
+	if err := CheckActionParams(action, param, minutes); err != nil {
+		return err
+	}
+	_, err := d.conn.Exec(`INSERT INTO web_list_actions (list_id, action, distinct_min, param, minutes) VALUES (?, ?, 1, ?, ?)
+		ON CONFLICT(list_id, action) DO UPDATE SET param = excluded.param, minutes = excluded.minutes`,
+		listID, action, param, minutes)
 	if err != nil {
 		return fmt.Errorf("failed to set the %s action: %w", action, err)
 	}
@@ -552,8 +579,8 @@ func (d *DB) copyLists(from Lists, toBlock string) error {
 				return err
 			}
 			for _, a := range l.Actions {
-				if _, err := d.conn.Exec("INSERT INTO web_list_actions (list_id, action, distinct_min, hits_min) VALUES (?, ?, ?, ?)",
-					id, a.Name, max(a.Distinct, 1), max(a.Hits, 1)); err != nil {
+				if _, err := d.conn.Exec("INSERT INTO web_list_actions (list_id, action, distinct_min, hits_min, param, minutes) VALUES (?, ?, ?, ?, ?, ?)",
+					id, a.Name, max(a.Distinct, 1), max(a.Hits, 1), a.Param, a.Minutes); err != nil {
 					return err
 				}
 			}
@@ -605,8 +632,14 @@ func migrateWebLists(conn *sql.DB) error {
 	if err := addColumnIfMissing(conn, "blocks", "lists_ready", "BOOLEAN NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
-	if err := addColumnIfMissing(conn, "web_list_actions", "hits_min", "INTEGER NOT NULL DEFAULT 1"); err != nil {
-		return err
+	for _, c := range []struct{ col, def string }{
+		{"hits_min", "INTEGER NOT NULL DEFAULT 1"},
+		{"param", "TEXT NOT NULL DEFAULT ''"},
+		{"minutes", "INTEGER NOT NULL DEFAULT 0"},
+	} {
+		if err := addColumnIfMissing(conn, "web_list_actions", c.col, c.def); err != nil {
+			return err
+		}
 	}
 	ids, err := func() ([]int, error) {
 		rows, err := conn.Query("SELECT id FROM blocks WHERE lists_ready = 0")

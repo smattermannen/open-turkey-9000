@@ -166,6 +166,7 @@ type Rules struct {
 // the address or the title takes every action; in the text, an action needs
 // Distinct different entries, occurring Hits times in all.
 type ListRule struct {
+	ID      int          `json:"id"`
 	Block   string       `json:"block"`
 	Name    string       `json:"name"`
 	URL     []string     `json:"url"`
@@ -175,11 +176,13 @@ type ListRule struct {
 	Except  RuleExcept   `json:"except"`
 }
 
-// RuleAction is one action of a ListRule.
+// RuleAction is one action of a ListRule. Param is the address for
+// redirect and the image's name for image.
 type RuleAction struct {
 	Name     string `json:"action"`
 	Distinct int    `json:"distinct"`
 	Hits     int    `json:"hits"`
+	Param    string `json:"param,omitempty"`
 }
 
 // RuleExcept holds a block's exceptions by place: a page any of them
@@ -211,7 +214,7 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 		if !l.Enforces() {
 			continue
 		}
-		rule := ListRule{Block: b.BlockName, Name: l.Name, URL: []string{}, Title: []string{}, Text: []string{},
+		rule := ListRule{ID: l.ID, Block: b.BlockName, Name: l.Name, URL: []string{}, Title: []string{}, Text: []string{},
 			Actions: []RuleAction{}, Except: except}
 		if l.Where.URL {
 			rule.URL = urlEntries(l.Entries)
@@ -223,7 +226,7 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 			rule.Text = append(rule.Text, l.Entries...)
 		}
 		for _, a := range l.Actions {
-			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct, Hits: a.Hits})
+			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct, Hits: a.Hits, Param: a.Param})
 		}
 		out = append(out, rule)
 	}
@@ -279,6 +282,8 @@ func ServeRules(d *db.DB) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/rules", rulesHandler(d, checkInRecorder(d)))
 	mux.HandleFunc("/usage", usageHandler(d))
+	mux.HandleFunc("/hit", hitHandler(d))
+	mux.HandleFunc("/image/", imageHandler)
 	return http.Serve(listener, mux)
 }
 
@@ -398,7 +403,9 @@ func enforceExtension(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
 	if !ExtensionRequired(d, active) || blocker.LibreWolfVersion() == "" {
 		return
 	}
-	extensionGuard.Enforce(now, protectionChanged(d))
+	if extensionGuard.Enforce(now, protectionChanged(d)) > 0 {
+		logEvent(d, db.EventBrowser, "", "")
+	}
 }
 
 func forcedKills(d *db.DB) []string {

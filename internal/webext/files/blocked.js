@@ -19,6 +19,16 @@ if (notes[reason]) {
   }
 }
 
+// A list can show a picture instead of the words. Only the daemon's stored
+// images (named by their SHA-256) are loaded.
+const image = params.get("image") || "";
+if (/^[0-9a-f]{64}\.(png|jpg|gif|webp)$/.test(image)) {
+  const picture = document.getElementById("picture");
+  picture.src = "http://127.0.0.1:47613/image/" + image;
+  picture.hidden = false;
+  document.getElementById("words").hidden = true;
+}
+
 async function check() {
   // Only web addresses: anything else in the query could run as script.
   if (byTitle || !/^https?:\/\//i.test(target)) {

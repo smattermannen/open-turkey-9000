@@ -12,6 +12,8 @@ let shownFor = null;
 // Once a list applies to a page it stays until the address changes, so a
 // page can't shake it off by changing its text.
 let keywordHits = { block: false, greyscale: false, noImages: false };
+// The list actions already reported for the page at keywordsFor ("id action").
+let reportedHits = new Set();
 let keywordsFor = null;
 let textChanged = true;
 // Only so much of a page's text is read, so a huge page can't slow it down.
@@ -75,11 +77,12 @@ function load(page) {
 }
 
 // scanKeywords reads the page's title and text (in the top frame only: a
-// frame's text is part of what the page shows) and applies the lists.
+// frame's text is part of what the page shows) and applies the lists,
+// reporting each list action that newly applies to the background script.
 // Blocking goes through the background script, which sends the tab to the
 // block page and also hides images in the page's frames.
 function scanKeywords() {
-  if (window !== window.top || !lists || !kc9kReadsPage(lists) || !textChanged) {
+  if (window !== window.top || !lists || !textChanged) {
     return;
   }
   const body = document.body || document.documentElement;
@@ -87,25 +90,35 @@ function scanKeywords() {
     return;
   }
   textChanged = false;
-  const text = (body.innerText || body.textContent || "").slice(0, MAX_TEXT);
   const url = location.href;
   if (keywordsFor !== url) {
     keywordHits = { block: false, greyscale: false, noImages: false };
+    reportedHits = new Set();
     keywordsFor = url;
   }
-  const acts = kc9kListActions(lists, { url, title: document.title || "", text });
-  const hits = { block: Boolean(acts.block), greyscale: Boolean(acts.greyscale), noImages: Boolean(acts["no-images"]) };
-  const before = JSON.stringify(keywordHits);
-  keywordHits = {
-    block: keywordHits.block || hits.block,
-    greyscale: keywordHits.greyscale || hits.greyscale,
-    noImages: keywordHits.noImages || hits.noImages,
-  };
-  if (JSON.stringify(keywordHits) === before) {
+  // Lists that only look at addresses need no reading: this still catches a
+  // page that changed address without loading (the background script only
+  // sees real loads).
+  const page = kc9kReadsPage(lists)
+    ? { url, title: document.title || "", text: (body.innerText || body.textContent || "").slice(0, MAX_TEXT) }
+    : { url };
+  const matches = kc9kListMatches(lists, page);
+  const fresh = [];
+  for (const match of matches) {
+    const names = match.actions.map((action) => action.action);
+    keywordHits.greyscale = keywordHits.greyscale || names.includes("greyscale");
+    keywordHits.noImages = keywordHits.noImages || names.includes("no-images");
+    const unseen = names.filter((name) => !reportedHits.has(match.list.id + " " + name));
+    if (unseen.length > 0) {
+      unseen.forEach((name) => reportedHits.add(match.list.id + " " + name));
+      fresh.push({ id: match.list.id, actions: unseen });
+    }
+  }
+  if (fresh.length === 0) {
     return;
   }
   render();
-  browser.runtime.sendMessage({ type: "keyword-hits", url, hits: keywordHits }).catch(() => {});
+  browser.runtime.sendMessage({ type: "page-hits", url, matches: fresh }).catch(() => {});
 }
 
 // Pages that fill in their text later (most of them) are scanned again when

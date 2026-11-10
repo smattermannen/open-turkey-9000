@@ -47,10 +47,50 @@ BROWSER_OPTIONS = (
 
 # What a blacklist does to the pages it matches; any combination.
 SITE_ACTIONS = (
-    ("block", "Block"),
+    ("block", "Block page"),
     ("greyscale", "Greyscale"),
     ("no-images", "Block images"),
+    ("redirect", "Open another page"),
+    ("image", "Show a picture"),
+    ("close-tab", "Close the tab"),
+    ("close-browser", "Close the browser"),
+    ("logout", "Log out"),
+    ("shutdown", "Shut down"),
+    ("monk", "Monk mode"),
 )
+
+# Actions with settings: what to ask for when one is ticked.
+PARAM_ACTIONS = ("redirect", "image", "logout", "shutdown", "monk")
+
+# What bypass prevention can do, mildest first.
+CONSEQUENCES = (
+    ("close-browser", "Close the browser"),
+    ("lock-screen", "Lock the screen"),
+    ("logout", "Log out"),
+    ("shutdown", "Shut down"),
+    ("monk", "Monk mode"),
+)
+
+
+def fmt_minutes(minutes):
+    """30 min, 2 h, 1 h 30 min."""
+    hours, rest = divmod(int(minutes), 60)
+    if not hours:
+        return f"{rest} min"
+    return f"{hours} h" + (f" {rest} min" if rest else "")
+
+
+def describe_nepsis(nepsis, count=None):
+    """One line for a bypass prevention setting."""
+    if not nepsis or not nepsis.get("count"):
+        return "Off."
+    then = dict(CONSEQUENCES).get(nepsis["consequence"], nepsis["consequence"])
+    if nepsis.get("action_minutes"):
+        then += f" for {fmt_minutes(nepsis['action_minutes'])}"
+    line = f"{nepsis['count']} stopped things within {fmt_minutes(nepsis['minutes'])}: {then.lower()}."
+    if count is not None:
+        line += f" {count} so far."
+    return line
 
 # Where a list looks.
 LIST_PLACES = (
@@ -378,14 +418,26 @@ class ListCard(Gtk.Frame):
         self.action_checks, self.spins = {}, {}
         self.threshold_row = None
         if not self.is_exceptions:
-            actions = Gtk.Box(spacing=12)
-            actions.pack_start(Gtk.Label(label="Actions:"), False, False, 0)
+            box.pack_start(Gtk.Label(label="Actions:", xalign=0), False, False, 0)
+            actions = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
+                                  column_spacing=12, row_spacing=2)
             for name, title in SITE_ACTIONS:
                 check = Gtk.CheckButton(label=title)
                 check.connect("toggled", self.toggle_action, name)
                 self.action_checks[name] = check
-                actions.pack_start(check, False, False, 0)
+                actions.add(check)
             box.pack_start(actions, False, False, 0)
+            # The settings of ticked actions that have some, each with Change….
+            self.param_rows = {}
+            for name in PARAM_ACTIONS:
+                row = Gtk.Box(spacing=8)
+                label = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+                change = Gtk.Button(label="Change…")
+                change.connect("clicked", lambda _b, n=name: self.ask_settings(n))
+                row.pack_start(label, True, True, 0)
+                row.pack_start(change, False, False, 0)
+                self.param_rows[name] = (row, label)
+                box.pack_start(row, False, False, 0)
 
             # For page text: how many different words each action needs, and
             # how many times they must occur in all (repeats counted).
@@ -430,6 +482,11 @@ class ListCard(Gtk.Frame):
             actions = {a["action"]: a for a in data["actions"]}
             for name, check in self.action_checks.items():
                 check.set_active(name in actions)
+            for name, (row, label) in getattr(self, "param_rows", {}).items():
+                row.set_no_show_all(name not in actions)
+                row.set_visible(name in actions)
+                if name in actions:
+                    label.set_text(self.settings_text(name, actions[name]))
             for name, (label, distinct, hits) in self.spins.items():
                 distinct.set_value(actions.get(name, {}).get("distinct", 1))
                 hits.set_value(actions.get(name, {}).get("hits", 1))
@@ -465,8 +522,56 @@ class ListCard(Gtk.Frame):
     def toggle_action(self, check, name):
         if self.filling or self.window.updating:
             return
+        if check.get_active() and name in PARAM_ACTIONS:
+            self.ask_settings(name)
+            return
         self.window.run(self.command("action", name, "on" if check.get_active() else "off"),
                         then=self.window.queued_note)
+
+    @staticmethod
+    def settings_text(name, action):
+        minutes = action.get("minutes", 0)
+        if name == "redirect":
+            return f"Opens {action.get('param', '')}"
+        if name == "image":
+            return "Shows your picture"
+        if name == "monk":
+            return f"Monk mode for {fmt_minutes(minutes)}"
+        verb = "Logs out" if name == "logout" else "Shuts down"
+        return f"{verb} for {fmt_minutes(minutes)}" if minutes else f"{verb} once"
+
+    def ask_settings(self, name):
+        """Asks for an action's address, picture or time, and turns it on with
+        them (or changes them). Cancelling leaves the list as it was."""
+        window, args = self.window, None
+        current = {a["action"]: a for a in self.data["actions"]}.get(name, {})
+        if name == "redirect":
+            url = window.ask_text("Open another page", "The address to open instead, starting "
+                                  "with https://.", initial=current.get("param", "https://"))
+            if url:
+                args = ["--url", url]
+        elif name == "image":
+            path = window.choose_file("Choose a picture", Gtk.FileChooserAction.OPEN, "Choose")
+            if path:
+                args = ["--image", path]
+        else:
+            details = {
+                "monk": ("Monk mode", "The browser closes and every website is blocked, locked, "
+                         "for this long (the block monk-mode).", 1, 60),
+                "logout": ("Log out", "The browser closes and you are logged out. With a time, "
+                           "you stay logged out that long; with 0, just once.", 0, 0),
+                "shutdown": ("Shut down", "The browser closes and the computer shuts down. With a "
+                             "time, it stays off that long; with 0, just once.", 0, 0),
+            }[name]
+            title, detail, minimum, initial = details
+            limit = 30 * 24 * 60 if name == "monk" else 24 * 60
+            minutes = window.ask_minutes(title, detail, minimum, limit, current.get("minutes", initial))
+            if minutes is not None:
+                args = ["--for", f"{minutes}m"] if minutes else []
+        if args is None:
+            self.update(self.data)  # untick the box again
+            return
+        window.run(self.command("action", name, "on", *args), then=window.queued_note)
 
     def save_numbers(self, _button):
         current = {a["action"]: a for a in self.data["actions"]}
@@ -954,6 +1059,94 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return value if answer == Gtk.ResponseType.OK else ""
 
+    def ask_minutes(self, title, detail, minimum, maximum, initial):
+        """Asks for a number of minutes; None when cancelled."""
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, text=title, secondary_text=detail,
+            message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
+        row = Gtk.Box(spacing=8)
+        spin = Gtk.SpinButton.new_with_range(minimum, maximum, 5)
+        spin.set_value(max(minimum, initial))
+        row.pack_start(spin, False, False, 0)
+        row.pack_start(Gtk.Label(label="minutes"), False, False, 0)
+        dialog.get_message_area().pack_start(row, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        value = spin.get_value_as_int()
+        dialog.destroy()
+        return value if answer == Gtk.ResponseType.OK else None
+
+    def ask_nepsis(self, title, current, allow_lock):
+        """Asks for a bypass prevention setting; returns the nepsis set
+        arguments, or None when cancelled."""
+        current = current if current and current.get("count") else {
+            "count": 10, "minutes": 5, "consequence": "monk", "action_minutes": 60}
+        dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
+        dialog.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Save", Gtk.ResponseType.OK)
+        area = dialog.get_content_area()
+        area.set_spacing(10)
+        area.set_border_width(16)
+        area.pack_start(dim("When Killer Chicken stops this many things (pages, apps, windows, "
+                            "attempts to loosen a held block) within this long, it does this. "
+                            "Making it stricter is always allowed; anything else loosens it."),
+                        False, False, 0)
+        grid = Gtk.Grid(column_spacing=10, row_spacing=8)
+        count = Gtk.SpinButton.new_with_range(1, 1000, 1)
+        count.set_value(current["count"])
+        within = Gtk.SpinButton.new_with_range(1, 24 * 60, 1)
+        within.set_value(current["minutes"])
+        then = Gtk.ComboBoxText()
+        for key, label in CONSEQUENCES:
+            then.append(key, label)
+        then.set_active_id(current["consequence"])
+        then_for = Gtk.SpinButton.new_with_range(0, 30 * 24 * 60, 5)
+        then_for.set_value(current.get("action_minutes", 0))
+        rows = [("Things stopped", count), ("Within (minutes)", within), ("Then", then),
+                ("For (minutes; 0 for once)", then_for)]
+        lock = None
+        if allow_lock:
+            lock = Gtk.SpinButton.new_with_range(0, 24 * 30, 1)
+            rows.append(("Can't be loosened for (hours)", lock))
+        for row, (label, widget) in enumerate(rows):
+            grid.attach(Gtk.Label(label=label, xalign=0), 0, row, 1, 1)
+            grid.attach(widget, 1, row, 1, 1)
+        area.pack_start(grid, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        args = ["--count", str(count.get_value_as_int()), "--within", f"{within.get_value_as_int()}m",
+                "--then", then.get_active_id() or "close-browser"]
+        if then.get_active_id() != "close-browser" and then_for.get_value_as_int():
+            args += ["--then-for", f"{then_for.get_value_as_int()}m"]
+        if lock is not None and lock.get_value_as_int():
+            args += ["--for", f"{lock.get_value_as_int()}h"]
+        dialog.destroy()
+        return args if answer == Gtk.ResponseType.OK else None
+
+    def monk_mode(self, _button):
+        minutes = self.ask_minutes(
+            "Monk mode", "Every website is blocked, locked, for this long (the block monk-mode: add "
+            "exceptions or apps to it under Blocks). A running monk mode can only be extended.",
+            1, 30 * 24 * 60, 60)
+        if minutes:
+            self.run(["monk", "--for", f"{minutes}m"])
+
+    def change_global_nepsis(self, _button):
+        args = self.ask_nepsis("Bypass prevention", self.state.get("nepsis"), True)
+        if args:
+            self.run(["nepsis", "set", *args], then=self.queued_note)
+
+    def change_block_nepsis(self, _button):
+        block = self.blocks.get(self.selected)
+        if block:
+            args = self.ask_nepsis(f"Bypass prevention for {block['name']}", block.get("nepsis"), False)
+            if args:
+                self.run(["nepsis", "set", "--block", block["name"], *args], then=self.queued_note)
+
+    def nepsis_off(self, _button, block=None):
+        if self.confirm("Turn bypass prevention off?", "This loosens it, so it isn't possible while "
+                        "it is locked (or, for a block, while the block is held).", "Turn off"):
+            self.run(["nepsis", "off"] + (["--block", block()] if block else []), then=self.queued_note)
+
     def run_thresholds(self, block_name, list_name, changes):
         """Set each (threshold or hits, action, number) of a list in turn: one
         command at a time."""
@@ -1051,7 +1244,10 @@ class Window(Gtk.ApplicationWindow):
         new_block.connect("clicked", self.create_block)
         freeze = Gtk.Button(label="Frozen Chicken…")
         freeze.connect("clicked", lambda _b: self.stack.set_visible_child_name("device"))
+        monk = Gtk.Button(label="Monk mode…")
+        monk.connect("clicked", self.monk_mode)
         actions.pack_start(new_block, False, False, 0)
+        actions.pack_start(monk, False, False, 0)
         actions.pack_start(freeze, False, False, 0)
         box.pack_start(actions, False, False, 0)
         return scroll
@@ -1227,6 +1423,24 @@ class Window(Gtk.ApplicationWindow):
         tabs.append_page(schedule, Gtk.Label(label="Schedule"))
 
         tabs.append_page(self.build_quota_tab(), Gtk.Label(label="Quota & Pomodoro"))
+
+        nepsis = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=12)
+        nepsis.pack_start(dim(
+            "Bypass prevention: when this block stops many things in a short time (pages, apps, "
+            "attempts to loosen it while held), likely a hunt for a loophole, it takes a "
+            "consequence so you step away. It counts while the block is on; the one under "
+            "Settings counts everything, and both apply."), False, False, 0)
+        self.block_nepsis_label = Gtk.Label(xalign=0, wrap=True)
+        nepsis.pack_start(self.block_nepsis_label, False, False, 0)
+        row = Gtk.Box(spacing=6)
+        change = Gtk.Button(label="Change…")
+        change.connect("clicked", self.change_block_nepsis)
+        off = Gtk.Button(label="Turn off…")
+        off.connect("clicked", self.nepsis_off, lambda: self.selected)
+        row.pack_start(change, False, False, 0)
+        row.pack_start(off, False, False, 0)
+        nepsis.pack_start(row, False, False, 0)
+        tabs.append_page(nepsis, Gtk.Label(label="Bypass prevention"))
         return paned
 
     def build_quota_tab(self):
@@ -1320,6 +1534,7 @@ class Window(Gtk.ApplicationWindow):
             self.update_lists([])
             self.calendar.set_windows([])
             self.quota_label.set_text("")
+            self.block_nepsis_label.set_text("")
             return
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
         self.status_label.set_text(block_summary(block))
@@ -1347,6 +1562,8 @@ class Window(Gtk.ApplicationWindow):
         self.quota_label.set_text(
             f"Used today: {block['quota_used'] // 60} of {limit // 60} min"
             + (" · session open" if block["quota_open"] else "") if limit else "No quota set.")
+        self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
+                                                         if block["active"] else None))
 
     def update_lists(self, lists):
         """Shows the selected block's lists, keeping the cards of lists that
@@ -1864,8 +2081,8 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(section(
             "LibreWolf",
             dim("LibreWolf is a privacy-focused Firefox that, unlike Firefox, runs the Killer "
-                "Chicken extension. The extension is always on: it enforces wildcards, keywords, "
-                "greyscale, images and web-only, and while a block has websites, browsers "
+                "Chicken extension. The extension is always on: it enforces wildcards, page titles "
+                "and text, greyscale, images and web-only, and while a block has websites, browsers "
                 "without it are closed."),
             *librewolf_rows), False, False, 0)
 
@@ -1906,6 +2123,22 @@ class Window(Gtk.ApplicationWindow):
                 "don't."),
             self.password_status, password_row), False, False, 0)
 
+        self.nepsis_label = Gtk.Label(xalign=0, wrap=True)
+        nepsis_row = Gtk.Box(spacing=6)
+        change = Gtk.Button(label="Change…")
+        change.connect("clicked", self.change_global_nepsis)
+        off = Gtk.Button(label="Turn off…")
+        off.connect("clicked", self.nepsis_off)
+        nepsis_row.pack_start(change, False, False, 0)
+        nepsis_row.pack_start(off, False, False, 0)
+        box.pack_start(section(
+            "Bypass prevention",
+            dim("When Killer Chicken stops many things in a short time (blocked pages, closed apps "
+                "and windows, browsers without the extension, attempts to loosen or stop a held "
+                "block), you are likely hunting for a loophole. It then takes the consequence you "
+                "choose, so you really step away. Each block can have its own too."),
+            self.nepsis_label, nepsis_row), False, False, 0)
+
         self.hotkey_ids = []
         self.hotkeys = EditableList(
             "Hotkeys", "ctrl+alt+s  study  1h", self.add_hotkey,
@@ -1943,6 +2176,11 @@ class Window(Gtk.ApplicationWindow):
             self.run(["password", "remove"], then=lambda _o: setattr(self, "settings_password", None))
 
     def update_settings(self):
+        lock = self.state.get("nepsis_lock", {})
+        text = describe_nepsis(self.state.get("nepsis"), self.state.get("nepsis_count"))
+        if lock.get("lock_seconds"):
+            text += f" Locked for {fmt_seconds(lock['lock_seconds'])}."
+        self.nepsis_label.set_text(text)
         for name, switch in self.browser_switches.items():
             set_switch(switch, self.state["browser"].get(name, False))
         for name, (label, unlock) in self.setting_locks.items():

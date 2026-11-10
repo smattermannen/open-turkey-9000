@@ -95,9 +95,9 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 	}
 	if hold.held() {
 		if hold.scheduleFrozen && !hold.active {
-			return fmt.Errorf("block '%s' is held by its schedule now or within %s; until its schedule lifts it, it can only be made stricter (%s)", name, freezeLead(), strengtheningEdits)
+			return refused(database, name, fmt.Errorf("block '%s' is held by its schedule now or within %s; until its schedule lifts it, it can only be made stricter (%s)", name, freezeLead(), strengtheningEdits))
 		}
-		return fmt.Errorf("block '%s' is currently held (locked, time-locked or by its schedule); until the hold lifts, it can only be made stricter (%s)", name, strengtheningEdits)
+		return refused(database, name, fmt.Errorf("block '%s' is currently held (locked, time-locked or by its schedule); until the hold lifts, it can only be made stricter (%s)", name, strengtheningEdits))
 	}
 	return nil
 }

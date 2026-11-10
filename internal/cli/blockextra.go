@@ -39,6 +39,7 @@ type blockExport struct {
 	Lists  []listExport `json:"lists,omitempty"`
 	Apps   []string     `json:"apps"`
 	Titles []string     `json:"titles,omitempty"`
+	Nepsis *db.Nepsis   `json:"nepsis,omitempty"`
 
 	Mode       string         `json:"mode,omitempty"`
 	Actions    []string       `json:"actions,omitempty"`
@@ -125,6 +126,9 @@ func toLists(in []listExport) (db.Lists, error) {
 				if a.Hits < 1 || a.Hits > db.MaxThreshold {
 					a.Hits = 1
 				}
+				if err := db.CheckActionParams(a.Name, a.Param, a.Minutes); err != nil {
+					return nil, fmt.Errorf("list '%s': %w", le.Name, err)
+				}
 				l.Actions = append(l.Actions, a)
 			}
 			if len(l.Actions) == 0 {
@@ -183,8 +187,11 @@ at least one action. With only the block name, prints each list's actions.`,
 		if err != nil {
 			return err
 		}
+		if err := db.CheckActionParams(action, "", 0); err != nil && on {
+			return fmt.Errorf("%v; set it per list with 'kc9k list action'", err)
+		}
 		for _, l := range detail.Lists.Blacklists() {
-			if err := listAction(cmd, database, name, l.Name, action, on); err != nil {
+			if err := listAction(cmd, database, name, l.Name, action, on, nil); err != nil {
 				return fmt.Errorf("list '%s': %w", l.Name, err)
 			}
 		}
@@ -202,6 +209,11 @@ var blockExportCmd = &cobra.Command{
 			return err
 		}
 		out := blockExport{Name: detail.Name, Apps: detail.Apps, Titles: detail.Titles, Lists: []listExport{}}
+		if n, err := database.BlockNepsis(detail.Name); err != nil {
+			return err
+		} else if n.On() {
+			out.Nepsis = &n
+		}
 		if out.Apps == nil {
 			out.Apps = []string{}
 		}
@@ -254,6 +266,11 @@ var blockImportCmd = &cobra.Command{
 		if err := checkTitleKeywords(in.Titles); err != nil {
 			return fmt.Errorf("in import: %w", err)
 		}
+		if in.Nepsis != nil && in.Nepsis.On() {
+			if err := in.Nepsis.Check(); err != nil {
+				return fmt.Errorf("in import: bypass prevention: %w", err)
+			}
+		}
 
 		database, err := openDB()
 		if err != nil {
@@ -274,6 +291,11 @@ var blockImportCmd = &cobra.Command{
 		}
 		if len(in.Titles) > 0 {
 			if err := database.AddTitles(in.Name, in.Titles); err != nil {
+				return err
+			}
+		}
+		if in.Nepsis != nil {
+			if err := database.SetBlockNepsis(in.Name, *in.Nepsis); err != nil {
 				return err
 			}
 		}

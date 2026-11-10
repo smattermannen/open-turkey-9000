@@ -96,7 +96,13 @@ func (d *DB) DuplicateBlock(name, copyName string) error {
 		}
 	}
 	if len(detail.Titles) > 0 {
-		return d.AddTitles(copyName, detail.Titles)
+		if err := d.AddTitles(copyName, detail.Titles); err != nil {
+			return err
+		}
 	}
-	return nil
+	n, err := d.BlockNepsis(name)
+	if err != nil {
+		return err
+	}
+	return d.SetBlockNepsis(copyName, n)
 }

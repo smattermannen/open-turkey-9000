@@ -6,13 +6,17 @@
 <style>
   body { font-family: sans-serif; display: grid; place-items: center; min-height: 90vh; margin: 0; background: #1b1d21; color: #eceff4; text-align: center; }
   h1 { font-size: 2rem; margin-bottom: .5rem; }
+  #picture { max-width: 90vw; max-height: 85vh; display: block; margin: 0 auto; }
 </style>
 </head>
 <body>
   <main>
-    <h1>Blocked by Killer Chicken 9000</h1>
-    <p>This page is blocked right now. Back to what you were doing.</p>
-    <p><small id="note">This tab returns to the page by itself when the block ends.</small></p>
+    <img id="picture" alt="" hidden>
+    <div id="words">
+      <h1>Blocked by Killer Chicken 9000</h1>
+      <p>This page is blocked right now. Back to what you were doing.</p>
+      <p><small id="note">This tab returns to the page by itself when the block ends.</small></p>
+    </div>
   </main>
   <script src="blocked.js"></script>
 </body>

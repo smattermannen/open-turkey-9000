@@ -19,6 +19,7 @@ Still to try:
 4. From before: shutdown mode and the `kc9k.nofreeze` GRUB escape; measure the fast relock (89c71bf).
 5. Page keywords on real sites over a few days (false hits, slow pages), and a hotkey pressed on the real keyboard (tested with xdotool).
 6. Website lists (extension 1.7.0): the upgrade turns the test blocks into lists (`kc9k list show <block>`); a title list, and an exception list by title (e.g. block youtube.com except pages titled "lecture"); a page that changes address without loading (YouTube) is caught by an address list; the interface's Websites tab on the laptop's screen.
+7. Extension 1.8.0 actions: redirect, a picture (does LibreWolf load it from 127.0.0.1?), close-tab, close-browser (the tab mustn't come back in the restored session), monk mode from a list, and a one-off logout. Bypass prevention firing (global and per block), and a locked global one refusing `nepsis off`. Monk mode from the Dashboard. `ci/browser_test.py` has new checks for a title exception and a redirect.
 
 `ci/browser_test.py` passed in LibreWolf on 2026-11-09 (all checks, with page keywords and no-private added). It could not run while block-devtools was on: the DisableDeveloperTools policy turns off Marionette, so testing builds now leave that policy out while the remote-control marker exists.
 
@@ -26,11 +27,7 @@ Still to try:
 - The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
 - Hotkeys only work in Cinnamon; GNOME keeps custom shortcuts under another dconf path.
 - Blocks tab: a "+" button for a new block.
-- Website lists, agreed plan (steps 1 and 2 done: named blacklists and exception lists, each ticking where it looks — address, page title, page text — with per-list actions, and for page text both different words and hits in all; one Websites tab in the interface):
-  3. More actions per blacklist: open a custom link instead of the block page; show an image (a file the user picks, served by the daemon); close the tab; close the browser; close the browser and log out; close the browser and shut down; close the browser and start monk mode. Actions that take a time (monk mode) show a duration setting.
-  4. Bypass prevention (the Nepsis idea below), optional per block, with global settings too; when both are set, both apply.
-- Monk mode: a `*.*` block that starts locked for a set time, with a quick button.
-- Nepsis mode (optional, lockable like the other options): when many block rules trigger within a short time (likely hunting for loopholes), take an action the user chooses, e.g. shut down for 1 hour, or start and lock monk mode for 1 hour, so the user really shifts mental state. Think about more ways to notice attempts to bypass KC9K or find loopholes.
+- Bypass prevention: more signs of hunting for loopholes to log as events (e.g. many new tabs to blocked sites from search results, renamed browsers, killed KC9K processes, clock changes noticed by the trusted clock). Window titles and other browsers count only globally so far; tie them to their block.
 - The terms in a list are hidden until the list's terms area is clicked, like sensitive content on Reddit.
 - A search box in each list to find terms in it.
 

@@ -1,25 +1,118 @@
-// actions.go — what a block does to the websites on its list.
+// actions.go — what a blacklist does to the pages it matches.
 //
-// Each block has three boxes to tick, in any combination: block the sites,
-// show them in greyscale, and block their images. Apps are always blocked.
-// Ticking a box makes the block stricter; unticking one loosens it, so the
-// CLI gates it like any other loosening edit.
+// Each blacklist ticks any of its actions. Page actions change or replace the
+// page: block it (the block page), grey it, hide its images, send it to
+// another address, show an image instead, or close the tab. Device actions
+// close the browser and, for some, go further: log out, shut down, or start
+// monk mode. Ticking a box makes the block stricter; unticking one loosens
+// it, so the CLI gates it like any other loosening edit.
 package db
 
 import (
 	"fmt"
+	"net/url"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 )
 
 // Website actions, as named on the command line and in exports.
 const (
-	ActionBlock     = "block"
-	ActionGreyscale = "greyscale"
-	ActionNoImages  = "no-images"
+	ActionBlock        = "block"
+	ActionGreyscale    = "greyscale"
+	ActionNoImages     = "no-images"
+	ActionRedirect     = "redirect"      // Param: the address to open instead
+	ActionImage        = "image"         // Param: a stored image (see ImageName)
+	ActionCloseTab     = "close-tab"     //
+	ActionCloseBrowser = "close-browser" //
+	ActionLogout       = "logout"        // Minutes: stay logged out that long (0: once)
+	ActionShutdown     = "shutdown"      // Minutes: stay off that long (0: once)
+	ActionMonk         = "monk"          // Minutes: how long monk mode lasts
 )
 
 // ActionNames lists the website actions in display order.
-var ActionNames = []string{ActionBlock, ActionGreyscale, ActionNoImages}
+var ActionNames = []string{ActionBlock, ActionGreyscale, ActionNoImages, ActionRedirect, ActionImage,
+	ActionCloseTab, ActionCloseBrowser, ActionLogout, ActionShutdown, ActionMonk}
+
+// IsDeviceAction reports whether an action reaches past the page: it closes
+// the browser, and the daemon carries out the rest.
+func IsDeviceAction(name string) bool {
+	switch name {
+	case ActionCloseBrowser, ActionLogout, ActionShutdown, ActionMonk:
+		return true
+	}
+	return false
+}
+
+// IsBlockingAction reports whether an action takes the page away (rather than
+// only changing how it looks). Bypass prevention counts these.
+func IsBlockingAction(name string) bool {
+	return name != ActionGreyscale && name != ActionNoImages && IsAction(name)
+}
+
+// Limits on an action's minutes. Logging out and shutting down for a while
+// go through Frozen Chicken, which lasts at most a day.
+const (
+	MaxFreezeMinutes = 24 * 60
+	MaxMonkMinutes   = 30 * 24 * 60
+)
+
+var imageName = regexp.MustCompile(`^[0-9a-f]{64}\.(png|jpg|gif|webp)$`)
+
+// IsImageName reports whether name is a stored image's name: its SHA-256 and
+// type. Only such names are stored or served.
+func IsImageName(name string) bool { return imageName.MatchString(name) }
+
+// CheckActionParams checks what an action needs: a web address for
+// redirect, a stored image for image, minutes for monk (and optionally for
+// logout and shutdown). Other actions take nothing.
+func CheckActionParams(action, param string, minutes int) error {
+	switch action {
+	case ActionRedirect:
+		u, err := url.Parse(param)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || strings.ContainsAny(param, " \n\r\t") {
+			return fmt.Errorf("redirect needs a web address starting with http:// or https://")
+		}
+	case ActionImage:
+		if !IsImageName(param) {
+			return fmt.Errorf("image needs a picture (PNG, JPEG, GIF or WebP)")
+		}
+	default:
+		if param != "" {
+			return fmt.Errorf("%s takes no address or image", action)
+		}
+	}
+	switch action {
+	case ActionMonk:
+		if minutes < 1 || minutes > MaxMonkMinutes {
+			return fmt.Errorf("monk mode lasts from 1 minute to %s", time.Duration(MaxMonkMinutes)*time.Minute)
+		}
+	case ActionLogout, ActionShutdown:
+		if minutes < 0 || minutes > MaxFreezeMinutes {
+			return fmt.Errorf("%s lasts at most %s (0: just once)", action, time.Duration(MaxFreezeMinutes)*time.Minute)
+		}
+	default:
+		if minutes != 0 {
+			return fmt.Errorf("%s takes no duration", action)
+		}
+	}
+	return nil
+}
+
+// ParamsStricter reports whether changing an action's settings from (param,
+// minutes) to (param2, minutes2) can only make it stricter: a longer time
+// does, a different address doesn't (it could open anything). A different
+// image is neither, so it is allowed.
+func ParamsStricter(action, param, param2 string, minutes, minutes2 int) bool {
+	switch action {
+	case ActionRedirect:
+		return param == param2
+	case ActionImage:
+		return true
+	}
+	return minutes2 >= minutes
+}
 
 // Actions holds which website actions a block uses. The zero value has none;
 // DefaultActions is what a new block gets.
@@ -101,3 +194,7 @@ func ParseActions(names []string) (Actions, error) {
 	}
 	return a, nil
 }
+
+// ImagesDir is where images for the image action are kept, beside the
+// database.
+func ImagesDir() string { return filepath.Join(filepath.Dir(ResolveDBPath()), "images") }

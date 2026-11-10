@@ -11,12 +11,12 @@ const POLL_MS = 3000;
 let lists = [];
 let webOnly = false;
 
-function addressActions(url) {
-  return kc9kListActions(lists, { url });
+function addressOutcome(url) {
+  return kc9kOutcome(kc9kListMatches(lists, { url }));
 }
 
 function isBlocked(url) {
-  return Boolean(addressActions(url).block);
+  return kc9kTakesAway(addressOutcome(url));
 }
 
 // pageUrl is the address of the tab a request belongs to, so images are
@@ -54,30 +54,103 @@ function webOnlyAction(rawUrl) {
   return null;
 }
 
-function blockedPage(url, reason) {
-  const page = browser.runtime.getURL("blocked.html") + "?url=" + encodeURIComponent(url);
-  return { redirectUrl: reason ? page + "&reason=" + reason : page };
+function blockedPage(url, reason, image) {
+  let page = browser.runtime.getURL("blocked.html") + "?url=" + encodeURIComponent(url);
+  if (reason) {
+    page += "&reason=" + reason;
+  }
+  if (image) {
+    page += "&image=" + encodeURIComponent(image);
+  }
+  return { redirectUrl: page };
+}
+
+// replacement is where a page goes instead, for an outcome without device
+// or close-tab actions: the block page (with the list's image, if any), or
+// the redirect's address unless that is blocked too.
+function replacement(url, outcome, reason) {
+  if (outcome.page === "redirect" && /^https?:\/\//i.test(outcome.param) && !isBlocked(outcome.param)) {
+    return { redirectUrl: outcome.param };
+  }
+  return blockedPage(url, reason, outcome.page === "image" ? outcome.param : "");
+}
+
+// Reports to the daemon: what took a page away (it counts these for bypass
+// prevention, and carries out logout, shutdown and monk mode). A tab and
+// address already reported in the last few seconds isn't reported again.
+const HIT_URL = "http://127.0.0.1:47613/hit";
+const reported = new Map();
+
+function report(tabId, url, outcome) {
+  const key = tabId + " " + url;
+  const now = Date.now();
+  if (now - (reported.get(key) || 0) < 10000) {
+    return Promise.resolve();
+  }
+  reported.set(key, now);
+  for (const [k, at] of reported) {
+    if (now - at > 60000) {
+      reported.delete(k);
+    }
+  }
+  return Promise.all(outcome.lists.map((hit) => fetch(HIT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-KC9K-Extension": "1" },
+    body: JSON.stringify({ list: hit.id, actions: hit.actions, url }),
+  }).catch(() => {})));
+}
+
+// closeEverything closes the tab first, so a restored session doesn't bring
+// the page back, then tells the daemon, then closes every window: the
+// browser quits cleanly.
+async function closeEverything(tabId, url, outcome) {
+  try {
+    await browser.tabs.remove(tabId);
+  } catch (error) {
+    // Already gone.
+  }
+  await report(tabId, url, outcome);
+  const windows = await browser.windows.getAll();
+  for (const win of windows) {
+    browser.windows.remove(win.id).catch(() => {});
+  }
+}
+
+// act carries out an outcome on a tab showing url (not from a request:
+// see onBeforeRequest for those).
+function act(tabId, url, outcome, reason) {
+  if (outcome.device) {
+    closeEverything(tabId, url, outcome);
+    return;
+  }
+  report(tabId, url, outcome);
+  if (outcome.page === "close-tab") {
+    browser.tabs.remove(tabId).catch(() => {});
+    return;
+  }
+  browser.tabs.update(tabId, { url: replacement(url, outcome, reason).redirectUrl });
 }
 
 // Window-title keywords from the active blocks: a tab whose title contains
 // one is sent to the block page, as the daemon closes other apps' windows.
 let titleWords = [];
 
-function titleBlocked(tab) {
+function blockTitledTab(tab) {
+  if (!tab.url || !/^https?:/i.test(tab.url)) {
+    return;
+  }
+  const outcome = kc9kOutcome(kc9kListMatches(lists, { url: tab.url, title: tab.title || "" }));
+  if (kc9kTakesAway(outcome)) {
+    act(tab.id, tab.url, outcome, "title");
+    return;
+  }
   const text = (tab.title || "").toLowerCase();
   if (titleWords.some((word) => text.includes(word))) {
-    return true;
-  }
-  return Boolean(kc9kListActions(lists, { url: tab.url, title: tab.title || "" }).block);
-}
-
-function blockTitledTab(tab) {
-  if (tab.url && /^https?:/i.test(tab.url) && titleBlocked(tab)) {
     browser.tabs.update(tab.id, { url: blockedPage(tab.url, "title").redirectUrl });
   }
 }
 
-// Tabs whose page a list's title or text greyed out of images, with the
+// Tabs whose page a list's title or text stripped of images, with the
 // address it happened at: their images are cancelled like those of a
 // no-images site, frames included, until the tab goes somewhere else.
 const keywordNoImages = new Map();
@@ -92,39 +165,64 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 browser.tabs.onRemoved.addListener((tabId) => keywordNoImages.delete(tabId));
 
-// keywordHit acts on a content script's report that a list matched its
-// page's title or text. Only the tab's own page counts, and only web pages.
-function keywordHit(message, sender) {
+// pageHit acts on a content script's report of the lists that matched its
+// page (by address, title and text). Only the tab's own page counts, and
+// only web pages; the lists and actions are taken from this script's own
+// rules, never from the report.
+function pageHit(message, sender) {
   const tab = sender && sender.tab;
   if (!tab || sender.frameId !== 0 || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
     return;
   }
-  const hits = message.hits || {};
-  if (hits.noImages) {
+  const matches = [];
+  for (const hit of Array.isArray(message.matches) ? message.matches : []) {
+    const list = lists.find((l) => l.id === hit.id);
+    const names = Array.isArray(hit.actions) ? hit.actions : [];
+    if (list) {
+      const actions = list.actions.filter((action) => names.includes(action.action));
+      if (actions.length > 0) {
+        matches.push({ list, actions });
+      }
+    }
+  }
+  if (matches.some((m) => m.actions.some((action) => action.action === "no-images"))) {
     keywordNoImages.set(tab.id, message.url);
   }
-  if (hits.block) {
-    // A page blocked by its address alone (one that changed address without
-    // loading, or whose block has exceptions by title or text) goes back
-    // when the block ends; one blocked for its title or text stays.
-    const reason = isBlocked(message.url) ? "" : "keyword";
-    browser.tabs.update(tab.id, { url: blockedPage(message.url, reason).redirectUrl });
+  const outcome = kc9kOutcome(matches);
+  if (kc9kTakesAway(outcome)) {
+    // A page taken away by its address alone (one that changed address
+    // without loading, or whose block has exceptions by title or text) goes
+    // back when the block ends; one taken away for its title or text stays.
+    act(tab.id, message.url, outcome, isBlocked(message.url) ? "" : "keyword");
   }
 }
 
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
-    if (details.url.startsWith(RULES_URL)) {
+    if (details.url.startsWith(RULES_URL) || details.url.startsWith(HIT_URL)) {
       return {};
     }
     if (details.type === "image" || details.type === "imageset" || details.type === "media") {
       if (keywordNoImages.has(details.tabId)) {
         return { cancel: true };
       }
-      return addressActions(pageUrl(details))["no-images"] ? { cancel: true } : {};
+      return kc9kListActions(lists, { url: pageUrl(details) })["no-images"] ? { cancel: true } : {};
     }
-    if (isBlocked(details.url)) {
-      return blockedPage(details.url);
+    const outcome = addressOutcome(details.url);
+    if (kc9kTakesAway(outcome)) {
+      // A frame only ever gets the block page: something embedded in a page
+      // mustn't close the tab or the browser.
+      if (details.type !== "main_frame") {
+        return blockedPage(details.url);
+      }
+      if (outcome.device || outcome.page === "close-tab") {
+        if (details.tabId >= 0) {
+          setTimeout(() => act(details.tabId, details.url, outcome, ""), 0);
+        }
+        return { cancel: true };
+      }
+      report(details.tabId, details.url, outcome);
+      return replacement(details.url, outcome, "");
     }
     if (webOnly && /^https?:/.test(details.url)) {
       const action = webOnlyAction(details.url);
@@ -158,8 +256,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message && message.type === "still-blocked" && typeof message.url === "string") {
     return Promise.resolve(stillBlocked(message.url));
   }
-  if (message && message.type === "keyword-hits") {
-    keywordHit(message, sender);
+  if (message && message.type === "page-hits") {
+    pageHit(message, sender);
   }
   return undefined;
 });
@@ -173,8 +271,12 @@ function apply(rules) {
 async function closeNewlyBlockedTabs() {
   const tabs = await browser.tabs.query({});
   for (const tab of tabs) {
-    if (tab.url && isBlocked(tab.url)) {
-      browser.tabs.update(tab.id, { url: blockedPage(tab.url).redirectUrl });
+    if (!tab.url || !/^https?:/i.test(tab.url)) {
+      continue;
+    }
+    const outcome = addressOutcome(tab.url);
+    if (kc9kTakesAway(outcome)) {
+      act(tab.id, tab.url, outcome, "");
     } else {
       blockTitledTab(tab);
     }
@@ -189,10 +291,7 @@ async function poll() {
     if (response.ok) {
       const rules = await response.json();
       apply(rules);
-      await browser.storage.local.set({
-        rules,
-        page: { lists: rules.lists || [] },
-      });
+      await browser.storage.local.set({ rules, page: { lists: rules.lists || [] } });
       await closeNewlyBlockedTabs();
     }
   } catch (error) {

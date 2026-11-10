@@ -155,6 +155,7 @@ function kc9kCompileLists(lists) {
   return (lists || []).map((list) => {
     const except = list.except || {};
     return {
+      id: list.id,
       url: kc9kFilter({ match: list.url || [] }),
       title: kc9kKeywordRegexes(list.title),
       text: kc9kKeywordRegexes(list.text),
@@ -174,16 +175,16 @@ function kc9kReadsPage(compiled) {
     list.except.title.length > 0 || list.except.text.length > 0);
 }
 
-// kc9kListActions works out which actions the lists take on a page: an
-// object with a true value for each action name. page holds its url, and its
+// kc9kListMatches works out which lists act on a page, and with which
+// actions: [{ list, actions: [action objects] }]. page holds its url, and its
 // title and text when they are known (undefined otherwise). A list whose
 // exceptions look at a part of the page that isn't known yet is left until
 // it is, so a page an exception spares isn't blocked before it is read.
 // A match in the address or the title takes every action of the list; in
 // the text, an action needs its number of different entries (distinct) and
 // of times they occur in all (hits).
-function kc9kListActions(compiled, page) {
-  const out = {};
+function kc9kListMatches(compiled, page) {
+  const out = [];
   if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
     return out;
   }
@@ -202,11 +203,64 @@ function kc9kListActions(compiled, page) {
     const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       (hasTitle && list.title.some((regex) => regex.test(page.title)));
     const found = hasText && list.text.length > 0 ? kc9kTextHits(list.text, page.text) : { distinct: 0, total: 0 };
-    for (const action of list.actions) {
-      if (whole || (found.distinct > 0 && found.distinct >= (action.distinct || 1) && found.total >= (action.hits || 1))) {
-        out[action.action] = true;
+    const actions = list.actions.filter((action) => whole ||
+      (found.distinct > 0 && found.distinct >= (action.distinct || 1) && found.total >= (action.hits || 1)));
+    if (actions.length > 0) {
+      out.push({ list, actions });
+    }
+  }
+  return out;
+}
+
+// kc9kListActions is which actions the lists take on a page: an object with
+// a true value for each action name.
+function kc9kListActions(compiled, page) {
+  const out = {};
+  for (const match of kc9kListMatches(compiled, page)) {
+    for (const action of match.actions) {
+      out[action.action] = true;
+    }
+  }
+  return out;
+}
+
+// Actions that take the page away (rather than change how it looks), and
+// those that reach past the browser tab.
+const KC9K_PAGE_ACTIONS = ["close-tab", "image", "redirect", "block"];
+const KC9K_DEVICE_ACTIONS = ["close-browser", "logout", "shutdown", "monk"];
+
+// kc9kOutcome turns matches into what to do: { device, page, param, lists }.
+// device is true when any device action applies (the tab and the browser
+// close); page is the strongest page action ("close-tab", "image",
+// "redirect", "block" or ""), and param its address or image. lists holds
+// [{ id, actions: [names] }] for the matches that take the page away, to
+// report to the daemon.
+function kc9kOutcome(matches) {
+  const out = { device: false, page: "", param: "", lists: [] };
+  let rank = KC9K_PAGE_ACTIONS.length;
+  for (const match of matches) {
+    const names = match.actions.map((action) => action.action);
+    const away = names.filter((name) => KC9K_PAGE_ACTIONS.includes(name) || KC9K_DEVICE_ACTIONS.includes(name));
+    if (away.length === 0) {
+      continue;
+    }
+    out.lists.push({ id: match.list.id, actions: away });
+    for (const action of match.actions) {
+      if (KC9K_DEVICE_ACTIONS.includes(action.action)) {
+        out.device = true;
+      }
+      const r = KC9K_PAGE_ACTIONS.indexOf(action.action);
+      if (r >= 0 && r < rank) {
+        rank = r;
+        out.page = action.action;
+        out.param = action.param || "";
       }
     }
   }
   return out;
+}
+
+// kc9kTakesAway reports whether an outcome takes the page away.
+function kc9kTakesAway(outcome) {
+  return outcome.device || outcome.page !== "";
 }

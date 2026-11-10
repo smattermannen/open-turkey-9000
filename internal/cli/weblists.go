@@ -23,9 +23,15 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
@@ -219,8 +225,49 @@ func listWhere(cmd *cobra.Command, database *db.DB, block, list, place string, o
 	return settle(database, block)
 }
 
-// listAction turns a blacklist's action on or off.
-func listAction(cmd *cobra.Command, database *db.DB, block, list, action string, on bool) error {
+// actionSettings are what an action needs: an address (redirect), an image
+// (image) or minutes (monk, and optionally logout and shutdown).
+type actionSettings struct {
+	param   string
+	minutes int
+}
+
+// readActionSettings reads --url, --image and --for for an action. An image
+// file is stored (see storeImage); its name becomes the parameter.
+func readActionSettings(cmd *cobra.Command, action string) (actionSettings, error) {
+	var s actionSettings
+	url, _ := cmd.Flags().GetString("url")
+	image, _ := cmd.Flags().GetString("image")
+	length, _ := cmd.Flags().GetString("for")
+	switch {
+	case url != "" && action != db.ActionRedirect:
+		return s, fmt.Errorf("--url goes with the redirect action")
+	case image != "" && action != db.ActionImage:
+		return s, fmt.Errorf("--image goes with the image action")
+	}
+	s.param = url
+	if image != "" {
+		name, err := storeImage(image)
+		if err != nil {
+			return s, err
+		}
+		s.param = name
+	}
+	if length != "" {
+		d, err := time.ParseDuration(length)
+		if err != nil || d < 0 || d%time.Minute != 0 {
+			return s, fmt.Errorf("invalid --for %q: give whole minutes, like 30m or 2h", length)
+		}
+		s.minutes = int(d / time.Minute)
+	}
+	return s, db.CheckActionParams(action, s.param, s.minutes)
+}
+
+// listAction turns a blacklist's action on or off, or changes what it needs
+// (set, for actions that take an address, an image or minutes). A setting
+// that can only make the action stricter (a longer time, another image) is
+// always allowed; another address loosens it.
+func listAction(cmd *cobra.Command, database *db.DB, block, list, action string, on bool, set *actionSettings) error {
 	if !db.IsAction(action) {
 		return fmt.Errorf("unknown action %q (use %s)", action, strings.Join(db.ActionNames, ", "))
 	}
@@ -231,22 +278,70 @@ func listAction(cmd *cobra.Command, database *db.DB, block, list, action string,
 	if l.IsExceptions() {
 		return fmt.Errorf("'%s' is an exception list; only blacklists have actions", list)
 	}
-	if l.HasAction(action) == on {
+	current, has := l.Action(action)
+	switch {
+	case on && has && set != nil && (set.param != current.Param || set.minutes != current.Minutes):
+		strengthens := db.ParamsStricter(action, current.Param, set.param, current.Minutes, set.minutes)
+		proceed, err := gateEdit(cmd, database, block, strengthens,
+			listEdit(db.EditListSetParams, l, action, set.param, strconv.Itoa(set.minutes)))
+		if err != nil || !proceed {
+			return err
+		}
+		if err := database.SetListActionParams(l.ID, action, set.param, set.minutes); err != nil {
+			return err
+		}
+		return settle(database, block)
+	case has == on:
 		return nil
-	}
-	if !on && len(l.Actions) == 1 {
+	case !on && len(l.Actions) == 1:
 		return fmt.Errorf("list '%s' needs at least one action; turn another on first", list)
-	}
-	if !on {
+	case !on:
 		proceed, err := gateEdit(cmd, database, block, false, listEdit(db.EditListUnsetAction, l, action))
 		if err != nil || !proceed {
 			return err
 		}
+		err = database.SetListAction(l.ID, action, false)
+		if err != nil {
+			return err
+		}
+		return settle(database, block)
 	}
-	if err := database.SetListAction(l.ID, action, on); err != nil {
+	if set == nil {
+		set = &actionSettings{}
+	}
+	if err := database.SetListActionParams(l.ID, action, set.param, set.minutes); err != nil {
 		return err
 	}
 	return settle(database, block)
+}
+
+// maxImageSize bounds a picture for the image action.
+const maxImageSize = 4 << 20
+
+// storeImage copies a picture into db.ImagesDir under its SHA-256 and type,
+// for the daemon to serve, and returns that name.
+func storeImage(path string) (string, error) {
+	data, err := readAsCaller(path)
+	if err != nil {
+		return "", err
+	}
+	if len(data) > maxImageSize {
+		return "", fmt.Errorf("%s is larger than %d MB", path, maxImageSize>>20)
+	}
+	ext := map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}[http.DetectContentType(data)]
+	if ext == "" {
+		return "", fmt.Errorf("%s isn't a PNG, JPEG, GIF or WebP picture", path)
+	}
+	sum := sha256.Sum256(data)
+	name := hex.EncodeToString(sum[:]) + "." + ext
+	dir := db.ImagesDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+		return "", fmt.Errorf("failed to store the image: %w", err)
+	}
+	return name, nil
 }
 
 // listThreshold sets how many different entries a page's text needs for an
@@ -347,11 +442,17 @@ func describeList(l db.WebList) string {
 	if !l.IsExceptions() {
 		var acts []string
 		for _, a := range l.Actions {
-			if l.Where.Text {
-				acts = append(acts, fmt.Sprintf("%s at %d different, %d in all", a.Name, a.Distinct, a.Hits))
-			} else {
-				acts = append(acts, a.Name)
+			text := a.Name
+			if a.Param != "" {
+				text += " " + a.Param
 			}
+			if a.Minutes > 0 {
+				text += fmt.Sprintf(" for %s", time.Duration(a.Minutes)*time.Minute)
+			}
+			if l.Where.Text {
+				text += fmt.Sprintf(" at %d different, %d in all", a.Distinct, a.Hits)
+			}
+			acts = append(acts, text)
 		}
 		s += "; actions: " + strings.Join(acts, ", ")
 	}
@@ -490,13 +591,46 @@ var listWhereCmd = &cobra.Command{
 var listActionCmd = &cobra.Command{
 	Use:   "action [block] [list] [" + strings.Join(db.ActionNames, "|") + "] [on|off]",
 	Short: "Choose what a blacklist does to the pages it matches",
-	Args:  cobra.ExactArgs(4),
+	Long: `Actions, in any combination:
+
+  block          show the block page
+  greyscale      show the page in greyscale
+  no-images      hide the page's images
+  redirect       open another address instead (--url https://...)
+  image          show a picture instead (--image FILE: PNG, JPEG, GIF or WebP)
+  close-tab      close the tab
+  close-browser  close the browser
+  logout         close the browser and log out (--for 1h: stay logged out)
+  shutdown       close the browser and shut down (--for 1h: stay off)
+  monk           close the browser and start monk mode (--for 1h, required)
+
+When several apply, the strongest page action wins (close-tab, then image,
+redirect, block). Device actions only follow from the page itself, never
+from something embedded in another page. A one-off logout or shutdown
+happens at most every 10 minutes; staying off or logged out goes through
+Frozen Chicken (at most a day). Monk mode starts the block 'monk-mode',
+which blocks every website unless you change it.
+
+Run 'on' again with other settings to change them: a longer time is always
+allowed, another address loosens the list.`,
+	Args: cobra.ExactArgs(4),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		on, err := parseOnOff(args[3])
 		if err != nil {
 			return err
 		}
-		return listAction(cmd, database, args[0], args[1], strings.ToLower(args[2]), on)
+		action := strings.ToLower(args[2])
+		var set *actionSettings
+		if on {
+			settings, err := readActionSettings(cmd, action)
+			if err != nil {
+				return err
+			}
+			set = &settings
+		} else if cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for") {
+			return fmt.Errorf("--url, --image and --for only go with 'on'")
+		}
+		return listAction(cmd, database, args[0], args[1], action, on, set)
 	}),
 }
 
@@ -569,6 +703,9 @@ var listImportCmd = &cobra.Command{
 }
 
 func init() {
+	listActionCmd.Flags().String("url", "", "For redirect: the address to open instead")
+	listActionCmd.Flags().String("image", "", "For image: the picture to show instead")
+	listActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
 	listCreateCmd.Flags().Bool("exceptions", false, "Make it an exception list")
 	listCreateCmd.Flags().Bool("url", false, "Look at the address (the default)")
 	listCreateCmd.Flags().Bool("title", false, "Look at the page title")

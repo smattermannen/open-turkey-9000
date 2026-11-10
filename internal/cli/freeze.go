@@ -95,6 +95,8 @@ type guiBlock struct {
 	Lists       []guiList `json:"lists"`
 	Apps        []string  `json:"apps"`
 	Titles      []string  `json:"titles"`
+	Nepsis      db.Nepsis `json:"nepsis"`
+	NepsisCount int       `json:"nepsis_count"`
 	Schedules   []string  `json:"schedules"`
 	Windows     []guiWin  `json:"schedule_windows"`
 	Active      bool      `json:"active"`
@@ -138,6 +140,10 @@ type guiState struct {
 	BrowserLocks  map[string]guiSettingLock `json:"browser_locks"`
 	Blocks        []guiBlock                `json:"blocks"`
 	Hotkeys       []db.Hotkey               `json:"hotkeys"`
+	Nepsis        db.Nepsis                 `json:"nepsis"`
+	NepsisCount   int                       `json:"nepsis_count"`
+	NepsisLock    guiSettingLock            `json:"nepsis_lock"`
+	MonkBlock     string                    `json:"monk_block"`
 }
 
 var guiStateCmd = &cobra.Command{
@@ -208,6 +214,20 @@ var guiStateCmd = &cobra.Command{
 			}
 			state.BrowserLocks[name] = g
 		}
+		state.MonkBlock = enforce.MonkBlock
+		if state.Nepsis, err = database.GlobalNepsis(); err != nil {
+			return err
+		}
+		if state.Nepsis.On() {
+			state.NepsisCount, _ = enforce.NepsisCount(database, now, "", state.Nepsis)
+		}
+		if s, err := loadSettingLock(database, db.NepsisLockName); err == nil {
+			state.NepsisLock = guiSettingLock{CharLocked: s.lock.LockChars > 0, Password: s.lock.PasswordHash != "",
+				Restart: s.lock.RestartLocked(s.bootID)}
+			if s.lock.TimeLocked(s.trusted) {
+				state.NepsisLock.Seconds = s.lock.LockedUntil - s.trusted
+			}
+		}
 
 		blocks, err := database.ListBlocks()
 		if err != nil {
@@ -259,6 +279,12 @@ var guiStateCmd = &cobra.Command{
 			} else if p != nil {
 				g.PomodoroOn, g.PomodoroOff = p.On, p.Off
 				g.OnBreak = detail.Active && quota.OnBreak(p.On, p.Off, p.Anchor, trusted)
+			}
+			if g.Nepsis, err = database.BlockNepsis(b.Name); err != nil {
+				return err
+			}
+			if g.Nepsis.On() {
+				g.NepsisCount, _ = enforce.NepsisCount(database, now, b.Name, g.Nepsis)
 			}
 			g.QuotaNext = quota.NoPending
 			if q, err := database.GetQuota(b.Name); err != nil {

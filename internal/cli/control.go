@@ -298,16 +298,16 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' has a daily quota and stays on. Use 'kc9k quota start %s'", blockName, blockName)
 		}
 		if hold.scheduledNow {
-			return fmt.Errorf("block '%s' is in a scheduled window and can't be stopped until it closes", blockName)
+			return refused(database, blockName, fmt.Errorf("block '%s' is in a scheduled window and can't be stopped until it closes", blockName))
 		}
 		if hold.timeLocked() {
-			return fmt.Errorf("block '%s' is time-locked until %s and can't be stopped before then", blockName, hold.until())
+			return refused(database, blockName, fmt.Errorf("block '%s' is time-locked until %s and can't be stopped before then", blockName, hold.until()))
 		}
 		if hold.restartLocked {
-			return fmt.Errorf("block '%s' stays on until the computer restarts", blockName)
+			return refused(database, blockName, fmt.Errorf("block '%s' stays on until the computer restarts", blockName))
 		}
 		if hold.charLocked || hold.passwordHash != "" {
-			return fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", blockName, blockName)
+			return refused(database, blockName, fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", blockName, blockName))
 		}
 		if hold.extras.Delay > 0 {
 			if hold.extras.StopAt == 0 {
@@ -360,13 +360,13 @@ var unlockCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' is not active", blockName)
 		}
 		if hold.scheduledNow {
-			return fmt.Errorf("block '%s' is in a scheduled window; it will lift automatically when the window closes", blockName)
+			return refused(database, blockName, fmt.Errorf("block '%s' is in a scheduled window; it will lift automatically when the window closes", blockName))
 		}
 		if hold.timeLocked() {
-			return fmt.Errorf("block '%s' is time-locked until %s; it cannot be unlocked before then", blockName, hold.until())
+			return refused(database, blockName, fmt.Errorf("block '%s' is time-locked until %s; it cannot be unlocked before then", blockName, hold.until()))
 		}
 		if hold.restartLocked {
-			return fmt.Errorf("block '%s' stays on until the computer restarts", blockName)
+			return refused(database, blockName, fmt.Errorf("block '%s' stays on until the computer restarts", blockName))
 		}
 		if !hold.charLocked && hold.passwordHash == "" {
 			return fmt.Errorf("block '%s' is not locked. Use 'kc9k stop' to deactivate it", blockName)
@@ -378,7 +378,7 @@ var unlockCmd = &cobra.Command{
 				return err
 			}
 			if !db.CheckPassword(hold.passwordHash, password) {
-				return fmt.Errorf("wrong password; block '%s' remains locked", blockName)
+				return refused(database, blockName, fmt.Errorf("wrong password; block '%s' remains locked", blockName))
 			}
 		}
 		if hold.charLocked {
@@ -387,6 +387,7 @@ var unlockCmd = &cobra.Command{
 				return fmt.Errorf("failed to run unlock challenge: %w", err)
 			}
 			if !success {
+				_ = refused(database, blockName, fmt.Errorf("failed the unlock challenge"))
 				fmt.Println("Unlock failed. The block remains active and locked.")
 				os.Exit(1)
 			}

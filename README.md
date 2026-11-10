@@ -274,7 +274,23 @@ A block has **blacklists** and **exception lists**, each with a name. Every list
 - **title**: the page title, as shown on its tab.
 - **text**: the page's text. Title and text entries are words or phrases: a plain word counts only on its own (`porn` doesn't count in "pornhub", `18+` not in "1118+"), and `*` matches inside words (`*porn*` counts in "pornhub", `porn*` in "pornstar"). Case is ignored.
 
-Each blacklist chooses its **actions**, in any combination: **block** the page (the default), show it in **greyscale**, and block its **images**. A match in the address or the title takes every action. In the text, each action has two numbers, and both must be met: a **threshold**, how many *different* entries the page must contain (repeats count once), and **hits**, how many times they occur in all (repeats counted). Both start at 1. Threshold 1 with hits 5 acts on one word five times, or five words once. Once a page meets them, it stays greyed or blocked until you leave it, even if its text changes.
+Each blacklist chooses its **actions**, in any combination:
+
+| Action | What happens |
+|---|---|
+| `block` | the block page (the default) |
+| `greyscale`, `no-images` | the page shows in greyscale, or without its images |
+| `redirect --url https://…` | another page opens instead |
+| `image --image FILE` | a picture of yours (PNG, JPEG, GIF or WebP) shows instead |
+| `close-tab` | the tab closes |
+| `close-browser` | the browser closes |
+| `logout [--for D]` | the browser closes and you are logged out; with `--for`, you stay logged out that long |
+| `shutdown [--for D]` | the browser closes and the computer shuts down; with `--for`, it stays off that long |
+| `monk --for D` | the browser closes and [monk mode](#monk-mode) starts for that long |
+
+When several apply, the strongest page action wins: close-tab, then image, redirect, block. A redirect to a page that is blocked too shows the block page. Only the page itself triggers close-tab and the device actions, never something embedded in another page (that only gets the block page). A one-off logout or shutdown happens at most every 10 minutes, so a page restored after restarting can't loop the computer; staying logged out or off goes through [Frozen Chicken](#frozen-chicken), at most a day. Changing an action's settings: a longer time and another picture are always allowed; another address loosens the list.
+
+A match in the address or the title takes every action. In the text, each action has two numbers, and both must be met: a **threshold**, how many *different* entries the page must contain (repeats count once), and **hits**, how many times they occur in all (repeats counted). Both start at 1. Threshold 1 with hits 5 acts on one word five times, or five words once. Once a page meets them, it stays greyed or blocked until you leave it, even if its text changes.
 
 An **exception list** spares the pages it matches from every blacklist of its block. Exceptions by title or text have to wait until the page is read, so a block that has them leaves its websites to the extension alone: they don't go to `/etc/hosts` or the firewall, and a page shows for a moment before it is blocked. An address exception also takes its domain out of `/etc/hosts` and the firewall (those block whole hosts), leaving it to the browser.
 
@@ -290,6 +306,8 @@ kc9k list threshold work Words block 3                # three different ones blo
 kc9k list hits work Words block 10                    # ...and only when they occur 10 times in all
 kc9k list create work Lectures --exceptions --title   # spare videos titled "lecture"
 kc9k list add work Lectures lecture tutorial
+kc9k list action work Videos redirect on --url https://example.com/focus
+kc9k list action work Words monk on --for 1h          # close the browser, monk mode for an hour
 kc9k list where work Videos text on                   # tick or untick a place
 kc9k list rename work Videos Video
 kc9k list delete work Video
@@ -386,6 +404,31 @@ kc9k block remove-title social Twitch
 
 While the block is on, any app whose window title contains one of the words (case-insensitive) is asked to close, as its close button would, so it can save or ask first; if it is still open a few seconds later, it is closed with everything it started. In LibreWolf, the extension sends just the matching tab to the block page instead. The usual rules apply: only your own programs, never ones the desktop needs. Window titles are read from X11 (Cinnamon on Linux Mint); under Wayland only apps running through XWayland are seen. Removing a word loosens the block, like removing an app.
 
+## Monk mode
+
+```bash
+kc9k monk --for 2h
+```
+
+Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. It is an ordinary block, so add exceptions (documentation you need), apps or anything else to it. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password, like any lock.
+
+## Bypass prevention
+
+Many blocked pages, closed apps or refused commands in a short time usually mean someone is hunting for a loophole. Bypass prevention ("nepsis", watchfulness) counts what Killer Chicken stops and, past a number within a time, takes the consequence you chose, so you really step away:
+
+```bash
+kc9k nepsis set --count 10 --within 5m --then monk --then-for 1h       # the whole computer
+kc9k nepsis set --block social --count 5 --within 10m --then shutdown --then-for 30m
+kc9k nepsis set --count 10 --within 5m --then monk --then-for 1h --for 7d   # locked for a week
+kc9k nepsis                                                              # show them and the count so far
+kc9k nepsis off [--block social]
+kc9k nepsis unlock                                                       # challenge or password lock
+```
+
+What counts: pages a blacklist takes away (not greyscale or no-images alone), blocked apps closed, windows closed for their title, browsers closed for running without the extension, and refused attempts to stop, unlock or loosen a held block. Consequences: `close-browser`, `lock-screen` (`--then-for` required), `logout` and `shutdown` (`--then-for` to stay so; without it, once), and `monk` (`--then-for` required). Staying locked, logged out or off goes through Frozen Chicken, at most a day.
+
+The global one counts everything; a block's own counts that block's events while it is on (window titles and other browsers count only globally); when both are set, both apply. After firing, only newer events count. Making either stricter (fewer events, a longer window, the same consequence for longer) is always allowed. Anything else loosens it: a block's is gated like other edits to the block, and the global one can be locked like a browser option (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart` on `set`). Events are kept for a day. The interface has the global one under Settings and each block's on its Bypass prevention tab.
+
 ## Page keywords
 
 Page keywords are a blacklist that looks at page text; see [Website lists](#website-lists). The older commands still work on a block's **Page words** list:
@@ -465,11 +508,11 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 
 `make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). Everything goes through the same command-line rules, so the interface can't do anything a lock forbids. It has five sections:
 
-- **Dashboard**: active blocks and their locks, the state of Frozen Chicken, strict mode and no-escape, and today's most used websites and apps.
-- **Blocks**: website lists (blacklists and exceptions, each with its own boxes for where it looks and what it does, and import/export), apps, folders and window titles (with import/export), schedules, quota and Pomodoro per block; starting a block with optional locks (time, typing challenge, until restart, delay, password, and the challenge length from 10 to 5000 characters). The typing challenge opens in a terminal. The Schedule tab shows the week as a calendar: drag down a day to add a window, click a window to remove it (filled windows turn the block on, outlined ones are allow windows).
+- **Dashboard**: active blocks and their locks, the state of Frozen Chicken, strict mode and no-escape, today's most used websites and apps, and a Monk mode… button.
+- **Blocks**: website lists (blacklists and exceptions, each with its own boxes for where it looks and what it does, and import/export), apps, folders and window titles (with import/export), schedules, quota, Pomodoro and bypass prevention per block; starting a block with optional locks (time, typing challenge, until restart, delay, password, and the challenge length from 10 to 5000 characters). The typing challenge opens in a terminal. The Schedule tab shows the week as a calendar: drag down a day to add a window, click a window to remove it (filled windows turn the block on, outlined ones are allow windows).
 - **Device Blocks**: whole-computer locks: Frozen Chicken, strict mode and no-escape.
 - **Statistics**: time per day and the most used websites or apps, for today or the last 7, 30 or 90 days.
-- **Settings**: the theme (light, dark or the system's, saved in `~/.config/kc9k/gui.json`), browser options and statistics.
+- **Settings**: the theme (light, dark or the system's, saved in `~/.config/kc9k/gui.json`), browser options, statistics, the settings password, bypass prevention for the whole computer, and hotkeys.
 
 ## Frozen Chicken
 

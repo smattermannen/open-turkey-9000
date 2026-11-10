@@ -37,7 +37,8 @@ func AnyLock(d *db.DB, now time.Time, trusted int64) (bool, error) {
 	return AnySettingLocked(d, trusted)
 }
 
-// AnySettingLocked reports whether a lock holds any browser setting.
+// AnySettingLocked reports whether a lock holds any browser setting or the
+// global bypass prevention.
 func AnySettingLocked(d *db.DB, trusted int64) (bool, error) {
 	bootID, err := db.BootID()
 	if err != nil {
@@ -50,7 +51,7 @@ func AnySettingLocked(d *db.DB, trusted int64) (bool, error) {
 	for _, l := range locks {
 		// A lock on a retired option (see RetiredBrowserSettings) can no
 		// longer be unlocked, so it no longer counts.
-		if IsBrowserSetting(l.Name) && l.InForce(trusted, bootID) {
+		if (IsBrowserSetting(l.Name) || l.Name == db.NepsisLockName) && l.InForce(trusted, bootID) {
 			return true, nil
 		}
 	}

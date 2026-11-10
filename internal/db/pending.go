@@ -30,7 +30,10 @@ const (
 	EditListUnsetAction  = "list-unset-action"  // Values: action
 	EditListSetThreshold = "list-set-threshold" // Values: action, number
 	EditListSetHits      = "list-set-hits"      // Values: action, number
+	EditListSetParams    = "list-set-params"    // Values: action, param, minutes
 	EditListDelete       = "list-delete"        // a blacklist
+
+	EditSetNepsis = "set-nepsis" // Values: count, minutes, consequence, action minutes (count 0: off)
 )
 
 // Edits queued before website lists. They still apply, to the lists made from
@@ -154,11 +157,27 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 		err = d.RemoveApps(blockName, e.Values)
 	case EditRemoveTitles:
 		err = d.RemoveTitles(blockName, e.Values)
-	case EditListRemove, EditListAdd, EditListWhere, EditListUnsetAction, EditListSetThreshold, EditListSetHits, EditListDelete:
+	case EditListRemove, EditListAdd, EditListWhere, EditListUnsetAction, EditListSetThreshold, EditListSetHits, EditListSetParams, EditListDelete:
 		err = d.applyListEdit(e)
 	case legacyAddSites, legacyRemoveSites, legacyRemovePatterns, legacyAddExceptions,
 		legacySetMode, legacyUnsetAction, legacyRemoveKeywords, legacySetThreshold:
 		err = d.applyLegacyEdit(blockName, e)
+	case EditSetNepsis:
+		if len(e.Values) != 4 {
+			return fmt.Errorf("set-nepsis needs a count, minutes, a consequence and its minutes")
+		}
+		var n Nepsis
+		var convErr error
+		if n.Count, convErr = strconv.Atoi(e.Values[0]); convErr == nil {
+			if n.Minutes, convErr = strconv.Atoi(e.Values[1]); convErr == nil {
+				n.ActionMinutes, convErr = strconv.Atoi(e.Values[3])
+			}
+		}
+		if convErr != nil {
+			return fmt.Errorf("bad set-nepsis edit: %v", convErr)
+		}
+		n.Consequence = e.Values[2]
+		err = d.SetBlockNepsis(blockName, n)
 	case EditAddSchedule:
 		err = d.AddSchedule(blockName, e.Window)
 	case EditRemoveSchedule:
@@ -224,6 +243,15 @@ func (d *DB) applyListEdit(e Edit) error {
 			return d.SetListHits(list.ID, e.Values[0], n)
 		}
 		return d.SetListThreshold(list.ID, e.Values[0], n)
+	case EditListSetParams:
+		if len(e.Values) != 3 {
+			return fmt.Errorf("list-set-params needs an action, a parameter and minutes")
+		}
+		minutes, err := strconv.Atoi(e.Values[2])
+		if err != nil {
+			return fmt.Errorf("bad minutes %q", e.Values[2])
+		}
+		return d.SetListActionParams(list.ID, e.Values[0], e.Values[1], minutes)
 	case EditListDelete:
 		return d.DeleteList(list.ID)
 	}

@@ -11,7 +11,38 @@ let shownFor = null;
 // What the lists decided from the title and text of the page at keywordsFor.
 // Once a list applies to a page it stays until the address changes, so a
 // page can't shake it off by changing its text.
-let keywordHits = { block: false, greyscale: false, noImages: false };
+let keywordLooks = new Set();
+// The actions that change how a page looks or sounds rather than take it away.
+const LOOKS = ["greyscale", "no-images", "mute", "no-video", "declutter", "dark"];
+// Whether the page at lightFor has a light background (dark only acts on those).
+let lightFor = null;
+let light = true;
+let noVideo = false;
+
+function pageIsLight() {
+  if (lightFor === location.href && document.body) {
+    return light;
+  }
+  const parse = (color) => {
+    const m = /rgba?\(([^)]+)\)/.exec(color || "");
+    if (!m) {
+      return null;
+    }
+    const [r, g, b, a] = m[1].split(",").map((v) => parseFloat(v));
+    return a === 0 ? null : (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  };
+  let value = null;
+  for (const el of [document.body, document.documentElement]) {
+    if (el && value === null) {
+      value = parse(getComputedStyle(el).backgroundColor);
+    }
+  }
+  light = value === null ? true : value > 0.5;
+  if (document.body) {
+    lightFor = location.href;
+  }
+  return light;
+}
 // The list actions already reported for the page at keywordsFor ("id action").
 let reportedHits = new Set();
 let keywordsFor = null;
@@ -39,21 +70,53 @@ function render() {
   }
   const url = topUrl();
   if (keywordsFor !== url) {
-    keywordHits = { block: false, greyscale: false, noImages: false };
+    keywordLooks = new Set();
     keywordsFor = url;
   }
   const byAddress = kc9kListActions(lists, { url });
-  const greyscale = Boolean(byAddress.greyscale) || keywordHits.greyscale;
-  const noImages = Boolean(byAddress["no-images"]) || keywordHits.noImages;
+  const on = (name) => Boolean(byAddress[name]) || keywordLooks.has(name);
   shownFor = url;
+  noVideo = on("no-video");
   let css = "";
-  if (greyscale) {
-    css += "html { filter: grayscale(1) !important; }\n";
+  const filters = [];
+  if (on("dark") && pageIsLight()) {
+    // Turn the page over, then turn pictures and videos back.
+    filters.push("invert(1) hue-rotate(180deg)");
+    css += "img, picture, video, canvas, iframe, svg image, [style*=\"background-image\"] " +
+      "{ filter: invert(1) hue-rotate(180deg) !important; }\n" +
+      "html { background: #fff !important; }\n";
   }
-  if (noImages) {
+  if (on("greyscale")) {
+    filters.push("grayscale(1)");
+  }
+  if (filters.length > 0) {
+    css += "html { filter: " + filters.join(" ") + " !important; }\n";
+  }
+  if (on("no-images")) {
     css += "img, picture, video, canvas, svg image { visibility: hidden !important; }\n" +
       "* { background-image: none !important; }\n";
   }
+  if (noVideo) {
+    css += "video, audio, object, embed, iframe[src*=\"youtube\"], iframe[src*=\"vimeo\"], " +
+      "iframe[src*=\"player\"], iframe[src*=\"embed\"] { display: none !important; }\n";
+  }
+  if (on("declutter")) {
+    // The page without what surrounds its text: side columns, bars,
+    // banners, pop-ups and suggestions.
+    css += "aside, nav, footer, [role=\"complementary\"], [role=\"banner\"], [role=\"navigation\"], " +
+      "[role=\"contentinfo\"], [class*=\"sidebar\" i], [id*=\"sidebar\" i], [class*=\"recommend\" i], " +
+      "[class*=\"related\" i], [id*=\"related\" i], [class*=\"promo\" i], [class*=\"banner\" i], " +
+      "[class*=\"popup\" i], [class*=\"modal\" i], [class*=\"cookie\" i], [id*=\"cookie\" i], " +
+      "[class*=\"newsletter\" i], [class*=\"share\" i], [class*=\"social\" i], [class*=\"comments\" i], " +
+      "[id*=\"comments\" i], [class*=\"trending\" i], [class*=\"advert\" i], [id*=\"advert\" i], " +
+      "ins.adsbygoogle, iframe { display: none !important; }\n" +
+      "* { animation: none !important; transition: none !important; position: static !important; " +
+      "float: none !important; background-image: none !important; box-shadow: none !important; }\n" +
+      "body { max-width: 46em !important; margin: 0 auto !important; padding: 1em !important; " +
+      "font: 18px/1.6 serif !important; }\n" +
+      "img, video { max-width: 100% !important; height: auto !important; }\n";
+  }
+  css += kc9kSocialCss(social, url);
   let style = document.getElementById(STYLE_ID);
   if (!css) {
     if (style) {
@@ -70,8 +133,76 @@ function render() {
 }
 
 let quotaOpen = false;
+let social = [];
+
+// Social media settings on pages that change address without loading: a
+// part of the site that is switched off goes where the setting sends it,
+// and a video outside the playlists let through is reported.
+let playlistSince = 0;
+let playlistFor = "";
+
+function enforceSocial() {
+  if (window !== window.top || social.length === 0) {
+    return;
+  }
+  const url = location.href;
+  if (kc9kPlaylistBlocks(social, url)) {
+    browser.runtime.sendMessage({ type: "playlist-violation", url }).catch(() => {});
+    return;
+  }
+  const elsewhere = kc9kSocialRedirect(social, url);
+  if (elsewhere) {
+    location.replace(elsewhere);
+    return;
+  }
+  checkPlaylistVideo(url);
+}
+
+// A video page that names a playlist let through must show a video of that
+// playlist: YouTube plays any video with any list= added to its address.
+// The playlist panel beside the video lists the playlist's videos; a video
+// that isn't among them, or a page that shows no panel for 20 seconds,
+// is outside the playlist.
+function checkPlaylistVideo(url) {
+  const ids = kc9kPlaylists(social);
+  let u;
+  try {
+    u = new URL(url);
+  } catch (error) {
+    return;
+  }
+  if (ids.length === 0 || !KC9K_YOUTUBE.test(u.hostname) || u.pathname !== "/watch") {
+    return;
+  }
+  const video = u.searchParams.get("v") || "";
+  const key = video + " " + (u.searchParams.get("list") || "");
+  if (playlistFor !== key) {
+    playlistFor = key;
+    playlistSince = Date.now();
+  }
+  const items = document.querySelectorAll("ytd-playlist-panel-video-renderer a[href*=\"v=\"]");
+  if (items.length === 0) {
+    if (Date.now() - playlistSince > 20000) {
+      browser.runtime.sendMessage({ type: "playlist-violation", url }).catch(() => {});
+    }
+    return;
+  }
+  const inList = Array.from(items).some((a) => {
+    try {
+      return new URL(a.href, location.href).searchParams.get("v") === video;
+    } catch (error) {
+      return false;
+    }
+  });
+  if (!inList && Date.now() - playlistSince > 4000) {
+    browser.runtime.sendMessage({ type: "playlist-violation", url }).catch(() => {});
+  }
+}
+
+setInterval(enforceSocial, 1000);
 
 function load(page) {
+  social = (page && page.social) || [];
   lists = kc9kCompileLists(page && page.lists);
   quotaOpen = Boolean(page && page.quota);
   textChanged = true;
@@ -95,7 +226,7 @@ function scanKeywords() {
   textChanged = false;
   const url = location.href;
   if (keywordsFor !== url) {
-    keywordHits = { block: false, greyscale: false, noImages: false };
+    keywordLooks = new Set();
     reportedHits = new Set();
     keywordsFor = url;
   }
@@ -115,8 +246,7 @@ function scanKeywords() {
   const fresh = [];
   for (const match of matches) {
     const names = match.actions.map((action) => action.action);
-    keywordHits.greyscale = keywordHits.greyscale || names.includes("greyscale");
-    keywordHits.noImages = keywordHits.noImages || names.includes("no-images");
+    names.filter((name) => LOOKS.includes(name)).forEach((name) => keywordLooks.add(name));
     const unseen = names.filter((name) => !reportedHits.has(match.list.id + " " + name));
     if (unseen.length > 0) {
       unseen.forEach((name) => reportedHits.add(match.list.id + " " + name));
@@ -300,6 +430,18 @@ setInterval(() => {
     textChanged = true;
     render();
     scanKeywords();
+  }
+}, 1000);
+
+// no-video: whatever still plays is stopped.
+setInterval(() => {
+  if (!noVideo) {
+    return;
+  }
+  for (const m of document.querySelectorAll("video, audio")) {
+    if (!m.paused) {
+      m.pause();
+    }
   }
 }, 1000);
 

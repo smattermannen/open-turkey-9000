@@ -65,7 +65,7 @@ const checkInRecordEvery = 30 * time.Second
 // apps alone doesn't need it.
 func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
 	for _, b := range active {
-		if b.Lists.Enforces() {
+		if b.Lists.Enforces() || len(b.Social) > 0 {
 			return true
 		}
 	}
@@ -179,6 +179,8 @@ type Rules struct {
 	// Blocks: every block's name, for adding a site from the toolbar. Empty
 	// when the Blocks page has an access password.
 	Blocks []string `json:"blocks"`
+	// Social: the social media settings of the blocks in force (db/social.go).
+	Social []string `json:"social"`
 }
 
 // ListRule is one blacklist: the entries it looks for in a page's address,
@@ -282,8 +284,14 @@ func BuildRules(d *db.DB) (Rules, error) {
 	rules.Soon = soonRules(d, active, now, trusted)
 	rules.Blocks = addableBlocks(d)
 	testing := d.TestBlocks()
+	rules.Social = []string{}
 	for _, b := range withoutBreaks(d, active, trusted) {
 		rules.Titles = append(rules.Titles, b.Titles...)
+		for _, preset := range b.Social {
+			if !slices.Contains(rules.Social, preset) {
+				rules.Social = append(rules.Social, preset)
+			}
+		}
 		for _, rule := range listRules(b) {
 			// Test mode is for tuning what a list finds in pages: lists that
 			// read the title or text are shown, not run.

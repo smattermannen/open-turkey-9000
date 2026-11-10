@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
@@ -34,6 +35,7 @@ const (
 	EditListDelete       = "list-delete"        // a blacklist
 
 	EditSetNepsis = "set-nepsis" // Values: the bypass detection as JSON ("": off)
+	EditSetDelay  = "set-delay"  // Values: the loosening delay in seconds
 )
 
 // Edits queued before website lists. They still apply, to the lists made from
@@ -69,6 +71,12 @@ func (e Edit) String() string {
 		return fmt.Sprintf("%s %s", e.Action, e.Window)
 	case EditListDelete:
 		return fmt.Sprintf("delete the list %q", e.ListName)
+	case EditSetDelay:
+		if len(e.Values) == 1 {
+			if n, err := strconv.ParseInt(e.Values[0], 10, 64); err == nil {
+				return fmt.Sprintf("shorten the loosening delay to %s", time.Duration(n)*time.Second)
+			}
+		}
 	}
 	s := e.Action
 	if e.ListName != "" {
@@ -162,6 +170,15 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 	case legacyAddSites, legacyRemoveSites, legacyRemovePatterns, legacyAddExceptions,
 		legacySetMode, legacyUnsetAction, legacyRemoveKeywords, legacySetThreshold:
 		err = d.applyLegacyEdit(blockName, e)
+	case EditSetDelay:
+		if len(e.Values) != 1 {
+			return fmt.Errorf("bad set-delay edit")
+		}
+		n, convErr := strconv.ParseInt(e.Values[0], 10, 64)
+		if convErr != nil {
+			return fmt.Errorf("bad set-delay edit: %v", convErr)
+		}
+		err = d.SetLoosenDelay(blockName, n)
 	case EditSetNepsis:
 		var n Nepsis
 		switch len(e.Values) {
@@ -313,4 +330,35 @@ func (d *DB) applyLegacyEdit(blockName string, e Edit) error {
 		return nil
 	}
 	return fmt.Errorf("unknown edit action %q", e.Action)
+}
+
+// Loosening delay: how long a queued loosening edit to a block with allow
+// windows waits. Each block can have its own.
+const (
+	DefaultLoosenDelay = 24 * 3600
+	MinLoosenDelay     = 3600
+	MaxLoosenDelay     = 30 * 24 * 3600
+)
+
+// LoosenDelay returns a block's loosening delay in seconds.
+func (d *DB) LoosenDelay(name string) (int64, error) {
+	var n int64
+	if err := d.conn.QueryRow("SELECT loosen_delay FROM blocks WHERE name = ?", name).Scan(&n); err != nil {
+		return 0, fmt.Errorf("failed to read the loosening delay of '%s': %w", name, err)
+	}
+	if n <= 0 {
+		return DefaultLoosenDelay, nil
+	}
+	return n, nil
+}
+
+// SetLoosenDelay sets a block's loosening delay in seconds.
+func (d *DB) SetLoosenDelay(name string, seconds int64) error {
+	if seconds < MinLoosenDelay || seconds > MaxLoosenDelay {
+		return fmt.Errorf("a loosening delay is from %s to %s", time.Duration(MinLoosenDelay)*time.Second, time.Duration(MaxLoosenDelay)*time.Second)
+	}
+	if _, err := d.conn.Exec("UPDATE blocks SET loosen_delay = ? WHERE name = ?", seconds, name); err != nil {
+		return fmt.Errorf("failed to save the loosening delay of '%s': %w", name, err)
+	}
+	return nil
 }

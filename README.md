@@ -175,7 +175,7 @@ kc9k pending                               # list queued changes
 kc9k pending cancel 1                      # drop one
 ```
 
-Queued changes also show in `block info` and `status`. If the block is also character- or time-locked (from `start --lock/--for/--until`), loosening is refused, and an already-queued change waits until those locks lift. Changes that make the block stricter (adding apps, sites to a blocklist, patterns, locks) always apply immediately.
+The wait is 24 hours unless the block has its own: `kc9k pending delay <block> 48h` (1h to 720h). A longer delay applies at once; a shorter one is itself queued for the delay the block has now. Queued changes also show in `block info` and `status`. If the block is also character- or time-locked (from `start --lock/--for/--until`), loosening is refused, and an already-queued change waits until those locks lift. Changes that make the block stricter (adding apps, sites to a blocklist, patterns, locks) always apply immediately.
 
 Show status:
 
@@ -280,6 +280,8 @@ Each blacklist chooses its **actions**, in any combination:
 |---|---|
 | `block` | the block page (the default) |
 | `greyscale`, `no-images` | the page shows in greyscale, or without its images |
+| `mute`, `no-video` | the tab's sound is switched off; videos and players are stopped and hidden |
+| `declutter` (experimental), `dark` | side columns, banners, pop-ups and suggestions are hidden and the text set in one column; a light page is shown dark |
 | `redirect --url https://…` | another page opens instead |
 | `image --image FILE` | a picture of yours (PNG, JPEG, GIF or WebP) shows instead |
 | `close-tab` | the tab closes |
@@ -540,6 +542,29 @@ kc9k password remove
 With it set, these ask for it: any loosening edit, `stop`, `unlock`, starting a block with any lock, schedules, quotas (setting or removing), Pomodoro, Frozen Chicken, turning browser options off or locking them, strict mode, no-escape, and uninstalling. These stay free: reading the state, starting a block without a lock, adding sites, apps and patterns, ticking a website action on, and opening a quota session. The interface asks for it the first time a change needs it and remembers it until it closes.
 
 Passwords are read from standard input, hidden on a terminal; when a command also takes a lock's own password, the settings password comes first. If it's lost, root can remove it while nothing is locked (`kc9k password --help` shows how), and the testing build's master password clears it too.
+
+## Social media settings
+
+```bash
+kc9k social                                  # the settings there are
+kc9k social work youtube:no-shorts on
+kc9k social work instagram:messages-only on
+kc9k social work                             # what the block has on
+```
+
+A setting keeps a site but takes a part of it away while its block is on: YouTube without Shorts, without the home feed (it opens Subscriptions), without recommendations or comments; Instagram, Facebook and X for messages only, or without Reels or Explore; Reddit without Popular and All or without the home feed; TikTok with Following only; LinkedIn without the feed or the news column. Don't put the site on the block's blacklist as well. Addresses of a part that is switched off are sent to another page of the site, and what is left of it on other pages is hidden. Turning a setting on is always allowed; turning one off loosens the block. In the interface: Blocks > a block > Social media.
+
+These sites change their pages now and then. A setting that sends addresses elsewhere keeps working; one that hides a part of a page may miss it until Killer Chicken 9000 is updated.
+
+### One YouTube playlist through a block
+
+```bash
+kc9k block add study youtube.com
+kc9k social study playlist "https://www.youtube.com/playlist?list=PL…" on
+kc9k social study playlist PL… off
+```
+
+The playlist's page and its videos stay open; YouTube's front page, search and every other video are blocked. A video must be opened from the playlist (its address carries `list=…`), and it must really be one of the playlist's videos: YouTube plays any video with any `list=` added, so the extension checks the playlist shown beside the video. Letting a playlist through adds exceptions to the block, so it is refused while the block is held; taking it away is always allowed.
 
 ## The toolbar button
 

@@ -6,6 +6,7 @@ const path = require("path");
 const vm = require("vm");
 
 vm.runInThisContext(fs.readFileSync(path.join(__dirname, "../internal/webext/files/match.js"), "utf8"));
+vm.runInThisContext(fs.readFileSync(path.join(__dirname, "../internal/webext/files/social.js"), "utf8"));
 
 const filter = kc9kFilter({ match: ["reddit.com", "my-site.com", "*casino*"], except: ["reddit.com/r/programming"] });
 const cases = [
@@ -186,6 +187,48 @@ process.exit(failed ? 1 : 0);
   }
   if (kc9kTimeLeft(42) !== "42s" || kc9kTimeLeft(125) !== "2m" || kc9kTimeLeft(3 * 3600) !== "3h") {
     console.error("FAIL kc9kTimeLeft");
+    process.exitCode = 1;
+  }
+}
+
+// Social media settings.
+if (typeof kc9kSocialRedirect === "function") {
+  const on = ["youtube:no-shorts", "youtube:no-home", "instagram:messages-only", "x:no-explore", "youtube:playlist=PLabcdefghij12"];
+  const redirects = [
+    ["https://www.youtube.com/shorts/abc", "https://www.youtube.com/"],
+    ["https://www.youtube.com/", "https://www.youtube.com/feed/subscriptions"],
+    ["https://www.youtube.com/feed/subscriptions", ""],
+    ["https://www.instagram.com/explore/", "https://www.instagram.com/direct/inbox/"],
+    ["https://www.instagram.com/direct/t/123", ""],
+    ["https://www.instagram.com/accounts/login/", ""],
+    ["https://x.com/explore/tabs/trending", "https://x.com/home"],
+    ["https://twitter.com/home", ""],
+    ["https://example.com/shorts/x", ""],
+  ];
+  for (const [url, want] of redirects) {
+    if (kc9kSocialRedirect(on, url) !== want) {
+      console.error("FAIL social redirect", url, "got", kc9kSocialRedirect(on, url), "want", want);
+      process.exitCode = 1;
+    }
+  }
+  const playlist = [
+    ["https://www.youtube.com/watch?v=abc&list=PLabcdefghij12", false],
+    ["https://www.youtube.com/watch?v=abc", true],
+    ["https://www.youtube.com/watch?v=abc&list=PLother00000000", true],
+    ["https://www.youtube.com/playlist?list=PLabcdefghij12", false],
+    ["https://www.youtube.com/results?search_query=x", false],
+    ["https://example.com/watch?v=abc", false],
+  ];
+  for (const [url, want] of playlist) {
+    if (kc9kPlaylistBlocks(on, url) !== want) {
+      console.error("FAIL playlist", url, "want", want);
+      process.exitCode = 1;
+    }
+  }
+  if (kc9kPlaylistBlocks(["youtube:no-shorts"], "https://www.youtube.com/watch?v=abc") ||
+    !kc9kSocialCss(on, "https://www.youtube.com/watch?v=x").includes("ytd-reel-shelf-renderer") ||
+    kc9kSocialCss(on, "https://example.com/") !== "") {
+    console.error("FAIL social css or playlist without playlists");
     process.exitCode = 1;
   }
 }

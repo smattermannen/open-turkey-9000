@@ -256,11 +256,45 @@ function blockTitledTab(tab) {
 // Tabs whose page a list's title or text stripped of images, with the
 // address it happened at: their images are cancelled like those of a
 // no-images site, frames included, until the tab goes somewhere else.
+// keywordNoVideo and keywordMute are the same for those actions.
 const keywordNoImages = new Map();
+const keywordNoVideo = new Map();
+const keywordMute = new Map();
+
+// mute: the tab's sound is switched off while its page is one a list mutes,
+// and switched on again when it leaves (only if this is what muted it).
+const mutedHere = new Set();
+
+function applyMute(tab) {
+  if (!tab || tab.id === undefined || !tab.url) {
+    return;
+  }
+  const want = /^https?:/i.test(tab.url) && (keywordMute.get(tab.id) === tab.url ||
+    Boolean(kc9kListActions(lists, { url: tab.url, title: tab.title || "" }).mute));
+  const muted = Boolean(tab.mutedInfo && tab.mutedInfo.muted);
+  if (want) {
+    mutedHere.add(tab.id);
+    if (!muted) {
+      browser.tabs.update(tab.id, { muted: true }).catch(() => {});
+    }
+  } else if (mutedHere.has(tab.id)) {
+    mutedHere.delete(tab.id);
+    if (muted) {
+      browser.tabs.update(tab.id, { muted: false }).catch(() => {});
+    }
+  }
+}
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.url !== undefined && keywordNoImages.get(tabId) !== changeInfo.url) {
-    keywordNoImages.delete(tabId);
+  if (changeInfo.url !== undefined) {
+    for (const kept of [keywordNoImages, keywordNoVideo, keywordMute]) {
+      if (kept.get(tabId) !== changeInfo.url) {
+        kept.delete(tabId);
+      }
+    }
+  }
+  if (changeInfo.url !== undefined || changeInfo.title !== undefined || changeInfo.mutedInfo !== undefined) {
+    applyMute(tab);
   }
   if (changeInfo.url !== undefined) {
     noteTabUrl(tabId, changeInfo.url);
@@ -272,6 +306,9 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 browser.tabs.onRemoved.addListener((tabId) => {
   keywordNoImages.delete(tabId);
+  keywordNoVideo.delete(tabId);
+  keywordMute.delete(tabId);
+  mutedHere.delete(tabId);
   cameFrom.delete(tabId);
   trail.delete(tabId);
   lastHit.delete(tabId);
@@ -327,8 +364,16 @@ function pageHit(message, sender) {
       }
     }
   }
-  if (matches.some((m) => m.actions.some((action) => action.action === "no-images"))) {
+  const takes = (name) => matches.some((m) => m.actions.some((action) => action.action === name));
+  if (takes("no-images")) {
     keywordNoImages.set(tab.id, message.url);
+  }
+  if (takes("no-video")) {
+    keywordNoVideo.set(tab.id, message.url);
+  }
+  if (takes("mute")) {
+    keywordMute.set(tab.id, message.url);
+    applyMute(tab);
   }
   const outcome = kc9kOutcome(matches);
   if (kc9kTakesAway(outcome)) {
@@ -348,10 +393,11 @@ browser.webRequest.onBeforeRequest.addListener(
       noteVisit(details.url);
     }
     if (details.type === "image" || details.type === "imageset" || details.type === "media") {
-      if (keywordNoImages.has(details.tabId)) {
+      if (keywordNoImages.has(details.tabId) || (details.type === "media" && keywordNoVideo.has(details.tabId))) {
         return { cancel: true };
       }
-      return kc9kListActions(lists, { url: pageUrl(details) })["no-images"] ? { cancel: true } : {};
+      const looks = kc9kListActions(lists, { url: pageUrl(details) });
+      return looks["no-images"] || (details.type === "media" && looks["no-video"]) ? { cancel: true } : {};
     }
     if (details.type === "main_frame") {
       noteOrigin(details);
@@ -372,6 +418,17 @@ browser.webRequest.onBeforeRequest.addListener(
       report(details.tabId, details.url, outcome);
       return replacement(details.url, outcome, "");
     }
+    if (details.type === "main_frame") {
+      // Social media settings: a video outside the playlists let through,
+      // and the parts of sites that are switched off.
+      if (kc9kPlaylistBlocks(social, details.url)) {
+        return blockedPage(details.url, "playlist");
+      }
+      const elsewhere = kc9kSocialRedirect(social, details.url);
+      if (elsewhere) {
+        return { redirectUrl: elsewhere };
+      }
+    }
     if (webOnly && /^https?:/.test(details.url)) {
       const action = webOnlyAction(details.url);
       if (action && action.block) {
@@ -390,7 +447,7 @@ browser.webRequest.onBeforeRequest.addListener(
 // stillBlocked tells the block page whether its site is still blocked, so it
 // can go back to the site once the block ends.
 function stillBlocked(url) {
-  if (isBlocked(url)) {
+  if (isBlocked(url) || kc9kPlaylistBlocks(social, url)) {
     return true;
   }
   if (webOnly && /^https?:/i.test(url)) {
@@ -409,6 +466,10 @@ browser.runtime.onMessage.addListener((message, sender) => {
   }
   if (message && message.type === "mirror") {
     mirrorHit(message, sender);
+  }
+  if (message && message.type === "playlist-violation" && sender && sender.tab && sender.frameId === 0 &&
+    typeof message.url === "string" && kc9kPlaylists(social).length > 0) {
+    browser.tabs.update(sender.tab.id, { url: blockedPage(message.url, "playlist").redirectUrl });
   }
   if (message && message.type === "why") {
     return Promise.resolve(why(sender));
@@ -432,6 +493,7 @@ let showWhy = false;
 let ends = {};
 let soon = [];
 let blockNames = [];
+let social = [];
 let daemonUp = true;
 
 function apply(rules) {
@@ -441,6 +503,7 @@ function apply(rules) {
     block: s.block, kind: s.kind, seconds: s.seconds, lists: kc9kCompileLists(s.lists),
   }));
   blockNames = rules.blocks || [];
+  social = rules.social || [];
   lists = kc9kCompileLists(rules.lists);
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
@@ -460,8 +523,13 @@ async function closeNewlyBlockedTabs() {
     const outcome = addressOutcome(tab.url);
     if (kc9kTakesAway(outcome)) {
       act(tab.id, tab.url, outcome, "");
+    } else if (kc9kPlaylistBlocks(social, tab.url)) {
+      browser.tabs.update(tab.id, { url: blockedPage(tab.url, "playlist").redirectUrl });
+    } else if (kc9kSocialRedirect(social, tab.url)) {
+      browser.tabs.update(tab.id, { url: kc9kSocialRedirect(social, tab.url) });
     } else {
       blockTitledTab(tab);
+      applyMute(tab);
     }
   }
 }
@@ -476,7 +544,7 @@ async function poll() {
       apply(rules);
       await browser.storage.local.set({
         rules,
-        page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0 },
+        page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0, social: rules.social || [] },
       });
       await closeNewlyBlockedTabs();
       daemonUp = true;

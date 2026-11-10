@@ -59,6 +59,7 @@ var commandAreas = map[string][]string{
 	"block":       {areaBlocks},
 	"list":        {areaBlocks},
 	"cluster":     {areaBlocks},
+	"social":      {areaBlocks},
 	"project":     {areaSettings},
 	"record":      {areaBlocks},
 	"schedule":    {areaBlocks},

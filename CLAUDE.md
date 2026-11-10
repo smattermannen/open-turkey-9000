@@ -177,6 +177,17 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   [--dry-run]`): everything except locks, passwords, hotkeys and
   statistics in one versioned JSON; import validates all first, then only
   adds (existing blocks/clusters untouched, options only strengthened).
+- **Look actions** (`db/actions.go`): besides greyscale and no-images,
+  `mute` (background `applyMute`), `no-video`, `declutter` and `dark`
+  (content.js `render`, CSS only; dark skips pages that are dark already).
+- **Social media settings** (`db/social.go`, `cli/social.go`, `kc9k social
+  [block] [<site:what> on|off | playlist <id|url> on|off]`): presets per
+  block in `block_social`, on `BlockDetail.Social`; `rules.social` goes to
+  `webext/files/social.js` (`KC9K_SOCIAL`: hosts, redirects, hide CSS).
+  A playlist is the preset `youtube:playlist=<id>` plus two exceptions
+  (`youtube.com/playlist?list=<id>`, `youtube.com/watch`); the extension
+  blocks video pages without an allowed `list=` and checks the playlist
+  panel (`checkPlaylistVideo`).
 - **Keyword test mode** (`db/testmode.go`, `kc9k list test <block> on|off`):
   title/text lists of the block go out with `test: true`; the extension
   shows `kc9kTestReport` in a panel and skips them in `kc9kListMatches`.
@@ -216,7 +227,7 @@ threshold | hits | export | import` (`action … on --url/--image/--for`), `monk
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `break …`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `break …`, `social …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

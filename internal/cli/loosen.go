@@ -31,7 +31,7 @@ import (
 
 // LoosenDelay is how long a queued loosening edit to a block with allow
 // windows waits before the daemon applies it.
-const LoosenDelay = 24 * time.Hour
+const LoosenDelay = db.DefaultLoosenDelay * time.Second
 
 // gateEdit decides whether an edit to a block may go ahead right now, and
 // reports true if so. Edits that strengthen the block always may. A loosening
@@ -76,7 +76,11 @@ func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool
 		return true, nil
 	}
 
-	applyAt := time.Now().Add(LoosenDelay)
+	delay, err := database.LoosenDelay(name)
+	if err != nil {
+		return false, err
+	}
+	applyAt := time.Now().Add(time.Duration(delay) * time.Second)
 	if err := database.QueueEdit(name, e, applyAt.Unix()); err != nil {
 		return false, err
 	}
@@ -178,7 +182,48 @@ var pendingCancelCmd = &cobra.Command{
 	},
 }
 
+var pendingDelayCmd = &cobra.Command{
+	Use:   "delay [block] [time]",
+	Short: "How long a block's queued loosening changes wait (default 24h)",
+	Long: `A block with allow windows is never loosened directly: the change is queued
+and applied later. This sets how much later for one block, from 1h to 720h.
+A longer delay applies at once. A shorter one loosens the block, so it is
+itself queued for the delay the block has now.`,
+	Args: cobra.RangeArgs(1, 2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		name := args[0]
+		current, err := database.LoosenDelay(name)
+		if err != nil {
+			return err
+		}
+		if len(args) == 1 {
+			fmt.Printf("Loosening changes to '%s' wait %s.\n", name, time.Duration(current)*time.Second)
+			return nil
+		}
+		d, err := time.ParseDuration(args[1])
+		if err != nil {
+			return fmt.Errorf("invalid time %q (e.g. 48h)", args[1])
+		}
+		want := int64(d.Seconds())
+		if want < db.MinLoosenDelay || want > db.MaxLoosenDelay {
+			return fmt.Errorf("a loosening delay is from 1h to 720h")
+		}
+		proceed, err := gateEdit(cmd, database, name, want >= current,
+			db.Edit{Action: db.EditSetDelay, Values: []string{fmt.Sprint(want)}})
+		if err != nil || !proceed {
+			return err
+		}
+		if err := database.SetLoosenDelay(name, want); err != nil {
+			return err
+		}
+		fmt.Printf("Loosening changes to '%s' now wait %s.\n", name, d)
+		return nil
+	}),
+}
+
 func init() {
+	addNowFlag(pendingDelayCmd)
+	pendingCmd.AddCommand(pendingDelayCmd)
 	pendingCmd.AddCommand(pendingCancelCmd)
 	rootCmd.AddCommand(pendingCmd)
 }

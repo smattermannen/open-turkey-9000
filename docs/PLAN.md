@@ -172,14 +172,14 @@ Images are embedded base64.
 
 ## Phase 6: what the extension does to pages
 
-**6.1 More list actions (L).** Ticked like the others in `db/actions.go`:
+**6.1 More list actions (L). Done 2026-11-10**, extension 1.14.0, without third-party code: `declutter` and `dark` are CSS only (no Readability, no Dark Reader), which is cruder but adds no bundled library. Ticked like the others in `db/actions.go`:
 - `mute`: `tabs.update({muted:true})`, re-muted when the user unmutes.
 - `no-video`: pause and hide `video` elements, block media requests.
 - `declutter` (experimental): Mozilla Readability (Apache 2.0) on the page.
 - `dark`: Dark Reader's engine (MIT) bundled, switched per page from rules.
 Each is one module loaded by `content.js` only when a rule needs it.
 
-**6.2 Social media settings (L).** Per site, presets enforced by redirects
+**6.2 Social media settings (L). Done 2026-11-10** (`kc9k social`; 18 presets; selectors are in `social.js`, shipped with the extension rather than updatable on their own). Per site, presets enforced by redirects
 plus element hiding: YouTube (no Shorts, no home feed, no recommendations,
 no autoplay, no comments), Instagram (DMs only, no Reels, no Explore),
 Facebook (no feed, no Reels), X (Following only, no trends), Reddit (no
@@ -189,7 +189,7 @@ news), Threads (Following only). Stored per block as
 Selectors live in one table with a version, updatable without a new
 extension. `not-for-you` is the reference for redirect targets.
 
-**6.3 YouTube playlist exception (M).** `kc9k list add <block> <exceptions>
+**6.3 YouTube playlist exception (M). Done 2026-11-10** as `kc9k social <block> playlist <id> on`. `kc9k list add <block> <exceptions>
 youtube-playlist:<id>`. The extension allows `/playlist?list=<id>` and a
 `/watch` page only while `list=<id>` is in the address and the video is one
 of the playlist's (read from the playlist panel on the page, cached). A
@@ -216,7 +216,7 @@ covers. Then: recovery entries hidden and `init=`/`single` editing locked
 (GRUB superuser already there), root login on TTYs and `su` locked during a
 lock, and `strict on` warning about firmware password and boot order.
 
-**8.2 Loosening delay per block (S, from CtblPlusPlus).** A block's own
+**8.2 Loosening delay per block (S, from CtblPlusPlus). Done 2026-11-10** (`kc9k pending delay <block> <D>`). A block's own
 delay instead of the fixed 24 h (`LoosenDelay`); lowering it is itself a
 queued edit.
 

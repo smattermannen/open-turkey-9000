@@ -119,6 +119,8 @@ type guiBlock struct {
 	QuotaOpen     bool      `json:"quota_open"`
 	QuotaNext     int64     `json:"quota_next"`
 	KeywordTest   bool      `json:"keyword_test"`
+	LoosenDelay   int64     `json:"loosen_delay"`
+	Social        []string  `json:"social"`
 	// Breaks: the allowance (seconds per BreakPer of blocking), what is
 	// earned, the relock time, and how long the block is lifted for now.
 	BreakAllowance int64 `json:"break_allowance"`
@@ -158,9 +160,10 @@ type guiState struct {
 	// Access says per area "none", "open" or "locked"; AccessUnused lists
 	// the given passwords (by position) that opened nothing: wrong, or
 	// changed since.
-	Options      map[string]bool   `json:"options"`
-	Access       map[string]string `json:"access"`
-	AccessUnused []int             `json:"access_unused"`
+	Options       map[string]bool   `json:"options"`
+	SocialPresets []db.SocialPreset `json:"social_presets"`
+	Access        map[string]string `json:"access"`
+	AccessUnused  []int             `json:"access_unused"`
 }
 
 var guiStateCmd = &cobra.Command{
@@ -313,6 +316,8 @@ var guiStateCmd = &cobra.Command{
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 			}
 			g.KeywordTest = slices.Contains(testing, b.Name)
+			g.LoosenDelay, _ = database.LoosenDelay(b.Name)
+			g.Social = append([]string{}, detail.Social...)
 			k, err := database.GetBreaks(b.Name)
 			if err != nil {
 				return err
@@ -328,6 +333,7 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 
+		state.SocialPresets = db.SocialPresets
 		state.Options = map[string]bool{}
 		for _, o := range enforce.Options {
 			state.Options[o.Name] = enforce.OptionOn(database, o.Name)

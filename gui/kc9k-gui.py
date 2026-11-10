@@ -61,6 +61,10 @@ SITE_ACTIONS = (
     ("block", "Block page"),
     ("greyscale", "Greyscale"),
     ("no-images", "Block images"),
+    ("mute", "Mute sound"),
+    ("no-video", "Stop and hide video"),
+    ("declutter", "Declutter (experimental)"),
+    ("dark", "Dark page"),
     ("redirect", "Open another page"),
     ("image", "Show a picture"),
     ("close-tab", "Close the tab"),
@@ -1701,6 +1705,17 @@ class Window(Gtk.ApplicationWindow):
                       "The block turns on and off by itself, and can't be weakened from "
                       "2 hours before a window opens.")
         schedule.pack_start(self.schedules, True, True, 0)
+        delay_row = Gtk.Box(spacing=6)
+        delay_row.pack_start(Gtk.Label(label="With allow windows, loosening changes wait"), False, False, 0)
+        self.loosen_hours = Gtk.SpinButton.new_with_range(1, 720, 1)
+        delay_row.pack_start(self.loosen_hours, False, False, 0)
+        delay_row.pack_start(Gtk.Label(label="hours"), False, False, 0)
+        delay_save = Gtk.Button(label="Save")
+        delay_save.connect("clicked", lambda _b: self.selected and self.run(
+            ["pending", "delay", self.selected, f"{self.loosen_hours.get_value_as_int()}h"],
+            then=self.queued_note))
+        delay_row.pack_start(delay_save, False, False, 0)
+        schedule.pack_start(delay_row, False, False, 0)
         tabs.append_page(schedule, Gtk.Label(label="Schedule"))
 
         tabs.append_page(self.build_quota_tab(), Gtk.Label(label="Quota & Pomodoro"))
@@ -1722,6 +1737,34 @@ class Window(Gtk.ApplicationWindow):
         row.pack_start(off, False, False, 0)
         nepsis.pack_start(row, False, False, 0)
         tabs.append_page(nepsis, Gtk.Label(label="Bypass prevention"))
+
+        social_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        social = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        social_scroll.add(social)
+        help_label = dim(
+            "Keep a site, take a part of it away while this block is on. Don't put the site on "
+            "the blacklist too. Ticking is always allowed; unticking loosens the block. Sites "
+            "change their pages now and then, and a setting that hides something may then miss "
+            "it until an update.")
+        help_label.set_max_width_chars(70)
+        social.pack_start(help_label, False, False, 0)
+        self.social_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.social_checks = {}
+        social.pack_start(self.social_box, False, False, 0)
+        social.pack_start(heading("YouTube playlists", "medium"), False, False, 0)
+        playlist_help = dim(
+            "For a block that stops YouTube: let one playlist through. Its page and its videos "
+            "stay open, every other video is blocked. Paste the playlist's address or ID.")
+        playlist_help.set_max_width_chars(70)
+        social.pack_start(playlist_help, False, False, 0)
+        self.playlist_list = EditableList(
+            "", "Playlist address or ID",
+            lambda values: [self.run(["social", self.selected, "playlist", v, "on"], then=self.queued_note)
+                            for v in values[:1]] if self.selected else None,
+            lambda value, _number: self.run(["social", self.selected, "playlist", value, "off"])
+            if self.selected else None)
+        social.pack_start(self.playlist_list, True, True, 0)
+        tabs.append_page(social_scroll, Gtk.Label(label="Social media"))
         return paned
 
     def build_quota_tab(self):
@@ -1881,6 +1924,9 @@ class Window(Gtk.ApplicationWindow):
         self.schedules.set_items(block["schedules"])
         self.calendar.set_windows(block.get("schedule_windows", []))
         set_switch(self.keyword_test_switch, block.get("keyword_test", False))
+        self.update_social(block)
+        if not self.loosen_hours.has_focus():
+            self.loosen_hours.set_value(block.get("loosen_delay", 86400) // 3600)
         allowance, balance = block.get("break_allowance", 0), block.get("break_balance", 0)
         paused = block.get("paused_seconds", 0)
         self.break_start.set_sensitive(block["active"] and allowance > 0 and balance >= 60 and not paused)
@@ -2791,6 +2837,31 @@ class Window(Gtk.ApplicationWindow):
             return False
         self.run(["option", name, "on" if wanted else "off"])
         return True
+
+    def update_social(self, block):
+        """Builds the social media boxes once, from the state's list, and ticks
+        the block's."""
+        if not self.social_checks:
+            site = None
+            for preset in self.state.get("social_presets") or []:
+                if preset["site"] != site:
+                    site = preset["site"]
+                    self.social_box.pack_start(heading(site, "medium"), False, False, 0)
+                check = Gtk.CheckButton(label=preset["title"])
+                check.connect("toggled", self.toggle_social, preset["name"])
+                self.social_checks[preset["name"]] = check
+                self.social_box.pack_start(check, False, False, 0)
+            self.social_box.show_all()
+        on = block.get("social") or []
+        for name, check in self.social_checks.items():
+            check.set_active(name in on)
+        self.playlist_list.set_items(
+            [p.split("=", 1)[1] for p in on if p.startswith("youtube:playlist=")], block["name"])
+
+    def toggle_social(self, check, name):
+        if self.updating or not self.selected:
+            return
+        self.run(["social", self.selected, name, "on" if check.get_active() else "off"])
 
     def toggle_keyword_test(self, _switch, wanted):
         if self.updating or not self.selected:

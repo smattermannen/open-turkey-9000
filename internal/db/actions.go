@@ -22,6 +22,10 @@ const (
 	ActionBlock        = "block"
 	ActionGreyscale    = "greyscale"
 	ActionNoImages     = "no-images"
+	ActionMute         = "mute"          // the tab's sound is switched off
+	ActionNoVideo      = "no-video"      // videos and players are stopped and hidden
+	ActionDeclutter    = "declutter"     // sidebars, banners and the like are hidden
+	ActionDark         = "dark"          // a light page is shown dark
 	ActionRedirect     = "redirect"      // Param: the address to open instead
 	ActionImage        = "image"         // Param: a stored image (see ImageName)
 	ActionCloseTab     = "close-tab"     //
@@ -32,7 +36,8 @@ const (
 )
 
 // ActionNames lists the website actions in display order.
-var ActionNames = []string{ActionBlock, ActionGreyscale, ActionNoImages, ActionRedirect, ActionImage,
+var ActionNames = []string{ActionBlock, ActionGreyscale, ActionNoImages, ActionMute, ActionNoVideo,
+	ActionDeclutter, ActionDark, ActionRedirect, ActionImage,
 	ActionCloseTab, ActionCloseBrowser, ActionLogout, ActionShutdown, ActionMonk}
 
 // IsDeviceAction reports whether an action reaches past the page: it closes
@@ -48,7 +53,11 @@ func IsDeviceAction(name string) bool {
 // IsBlockingAction reports whether an action takes the page away (rather than
 // only changing how it looks). Bypass prevention counts these.
 func IsBlockingAction(name string) bool {
-	return name != ActionGreyscale && name != ActionNoImages && IsAction(name)
+	switch name {
+	case ActionGreyscale, ActionNoImages, ActionMute, ActionNoVideo, ActionDeclutter, ActionDark:
+		return false
+	}
+	return IsAction(name)
 }
 
 // Limits on an action's minutes. Logging out and shutting down for a while

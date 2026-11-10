@@ -23,11 +23,13 @@ if (typeof globalThis.URL === "undefined") {
       const decode = (v) => decodeURIComponent(v.replace(/\+/g, " "));
       return i < 0 ? [decode(pair), ""] : [decode(pair.slice(0, i)), decode(pair.slice(i + 1))];
     });
-    this.searchParams = { [Symbol.iterator]: () => pairs[Symbol.iterator]() };
+    this.searchParams = { [Symbol.iterator]: () => pairs[Symbol.iterator](), get: (k) => { const f = pairs.find((p) => p[0] === k); return f ? f[1] : null; } };
+    this.protocol = m[1].toLowerCase() + ":";
+    this.host = m[2];
   };
 }
 const test = read("match_test.js").split("\n").filter((line) => !/require\(|vm\.runInThisContext/.test(line)).join("\n");
-(0, eval)(read("../internal/webext/files/match.js") + "\n" + test);
+(0, eval)(read("../internal/webext/files/match.js") + "\n" + read("../internal/webext/files/social.js") + "\n" + test);
 if (process.exitCode) {
   imports.system.exit(process.exitCode);
 }

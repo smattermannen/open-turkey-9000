@@ -7,11 +7,12 @@ const target = params.get("url") || "";
 // A page blocked for its title or its text would come straight back here,
 // so it stays.
 const reason = params.get("reason");
-const byTitle = reason === "title" || reason === "keyword" || reason === "mirror";
+const byTitle = reason === "title" || reason === "keyword" || reason === "mirror" || reason === "playlist";
 const notes = {
   title: "Its title contains a word one of your blocks closes.",
   keyword: "Its title or text contains words one of your blocks looks for.",
   mirror: "It shows a site one of your blocks stops.",
+  playlist: "Only the videos of the playlists you let through are open.",
 };
 if (notes[reason]) {
   const note = document.getElementById("note");

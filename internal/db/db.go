@@ -78,6 +78,7 @@ type BlockDetail struct {
 	Lists       Lists // website blacklists and exception lists
 	Apps        []string
 	Titles      []string // window-title keywords
+	Social      []string // social media settings (social.go)
 	Active      bool
 	Locked      bool
 	LockChars   int
@@ -93,6 +94,7 @@ type ActiveBlockDetail struct {
 	Lists       Lists
 	Apps        []string
 	Titles      []string
+	Social      []string
 	Locked      bool
 	LockChars   int
 	LockedUntil int64
@@ -233,7 +235,7 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
-	if _, err := conn.Exec(webListsSchema + clustersSchema + recordingSchema + eventsSchema + nepsisSchema + clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema + pausesSchema + breaksSchema); err != nil {
+	if _, err := conn.Exec(webListsSchema + clustersSchema + recordingSchema + eventsSchema + nepsisSchema + clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema + pausesSchema + breaksSchema + socialSchema); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to create clock table: %w", err)
 	}
@@ -457,6 +459,9 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 	if err != nil {
 		return nil, err
 	}
+	if detail.Social, err = d.getBlockSocial(detail.ID); err != nil {
+		return nil, err
+	}
 
 	return &detail, nil
 }
@@ -638,6 +643,9 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 		if activeBlocks[i].Titles, err = d.getBlockTitles(ids[i]); err != nil {
 			return nil, err
 		}
+		if activeBlocks[i].Social, err = d.getBlockSocial(ids[i]); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := rows.Err(); err != nil {
@@ -694,5 +702,5 @@ func (d *DB) getBlockApps(blockID int) ([]string, error) {
 // Empty reports whether a block has nothing to enforce: no apps, window
 // titles, or blacklist that does something (see WebList.Enforces).
 func (b *BlockDetail) Empty() bool {
-	return len(b.Apps) == 0 && len(b.Titles) == 0 && !b.Lists.Enforces()
+	return len(b.Apps) == 0 && len(b.Titles) == 0 && len(b.Social) == 0 && !b.Lists.Enforces()
 }

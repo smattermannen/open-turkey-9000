@@ -393,6 +393,29 @@ var unlockCmd = &cobra.Command{
 			}
 		}
 
+		// With relock set, unlocking is a break: the block is lifted for a
+		// while and comes back with its locks. Unlocking again during that
+		// break ends it.
+		if breaks, err := database.GetBreaks(blockName); err != nil {
+			return err
+		} else if breaks.Relock > 0 {
+			trusted, err := database.TrustedNow(time.Now())
+			if err != nil {
+				return err
+			}
+			if until, _ := database.PausedUntil(blockName); until <= trusted {
+				if err := database.SetPause(blockName, trusted+breaks.Relock); err != nil {
+					return err
+				}
+				if err := enforce.ApplyFromDB(database); err != nil {
+					return err
+				}
+				fmt.Printf("Block '%s' is lifted for %s, then it is back with its locks. Unlock it again before then to end it.\n",
+					blockName, seconds(breaks.Relock))
+				return nil
+			}
+		}
+
 		if err := database.DeactivateBlock(blockName); err != nil {
 			return err
 		}

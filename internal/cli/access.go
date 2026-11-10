@@ -55,6 +55,7 @@ var commandAreas = map[string][]string{
 	"stop":        {areaDashboard, areaBlocks},
 	"unlock":      {areaDashboard, areaBlocks},
 	"monk":        {areaDashboard},
+	"break":       {areaDashboard, areaBlocks},
 	"block":       {areaBlocks},
 	"list":        {areaBlocks},
 	"cluster":     {areaBlocks},

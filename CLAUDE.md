@@ -166,6 +166,13 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   schedule start within 2 h) feeds the toolbar badge and popup
   (`timeLeftFor`, `popup.js`); `/add` adds the tab's site to a block's
   Blocked list (refused with an access password on blocks).
+- **Breaks** (`db/breaks.go`, `cli/breaks.go`, `kc9k break [allowance B D
+  --per D | relock B D | start B [D] | end B]`): an allowance earns pause
+  time while the block is enforced (`earnBreaks` in `Tick`); `relock` makes
+  `unlock` set a pause instead of deactivating (a second unlock during it
+  ends the block). Looser settings go through `ensureEditable`. Pomodoro
+  has an optional long break (`quota.Cycle`); `PomodoroWorking` keeps a
+  quota session closed during a work period.
 - **Keyword test mode** (`db/testmode.go`, `kc9k list test <block> on|off`):
   title/text lists of the block go out with `test: true`; the extension
   shows `kc9kTestReport` in a panel and skips them in `kc9kListMatches`.
@@ -199,7 +206,7 @@ threshold | hits | export | import` (`action … on --url/--image/--for`), `monk
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `break …`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"github.com/smattermannen/kc9k/internal/quota"
 )
 
 const pomodoroSchema = `CREATE TABLE IF NOT EXISTS pomodoro (
@@ -16,6 +17,13 @@ const pomodoroSchema = `CREATE TABLE IF NOT EXISTS pomodoro (
 // Pomodoro is a block's work and break cycle.
 type Pomodoro struct {
 	On, Off, Anchor int64
+	// Long and Every: every Every-th break lasts Long seconds (0: none).
+	Long, Every int64
+}
+
+// Cycle returns the rhythm for the time arithmetic in package quota.
+func (p Pomodoro) Cycle() quota.Cycle {
+	return quota.Cycle{On: p.On, Off: p.Off, Long: p.Long, Every: p.Every, Anchor: p.Anchor}
 }
 
 // GetPomodoro returns a block's cycle, or nil if it has none.
@@ -25,8 +33,8 @@ func (d *DB) GetPomodoro(name string) (*Pomodoro, error) {
 		return nil, err
 	}
 	var p Pomodoro
-	err = d.conn.QueryRow("SELECT on_seconds, off_seconds, anchor FROM pomodoro WHERE block_id = ?", blockID).
-		Scan(&p.On, &p.Off, &p.Anchor)
+	err = d.conn.QueryRow("SELECT on_seconds, off_seconds, anchor, long_seconds, every_n FROM pomodoro WHERE block_id = ?", blockID).
+		Scan(&p.On, &p.Off, &p.Anchor, &p.Long, &p.Every)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -42,8 +50,8 @@ func (d *DB) SetPomodoro(name string, p Pomodoro) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.conn.Exec("INSERT OR REPLACE INTO pomodoro (block_id, on_seconds, off_seconds, anchor) VALUES (?, ?, ?, ?)",
-		blockID, p.On, p.Off, p.Anchor)
+	_, err = d.conn.Exec("INSERT OR REPLACE INTO pomodoro (block_id, on_seconds, off_seconds, anchor, long_seconds, every_n) VALUES (?, ?, ?, ?, ?, ?)",
+		blockID, p.On, p.Off, p.Anchor, p.Long, p.Every)
 	if err != nil {
 		return fmt.Errorf("failed to save Pomodoro of '%s': %w", name, err)
 	}

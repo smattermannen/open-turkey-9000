@@ -180,6 +180,9 @@ var quotaStartCmd = &cobra.Command{
 			hold.passwordHash != "" || hold.restartLocked || hold.extras.Delay > 0) {
 			return fmt.Errorf("block '%s' is locked or in a scheduled window, so its quota can't be used now", name)
 		}
+		if enforce.PomodoroWorking(database, name) {
+			return fmt.Errorf("block '%s' is in a Pomodoro work period; its quota can be used in the break", name)
+		}
 
 		s.Open, s.SessionEnd = true, 0
 		if forDur != "" {

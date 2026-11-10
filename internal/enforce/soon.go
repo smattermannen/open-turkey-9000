@@ -50,7 +50,7 @@ func pausedFor(d *db.DB, name string, trusted int64) int64 {
 	if p, err := d.GetPomodoro(name); err != nil {
 		log.Printf("pomodoro: %v", err)
 	} else if p != nil {
-		left = quota.BreakLeft(p.On, p.Off, p.Anchor, trusted)
+		left = p.Cycle().BreakLeft(trusted)
 	}
 	if until, err := d.PausedUntil(name); err != nil {
 		log.Printf("pause: %v", err)

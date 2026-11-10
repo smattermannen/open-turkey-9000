@@ -302,6 +302,8 @@ def block_summary(block):
         parts.append(f"{fmt_seconds(block['delay_seconds'])} delay to stop")
     if block["pomodoro_on"]:
         parts.append(f"Pomodoro {block['pomodoro_on'] // 60}+{block['pomodoro_off'] // 60} min")
+    if block.get("paused_seconds"):
+        parts.append(f"on a break for {fmt_seconds(block['paused_seconds'])}")
     if block["on_break"]:
         parts.append("on a break")
     if block["scheduled"]:
@@ -1767,9 +1769,63 @@ class Window(Gtk.ApplicationWindow):
         clear_pomodoro.connect("clicked", self.clear_pomodoro)
         pomodoro_row.pack_start(set_pomodoro, False, False, 0)
         pomodoro_row.pack_start(clear_pomodoro, False, False, 0)
+        long_row = Gtk.Box(spacing=6)
+        self.long_check = Gtk.CheckButton(label="A long break of")
+        self.long_minutes = Gtk.SpinButton.new_with_range(1, 240, 5)
+        self.long_minutes.set_value(15)
+        self.long_every = Gtk.SpinButton.new_with_range(2, 20, 1)
+        self.long_every.set_value(4)
+        long_row.pack_start(self.long_check, False, False, 0)
+        long_row.pack_start(self.long_minutes, False, False, 0)
+        long_row.pack_start(Gtk.Label(label="min after every"), False, False, 0)
+        long_row.pack_start(self.long_every, False, False, 0)
+        long_row.pack_start(Gtk.Label(label="work periods"), False, False, 0)
         box.pack_start(section(
-            "Pomodoro", dim("While the block is on, it pauses for the break after each work period."),
-            pomodoro_row), False, False, 0)
+            "Pomodoro", dim("While the block is on, it pauses for the break after each work period. "
+                            "During a work period the block's quota can't be used."),
+            pomodoro_row, long_row), False, False, 0)
+
+        allowance_row = Gtk.Box(spacing=6)
+        self.allowance_minutes = Gtk.SpinButton.new_with_range(1, 240, 1)
+        self.allowance_minutes.set_value(10)
+        self.allowance_per = Gtk.SpinButton.new_with_range(5, 1440, 5)
+        self.allowance_per.set_value(60)
+        allowance_row.pack_start(self.allowance_minutes, False, False, 0)
+        allowance_row.pack_start(Gtk.Label(label="min of break for every"), False, False, 0)
+        allowance_row.pack_start(self.allowance_per, False, False, 0)
+        allowance_row.pack_start(Gtk.Label(label="min of blocking"), False, False, 0)
+        allowance_buttons = Gtk.Box(spacing=6)
+        for label, handler in (("Save allowance", self.set_allowance), ("Remove", self.clear_allowance)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", handler)
+            allowance_buttons.pack_start(button, False, False, 0)
+        self.break_start = Gtk.Button(label="Take a break now")
+        self.break_start.connect("clicked", self.start_break)
+        self.break_end = Gtk.Button(label="End break")
+        self.break_end.connect("clicked", self.end_break)
+        allowance_buttons.pack_start(self.break_start, False, False, 0)
+        allowance_buttons.pack_start(self.break_end, False, False, 0)
+        self.break_label = dim("")
+        relock_row = Gtk.Box(spacing=6)
+        self.relock_check = Gtk.CheckButton(label="Unlocking gives a break of")
+        self.relock_minutes = Gtk.SpinButton.new_with_range(1, 240, 1)
+        self.relock_minutes.set_value(5)
+        relock_save = Gtk.Button(label="Save")
+        relock_save.connect("clicked", self.set_relock)
+        relock_row.pack_start(self.relock_check, False, False, 0)
+        relock_row.pack_start(self.relock_minutes, False, False, 0)
+        relock_row.pack_start(Gtk.Label(label="min, then the block is back with its locks"), False, False, 0)
+        relock_row.pack_start(relock_save, False, False, 0)
+        box.pack_start(section(
+            "Breaks",
+            dim("Break time is earned while the block is on and saved up to one allowance. Take "
+                "it when you choose, also while the block is locked; the block comes back by "
+                "itself. Allowing more breaks loosens the block, so decide before locking it."),
+            allowance_row, allowance_buttons, self.break_label,
+            dim("With the box below ticked, passing the typing challenge or giving the password "
+                "doesn't end the block: it lifts it for a while. Unlocking again during that "
+                "break ends it."),
+            relock_row), False, False, 0)
         return box
 
     def update_block_list(self):
@@ -1825,6 +1881,20 @@ class Window(Gtk.ApplicationWindow):
         self.schedules.set_items(block["schedules"])
         self.calendar.set_windows(block.get("schedule_windows", []))
         set_switch(self.keyword_test_switch, block.get("keyword_test", False))
+        allowance, balance = block.get("break_allowance", 0), block.get("break_balance", 0)
+        paused = block.get("paused_seconds", 0)
+        self.break_start.set_sensitive(block["active"] and allowance > 0 and balance >= 60 and not paused)
+        self.break_end.set_sensitive(bool(paused))
+        if paused:
+            text = f"On a break for {fmt_seconds(paused)} more."
+        elif allowance:
+            text = (f"Allowance: {allowance // 60} min per {block.get('break_per', 0) // 60} min of blocking. "
+                    f"Earned: {balance // 60} min.")
+        else:
+            text = "No break allowance."
+        if block.get("relock"):
+            text += f" Unlocking gives a break of {block['relock'] // 60} min."
+        self.break_label.set_text(text)
 
         self.start_button.set_label("Add locks…" if block["active"] else "Start…")
         self.stop_button.set_sensitive(
@@ -2018,9 +2088,36 @@ class Window(Gtk.ApplicationWindow):
 
     def set_pomodoro(self, _button):
         if self.selected:
-            self.run(["pomodoro", "set", self.selected,
-                      f"{self.work_minutes.get_value_as_int()}m",
-                      f"{self.break_minutes.get_value_as_int()}m"])
+            args = ["pomodoro", "set", self.selected,
+                    f"{self.work_minutes.get_value_as_int()}m",
+                    f"{self.break_minutes.get_value_as_int()}m"]
+            if self.long_check.get_active():
+                args += ["--long", f"{self.long_minutes.get_value_as_int()}m",
+                         "--every", str(self.long_every.get_value_as_int())]
+            self.run(args)
+
+    def set_allowance(self, _button):
+        if self.selected:
+            self.run(["break", "allowance", self.selected,
+                      f"{self.allowance_minutes.get_value_as_int()}m",
+                      "--per", f"{self.allowance_per.get_value_as_int()}m"])
+
+    def clear_allowance(self, _button):
+        if self.selected:
+            self.run(["break", "allowance", self.selected, "off"])
+
+    def start_break(self, _button):
+        if self.selected:
+            self.run(["break", "start", self.selected])
+
+    def end_break(self, _button):
+        if self.selected:
+            self.run(["break", "end", self.selected])
+
+    def set_relock(self, _button):
+        if self.selected:
+            value = f"{self.relock_minutes.get_value_as_int()}m" if self.relock_check.get_active() else "off"
+            self.run(["break", "relock", self.selected, value])
 
     def clear_pomodoro(self, _button):
         if self.selected:

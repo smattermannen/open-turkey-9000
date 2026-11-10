@@ -88,19 +88,19 @@ inside the repeated hour is open both times. Time locks, Pomodoro, queued
 edits and the edit freeze count real time and were already right; the quota
 day follows the calendar date.
 
-**3.2 Auto-relock (M).** `start --relock 5m` with a lock: passing the
+**3.2 Auto-relock (M). Done 2026-11-10** as `kc9k break relock <block> <D>` (a setting of the block rather than a `start` flag; a second unlock during the break ends the block). `start --relock 5m` with a lock: passing the
 challenge (or giving the password) lifts the block for that long, editing
 stays refused, then the daemon turns it back on with the same locks. Stored
 on the block as `relock_minutes` and `relock_until`. A time lock is not
 shortened by it.
 
-**3.3 Breaks from an allowance (M).** `kc9k break set <block> 10m --per 1h`
+**3.3 Breaks from an allowance (M). Done 2026-11-10** (`kc9k break allowance/start/end`). `kc9k break set <block> 10m --per 1h`
 and `kc9k break start <block>`: time earned while the block is on, spent
 when you choose, capped at one allowance. Shares the "lifted until" field
 with 3.2 and Pomodoro's break so the three never stack. Setting or raising
 an allowance on a held block is gated.
 
-**3.4 Pomodoro additions (S, from Focuser).** A long break after N work
+**3.4 Pomodoro additions (S, from Focuser). Done 2026-11-10.** A long break after N work
 periods, and quota sessions closed during a work period.
 
 **3.5 Time left in the extension (M). Done 2026-11-10** (badge, popup, add-site; tried in LibreWolf through the popup's message, the badge itself not looked at).

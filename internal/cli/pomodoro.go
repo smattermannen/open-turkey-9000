@@ -19,7 +19,14 @@ var pomodoroCmd = &cobra.Command{
 var pomodoroSetCmd = &cobra.Command{
 	Use:   "set [block] [work] [break]",
 	Short: "Set a cycle, e.g. 25m 5m (refused while the block is held)",
-	Args:  cobra.ExactArgs(3),
+	Long: `Sets the block's rhythm: it is on for the work time and lifted for the
+break, over and over, while it runs. With --long and --every, every so many
+breaks is a long one:
+
+  kc9k pomodoro set work 25m 5m --long 15m --every 4
+
+While a block's work period runs, its quota session can't be opened.`,
+	Args: cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		on, err := time.ParseDuration(args[1])
 		if err != nil {
@@ -32,6 +39,19 @@ var pomodoroSetCmd = &cobra.Command{
 		if on < minPomodoroPhase || off < minPomodoroPhase {
 			return fmt.Errorf("work and break must each be at least %s", minPomodoroPhase)
 		}
+		p := db.Pomodoro{On: int64(on.Seconds()), Off: int64(off.Seconds())}
+		longText, _ := cmd.Flags().GetString("long")
+		every, _ := cmd.Flags().GetInt("every")
+		if longText != "" || every != 0 {
+			long, err := time.ParseDuration(longText)
+			if err != nil || long < minPomodoroPhase {
+				return fmt.Errorf("--long needs a time of at least %s, e.g. 15m", minPomodoroPhase)
+			}
+			if every < 2 || every > 20 {
+				return fmt.Errorf("--every needs a number from 2 to 20: the long break comes after that many work periods")
+			}
+			p.Long, p.Every = int64(long.Seconds()), int64(every)
+		}
 		if err := ensureEditable(database, args[0], false); err != nil {
 			return err
 		}
@@ -39,7 +59,8 @@ var pomodoroSetCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if err := database.SetPomodoro(args[0], db.Pomodoro{On: int64(on.Seconds()), Off: int64(off.Seconds()), Anchor: trusted}); err != nil {
+		p.Anchor = trusted
+		if err := database.SetPomodoro(args[0], p); err != nil {
 			return err
 		}
 		return reapplyIfActive(database, args[0])
@@ -80,6 +101,8 @@ var blockDuplicateCmd = &cobra.Command{
 }
 
 func init() {
+	pomodoroSetCmd.Flags().String("long", "", "A long break, e.g. 15m (with --every)")
+	pomodoroSetCmd.Flags().Int("every", 0, "The long break comes after this many work periods")
 	pomodoroCmd.AddCommand(pomodoroSetCmd, pomodoroOffCmd)
 	rootCmd.AddCommand(pomodoroCmd)
 	blockCmd.AddCommand(blockRenameCmd, blockDuplicateCmd)

@@ -15,6 +15,7 @@ package enforce
 
 import (
 	"log"
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -177,6 +178,11 @@ var deferKills bool
 // after the desired state changes (start, stop, unlock, edit), where the domain
 // set may have changed and we want the effect immediately.
 func Apply(active []db.ActiveBlockDetail) error {
+	// A database used through KC9K_DB is a test's: it must never drive the
+	// real hosts file, firewall or browser policies.
+	if os.Getenv("KC9K_DB") != "" {
+		return nil
+	}
 	hosts, apps, bp := Inputs(active)
 
 	var firstErr error
@@ -249,6 +255,9 @@ func Tick(d *db.DB, now time.Time) error {
 		return err
 	}
 	active = withoutBreaks(d, active, trusted)
+	if trusted != 0 {
+		earnBreaks(d, active, trusted)
+	}
 	hosts, _, bp := Inputs(active)
 	enforceExtension(d, now, active)
 	enforceTitles(d, active, now)

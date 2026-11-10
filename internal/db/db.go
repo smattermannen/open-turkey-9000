@@ -233,7 +233,7 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
-	if _, err := conn.Exec(webListsSchema + clustersSchema + recordingSchema + eventsSchema + nepsisSchema + clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema + pausesSchema); err != nil {
+	if _, err := conn.Exec(webListsSchema + clustersSchema + recordingSchema + eventsSchema + nepsisSchema + clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema + pausesSchema + breaksSchema); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to create clock table: %w", err)
 	}
@@ -561,6 +561,10 @@ func (d *DB) DeactivateBlock(name string) error {
 
 	result, err := d.conn.Exec("DELETE FROM active_blocks WHERE block_id = ?", blockID)
 	if err != nil {
+		return fmt.Errorf("failed to deactivate block '%s': %w", name, err)
+	}
+	// A pause belongs to this run of the block.
+	if _, err := d.conn.Exec("DELETE FROM block_pauses WHERE block_id = ?", blockID); err != nil {
 		return fmt.Errorf("failed to deactivate block '%s': %w", name, err)
 	}
 

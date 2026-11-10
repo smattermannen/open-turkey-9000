@@ -126,7 +126,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		if err != nil {
 			log.Printf("daemon: quota: %v", err)
 		}
-		if locked || scheduled {
+		if locked || scheduled || PomodoroWorking(d, name) {
 			s.Open = false
 		}
 

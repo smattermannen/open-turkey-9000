@@ -92,31 +92,40 @@ type guiList struct {
 }
 
 type guiBlock struct {
-	Name        string    `json:"name"`
-	Lists       []guiList `json:"lists"`
-	Apps        []string  `json:"apps"`
-	Titles      []string  `json:"titles"`
-	Nepsis      db.Nepsis `json:"nepsis"`
-	NepsisCount int       `json:"nepsis_count"`
-	Schedules   []string  `json:"schedules"`
-	Windows     []guiWin  `json:"schedule_windows"`
-	Active      bool      `json:"active"`
-	Held        bool      `json:"held"`
-	CharLocked  bool      `json:"char_locked"`
-	PomodoroOn  int64     `json:"pomodoro_on"`
-	PomodoroOff int64     `json:"pomodoro_off"`
-	OnBreak     bool      `json:"on_break"`
-	Password    bool      `json:"password_locked"`
-	Restart     bool      `json:"restart_locked"`
-	Delay       int64     `json:"delay_seconds"`
-	StopSeconds int64     `json:"stop_seconds"`
-	Scheduled   bool      `json:"scheduled"`
-	LockSeconds int64     `json:"lock_seconds"`
-	QuotaLimit  int64     `json:"quota_limit"`
-	QuotaUsed   int64     `json:"quota_used"`
-	QuotaOpen   bool      `json:"quota_open"`
-	QuotaNext   int64     `json:"quota_next"`
-	KeywordTest bool      `json:"keyword_test"`
+	Name          string    `json:"name"`
+	Lists         []guiList `json:"lists"`
+	Apps          []string  `json:"apps"`
+	Titles        []string  `json:"titles"`
+	Nepsis        db.Nepsis `json:"nepsis"`
+	NepsisCount   int       `json:"nepsis_count"`
+	Schedules     []string  `json:"schedules"`
+	Windows       []guiWin  `json:"schedule_windows"`
+	Active        bool      `json:"active"`
+	Held          bool      `json:"held"`
+	CharLocked    bool      `json:"char_locked"`
+	PomodoroOn    int64     `json:"pomodoro_on"`
+	PomodoroOff   int64     `json:"pomodoro_off"`
+	PomodoroLong  int64     `json:"pomodoro_long"`
+	PomodoroEvery int64     `json:"pomodoro_every"`
+	OnBreak       bool      `json:"on_break"`
+	Password      bool      `json:"password_locked"`
+	Restart       bool      `json:"restart_locked"`
+	Delay         int64     `json:"delay_seconds"`
+	StopSeconds   int64     `json:"stop_seconds"`
+	Scheduled     bool      `json:"scheduled"`
+	LockSeconds   int64     `json:"lock_seconds"`
+	QuotaLimit    int64     `json:"quota_limit"`
+	QuotaUsed     int64     `json:"quota_used"`
+	QuotaOpen     bool      `json:"quota_open"`
+	QuotaNext     int64     `json:"quota_next"`
+	KeywordTest   bool      `json:"keyword_test"`
+	// Breaks: the allowance (seconds per BreakPer of blocking), what is
+	// earned, the relock time, and how long the block is lifted for now.
+	BreakAllowance int64 `json:"break_allowance"`
+	BreakPer       int64 `json:"break_per"`
+	BreakBalance   int64 `json:"break_balance"`
+	Relock         int64 `json:"relock"`
+	PausedSeconds  int64 `json:"paused_seconds"`
 }
 
 // guiSettingLock is a browser setting's locks for the interface.
@@ -287,7 +296,8 @@ var guiStateCmd = &cobra.Command{
 				return err
 			} else if p != nil {
 				g.PomodoroOn, g.PomodoroOff = p.On, p.Off
-				g.OnBreak = detail.Active && quota.OnBreak(p.On, p.Off, p.Anchor, trusted)
+				g.OnBreak = detail.Active && p.Cycle().OnBreak(trusted)
+				g.PomodoroLong, g.PomodoroEvery = p.Long, p.Every
 			}
 			if g.Nepsis, err = database.BlockNepsis(b.Name); err != nil {
 				return err
@@ -303,6 +313,14 @@ var guiStateCmd = &cobra.Command{
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 			}
 			g.KeywordTest = slices.Contains(testing, b.Name)
+			k, err := database.GetBreaks(b.Name)
+			if err != nil {
+				return err
+			}
+			g.BreakAllowance, g.BreakPer, g.BreakBalance, g.Relock = k.Allowance, k.Per, k.Balance(), k.Relock
+			if until, _ := database.PausedUntil(b.Name); detail.Active && until > trusted {
+				g.PausedSeconds = until - trusted
+			}
 			state.Blocks = append(state.Blocks, g)
 		}
 

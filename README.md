@@ -433,7 +433,19 @@ The extension checks in each time it fetches its rules, with a header web pages 
 
 ## Pomodoro
 
-`kc9k pomodoro set work 25m 5m` alternates a block between work and breaks while it runs, with locks kept in place. Setting a cycle is refused while the block is held, and `pomodoro off` is always allowed.
+`kc9k pomodoro set work 25m 5m` alternates a block between work and breaks while it runs, with locks kept in place. Add `--long 15m --every 4` for a long break after every fourth work period. During a work period the block's quota session can't be opened, and an open one is closed. Setting a cycle is refused while the block is held, and `pomodoro off` is always allowed.
+
+## Breaks
+
+```bash
+kc9k break allowance work 10m --per 1h   # earn 10 minutes of break per hour of blocking
+kc9k break start work                    # take what is earned (or: break start work 5m)
+kc9k break end work                      # back to work early; the rest is kept
+kc9k break relock work 5m                # unlocking gives a 5-minute break instead of ending the block
+kc9k break                               # what each block allows and has earned
+```
+
+An allowance earns break time while the block is on, saved up to one allowance. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With `relock`, passing the typing challenge or giving the password lifts the block for that long instead of ending it, and unlocking once more during that break ends it. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `relock … off`) is always possible. The toolbar button shows the break time left on the block's sites.
 
 ## Window titles
 

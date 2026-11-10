@@ -601,7 +601,8 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 }
 
 // untilToday parses "HH:MM" into the next time it occurs from now (today, or
-// tomorrow if the time has already passed today).
+// tomorrow if the time has already passed today). Tomorrow is the next
+// calendar day, not 24 hours on: the two differ when the clocks change.
 func untilToday(now time.Time, clock string) (time.Time, error) {
 	var h, m int
 	if _, err := fmt.Sscanf(clock, "%d:%d", &h, &m); err != nil {
@@ -612,7 +613,7 @@ func untilToday(now time.Time, clock string) (time.Time, error) {
 	}
 	t := time.Date(now.Year(), now.Month(), now.Day(), h, m, 0, 0, now.Location())
 	if !t.After(now) {
-		t = t.Add(24 * time.Hour)
+		t = time.Date(now.Year(), now.Month(), now.Day()+1, h, m, 0, 0, now.Location())
 	}
 	return t, nil
 }

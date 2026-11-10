@@ -135,7 +135,7 @@ func TestNepsisLadder(t *testing.T) {
 		t.Fatal(err)
 	}
 	ladder := db.Nepsis{
-		Detectors: []string{db.EventPage, db.EventRefused},
+		Detectors: []string{db.EventPage, db.EventTitle},
 		Steps: []db.NepsisStep{
 			{Count: 2, Minutes: 10, Actions: []db.NepsisAction{{Kind: db.ConsequenceWarning}, {Kind: db.ConsequenceCloseTab}}},
 			{Count: 2, Minutes: 10, Actions: []db.NepsisAction{{Kind: db.ConsequenceCloseBrowser}}},
@@ -155,7 +155,11 @@ func TestNepsisLadder(t *testing.T) {
 		t.Fatalf("fired early: %q", *did)
 	}
 	// Step 1: a warning and the tab.
-	addEvents(t, d, db.EventRefused, "b", 1)
+	addEvents(t, d, db.EventRefused, "b", 5) // asking to loosen never counts
+	if checkScopes(d, now, []string{"b"}) || len(*did) != 0 {
+		t.Fatalf("refused loosening counted: %q", *did)
+	}
+	addEvents(t, d, db.EventTitle, "b", 1)
 	if !checkScopes(d, now.Add(time.Second), []string{"b"}) {
 		t.Fatal("step 1 didn't ask to close the tab")
 	}

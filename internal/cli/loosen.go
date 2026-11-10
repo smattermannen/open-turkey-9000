@@ -87,7 +87,8 @@ func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool
 }
 
 // refused logs a refused attempt to loosen or stop a held block as an event
-// (bypass prevention counts them), and returns err.
+// and returns err. It is in the log only: asking is ordinary use, and bypass
+// detection doesn't count it.
 func refused(database *db.DB, block string, err error) error {
 	if logErr := database.RecordEvent(db.EventRefused, block, err.Error()); logErr != nil {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", logErr)

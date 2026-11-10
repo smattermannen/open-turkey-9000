@@ -112,7 +112,7 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
 - **Events and bypass prevention** (`db/events.go`, `db/nepsis.go`,
   `enforce/nepsis.go`, `cli/nepsis.go`): what KC9K stops is logged (pages
   via `/hit`, app kills per block, title closes, browsers closed, refused
-  loosening via `refused()` in the CLI, tamper: daemon restart, clock jump),
+  loosening via `refused()` in the CLI (logged only, never counted), tamper: daemon restart, clock jump),
   kept a day. Bypass detection (`db.Nepsis`: detectors, a ladder of steps,
   quiet time; global setting lockable as setting lock `nepsis`; per block,
   gated) climbs a step when a step's Count events of its detectors fall
@@ -146,6 +146,16 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   off, strict, no-escape and prepare-uninstall. Passwords come one per line
   from `stdinLines` (settings password first). The GUI retries a refused
   command once after asking for it.
+- **Access passwords** (`internal/cli/access.go`, `kc9k access [set|remove
+  <area…>|--all]`): optional passwords per area (`app`, `dashboard`,
+  `blocks`, `device`, `stats`, `settings`; setting `access.password.<area>`,
+  areas set together share a hash). `accessGate` (root `PersistentPreRunE`)
+  maps each command to its areas (`commandAreas`) and needs the app password
+  plus one open area; `daemon`, `hotkey run`, `gui-state` are exempt.
+  Passwords come as the first stdin lines, counted by the hidden
+  `--access-lines N` (before the settings password), or are asked on a
+  terminal. `gui-state` reports `access`/`access_unused` and empties what
+  locked pages own (`hideLocked`); the GUI covers locked pages (`guarded`).
 - **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL; every
   pooled connection gets busy_timeout and foreign_keys via `_pragma`);
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
@@ -173,7 +183,7 @@ threshold | hits | export | import` (`action … on --url/--image/--for`), `monk
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

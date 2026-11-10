@@ -18,8 +18,9 @@ const (
 	EventApp     = "app"     // a blocked app was closed
 	EventTitle   = "title"   // a window was closed for its title
 	EventBrowser = "browser" // a browser without the extension was closed
-	EventRefused = "refused" // a loosening command was refused
+	EventRefused = "refused" // a loosening command was refused: logged, never counted (ordinary use)
 	EventTamper  = "tamper"  // the daemon restarted within a boot, or the clock jumped
+	EventAccess  = "access"  // a wrong access password was given
 )
 
 // EventsKept is how long events are kept.
@@ -83,7 +84,8 @@ func (d *DB) CountEvents(block string, since int64) (int, error) {
 	return d.CountEventsOf(block, since, nil)
 }
 
-// CountEventsOf is CountEvents for the given kinds only (none: every kind).
+// CountEventsOf is CountEvents for the given kinds only (none: every kind
+// that counts, which leaves out refused loosening).
 func (d *DB) CountEventsOf(block string, since int64, kinds []string) (int, error) {
 	query, args := "SELECT COUNT(*) FROM events WHERE at >= ?", []any{since}
 	if block != "" {
@@ -93,6 +95,9 @@ func (d *DB) CountEventsOf(block string, since int64, kinds []string) (int, erro
 	}
 	if slices.Contains(kinds, EventPage) && !slices.Contains(kinds, EventSearch) {
 		kinds = append(slices.Clone(kinds), EventSearch) // a kind of page
+	}
+	if len(kinds) == 0 {
+		query, args = query+" AND kind != ?", append(args, EventRefused)
 	}
 	if len(kinds) > 0 {
 		query += " AND kind IN (?" + strings.Repeat(", ?", len(kinds)-1) + ")"

@@ -2,6 +2,7 @@
 
 ## Note to the next session (2026-11-10)
 Read this first, then `git fetch origin`: other sessions push TODO ideas straight to GitHub.
+The order of work for everything below is in `docs/PLAN.md` (agreed with the user 2026-11-10: do all of it, any order).
 
 - Everything here is committed and pushed, and installed on this machine (the test laptop) with `TAGS=devmaster`, extension 1.12.0. `ci/actions_test.py` (15 checks) and `ci/browser_test.py` (20) pass in a real LibreWolf after the last install.
 - Done in the session before this one: website lists, more actions, monk mode, events and bypass detection with an escalation ladder, quota spent only while in use, GNOME hotkeys, hidden/searchable lists in the interface, tamper events. Real-browser scripts: `ci/browser_test.py`, `ci/actions_test.py`, `ci/quota_test.py` (run with `GECKOWEBDRIVER=~/.local/share/kc9k-browsertest ~/.local/share/kc9k-browsertest/venv/bin/python ci/...`).
@@ -65,6 +66,17 @@ Interface work waits until the functionality below is pinned down: build each fe
 - Project export and import: the whole setup (every block with its lists, apps, titles, schedules, quota, Pomodoro and bypass detection; clusters; browser options; freeze schedules; hotkeys) in one file, to share setups with the community. Locks and passwords are never exported; importing never weakens anything that is held.
 - More list actions, ticked like the others: block audio (mute the page's sound), block video (stop and hide videos), declutter (experimental: render the page bare-bones, reader-style), force dark mode (Dark Reader's engine, MIT licensed, bundled and configured from KC9K).
 - Social media settings (their own tab in the interface): per major site, presets such as "DMs only", "No reels/shorts", "No feed", "No discover/explore page", enforced by redirecting addresses (and hiding elements where needed), e.g. YouTube, Instagram, Facebook, X, Reddit, TikTok.
+
+## Ideas from Cold Turkey users (added 2026-11-10)
+Things that work badly in Cold Turkey Blocker on Windows, or that people asked for. Not ordered or agreed yet.
+
+- Allow one YouTube playlist while YouTube is blocked. An exception list on the address (`list=<id>`) only covers the playlist page and videos opened with that parameter; a video opened without it, or after YouTube changes the address without loading, falls outside. Needs the extension to check that the playing video belongs to the playlist. Fits the social media settings.
+- Daylight saving time: Cold Turkey has bugs here. Schedules compare the wall clock (`schedule.go`), which should hold, but nothing tests it. Add tests across both changes for schedule windows, `EditFreeze`, `--until HH:MM`, time locks, the quota day turning at midnight, Pomodoro phases and scheduled Frozen Chicken.
+- Breaks: Pomodoro and auto-relock (above) cover part of it. Open: breaks you take when you choose, from an allowance (e.g. 10 minutes per hour of blocking).
+- Time left in the extension: a badge on the toolbar button showing how long until the site in the tab is blocked (quota left in an open session, time until a schedule starts, break left). During a break the badge shows the break remaining for the block the site is spending it from. The extension has no badge yet; `rules.quota` already lists the session's blocks.
+- Search when adding an app or folder: the interface takes a typed name (`add-app`). Offer a searchable picker of installed apps (`.desktop` files, Flatpak IDs) and running processes.
+- Searchable lists: done for website lists in the interface ("Find in this list"). Still missing for apps, folders, window titles and clusters, and in the CLI (`list show --find`).
+- Projects to read for ideas: open-turkey and Focuser, and the GitHub topics `distraction-blocker` and `cold-turkey-alternative` (the second has one Linux project so far).
 
 ## Before release
 Build without `TAGS=devmaster`. Remove `ci/vm.sh`. Rename the GitHub repository to `kc9k`. On the test laptop, remove `/etc/sudoers.d/99-claude-test`.

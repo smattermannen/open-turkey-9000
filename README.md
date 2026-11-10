@@ -364,6 +364,10 @@ kc9k record stop --discard              # stop and drop them
 
 The sites (domains, without `www.`) come from the extension in LibreWolf: pages and the frames inside them (a login or captcha from another site), private windows included, and pages a block stops too, so you can record with the block on and see what it would need. They stay on this computer. Nothing changes until `stop`, which follows the target's rules: into a blacklist or a cluster is always allowed; into an exception list it loosens the block, so it is refused while the block is held (the recording then stays, to stop later or discard) and queued or challenged for a block with allow windows. One recording at a time, at most 2000 sites.
 
+## When the clocks change
+
+Schedules follow the clock on the wall. On the night the clocks go forward, the skipped hour doesn't happen: a window that lies wholly inside it doesn't open that day, and one that spans it is an hour shorter. On the night they go back, the repeated hour is covered both times. `start --until 07:00` means 07:00 on the clock, however long the night is. Everything counted in time (`--for`, delays, Pomodoro, the 24-hour wait for loosening, the 2-hour edit freeze before a window) counts real hours.
+
 ## Daily quotas
 
 ```bash
@@ -452,13 +456,13 @@ Monk mode blocks every website for a while, time-locked: it starts the block **m
 
 ## Bypass detection
 
-Many blocked pages, closed apps or refused commands in a short time usually mean someone is hunting for a loophole. Bypass detection ("nepsis", watchfulness) counts what Killer Chicken stops and climbs a ladder of steps you choose, so you really step away:
+Many blocked pages or closed apps in a short time usually mean someone is hunting for a loophole. Bypass detection ("nepsis", watchfulness) counts what Killer Chicken stops and climbs a ladder of steps you choose, so you really step away:
 
 ```bash
 kc9k nepsis set --step "3 in 10m: warning, close-tab, logout 1m" \
                 --step "3 in 10m: close-browser, monk 5m" \
                 --step "2 in 30m: shutdown 15m" --quiet 2h      # the whole computer
-kc9k nepsis set --block social --step "5 in 10m: close-browser, monk 30m" --detect page,refused
+kc9k nepsis set --block social --step "5 in 10m: close-browser, monk 30m" --detect page,app
 kc9k nepsis set ... --for 7d                                      # global only: locked for a week
 kc9k nepsis                                                       # the ladders and where they stand
 kc9k nepsis off [--block social]
@@ -467,7 +471,7 @@ kc9k nepsis unlock                                                # challenge or
 
 Each step trips when its number of events happens within its window, then takes its actions; the next time, the next step; past the last, the last again. After `--quiet` without tripping, the ladder falls back a step. Actions: `warning` (a notification), `close-tab` (the tab of the page that tripped it), `close-browser`, `lock-screen D`, `logout [D]`, `shutdown [D]` and `monk D`. With a time, locked, logged out or off lasts that long through Frozen Chicken (at most a day); a one-off logout or shutdown happens at most every 10 minutes. `--count N --within D --then ACTION [--then-for D]` is a short way to give one step.
 
-Detectors (`--detect`, default all): `page` (a blacklist took a page away; greyscale or no-images alone don't count), `search` (such a page opened from a search engine's results: Google, Bing, DuckDuckGo, Brave, Startpage and others, or any `/search?q=` page; `page` counts these too, so pick `search` alone to count only pages that were looked for), `app` (a blocked app was closed), `title` (a window was closed for its title), `browser` (a browser without the extension was closed), `refused` (an attempt to stop, unlock or loosen a held block), `tamper` (the daemon started again within a boot, or the clock moved more than 2 minutes against the boot clock).
+Detectors (`--detect`, default all): `page` (a blacklist took a page away; greyscale or no-images alone don't count), `search` (such a page opened from a search engine's results: Google, Bing, DuckDuckGo, Brave, Startpage and others, or any `/search?q=` page; `page` counts these too, so pick `search` alone to count only pages that were looked for), `app` (a blocked app was closed), `title` (a window was closed for its title), `browser` (a browser without the extension was closed), `tamper` (the daemon started again within a boot, or the clock moved more than 2 minutes against the boot clock), `access` (a wrong [access password](#access-passwords)). Asking to stop, unlock or loosen a held block is refused and logged, but never counted: that is ordinary use.
 
 The global ladder counts every block's events; a block's own counts that block's events while it is on (a closed browser counts for every active block with websites, tampering for every active block, and once for the whole computer); when both are set, both apply. A blocked page is judged at once, so close-tab hits the right tab; everything else every daemon cycle. Making one stricter (more detectors, a later fall-back, steps that trip on fewer events over longer windows and keep every action for at least as long, more steps at the end) is always allowed. Anything else loosens it: a block's is gated like other edits to the block, and the global one can be locked like a browser option (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart` on `set`). Events are kept for a day. A setting from before the ladder became one step that closes the browsers and then takes its old consequence.
 
@@ -516,6 +520,26 @@ kc9k password remove
 With it set, these ask for it: any loosening edit, `stop`, `unlock`, starting a block with any lock, schedules, quotas (setting or removing), Pomodoro, Frozen Chicken, turning browser options off or locking them, strict mode, no-escape, and uninstalling. These stay free: reading the state, starting a block without a lock, adding sites, apps and patterns, ticking a website action on, and opening a quota session. The interface asks for it the first time a change needs it and remembers it until it closes.
 
 Passwords are read from standard input, hidden on a terminal; when a command also takes a lock's own password, the settings password comes first. If it's lost, root can remove it while nothing is locked (`kc9k password --help` shows how), and the testing build's master password clears it too.
+
+## Access passwords
+
+Optional passwords to open Killer Chicken 9000 and each of its pages. There is one for opening the program (`app`) and one per page: `dashboard`, `blocks`, `device`, `stats` and `settings`. Set none, one for everything, or a different one for each:
+
+```bash
+kc9k access                     # which are set
+kc9k access set --all           # one password for everything
+kc9k access set blocks stats    # one password for these two pages
+kc9k access set settings        # and another for Settings
+kc9k access remove stats
+```
+
+In the interface they are under Settings > Access passwords. A locked page shows a password box and nothing else; a password you type opens every page it belongs to, and stays remembered until you close the window or press Lock. With the `app` password set, nothing shows until it is given.
+
+The check is made by `kc9k` itself, not by the interface, so the commands ask too: every command belongs to a page (`block`, `list`, `schedule`, `quota` … to Blocks; `freeze`, `strict`, `no-escape` to Device Blocks; `browser`, `hotkey`, `password`, `access` to Settings; `status`, `start`, `stop`, `unlock` to the Dashboard or Blocks, whichever is open) and runs only with the `app` password and that page's. On a terminal it asks; the interface passes them along. The daemon and hotkeys are not affected, so blocking goes on as before.
+
+Changing or removing a password asks for the one it has (and for the settings password, when set). A wrong password takes a second and is logged as an `access` event, which bypass detection can count. If one is lost, root can remove them all (`kc9k access --help` shows the command).
+
+Access passwords decide who may look; the [settings password](#settings-password) decides who may loosen. They are separate and can be the same text.
 
 ## Strict mode
 

@@ -102,7 +102,7 @@ func warnRootGroups(name string) {
 var stdinLines = bufio.NewReader(os.Stdin)
 
 // isTerminalInput reports whether standard input is a terminal.
-func isTerminalInput() bool {
+var isTerminalInput = func() bool {
 	_, err := unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TCGETS)
 	return err == nil
 }

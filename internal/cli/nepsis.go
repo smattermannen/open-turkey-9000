@@ -4,7 +4,7 @@
 //	kc9k nepsis                              # show bypass detection
 //	kc9k nepsis set --step "3 in 10m: close-tab, logout 1m" \
 //	                --step "3 in 10m: close-browser, monk 5m" \
-//	                --step "2 in 30m: shutdown 15m" [--detect page,refused] [--quiet 2h] [--block B]
+//	                --step "2 in 30m: shutdown 15m" [--detect page,app] [--quiet 2h] [--block B]
 //	kc9k nepsis set --count 10 --within 5m --then monk --then-for 1h   # one step
 //	kc9k nepsis set ... --for 7d --lock      # global only: lock it like a browser option
 //	kc9k nepsis off [--block B]
@@ -269,8 +269,8 @@ var nepsisCmd = &cobra.Command{
 detectors (--detect; default all) are the kinds of events that count:
 
   page     a blacklist took a page away       browser  a browser without the extension was closed
-  app      a blocked app was closed           refused  an attempt to stop, unlock or loosen a held block
-  title    a window was closed for its title  tamper   the daemon restarted in a boot, or the clock jumped
+  app      a blocked app was closed           tamper   the daemon restarted in a boot, or the clock jumped
+  title    a window was closed for its title  access   a wrong access password
   search   a page taken away that was opened from a search engine's results
            (page counts these too; alone, it counts only pages looked for)
 

@@ -138,6 +138,20 @@ def run_cli(args, secret=None, timeout=120):
     return result.returncode == 0, (result.stdout + result.stderr).strip()
 
 
+def cli_with_access(passwords, args, secret=None, timeout=120):
+    """run_cli with the access passwords given so far as the first lines of
+    standard input, announced with --access-lines."""
+    if not passwords:
+        return run_cli(args, secret, timeout)
+    return run_cli(["--access-lines", str(len(passwords)), *args],
+                   "".join(p + "\n" for p in passwords) + (secret or ""), timeout)
+
+
+AREA_TITLES = {"app": "Killer Chicken 9000", "dashboard": "Dashboard", "blocks": "Blocks",
+               "device": "Device Blocks", "stats": "Statistics", "settings": "Settings"}
+AREAS = list(AREA_TITLES)
+
+
 def heading(text, size="large"):
     label = Gtk.Label(xalign=0)
     label.set_markup(f"<span size='{size}' weight='bold'>{GLib.markup_escape_text(text)}</span>")
@@ -1018,11 +1032,18 @@ class Window(Gtk.ApplicationWindow):
         self.busy = False
         self.updating = False  # set while widgets are filled from the state
         self.settings_password = None  # remembered for this session once given
+        self.access_passwords = []  # access passwords given, until closed or locked
+        self.access = {}  # area -> "none", "open" or "locked"
+        self.covers = {}  # page name -> (stack, cover text, entry, title)
         self.stats_rows = []
         self.stats_on = True
 
         header = Gtk.HeaderBar(show_close_button=True, title="Killer Chicken 9000")
         self.set_titlebar(header)
+        self.lock_button = Gtk.Button(label="Lock", no_show_all=True,
+                                      tooltip_text="Forget the passwords given and lock the pages again")
+        self.lock_button.connect("clicked", self.lock_access)
+        header.pack_end(self.lock_button)
 
         root = Gtk.Box()
         self.add(root)
@@ -1040,11 +1061,13 @@ class Window(Gtk.ApplicationWindow):
         content.pack_start(self.banner, False, False, 0)
         content.pack_start(self.stack, True, True, 0)
 
-        self.stack.add_titled(self.build_dashboard(), "dashboard", "Dashboard")
-        self.stack.add_titled(self.build_blocks(), "blocks", "Blocks")
-        self.stack.add_titled(self.build_device(), "device", "Device Blocks")
-        self.stack.add_titled(self.build_stats(), "stats", "Statistics")
-        self.stack.add_titled(self.build_settings(), "settings", "Settings")
+        for name, title, build in (
+                ("dashboard", "Dashboard", self.build_dashboard),
+                ("blocks", "Blocks", self.build_blocks),
+                ("device", "Device Blocks", self.build_device),
+                ("stats", "Statistics", self.build_stats),
+                ("settings", "Settings", self.build_settings)):
+            self.stack.add_titled(self.guarded(name, title, build()), name, title)
         self.stack.connect("notify::visible-child-name", self.page_changed)
 
         self.refresh()
@@ -1064,15 +1087,28 @@ class Window(Gtk.ApplicationWindow):
         stdin = secret
         if self.settings_password and self.state and self.state.get("settings_password"):
             stdin = self.settings_password + "\n" + (secret or "")
+        passwords = list(self.access_passwords)
 
         def work():
-            ok, output = run_cli(args, stdin, timeout)
+            ok, output = cli_with_access(passwords, args, stdin, timeout)
             GLib.idle_add(self.finished, ok, output, then, (args, secret, timeout))
 
         threading.Thread(target=work, daemon=True).start()
 
     def finished(self, ok, output, then, request=None):
         self.set_sensitive(True)
+        if not ok and request and ("needs the access password" in output
+                                   or "wrong access password" in output):
+            # A page's password that wasn't given yet (changing another
+            # page's password asks for that one).
+            area = output[output.rfind("(") + 1:output.rfind(")")] if "(" in output else ""
+            password = self.ask_text(
+                "Access password", f"This needs the password for {AREA_TITLES.get(area, area)}.",
+                password=True)
+            if password and self.try_access(password):
+                args, secret, timeout = request
+                self.run(args, secret, then, timeout)
+            return False
         if not ok and request and ("needs the settings password" in output
                                    or "wrong settings password" in output):
             wrong = "wrong settings password" in output and self.settings_password
@@ -1154,8 +1190,8 @@ class Window(Gtk.ApplicationWindow):
         area = dialog.get_content_area()
         area.set_spacing(10)
         area.set_border_width(16)
-        area.pack_start(dim("When Killer Chicken stops this many things (pages, apps, windows, "
-                            "attempts to loosen a held block) within this long, it does this. "
+        area.pack_start(dim("When Killer Chicken stops this many things (pages, apps, "
+                            "windows) within this long, it does this. "
                             "Making it stricter is always allowed; anything else loosens it."),
                         False, False, 0)
         grid = Gtk.Grid(column_spacing=10, row_spacing=8)
@@ -1240,15 +1276,22 @@ class Window(Gtk.ApplicationWindow):
             return True
         self.busy = True
 
+        passwords = list(self.access_passwords)
+
         def work():
-            ok, output = run_cli(["gui-state"])
-            GLib.idle_add(self.apply_state, ok, output)
+            ok, output = cli_with_access(passwords, ["gui-state"])
+            GLib.idle_add(self.apply_state, ok, output, passwords)
 
         threading.Thread(target=work, daemon=True).start()
         return True
 
-    def apply_state(self, ok, output):
+    def apply_state(self, ok, output, passwords=()):
         self.busy = False
+        if list(passwords) != self.access_passwords:
+            # Locked or unlocked while this was being read: read again
+            # rather than show what the old passwords opened.
+            self.refresh()
+            return False
         if not ok:
             self.show_banner(f"Can't read the state: {output}", Gtk.MessageType.ERROR)
             return False
@@ -1256,6 +1299,12 @@ class Window(Gtk.ApplicationWindow):
             return False
         self.state_json = output
         self.state = json.loads(output)
+        # A password that opens nothing any more (it was changed) is dropped.
+        for index in self.state.get("access_unused") or []:
+            if index < len(passwords) and passwords[index] in self.access_passwords:
+                self.access_passwords.remove(passwords[index])
+        self.access = self.state.get("access") or {}
+        self.update_covers()
         self.blocks = {block["name"]: block for block in self.state["blocks"]}
         self.updating = True
         try:
@@ -1265,10 +1314,12 @@ class Window(Gtk.ApplicationWindow):
                                  Gtk.MessageType.WARNING)
             else:
                 self.banner.set_revealed(False)
-            self.update_dashboard()
-            self.update_block_list()
-            self.update_device()
-            self.update_settings()
+            for area, update in (("dashboard", self.update_dashboard),
+                                 ("blocks", self.update_block_list),
+                                 ("device", self.update_device),
+                                 ("settings", self.update_settings)):
+                if not self.locked(area):
+                    update()
         finally:
             self.updating = False
         return False
@@ -1281,6 +1332,142 @@ class Window(Gtk.ApplicationWindow):
     def page_changed(self, *_args):
         if self.stack.get_visible_child_name() in ("stats", "dashboard"):
             self.refresh_stats()
+
+    # Access passwords ----------------------------------------------------
+    def guarded(self, name, title, page):
+        """The page under a cover that asks for its password while locked."""
+        stack = Gtk.Stack()
+        stack.add_named(page, "page")
+        cover = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
+                        halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        cover.pack_start(Gtk.Image.new_from_icon_name("changes-prevent-symbolic", Gtk.IconSize.DIALOG),
+                         False, False, 0)
+        text = Gtk.Label(justify=Gtk.Justification.CENTER)
+        cover.pack_start(text, False, False, 0)
+        row = Gtk.Box(spacing=6)
+        entry = Gtk.Entry(visibility=False, placeholder_text="Password", width_chars=24,
+                          input_purpose=Gtk.InputPurpose.PASSWORD)
+        button = Gtk.Button(label="Unlock")
+        button.get_style_context().add_class("suggested-action")
+        unlock = lambda *_args: self.unlock_from(entry)
+        entry.connect("activate", unlock)
+        button.connect("clicked", unlock)
+        row.pack_start(entry, True, True, 0)
+        row.pack_start(button, False, False, 0)
+        cover.pack_start(row, False, False, 0)
+        stack.add_named(cover, "cover")
+        self.covers[name] = (stack, text, entry, title)
+        return stack
+
+    def locked(self, area):
+        return self.access.get(area) == "locked"
+
+    def update_covers(self):
+        app_locked = self.access.get("app") == "locked"
+        for name, (stack, text, _entry, title) in self.covers.items():
+            if app_locked:
+                text.set_markup("<b>Killer Chicken 9000 is locked.</b>\nEnter its password to open it.")
+            else:
+                text.set_markup(f"<b>{title} is locked.</b>\nEnter its password to open it.")
+            stack.set_visible_child_name("cover" if self.locked(name) else "page")
+        self.lock_button.set_visible(bool(self.access_passwords))
+        if hasattr(self, "access_status"):
+            self.update_access_section()
+
+    def unlock_from(self, entry):
+        password = entry.get_text()
+        entry.set_text("")
+        if password and not self.try_access(password):
+            self.message("That password opens nothing.")
+            entry.grab_focus()
+
+    def try_access(self, password):
+        """Keeps a password if it opens something; False if it doesn't."""
+        if password in self.access_passwords:
+            return True
+        passwords = self.access_passwords + [password]
+        ok, output = cli_with_access(passwords, ["gui-state"])
+        if not ok:
+            return False
+        if len(passwords) - 1 in (json.loads(output).get("access_unused") or []):
+            return False
+        self.access_passwords = passwords
+        self.state_json = None
+        self.apply_state(True, output, passwords)
+        self.refresh_stats()
+        return True
+
+    def lock_access(self, _button=None):
+        self.access_passwords = []
+        self.state_json = None
+        self.refresh()
+
+    def access_dialog(self, remove):
+        """Asks which areas (and, to set, which password). Returns (areas, password)."""
+        dialog = Gtk.Dialog(title="Remove access passwords" if remove else "Set an access password",
+                            transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Remove" if remove else "Set", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("destructive-action" if remove else "suggested-action")
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        for side in ("margin_start", "margin_end", "margin_top", "margin_bottom"):
+            box.set_property(side, 16)
+        box.pack_start(dim("Remove the password of:" if remove else
+                           "Everything ticked gets this one password. Do it again with "
+                           "other boxes ticked for a different one."), False, False, 0)
+        checks = {}
+        for area in AREAS:
+            has = self.access.get(area, "none") != "none"
+            label = ("Opening the program" if area == "app" else AREA_TITLES[area])
+            check = Gtk.CheckButton(label=label + (" (has a password)" if has and not remove else ""))
+            if remove:
+                check.set_sensitive(has)
+            checks[area] = check
+            box.pack_start(check, False, False, 0)
+        first = Gtk.Entry(visibility=False, placeholder_text="Password (at least 4 characters)",
+                          activates_default=True)
+        again = Gtk.Entry(visibility=False, placeholder_text="Repeat it", activates_default=True)
+        if not remove:
+            box.pack_start(first, False, False, 0)
+            box.pack_start(again, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        areas = [area for area, check in checks.items() if check.get_active()]
+        password, repeat = first.get_text(), again.get_text()
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK or not areas:
+            return None, None
+        if not remove and password != repeat:
+            self.message("The two passwords differ; nothing changed.", Gtk.MessageType.INFO)
+            return None, None
+        if not remove and len(password) < 4:
+            self.message("Use at least 4 characters.", Gtk.MessageType.INFO)
+            return None, None
+        return areas, password
+
+    def set_access_password(self, _button):
+        areas, password = self.access_dialog(remove=False)
+        if areas:
+            # Remembered at once, so the page being worked on doesn't lock.
+            self.run(["access", "set", *areas], password + "\n",
+                     then=lambda _o: self.access_passwords.append(password)
+                     if password not in self.access_passwords else None)
+
+    def remove_access_password(self, _button):
+        areas, _password = self.access_dialog(remove=True)
+        if areas:
+            self.run(["access", "remove", *areas])
+
+    def update_access_section(self):
+        with_password = [("Opening the program" if a == "app" else AREA_TITLES[a])
+                         for a in AREAS if self.access.get(a, "none") != "none"]
+        if with_password:
+            self.access_status.set_markup("<b>On for:</b> " + GLib.markup_escape_text(", ".join(with_password)) + ".")
+        else:
+            self.access_status.set_text("Not set.")
+        self.access_remove_button.set_visible(bool(with_password))
 
     # Dashboard -----------------------------------------------------------
     def build_dashboard(self):
@@ -1501,7 +1688,7 @@ class Window(Gtk.ApplicationWindow):
         nepsis = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=12)
         nepsis.pack_start(dim(
             "Bypass prevention: when this block stops many things in a short time (pages, apps, "
-            "attempts to loosen it while held), likely a hunt for a loophole, it takes a "
+            "windows), likely a hunt for a loophole, it takes a "
             "consequence so you step away. It counts while the block is on; the one under "
             "Settings counts everything, and both apply."), False, False, 0)
         self.block_nepsis_label = Gtk.Label(xalign=0, wrap=True)
@@ -1874,7 +2061,7 @@ class Window(Gtk.ApplicationWindow):
         path = self.choose_file("Export list", Gtk.FileChooserAction.SAVE, "Save")
         if not path:
             return
-        ok, output = run_cli(command)
+        ok, output = cli_with_access(self.access_passwords, command)
         if not ok:
             self.message(output)
             return
@@ -2074,8 +2261,12 @@ class Window(Gtk.ApplicationWindow):
     def refresh_stats(self):
         days = int(self.stats_period.get_active_id() or 7) if hasattr(self, "stats_period") else 7
         # The dashboard needs today; ask for at least that.
+        if self.locked("stats") and self.locked("dashboard"):
+            return True
+        passwords = list(self.access_passwords)
+
         def work():
-            ok, output = run_cli(["stats", "--json", "--days", str(max(days, 1))])
+            ok, output = cli_with_access(passwords, ["stats", "--json", "--days", str(max(days, 1))])
             GLib.idle_add(self.apply_stats, ok, output)
 
         threading.Thread(target=work, daemon=True).start()
@@ -2087,8 +2278,10 @@ class Window(Gtk.ApplicationWindow):
         data = json.loads(output)
         self.stats_rows = data["rows"]
         self.stats_on = data["enabled"]
-        self.update_stats()
-        self.update_dashboard_stats()
+        if not self.locked("stats"):
+            self.update_stats()
+        if not self.locked("dashboard"):
+            self.update_dashboard_stats()
         return False
 
     def update_stats(self):
@@ -2199,6 +2392,23 @@ class Window(Gtk.ApplicationWindow):
                 "don't."),
             self.password_status, password_row), False, False, 0)
 
+        self.access_status = Gtk.Label(xalign=0, wrap=True)
+        access_row = Gtk.Box(spacing=6)
+        access_set = Gtk.Button(label="Set a password…")
+        access_set.connect("clicked", self.set_access_password)
+        self.access_remove_button = Gtk.Button(label="Remove…", no_show_all=True)
+        self.access_remove_button.connect("clicked", self.remove_access_password)
+        access_row.pack_start(access_set, False, False, 0)
+        access_row.pack_start(self.access_remove_button, False, False, 0)
+        box.pack_start(section(
+            "Access passwords",
+            dim("Optional passwords to open Killer Chicken 9000 and each of its pages: "
+                "Dashboard, Blocks, Device Blocks, Statistics and Settings. Use the same one "
+                "for several, or a different one for each. A locked page shows nothing until "
+                "its password is given; the Lock button at the top locks them again. "
+                "Changing or removing one asks for the one it has."),
+            self.access_status, access_row), False, False, 0)
+
         self.nepsis_label = Gtk.Label(xalign=0, wrap=True)
         nepsis_row = Gtk.Box(spacing=6)
         change = Gtk.Button(label="Change…")
@@ -2210,8 +2420,8 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(section(
             "Bypass prevention",
             dim("When Killer Chicken stops many things in a short time (blocked pages, closed apps "
-                "and windows, browsers without the extension, attempts to loosen or stop a held "
-                "block), you are likely hunting for a loophole. It then takes the consequence you "
+                "and windows, browsers without the extension, wrong access "
+                "passwords), you are likely hunting for a loophole. It then takes the consequence you "
                 "choose, so you really step away. Each block can have its own too."),
             self.nepsis_label, nepsis_row), False, False, 0)
 

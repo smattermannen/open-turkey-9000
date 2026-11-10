@@ -37,7 +37,7 @@ var Consequences = []string{ConsequenceWarning, ConsequenceCloseTab, Consequence
 
 // Detectors are the event kinds bypass detection can count. EventSearch is a
 // kind of EventPage: counting pages counts those too.
-var Detectors = []string{EventPage, EventSearch, EventApp, EventTitle, EventBrowser, EventRefused, EventTamper}
+var Detectors = []string{EventPage, EventSearch, EventApp, EventTitle, EventBrowser, EventTamper, EventAccess}
 
 // Limits on bypass detection's own numbers.
 const (
@@ -110,6 +110,15 @@ func (n Nepsis) normalize() Nepsis {
 		n.Steps = []NepsisStep{{Count: n.Count, Minutes: n.Minutes, Actions: actions}}
 	}
 	n.Count, n.Minutes, n.Consequence, n.ActionMinutes = 0, 0, "", 0
+	// Refused loosening was a detector once. Asking to stop a held block is
+	// ordinary use, so it no longer counts; a ladder that counted nothing
+	// else is off.
+	if slices.Contains(n.Detectors, EventRefused) {
+		n.Detectors = slices.DeleteFunc(slices.Clone(n.Detectors), func(k string) bool { return k == EventRefused })
+		if len(n.Detectors) == 0 {
+			n.Steps = nil
+		}
+	}
 	return n
 }
 

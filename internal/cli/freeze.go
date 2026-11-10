@@ -144,6 +144,11 @@ type guiState struct {
 	NepsisCount   int                       `json:"nepsis_count"`
 	NepsisLock    guiSettingLock            `json:"nepsis_lock"`
 	MonkBlock     string                    `json:"monk_block"`
+	// Access says per area "none", "open" or "locked"; AccessUnused lists
+	// the given passwords (by position) that opened nothing: wrong, or
+	// changed since.
+	Access       map[string]string `json:"access"`
+	AccessUnused []int             `json:"access_unused"`
 }
 
 var guiStateCmd = &cobra.Command{
@@ -299,6 +304,11 @@ var guiStateCmd = &cobra.Command{
 		if state.Hotkeys, err = database.Hotkeys(); err != nil {
 			return err
 		}
+
+		if state.Access, state.AccessUnused, err = accessStatus(cmd, database); err != nil {
+			return err
+		}
+		state.hideLocked()
 
 		out, err := json.Marshal(state)
 		if err != nil {

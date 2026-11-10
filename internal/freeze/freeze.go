@@ -59,10 +59,11 @@ func Engaged(now, until int64, cmdline string) bool {
 }
 
 // WindowEnd returns when the window w, open at t, closes: the same day at
-// w.End, where 24:00 is the next midnight.
+// w.End on the clock, where 24:00 is the next midnight. It is built from the
+// clock time, not counted from midnight: on a day the clocks change, the two
+// are an hour apart.
 func WindowEnd(w schedule.Window, t time.Time) time.Time {
-	midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
-	return midnight.Add(time.Duration(w.End) * time.Minute)
+	return time.Date(t.Year(), t.Month(), t.Day(), w.End/60, w.End%60, 0, 0, t.Location())
 }
 
 // Scheduled returns how long a scheduled freeze must run at t: until the

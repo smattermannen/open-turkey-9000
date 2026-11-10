@@ -64,9 +64,12 @@ func TestActionSettings(t *testing.T) {
 	if monk.Minutes != 30 {
 		t.Errorf("monk minutes = %d", monk.Minutes)
 	}
-	// Refusals are logged for bypass prevention.
-	if n, _ := d.CountEvents("b", 0); n != 3 {
+	// Refusals are logged, but bypass detection never counts them.
+	if n, _ := d.CountEventsOf("b", 0, []string{db.EventRefused}); n != 3 {
 		t.Errorf("%d refusals logged; want 3", n)
+	}
+	if n, _ := d.CountEvents("b", 0); n != 0 {
+		t.Errorf("%d refusals counted; want 0", n)
 	}
 }
 
@@ -115,9 +118,9 @@ func TestNepsisLadderCommand(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "nepsis", "set", "--step", "3 in 10m: warning, close-tab, logout 1m",
 		"--step", "3 in 10m: close-browser, monk 5m", "--step", "2 in 30m: shutdown 15m",
-		"--detect", "page,refused", "--quiet", "2h")
+		"--detect", "page,app", "--quiet", "2h")
 	n, _ := d.GlobalNepsis()
-	if len(n.Steps) != 3 || n.QuietMinutes != 120 || !reflect.DeepEqual(n.Detectors, []string{"page", "refused"}) ||
+	if len(n.Steps) != 3 || n.QuietMinutes != 120 || !reflect.DeepEqual(n.Detectors, []string{"page", "app"}) ||
 		!reflect.DeepEqual(n.Steps[0].Actions, []db.NepsisAction{{Kind: "warning"}, {Kind: "close-tab"}, {Kind: "logout", Minutes: 1}}) {
 		t.Errorf("ladder = %+v", n)
 	}

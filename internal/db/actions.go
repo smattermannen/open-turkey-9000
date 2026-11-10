@@ -101,34 +101,3 @@ func ParseActions(names []string) (Actions, error) {
 	}
 	return a, nil
 }
-
-// SetBlockActions replaces a block's website actions. At least one must stay
-// on: a list that does nothing to its sites is a block that quietly stopped
-// working.
-func (d *DB) SetBlockActions(name string, a Actions) error {
-	if !a.Any() {
-		return fmt.Errorf("block '%s' needs at least one action (%s)", name, strings.Join(ActionNames, ", "))
-	}
-	result, err := d.conn.Exec(
-		"UPDATE blocks SET act_block = ?, act_greyscale = ?, act_no_images = ? WHERE name = ?",
-		a.Block, a.Greyscale, a.NoImages, name)
-	if err != nil {
-		return fmt.Errorf("failed to set actions for block '%s': %w", name, err)
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return fmt.Errorf("block '%s' not found", name)
-	}
-	return nil
-}
-
-// SetBlockAction turns one website action of a block on or off.
-func (d *DB) SetBlockAction(name, action string, on bool) error {
-	if !IsAction(action) {
-		return fmt.Errorf("unknown action %q (use %s)", action, strings.Join(ActionNames, ", "))
-	}
-	detail, err := d.GetBlock(name)
-	if err != nil {
-		return err
-	}
-	return d.SetBlockActions(name, detail.Actions.With(action, on))
-}

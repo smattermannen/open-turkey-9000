@@ -58,12 +58,12 @@ const SettingExtensionCheckIn = "extension.last_checkin"
 const checkInRecordEvery = 30 * time.Second
 
 // ExtensionRequired reports whether browsers must run the extension now:
-// while an active block has websites (sites, patterns, or allowlist mode)
-// or an option only the extension enforces (web-only, force-search) is on.
-// A block of apps alone doesn't need it.
+// while an active block has a blacklist that does something, or an option
+// only the extension enforces (web-only, force-search) is on. A block of
+// apps alone doesn't need it.
 func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
 	for _, b := range active {
-		if b.Mode == db.ModeAllowlist || len(b.Sites) > 0 || len(b.Patterns) > 0 || len(b.Keywords) > 0 {
+		if b.Lists.Enforces() {
 			return true
 		}
 	}
@@ -148,80 +148,93 @@ var otherSearchEngines = []string{
 	"mojeek.com", "metager.org",
 }
 
-// Filter is a set of sites a block action applies to: an entry in Match that
-// no entry in Except matches.
-type Filter struct {
-	Match  []string `json:"match"`
-	Except []string `json:"except"`
-}
-
-// add adds a block's sites to the filter: its sites and patterns, or in
-// allowlist mode every site except its listed ones.
-func (f *Filter) add(b db.ActiveBlockDetail) {
-	f.Match = append(f.Match, b.Patterns...)
-	f.Except = append(f.Except, b.Exceptions...)
-	if b.Mode == db.ModeAllowlist {
-		f.Match = append(f.Match, "*.*")
-		f.Except = append(f.Except, b.Sites...)
-	} else {
-		f.Match = append(f.Match, b.Sites...)
-	}
-}
-
-// Rules is what the extension enforces. Block and Exceptions come from blocks
-// that block their sites; Greyscale and NoImages from blocks with those
-// actions. The keys differ from the old global greyscale/images switches, so
-// an extension from before per-block actions ignores them instead of
-// misreading them.
+// Rules is what the extension enforces. Lists holds every blacklist of the
+// active blocks, each with its block's exceptions. Block and Exceptions are
+// for extensions from before lists: the addresses blacklists block, so an
+// extension that hasn't updated yet keeps blocking them until the browser
+// restarts with the new one.
 type Rules struct {
-	Block      []string      `json:"block"`
-	Exceptions []string      `json:"exceptions"`
-	Greyscale  Filter        `json:"greyscale_sites"`
-	NoImages   Filter        `json:"no_image_sites"`
-	WebOnly    bool          `json:"web_only"`
-	Titles     []string      `json:"titles"`
-	Keywords   []KeywordRule `json:"page_keywords"`
+	Lists      []ListRule `json:"lists"`
+	Block      []string   `json:"block"`
+	Exceptions []string   `json:"exceptions"`
+	WebOnly    bool       `json:"web_only"`
+	Titles     []string   `json:"titles"`
 }
 
-// KeywordRule is one block's page keywords. Each action counts how many of
-// the different keywords a page must contain before it applies to the page;
-// 0 means the block doesn't take that action. Pages on Except are spared.
-type KeywordRule struct {
-	Keywords  []string `json:"keywords"`
-	Block     int      `json:"block"`
-	Greyscale int      `json:"greyscale"`
-	NoImages  int      `json:"no_images"`
-	Except    []string `json:"except"`
+// ListRule is one blacklist: the entries it looks for in a page's address,
+// title and text, its actions, and the exceptions of its block. A match in
+// the address or the title takes every action; in the text, an action needs
+// Distinct different entries.
+type ListRule struct {
+	Block   string       `json:"block"`
+	Name    string       `json:"name"`
+	URL     []string     `json:"url"`
+	Title   []string     `json:"title"`
+	Text    []string     `json:"text"`
+	Actions []RuleAction `json:"actions"`
+	Except  RuleExcept   `json:"except"`
 }
 
-// keywordRule turns a block into its KeywordRule, or false if it has no page
-// keywords.
-func keywordRule(b db.ActiveBlockDetail) (KeywordRule, bool) {
-	if len(b.Keywords) == 0 {
-		return KeywordRule{}, false
+// RuleAction is one action of a ListRule.
+type RuleAction struct {
+	Name     string `json:"action"`
+	Distinct int    `json:"distinct"`
+}
+
+// RuleExcept holds a block's exceptions by place: a page any of them
+// matches is spared from the block's blacklists.
+type RuleExcept struct {
+	URL   []string `json:"url"`
+	Title []string `json:"title"`
+	Text  []string `json:"text"`
+}
+
+// urlEntries keeps the entries that can match addresses.
+func urlEntries(entries []string) []string {
+	out := []string{}
+	for _, e := range entries {
+		if blocker.IsURLEntry(e) {
+			out = append(out, e)
+		}
 	}
-	rule := KeywordRule{Keywords: append([]string{}, b.Keywords...), Except: append([]string{}, b.Exceptions...)}
-	if b.Actions.Block {
-		rule.Block = b.Thresholds.Block
+	return out
+}
+
+// listRules turns a block's blacklists into rules.
+func listRules(b db.ActiveBlockDetail) []ListRule {
+	except := RuleExcept{URL: urlEntries(b.Lists.ExceptionEntries(db.PlaceURL)),
+		Title: append([]string{}, b.Lists.ExceptionEntries(db.PlaceTitle)...),
+		Text:  append([]string{}, b.Lists.ExceptionEntries(db.PlaceText)...)}
+	var out []ListRule
+	for _, l := range b.Lists.Blacklists() {
+		if !l.Enforces() {
+			continue
+		}
+		rule := ListRule{Block: b.BlockName, Name: l.Name, URL: []string{}, Title: []string{}, Text: []string{},
+			Actions: []RuleAction{}, Except: except}
+		if l.Where.URL {
+			rule.URL = urlEntries(l.Entries)
+		}
+		if l.Where.Title {
+			rule.Title = append(rule.Title, l.Entries...)
+		}
+		if l.Where.Text {
+			rule.Text = append(rule.Text, l.Entries...)
+		}
+		for _, a := range l.Actions {
+			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct})
+		}
+		out = append(out, rule)
 	}
-	if b.Actions.Greyscale {
-		rule.Greyscale = b.Thresholds.Greyscale
-	}
-	if b.Actions.NoImages {
-		rule.NoImages = b.Thresholds.NoImages
-	}
-	return rule, true
+	return out
 }
 
 // BuildRules collects the rules for the extension right now.
 func BuildRules(d *db.DB) (Rules, error) {
 	rules := Rules{
-		Block: []string{}, Exceptions: []string{},
-		Greyscale: Filter{Match: []string{}, Except: []string{}},
-		NoImages:  Filter{Match: []string{}, Except: []string{}},
-		WebOnly:   BrowserOn(d, "web-only"),
-		Titles:    []string{},
-		Keywords:  []KeywordRule{},
+		Lists: []ListRule{}, Block: []string{}, Exceptions: []string{},
+		WebOnly: BrowserOn(d, "web-only"),
+		Titles:  []string{},
 	}
 	active, err := d.GetActiveBlocks()
 	if err != nil {
@@ -231,24 +244,25 @@ func BuildRules(d *db.DB) (Rules, error) {
 	if err != nil {
 		return rules, err
 	}
-	blocking := Filter{Match: rules.Block, Except: rules.Exceptions}
 	for _, b := range withoutBreaks(d, active, trusted) {
-		if b.Actions.Block {
-			blocking.add(b)
-		}
-		if b.Actions.Greyscale {
-			rules.Greyscale.add(b)
-		}
-		if b.Actions.NoImages {
-			rules.NoImages.add(b)
-		}
 		rules.Titles = append(rules.Titles, b.Titles...)
-		if rule, ok := keywordRule(b); ok {
-			rules.Keywords = append(rules.Keywords, rule)
+		for _, rule := range listRules(b) {
+			rules.Lists = append(rules.Lists, rule)
+			if len(rule.URL) > 0 && len(rule.Except.Title)+len(rule.Except.Text) == 0 {
+				for _, a := range rule.Actions {
+					if a.Name == db.ActionBlock {
+						rules.Block = append(rules.Block, rule.URL...)
+						rules.Exceptions = append(rules.Exceptions, rule.Except.URL...)
+					}
+				}
+			}
 		}
 	}
-	rules.Block, rules.Exceptions = blocking.Match, blocking.Except
 	if BrowserOn(d, "force-search") {
+		rules.Lists = append(rules.Lists, ListRule{Block: "force-search", Name: "Other search engines",
+			URL: otherSearchEngines, Title: []string{}, Text: []string{},
+			Actions: []RuleAction{{Name: db.ActionBlock, Distinct: 1}},
+			Except:  RuleExcept{URL: []string{}, Title: []string{}, Text: []string{}}})
 		rules.Block = append(rules.Block, otherSearchEngines...)
 	}
 	return rules, nil

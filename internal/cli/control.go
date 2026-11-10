@@ -176,7 +176,7 @@ shortened or removed this way.`,
 			return err
 		}
 		if blockEmpty(detail) {
-			return fmt.Errorf("block '%s' has nothing to enforce. Add sites, apps, patterns, window titles or page keywords first", blockName)
+			return fmt.Errorf("block '%s' has nothing to enforce. Add websites to a list, apps or window titles first", blockName)
 		}
 		if detail.Active && hasExtras {
 			return fmt.Errorf("block '%s' is already active; password, restart and delay locks are set when it starts", blockName)
@@ -437,9 +437,6 @@ var statusCmd = &cobra.Command{
 				return err
 			}
 			tags := ""
-			if detail.Mode == db.ModeAllowlist {
-				tags += " [ALLOWLIST]"
-			}
 			if detail.Active {
 				if detail.Scheduled {
 					tags += " [SCHEDULED]"

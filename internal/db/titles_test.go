@@ -12,7 +12,7 @@ func TestTitles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	if err := d.CreateBlock("b", ModeBlocklist); err != nil {
+	if err := d.CreateBlock("b"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddTitles("b", []string{"YouTube", "youtube", " Twitch ", ""}); err != nil {

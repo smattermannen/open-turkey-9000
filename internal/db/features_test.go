@@ -18,16 +18,17 @@ func TestFeaturesRoundTrip(t *testing.T) {
 	}
 	defer d.Close()
 
-	if err := d.CreateBlock("focus", ModeAllowlist); err != nil {
+	if err := d.CreateBlock("focus"); err != nil {
 		t.Fatalf("CreateBlock: %v", err)
-	}
-	if err := d.AddSites("focus", []string{"work.com"}); err != nil {
-		t.Fatal(err)
 	}
 	if err := d.AddApps("focus", []string{"discord"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.AddPatterns("focus", []string{"*ads*", "*casino*"}); err != nil {
+	id, err := d.ListID("focus", DefaultBlockedList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddListEntries(id, []string{"*ads*", "*casino*"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddSchedule("focus", schedule.Window{Days: 0x3e, Start: 540, End: 1020}); err != nil {
@@ -43,14 +44,11 @@ func TestFeaturesRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Mode != ModeAllowlist {
-		t.Errorf("mode = %q; want allowlist", got.Mode)
-	}
 	if !got.Active || !got.Locked || got.LockChars != 300 || got.LockedUntil != 9999999999 || !got.Scheduled {
 		t.Errorf("activation state wrong: %+v", got)
 	}
-	if len(got.Patterns) != 2 {
-		t.Errorf("patterns = %v; want 2", got.Patterns)
+	if l, _ := got.Lists.Find(DefaultBlockedList); len(l.Entries) != 2 {
+		t.Errorf("Blocked = %v; want 2 entries", l.Entries)
 	}
 
 	// Schedules visible per-block and globally.
@@ -66,7 +64,7 @@ func TestFeaturesRoundTrip(t *testing.T) {
 		t.Errorf("AllSchedules = %+v", all)
 	}
 
-	// Active blocks carry mode, patterns and the time lock.
+	// Active blocks carry their lists and the time lock.
 	active, err := d.GetActiveBlocks()
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +72,7 @@ func TestFeaturesRoundTrip(t *testing.T) {
 	if len(active) != 1 {
 		t.Fatalf("active = %d; want 1", len(active))
 	}
-	if active[0].Mode != ModeAllowlist || active[0].LockedUntil != 9999999999 || len(active[0].Patterns) != 2 {
+	if l, _ := active[0].Lists.Find(DefaultBlockedList); active[0].LockedUntil != 9999999999 || len(l.Entries) != 2 {
 		t.Errorf("active detail wrong: %+v", active[0])
 	}
 
@@ -98,27 +96,6 @@ func TestFeaturesRoundTrip(t *testing.T) {
 	}
 }
 
-// TestCreateBlockRejectsBadMode guards the mode validation.
-func TestCreateBlockRejectsBadMode(t *testing.T) {
-	d, err := OpenDB(filepath.Join(t.TempDir(), "t.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer d.Close()
-
-	if err := d.CreateBlock("x", "sideways"); err == nil {
-		t.Error("CreateBlock with invalid mode should error")
-	}
-	// Empty mode defaults to blocklist.
-	if err := d.CreateBlock("y", ""); err != nil {
-		t.Fatalf("CreateBlock empty mode: %v", err)
-	}
-	b, _ := d.GetBlock("y")
-	if b.Mode != ModeBlocklist {
-		t.Errorf("default mode = %q; want blocklist", b.Mode)
-	}
-}
-
 // TestScheduleNumbering checks that schedules are numbered 1..n per block, that
 // removing one renumbers the later ones down, and that a new one takes the
 // lowest free number.
@@ -130,7 +107,7 @@ func TestScheduleNumbering(t *testing.T) {
 	defer d.Close()
 
 	for _, name := range []string{"a", "b"} {
-		if err := d.CreateBlock(name, ""); err != nil {
+		if err := d.CreateBlock(name); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -190,7 +167,7 @@ func TestPendingEdits(t *testing.T) {
 	}
 	defer d.Close()
 
-	if err := d.CreateBlock("games", ""); err != nil {
+	if err := d.CreateBlock("games"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddApps("games", []string{"steam", "lutris"}); err != nil {

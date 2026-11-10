@@ -36,7 +36,7 @@ func upgradeSchema(conn *sql.DB) error {
 			return err
 		}
 	}
-	return nil
+	return migrateWebLists(conn)
 }
 
 // addColumnIfMissing runs "ALTER TABLE ... ADD COLUMN" only when the column
@@ -71,112 +71,6 @@ func addColumnIfMissing(conn *sql.DB, table, column, definition string) error {
 
 	if _, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition)); err != nil {
 		return fmt.Errorf("failed to add column %s.%s: %w", table, column, err)
-	}
-	return nil
-}
-
-// --------------------------------------------------------------------------
-// Block mode
-// --------------------------------------------------------------------------
-
-// SetBlockMode changes a block's mode (ModeBlocklist or ModeAllowlist).
-func (d *DB) SetBlockMode(name, mode string) error {
-	if mode != ModeBlocklist && mode != ModeAllowlist {
-		return fmt.Errorf("invalid block mode '%s' (use '%s' or '%s')", mode, ModeBlocklist, ModeAllowlist)
-	}
-	result, err := d.conn.Exec("UPDATE blocks SET mode = ? WHERE name = ?", mode, name)
-	if err != nil {
-		return fmt.Errorf("failed to set mode for block '%s': %w", name, err)
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("block '%s' not found", name)
-	}
-	return nil
-}
-
-// --------------------------------------------------------------------------
-// Browser patterns (wildcard / keyword filters, enforced at the browser layer)
-// --------------------------------------------------------------------------
-
-// getBlockPatterns returns a block's browser patterns by ID.
-func (d *DB) getBlockPatterns(blockID int) ([]string, error) {
-	rows, err := d.conn.Query("SELECT pattern FROM patterns WHERE block_id = ? ORDER BY pattern", blockID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch block patterns: %w", err)
-	}
-	defer rows.Close()
-
-	var patterns []string
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			return nil, fmt.Errorf("failed to read pattern: %w", err)
-		}
-		patterns = append(patterns, p)
-	}
-	return patterns, rows.Err()
-}
-
-// AddPatterns adds browser patterns to a block (transactional).
-func (d *DB) AddPatterns(blockName string, patterns []string) error {
-	blockID, err := d.getBlockID(blockName)
-	if err != nil {
-		return err
-	}
-	tx, err := d.conn.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.Prepare("INSERT INTO patterns (block_id, pattern) VALUES (?, ?)")
-	if err != nil {
-		return fmt.Errorf("failed to prepare pattern insert: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, p := range patterns {
-		if _, err := stmt.Exec(blockID, p); err != nil {
-			return fmt.Errorf("failed to add pattern '%s' to block '%s': %w", p, blockName, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to save patterns for block '%s': %w", blockName, err)
-	}
-	return nil
-}
-
-// RemovePatterns removes browser patterns from a block, erroring if one isn't
-// present (transactional, so a bad name leaves the block unchanged).
-func (d *DB) RemovePatterns(blockName string, patterns []string) error {
-	blockID, err := d.getBlockID(blockName)
-	if err != nil {
-		return err
-	}
-	tx, err := d.conn.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.Prepare("DELETE FROM patterns WHERE block_id = ? AND pattern = ?")
-	if err != nil {
-		return fmt.Errorf("failed to prepare pattern removal: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, p := range patterns {
-		result, err := stmt.Exec(blockID, p)
-		if err != nil {
-			return fmt.Errorf("failed to remove pattern '%s' from block '%s': %w", p, blockName, err)
-		}
-		if n, _ := result.RowsAffected(); n == 0 {
-			return fmt.Errorf("pattern '%s' not found in block '%s'", p, blockName)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to save pattern removal for block '%s': %w", blockName, err)
 	}
 	return nil
 }

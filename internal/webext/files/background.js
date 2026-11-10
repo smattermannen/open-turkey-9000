@@ -5,16 +5,18 @@
 const RULES_URL = "http://127.0.0.1:47613/rules";
 const POLL_MS = 3000;
 
-// Compiled filters (see match.js). blocking holds the blocked sites and their
-// exceptions; noImages the sites of blocks with the no-images action. The
-// content script handles greyscale on its own.
-const EMPTY = { match: [], except: [] };
-let blocking = kc9kFilter(EMPTY);
-let noImages = kc9kFilter(EMPTY);
+// The blacklists of the active blocks, compiled (see match.js). Here they are
+// judged by address and tab title; the content script reads the page too,
+// handles greyscale, and reports what the title and text decide.
+let lists = [];
 let webOnly = false;
 
+function addressActions(url) {
+  return kc9kListActions(lists, { url });
+}
+
 function isBlocked(url) {
-  return kc9kMatches(blocking, url);
+  return Boolean(addressActions(url).block);
 }
 
 // pageUrl is the address of the tab a request belongs to, so images are
@@ -61,19 +63,22 @@ function blockedPage(url, reason) {
 // one is sent to the block page, as the daemon closes other apps' windows.
 let titleWords = [];
 
-function titleBlocked(title) {
-  const text = (title || "").toLowerCase();
-  return titleWords.some((word) => text.includes(word));
+function titleBlocked(tab) {
+  const text = (tab.title || "").toLowerCase();
+  if (titleWords.some((word) => text.includes(word))) {
+    return true;
+  }
+  return Boolean(kc9kListActions(lists, { url: tab.url, title: tab.title || "" }).block);
 }
 
 function blockTitledTab(tab) {
-  if (tab.url && /^https?:/i.test(tab.url) && titleBlocked(tab.title)) {
+  if (tab.url && /^https?:/i.test(tab.url) && titleBlocked(tab)) {
     browser.tabs.update(tab.id, { url: blockedPage(tab.url, "title").redirectUrl });
   }
 }
 
-// Tabs whose page met a page keyword rule's no-images threshold, with the
-// address it was met at: their images are cancelled like those of a
+// Tabs whose page a list's title or text greyed out of images, with the
+// address it happened at: their images are cancelled like those of a
 // no-images site, frames included, until the tab goes somewhere else.
 const keywordNoImages = new Map();
 
@@ -87,8 +92,8 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 browser.tabs.onRemoved.addListener((tabId) => keywordNoImages.delete(tabId));
 
-// keywordHit acts on a content script's report that its page met a page
-// keyword rule. Only the tab's own page counts, and only web pages.
+// keywordHit acts on a content script's report that a list matched its
+// page's title or text. Only the tab's own page counts, and only web pages.
 function keywordHit(message, sender) {
   const tab = sender && sender.tab;
   if (!tab || sender.frameId !== 0 || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
@@ -99,7 +104,11 @@ function keywordHit(message, sender) {
     keywordNoImages.set(tab.id, message.url);
   }
   if (hits.block) {
-    browser.tabs.update(tab.id, { url: blockedPage(message.url, "keyword").redirectUrl });
+    // A page blocked by its address alone (one that changed address without
+    // loading, or whose block has exceptions by title or text) goes back
+    // when the block ends; one blocked for its title or text stays.
+    const reason = isBlocked(message.url) ? "" : "keyword";
+    browser.tabs.update(tab.id, { url: blockedPage(message.url, reason).redirectUrl });
   }
 }
 
@@ -112,7 +121,7 @@ browser.webRequest.onBeforeRequest.addListener(
       if (keywordNoImages.has(details.tabId)) {
         return { cancel: true };
       }
-      return kc9kMatches(noImages, pageUrl(details)) ? { cancel: true } : {};
+      return addressActions(pageUrl(details))["no-images"] ? { cancel: true } : {};
     }
     if (isBlocked(details.url)) {
       return blockedPage(details.url);
@@ -156,8 +165,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
 });
 
 function apply(rules) {
-  blocking = kc9kFilter({ match: rules.block, except: rules.exceptions });
-  noImages = kc9kFilter(rules.no_image_sites);
+  lists = kc9kCompileLists(rules.lists);
   webOnly = Boolean(rules.web_only);
   titleWords = (rules.titles || []).map((word) => String(word).toLowerCase()).filter(Boolean);
 }
@@ -183,11 +191,7 @@ async function poll() {
       apply(rules);
       await browser.storage.local.set({
         rules,
-        page: {
-          greyscale: rules.greyscale_sites || EMPTY,
-          no_images: rules.no_image_sites || EMPTY,
-          keywords: rules.page_keywords || [],
-        },
+        page: { lists: rules.lists || [] },
       });
       await closeNewlyBlockedTabs();
     }

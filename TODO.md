@@ -18,6 +18,7 @@ Still to try:
 3. Strict mode (`unshare -Urm` gives no way out, `--user` Flatpak apps are killed, Electron apps aren't taken for browsers). Needs a moment when the `test` block can be unlocked: strict mode denies sudo while any block is locked.
 4. From before: shutdown mode and the `kc9k.nofreeze` GRUB escape; measure the fast relock (89c71bf).
 5. Page keywords on real sites over a few days (false hits, slow pages), and a hotkey pressed on the real keyboard (tested with xdotool).
+6. Website lists (extension 1.7.0): the upgrade turns the test blocks into lists (`kc9k list show <block>`); a title list, and an exception list by title (e.g. block youtube.com except pages titled "lecture"); a page that changes address without loading (YouTube) is caught by an address list; the interface's Websites tab on the laptop's screen.
 
 `ci/browser_test.py` passed in LibreWolf on 2026-11-09 (all checks, with page keywords and no-private added). It could not run while block-devtools was on: the DisableDeveloperTools policy turns off Marionette, so testing builds now leave that policy out while the remote-control marker exists.
 
@@ -25,13 +26,14 @@ Still to try:
 - The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
 - Hotkeys only work in Cinnamon; GNOME keeps custom shortcuts under another dconf path.
 - Blocks tab: a "+" button for a new block.
-- Several lists per block, so one block can hold several layers: one section of allowlists, one of blocklists. Each list has a name. The threshold (strictness) only applies to lists set to "Keyword", the kind that searches a page's rendered text.
-- More actions per list: open a custom link instead of the block page; close the tab; close the browser; close the browser and log out; close the browser and shut down; close the browser and start monk mode for a custom time.
-- Monk mode: a quick button that blocks and locks `*.*` for a set time.
+- Website lists, agreed plan (step 1 done: named blacklists and exception lists, each ticking where it looks — address, page title, page text — with per-list actions and thresholds; one Websites tab in the interface):
+  2. Page text "frequency": besides how many *different* entries, how many hits in total (repeats counted) before each action applies.
+  3. More actions per blacklist: open a custom link instead of the block page; show an image (a file the user picks, served by the daemon); close the tab; close the browser; close the browser and log out; close the browser and shut down; close the browser and start monk mode. Actions that take a time (monk mode) show a duration setting.
+  4. Bypass prevention (the Nepsis idea below), optional per block, with global settings too; when both are set, both apply.
+- Monk mode: a `*.*` block that starts locked for a set time, with a quick button.
 - Nepsis mode (optional, lockable like the other options): when many block rules trigger within a short time (likely hunting for loopholes), take an action the user chooses, e.g. shut down for 1 hour, or start and lock monk mode for 1 hour, so the user really shifts mental state. Think about more ways to notice attempts to bypass KC9K or find loopholes.
 - The terms in a list are hidden until the list's terms area is clicked, like sensitive content on Reddit.
 - A search box in each list to find terms in it.
-- Remove every note saying some parts only work with the extension: it is forced by default, so they no longer apply (interface, README, command help).
 
 ## Later
 - Count quota time only while a block's sites or apps are in use, measured by the extension (its statistics sampling in background.js can be reused) and the daemon's foreground-app sampling. Watch for loopholes: a muted video beside another window, and browsers without the extension while a session is open.

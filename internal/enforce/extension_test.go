@@ -14,10 +14,11 @@ func TestExtensionRequired(t *testing.T) {
 	}
 	defer d.Close()
 
-	appsOnly := db.ActiveBlockDetail{BlockName: "games", Mode: db.ModeBlocklist, Apps: []string{"steam"}}
-	sites := db.ActiveBlockDetail{BlockName: "social", Mode: db.ModeBlocklist, Sites: []string{"reddit.com"}}
-	patterns := db.ActiveBlockDetail{BlockName: "casino", Mode: db.ModeBlocklist, Patterns: []string{"*casino*"}}
-	everything := db.ActiveBlockDetail{BlockName: "focus", Mode: db.ModeAllowlist}
+	appsOnly := db.ActiveBlockDetail{BlockName: "games", Apps: []string{"steam"},
+		Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}), exceptionList("Exceptions", db.Where{URL: true}, "x.com")}}
+	sites := db.ActiveBlockDetail{BlockName: "social", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, "reddit.com")}}
+	words := db.ActiveBlockDetail{BlockName: "words", Lists: db.Lists{blacklist("Words", db.Where{Text: true}, "nsfw")}}
+	nowhere := db.ActiveBlockDetail{BlockName: "off", Apps: []string{"steam"}, Lists: db.Lists{blacklist("Blocked", db.Where{}, "reddit.com")}}
 
 	cases := []struct {
 		name   string
@@ -27,8 +28,8 @@ func TestExtensionRequired(t *testing.T) {
 		{"nothing active", nil, false},
 		{"a block of apps only", []db.ActiveBlockDetail{appsOnly}, false},
 		{"a block with sites", []db.ActiveBlockDetail{appsOnly, sites}, true},
-		{"a block with patterns", []db.ActiveBlockDetail{patterns}, true},
-		{"an allowlist with nothing allowed", []db.ActiveBlockDetail{everything}, true},
+		{"a block with page words", []db.ActiveBlockDetail{words}, true},
+		{"a list that looks nowhere", []db.ActiveBlockDetail{nowhere}, false},
 	}
 	for _, c := range cases {
 		if got := ExtensionRequired(d, c.active); got != c.want {

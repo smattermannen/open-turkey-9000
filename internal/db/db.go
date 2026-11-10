@@ -51,22 +51,23 @@ type DB struct {
 	conn *sql.DB
 }
 
-// Block modes. A "blocklist" block blocks its sites; an "allowlist" block
-// blocks everything EXCEPT its sites (enforced at the browser layer only).
+// Block modes from before website lists, read once by migrateWebLists. An
+// allowlist block blocked everything except its sites; it became a "*.*"
+// blacklist and an exception list.
 const (
 	ModeBlocklist = "blocklist"
 	ModeAllowlist = "allowlist"
 )
 
 // Block represents a block in the general listing.
-// SiteCount and AppCount avoid loading every domain/app just to count them.
+// EntryCount (blacklist entries) and AppCount avoid loading every list just
+// to count them.
 type Block struct {
-	ID        int
-	Name      string
-	Mode      string
-	SiteCount int
-	AppCount  int
-	CreatedAt string
+	ID         int
+	Name       string
+	EntryCount int
+	AppCount   int
+	CreatedAt  string
 }
 
 // BlockDetail carries all the information about a specific block,
@@ -74,15 +75,9 @@ type Block struct {
 type BlockDetail struct {
 	ID          int
 	Name        string
-	Mode        string
-	Actions     Actions // what happens to the sites: block, greyscale, no images
-	Sites       []string
+	Lists       Lists // website blacklists and exception lists
 	Apps        []string
-	Patterns    []string
-	Exceptions  []string
-	Titles      []string   // window-title keywords
-	Keywords    []string   // page keywords
-	Thresholds  Thresholds // distinct page keywords needed per action
+	Titles      []string // window-title keywords
 	Active      bool
 	Locked      bool
 	LockChars   int
@@ -95,15 +90,9 @@ type BlockDetail struct {
 // The daemon uses it to know what to block.
 type ActiveBlockDetail struct {
 	BlockName   string
-	Mode        string
-	Actions     Actions
-	Sites       []string
+	Lists       Lists
 	Apps        []string
-	Patterns    []string
-	Exceptions  []string
 	Titles      []string
-	Keywords    []string
-	Thresholds  Thresholds
 	Locked      bool
 	LockChars   int
 	LockedUntil int64
@@ -209,7 +198,13 @@ CREATE TABLE IF NOT EXISTS active_blocks (
 func OpenDB(dbPath string) (*DB, error) {
 	// "sqlite" is the name of the driver registered by modernc.org/sqlite.
 	// dbPath is the path of the .db file on disk.
-	conn, err := sql.Open("sqlite", dbPath)
+	//
+	// Every connection in the pool gets these settings (the driver applies
+	// _pragma on each new one; a plain PRAGMA would reach only one):
+	//   - busy_timeout: wait up to 5 s for another writer (the daemon, or a
+	//     second kc9k command) instead of failing with "database is locked".
+	//   - foreign_keys: SQLite ignores FOREIGN KEY, and so CASCADE, without it.
+	conn, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database at '%s': %w", dbPath, err)
 	}
@@ -220,13 +215,6 @@ func OpenDB(dbPath string) (*DB, error) {
 	if err := conn.Ping(); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// Enable foreign keys. Without this, SQLite ignores FOREIGN KEY
-	// and CASCADE doesn't work. This is one of SQLite's most common "gotchas".
-	if _, err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
 	// WAL (Write-Ahead Logging) lets reads happen while a write is in
@@ -245,7 +233,7 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
-	if _, err := conn.Exec(clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema); err != nil {
+	if _, err := conn.Exec(webListsSchema + clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to create clock table: %w", err)
 	}
@@ -270,17 +258,16 @@ func (d *DB) Close() error {
 // Block CRUD
 // --------------------------------------------------------------------------
 
-// CreateBlock creates a new block with the given name and mode
-// (ModeBlocklist or ModeAllowlist; empty defaults to blocklist).
+// CreateBlock creates a new block with an empty blacklist ("Blocked") and
+// exception list ("Exceptions"), both looking at addresses.
 // The name must be unique — if it already exists, the database returns an error.
-func (d *DB) CreateBlock(name, mode string) error {
-	if mode == "" {
-		mode = ModeBlocklist
+func (d *DB) CreateBlock(name string) error {
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
 	}
-	if mode != ModeBlocklist && mode != ModeAllowlist {
-		return fmt.Errorf("invalid block mode '%s' (use '%s' or '%s')", mode, ModeBlocklist, ModeAllowlist)
-	}
-	_, err := d.conn.Exec("INSERT INTO blocks (name, mode) VALUES (?, ?)", name, mode)
+	defer tx.Rollback()
+	res, err := tx.Exec("INSERT INTO blocks (name, lists_ready) VALUES (?, 1)", name)
 	if err != nil {
 		// If it's a UNIQUE constraint error, give a clearer message.
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -288,49 +275,14 @@ func (d *DB) CreateBlock(name, mode string) error {
 		}
 		return fmt.Errorf("failed to create block '%s': %w", name, err)
 	}
-	return nil
-}
-
-// AddSites adds a list of domains to an existing block.
-//
-// We use a transaction (tx) to guarantee that either ALL domains are
-// inserted, or NONE are. This avoids inconsistent states — for example, if
-// the third domain fails, the first two are undone (rollback).
-func (d *DB) AddSites(blockName string, domains []string) error {
-	// First, look up the block ID by name.
-	blockID, err := d.getBlockID(blockName)
+	id, err := res.LastInsertId()
 	if err != nil {
 		return err
 	}
-
-	// Start a transaction.
-	tx, err := d.conn.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
+	if err := createDefaultLists(tx, int(id)); err != nil {
+		return err
 	}
-	// defer tx.Rollback() is safe even if tx.Commit() was already called.
-	// If Commit() succeeded, Rollback() simply does nothing.
-	defer tx.Rollback()
-
-	// Prepare the statement once and reuse it for each domain.
-	// This is more efficient than running a separate INSERT for each one.
-	stmt, err := tx.Prepare("INSERT INTO sites (block_id, domain) VALUES (?, ?)")
-	if err != nil {
-		return fmt.Errorf("failed to prepare site insert: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, domain := range domains {
-		if _, err := stmt.Exec(blockID, domain); err != nil {
-			return fmt.Errorf("failed to add domain '%s' to block '%s': %w", domain, blockName, err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to save sites for block '%s': %w", blockName, err)
-	}
-
-	return nil
+	return tx.Commit()
 }
 
 // AddApps adds a list of process names to an existing block.
@@ -361,49 +313,6 @@ func (d *DB) AddApps(blockName string, processNames []string) error {
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to save apps for block '%s': %w", blockName, err)
-	}
-
-	return nil
-}
-
-// RemoveSites removes a list of domains from an existing block.
-//
-// If any domain doesn't exist in the block, it returns an error and the whole
-// removal is rolled back.
-func (d *DB) RemoveSites(blockName string, domains []string) error {
-	blockID, err := d.getBlockID(blockName)
-	if err != nil {
-		return err
-	}
-
-	tx, err := d.conn.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.Prepare("DELETE FROM sites WHERE block_id = ? AND domain = ?")
-	if err != nil {
-		return fmt.Errorf("failed to prepare site removal: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, domain := range domains {
-		result, err := stmt.Exec(blockID, domain)
-		if err != nil {
-			return fmt.Errorf("failed to remove domain '%s' from block '%s': %w", domain, blockName, err)
-		}
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to verify removal of domain '%s': %w", domain, err)
-		}
-		if rowsAffected == 0 {
-			return fmt.Errorf("domain '%s' not found in block '%s'", domain, blockName)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to save site removal for block '%s': %w", blockName, err)
 	}
 
 	return nil
@@ -462,12 +371,11 @@ func (d *DB) ListBlocks() ([]Block, error) {
 		SELECT
 			b.id,
 			b.name,
-			b.mode,
-			COUNT(DISTINCT s.id) AS site_count,
+			(SELECT COUNT(*) FROM web_list_entries e JOIN web_lists l ON l.id = e.list_id
+				WHERE l.block_id = b.id AND l.kind = 'blacklist') AS entry_count,
 			COUNT(DISTINCT a.id) AS app_count,
 			b.created_at
 		FROM blocks b
-		LEFT JOIN sites s ON s.block_id = b.id
 		LEFT JOIN apps  a ON a.block_id = b.id
 		GROUP BY b.id
 		ORDER BY b.name
@@ -484,7 +392,7 @@ func (d *DB) ListBlocks() ([]Block, error) {
 	var blocks []Block
 	for rows.Next() {
 		var b Block
-		if err := rows.Scan(&b.ID, &b.Name, &b.Mode, &b.SiteCount, &b.AppCount, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.Name, &b.EntryCount, &b.AppCount, &b.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to read block data: %w", err)
 		}
 		blocks = append(blocks, b)
@@ -509,10 +417,6 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 		SELECT
 			b.id,
 			b.name,
-			b.mode,
-			b.act_block,
-			b.act_greyscale,
-			b.act_no_images,
 			b.created_at,
 			CASE WHEN ab.id IS NOT NULL THEN 1 ELSE 0 END AS active,
 			COALESCE(ab.locked, 0) AS locked,
@@ -525,10 +429,6 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 	`, name).Scan(
 		&detail.ID,
 		&detail.Name,
-		&detail.Mode,
-		&detail.Actions.Block,
-		&detail.Actions.Greyscale,
-		&detail.Actions.NoImages,
 		&detail.CreatedAt,
 		&detail.Active,
 		&detail.Locked,
@@ -543,9 +443,7 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 		return nil, fmt.Errorf("failed to fetch block '%s': %w", name, err)
 	}
 
-	// Fetch the block's sites.
-	detail.Sites, err = d.getBlockSites(detail.ID)
-	if err != nil {
+	if detail.Lists, err = getBlockLists(d.conn, detail.ID); err != nil {
 		return nil, err
 	}
 
@@ -555,23 +453,8 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 		return nil, err
 	}
 
-	// Fetch the block's browser patterns.
-	detail.Patterns, err = d.getBlockPatterns(detail.ID)
-	if err != nil {
-		return nil, err
-	}
-	detail.Exceptions, err = d.getBlockExceptions(detail.ID)
-	if err != nil {
-		return nil, err
-	}
 	detail.Titles, err = d.getBlockTitles(detail.ID)
 	if err != nil {
-		return nil, err
-	}
-	if detail.Keywords, err = d.getBlockPageKeywords(detail.ID); err != nil {
-		return nil, err
-	}
-	if detail.Thresholds, err = d.getBlockThresholds(detail.ID); err != nil {
 		return nil, err
 	}
 
@@ -714,7 +597,7 @@ func (d *DB) IsBlockActive(name string) (bool, error) {
 // The daemon uses this to know what to block.
 func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 	rows, err := d.conn.Query(`
-		SELECT b.id, b.name, b.mode, b.act_block, b.act_greyscale, b.act_no_images,
+		SELECT b.id, b.name,
 			ab.locked, ab.lock_chars, ab.locked_until, ab.scheduled
 		FROM active_blocks ab
 		JOIN blocks b ON b.id = ab.block_id
@@ -730,8 +613,7 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 		var blockID int
 		var abd ActiveBlockDetail
 
-		if err := rows.Scan(&blockID, &abd.BlockName, &abd.Mode,
-			&abd.Actions.Block, &abd.Actions.Greyscale, &abd.Actions.NoImages, &abd.Locked, &abd.LockChars, &abd.LockedUntil, &abd.Scheduled); err != nil {
+		if err := rows.Scan(&blockID, &abd.BlockName, &abd.Locked, &abd.LockChars, &abd.LockedUntil, &abd.Scheduled); err != nil {
 			return nil, fmt.Errorf("failed to read active block: %w", err)
 		}
 		activeBlocks = append(activeBlocks, abd)
@@ -743,25 +625,13 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 	// The child lookups below open their own queries, so we must finish reading
 	// (and let the deferred Close run) before issuing them; gather rows first.
 	for i := range activeBlocks {
-		if activeBlocks[i].Sites, err = d.getBlockSites(ids[i]); err != nil {
+		if activeBlocks[i].Lists, err = getBlockLists(d.conn, ids[i]); err != nil {
 			return nil, err
 		}
 		if activeBlocks[i].Apps, err = d.getBlockApps(ids[i]); err != nil {
 			return nil, err
 		}
-		if activeBlocks[i].Patterns, err = d.getBlockPatterns(ids[i]); err != nil {
-			return nil, err
-		}
-		if activeBlocks[i].Exceptions, err = d.getBlockExceptions(ids[i]); err != nil {
-			return nil, err
-		}
 		if activeBlocks[i].Titles, err = d.getBlockTitles(ids[i]); err != nil {
-			return nil, err
-		}
-		if activeBlocks[i].Keywords, err = d.getBlockPageKeywords(ids[i]); err != nil {
-			return nil, err
-		}
-		if activeBlocks[i].Thresholds, err = d.getBlockThresholds(ids[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -793,30 +663,6 @@ func (d *DB) getBlockID(name string) (int, error) {
 	return id, nil
 }
 
-// getBlockSites returns every domain of a block by ID.
-func (d *DB) getBlockSites(blockID int) ([]string, error) {
-	rows, err := d.conn.Query("SELECT domain FROM sites WHERE block_id = ? ORDER BY domain", blockID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch block sites: %w", err)
-	}
-	defer rows.Close()
-
-	var sites []string
-	for rows.Next() {
-		var site string
-		if err := rows.Scan(&site); err != nil {
-			return nil, fmt.Errorf("failed to read site: %w", err)
-		}
-		sites = append(sites, site)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate sites: %w", err)
-	}
-
-	return sites, nil
-}
-
 // getBlockApps returns every process name of a block by ID.
 func (d *DB) getBlockApps(blockID int) ([]string, error) {
 	rows, err := d.conn.Query("SELECT process_name FROM apps WHERE block_id = ? ORDER BY process_name", blockID)
@@ -841,8 +687,8 @@ func (d *DB) getBlockApps(blockID int) ([]string, error) {
 	return apps, nil
 }
 
-// Empty reports whether a block has nothing to enforce: no sites, apps,
-// patterns, window titles or page keywords.
+// Empty reports whether a block has nothing to enforce: no apps, window
+// titles, or blacklist that does something (see WebList.Enforces).
 func (b *BlockDetail) Empty() bool {
-	return len(b.Sites) == 0 && len(b.Apps) == 0 && len(b.Patterns) == 0 && len(b.Titles) == 0 && len(b.Keywords) == 0
+	return len(b.Apps) == 0 && len(b.Titles) == 0 && !b.Lists.Enforces()
 }

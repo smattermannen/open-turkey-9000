@@ -84,46 +84,19 @@ func (d *DB) DuplicateBlock(name, copyName string) error {
 	if err != nil {
 		return err
 	}
-	if err := d.CreateBlock(copyName, detail.Mode); err != nil {
+	if err := d.CreateBlock(copyName); err != nil {
 		return err
 	}
-	if err := d.SetBlockActions(copyName, detail.Actions); err != nil {
+	if err := d.copyLists(detail.Lists, copyName); err != nil {
 		return err
-	}
-	if len(detail.Sites) > 0 {
-		if err := d.AddSites(copyName, detail.Sites); err != nil {
-			return err
-		}
 	}
 	if len(detail.Apps) > 0 {
 		if err := d.AddApps(copyName, detail.Apps); err != nil {
 			return err
 		}
 	}
-	if len(detail.Patterns) > 0 {
-		if err := d.AddPatterns(copyName, detail.Patterns); err != nil {
-			return err
-		}
-	}
 	if len(detail.Titles) > 0 {
-		if err := d.AddTitles(copyName, detail.Titles); err != nil {
-			return err
-		}
-	}
-	if len(detail.Keywords) > 0 {
-		if err := d.AddPageKeywords(copyName, detail.Keywords); err != nil {
-			return err
-		}
-	}
-	for _, action := range ActionNames {
-		if n := detail.Thresholds.Get(action); n != DefaultThresholds.Get(action) {
-			if err := d.SetThreshold(copyName, action, n); err != nil {
-				return err
-			}
-		}
-	}
-	if len(detail.Exceptions) > 0 {
-		return d.AddExceptions(copyName, detail.Exceptions)
+		return d.AddTitles(copyName, detail.Titles)
 	}
 	return nil
 }

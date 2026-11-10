@@ -53,8 +53,8 @@ The installed program is independent of the source directory — once installed,
 
 ## Concepts
 
-- **Block**: a set of sites/apps (and optional browser patterns) you block together. A block is either a **blocklist** (block its sites) or an **allowlist** (`--allowlist`: block everything *except* its sites, enforced at the browser layer).
-- **Overlapping blocks**: several blocks can be active at once, and everything they enforce is combined: all their blocked sites, apps and patterns apply. Allowlists combine too: with two allowlist blocks active, a site allowed by **either** one is reachable. To make a held block stricter, see [Strengthening a held block](#strengthening-a-held-block).
+- **Block**: website lists, apps and window titles you block together. A block has **blacklists** and **exception lists**; each list ticks where it looks (the address, the page title, the page text), and each blacklist chooses its actions. See [Website lists](#website-lists).
+- **Overlapping blocks**: several blocks can be active at once, and everything they enforce is combined. A block's exceptions spare pages only from that block's own blacklists. To make a held block stricter, see [Strengthening a held block](#strengthening-a-held-block).
 - **Active**: a block currently in effect (the system is enforcing it).
 - **Character lock (`--lock`)**: prevents `stop`. The only way out is `unlock`, which shows a string of random characters and requires typing all of it in one go, with at least 98% accuracy (at most 6 errors in the default 300 characters). Mistakes aren't highlighted (Backspace works, but you have to spot them yourself), paste is rejected, and `--lock-chars` sets the length, from 10 to 5000 characters (default 300, several minutes of typing; 5000 is about an hour). In the interface, the lock dialogs have a length field. Deliberate friction to outlast an impulse. Each character is a letter (upper or lower case) 60% of the time, a digit 35% of the time and a symbol 5% of the time; symbols can be any printable ASCII symbol on a US keyboard (`` !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ``).
 - **Time lock (`--for` / `--until`)**: the block cannot be removed *at all* — not even with the challenge — until the time passes. The strongest lock. While it runs, only time the computer is on or suspended counts: changing the system clock has no effect, and time powered off is not counted, so a shutdown extends the lock by that long.
@@ -68,9 +68,11 @@ While a block is *held* (char-locked, time-locked, in a schedule window, or with
 
 ```bash
 kc9k block create social-media
-kc9k block add-site social-media instagram.com x.com facebook.com
-kc9k block add-app  social-media discord telegram
+kc9k block add social-media instagram.com x.com facebook.com   # to its "Blocked" list
+kc9k block add-app social-media discord telegram
 ```
+
+A new block has a blacklist named **Blocked** and an exception list named **Exceptions**, both looking at addresses. `block add` and `block add-exception` are shortcuts to them; [Website lists](#website-lists) covers more lists, page titles, page text and actions.
 
 Blocking an app also kills everything it launched — block `lutris` and the games started from Lutris close too.
 
@@ -80,23 +82,15 @@ For a Flatpak app, block it by its app ID (see `flatpak list --app`). This is mo
 kc9k block add-app social-media com.discordapp.Discord
 ```
 
-Seed from a built-in template (`social-media`, `news`, `video`, `shopping`), or make an allowlist block:
+Seed from a built-in template (`social-media`, `news`, `video`, `shopping`), or block every website except the ones you add as exceptions:
 
 ```bash
 kc9k block create focus --template social-media
-kc9k block create work  --allowlist
-kc9k block set-mode work allowlist   # or blocklist
+kc9k block create work  --allowlist          # *.* in Blocked
+kc9k block add-exception work docs.python.org
 ```
 
-Choose what a block does to its websites. Each block has three boxes to tick, in any combination: **block** them (the default), show them in **greyscale**, and block their **images**. In allowlist mode the actions apply to every site except the listed ones. A block without `block` leaves its sites reachable and only changes how they look; its apps are still blocked. The interface shows the same three boxes on a block's Websites tab.
-
-```bash
-kc9k block action social-media greyscale on   # greyscale as well as blocked
-kc9k block action reddit block off            # reachable, but grey and without images
-kc9k block action reddit                      # list the block's actions
-```
-
-Ticking a box is always allowed. Unticking one loosens the block, so it is refused while the block is held, and queued for a block with allow windows. At least one action stays on.
+`kc9k block action <block> <action> on|off` turns an action on or off for every blacklist of the block at once (see [Website lists](#website-lists)).
 
 Add keyword/wildcard URL patterns (browser layer only):
 
@@ -162,13 +156,13 @@ Schedules are numbered `1, 2, 3, …` per block. Removing one moves the later on
 
 Windows are same-day; for an overnight span (e.g. 17:00–05:00) add two windows (`17:00–24:00` and `00:00–05:00`). From **2 hours before** a schedule's window opens until it closes, that schedule **can't be removed** — otherwise deleting it would end the block early or stop it from starting, defeating the point. Schedules whose windows aren't open or about to open can still be removed at any time, and you can always add new block windows.
 
-Whenever its schedule has the block on, or will within 2 hours, the block itself is frozen: it can't be weakened (removing apps or patterns, changing its mode, …) or removed, though it can still be made stricter (see [Strengthening a held block](#strengthening-a-held-block)).
+Whenever its schedule has the block on, or will within 2 hours, the block itself is frozen: it can't be weakened (removing apps or list entries, adding exceptions, …) or removed, though it can still be made stricter (see [Strengthening a held block](#strengthening-a-held-block)).
 
 #### Loosening a block with allow windows
 
 A block with allow windows is meant to stay blocked outside them, so it can't be loosened directly **at any time** — not even during an allow window, which would otherwise be the moment to dismantle it. Loosening changes are:
 
-- removing apps or patterns, `remove-site` on a blocklist block, `add-site` on an allowlist block (or `remove-site` that would empty it), `set-mode`, and turning a website action off (`block action <block> <action> off`);
+- removing apps, window titles or blacklist entries, adding exceptions, unticking a blacklist's places or actions, ticking more places on an exception list, raising a threshold, and deleting a blacklist (see [Website lists](#website-lists));
 - `block remove`;
 - adding another allow window, or removing the **last** one (removing one of several only makes the block stricter, so that's immediate).
 
@@ -210,16 +204,17 @@ To practice or test the challenge without touching any block (no root needed), r
 
 ### 3) Editing a block's lists
 
-Remove a domain from a block:
+Remove a domain from a block's Blocked list (or from any list with `kc9k list remove`):
 
 ```bash
 kc9k block remove-site social-media instagram.com
+kc9k list remove social-media Blocked instagram.com
 ```
 
 Notes:
 
 - If the block is **active**, Killer Chicken 9000 re-applies the layers so the change takes effect immediately.
-- If the block is **held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening), you **cannot** loosen it: removing apps or patterns, removing sites from a blocklist, adding sites to an allowlist, changing its mode, and turning a website action off are refused. Clear the hold first (unlock, or wait for the time lock / schedule window to end), make your changes, then activate again. Edits that only make it stricter are always allowed (next section).
+- If the block is **held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening), you **cannot** loosen it: removing apps, window titles or blacklist entries, adding exceptions, and unticking a blacklist's places or actions are refused (see [Website lists](#website-lists) for the full list). Clear the hold first (unlock, or wait for the time lock / schedule window to end), make your changes, then activate again. Edits that only make it stricter are always allowed (next section).
 
 #### Strengthening a held block
 
@@ -227,10 +222,10 @@ A held block can always be made stricter, since that can't be used to escape it:
 
 | Allowed while held | Why it's safe |
 |---|---|
-| `block add-app`, `block add-pattern` | apps and patterns are blocked in both modes |
-| `block add-site` on a **blocklist** block | blocks more sites |
-| `block action <block> <action> on` | blocks, greys out or strips images from more |
-| `block remove-site` on an **allowlist** block | allows fewer sites — refused if it would leave the block with nothing at all, since an empty block is switched off |
+| `block add-app`, `block add-title` | closes more apps |
+| `list add` to a blacklist (`block add`, `add-keyword`), `list create` | matches more pages |
+| `list where … on` and `list action … on` on a blacklist, a lower `list threshold` | looks in more places, does more, or needs fewer words |
+| `list remove` from an exception list (`block remove-exception`), `list where … off` on one, `list delete` of one | spares fewer pages |
 | `start <block> --lock [--lock-chars N]` on an **active** block | adds a char lock, or lengthens the challenge (a shorter `--lock-chars` is refused) |
 | `start <block> --for D` / `--until HH:MM` on an **active** block | adds a time lock, or extends it (an earlier end is refused) |
 
@@ -271,21 +266,46 @@ sudo make uninstall
 
 Uninstalling first runs a guard that **refuses while any block is held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening) **or has allow windows**, so uninstalling can't be used to sidestep a lock — clear the hold first, and remove allow windows (queued or `--now`, see above). When it proceeds, it deactivates all blocks and removes every blocking layer (`/etc/hosts` entries, firewall rules, browser policies) so the system is left clean rather than blocked-with-no-tool. It also undoes KC9K's other changes: forced SafeSearch, the forced search engine, LibreWolf's permission for the unsigned extension, and the no-escape boot lock. Browsers are told to remove the extension at their next start, since a leftover copy would keep enforcing its last rules with no daemon to update them; that one small policy stays in `/etc/librewolf/policies/` and `/etc/firefox/policies/`, and can be deleted once LibreWolf has started once. LibreWolf itself stays installed.
 
-## Blocked lists and exceptions
+## Website lists
 
-Each block has a list of what is blocked and a list of exceptions, and an exception beats the block:
+A block has **blacklists** and **exception lists**, each with a name. Every list ticks where it looks, in any combination:
+
+- **url**: the page's address. Entries are domains (`reddit.com`), paths (`reddit.com/r/funny`) and wildcards (`*.xxx`, `*casino*`, and `*.*` for every website).
+- **title**: the page title, as shown on its tab.
+- **text**: the page's text. Title and text entries are words or phrases: a plain word counts only on its own (`porn` doesn't count in "pornhub", `18+` not in "1118+"), and `*` matches inside words (`*porn*` counts in "pornhub", `porn*` in "pornstar"). Case is ignored.
+
+Each blacklist chooses its **actions**, in any combination: **block** the page (the default), show it in **greyscale**, and block its **images**. A match in the address or the title takes every action. In the text, each action has a **threshold**: how many *different* entries the page must contain (repeats count once). Once a page meets one, it stays greyed or blocked until you leave it, even if its text changes.
+
+An **exception list** spares the pages it matches from every blacklist of its block. Exceptions by title or text have to wait until the page is read, so a block that has them leaves its websites to the extension alone: they don't go to `/etc/hosts` or the firewall, and a page shows for a moment before it is blocked. An address exception also takes its domain out of `/etc/hosts` and the firewall (those block whole hosts), leaving it to the browser.
 
 ```bash
-kc9k block add work reddit.com 'reddit.com/r/funny' '*.xxx' '*.*'
-kc9k block add-exception work reddit.com/r/programming
-kc9k block export-list work blocked > blocked.txt
-kc9k block export-list work exceptions > exceptions.txt
-kc9k block import-list work blocked blocked.txt
-kc9k block export-list work apps > apps.txt       # also: titles
+kc9k list show work                                   # the block's lists
+kc9k list create work Videos --url --title            # a blacklist (looks at the address unless told otherwise)
+kc9k list add work Videos youtube.com twitch.tv "*stream*"
+kc9k list create work Words --text
+kc9k list add work Words nsfw 18+ "*porn*"
+kc9k list action work Words greyscale on
+kc9k list threshold work Words greyscale 1            # one word greys the page
+kc9k list threshold work Words block 3                # three different ones block it
+kc9k list create work Lectures --exceptions --title   # spare videos titled "lecture"
+kc9k list add work Lectures lecture tutorial
+kc9k list where work Videos text on                   # tick or untick a place
+kc9k list rename work Videos Video
+kc9k list delete work Video
+```
+
+Each list exports and imports as a text file with one entry per line (`#` starts a comment), and so do a block's apps and window titles:
+
+```bash
+kc9k list export work Words > words.txt
+kc9k list import work Words words.txt
+kc9k block export-list work apps > apps.txt       # also: titles, blocked, exceptions
 kc9k block import-list work apps apps.txt
 ```
 
-Files hold one entry per line, and `#` starts a comment. `*.*` blocks every website, so combine it with exceptions to allow only what you need. A domain with an exception leaves `/etc/hosts` and the firewall, because those block whole hosts, so only browser policy enforces it.
+What makes a block stricter is always allowed, even while it is held: adding to a blacklist, ticking a blacklist's places or actions, lowering a threshold, adding a list, and removing exceptions or unticking an exception list's places. Everything else loosens it, so it is refused while the block is held and queued for a block with allow windows. A blacklist keeps at least one place and one action.
+
+The commands from before lists still work on a block's default lists: `block add`, `remove-entry`, `add-site`, `remove-site`, `add-pattern` and `remove-pattern` on **Blocked**, `add-exception` and `remove-exception` on **Exceptions**, and `add-keyword`, `remove-keyword` and `threshold` on **Page words** (a text list, made when first needed). Upgrading turns each block's sites and patterns, exceptions and page keywords into those three lists, with the block's actions and thresholds; an allowlist block becomes `*.*` in Blocked with its sites as exceptions. `block export` writes the lists, and `block import` also reads exports from before lists.
 
 ## Daily quotas
 
@@ -311,9 +331,9 @@ All time in an open session is spent, whether or not the sites are used, because
 
 ## Browser options
 
-The daemon force-installs the bundled extension in Firefox-family browsers through policy, so it can't be removed or disabled. It enforces wildcards, keywords, greyscale, images and web-only, shows a block page, and reads its rules from the daemon on `127.0.0.1:47613`. It runs in LibreWolf, which installing KC9K installs; Firefox only accepts signed extensions, and Chrome-family browsers have none.
+The daemon force-installs the bundled extension in Firefox-family browsers through policy, so it can't be removed or disabled. It enforces wildcards, page titles and text, greyscale, images and web-only, shows a block page, and reads its rules from the daemon on `127.0.0.1:47613`. It runs in LibreWolf, which installing KC9K installs; Firefox only accepts signed extensions, and Chrome-family browsers have none.
 
-**The extension is not optional.** While an active block has websites (sites, patterns or allowlist mode), or web-only or force-search is on, any browser that has run for 60 seconds without the extension checking in is closed, like Cold Turkey does; a block of apps alone leaves browsers alone. `kc9k status` shows whether the extension is needed right now and when it last checked in. Without LibreWolf nothing is closed, since there would be no browser left, and `kc9k status` says so.
+**The extension is not optional.** While an active block has a blacklist with entries, or web-only or force-search is on, any browser that has run for 60 seconds without the extension checking in is closed, like Cold Turkey does; a block of apps alone leaves browsers alone. `kc9k status` shows whether the extension is needed right now and when it last checked in. Without LibreWolf nothing is closed, since there would be no browser left, and `kc9k status` says so.
 
 ```bash
 kc9k browser install-librewolf    # install LibreWolf (official repository, via extrepo)
@@ -367,7 +387,7 @@ While the block is on, any app whose window title contains one of the words (cas
 
 ## Page keywords
 
-A block can also act on what pages say, not just where they are:
+Page keywords are a blacklist that looks at page text; see [Website lists](#website-lists). The older commands still work on a block's **Page words** list:
 
 ```bash
 kc9k block add-keyword adult nsfw 18+ "*porn*"
@@ -375,10 +395,6 @@ kc9k block threshold adult greyscale 1   # one keyword greys the page
 kc9k block threshold adult block 3       # three different ones block it
 kc9k block remove-keyword adult nsfw
 ```
-
-The extension reads the text of every page (and its title). A plain keyword counts only as a whole word: `porn` doesn't count in "pornhub", and `18+` doesn't count in "1118+". A `*` matches inside words: `*porn*` counts in "pornhub", `porn*` in "pornstar". Case is ignored.
-
-Each of the block's actions (`kc9k block action`: block, greyscale, no-images) has a **threshold**: how many *different* keywords a page must contain before that action applies. Repeats of one keyword count once. Thresholds start at 1. Lowering one is always allowed; raising one loosens the block, so it is refused while the block is held, like removing a keyword. Pages on the block's exception list are spared. Once a page meets a threshold it stays greyed or blocked until you leave it, even if its text changes. A block with page keywords needs the extension, so other browsers are closed while it is on.
 
 ## Hotkeys
 
@@ -449,7 +465,7 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 `make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). Everything goes through the same command-line rules, so the interface can't do anything a lock forbids. It has five sections:
 
 - **Dashboard**: active blocks and their locks, the state of Frozen Chicken, strict mode and no-escape, and today's most used websites and apps.
-- **Blocks**: websites and exceptions, apps, folders and window titles, schedules, quota and Pomodoro per block; starting a block with optional locks (time, typing challenge, until restart, delay, password, and the challenge length from 10 to 5000 characters). The typing challenge opens in a terminal. The Schedule tab shows the week as a calendar: drag down a day to add a window, click a window to remove it (filled windows turn the block on, outlined ones are allow windows).
+- **Blocks**: website lists (blacklists and exceptions, each with its own boxes for where it looks and what it does, and import/export), apps, folders and window titles (with import/export), schedules, quota and Pomodoro per block; starting a block with optional locks (time, typing challenge, until restart, delay, password, and the challenge length from 10 to 5000 characters). The typing challenge opens in a terminal. The Schedule tab shows the week as a calendar: drag down a day to add a window, click a window to remove it (filled windows turn the block on, outlined ones are allow windows).
 - **Device Blocks**: whole-computer locks: Frozen Chicken, strict mode and no-escape.
 - **Statistics**: time per day and the most used websites or apps, for today or the last 7, 30 or 90 days.
 - **Settings**: the theme (light, dark or the system's, saved in `~/.config/kc9k/gui.json`), browser options and statistics.

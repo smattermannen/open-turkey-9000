@@ -68,22 +68,53 @@ for (const [keyword, text, want] of keywordCases) {
   }
 }
 
-// Distinct keywords count once each, and thresholds apply per action.
-const total = cases.length + keywordCases.length + 6;
+// Lists: distinct keywords count once each, and thresholds apply per action.
+let checks = 0;
 const text = "nsfw nsfw nsfw nsfw 18+";
 const check = (name, got, want) => {
+  checks++;
   if (JSON.stringify(got) !== JSON.stringify(want)) {
     failed++;
     console.log(`FAIL: ${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
   }
 };
+const none = { url: [], title: [], text: [] };
 check("repeats count once", kc9kCountKeywords(text, ["nsfw", "18+", "porn"]), 2);
-const rules = [{ keywords: ["nsfw", "18+", "porn"], block: 3, greyscale: 1, no_images: 2, except: ["wikipedia.org"] }];
-check("thresholds", kc9kKeywordActions(rules, "https://example.com/", text), { block: false, greyscale: true, noImages: true });
-check("three different block", kc9kKeywordActions(rules, "https://example.com/", text + " porn").block, true);
-check("excepted site", kc9kKeywordActions(rules, "https://en.wikipedia.org/wiki/X", text + " porn"), { block: false, greyscale: false, noImages: false });
-check("untaken action", kc9kKeywordActions([{ keywords: ["nsfw"], block: 0, greyscale: 1, no_images: 0 }], "https://a.com/", "nsfw").block, false);
-check("not a web page", kc9kKeywordActions(rules, "about:blank", text).greyscale, false);
+const words = kc9kCompileLists([{
+  url: [], title: [], text: ["nsfw", "18+", "porn"],
+  actions: [{ action: "block", distinct: 3 }, { action: "greyscale", distinct: 1 }, { action: "no-images", distinct: 2 }],
+  except: { url: ["wikipedia.org"], title: [], text: [] },
+}]);
+const at = (url, extra) => Object.assign({ url, title: "" }, extra);
+check("thresholds", kc9kListActions(words, at("https://example.com/", { text })), { greyscale: true, "no-images": true });
+check("three different block", kc9kListActions(words, at("https://example.com/", { text: text + " porn" })).block, true);
+check("excepted site", kc9kListActions(words, at("https://en.wikipedia.org/wiki/X", { text: text + " porn" })), {});
+check("text unknown yet", kc9kListActions(words, { url: "https://example.com/" }), {});
+check("not a web page", kc9kListActions(words, at("about:blank", { text })), {});
 
+// An address list takes every action at once, whatever the thresholds.
+const sites = kc9kCompileLists([{
+  url: ["reddit.com", "*casino*"], title: ["youtube"], text: [],
+  actions: [{ action: "block", distinct: 5 }, { action: "greyscale", distinct: 5 }], except: none,
+}]);
+check("address", kc9kListActions(sites, { url: "https://old.reddit.com/r/x" }), { block: true, greyscale: true });
+check("address pattern", kc9kListActions(sites, { url: "https://bigcasino.example/" }).block, true);
+check("title", kc9kListActions(sites, { url: "https://example.com/", title: "YouTube - Video" }).block, true);
+check("title is a whole word", kc9kListActions(sites, { url: "https://example.com/", title: "myyoutube" }), {});
+check("other site", kc9kListActions(sites, { url: "https://example.com/", title: "News", text: "youtube" }), {});
+
+// Exceptions by title or text wait until the page is read, then spare it.
+const spared = kc9kCompileLists([{
+  url: ["youtube.com"], title: [], text: [], actions: [{ action: "block", distinct: 1 }],
+  except: { url: [], title: ["lecture"], text: ["tutorial"] },
+}]);
+check("waits for the title", kc9kListActions(spared, { url: "https://youtube.com/watch" }), {});
+check("waits for the text", kc9kListActions(spared, { url: "https://youtube.com/watch", title: "Cats" }), {});
+check("blocked once read", kc9kListActions(spared, { url: "https://youtube.com/watch", title: "Cats", text: "cats" }).block, true);
+check("title exception", kc9kListActions(spared, { url: "https://youtube.com/watch", title: "Lecture 3", text: "" }), {});
+check("text exception", kc9kListActions(spared, { url: "https://youtube.com/watch", title: "X", text: "a tutorial" }), {});
+check("reads the page", [kc9kReadsPage(spared), kc9kReadsPage(kc9kCompileLists([{ url: ["a.com"], actions: [] }]))], [true, false]);
+
+const total = cases.length + keywordCases.length + checks;
 console.log(failed ? `${failed} of ${total} failed` : `all ${total} passed`);
 process.exit(failed ? 1 : 0);

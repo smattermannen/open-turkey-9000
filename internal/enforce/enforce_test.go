@@ -21,10 +21,10 @@ func TestReconcileSchedules(t *testing.T) {
 	}
 	defer d.Close()
 
-	if err := d.CreateBlock("s", db.ModeBlocklist); err != nil {
+	if err := d.CreateBlock("s"); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.AddSites("s", []string{"x.com"}); err != nil {
+	if err := addEntries(d, "s", db.DefaultBlockedList, "x.com"); err != nil {
 		t.Fatal(err)
 	}
 	// Every day, 09:00–17:00.
@@ -73,7 +73,7 @@ func TestReconcileKeepsLockedScheduledBlock(t *testing.T) {
 	}
 	defer d.Close()
 
-	if err := d.CreateBlock("s", db.ModeBlocklist); err != nil {
+	if err := d.CreateBlock("s"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddSchedule("s", schedule.Window{Days: 0x7f, Start: 9 * 60, End: 17 * 60}); err != nil {
@@ -124,7 +124,7 @@ func TestApplyDueEdits(t *testing.T) {
 	}
 	defer d.Close()
 
-	if err := d.CreateBlock("games", db.ModeBlocklist); err != nil {
+	if err := d.CreateBlock("games"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddApps("games", []string{"steam", "lutris"}); err != nil {
@@ -176,7 +176,7 @@ func TestReconcileDropsUnscheduledBlock(t *testing.T) {
 	}
 	defer d.Close()
 
-	if err := d.CreateBlock("games", db.ModeBlocklist); err != nil {
+	if err := d.CreateBlock("games"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddApps("games", []string{"steam"}); err != nil {
@@ -212,7 +212,7 @@ func TestReconcileAllowSchedule(t *testing.T) {
 	}
 	defer d.Close()
 
-	if err := d.CreateBlock("games", db.ModeBlocklist); err != nil {
+	if err := d.CreateBlock("games"); err != nil {
 		t.Fatal(err)
 	}
 	// Allowed Friday and Saturday 18:00–24:00.
@@ -248,8 +248,8 @@ func TestReconcileAllowSchedule(t *testing.T) {
 
 func TestInputsBlocklist(t *testing.T) {
 	active := []db.ActiveBlockDetail{
-		{BlockName: "a", Mode: db.ModeBlocklist, Actions: db.DefaultActions, Sites: []string{"facebook.com"}, Apps: []string{"discord"}, Patterns: []string{"*ads*"}},
-		{BlockName: "b", Mode: db.ModeBlocklist, Actions: db.DefaultActions, Sites: []string{"reddit.com"}, Apps: []string{"discord", "slack"}},
+		{BlockName: "a", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, "facebook.com", "*ads*")}, Apps: []string{"discord"}},
+		{BlockName: "b", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, "reddit.com")}, Apps: []string{"discord", "slack"}},
 	}
 	hosts, apps, bp := Inputs(active)
 
@@ -259,36 +259,24 @@ func TestInputsBlocklist(t *testing.T) {
 	if !reflect.DeepEqual(apps, []string{"discord", "slack"}) { // deduped, sorted
 		t.Errorf("apps = %v", apps)
 	}
-	if bp.AllowMode {
-		t.Error("no allowlist block, AllowMode should be false")
-	}
 	if !reflect.DeepEqual(bp.BlockPatterns, []string{"*ads*"}) {
 		t.Errorf("patterns = %v", bp.BlockPatterns)
 	}
 }
 
-func TestInputsAllowlist(t *testing.T) {
+// Blocking everything but some sites is *.* with exceptions: browser policy
+// only, and the exceptions go with it.
+func TestInputsEverythingExcept(t *testing.T) {
 	active := []db.ActiveBlockDetail{
-		{BlockName: "block", Mode: db.ModeBlocklist, Actions: db.DefaultActions, Sites: []string{"facebook.com"}},
-		{BlockName: "allow", Mode: db.ModeAllowlist, Actions: db.DefaultActions, Sites: []string{"work.com", "docs.com"}},
+		{BlockName: "block", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, "facebook.com")}},
+		{BlockName: "allow", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, "*.*"),
+			exceptionList("Exceptions", db.Where{URL: true}, "work.com", "docs.com")}},
 	}
 	hosts, _, bp := Inputs(active)
-
-	// Only blocklist domains go to /etc/hosts and the firewall.
 	if !reflect.DeepEqual(hosts, []string{"facebook.com"}) {
 		t.Errorf("hosts = %v; want [facebook.com]", hosts)
 	}
-	if !bp.AllowMode {
-		t.Fatal("AllowMode should be true when an allowlist block is active")
-	}
-	// Allowed domains carried into the browser policy.
-	wantAllow := map[string]bool{"work.com": true, "docs.com": true}
-	for _, d := range bp.AllowDomains {
-		if !wantAllow[d] {
-			t.Errorf("unexpected allow domain %q", d)
-		}
-	}
-	if len(bp.AllowDomains) != 2 {
-		t.Errorf("AllowDomains = %v; want 2 entries", bp.AllowDomains)
+	if !reflect.DeepEqual(bp.BlockPatterns, []string{"*.*"}) || !reflect.DeepEqual(bp.Exceptions, []string{"work.com", "docs.com"}) {
+		t.Errorf("policy = %+v; want *.* except work.com and docs.com", bp)
 	}
 }

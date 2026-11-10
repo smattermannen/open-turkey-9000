@@ -63,17 +63,22 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   typing challenge first.
 - **Daemon** (`internal/daemon/`): systemd service, calls `enforce.Tick` every 5s; also samples the foreground app for statistics every 5s and relocks the screen every 0.5s during a lock freeze.
 - **GUI** (`gui/kc9k-gui.py`): GTK 3 Python, English; Dashboard, Blocks, Device Blocks, Statistics, Settings. Reads `kc9k gui-state` and `kc9k stats --json`; every change runs a `kc9k` command.
-- **Website actions** (`internal/db/actions.go`): each block ticks any of
-  block / greyscale / no-images for its sites. Only `block` feeds hosts,
-  firewall and browser policy; greyscale and no-images go to the extension
-  (`enforce.BuildRules`, `internal/webext/files/match.js`). Unticking is a
-  loosening edit (gated and queueable like the others).
-- **Page keywords** (`internal/db/pagekeywords.go`, `internal/cli/keywords.go`):
-  per block, with a threshold per action (distinct keywords needed; raising
-  one is a loosening edit). Sent as `page_keywords` rules; the extension's
-  content script scans the top frame's text (`kc9kKeywordActions` in
-  `match.js`: plain keywords are whole words, `*` matches inside words) and
-  the background blocks the tab or cancels its images.
+- **Website lists** (`internal/db/weblists.go`, `internal/cli/weblists.go`,
+  `kc9k list …`): each block has named blacklists and exception lists. Each
+  list ticks where it looks (url / title / text); each blacklist ticks its
+  actions (block / greyscale / no-images, `actions.go`) with, per action, a
+  threshold of distinct entries for page text. An exception list spares pages
+  from its own block's blacklists only. Only url blacklists with `block` feed
+  hosts, firewall and browser policy (`enforce.Inputs`), and not at all for a
+  block with title/text exceptions; everything goes to the extension as
+  `lists` rules (`enforce.BuildRules`, `kc9kListActions` in `match.js`: plain
+  words are whole words, `*` matches inside words; a list whose exceptions
+  look at a part of the page not read yet waits). What strengthens is free;
+  the rest is gated/queueable (`EditList*` edits name lists by id). Old
+  commands (`block add`, `add-exception`, `add-keyword`, `threshold`,
+  `action`) are shortcuts to the default lists Blocked / Exceptions / Page
+  words; `migrateWebLists` turned pre-list blocks (sites, patterns,
+  exceptions, page keywords, allowlist mode) into those lists once.
 - **Hotkeys** (`internal/db/hotkeys.go`, `internal/cli/hotkeys.go`,
   `internal/blocker/hotkeys.go`): Cinnamon custom keybindings in dconf named
   `kc9k<id>`, running `kc9k hotkey run <id>` (starts the block in-process with
@@ -101,10 +106,11 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   off, strict, no-escape and prepare-uninstall. Passwords come one per line
   from `stdinLines` (settings password first). The GUI retries a refused
   command once after asking for it.
-- **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL);
+- **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL; every
+  pooled connection gets busy_timeout and foreign_keys via `_pragma`);
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
-  `db.go` core + `features.go` (modes, patterns, schedules, time locks, schema
-  upgrades) + `pending.go` (queued loosening edits).
+  `db.go` core + `features.go` (schedules, time locks, schema upgrades) +
+  `weblists.go` (website lists) + `pending.go` (queued loosening edits).
 - **Lock** (`internal/lock/`): raw-mode, paste-resistant typing challenge (random
   characters: 60% letters, 35% digits, 5% symbols) that gates a char-locked
   block's deactivation.
@@ -119,8 +125,10 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 ## Commands
 
 Full usage and examples in `README.md`. Summary:
-`block create [--allowlist] [--template T] | add-site | add-app | add-title | remove-title | remove-site |
-remove-app | add-pattern | remove-pattern | set-mode | action | export | import | list |
+`list show | create [--exceptions --url --title --text] | rename | delete | add | remove | where | action |
+threshold | export | import`,
+`block create [--allowlist] [--template T] | add | add-exception | add-app | add-title | remove-title |
+remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
 `pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden

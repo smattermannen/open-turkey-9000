@@ -118,43 +118,79 @@ function kc9kKeywordRegex(keyword) {
   return new RegExp(before + body + after, "iu");
 }
 
+// kc9kUsableKeyword drops entries that are only wildcards or blank.
+function kc9kUsableKeyword(keyword) {
+  return String(keyword).replace(/\*/g, "").trim() !== "";
+}
+
+function kc9kKeywordRegexes(keywords) {
+  return (keywords || []).filter(kc9kUsableKeyword).map(kc9kKeywordRegex);
+}
+
 // kc9kCountKeywords returns how many of the keywords occur in text; a keyword
 // found many times counts once.
 function kc9kCountKeywords(text, keywords) {
-  let found = 0;
-  for (const keyword of keywords) {
-    if (String(keyword).replace(/\*/g, "").trim() && kc9kKeywordRegex(keyword).test(text)) {
-      found++;
-    }
-  }
-  return found;
+  return kc9kKeywordRegexes(keywords).filter((regex) => regex.test(text)).length;
 }
 
-// kc9kKeywordActions works out which actions the page keyword rules take on
-// a page at url with this text: { block, greyscale, noImages }. Each rule is
-// one block's keywords with, per action, how many different ones it takes
-// (0: the block doesn't take that action).
-function kc9kKeywordActions(rules, url, text) {
-  const out = { block: false, greyscale: false, noImages: false };
-  if (!url || !/^https?:/i.test(url)) {
+// kc9kCompileLists compiles the daemon's blacklists (see the daemon's
+// ListRule): what each looks for in a page's address, title and text, its
+// actions, and its block's exceptions.
+function kc9kCompileLists(lists) {
+  return (lists || []).map((list) => {
+    const except = list.except || {};
+    return {
+      url: kc9kFilter({ match: list.url || [] }),
+      title: kc9kKeywordRegexes(list.title),
+      text: kc9kKeywordRegexes(list.text),
+      actions: list.actions || [],
+      except: {
+        url: kc9kFilter({ match: except.url || [] }),
+        title: kc9kKeywordRegexes(except.title),
+        text: kc9kKeywordRegexes(except.text),
+      },
+    };
+  });
+}
+
+// kc9kReadsPage reports whether any list needs the page's title or text.
+function kc9kReadsPage(compiled) {
+  return compiled.some((list) => list.title.length > 0 || list.text.length > 0 ||
+    list.except.title.length > 0 || list.except.text.length > 0);
+}
+
+// kc9kListActions works out which actions the lists take on a page: an
+// object with a true value for each action name. page holds its url, and its
+// title and text when they are known (undefined otherwise). A list whose
+// exceptions look at a part of the page that isn't known yet is left until
+// it is, so a page an exception spares isn't blocked before it is read.
+// A match in the address or the title takes every action of the list; in
+// the text, an action needs its number of different entries.
+function kc9kListActions(compiled, page) {
+  const out = {};
+  if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
     return out;
   }
-  for (const rule of rules || []) {
-    const keywords = rule.keywords || [];
-    if (keywords.length === 0) {
+  const hasTitle = typeof page.title === "string";
+  const hasText = typeof page.text === "string";
+  for (const list of compiled) {
+    const except = list.except;
+    if ((except.title.length > 0 && !hasTitle) || (except.text.length > 0 && !hasText)) {
       continue;
     }
-    const except = kc9kFilter({ match: rule.except || [] });
-    if (except.match.length > 0 && kc9kMatches(except, url)) {
+    if ((except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
+      (hasTitle && except.title.some((regex) => regex.test(page.title))) ||
+      (hasText && except.text.some((regex) => regex.test(page.text)))) {
       continue;
     }
-    const found = kc9kCountKeywords(text, keywords);
-    if (found === 0) {
-      continue;
+    const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
+      (hasTitle && list.title.some((regex) => regex.test(page.title)));
+    const found = hasText && list.text.length > 0 ? list.text.filter((regex) => regex.test(page.text)).length : 0;
+    for (const action of list.actions) {
+      if (whole || (found > 0 && found >= (action.distinct || 1))) {
+        out[action.action] = true;
+      }
     }
-    out.block = out.block || (rule.block > 0 && found >= rule.block);
-    out.greyscale = out.greyscale || (rule.greyscale > 0 && found >= rule.greyscale);
-    out.noImages = out.noImages || (rule.no_images > 0 && found >= rule.no_images);
   }
   return out;
 }

@@ -17,27 +17,43 @@ import (
 
 // Edit actions that can be queued.
 const (
-	EditAddSites       = "add-site"
-	EditRemoveSites    = "remove-site"
 	EditRemoveApps     = "remove-app"
-	EditRemovePatterns = "remove-pattern"
-	EditAddExceptions  = "add-exception"
-	EditSetMode        = "set-mode"
-	EditUnsetAction    = "unset-action"
 	EditRemoveTitles   = "remove-title"
-	EditRemoveKeywords = "remove-keyword"
-	EditSetThreshold   = "set-threshold"
 	EditRemoveBlock    = "remove-block"
 	EditAddSchedule    = "add-schedule"
 	EditRemoveSchedule = "remove-schedule"
+
+	// Edits to a website list, named by List (its id).
+	EditListRemove       = "list-remove"        // Values: entries, from a blacklist
+	EditListAdd          = "list-add"           // Values: entries, to an exception list
+	EditListWhere        = "list-where"         // Values: place, "on" or "off"
+	EditListUnsetAction  = "list-unset-action"  // Values: action
+	EditListSetThreshold = "list-set-threshold" // Values: action, number
+	EditListDelete       = "list-delete"        // a blacklist
 )
 
-// Edit is one change to a block. Values holds the sites, apps or patterns (or
-// the mode, for EditSetMode; the action, for EditUnsetAction); Window the schedule, for the schedule actions.
+// Edits queued before website lists. They still apply, to the lists made from
+// the old ones (see migrateWebLists).
+const (
+	legacyAddSites       = "add-site" // only queued for allowlist blocks: an allowed site
+	legacyRemoveSites    = "remove-site"
+	legacyRemovePatterns = "remove-pattern"
+	legacyAddExceptions  = "add-exception"
+	legacySetMode        = "set-mode"
+	legacyUnsetAction    = "unset-action"
+	legacyRemoveKeywords = "remove-keyword"
+	legacySetThreshold   = "set-threshold"
+)
+
+// Edit is one change to a block. Values holds the apps, titles or list
+// entries (or what the action's comment says); Window the schedule, for the
+// schedule actions; List and ListName the list, for list edits.
 type Edit struct {
-	Action string          `json:"-"`
-	Values []string        `json:"values,omitempty"`
-	Window schedule.Window `json:"window"`
+	Action   string          `json:"-"`
+	Values   []string        `json:"values,omitempty"`
+	Window   schedule.Window `json:"window"`
+	List     int             `json:"list,omitempty"`
+	ListName string          `json:"list_name,omitempty"`
 }
 
 // String describes the edit for listings, e.g. "remove-app steam".
@@ -47,8 +63,13 @@ func (e Edit) String() string {
 		return "remove the block"
 	case EditAddSchedule, EditRemoveSchedule:
 		return fmt.Sprintf("%s %s", e.Action, e.Window)
+	case EditListDelete:
+		return fmt.Sprintf("delete the list %q", e.ListName)
 	}
 	s := e.Action
+	if e.ListName != "" {
+		s += fmt.Sprintf(" %q", e.ListName)
+	}
 	for _, v := range e.Values {
 		s += " " + v
 	}
@@ -128,39 +149,15 @@ func (d *DB) DeletePendingEdit(id int) error {
 func (d *DB) ApplyEdit(blockName string, e Edit) error {
 	var err error
 	switch e.Action {
-	case EditAddSites:
-		err = d.AddSites(blockName, e.Values)
-	case EditRemoveSites:
-		err = d.RemoveSites(blockName, e.Values)
 	case EditRemoveApps:
 		err = d.RemoveApps(blockName, e.Values)
-	case EditRemovePatterns:
-		err = d.RemovePatterns(blockName, e.Values)
-	case EditAddExceptions:
-		err = d.AddExceptions(blockName, e.Values)
-	case EditSetMode:
-		if len(e.Values) != 1 {
-			return fmt.Errorf("set-mode needs exactly one mode")
-		}
-		err = d.SetBlockMode(blockName, e.Values[0])
 	case EditRemoveTitles:
 		err = d.RemoveTitles(blockName, e.Values)
-	case EditRemoveKeywords:
-		err = d.RemovePageKeywords(blockName, e.Values)
-	case EditSetThreshold:
-		if len(e.Values) != 2 {
-			return fmt.Errorf("set-threshold needs an action and a number")
-		}
-		n, convErr := strconv.Atoi(e.Values[1])
-		if convErr != nil {
-			return fmt.Errorf("bad threshold %q", e.Values[1])
-		}
-		err = d.SetThreshold(blockName, e.Values[0], n)
-	case EditUnsetAction:
-		if len(e.Values) != 1 {
-			return fmt.Errorf("unset-action needs exactly one action")
-		}
-		err = d.SetBlockAction(blockName, e.Values[0], false)
+	case EditListRemove, EditListAdd, EditListWhere, EditListUnsetAction, EditListSetThreshold, EditListDelete:
+		err = d.applyListEdit(e)
+	case legacyAddSites, legacyRemoveSites, legacyRemovePatterns, legacyAddExceptions,
+		legacySetMode, legacyUnsetAction, legacyRemoveKeywords, legacySetThreshold:
+		err = d.applyLegacyEdit(blockName, e)
 	case EditAddSchedule:
 		err = d.AddSchedule(blockName, e.Window)
 	case EditRemoveSchedule:
@@ -191,4 +188,89 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 		return d.DeactivateBlock(blockName)
 	}
 	return nil
+}
+
+// applyListEdit performs an edit to one website list.
+func (d *DB) applyListEdit(e Edit) error {
+	list, err := d.GetList(e.List)
+	if err != nil {
+		return err
+	}
+	switch e.Action {
+	case EditListRemove:
+		return d.RemoveListEntries(list.ID, e.Values)
+	case EditListAdd:
+		return d.AddListEntries(list.ID, e.Values)
+	case EditListWhere:
+		if len(e.Values) != 2 || !IsPlace(e.Values[0]) {
+			return fmt.Errorf("list-where needs a place and on or off")
+		}
+		return d.SetListWhere(list.ID, list.Where.With(e.Values[0], e.Values[1] == "on"))
+	case EditListUnsetAction:
+		if len(e.Values) != 1 {
+			return fmt.Errorf("list-unset-action needs exactly one action")
+		}
+		return d.SetListAction(list.ID, e.Values[0], false)
+	case EditListSetThreshold:
+		if len(e.Values) != 2 {
+			return fmt.Errorf("list-set-threshold needs an action and a number")
+		}
+		n, err := strconv.Atoi(e.Values[1])
+		if err != nil {
+			return fmt.Errorf("bad threshold %q", e.Values[1])
+		}
+		return d.SetListThreshold(list.ID, e.Values[0], n)
+	case EditListDelete:
+		return d.DeleteList(list.ID)
+	}
+	return fmt.Errorf("unknown list edit %q", e.Action)
+}
+
+// applyLegacyEdit performs an edit queued before website lists on the lists
+// made from the old ones.
+func (d *DB) applyLegacyEdit(blockName string, e Edit) error {
+	listFor := func(name string) (int, error) { return d.ListID(blockName, name) }
+	switch e.Action {
+	case legacySetMode:
+		return fmt.Errorf("blocks no longer have modes")
+	case legacyAddSites, legacyAddExceptions:
+		id, err := listFor(DefaultExceptionsList)
+		if err != nil {
+			return err
+		}
+		return d.AddListEntries(id, e.Values)
+	case legacyRemoveSites, legacyRemovePatterns:
+		id, err := listFor(DefaultBlockedList)
+		if err != nil {
+			return err
+		}
+		return d.RemoveListEntries(id, e.Values)
+	case legacyRemoveKeywords:
+		id, err := listFor(DefaultWordsList)
+		if err != nil {
+			return err
+		}
+		return d.RemoveListEntries(id, e.Values)
+	case legacySetThreshold:
+		id, err := listFor(DefaultWordsList)
+		if err != nil {
+			return err
+		}
+		return d.applyListEdit(Edit{Action: EditListSetThreshold, List: id, Values: e.Values})
+	case legacyUnsetAction:
+		detail, err := d.GetBlock(blockName)
+		if err != nil {
+			return err
+		}
+		if len(e.Values) != 1 {
+			return fmt.Errorf("unset-action needs exactly one action")
+		}
+		for _, l := range detail.Lists.Blacklists() {
+			if err := d.SetListAction(l.ID, e.Values[0], false); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("unknown edit action %q", e.Action)
 }

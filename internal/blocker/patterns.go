@@ -86,3 +86,27 @@ func HasExceptionUnder(domain string, exceptions []string) bool {
 	}
 	return false
 }
+
+// SplitURLEntries sorts a list's entries for address matching: plain
+// domains (normalized) and patterns (anything with a "/" or "*"). Entries
+// that are neither, such as a lone word meant for page text, are left out.
+func SplitURLEntries(entries []string) (domains, patterns []string) {
+	for _, e := range entries {
+		if strings.ContainsAny(e, "/*") {
+			if IsValidPattern(e) {
+				patterns = append(patterns, e)
+			}
+			continue
+		}
+		if host := NormalizeDomain(e); IsValidDomain(host) {
+			domains = append(domains, host)
+		}
+	}
+	return domains, patterns
+}
+
+// IsURLEntry reports whether an entry can match addresses.
+func IsURLEntry(e string) bool {
+	domains, patterns := SplitURLEntries([]string{e})
+	return len(domains)+len(patterns) > 0
+}

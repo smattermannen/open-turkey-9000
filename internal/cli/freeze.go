@@ -80,34 +80,39 @@ type guiWin struct {
 	Allow bool `json:"allow"`
 }
 
+// guiList is one website list for the interface.
+type guiList struct {
+	ID      int             `json:"id"`
+	Name    string          `json:"name"`
+	Kind    string          `json:"kind"`
+	Where   []string        `json:"where"`
+	Actions []db.ListAction `json:"actions"`
+	Entries []string        `json:"entries"`
+}
+
 type guiBlock struct {
-	Name        string        `json:"name"`
-	Mode        string        `json:"mode"`
-	Actions     []string      `json:"actions"`
-	Sites       []string      `json:"sites"`
-	Exceptions  []string      `json:"exceptions"`
-	Apps        []string      `json:"apps"`
-	Titles      []string      `json:"titles"`
-	Keywords    []string      `json:"page_keywords"`
-	Thresholds  db.Thresholds `json:"keyword_thresholds"`
-	Schedules   []string      `json:"schedules"`
-	Windows     []guiWin      `json:"schedule_windows"`
-	Active      bool          `json:"active"`
-	Held        bool          `json:"held"`
-	CharLocked  bool          `json:"char_locked"`
-	PomodoroOn  int64         `json:"pomodoro_on"`
-	PomodoroOff int64         `json:"pomodoro_off"`
-	OnBreak     bool          `json:"on_break"`
-	Password    bool          `json:"password_locked"`
-	Restart     bool          `json:"restart_locked"`
-	Delay       int64         `json:"delay_seconds"`
-	StopSeconds int64         `json:"stop_seconds"`
-	Scheduled   bool          `json:"scheduled"`
-	LockSeconds int64         `json:"lock_seconds"`
-	QuotaLimit  int64         `json:"quota_limit"`
-	QuotaUsed   int64         `json:"quota_used"`
-	QuotaOpen   bool          `json:"quota_open"`
-	QuotaNext   int64         `json:"quota_next"`
+	Name        string    `json:"name"`
+	Lists       []guiList `json:"lists"`
+	Apps        []string  `json:"apps"`
+	Titles      []string  `json:"titles"`
+	Schedules   []string  `json:"schedules"`
+	Windows     []guiWin  `json:"schedule_windows"`
+	Active      bool      `json:"active"`
+	Held        bool      `json:"held"`
+	CharLocked  bool      `json:"char_locked"`
+	PomodoroOn  int64     `json:"pomodoro_on"`
+	PomodoroOff int64     `json:"pomodoro_off"`
+	OnBreak     bool      `json:"on_break"`
+	Password    bool      `json:"password_locked"`
+	Restart     bool      `json:"restart_locked"`
+	Delay       int64     `json:"delay_seconds"`
+	StopSeconds int64     `json:"stop_seconds"`
+	Scheduled   bool      `json:"scheduled"`
+	LockSeconds int64     `json:"lock_seconds"`
+	QuotaLimit  int64     `json:"quota_limit"`
+	QuotaUsed   int64     `json:"quota_used"`
+	QuotaOpen   bool      `json:"quota_open"`
+	QuotaNext   int64     `json:"quota_next"`
 }
 
 // guiSettingLock is a browser setting's locks for the interface.
@@ -222,14 +227,19 @@ var guiStateCmd = &cobra.Command{
 				return err
 			}
 			g := guiBlock{
-				Name: detail.Name, Mode: detail.Mode, Actions: detail.Actions.List(),
-				Sites: append(append([]string{}, detail.Sites...), detail.Patterns...), Apps: append([]string{}, detail.Apps...),
-				Exceptions: append([]string{}, detail.Exceptions...),
-				Titles:     append([]string{}, detail.Titles...),
-				Keywords:   append([]string{}, detail.Keywords...), Thresholds: detail.Thresholds,
+				Name: detail.Name, Lists: []guiList{}, Apps: append([]string{}, detail.Apps...),
+				Titles:    append([]string{}, detail.Titles...),
 				Schedules: []string{},
 				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && detail.Locked,
 				Scheduled: detail.Scheduled,
+			}
+			for _, l := range detail.Lists {
+				actions := l.Actions
+				if actions == nil {
+					actions = []db.ListAction{}
+				}
+				g.Lists = append(g.Lists, guiList{ID: l.ID, Name: l.Name, Kind: l.Kind, Where: append([]string{}, l.Where.List()...),
+					Actions: actions, Entries: l.Entries})
 			}
 			if detail.Active && detail.LockedUntil > trusted {
 				g.LockSeconds = detail.LockedUntil - trusted

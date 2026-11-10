@@ -1,11 +1,15 @@
-// lists.go — one list per block for what is blocked and one for exceptions,
-// with separate export and import. Entries work as in Cold Turkey: a plain
-// domain, a URL, or a wildcard pattern.
+// lists.go — the commands from before website lists, kept as shortcuts to a
+// block's default lists: "Blocked" (addresses), "Exceptions" (addresses) and
+// "Page words" (page text). See weblists.go for the lists themselves.
+//
+//	kc9k block add <block> reddit.com '*casino*'       # to Blocked
+//	kc9k block add-exception <block> reddit.com/r/x   # to Exceptions
+//	kc9k block export-list <block> blocked|exceptions|apps|titles|<list>
+//	kc9k block import-list <block> blocked|exceptions|apps|titles|<list> <file>
 package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
@@ -19,84 +23,46 @@ const (
 	listTitles     = "titles"
 )
 
-// listKinds are the lists export-list and import-list know.
-var listKinds = []string{listBlocked, listExceptions, listApps, listTitles}
-
-// splitEntries separates plain domains from URLs and wildcard patterns.
-func splitEntries(entries []string) (domains, patterns []string, err error) {
-	var plain []string
-	for _, e := range entries {
-		if strings.ContainsAny(e, "/*") {
-			if !blocker.IsValidPattern(e) {
-				return nil, nil, fmt.Errorf("invalid entry %q", e)
-			}
-			patterns = append(patterns, e)
-		} else {
-			plain = append(plain, e)
-		}
+// defaultList returns the name of one of a block's default lists, creating
+// it if the block doesn't have it (it was deleted or renamed).
+func defaultList(database *db.DB, block, name string) (string, error) {
+	detail, err := database.GetBlock(block)
+	if err != nil {
+		return "", err
 	}
-	domains, err = normalizeDomains(plain)
-	return domains, patterns, err
+	if _, ok := detail.Lists.Find(name); ok {
+		return name, nil
+	}
+	kind, where := db.ListBlacklist, db.Where{URL: true}
+	switch name {
+	case db.DefaultExceptionsList:
+		kind = db.ListExceptions
+	case db.DefaultWordsList:
+		where = db.Where{Text: true}
+	}
+	_, err = database.CreateList(block, kind, name, where)
+	return name, err
 }
 
-func missing(have, want []string) []string {
-	set := make(map[string]bool, len(have))
-	for _, h := range have {
-		set[h] = true
+// onDefaultList runs fn on one of the block's default lists.
+func onDefaultList(database *db.DB, block, name string, fn func(list string) error) error {
+	list, err := defaultList(database, block, name)
+	if err != nil {
+		return err
 	}
-	var out []string
-	for _, w := range want {
-		if !set[w] {
-			set[w] = true
-			out = append(out, w)
-		}
-	}
-	return out
+	return fn(list)
 }
 
 func addBlockedEntries(cmd *cobra.Command, database *db.DB, name string, entries []string) error {
-	domains, patterns, err := splitEntries(entries)
-	if err != nil {
-		return err
-	}
-	detail, err := database.GetBlock(name)
-	if err != nil {
-		return err
-	}
-	domains, patterns = missing(detail.Sites, domains), missing(detail.Patterns, patterns)
-	if len(patterns) > 0 {
-		if err := database.AddPatterns(name, patterns); err != nil {
-			return err
-		}
-	}
-	if len(domains) > 0 {
-		proceed, err := gateEdit(cmd, database, name, siteEditStrengthens(detail, domains, true), db.Edit{Action: db.EditAddSites, Values: domains})
-		if err != nil {
-			return err
-		}
-		if proceed {
-			if err := database.AddSites(name, domains); err != nil {
-				return err
-			}
-		}
-	}
-	return reapplyIfActive(database, name)
+	return onDefaultList(database, name, db.DefaultBlockedList, func(list string) error {
+		return listAdd(cmd, database, name, list, entries)
+	})
 }
 
 func addExceptions(cmd *cobra.Command, database *db.DB, name string, entries []string) error {
-	for _, e := range entries {
-		if !blocker.IsValidPattern(e) {
-			return fmt.Errorf("invalid entry %q", e)
-		}
-	}
-	proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditAddExceptions, Values: entries})
-	if err != nil || !proceed {
-		return err
-	}
-	if err := database.AddExceptions(name, entries); err != nil {
-		return err
-	}
-	return reapplyIfActive(database, name)
+	return onDefaultList(database, name, db.DefaultExceptionsList, func(list string) error {
+		return listAdd(cmd, database, name, list, entries)
+	})
 }
 
 func withDB(run func(cmd *cobra.Command, database *db.DB, args []string) error) func(*cobra.Command, []string) error {
@@ -110,93 +76,82 @@ func withDB(run func(cmd *cobra.Command, database *db.DB, args []string) error) 
 	}
 }
 
-var blockAddEntryCmd = &cobra.Command{
-	Use:   "add [block] [entries...]",
-	Short: "Block domains, URLs or wildcard patterns",
-	Args:  cobra.MinimumNArgs(2),
-	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		return addBlockedEntries(cmd, database, args[0], args[1:])
-	}),
-}
-
-var blockRemoveEntryCmd = &cobra.Command{
-	Use:   "remove-entry [block] [entries...]",
-	Short: "Remove domains, URLs or wildcard patterns from a block",
-	Args:  cobra.MinimumNArgs(2),
-	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		name := args[0]
-		domains, patterns, err := splitEntries(args[1:])
-		if err != nil {
-			return err
-		}
-		detail, err := database.GetBlock(name)
-		if err != nil {
-			return err
-		}
-		if len(domains) > 0 {
-			if err := requireAll("site", name, detail.Sites, domains); err != nil {
-				return err
-			}
-			proceed, err := gateEdit(cmd, database, name, siteEditStrengthens(detail, domains, false), db.Edit{Action: db.EditRemoveSites, Values: domains})
-			if err != nil {
-				return err
-			}
-			if proceed {
-				if err := database.RemoveSites(name, domains); err != nil {
-					return err
+// shortcut makes a command that runs fn on a default list with the block
+// name and the remaining arguments.
+func shortcut(use, short, list string, add bool) *cobra.Command {
+	return &cobra.Command{
+		Use:   use,
+		Short: short,
+		Args:  cobra.MinimumNArgs(2),
+		RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+			return onDefaultList(database, args[0], list, func(name string) error {
+				if add {
+					return listAdd(cmd, database, args[0], name, args[1:])
 				}
-			}
-		}
-		if len(patterns) > 0 {
-			if err := requireAll("pattern", name, detail.Patterns, patterns); err != nil {
-				return err
-			}
-			proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditRemovePatterns, Values: patterns})
-			if err != nil {
-				return err
-			}
-			if proceed {
-				if err := database.RemovePatterns(name, patterns); err != nil {
-					return err
-				}
-			}
-		}
-		return reapplyIfActive(database, name)
-	}),
-}
-
-var blockAddExceptionCmd = &cobra.Command{
-	Use:   "add-exception [block] [entries...]",
-	Short: "Allow domains, URLs or wildcard patterns despite the block",
-	Args:  cobra.MinimumNArgs(2),
-	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		return addExceptions(cmd, database, args[0], args[1:])
-	}),
-}
-
-var blockRemoveExceptionCmd = &cobra.Command{
-	Use:   "remove-exception [block] [entries...]",
-	Short: "Remove exceptions from a block (always allowed: it makes the block stricter)",
-	Args:  cobra.MinimumNArgs(2),
-	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		if err := database.RemoveExceptions(args[0], args[1:]); err != nil {
-			return err
-		}
-		return reapplyIfActive(database, args[0])
-	}),
-}
-
-func checkListKind(kind string) error {
-	for _, k := range listKinds {
-		if k == kind {
-			return nil
-		}
+				return listRemove(cmd, database, args[0], name, args[1:])
+			})
+		}),
 	}
-	return fmt.Errorf("unknown list %q (use %s)", kind, strings.Join(listKinds, ", "))
 }
 
-// addApps adds apps to a block. Apps are blocked in both modes, so adding
-// one only strengthens it.
+var (
+	blockAddEntryCmd        = shortcut("add [block] [entries...]", "Block domains, URLs or wildcard patterns (the Blocked list)", db.DefaultBlockedList, true)
+	blockRemoveEntryCmd     = shortcut("remove-entry [block] [entries...]", "Remove entries from the Blocked list", db.DefaultBlockedList, false)
+	blockAddSiteCmd         = shortcut("add-site [block] [domains...]", "Add sites to the Blocked list", db.DefaultBlockedList, true)
+	blockRemoveSiteCmd      = shortcut("remove-site [block] [domains...]", "Remove sites from the Blocked list", db.DefaultBlockedList, false)
+	blockAddPatternCmd      = shortcut("add-pattern [block] [patterns...]", "Add URL patterns (wildcards) to the Blocked list", db.DefaultBlockedList, true)
+	blockRemovePatternCmd   = shortcut("remove-pattern [block] [patterns...]", "Remove URL patterns from the Blocked list", db.DefaultBlockedList, false)
+	blockAddExceptionCmd    = shortcut("add-exception [block] [entries...]", "Allow domains, URLs or patterns despite the block (the Exceptions list)", db.DefaultExceptionsList, true)
+	blockRemoveExceptionCmd = shortcut("remove-exception [block] [entries...]", "Remove exceptions (always allowed: it makes the block stricter)", db.DefaultExceptionsList, false)
+)
+
+// listFor maps export-list/import-list's names to a list: blocked and
+// exceptions are the default lists, anything else names a list.
+func listFor(database *db.DB, block, kind string) (string, error) {
+	switch kind {
+	case listBlocked:
+		return defaultList(database, block, db.DefaultBlockedList)
+	case listExceptions:
+		return defaultList(database, block, db.DefaultExceptionsList)
+	}
+	return kind, nil
+}
+
+var blockExportListCmd = &cobra.Command{
+	Use:   "export-list [block] [blocked|exceptions|apps|titles|<list name>]",
+	Short: "Print one list, one entry per line",
+	Args:  cobra.ExactArgs(2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		detail, err := database.GetBlock(args[0])
+		if err != nil {
+			return err
+		}
+		var lines []string
+		switch args[1] {
+		case listApps:
+			lines = detail.Apps
+		case listTitles:
+			lines = detail.Titles
+		default:
+			name, err := listFor(database, args[0], args[1])
+			if err != nil {
+				return err
+			}
+			_, l, err := findList(database, args[0], name)
+			if err != nil {
+				return err
+			}
+			lines = l.Entries
+		}
+		for _, line := range lines {
+			fmt.Println(line)
+		}
+		return nil
+	}),
+}
+
+// addApps adds apps to a block. Apps are always blocked, so adding one only
+// strengthens it.
 func addApps(database *db.DB, name string, apps []string) error {
 	for _, a := range apps {
 		if err := blocker.ValidAppEntry(a); err != nil {
@@ -220,71 +175,25 @@ func addTitles(database *db.DB, name string, titles []string) error {
 	return reapplyIfActive(database, name)
 }
 
-var blockExportListCmd = &cobra.Command{
-	Use:   "export-list [block] [blocked|exceptions|apps|titles]",
-	Short: "Print one list, one entry per line",
-	Args:  cobra.ExactArgs(2),
-	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		if err := checkListKind(args[1]); err != nil {
-			return err
-		}
-		detail, err := database.GetBlock(args[0])
-		if err != nil {
-			return err
-		}
-		lines := detail.Exceptions
-		switch args[1] {
-		case listApps:
-			lines = detail.Apps
-		case listTitles:
-			lines = detail.Titles
-		case listBlocked:
-			lines = append(append([]string{}, detail.Sites...), detail.Patterns...)
-			if detail.Mode == db.ModeAllowlist {
-				lines = detail.Patterns
-			}
-		default:
-			if detail.Mode == db.ModeAllowlist {
-				lines = append(append([]string{}, detail.Sites...), detail.Exceptions...)
-			}
-		}
-		for _, line := range lines {
-			fmt.Println(line)
-		}
-		return nil
-	}),
-}
-
 var blockImportListCmd = &cobra.Command{
-	Use:   "import-list [block] [blocked|exceptions|apps|titles] [file]",
+	Use:   "import-list [block] [blocked|exceptions|apps|titles|<list name>] [file]",
 	Short: "Add entries from a text file with one entry per line",
 	Args:  cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		if err := checkListKind(args[1]); err != nil {
-			return err
-		}
-		data, err := readAsCaller(args[2])
+		entries, err := readEntryFile(args[2])
 		if err != nil {
 			return err
 		}
-		var entries []string
-		for _, line := range strings.Split(string(data), "\n") {
-			if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
-				entries = append(entries, line)
-			}
-		}
-		if len(entries) == 0 {
-			return fmt.Errorf("%s has no entries", args[2])
-		}
 		switch args[1] {
-		case listBlocked:
-			err = addBlockedEntries(cmd, database, args[0], entries)
 		case listApps:
 			err = addApps(database, args[0], entries)
 		case listTitles:
 			err = addTitles(database, args[0], entries)
 		default:
-			err = addExceptions(cmd, database, args[0], entries)
+			var name string
+			if name, err = listFor(database, args[0], args[1]); err == nil {
+				err = listAdd(cmd, database, args[0], name, entries)
+			}
 		}
 		if err != nil {
 			return err
@@ -295,7 +204,9 @@ var blockImportListCmd = &cobra.Command{
 }
 
 func init() {
-	addNowFlag(blockAddEntryCmd, blockRemoveEntryCmd, blockAddExceptionCmd, blockImportListCmd)
-	blockCmd.AddCommand(blockAddEntryCmd, blockRemoveEntryCmd, blockAddExceptionCmd,
+	addNowFlag(blockAddEntryCmd, blockRemoveEntryCmd, blockAddSiteCmd, blockRemoveSiteCmd, blockRemovePatternCmd,
+		blockAddExceptionCmd, blockImportListCmd)
+	blockCmd.AddCommand(blockAddEntryCmd, blockRemoveEntryCmd, blockAddSiteCmd, blockRemoveSiteCmd,
+		blockAddPatternCmd, blockRemovePatternCmd, blockAddExceptionCmd,
 		blockRemoveExceptionCmd, blockExportListCmd, blockImportListCmd)
 }

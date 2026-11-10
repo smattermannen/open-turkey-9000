@@ -26,50 +26,58 @@ import (
 )
 
 // Inputs derives the layer inputs from the active blocks:
-//   - hostsDomains: blocklist-mode domains for /etc/hosts and the firewall
-//     (allowlist mode can't be represented there, so only blocklist domains go
-//     to those layers).
+//   - hostsDomains: the domains of blacklists that look at addresses and
+//     block, for /etc/hosts and the firewall, minus those with an address
+//     exception under them (those layers block whole hosts).
 //   - apps: the union of process names to kill.
-//   - bp: the full browser policy (blocklist domains, patterns, and allowlist
-//     mode/domains if any active block is an allowlist).
+//   - bp: the browser policy: those blacklists' domains and patterns, with
+//     the block's address exceptions.
 //
-// Everything is unioned across active blocks, including allowlists: with two
-// allowlist blocks active, a site allowed by either one is reachable. Only
-// blocks with the block action contribute websites: a block that only greys
-// out or strips images leaves its sites reachable, and the extension does the
-// rest (see BuildRules). Apps are blocked whatever the actions.
+// Everything is unioned across active blocks. A block with exceptions by
+// title or text leaves its websites to the extension alone: only it can
+// read a page before deciding, so those layers would block pages the
+// exceptions spare. Greyscale and no-images only go to the extension (see
+// BuildRules). Apps are blocked whatever the lists do.
 func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp blocker.BrowserPolicy) {
-	var blockDomains, hostDomains, allowDomains, patterns, exceptions, appList []string
-	allowMode := false
+	var blockDomains, hostDomains, patterns, exceptions, appList []string
 
 	for _, b := range active {
 		appList = append(appList, b.Apps...)
-		if !b.Actions.Block {
+		if pageExceptions(b.Lists) {
 			continue
 		}
-		patterns = append(patterns, b.Patterns...)
-		exceptions = append(exceptions, b.Exceptions...)
-		if b.Mode == db.ModeAllowlist {
-			allowMode = true
-			allowDomains = append(allowDomains, b.Sites...)
-		} else {
-			blockDomains = append(blockDomains, b.Sites...)
-			for _, site := range b.Sites {
-				if !blocker.HasExceptionUnder(site, b.Exceptions) {
+		except := urlEntries(b.Lists.ExceptionEntries(db.PlaceURL))
+		used := false
+		for _, l := range b.Lists.Blacklists() {
+			if !l.Enforces() || !l.Where.URL || !l.HasAction(db.ActionBlock) {
+				continue
+			}
+			used = true
+			domains, pats := blocker.SplitURLEntries(l.Entries)
+			blockDomains = append(blockDomains, domains...)
+			patterns = append(patterns, pats...)
+			for _, site := range domains {
+				if !blocker.HasExceptionUnder(site, except) {
 					hostDomains = append(hostDomains, site)
 				}
 			}
+		}
+		if used {
+			exceptions = append(exceptions, except...)
 		}
 	}
 
 	bp = blocker.BrowserPolicy{
 		BlockDomains:  blockDomains,
 		BlockPatterns: patterns,
-		AllowMode:     allowMode,
-		AllowDomains:  allowDomains,
 		Exceptions:    exceptions,
 	}
 	return blocker.ValidDomains(hostDomains), dedup(appList), bp
+}
+
+// pageExceptions reports whether a block has exceptions by title or text.
+func pageExceptions(lists db.Lists) bool {
+	return len(lists.ExceptionEntries(db.PlaceTitle))+len(lists.ExceptionEntries(db.PlaceText)) > 0
 }
 
 // titleGuard closes apps whose window titles contain blocked keywords.

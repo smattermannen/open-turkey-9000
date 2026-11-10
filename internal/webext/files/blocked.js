@@ -10,7 +10,7 @@ const reason = params.get("reason");
 const byTitle = reason === "title" || reason === "keyword";
 const notes = {
   title: "Its title contains a word one of your blocks closes.",
-  keyword: "Its text contains words one of your blocks looks for.",
+  keyword: "Its title or text contains words one of your blocks looks for.",
 };
 if (notes[reason]) {
   const note = document.getElementById("note");

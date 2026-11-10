@@ -1,16 +1,16 @@
 "use strict";
 
-// Greys out pages and hides images on the sites of blocks with those actions.
-// The background script also cancels image requests from those pages; hiding
+// Greys out pages and hides images for the blacklists with those actions,
+// and reads the page's title and text for the lists that look at them. The
+// background script also cancels image requests from those pages; hiding
 // them here covers images already cached or drawn by the page itself.
 
 const STYLE_ID = "kc9k-page-style";
-let filters = null;
+let lists = null;
 let shownFor = null;
-// What the page keyword rules decided for the page at keywordsFor. Once a
-// rule applies to a page it stays until the address changes, so a page can't
-// shake it off by changing its text.
-let keywordRules = [];
+// What the lists decided from the title and text of the page at keywordsFor.
+// Once a list applies to a page it stays until the address changes, so a
+// page can't shake it off by changing its text.
 let keywordHits = { block: false, greyscale: false, noImages: false };
 let keywordsFor = null;
 let textChanged = true;
@@ -32,7 +32,7 @@ function topUrl() {
 }
 
 function render() {
-  if (!filters) {
+  if (!lists) {
     return;
   }
   const url = topUrl();
@@ -40,8 +40,9 @@ function render() {
     keywordHits = { block: false, greyscale: false, noImages: false };
     keywordsFor = url;
   }
-  const greyscale = kc9kMatches(filters.greyscale, url) || keywordHits.greyscale;
-  const noImages = kc9kMatches(filters.noImages, url) || keywordHits.noImages;
+  const byAddress = kc9kListActions(lists, { url });
+  const greyscale = Boolean(byAddress.greyscale) || keywordHits.greyscale;
+  const noImages = Boolean(byAddress["no-images"]) || keywordHits.noImages;
   shownFor = url;
   let css = "";
   if (greyscale) {
@@ -67,23 +68,18 @@ function render() {
 }
 
 function load(page) {
-  filters = {
-    greyscale: kc9kFilter(page && page.greyscale),
-    noImages: kc9kFilter(page && page.no_images),
-  };
-  keywordRules = (page && page.keywords) || [];
+  lists = kc9kCompileLists(page && page.lists);
   textChanged = true;
   render();
   scanKeywords();
 }
 
-// scanKeywords reads the page's text (in the top frame only: a frame's text
-// is part of what the page shows, but is scanned as its own page would be)
-// and applies the page keyword rules. Blocking goes through the background
-// script, which sends the tab to the block page and also hides images in
-// the page's frames.
+// scanKeywords reads the page's title and text (in the top frame only: a
+// frame's text is part of what the page shows) and applies the lists.
+// Blocking goes through the background script, which sends the tab to the
+// block page and also hides images in the page's frames.
 function scanKeywords() {
-  if (window !== window.top || !filters || keywordRules.length === 0 || !textChanged) {
+  if (window !== window.top || !lists || !kc9kReadsPage(lists) || !textChanged) {
     return;
   }
   const body = document.body || document.documentElement;
@@ -91,13 +87,14 @@ function scanKeywords() {
     return;
   }
   textChanged = false;
-  const text = (document.title + "\n" + (body.innerText || body.textContent || "")).slice(0, MAX_TEXT);
+  const text = (body.innerText || body.textContent || "").slice(0, MAX_TEXT);
   const url = location.href;
   if (keywordsFor !== url) {
     keywordHits = { block: false, greyscale: false, noImages: false };
     keywordsFor = url;
   }
-  const hits = kc9kKeywordActions(keywordRules, url, text);
+  const acts = kc9kListActions(lists, { url, title: document.title || "", text });
+  const hits = { block: Boolean(acts.block), greyscale: Boolean(acts.greyscale), noImages: Boolean(acts["no-images"]) };
   const before = JSON.stringify(keywordHits);
   keywordHits = {
     block: keywordHits.block || hits.block,
@@ -132,7 +129,7 @@ browser.storage.onChanged.addListener((changes) => {
 // Sites that change pages without reloading (YouTube, Reddit) keep this
 // script, so follow their address.
 setInterval(() => {
-  if (filters && topUrl() !== shownFor) {
+  if (lists && topUrl() !== shownFor) {
     textChanged = true;
     render();
     scanKeywords();

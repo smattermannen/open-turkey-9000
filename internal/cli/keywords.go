@@ -1,4 +1,5 @@
-// keywords.go — page keywords and their thresholds for a block.
+// keywords.go — shortcuts to a block's "Page words" list, a blacklist that
+// looks at page text (created when first needed).
 //
 //	kc9k block add-keyword <block> nsfw 18+ "*porn*"
 //	kc9k block remove-keyword <block> nsfw
@@ -8,8 +9,7 @@
 // The extension reads each page's text. A plain keyword counts only as a
 // whole word ("porn" misses "pornhub", "18+" misses "1118+"); a * matches
 // inside words ("*porn*" hits "pornhub"). When a page contains at least the
-// threshold's number of the block's distinct keywords, the block's ticked
-// actions apply to it: the block page, greyscale, no images.
+// threshold's number of the list's different keywords, that action applies.
 package cli
 
 import (
@@ -36,75 +36,17 @@ func checkPageKeywords(keywords []string) error {
 	return nil
 }
 
-var blockAddKeywordCmd = &cobra.Command{
-	Use:   "add-keyword [block] [keywords...]",
-	Short: "Act on pages whose text contains these words",
-	Long: `While the block is on, the extension looks for its keywords in the text of
-every page (case-insensitive). A plain keyword counts only as a whole word:
-"porn" doesn't count in "pornhub", and "18+" doesn't count in "1118+". A *
-matches inside words: "*porn*" counts in "pornhub", "porn*" in "pornstar".
+var blockAddKeywordCmd = shortcut("add-keyword [block] [keywords...]", "Look for these words in page text (the Page words list)", db.DefaultWordsList, true)
 
-Once a page contains at least the threshold's number of different keywords
-('kc9k block threshold'; 1 unless changed), the block's actions apply to it:
-the block page, greyscale or no images, as ticked with 'kc9k block action'.
-Adding keywords only makes a block stricter, so it is always allowed.`,
-	Args: cobra.MinimumNArgs(2),
-	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		name, keywords := args[0], args[1:]
-		if err := checkPageKeywords(keywords); err != nil {
-			return err
-		}
-		if err := database.AddPageKeywords(name, keywords); err != nil {
-			return err
-		}
-		if err := reapplyIfActive(database, name); err != nil {
-			return err
-		}
-		fmt.Printf("Page keywords added to block '%s'.\n", name)
-		return nil
-	}),
-}
-
-var blockRemoveKeywordCmd = &cobra.Command{
-	Use:   "remove-keyword [block] [keywords...]",
-	Short: "Stop looking for these words in pages",
-	Args:  cobra.MinimumNArgs(2),
-	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		name, keywords := args[0], args[1:]
-		detail, err := database.GetBlock(name)
-		if err != nil {
-			return err
-		}
-		if err := requireAll("page keyword", name, detail.Keywords, keywords); err != nil {
-			return err
-		}
-		proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditRemoveKeywords, Values: keywords})
-		if err != nil || !proceed {
-			return err
-		}
-		if err := database.RemovePageKeywords(name, keywords); err != nil {
-			return err
-		}
-		if err := reapplyIfActive(database, name); err != nil {
-			return err
-		}
-		fmt.Printf("Page keywords removed from block '%s'.\n", name)
-		return nil
-	}),
-}
+var blockRemoveKeywordCmd = shortcut("remove-keyword [block] [keywords...]", "Remove words from the Page words list", db.DefaultWordsList, false)
 
 var blockThresholdCmd = &cobra.Command{
 	Use:   "threshold [block] [" + strings.Join(db.ActionNames, "|") + "] [count]",
-	Short: "How many different page keywords trigger each action",
-	Long: `Sets, for one of the block's actions, how many of its different page keywords
-a page must contain before that action applies. Repeats of the same keyword
-count once. For example, greyscale at 1 and block at 3: one keyword greys the
-page, three different ones block it.
-
-Lowering a threshold makes the block stricter and is always allowed. Raising
-one loosens it, so it is gated like other loosening edits (refused while the
-block is held; queued for a block with allow windows, or applied with --now
-after the typing challenge). With only the block name, prints the thresholds.`,
+	Short: "How many different page words trigger each action (the Page words list)",
+	Long: `A shortcut for 'kc9k list threshold' on the block's Page words list: how many
+of its different words a page must contain before that action applies.
+Repeats of the same word count once. Lowering a threshold is always allowed;
+raising one loosens the block. With only the block name, prints them.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 && len(args) != 3 {
 			return fmt.Errorf("give a block, or a block, an action and a count")
@@ -113,44 +55,25 @@ after the typing challenge). With only the block name, prints the thresholds.`,
 	},
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		name := args[0]
-		detail, err := database.GetBlock(name)
+		list, err := defaultList(database, name, db.DefaultWordsList)
 		if err != nil {
 			return err
 		}
 		if len(args) == 1 {
-			for _, action := range db.ActionNames {
-				fmt.Printf("%s %d\n", action, detail.Thresholds.Get(action))
-			}
-			return nil
-		}
-		action := strings.ToLower(args[1])
-		if !db.IsAction(action) {
-			return fmt.Errorf("unknown action %q (use %s)", args[1], strings.Join(db.ActionNames, ", "))
-		}
-		n, err := strconv.Atoi(args[2])
-		if err != nil || n < 1 || n > db.MaxThreshold {
-			return fmt.Errorf("a threshold is a number from 1 to %d", db.MaxThreshold)
-		}
-		current := detail.Thresholds.Get(action)
-		if n == current {
-			fmt.Printf("Block '%s' already needs %d keyword(s) for %s.\n", name, n, action)
-			return nil
-		}
-		if n > current {
-			proceed, err := gateEdit(cmd, database, name, false,
-				db.Edit{Action: db.EditSetThreshold, Values: []string{action, strconv.Itoa(n)}})
-			if err != nil || !proceed {
+			_, l, err := findList(database, name, list)
+			if err != nil {
 				return err
 			}
+			for _, a := range l.Actions {
+				fmt.Printf("%s %d\n", a.Name, a.Distinct)
+			}
+			return nil
 		}
-		if err := database.SetThreshold(name, action, n); err != nil {
-			return err
+		n, err := strconv.Atoi(args[2])
+		if err != nil {
+			return fmt.Errorf("a threshold is a number from 1 to %d", db.MaxThreshold)
 		}
-		if err := reapplyIfActive(database, name); err != nil {
-			return err
-		}
-		fmt.Printf("Block '%s' now needs %d different keyword(s) for %s.\n", name, n, action)
-		return nil
+		return listThreshold(cmd, database, name, list, strings.ToLower(args[1]), n)
 	}),
 }
 

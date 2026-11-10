@@ -45,11 +45,18 @@ BROWSER_OPTIONS = (
      "No image, shopping or AI results in Google."),
 )
 
-# What a block does to the websites on its list; any combination.
+# What a blacklist does to the pages it matches; any combination.
 SITE_ACTIONS = (
     ("block", "Block"),
     ("greyscale", "Greyscale"),
     ("no-images", "Block images"),
+)
+
+# Where a list looks.
+LIST_PLACES = (
+    ("url", "Address"),
+    ("title", "Page title"),
+    ("text", "Page text"),
 )
 
 
@@ -230,12 +237,6 @@ def block_summary(block):
         parts.append(f"quota {block['quota_used'] // 60} of {block['quota_limit'] // 60} min")
     if block["quota_open"]:
         parts.append("quota in use")
-    if block["mode"] == "allowlist":
-        parts.append("allowlist")
-    actions = block.get("actions", ["block"])
-    if actions != ["block"]:
-        titles = dict(SITE_ACTIONS)
-        parts.append("websites: " + ", ".join(titles.get(a, a).lower() for a in actions))
     return " · ".join(parts)
 
 
@@ -291,7 +292,8 @@ class EditableList(Gtk.Box):
                  on_import=None, on_export=None, help_text=""):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
-        self.pack_start(heading(title, "medium"), False, False, 0)
+        if title:
+            self.pack_start(heading(title, "medium"), False, False, 0)
         if help_text:
             self.pack_start(dim(help_text), False, False, 0)
 
@@ -339,6 +341,142 @@ class EditableList(Gtk.Box):
         model, iterator = self.view.get_selection().get_selected()
         if iterator:
             self.on_remove(model[iterator][0], model.get_path(iterator)[0] + 1)
+
+
+class ListCard(Gtk.Frame):
+    """One website list: where it looks, its actions (blacklists), its
+    thresholds for page text, and its entries. Every change runs through
+    the window, which runs a kc9k command."""
+
+    def __init__(self, window, data):
+        super().__init__()
+        self.window, self.data = window, data
+        self.filling = False
+        self.is_exceptions = data["kind"] == "exceptions"
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        self.add(box)
+
+        top = Gtk.Box(spacing=6)
+        self.title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        top.pack_start(self.title, True, True, 0)
+        for label, handler in (("Delete…", self.delete), ("Rename…", self.rename)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", handler)
+            top.pack_end(button, False, False, 0)
+        box.pack_start(top, False, False, 0)
+
+        self.place_checks = {}
+        places = Gtk.Box(spacing=12)
+        places.pack_start(Gtk.Label(label="Looks at:"), False, False, 0)
+        for name, title in LIST_PLACES:
+            check = Gtk.CheckButton(label=title)
+            check.connect("toggled", self.toggle_place, name)
+            self.place_checks[name] = check
+            places.pack_start(check, False, False, 0)
+        box.pack_start(places, False, False, 0)
+
+        self.action_checks, self.spins = {}, {}
+        self.threshold_row = None
+        if not self.is_exceptions:
+            actions = Gtk.Box(spacing=12)
+            actions.pack_start(Gtk.Label(label="Actions:"), False, False, 0)
+            for name, title in SITE_ACTIONS:
+                check = Gtk.CheckButton(label=title)
+                check.connect("toggled", self.toggle_action, name)
+                self.action_checks[name] = check
+                actions.pack_start(check, False, False, 0)
+            box.pack_start(actions, False, False, 0)
+
+            # For page text: how many different entries each action needs.
+            self.threshold_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            self.threshold_row.pack_start(dim("Different words a page's text needs for each action:"),
+                                          False, False, 0)
+            grid = Gtk.Grid(column_spacing=8, row_spacing=4)
+            for row, (name, title) in enumerate(SITE_ACTIONS):
+                label = Gtk.Label(label=title, xalign=0)
+                spin = Gtk.SpinButton.new_with_range(1, 1000, 1)
+                self.spins[name] = (label, spin)
+                grid.attach(label, 0, row, 1, 1)
+                grid.attach(spin, 1, row, 1, 1)
+            save = Gtk.Button(label="Save numbers", valign=Gtk.Align.END)
+            save.connect("clicked", self.save_numbers)
+            grid.attach(save, 2, 0, 1, len(SITE_ACTIONS))
+            self.threshold_row.pack_start(grid, False, False, 0)
+            box.pack_start(self.threshold_row, False, False, 0)
+
+        self.entries = EditableList(
+            "", "reddit.com  *casino*  nsfw", self.add_entries, self.remove_entry,
+            lambda: window.import_list(["list", "import", window.selected, self.data["name"]]),
+            lambda: window.export_list(["list", "export", window.selected, self.data["name"]]))
+        box.pack_start(self.entries, True, True, 0)
+        self.update(data)
+
+    def update(self, data):
+        self.data = data
+        self.filling = True
+        try:
+            kind = "exceptions" if self.is_exceptions else "blacklist"
+            count = len(data["entries"])
+            self.title.set_markup(f"<b>{GLib.markup_escape_text(data['name'])}</b>  "
+                                  f"<small>{kind} · {count} {'entry' if count == 1 else 'entries'}</small>")
+            for name, check in self.place_checks.items():
+                check.set_active(name in data["where"])
+            actions = {a["action"]: a["distinct"] for a in data["actions"]}
+            for name, check in self.action_checks.items():
+                check.set_active(name in actions)
+            for name, (label, spin) in self.spins.items():
+                spin.set_value(actions.get(name, 1))
+                for widget in (label, spin):
+                    widget.set_no_show_all(name not in actions)
+                    widget.set_visible(name in actions)
+            if self.threshold_row is not None:
+                self.threshold_row.set_no_show_all("text" not in data["where"])
+                self.threshold_row.set_visible("text" in data["where"])
+            self.entries.set_items(data["entries"])
+            words = "title" in data["where"] or "text" in data["where"]
+            self.entries.entry.set_placeholder_text(
+                ("reddit.com  *.xxx  nsfw" if words else "reddit.com  *.xxx  *casino*")
+                if "url" in data["where"] else "nsfw  18+  *porn*")
+        finally:
+            self.filling = False
+
+    def command(self, *args):
+        return ["list", args[0], self.window.selected, self.data["name"], *args[1:]]
+
+    def add_entries(self, values):
+        self.window.run(self.command("add", *values), then=self.window.queued_note)
+
+    def remove_entry(self, value, _num):
+        self.window.run(self.command("remove", value), then=self.window.queued_note)
+
+    def toggle_place(self, check, name):
+        if self.filling or self.window.updating:
+            return
+        self.window.run(self.command("where", name, "on" if check.get_active() else "off"),
+                        then=self.window.queued_note)
+
+    def toggle_action(self, check, name):
+        if self.filling or self.window.updating:
+            return
+        self.window.run(self.command("action", name, "on" if check.get_active() else "off"),
+                        then=self.window.queued_note)
+
+    def save_numbers(self, _button):
+        current = {a["action"]: a["distinct"] for a in self.data["actions"]}
+        changes = [(name, spin.get_value_as_int()) for name, (_label, spin) in self.spins.items()
+                   if name in current and spin.get_value_as_int() != current[name]]
+        self.window.run_thresholds(self.window.selected, self.data["name"], changes)
+
+    def rename(self, _button):
+        name = self.window.ask_text("Rename list", initial=self.data["name"])
+        if name and name != self.data["name"]:
+            self.window.run(self.command("rename", name))
+
+    def delete(self, _button):
+        if self.window.confirm(f"Delete the list {self.data['name']}?",
+                               "Its entries go with it. Deleting a blacklist loosens the block.",
+                               "Delete", destructive=True):
+            self.window.run(self.command("delete"), then=self.window.queued_note)
 
 
 class StatTile(Gtk.Box):
@@ -804,22 +942,18 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return value if answer == Gtk.ResponseType.OK else ""
 
-    def save_thresholds(self, _button):
-        block = self.blocks.get(self.selected)
-        if not block:
-            return
-        current = block.get("keyword_thresholds", {})
-        changed = [(name, spin.get_value_as_int()) for name, spin in self.threshold_spins.items()
-                   if spin.get_value_as_int() != current.get(name, 1)]
-        self.run_thresholds(self.selected, changed)
-
-    def run_thresholds(self, block_name, changes):
-        """Set each (action, number) in turn: one command at a time."""
+    def run_thresholds(self, block_name, list_name, changes):
+        """Set each (action, number) of a list in turn: one command at a time."""
         if not changes:
             return
         (name, value), rest = changes[0], changes[1:]
-        self.run(["block", "threshold", block_name, name, str(value)],
-                 then=lambda _o: self.run_thresholds(block_name, rest))
+        self.run(["list", "threshold", block_name, list_name, name, str(value)],
+                 then=lambda _o: self.run_thresholds(block_name, list_name, rest))
+
+    def queued_note(self, output):
+        """Says so when a change was queued instead of applied."""
+        if "queued" in output:
+            self.message(output, Gtk.MessageType.INFO)
 
     def block_cmd(self, command, values):
         if self.selected:
@@ -1013,33 +1147,34 @@ class Window(Gtk.ApplicationWindow):
         self.detail.pack_start(tabs, True, True, 0)
 
         websites = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin=12)
-        self.action_checks = {}
-        self.filling_actions = False
-        action_row = Gtk.Box(spacing=12)
-        action_row.pack_start(Gtk.Label(label="These websites are:"), False, False, 0)
-        for name, title in SITE_ACTIONS:
-            check = Gtk.CheckButton(label=title)
-            check.connect("toggled", self.toggle_action, name)
-            self.action_checks[name] = check
-            action_row.pack_start(check, False, False, 0)
-        websites.pack_start(action_row, False, False, 0)
-        websites.pack_start(dim(
-            "Tick any combination. Unticking loosens the block, so it isn't possible while it is locked."),
-            False, False, 0)
-        self.sites = EditableList(
-            "Blocked", "reddit.com  reddit.com/r/funny  *.xxx  *casino*",
-            lambda values: self.block_cmd("add", values),
-            lambda value, _num: self.block_cmd("remove-entry", [value]),
-            lambda: self.import_list("blocked"), lambda: self.export_list("blocked"),
-            "Domains, paths, wildcards (*.xxx, *.* for everything) and keywords (*casino*).")
-        self.exceptions = EditableList(
-            "Exceptions", "reddit.com/r/programming",
-            lambda values: self.block_cmd("add-exception", values),
-            lambda value, _num: self.block_cmd("remove-exception", [value]),
-            lambda: self.import_list("exceptions"), lambda: self.export_list("exceptions"),
-            "Allowed even when they match a blocked entry.")
-        for widget in (self.sites, self.exceptions):
-            websites.pack_start(widget, True, True, 0)
+        websites_help = dim(
+            "Each list ticks where it looks: the address, the page title (the tab title) or the "
+            "page text. Addresses take domains, paths and wildcards (*.xxx, *casino*, *.* for "
+            "everything); titles and text take words: a plain word counts only on its own "
+            "(porn misses pornhub), * matches inside words (*porn* hits pornhub). A match in "
+            "the address or title takes every action; in the text, each action needs its number "
+            "of different words. Unticking or removing loosens the block, so it isn't possible "
+            "while it is locked.")
+        # A wrapped label asks for its whole text on one line; cap it, so the
+        # window still fits small screens.
+        websites_help.set_max_width_chars(70)
+        websites.pack_start(websites_help, False, False, 0)
+        self.list_cards = {}
+        self.list_boxes = {}
+        for kind, title, button_label, detail in (
+                ("blacklist", "Blacklists", "New blacklist…", ""),
+                ("exceptions", "Exceptions", "New exception list…",
+                 "A page an exception list matches is spared from every blacklist of this block.")):
+            head = Gtk.Box(spacing=6)
+            head.pack_start(heading(title, "medium"), False, False, 0)
+            new = Gtk.Button(label=button_label)
+            new.connect("clicked", self.create_list, kind)
+            head.pack_end(new, False, False, 0)
+            websites.pack_start(head, False, False, 0)
+            if detail:
+                websites.pack_start(dim(detail), False, False, 0)
+            self.list_boxes[kind] = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            websites.pack_start(self.list_boxes[kind], False, False, 0)
         tabs.append_page(websites, Gtk.Label(label="Websites"))
 
         apps = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=12)
@@ -1047,7 +1182,8 @@ class Window(Gtk.ApplicationWindow):
             "Apps and folders", "discord  com.discordapp.Discord  /opt/games/",
             lambda values: self.block_cmd("add-app", values),
             lambda value, _num: self.block_cmd("remove-app", [value]),
-            lambda: self.import_list("apps"), lambda: self.export_list("apps"),
+            lambda: self.import_list(["block", "import-list", self.selected, "apps"]),
+            lambda: self.export_list(["block", "export-list", self.selected, "apps"]),
             help_text="Executable names, Flatpak app IDs (see 'flatpak list --app'), or folders "
                       "whose programs can't run. Everything a blocked app started is closed too.")
         apps.pack_start(self.apps, True, True, 0)
@@ -1055,37 +1191,13 @@ class Window(Gtk.ApplicationWindow):
             "Window titles", "YouTube  Twitch",
             lambda values: self.block_cmd("add-title", values),
             lambda value, _num: self.block_cmd("remove-title", [value]),
-            lambda: self.import_list("titles"), lambda: self.export_list("titles"),
+            lambda: self.import_list(["block", "import-list", self.selected, "titles"]),
+            lambda: self.export_list(["block", "export-list", self.selected, "titles"]),
             help_text="Any app whose window title contains one of these words is closed while "
                       "the block is on; in LibreWolf, just that tab. Separate words with spaces.")
         apps.set_spacing(14)
         apps.pack_start(self.titles, True, True, 0)
         tabs.append_page(apps, Gtk.Label(label="Apps"))
-
-        words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
-        self.keywords = EditableList(
-            "Page words", "nsfw  18+  *porn*",
-            lambda values: self.block_cmd("add-keyword", values),
-            lambda value, _num: self.block_cmd("remove-keyword", [value]),
-            help_text="Looked for in the text of every page. A plain word counts only on its own "
-                      "(porn misses pornhub, 18+ misses 1118+); * matches inside words (*porn* "
-                      "hits pornhub). Separate words with spaces.")
-        words.pack_start(self.keywords, True, True, 0)
-        words.pack_start(dim("How many different words a page needs before each action applies "
-                             "(repeats count once). Only the actions ticked on the Websites tab "
-                             "apply. Raising a number loosens the block."), False, False, 0)
-        threshold_row = Gtk.Box(spacing=12)
-        self.threshold_spins = {}
-        for name, title in SITE_ACTIONS:
-            threshold_row.pack_start(Gtk.Label(label=title), False, False, 0)
-            spin = Gtk.SpinButton.new_with_range(1, 1000, 1)
-            self.threshold_spins[name] = spin
-            threshold_row.pack_start(spin, False, False, 0)
-        save = Gtk.Button(label="Save numbers")
-        save.connect("clicked", self.save_thresholds)
-        threshold_row.pack_start(save, False, False, 0)
-        words.pack_start(threshold_row, False, False, 0)
-        tabs.append_page(words, Gtk.Label(label="Page words"))
 
         schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
         self.calendar = WeekCalendar(self.create_window_from_calendar, self.remove_window_from_calendar)
@@ -1189,26 +1301,17 @@ class Window(Gtk.ApplicationWindow):
         if block is None:
             self.title_label.set_markup("<big><b>No blocks yet</b></big>")
             self.status_label.set_text("Create a block, add sites or apps, then start it.")
-            for widget in (self.sites, self.exceptions, self.apps, self.titles, self.keywords, self.schedules):
+            for widget in (self.apps, self.titles, self.schedules):
                 widget.set_items([])
+            self.update_lists([])
             self.calendar.set_windows([])
             self.quota_label.set_text("")
             return
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
         self.status_label.set_text(block_summary(block))
-        self.filling_actions = True
-        actions = block.get("actions", ["block"])
-        for name, check in self.action_checks.items():
-            check.set_active(name in actions)
-        self.filling_actions = False
-        self.sites.set_items(block["sites"])
-        self.exceptions.set_items(block["exceptions"])
+        self.update_lists(block.get("lists", []))
         self.apps.set_items(block["apps"])
         self.titles.set_items(block.get("titles", []))
-        self.keywords.set_items(block.get("page_keywords", []))
-        thresholds = block.get("keyword_thresholds", {})
-        for name, spin in self.threshold_spins.items():
-            spin.set_value(thresholds.get(name, 1))
         self.schedules.set_items(block["schedules"])
         self.calendar.set_windows(block.get("schedule_windows", []))
 
@@ -1231,16 +1334,50 @@ class Window(Gtk.ApplicationWindow):
             f"Used today: {block['quota_used'] // 60} of {limit // 60} min"
             + (" · session open" if block["quota_open"] else "") if limit else "No quota set.")
 
-    def toggle_action(self, check, name):
-        if self.filling_actions or self.updating or not self.selected:
+    def update_lists(self, lists):
+        """Shows the selected block's lists, keeping the cards of lists that
+        are still there, so a refresh doesn't disturb what is being typed."""
+        ids = [entry["id"] for entry in lists]
+        for list_id in list(self.list_cards):
+            if list_id not in ids:
+                card = self.list_cards.pop(list_id)
+                card.get_parent().remove(card)
+        for entry in lists:
+            card = self.list_cards.get(entry["id"])
+            if card is None:
+                card = ListCard(self, entry)
+                self.list_cards[entry["id"]] = card
+                self.list_boxes[entry["kind"]].pack_start(card, False, False, 0)
+                card.show_all()
+            card.update(entry)
+
+    def create_list(self, _button, kind):
+        if not self.selected:
             return
-
-        def queued(output):
-            if "queued" in output:
-                self.message(output, Gtk.MessageType.INFO)
-
-        self.run(["block", "action", self.selected, name, "on" if check.get_active() else "off"],
-                 then=queued)
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL,
+            text="New exception list" if kind == "exceptions" else "New blacklist",
+            secondary_text="A name, and where the list looks.")
+        entry = Gtk.Entry(activates_default=True)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        area = dialog.get_message_area()
+        area.pack_start(entry, False, False, 0)
+        checks = {}
+        for name, title in LIST_PLACES:
+            checks[name] = Gtk.CheckButton(label=title, active=name == "url")
+            area.pack_start(checks[name], False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        name = entry.get_text().strip()
+        places = [place for place, check in checks.items() if check.get_active()]
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK or not name:
+            return
+        args = ["list", "create", self.selected, name] + ["--" + place for place in places]
+        if kind == "exceptions":
+            args.append("--exceptions")
+        self.run(args)
 
     # Block actions -------------------------------------------------------
     def create_block(self, _button):
@@ -1415,20 +1552,22 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return path if answer == Gtk.ResponseType.OK else None
 
-    def import_list(self, kind):
+    def import_list(self, command):
+        """Runs command (an import with its block and list) with a file."""
         if not self.selected:
             return
         path = self.choose_file("Import list", Gtk.FileChooserAction.OPEN, "Import")
         if path:
-            self.run(["block", "import-list", self.selected, kind, path])
+            self.run(command + [path], then=self.queued_note)
 
-    def export_list(self, kind):
+    def export_list(self, command):
+        """Saves what command (an export) prints to a file."""
         if not self.selected:
             return
         path = self.choose_file("Export list", Gtk.FileChooserAction.SAVE, "Save")
         if not path:
             return
-        ok, output = run_cli(["block", "export-list", self.selected, kind])
+        ok, output = run_cli(command)
         if not ok:
             self.message(output)
             return

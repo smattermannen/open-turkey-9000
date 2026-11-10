@@ -103,54 +103,15 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 }
 
 // strengtheningEdits lists, for error messages, the edits a held block allows.
-const strengtheningEdits = "add apps, patterns, window titles or page keywords, lower keyword thresholds, add sites to a blocklist, remove sites from an allowlist, turn website actions on, or extend its locks with 'start'"
+const strengtheningEdits = "add apps, window titles, blacklists or blacklist entries, tick more places or actions on a blacklist, lower its thresholds, remove exceptions, or extend its locks with 'start'"
 
-// siteEditStrengthens reports whether adding (or removing) the given sites
-// can only make the block stricter: adding to a blocklist, or removing from an
-// allowlist as long as the block keeps something to enforce (an emptied
-// active block is deactivated, which would be a bypass).
-func siteEditStrengthens(detail *db.BlockDetail, domains []string, adding bool) bool {
-	if detail.Mode != db.ModeAllowlist {
-		return adding
-	}
-	if adding {
-		return false
-	}
-	removing := map[string]bool{}
-	for _, d := range domains {
-		removing[d] = true
-	}
-	left := 0
-	for _, s := range detail.Sites {
-		if !removing[s] {
-			left++
-		}
-	}
-	return left > 0 || len(detail.Apps) > 0 || len(detail.Patterns) > 0 || len(detail.Titles) > 0 || len(detail.Keywords) > 0
-}
-
-// blockEmpty reports whether a block has nothing to enforce: no sites, apps,
-// patterns, window titles or page keywords.
+// blockEmpty reports whether a block has nothing to enforce (see
+// db.BlockDetail.Empty).
 func blockEmpty(d *db.BlockDetail) bool { return d.Empty() }
 
 // freezeLead renders schedule.EditFreeze for messages ("2 hours").
 func freezeLead() string {
 	return fmt.Sprintf("%d hours", int(schedule.EditFreeze/time.Hour))
-}
-
-// normalizeDomains normalizes each raw domain and rejects any that aren't valid
-// hostnames, returning a clear error naming the offending input. This is the
-// user-facing gate; the blocking layers validate again defensively.
-func normalizeDomains(raw []string) ([]string, error) {
-	out := make([]string, 0, len(raw))
-	for _, r := range raw {
-		host := blocker.NormalizeDomain(r)
-		if !blocker.IsValidDomain(host) {
-			return nil, fmt.Errorf("invalid domain %q (expected something like 'example.com')", r)
-		}
-		out = append(out, host)
-	}
-	return out, nil
 }
 
 // --------------------------------------------------------------------------
@@ -170,9 +131,8 @@ var blockCmd = &cobra.Command{
 // Subcommand: block create
 // --------------------------------------------------------------------------
 
-// blockCreateCmd creates a new block with the given name.
-// The name must be unique — if a block with the same name already exists,
-// the database returns an error.
+// blockCreateCmd creates a new block with the given name, with an empty
+// blacklist ("Blocked") and exception list ("Exceptions").
 //
 // Usage:
 //
@@ -182,23 +142,18 @@ var blockCmd = &cobra.Command{
 var blockCreateCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a new block",
-	Long: `Create a new block.
+	Long: `Create a new block, with an empty blacklist ("Blocked") and exception list
+("Exceptions") that look at addresses. See 'kc9k list' for more lists.
 
-  --allowlist         Make it an allowlist block (block everything EXCEPT its
-                      sites; enforced at the browser layer only).
-  --template NAME     Seed it from a built-in list (social-media, news, video,
-                      shopping).`,
+  --allowlist         Block every website (*.* in Blocked) except what you add
+                      to Exceptions.
+  --template NAME     Seed Blocked from a built-in list (social-media, news,
+                      video, shopping).`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
-
 		allowlist, _ := cmd.Flags().GetBool("allowlist")
 		template, _ := cmd.Flags().GetString("template")
-
-		mode := db.ModeBlocklist
-		if allowlist {
-			mode = db.ModeAllowlist
-		}
 
 		// Resolve template seeds (validated) before touching the database, so a
 		// bad template name fails cleanly with nothing created.
@@ -206,192 +161,42 @@ var blockCreateCmd = &cobra.Command{
 		if template != "" {
 			raw, err := templateDomains(template)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return err
 			}
-			seeds, err = normalizeDomains(raw)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+			if seeds, err = prepareEntries(db.Where{URL: true}, raw); err != nil {
+				return err
 			}
+		}
+		if allowlist {
+			seeds = append([]string{"*.*"}, seeds...)
 		}
 
 		database, err := openDB()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer database.Close()
 
-		if err := database.CreateBlock(name, mode); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+		if err := database.CreateBlock(name); err != nil {
+			return err
 		}
-
 		if len(seeds) > 0 {
-			if err := database.AddSites(name, seeds); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+			id, err := database.ListID(name, db.DefaultBlockedList)
+			if err != nil {
+				return err
+			}
+			if err := database.AddListEntries(id, seeds); err != nil {
+				return err
 			}
 		}
-
-		fmt.Printf("Block '%s' created successfully (%s).\n", name, mode)
-		if len(seeds) > 0 {
+		fmt.Printf("Block '%s' created successfully.\n", name)
+		if allowlist {
+			fmt.Printf("It blocks every website; add the ones to allow with 'kc9k block add-exception %s <sites>'.\n", name)
+		}
+		if template != "" {
 			fmt.Printf("Seeded %d sites from template '%s'.\n", len(seeds), template)
 		}
-	},
-}
-
-// --------------------------------------------------------------------------
-// Subcommand: block add-site
-// --------------------------------------------------------------------------
-
-// blockAddSiteCmd adds one or more domains (sites) to an existing block.
-// The first argument is the block name, and the rest are the domains.
-//
-// Usage: kc9k block add-site social-media facebook.com instagram.com
-var blockAddSiteCmd = &cobra.Command{
-	Use:   "add-site [block] [domains...]",
-	Short: "Add sites to a block",
-	// cobra.MinimumNArgs(2) requires at least 2 arguments:
-	// the block name + at least 1 domain.
-	Args: cobra.MinimumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		// The first argument is the block name.
-		name := args[0]
-
-		// Normalize and validate each domain. Rejecting invalid input here
-		// (and again in the blocking layers) prevents crafted strings — e.g.
-		// one containing a newline — from being injected into /etc/hosts.
-		domains, err := normalizeDomains(args[1:])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
-		database, err := openDB()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		defer database.Close()
-
-		detail, err := database.GetBlock(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		proceed, err := gateEdit(cmd, database, name, siteEditStrengthens(detail, domains, true),
-			db.Edit{Action: db.EditAddSites, Values: domains})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if !proceed {
-			return
-		}
-
-		if err := database.AddSites(name, domains); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
-		active, err := database.IsBlockActive(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if active {
-			if err := enforce.ApplyFromDB(database); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-		}
-
-		fmt.Printf("Sites added to block '%s' successfully.\n", name)
-	},
-}
-
-// --------------------------------------------------------------------------
-// Subcommand: block remove-site
-// --------------------------------------------------------------------------
-
-// blockRemoveSiteCmd removes one or more domains (sites) from an existing block.
-//
-// Usage: kc9k block remove-site social-media facebook.com instagram.com
-var blockRemoveSiteCmd = &cobra.Command{
-	Use:   "remove-site [block] [domains...]",
-	Short: "Remove sites from a block",
-	Args:  cobra.MinimumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		name := args[0]
-		// Normalize each domain to guarantee a match with what's in the database.
-		domains, err := normalizeDomains(args[1:])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
-		database, err := openDB()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		defer database.Close()
-
-		detail, err := database.GetBlock(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if err := requireAll("site", name, detail.Sites, domains); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		proceed, err := gateEdit(cmd, database, name, siteEditStrengthens(detail, domains, false),
-			db.Edit{Action: db.EditRemoveSites, Values: domains})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if !proceed {
-			return
-		}
-
-		if err := database.RemoveSites(name, domains); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
-		active, err := database.IsBlockActive(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if active {
-			// If the block became empty, deactivate it to avoid an "active with
-			// nothing" state (and to ensure the layers are removed if nothing
-			// active remains).
-			detail, err := database.GetBlock(name)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-
-			if blockEmpty(detail) {
-				if err := database.DeactivateBlock(name); err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					os.Exit(1)
-				}
-			}
-
-			if err := enforce.ApplyFromDB(database); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-		}
-
-		fmt.Printf("Sites removed from block '%s' successfully.\n", name)
+		return nil
 	},
 }
 
@@ -561,14 +366,14 @@ var blockListCmd = &cobra.Command{
 		// %-20s = left-aligned string, 20 characters wide.
 		// %-6s  = left-aligned string, 6 characters wide.
 		// This format keeps the columns visually aligned.
-		fmt.Printf("%-20s %-6s %-6s %s\n", "BLOCK", "SITES", "APPS", "CREATED AT")
+		fmt.Printf("%-20s %-8s %-6s %s\n", "BLOCK", "ENTRIES", "APPS", "CREATED AT")
 
 		// Iterate over each block and print a table row.
 		for _, b := range blocks {
 			// %-20s for the block name (left-aligned).
 			// %-6d for the numbers (left-aligned, integer format).
 			// %s for the creation date.
-			fmt.Printf("%-20s %-6d %-6d %s\n", b.Name, b.SiteCount, b.AppCount, b.CreatedAt)
+			fmt.Printf("%-20s %-8d %-6d %s\n", b.Name, b.EntryCount, b.AppCount, b.CreatedAt)
 		}
 	},
 }
@@ -605,8 +410,6 @@ var blockInfoCmd = &cobra.Command{
 
 		// Show the block's basic information.
 		fmt.Printf("Block: %s\n", block.Name)
-		fmt.Printf("Mode: %s\n", block.Mode)
-		fmt.Printf("Actions: %s\n", block.Actions)
 		fmt.Printf("Created at: %s\n", block.CreatedAt)
 
 		// Status line: inactive, or active with any holds.
@@ -631,16 +434,16 @@ var blockInfoCmd = &cobra.Command{
 			fmt.Printf("Status: Inactive\n")
 		}
 
-		// Show the list of blocked sites.
-		// Separate with a blank line to improve readability.
-		fmt.Println()
-		if len(block.Sites) > 0 {
-			fmt.Println("Blocked sites:")
-			for _, site := range block.Sites {
-				fmt.Printf("  - %s\n", site)
+		// Show the website lists.
+		for _, l := range block.Lists {
+			fmt.Println()
+			fmt.Println(describeList(l) + ":")
+			if len(l.Entries) == 0 {
+				fmt.Println("  (empty)")
 			}
-		} else {
-			fmt.Println("Blocked sites: none")
+			for _, e := range l.Entries {
+				fmt.Printf("  - %s\n", e)
+			}
 		}
 
 		// Show the list of blocked applications.
@@ -660,25 +463,6 @@ var blockInfoCmd = &cobra.Command{
 			fmt.Println("Window titles (apps showing them are closed):")
 			for _, k := range block.Titles {
 				fmt.Printf("  - %s\n", k)
-			}
-		}
-
-		// Show page keywords and their thresholds, if any.
-		if len(block.Keywords) > 0 {
-			fmt.Println()
-			fmt.Printf("Page keywords (different ones needed: block %d, greyscale %d, no-images %d):\n",
-				block.Thresholds.Block, block.Thresholds.Greyscale, block.Thresholds.NoImages)
-			for _, k := range block.Keywords {
-				fmt.Printf("  - %s\n", k)
-			}
-		}
-
-		// Show browser patterns, if any.
-		if len(block.Patterns) > 0 {
-			fmt.Println()
-			fmt.Println("Browser patterns:")
-			for _, p := range block.Patterns {
-				fmt.Printf("  - %s\n", p)
 			}
 		}
 
@@ -796,15 +580,13 @@ func init() {
 	rootCmd.AddCommand(blockCmd)
 
 	// Flags for "block create".
-	blockCreateCmd.Flags().Bool("allowlist", false, "Create an allowlist block (block everything except its sites)")
+	blockCreateCmd.Flags().Bool("allowlist", false, "Block every website except what you add to its Exceptions list")
 	blockCreateCmd.Flags().String("template", "", "Seed the block from a built-in list (social-media, news, video, shopping)")
 
 	// Add every subcommand as a child of "block".
-	addNowFlag(blockAddSiteCmd, blockRemoveSiteCmd, blockRemoveAppCmd, blockRemoveCmd)
+	addNowFlag(blockRemoveAppCmd, blockRemoveCmd)
 
 	blockCmd.AddCommand(blockCreateCmd)
-	blockCmd.AddCommand(blockAddSiteCmd)
-	blockCmd.AddCommand(blockRemoveSiteCmd)
 	blockCmd.AddCommand(blockAddAppCmd)
 	blockCmd.AddCommand(blockRemoveAppCmd)
 	blockCmd.AddCommand(blockListCmd)

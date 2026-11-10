@@ -1,15 +1,9 @@
-// blockextra.go — additional block subcommands: browser patterns, mode
-// switching, and JSON export/import.
+// blockextra.go — additional block subcommands: the action shortcut, and
+// JSON export/import.
 //
-//	kc9k block add-pattern <block> '*casino*' '*://*/*ads*'
-//	kc9k block remove-pattern <block> '*casino*'
-//	kc9k block set-mode <block> allowlist|blocklist
 //	kc9k block action <block> block|greyscale|no-images on|off
 //	kc9k block export <block>            # prints JSON to stdout
 //	kc9k block import <file>             # creates a block from JSON
-//
-// Patterns are wildcard/keyword URL filters enforced ONLY at the browser layer
-// (they can't be expressed in /etc/hosts or iptables).
 package cli
 
 import (
@@ -28,18 +22,115 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// blockExport is the JSON shape for export/import.
+// listExport is one website list in an export.
+type listExport struct {
+	Name    string          `json:"name"`
+	Kind    string          `json:"kind"`
+	Where   []string        `json:"where"`
+	Actions []db.ListAction `json:"actions,omitempty"`
+	Entries []string        `json:"entries"`
+}
+
+// blockExport is the JSON shape for export/import. Mode, Actions, Sites,
+// Patterns, Exceptions, Keywords and Thresholds are read from exports made
+// before website lists, and turned into lists as the database did.
 type blockExport struct {
-	Name       string         `json:"name"`
-	Mode       string         `json:"mode"`
+	Name   string       `json:"name"`
+	Lists  []listExport `json:"lists,omitempty"`
+	Apps   []string     `json:"apps"`
+	Titles []string     `json:"titles,omitempty"`
+
+	Mode       string         `json:"mode,omitempty"`
 	Actions    []string       `json:"actions,omitempty"`
-	Sites      []string       `json:"sites"`
-	Apps       []string       `json:"apps"`
-	Patterns   []string       `json:"patterns"`
+	Sites      []string       `json:"sites,omitempty"`
+	Patterns   []string       `json:"patterns,omitempty"`
 	Exceptions []string       `json:"exceptions,omitempty"`
-	Titles     []string       `json:"titles,omitempty"`
 	Keywords   []string       `json:"page_keywords,omitempty"`
 	Thresholds *db.Thresholds `json:"keyword_thresholds,omitempty"`
+}
+
+// legacyLists turns an export from before website lists into lists.
+func (in blockExport) legacyLists() ([]listExport, error) {
+	actions, err := db.ParseActions(in.Actions)
+	if err != nil {
+		return nil, err
+	}
+	thresholds := db.DefaultThresholds
+	if in.Thresholds != nil {
+		thresholds = *in.Thresholds
+	}
+	listActions := func(withThresholds bool) []db.ListAction {
+		var out []db.ListAction
+		for _, name := range actions.List() {
+			n := 1
+			if withThresholds && thresholds.Get(name) >= 1 {
+				n = thresholds.Get(name)
+			}
+			out = append(out, db.ListAction{Name: name, Distinct: n})
+		}
+		return out
+	}
+	blocked := append(append([]string{}, in.Sites...), in.Patterns...)
+	allowed := append([]string{}, in.Exceptions...)
+	if strings.EqualFold(strings.TrimSpace(in.Mode), db.ModeAllowlist) {
+		blocked = append([]string{"*.*"}, in.Patterns...)
+		allowed = append(append([]string{}, in.Sites...), in.Exceptions...)
+	}
+	out := []listExport{
+		{Name: db.DefaultBlockedList, Kind: db.ListBlacklist, Where: []string{db.PlaceURL}, Actions: listActions(false), Entries: blocked},
+		{Name: db.DefaultExceptionsList, Kind: db.ListExceptions, Where: []string{db.PlaceURL}, Entries: allowed},
+	}
+	if len(in.Keywords) > 0 {
+		out = append(out, listExport{Name: db.DefaultWordsList, Kind: db.ListBlacklist, Where: []string{db.PlaceText},
+			Actions: listActions(true), Entries: in.Keywords})
+	}
+	return out, nil
+}
+
+// toLists validates exported lists and turns them into database lists.
+func toLists(in []listExport) (db.Lists, error) {
+	var out db.Lists
+	for _, le := range in {
+		if err := db.CheckListName(le.Name); err != nil {
+			return nil, err
+		}
+		if le.Kind != db.ListBlacklist && le.Kind != db.ListExceptions {
+			return nil, fmt.Errorf("list '%s' has an unknown kind %q", le.Name, le.Kind)
+		}
+		l := db.WebList{Name: le.Name, Kind: le.Kind}
+		for _, place := range le.Where {
+			if !db.IsPlace(place) {
+				return nil, fmt.Errorf("list '%s' looks at an unknown place %q", le.Name, place)
+			}
+			l.Where = l.Where.With(place, true)
+		}
+		if !l.Where.Any() {
+			l.Where.URL = true
+		}
+		if len(le.Entries) > 0 {
+			entries, err := prepareEntries(l.Where, le.Entries)
+			if err != nil {
+				return nil, fmt.Errorf("list '%s': %w", le.Name, err)
+			}
+			l.Entries = entries
+		}
+		if le.Kind == db.ListBlacklist {
+			for _, a := range le.Actions {
+				if !db.IsAction(a.Name) {
+					return nil, fmt.Errorf("list '%s' has an unknown action %q", le.Name, a.Name)
+				}
+				if a.Distinct < 1 || a.Distinct > db.MaxThreshold {
+					a.Distinct = 1
+				}
+				l.Actions = append(l.Actions, a)
+			}
+			if len(l.Actions) == 0 {
+				l.Actions = []db.ListAction{{Name: db.ActionBlock, Distinct: 1}}
+			}
+		}
+		out = append(out, l)
+	}
+	return out, nil
 }
 
 // reapplyIfActive re-applies all layers when the named block is currently
@@ -55,135 +146,17 @@ func reapplyIfActive(database *db.DB, name string) error {
 	return nil
 }
 
-var blockAddPatternCmd = &cobra.Command{
-	Use:   "add-pattern [block] [patterns...]",
-	Short: "Add browser URL patterns (wildcards/keywords) to a block",
-	Args:  cobra.MinimumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		name := args[0]
-		patterns := args[1:]
-		for _, p := range patterns {
-			if !blocker.IsValidPattern(p) {
-				fmt.Fprintf(os.Stderr, "Error: invalid pattern %q\n", p)
-				os.Exit(1)
-			}
-		}
-
-		database, err := openDB()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		defer database.Close()
-
-		// Patterns are blocked in both modes, so adding one only strengthens
-		// the block: no ensureEditable/gateEdit check needed.
-		if err := database.AddPatterns(name, patterns); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if err := reapplyIfActive(database, name); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Patterns added to block '%s'.\n", name)
-	},
-}
-
-var blockRemovePatternCmd = &cobra.Command{
-	Use:   "remove-pattern [block] [patterns...]",
-	Short: "Remove browser URL patterns from a block",
-	Args:  cobra.MinimumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		name := args[0]
-		patterns := args[1:]
-
-		database, err := openDB()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		defer database.Close()
-
-		detail, err := database.GetBlock(name)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if err := requireAll("pattern", name, detail.Patterns, patterns); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditRemovePatterns, Values: patterns})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if !proceed {
-			return
-		}
-		if err := database.RemovePatterns(name, patterns); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if err := reapplyIfActive(database, name); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Patterns removed from block '%s'.\n", name)
-	},
-}
-
-var blockSetModeCmd = &cobra.Command{
-	Use:   "set-mode [block] [blocklist|allowlist]",
-	Short: "Change a block's mode",
-	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		name, mode := args[0], args[1]
-
-		database, err := openDB()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		defer database.Close()
-
-		if mode != db.ModeBlocklist && mode != db.ModeAllowlist {
-			fmt.Fprintf(os.Stderr, "Error: invalid block mode '%s' (use '%s' or '%s')\n", mode, db.ModeBlocklist, db.ModeAllowlist)
-			os.Exit(1)
-		}
-		proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditSetMode, Values: []string{mode}})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if !proceed {
-			return
-		}
-		if err := database.SetBlockMode(name, mode); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if err := reapplyIfActive(database, name); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Block '%s' mode set to %s.\n", name, mode)
-	},
-}
-
 var blockActionCmd = &cobra.Command{
 	Use:   "action [block] [" + strings.Join(db.ActionNames, "|") + "] [on|off]",
-	Short: "Choose what a block does to its websites: block, greyscale, no-images",
-	Long: `Every block can block its websites, show them in greyscale, block their
-images, or any combination. In allowlist mode the actions apply to every site
-except the listed ones. Apps are always blocked.
+	Short: "Turn an action on or off for all of a block's blacklists",
+	Long: `A shortcut for 'kc9k list action' on every blacklist of the block: block
+the pages they match, show them in greyscale, block their images, or any
+combination. Apps are always blocked.
 
-Greyscale and no-images work in browsers with the Killer Chicken extension.
 Turning an action on is always allowed. Turning one off loosens the block, so
 it is refused while the block is held, and queued for a block with allow
-windows (or applied with --now after the typing challenge). At least one
-action stays on. With only the block name, prints its actions.`,
+windows (or applied with --now after the typing challenge). Each list keeps
+at least one action. With only the block name, prints each list's actions.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 && len(args) != 3 {
 			return fmt.Errorf("give a block, or a block, an action and on|off")
@@ -197,44 +170,21 @@ action stays on. With only the block name, prints its actions.`,
 			return err
 		}
 		if len(args) == 1 {
-			for _, action := range db.ActionNames {
-				state := "off"
-				if detail.Actions.Has(action) {
-					state = "on"
-				}
-				fmt.Printf("%s %s\n", action, state)
+			for _, l := range detail.Lists.Blacklists() {
+				fmt.Printf("%s: %s\n", l.Name, strings.Join(l.ActionNames(), ", "))
 			}
 			return nil
 		}
-		action, value := strings.ToLower(args[1]), strings.ToLower(args[2])
-		if !db.IsAction(action) {
-			return fmt.Errorf("unknown action %q (use %s)", args[1], strings.Join(db.ActionNames, ", "))
+		action := strings.ToLower(args[1])
+		on, err := parseOnOff(args[2])
+		if err != nil {
+			return err
 		}
-		if value != "on" && value != "off" {
-			return fmt.Errorf("use 'on' or 'off'")
-		}
-		on := value == "on"
-		if detail.Actions.Has(action) == on {
-			fmt.Printf("Block '%s' already has %s %s.\n", name, action, value)
-			return nil
-		}
-		next := detail.Actions.With(action, on)
-		if !next.Any() {
-			return fmt.Errorf("block '%s' needs at least one action; turn another on first", name)
-		}
-		if !on {
-			proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditUnsetAction, Values: []string{action}})
-			if err != nil || !proceed {
-				return err
+		for _, l := range detail.Lists.Blacklists() {
+			if err := listAction(cmd, database, name, l.Name, action, on); err != nil {
+				return fmt.Errorf("list '%s': %w", l.Name, err)
 			}
 		}
-		if err := database.SetBlockActions(name, next); err != nil {
-			return err
-		}
-		if err := reapplyIfActive(database, name); err != nil {
-			return err
-		}
-		fmt.Printf("Block '%s' now does: %s.\n", name, next)
 		return nil
 	}),
 }
@@ -243,28 +193,18 @@ var blockExportCmd = &cobra.Command{
 	Use:   "export [block]",
 	Short: "Print a block as JSON (redirect to a file to save it)",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := openDB()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		detail, err := database.GetBlock(args[0])
 		if err != nil {
 			return err
 		}
-		out := blockExport{
-			Name:       detail.Name,
-			Mode:       detail.Mode,
-			Actions:    detail.Actions.List(),
-			Sites:      detail.Sites,
-			Apps:       detail.Apps,
-			Patterns:   detail.Patterns,
-			Exceptions: detail.Exceptions,
-			Titles:     detail.Titles,
-			Keywords:   detail.Keywords,
-			Thresholds: &detail.Thresholds,
+		out := blockExport{Name: detail.Name, Apps: detail.Apps, Titles: detail.Titles, Lists: []listExport{}}
+		if out.Apps == nil {
+			out.Apps = []string{}
+		}
+		for _, l := range detail.Lists {
+			out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Where: l.Where.List(),
+				Actions: l.Actions, Entries: l.Entries})
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
@@ -272,7 +212,7 @@ var blockExportCmd = &cobra.Command{
 		}
 		fmt.Println(string(data))
 		return nil
-	},
+	}),
 }
 
 var blockImportCmd = &cobra.Command{
@@ -291,28 +231,17 @@ var blockImportCmd = &cobra.Command{
 		if in.Name == "" {
 			return fmt.Errorf("import file has no block name")
 		}
-		in.Mode = strings.ToLower(strings.TrimSpace(in.Mode))
-		if in.Mode == "" {
-			in.Mode = db.ModeBlocklist
-		}
-		if in.Mode != db.ModeBlocklist && in.Mode != db.ModeAllowlist {
-			return fmt.Errorf("invalid mode %q in import (use '%s' or '%s')", in.Mode, db.ModeBlocklist, db.ModeAllowlist)
-		}
-
-		actions, err := db.ParseActions(in.Actions)
-		if err != nil {
-			return err
+		exported := in.Lists
+		if exported == nil {
+			if exported, err = in.legacyLists(); err != nil {
+				return err
+			}
 		}
 
 		// Validate before writing anything.
-		sites, err := normalizeDomains(in.Sites)
+		lists, err := toLists(exported)
 		if err != nil {
-			return err
-		}
-		for _, p := range in.Patterns {
-			if !blocker.IsValidPattern(p) {
-				return fmt.Errorf("invalid pattern %q in import", p)
-			}
+			return fmt.Errorf("in import: %w", err)
 		}
 		for _, app := range in.Apps {
 			if err := blocker.ValidAppEntry(app); err != nil {
@@ -322,9 +251,6 @@ var blockImportCmd = &cobra.Command{
 		if err := checkTitleKeywords(in.Titles); err != nil {
 			return fmt.Errorf("in import: %w", err)
 		}
-		if err := checkPageKeywords(in.Keywords); err != nil {
-			return fmt.Errorf("in import: %w", err)
-		}
 
 		database, err := openDB()
 		if err != nil {
@@ -332,24 +258,14 @@ var blockImportCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		if err := database.CreateBlock(in.Name, in.Mode); err != nil {
+		if err := database.CreateBlock(in.Name); err != nil {
 			return err
 		}
-		if err := database.SetBlockActions(in.Name, actions); err != nil {
+		if err := database.SetLists(in.Name, lists); err != nil {
 			return err
-		}
-		if len(sites) > 0 {
-			if err := database.AddSites(in.Name, sites); err != nil {
-				return err
-			}
 		}
 		if len(in.Apps) > 0 {
 			if err := database.AddApps(in.Name, in.Apps); err != nil {
-				return err
-			}
-		}
-		if len(in.Exceptions) > 0 {
-			if err := database.AddExceptions(in.Name, in.Exceptions); err != nil {
 				return err
 			}
 		}
@@ -358,37 +274,13 @@ var blockImportCmd = &cobra.Command{
 				return err
 			}
 		}
-		if len(in.Keywords) > 0 {
-			if err := database.AddPageKeywords(in.Name, in.Keywords); err != nil {
-				return err
-			}
-		}
-		if in.Thresholds != nil {
-			for _, action := range db.ActionNames {
-				if n := in.Thresholds.Get(action); n >= 1 {
-					if err := database.SetThreshold(in.Name, action, n); err != nil {
-						return fmt.Errorf("in import: %w", err)
-					}
-				}
-			}
-		}
-		if len(in.Patterns) > 0 {
-			if err := database.AddPatterns(in.Name, in.Patterns); err != nil {
-				return err
-			}
-		}
-		fmt.Printf("Imported block '%s' (%d sites, %d apps, %d patterns).\n",
-			in.Name, len(sites), len(in.Apps), len(in.Patterns))
+		fmt.Printf("Imported block '%s' (%d lists, %d apps).\n", in.Name, len(lists), len(in.Apps))
 		return nil
 	},
 }
 
 func init() {
-	addNowFlag(blockRemovePatternCmd, blockSetModeCmd, blockActionCmd)
-
-	blockCmd.AddCommand(blockAddPatternCmd)
-	blockCmd.AddCommand(blockRemovePatternCmd)
-	blockCmd.AddCommand(blockSetModeCmd)
+	addNowFlag(blockActionCmd)
 	blockCmd.AddCommand(blockActionCmd)
 	blockCmd.AddCommand(blockExportCmd)
 	blockCmd.AddCommand(blockImportCmd)

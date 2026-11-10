@@ -33,7 +33,7 @@ Still to try:
 - A search box in each list to find terms in it.
 - Link recording: start recording, then every link opened in the browser is added to a list until recording is stopped. Makes allowlisting school sites with many verification steps easy.
 - Clusters: lists made independently of blocks, with all the same features as lists. A cluster can be imported into a block's list or added as a standalone list within a block, so a new block can quickly allowlist e.g. the academia or anime cluster.
-- Keyword test mode: turn it on for a block, then browse; the extension shows the keyword matches on each page (frequency and distinct keywords), so it is easy to see whether a rule would be too harsh.
+- Keyword test mode: turn it on for a block, then browse; the extension shows the keyword matches on each page (which keywords matched, how often each appears, and how many distinct keywords), so it is easy to see whether a rule would be too harsh.
 - Keyword thresholds by frequency (total matches), not only by distinct keywords.
 - Remove every note saying some parts only work with the extension: it is forced by default, so they no longer apply (interface, README, command help).
 

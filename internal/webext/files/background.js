@@ -100,16 +100,16 @@ function report(tabId, url, outcome) {
   }).catch(() => {})));
 }
 
-// closeEverything closes the tab first, so a restored session doesn't bring
-// the page back, then tells the daemon, then closes every window: the
-// browser quits cleanly.
+// closeEverything tells the daemon (first: closing the last tab quits the
+// browser), then closes the tab, so a restored session doesn't bring the page
+// back, then every window: the browser quits cleanly.
 async function closeEverything(tabId, url, outcome) {
+  await Promise.race([report(tabId, url, outcome), new Promise((done) => setTimeout(done, 2000))]);
   try {
     await browser.tabs.remove(tabId);
   } catch (error) {
     // Already gone.
   }
-  await report(tabId, url, outcome);
   const windows = await browser.windows.getAll();
   for (const win of windows) {
     browser.windows.remove(win.id).catch(() => {});

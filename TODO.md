@@ -18,10 +18,18 @@ Still to try:
 3. Strict mode (`unshare -Urm` gives no way out, `--user` Flatpak apps are killed, Electron apps aren't taken for browsers). Needs a moment when the `test` block can be unlocked: strict mode denies sudo while any block is locked.
 4. From before: shutdown mode and the `kc9k.nofreeze` GRUB escape; measure the fast relock (89c71bf).
 5. Page keywords on real sites over a few days (false hits, slow pages), and a hotkey pressed on the real keyboard (tested with xdotool).
-6. Website lists (extension 1.7.0): the upgrade turns the test blocks into lists (`kc9k list show <block>`); a title list, and an exception list by title (e.g. block youtube.com except pages titled "lecture"); a page that changes address without loading (YouTube) is caught by an address list; the interface's Websites tab on the laptop's screen.
-7. Extension 1.8.0 actions: redirect, a picture (does LibreWolf load it from 127.0.0.1?), close-tab, close-browser (the tab mustn't come back in the restored session), monk mode from a list, and a one-off logout. Bypass prevention firing (global and per block), and a locked global one refusing `nepsis off`. Monk mode from the Dashboard. `ci/browser_test.py` has new checks for a title exception and a redirect.
-8. Hotkeys under GNOME (written beside Cinnamon's; check they don't disturb Cinnamon), the hidden terms and search box in the interface, and a daemon restart (`sudo systemctl restart kc9k`) showing up in `kc9k nepsis` counts.
-9. Quota by use (extension 1.9.0): a session spends nothing while idle or on another site, counts a muted video playing in a background tab, counts the block's app in front; another browser is closed during a website session.
+6. Website lists: a page that changes address without loading (YouTube) caught by an address list; the Websites tab on the laptop's real screen (hidden terms, search box).
+7. A one-off logout and shutdown from a list (they end the session, so not run unattended); the Dashboard's Monk mode button and a locked global bypass prevention refusing `nepsis off` by hand.
+8. A hotkey pressed under GNOME (the dconf entries are right; only Cinnamon is installed here).
+9. Quota by use with someone at the computer: the focused tab and a blocked app in front count, idle time doesn't; another browser is closed during a website session.
+
+Tried on 2026-11-10 after installing (extension 1.9.1), unattended. Passed:
+- The upgrade turned the `test` and `H` blocks into lists exactly: sites and patterns in Blocked, H's page keywords in Page words with their action, locks kept, `/etc/hosts` and the firewall unchanged.
+- `ci/browser_test.py`: all 20 checks, including the new title exception and redirect.
+- `ci/actions_test.py` (new): a list's picture shows instead of the page, close-tab, close-browser, bypass prevention closing the browser after three blocked pages, monk mode from a list starting and ending by itself after a minute.
+- `ci/quota_test.py` (new): a quota session spends nothing on another page, and spends while the block's page plays muted audio.
+- A daemon restart is logged as a tamper event; hotkeys are written to Cinnamon's and GNOME's dconf lists and removed from both (fixed: an empty GNOME list).
+- Found and fixed: close-browser and monk mode from a list never reached the daemon, because closing the last tab quit the browser before the report went out.
 
 `ci/browser_test.py` passed in LibreWolf on 2026-11-09 (all checks, with page keywords and no-private added). It could not run while block-devtools was on: the DisableDeveloperTools policy turns off Marionette, so testing builds now leave that policy out while the remote-control marker exists.
 

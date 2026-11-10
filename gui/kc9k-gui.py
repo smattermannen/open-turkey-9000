@@ -1718,6 +1718,37 @@ class Window(Gtk.ApplicationWindow):
         schedule.pack_start(delay_row, False, False, 0)
         tabs.append_page(schedule, Gtk.Label(label="Schedule"))
 
+        places = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        places_help = dim(
+            "Turn this block on while the computer is at a place. A place is known by the Wi-Fi "
+            "networks in range when you save it (yours and the neighbours'); the computer is "
+            "there when two of them are in range again. While there, the block can't be stopped "
+            "or loosened. With Wi-Fi switched off the computer counts as being at every place, "
+            "and Wi-Fi is switched back on.")
+        places_help.set_max_width_chars(70)
+        places.pack_start(places_help, False, False, 0)
+        pick_row = Gtk.Box(spacing=6)
+        self.place_combo = Gtk.ComboBoxText()
+        pick_row.pack_start(self.place_combo, False, False, 0)
+        place_on = Gtk.Button(label="Turn on at this place")
+        place_on.connect("clicked", lambda _b: self.selected and self.place_combo.get_active_text() and self.run(
+            ["place", "rule", self.selected, self.place_combo.get_active_text(), "on"]))
+        pick_row.pack_start(place_on, False, False, 0)
+        save_place = Gtk.Button(label="Save where I am now as…")
+        save_place.connect("clicked", self.save_place)
+        pick_row.pack_start(save_place, False, False, 0)
+        places.pack_start(pick_row, False, False, 0)
+        self.place_rules = EditableList(
+            "On at", "", lambda _values: None,
+            lambda value, _number: self.selected and self.run(["place", "rule", self.selected, value, "off"]))
+        add_row = self.place_rules.entry.get_parent()  # rules are added with the button above
+        add_row.set_no_show_all(True)
+        add_row.hide()
+        places.pack_start(self.place_rules, True, True, 0)
+        self.places_label = dim("")
+        places.pack_start(self.places_label, False, False, 0)
+        tabs.append_page(places, Gtk.Label(label="Places"))
+
         tabs.append_page(self.build_quota_tab(), Gtk.Label(label="Quota & Pomodoro"))
 
         nepsis = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=12)
@@ -1925,6 +1956,18 @@ class Window(Gtk.ApplicationWindow):
         self.calendar.set_windows(block.get("schedule_windows", []))
         set_switch(self.keyword_test_switch, block.get("keyword_test", False))
         self.update_social(block)
+        saved = [p["name"] for p in self.state.get("places") or []]
+        if getattr(self, "places_shown", None) != saved:
+            self.places_shown = saved
+            self.place_combo.remove_all()
+            for name in saved:
+                self.place_combo.append_text(name)
+            if saved:
+                self.place_combo.set_active(0)
+        self.place_rules.set_items(block.get("places") or [], block["name"])
+        self.places_label.set_text(
+            "Saved places: " + ", ".join(f"{p['name']} ({p['networks']} networks)" for p in self.state.get("places") or [])
+            if saved else "No places saved yet.")
         if not self.loosen_hours.has_focus():
             self.loosen_hours.set_value(block.get("loosen_delay", 86400) // 3600)
         allowance, balance = block.get("break_allowance", 0), block.get("break_balance", 0)
@@ -2857,6 +2900,13 @@ class Window(Gtk.ApplicationWindow):
             check.set_active(name in on)
         self.playlist_list.set_items(
             [p.split("=", 1)[1] for p in on if p.startswith("youtube:playlist=")], block["name"])
+
+    def save_place(self, _button):
+        name = self.ask_text("Save this place", "A name for where the computer is now, such as home or library. "
+                             "Saving under a name that exists adds the networks seen now.")
+        if name:
+            self.run(["place", "add", name], timeout=60,
+                     then=lambda output: self.message(output, Gtk.MessageType.INFO))
 
     def toggle_social(self, check, name):
         if self.updating or not self.selected:

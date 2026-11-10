@@ -366,6 +366,20 @@ kc9k record stop --discard              # stop and drop them
 
 The sites (domains, without `www.`) come from the extension in LibreWolf: pages and the frames inside them (a login or captcha from another site), private windows included, and pages a block stops too, so you can record with the block on and see what it would need. They stay on this computer. Nothing changes until `stop`, which follows the target's rules: into a blacklist or a cluster is always allowed; into an exception list it loosens the block, so it is refused while the block is held (the recording then stays, to stop later or discard) and queued or challenged for a block with allow windows. One recording at a time, at most 2000 sites.
 
+## Places
+
+```bash
+kc9k place add library               # remember the Wi-Fi networks in range now as "library"
+kc9k place rule work library on      # block 'work' is on while the computer is there
+kc9k place                           # places, and whether you are at one now
+kc9k place rule work library off
+kc9k place remove library
+```
+
+A place is known by the Wi-Fi networks in range when you save it: your own and the neighbours'. The computer is at the place when two of them are in range again (one, if the place only knows one). Saving a place again under the same name adds the networks seen now, which makes it easier to recognise. A block with a place rule turns on within seconds of arriving and is held while you are there, like a block in a schedule window: it can't be stopped or loosened, and the rule and the place can't be removed. It turns off when you leave, unless it was locked meanwhile.
+
+When no network at all can be seen (Wi-Fi switched off, or no adapter) the computer counts as being at every place with a rule, and a switched-off Wi-Fi is switched back on, so turning Wi-Fi off is no way out. Location uses Wi-Fi only; there is no GPS. In the interface: Blocks > a block > Places.
+
 ## When the clocks change
 
 Schedules follow the clock on the wall. On the night the clocks go forward, the skipped hour doesn't happen: a window that lies wholly inside it doesn't open that day, and one that spans it is an hour shorter. On the night they go back, the repeated hour is covered both times. `start --until 07:00` means 07:00 on the clock, however long the night is. Everything counted in time (`--for`, delays, Pomodoro, the 24-hour wait for loosening, the 2-hour edit freeze before a window) counts real hours.

@@ -202,6 +202,10 @@ if it has an end.
 
 ## Phase 7: location (L)
 
+**Done 2026-11-10**, Wi-Fi only (GPS dropped, as agreed): `kc9k place`.
+Tried against the real Wi-Fi scan on a scratch database; the daemon turning a
+block on and off when moving between places has not been tried.
+
 Wi-Fi first: `kc9k place add <name>` records the networks in range (`nmcli`
 BSSIDs); a place matches when enough of them are seen. `block place <block>
 <name>` or `monk --at <name>` starts it there. Locking such a block keeps

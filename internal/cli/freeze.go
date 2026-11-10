@@ -119,6 +119,7 @@ type guiBlock struct {
 	QuotaOpen     bool      `json:"quota_open"`
 	QuotaNext     int64     `json:"quota_next"`
 	KeywordTest   bool      `json:"keyword_test"`
+	Places        []string  `json:"places"`
 	LoosenDelay   int64     `json:"loosen_delay"`
 	Social        []string  `json:"social"`
 	// Breaks: the allowance (seconds per BreakPer of blocking), what is
@@ -137,6 +138,12 @@ type guiSettingLock struct {
 	Password     bool  `json:"password_locked"`
 	Restart      bool  `json:"restart_locked"`
 	GuardsBlocks bool  `json:"guards_blocks"`
+}
+
+// guiPlace is a saved place for the interface.
+type guiPlace struct {
+	Name     string `json:"name"`
+	Networks int    `json:"networks"`
 }
 
 type guiState struct {
@@ -161,6 +168,7 @@ type guiState struct {
 	// the given passwords (by position) that opened nothing: wrong, or
 	// changed since.
 	Options       map[string]bool   `json:"options"`
+	Places        []guiPlace        `json:"places"`
 	SocialPresets []db.SocialPreset `json:"social_presets"`
 	Access        map[string]string `json:"access"`
 	AccessUnused  []int             `json:"access_unused"`
@@ -254,6 +262,14 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 		testing := database.TestBlocks()
+		places, err := database.Places()
+		if err != nil {
+			return err
+		}
+		state.Places = []guiPlace{}
+		for _, p := range places {
+			state.Places = append(state.Places, guiPlace{Name: p.Name, Networks: len(p.Networks)})
+		}
 		for _, b := range blocks {
 			detail, err := database.GetBlock(b.Name)
 			if err != nil {
@@ -316,6 +332,7 @@ var guiStateCmd = &cobra.Command{
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 			}
 			g.KeywordTest = slices.Contains(testing, b.Name)
+			g.Places = placeNames(places, b.Name)
 			g.LoosenDelay, _ = database.LoosenDelay(b.Name)
 			g.Social = append([]string{}, detail.Social...)
 			k, err := database.GetBreaks(b.Name)

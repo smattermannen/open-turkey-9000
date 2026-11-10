@@ -427,8 +427,25 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 		return err
 	}
 
+	// A place rule turns its block on while the computer is there, like a
+	// schedule window that is open.
+	atPlace, err := PlaceBlocks(d, now)
+	if err != nil {
+		return err
+	}
+	ruled, err := PlaceRuled(d)
+	if err != nil {
+		return err
+	}
+	for name := range ruled {
+		if _, ok := windows[name]; !ok {
+			windows[name] = nil
+		}
+	}
+	keepWifiOn(d)
+
 	for name, ws := range windows {
-		within := schedule.Enforced(ws, now)
+		within := schedule.Enforced(ws, now) || atPlace[name]
 
 		detail, err := d.GetBlock(name)
 		if err != nil {
@@ -465,7 +482,12 @@ func ScheduleActiveNow(d *db.DB, blockName string, now time.Time) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	return schedule.Enforced(db.Windows(schedules), now), nil
+	if schedule.Enforced(db.Windows(schedules), now) {
+		return true, nil
+	}
+	// A place rule holds its block the same way while the computer is there.
+	atPlace, err := PlaceBlocks(d, now)
+	return atPlace[blockName], err
 }
 
 // ScheduleFrozen reports whether a block's schedule enforces it now or at any

@@ -188,6 +188,12 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   (`youtube.com/playlist?list=<id>`, `youtube.com/watch`); the extension
   blocks video pages without an allowed `list=` and checks the playlist
   panel (`checkPlaylistVideo`).
+- **Places** (`db/places.go`, `enforce/places.go`, `cli/places.go`, `kc9k
+  place [add N | remove N | rule <block> <place> on|off]`): a place is a
+  set of BSSIDs from `nmcli` (`ScanWifi`, replaceable in tests); `AtPlace`
+  needs two in range, and an empty scan counts as there. `PlaceBlocks`
+  feeds `reconcileSchedulesAt` and `ScheduleActiveNow`, so a place rule
+  behaves like an open schedule window; `keepWifiOn` re-enables the radio.
 - **Keyword test mode** (`db/testmode.go`, `kc9k list test <block> on|off`):
   title/text lists of the block go out with `test: true`; the extension
   shows `kc9kTestReport` in a panel and skips them in `kc9kListMatches`.
@@ -227,7 +233,7 @@ threshold | hits | export | import` (`action … on --url/--image/--for`), `monk
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `break …`, `social …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `break …`, `social …`, `place …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

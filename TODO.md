@@ -35,7 +35,14 @@ Tried on 2026-11-10 after installing (extension 1.9.1), unattended. Passed:
 
 ## Next
 - The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
-- Bypass prevention: more signs of loophole hunting to log as events. Logged so far: blocked pages, apps, window titles (per block), browsers closed (globally), refused loosening, the daemon restarting within a boot, clock jumps.
+- Bypass detection, a full system (grows out of bypass prevention, `kc9k nepsis`):
+  - The user picks which detectors count (blocked pages, apps, window titles, browsers without the extension, refused loosening, daemon restarts, clock jumps, and new ones: e.g. a burst of blocked pages from search results; tie "other browser closed" to a block).
+  - An escalation ladder instead of one consequence, customizable in detail: each step has its own trigger (count within a window) and actions, e.g. 1) a warning: the tab closes and you are logged out for 1 minute; 2) the browser closes and monk mode runs for 5 minutes; 3) the computer shuts down for 15 minutes. The ladder falls back a step after a quiet time the user sets. Add a "warning" consequence (a notification).
+- Auto-relock, chosen when setting a lock: e.g. the typing challenge lifts the block for 5 minutes (a break, like Pomodoro's), editing it stays refused, then it locks again by itself.
+- Location-based activation: a block (or monk mode) starts when the computer is at a place, sensed by nearby Wi-Fi networks (nmcli scan: SSIDs/BSSIDs, e.g. the neighbours' networks) and/or GPS; the user picks which, or both. Locking such a block forces Wi-Fi on and guards against GPS tampering (no fix or a jump counts as being there, or as a bypass event). Note: most laptops have no GPS receiver, and geoclue's network location service (Mozilla's) is gone, so GPS needs real hardware.
+- Project export and import: the whole setup (every block with its lists, apps, titles, schedules, quota, Pomodoro and bypass detection; browser options; freeze schedules; hotkeys) in one file, to share setups with the community. Locks and passwords are never exported; importing never weakens anything that is held.
+- More list actions, ticked like the others: block audio (mute the page's sound), block video (stop and hide videos), declutter (experimental: render the page bare-bones, reader-style), force dark mode (Dark Reader's engine, MIT licensed, bundled and configured from KC9K).
+- Social media settings: per major site, presets such as "DMs only", "No reels/shorts", "No feed", "No discover/explore page", enforced by redirecting addresses (and hiding elements where needed), e.g. YouTube, Instagram, Facebook, X, Reddit, TikTok.
 
 ## Before release
 Build without `TAGS=devmaster`. Remove `ci/vm.sh`. Rename the GitHub repository to `kc9k`. On the test laptop, remove `/etc/sudoers.d/99-claude-test`.

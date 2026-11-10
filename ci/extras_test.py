@@ -148,6 +148,7 @@ try:
         # The block page says why.
         visit(driver, "https://example.org/")
         check("a blocked page goes to the block page", on_block_page(driver))
+        extension = driver.current_url.split("/blocked.html")[0]
         why = text_of(driver, "why") or ""
         check("the block page names the block and the list", "extras" in why and "Blocked" in why)
 
@@ -202,6 +203,7 @@ try:
         ot("stop", "extralooks")
 
         # Social media settings: Shorts are sent to the front page.
+        ot("stop", "extras")  # it stops youtube.com, which the next checks need
         ot("block", "create", "extrasocial")
         ot("social", "extrasocial", "youtube:no-shorts", "on")
         ot("start", "extrasocial")
@@ -238,6 +240,7 @@ try:
             ot("start", "extrasoon")
             ot("block", "create", "extraadd")
             time.sleep(16)
+            visit(driver, extension + "/popup.html", wait=2)  # messages go from one of its pages
             state = ask(driver, {"type": "popup", "url": "https://en.wikipedia.org/wiki/Chicken"})
             left = (state or {}).get("left") or []
             check("the toolbar button knows the time until a break ends and the site is blocked",

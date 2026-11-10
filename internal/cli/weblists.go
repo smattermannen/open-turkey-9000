@@ -9,6 +9,7 @@
 //	kc9k list where <block> <list> url|title|text on|off
 //	kc9k list action <block> <list> block|greyscale|no-images on|off
 //	kc9k list threshold <block> <list> <action> <count>
+//	kc9k list hits <block> <list> <action> <count>
 //	kc9k list export <block> <list>
 //	kc9k list import <block> <list> <file>
 //
@@ -251,6 +252,16 @@ func listAction(cmd *cobra.Command, database *db.DB, block, list, action string,
 // listThreshold sets how many different entries a page's text needs for an
 // action. Raising it loosens the list.
 func listThreshold(cmd *cobra.Command, database *db.DB, block, list, action string, n int) error {
+	return listCount(cmd, database, block, list, action, n, false)
+}
+
+// listHits sets how many times in all a list's entries must occur in a
+// page's text for an action. Raising it loosens the list.
+func listHits(cmd *cobra.Command, database *db.DB, block, list, action string, n int) error {
+	return listCount(cmd, database, block, list, action, n, true)
+}
+
+func listCount(cmd *cobra.Command, database *db.DB, block, list, action string, n int, hits bool) error {
 	if !db.IsAction(action) {
 		return fmt.Errorf("unknown action %q (use %s)", action, strings.Join(db.ActionNames, ", "))
 	}
@@ -265,14 +276,18 @@ func listThreshold(cmd *cobra.Command, database *db.DB, block, list, action stri
 	if !ok {
 		return fmt.Errorf("list '%s' doesn't take the %s action; turn it on first", list, action)
 	}
-	if n == a.Distinct {
+	current, edit, set := a.Distinct, db.EditListSetThreshold, database.SetListThreshold
+	if hits {
+		current, edit, set = a.Hits, db.EditListSetHits, database.SetListHits
+	}
+	if n == current {
 		return nil
 	}
-	proceed, err := gateEdit(cmd, database, block, n < a.Distinct, listEdit(db.EditListSetThreshold, l, action, strconv.Itoa(n)))
+	proceed, err := gateEdit(cmd, database, block, n < current, listEdit(edit, l, action, strconv.Itoa(n)))
 	if err != nil || !proceed {
 		return err
 	}
-	if err := database.SetListThreshold(l.ID, action, n); err != nil {
+	if err := set(l.ID, action, n); err != nil {
 		return err
 	}
 	return settle(database, block)
@@ -333,7 +348,7 @@ func describeList(l db.WebList) string {
 		var acts []string
 		for _, a := range l.Actions {
 			if l.Where.Text {
-				acts = append(acts, fmt.Sprintf("%s at %d", a.Name, a.Distinct))
+				acts = append(acts, fmt.Sprintf("%s at %d different, %d in all", a.Name, a.Distinct, a.Hits))
 			} else {
 				acts = append(acts, a.Name)
 			}
@@ -356,7 +371,8 @@ words or phrases: a plain word counts only on its own ("porn" misses
 
 A blacklist's actions (block, greyscale, no-images) apply to the pages it
 matches. A match in the address or the title takes every action; in the
-text, each action needs its threshold of different entries. An exception
+text, each action needs its number of different entries (threshold) and of
+times they occur in all (hits). An exception
 list spares the pages it matches from all of its block's blacklists.
 
 A block with exceptions by title or text is enforced by the extension only,
@@ -501,6 +517,24 @@ it loosens the list.`,
 	}),
 }
 
+var listHitsCmd = &cobra.Command{
+	Use:   "hits [block] [list] [action] [count]",
+	Short: "How many times in all a page's text must contain the list's entries",
+	Long: `For a blacklist that looks at page text: how many times its entries must
+occur in a page's text, repeats counted, before the action applies. It works
+together with the threshold of different entries: both must be met. For
+example threshold 1 and hits 5: one word five times, or five words once.
+Lowering it is always allowed; raising it loosens the list.`,
+	Args: cobra.ExactArgs(4),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		n, err := strconv.Atoi(args[3])
+		if err != nil {
+			return fmt.Errorf("a count is a number from 1 to %d", db.MaxThreshold)
+		}
+		return listHits(cmd, database, args[0], args[1], strings.ToLower(args[2]), n)
+	}),
+}
+
 var listExportCmd = &cobra.Command{
 	Use:   "export [block] [list]",
 	Short: "Print a list's entries, one per line",
@@ -539,8 +573,8 @@ func init() {
 	listCreateCmd.Flags().Bool("url", false, "Look at the address (the default)")
 	listCreateCmd.Flags().Bool("title", false, "Look at the page title")
 	listCreateCmd.Flags().Bool("text", false, "Look at the page text")
-	addNowFlag(listDeleteCmd, listAddCmd, listRemoveCmd, listWhereCmd, listActionCmd, listThresholdCmd, listImportCmd)
+	addNowFlag(listDeleteCmd, listAddCmd, listRemoveCmd, listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listImportCmd)
 	listCmd.AddCommand(listShowCmd, listCreateCmd, listRenameCmd, listDeleteCmd, listAddCmd, listRemoveCmd,
-		listWhereCmd, listActionCmd, listThresholdCmd, listExportCmd, listImportCmd)
+		listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listExportCmd, listImportCmd)
 	rootCmd.AddCommand(listCmd)
 }

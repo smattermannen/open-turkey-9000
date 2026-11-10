@@ -164,7 +164,7 @@ type Rules struct {
 // ListRule is one blacklist: the entries it looks for in a page's address,
 // title and text, its actions, and the exceptions of its block. A match in
 // the address or the title takes every action; in the text, an action needs
-// Distinct different entries.
+// Distinct different entries, occurring Hits times in all.
 type ListRule struct {
 	Block   string       `json:"block"`
 	Name    string       `json:"name"`
@@ -179,6 +179,7 @@ type ListRule struct {
 type RuleAction struct {
 	Name     string `json:"action"`
 	Distinct int    `json:"distinct"`
+	Hits     int    `json:"hits"`
 }
 
 // RuleExcept holds a block's exceptions by place: a page any of them
@@ -222,7 +223,7 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 			rule.Text = append(rule.Text, l.Entries...)
 		}
 		for _, a := range l.Actions {
-			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct})
+			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct, Hits: a.Hits})
 		}
 		out = append(out, rule)
 	}
@@ -261,7 +262,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 	if BrowserOn(d, "force-search") {
 		rules.Lists = append(rules.Lists, ListRule{Block: "force-search", Name: "Other search engines",
 			URL: otherSearchEngines, Title: []string{}, Text: []string{},
-			Actions: []RuleAction{{Name: db.ActionBlock, Distinct: 1}},
+			Actions: []RuleAction{{Name: db.ActionBlock, Distinct: 1, Hits: 1}},
 			Except:  RuleExcept{URL: []string{}, Title: []string{}, Text: []string{}}})
 		rules.Block = append(rules.Block, otherSearchEngines...)
 	}

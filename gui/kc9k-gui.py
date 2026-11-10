@@ -387,20 +387,26 @@ class ListCard(Gtk.Frame):
                 actions.pack_start(check, False, False, 0)
             box.pack_start(actions, False, False, 0)
 
-            # For page text: how many different entries each action needs.
+            # For page text: how many different words each action needs, and
+            # how many times they must occur in all (repeats counted).
             self.threshold_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-            self.threshold_row.pack_start(dim("Different words a page's text needs for each action:"),
-                                          False, False, 0)
+            self.threshold_row.pack_start(dim(
+                "What a page's text needs for each action: different words, and how many "
+                "times they occur in all (both must be met)."), False, False, 0)
             grid = Gtk.Grid(column_spacing=8, row_spacing=4)
-            for row, (name, title) in enumerate(SITE_ACTIONS):
+            grid.attach(dim("Different", wrap=False), 1, 0, 1, 1)
+            grid.attach(dim("In all", wrap=False), 2, 0, 1, 1)
+            for row, (name, title) in enumerate(SITE_ACTIONS, start=1):
                 label = Gtk.Label(label=title, xalign=0)
-                spin = Gtk.SpinButton.new_with_range(1, 1000, 1)
-                self.spins[name] = (label, spin)
+                distinct = Gtk.SpinButton.new_with_range(1, 1000, 1)
+                hits = Gtk.SpinButton.new_with_range(1, 1000, 1)
+                self.spins[name] = (label, distinct, hits)
                 grid.attach(label, 0, row, 1, 1)
-                grid.attach(spin, 1, row, 1, 1)
-            save = Gtk.Button(label="Save numbers", valign=Gtk.Align.END)
+                grid.attach(distinct, 1, row, 1, 1)
+                grid.attach(hits, 2, row, 1, 1)
+            save = Gtk.Button(label="Save numbers", halign=Gtk.Align.START)
             save.connect("clicked", self.save_numbers)
-            grid.attach(save, 2, 0, 1, len(SITE_ACTIONS))
+            grid.attach(save, 1, len(SITE_ACTIONS) + 1, 2, 1)
             self.threshold_row.pack_start(grid, False, False, 0)
             box.pack_start(self.threshold_row, False, False, 0)
 
@@ -421,12 +427,13 @@ class ListCard(Gtk.Frame):
                                   f"<small>{kind} · {count} {'entry' if count == 1 else 'entries'}</small>")
             for name, check in self.place_checks.items():
                 check.set_active(name in data["where"])
-            actions = {a["action"]: a["distinct"] for a in data["actions"]}
+            actions = {a["action"]: a for a in data["actions"]}
             for name, check in self.action_checks.items():
                 check.set_active(name in actions)
-            for name, (label, spin) in self.spins.items():
-                spin.set_value(actions.get(name, 1))
-                for widget in (label, spin):
+            for name, (label, distinct, hits) in self.spins.items():
+                distinct.set_value(actions.get(name, {}).get("distinct", 1))
+                hits.set_value(actions.get(name, {}).get("hits", 1))
+                for widget in (label, distinct, hits):
                     widget.set_no_show_all(name not in actions)
                     widget.set_visible(name in actions)
             if self.threshold_row is not None:
@@ -462,9 +469,14 @@ class ListCard(Gtk.Frame):
                         then=self.window.queued_note)
 
     def save_numbers(self, _button):
-        current = {a["action"]: a["distinct"] for a in self.data["actions"]}
-        changes = [(name, spin.get_value_as_int()) for name, (_label, spin) in self.spins.items()
-                   if name in current and spin.get_value_as_int() != current[name]]
+        current = {a["action"]: a for a in self.data["actions"]}
+        changes = []
+        for name, (_label, distinct, hits) in self.spins.items():
+            if name not in current:
+                continue
+            for command, spin, key in (("threshold", distinct, "distinct"), ("hits", hits, "hits")):
+                if spin.get_value_as_int() != current[name].get(key, 1):
+                    changes.append((command, name, spin.get_value_as_int()))
         self.window.run_thresholds(self.window.selected, self.data["name"], changes)
 
     def rename(self, _button):
@@ -943,12 +955,14 @@ class Window(Gtk.ApplicationWindow):
         return value if answer == Gtk.ResponseType.OK else ""
 
     def run_thresholds(self, block_name, list_name, changes):
-        """Set each (action, number) of a list in turn: one command at a time."""
+        """Set each (threshold or hits, action, number) of a list in turn: one
+        command at a time."""
         if not changes:
             return
-        (name, value), rest = changes[0], changes[1:]
-        self.run(["list", "threshold", block_name, list_name, name, str(value)],
-                 then=lambda _o: self.run_thresholds(block_name, list_name, rest))
+        (command, name, value), rest = changes[0], changes[1:]
+        self.run(["list", command, block_name, list_name, name, str(value)],
+                 then=lambda output: (self.queued_note(output),
+                                      self.run_thresholds(block_name, list_name, rest)))
 
     def queued_note(self, output):
         """Says so when a change was queued instead of applied."""

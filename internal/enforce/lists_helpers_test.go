@@ -10,7 +10,7 @@ import (
 // none) at one entry each.
 func blacklist(name string, where db.Where, entries ...string) db.WebList {
 	return db.WebList{Kind: db.ListBlacklist, Name: name, Where: where, Entries: entries,
-		Actions: []db.ListAction{{Name: db.ActionBlock, Distinct: 1}}}
+		Actions: []db.ListAction{{Name: db.ActionBlock, Distinct: 1, Hits: 1}}}
 }
 
 func withActions(l db.WebList, actions ...db.ListAction) db.WebList {

@@ -33,7 +33,7 @@ func TestNewBlockLists(t *testing.T) {
 	}
 	blocked, exceptions := b.Lists[0], b.Lists[1]
 	if blocked.Name != DefaultBlockedList || blocked.IsExceptions() || blocked.Where != (Where{URL: true}) ||
-		!reflect.DeepEqual(blocked.Actions, []ListAction{{Name: ActionBlock, Distinct: 1}}) {
+		!reflect.DeepEqual(blocked.Actions, []ListAction{{Name: ActionBlock, Distinct: 1, Hits: 1}}) {
 		t.Errorf("Blocked = %+v", blocked)
 	}
 	if exceptions.Name != DefaultExceptionsList || !exceptions.IsExceptions() || len(exceptions.Actions) != 0 {
@@ -81,7 +81,7 @@ func TestListEdits(t *testing.T) {
 	if err := d.SetListThreshold(id, ActionBlock, 0); err == nil {
 		t.Error("threshold 0 accepted")
 	}
-	want := []ListAction{{Name: ActionBlock, Distinct: 3}, {Name: ActionGreyscale, Distinct: 1}}
+	want := []ListAction{{Name: ActionBlock, Distinct: 3, Hits: 1}, {Name: ActionGreyscale, Distinct: 1, Hits: 1}}
 	if l, _ := d.GetList(id); !reflect.DeepEqual(l.Actions, want) {
 		t.Errorf("actions = %+v; want %+v", l.Actions, want)
 	}
@@ -92,6 +92,7 @@ func TestListEdits(t *testing.T) {
 	}
 	for _, e := range []Edit{
 		{Action: EditListSetThreshold, List: id, Values: []string{ActionGreyscale, "2"}},
+		{Action: EditListSetHits, List: id, Values: []string{ActionGreyscale, "4"}},
 		{Action: EditListUnsetAction, List: id, Values: []string{ActionBlock}},
 		{Action: EditListWhere, List: id, Values: []string{PlaceTitle, "off"}},
 		{Action: EditListRemove, List: id, Values: []string{"18+"}},
@@ -102,7 +103,7 @@ func TestListEdits(t *testing.T) {
 	}
 	l, _ = d.GetList(id)
 	if l.Name != "Page words" || l.Where != (Where{Text: true}) || !reflect.DeepEqual(l.Entries, []string{"NSFW"}) ||
-		!reflect.DeepEqual(l.Actions, []ListAction{{Name: ActionGreyscale, Distinct: 2}}) {
+		!reflect.DeepEqual(l.Actions, []ListAction{{Name: ActionGreyscale, Distinct: 2, Hits: 4}}) {
 		t.Errorf("after queued edits: %+v", l)
 	}
 
@@ -163,11 +164,11 @@ func TestMigrateWebLists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	both := []ListAction{{Name: ActionBlock, Distinct: 1}, {Name: ActionGreyscale, Distinct: 1}}
+	both := []ListAction{{Name: ActionBlock, Distinct: 1, Hits: 1}, {Name: ActionGreyscale, Distinct: 1, Hits: 1}}
 	want := Lists{
 		{Kind: ListBlacklist, Name: DefaultBlockedList, Where: Where{URL: true}, Entries: []string{"reddit.com", "*casino*"}, Actions: both},
 		{Kind: ListBlacklist, Name: DefaultWordsList, Where: Where{Text: true}, Entries: []string{"nsfw"},
-			Actions: []ListAction{{Name: ActionBlock, Distinct: 2}, {Name: ActionGreyscale, Distinct: 1}}},
+			Actions: []ListAction{{Name: ActionBlock, Distinct: 2, Hits: 1}, {Name: ActionGreyscale, Distinct: 1, Hits: 1}}},
 		{Kind: ListExceptions, Name: DefaultExceptionsList, Where: Where{URL: true}, Entries: []string{"reddit.com/r/golang"}},
 	}
 	for i := range old.Lists {

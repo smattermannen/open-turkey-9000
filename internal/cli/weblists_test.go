@@ -123,6 +123,7 @@ func TestListGating(t *testing.T) {
 	mustRun(t, "block", "add-keyword", "b", "nsfw", "18+")
 	mustRun(t, "list", "add", "b", "Blocked", "reddit.com")
 	mustRun(t, "list", "threshold", "b", "Page words", "block", "3")
+	mustRun(t, "list", "hits", "b", "Page words", "block", "4")
 	if err := runCLI(t, "list", "threshold", "b", "Page words", "block", "0"); err == nil {
 		t.Error("threshold 0 accepted")
 	}
@@ -138,13 +139,14 @@ func TestListGating(t *testing.T) {
 		{"list", "delete", "b", "Page words"},
 		{"block", "remove-keyword", "b", "nsfw"},
 		{"block", "threshold", "b", "block", "9"},
+		{"list", "hits", "b", "Page words", "block", "9"},
 	}
 	for _, args := range refused {
 		if err := runCLI(t, args...); err == nil || !strings.Contains(err.Error(), "held") {
 			t.Errorf("%s on a locked block: %v; want refused as held", strings.Join(args, " "), err)
 		}
 	}
-	if l := list(t, d, "b", "Page words"); len(l.Entries) != 2 || l.Actions[0].Distinct != 3 {
+	if l := list(t, d, "b", "Page words"); len(l.Entries) != 2 || l.Actions[0].Distinct != 3 || l.Actions[0].Hits != 4 {
 		t.Errorf("after refused edits: %+v", l)
 	}
 }
@@ -193,7 +195,7 @@ func TestBlockExportImport(t *testing.T) {
 	if l := list(t, d, "old", "Exceptions"); !reflect.DeepEqual(l.Entries, []string{"work.com"}) {
 		t.Errorf("old Exceptions = %+v", l)
 	}
-	if l := list(t, d, "old", db.DefaultWordsList); l.Actions[0] != (db.ListAction{Name: "block", Distinct: 2}) {
+	if l := list(t, d, "old", db.DefaultWordsList); l.Actions[0] != (db.ListAction{Name: "block", Distinct: 2, Hits: 1}) {
 		t.Errorf("old Page words = %+v", l)
 	}
 }

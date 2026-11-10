@@ -66,7 +66,7 @@ func (in blockExport) legacyLists() ([]listExport, error) {
 			if withThresholds && thresholds.Get(name) >= 1 {
 				n = thresholds.Get(name)
 			}
-			out = append(out, db.ListAction{Name: name, Distinct: n})
+			out = append(out, db.ListAction{Name: name, Distinct: n, Hits: 1})
 		}
 		return out
 	}
@@ -122,10 +122,13 @@ func toLists(in []listExport) (db.Lists, error) {
 				if a.Distinct < 1 || a.Distinct > db.MaxThreshold {
 					a.Distinct = 1
 				}
+				if a.Hits < 1 || a.Hits > db.MaxThreshold {
+					a.Hits = 1
+				}
 				l.Actions = append(l.Actions, a)
 			}
 			if len(l.Actions) == 0 {
-				l.Actions = []db.ListAction{{Name: db.ActionBlock, Distinct: 1}}
+				l.Actions = []db.ListAction{{Name: db.ActionBlock, Distinct: 1, Hits: 1}}
 			}
 		}
 		out = append(out, l)

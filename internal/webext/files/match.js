@@ -133,6 +133,21 @@ function kc9kCountKeywords(text, keywords) {
   return kc9kKeywordRegexes(keywords).filter((regex) => regex.test(text)).length;
 }
 
+// kc9kTextHits counts, in text, how many of the regexes occur (each once)
+// and how many times they occur in all.
+function kc9kTextHits(regexes, text) {
+  let distinct = 0;
+  let total = 0;
+  for (const regex of regexes) {
+    const all = text.match(new RegExp(regex.source, "giu"));
+    if (all) {
+      distinct++;
+      total += all.length;
+    }
+  }
+  return { distinct, total };
+}
+
 // kc9kCompileLists compiles the daemon's blacklists (see the daemon's
 // ListRule): what each looks for in a page's address, title and text, its
 // actions, and its block's exceptions.
@@ -165,7 +180,8 @@ function kc9kReadsPage(compiled) {
 // exceptions look at a part of the page that isn't known yet is left until
 // it is, so a page an exception spares isn't blocked before it is read.
 // A match in the address or the title takes every action of the list; in
-// the text, an action needs its number of different entries.
+// the text, an action needs its number of different entries (distinct) and
+// of times they occur in all (hits).
 function kc9kListActions(compiled, page) {
   const out = {};
   if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
@@ -185,9 +201,9 @@ function kc9kListActions(compiled, page) {
     }
     const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       (hasTitle && list.title.some((regex) => regex.test(page.title)));
-    const found = hasText && list.text.length > 0 ? list.text.filter((regex) => regex.test(page.text)).length : 0;
+    const found = hasText && list.text.length > 0 ? kc9kTextHits(list.text, page.text) : { distinct: 0, total: 0 };
     for (const action of list.actions) {
-      if (whole || (found > 0 && found >= (action.distinct || 1))) {
+      if (whole || (found.distinct > 0 && found.distinct >= (action.distinct || 1) && found.total >= (action.hits || 1))) {
         out[action.action] = true;
       }
     }

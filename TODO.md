@@ -26,8 +26,7 @@ Still to try:
 - The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
 - Hotkeys only work in Cinnamon; GNOME keeps custom shortcuts under another dconf path.
 - Blocks tab: a "+" button for a new block.
-- Website lists, agreed plan (step 1 done: named blacklists and exception lists, each ticking where it looks — address, page title, page text — with per-list actions and thresholds; one Websites tab in the interface):
-  2. Page text "frequency": besides how many *different* entries, how many hits in total (repeats counted) before each action applies.
+- Website lists, agreed plan (steps 1 and 2 done: named blacklists and exception lists, each ticking where it looks — address, page title, page text — with per-list actions, and for page text both different words and hits in all; one Websites tab in the interface):
   3. More actions per blacklist: open a custom link instead of the block page; show an image (a file the user picks, served by the daemon); close the tab; close the browser; close the browser and log out; close the browser and shut down; close the browser and start monk mode. Actions that take a time (monk mode) show a duration setting.
   4. Bypass prevention (the Nepsis idea below), optional per block, with global settings too; when both are set, both apply.
 - Monk mode: a `*.*` block that starts locked for a set time, with a quick button.

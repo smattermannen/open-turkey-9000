@@ -162,7 +162,7 @@ Whenever its schedule has the block on, or will within 2 hours, the block itself
 
 A block with allow windows is meant to stay blocked outside them, so it can't be loosened directly **at any time** — not even during an allow window, which would otherwise be the moment to dismantle it. Loosening changes are:
 
-- removing apps, window titles or blacklist entries, adding exceptions, unticking a blacklist's places or actions, ticking more places on an exception list, raising a threshold, and deleting a blacklist (see [Website lists](#website-lists));
+- removing apps, window titles or blacklist entries, adding exceptions, unticking a blacklist's places or actions, ticking more places on an exception list, raising a threshold or hits, and deleting a blacklist (see [Website lists](#website-lists));
 - `block remove`;
 - adding another allow window, or removing the **last** one (removing one of several only makes the block stricter, so that's immediate).
 
@@ -274,7 +274,7 @@ A block has **blacklists** and **exception lists**, each with a name. Every list
 - **title**: the page title, as shown on its tab.
 - **text**: the page's text. Title and text entries are words or phrases: a plain word counts only on its own (`porn` doesn't count in "pornhub", `18+` not in "1118+"), and `*` matches inside words (`*porn*` counts in "pornhub", `porn*` in "pornstar"). Case is ignored.
 
-Each blacklist chooses its **actions**, in any combination: **block** the page (the default), show it in **greyscale**, and block its **images**. A match in the address or the title takes every action. In the text, each action has a **threshold**: how many *different* entries the page must contain (repeats count once). Once a page meets one, it stays greyed or blocked until you leave it, even if its text changes.
+Each blacklist chooses its **actions**, in any combination: **block** the page (the default), show it in **greyscale**, and block its **images**. A match in the address or the title takes every action. In the text, each action has two numbers, and both must be met: a **threshold**, how many *different* entries the page must contain (repeats count once), and **hits**, how many times they occur in all (repeats counted). Both start at 1. Threshold 1 with hits 5 acts on one word five times, or five words once. Once a page meets them, it stays greyed or blocked until you leave it, even if its text changes.
 
 An **exception list** spares the pages it matches from every blacklist of its block. Exceptions by title or text have to wait until the page is read, so a block that has them leaves its websites to the extension alone: they don't go to `/etc/hosts` or the firewall, and a page shows for a moment before it is blocked. An address exception also takes its domain out of `/etc/hosts` and the firewall (those block whole hosts), leaving it to the browser.
 
@@ -287,6 +287,7 @@ kc9k list add work Words nsfw 18+ "*porn*"
 kc9k list action work Words greyscale on
 kc9k list threshold work Words greyscale 1            # one word greys the page
 kc9k list threshold work Words block 3                # three different ones block it
+kc9k list hits work Words block 10                    # ...and only when they occur 10 times in all
 kc9k list create work Lectures --exceptions --title   # spare videos titled "lecture"
 kc9k list add work Lectures lecture tutorial
 kc9k list where work Videos text on                   # tick or untick a place
@@ -303,7 +304,7 @@ kc9k block export-list work apps > apps.txt       # also: titles, blocked, excep
 kc9k block import-list work apps apps.txt
 ```
 
-What makes a block stricter is always allowed, even while it is held: adding to a blacklist, ticking a blacklist's places or actions, lowering a threshold, adding a list, and removing exceptions or unticking an exception list's places. Everything else loosens it, so it is refused while the block is held and queued for a block with allow windows. A blacklist keeps at least one place and one action.
+What makes a block stricter is always allowed, even while it is held: adding to a blacklist, ticking a blacklist's places or actions, lowering a threshold or hits, adding a list, and removing exceptions or unticking an exception list's places. Everything else loosens it, so it is refused while the block is held and queued for a block with allow windows. A blacklist keeps at least one place and one action.
 
 The commands from before lists still work on a block's default lists: `block add`, `remove-entry`, `add-site`, `remove-site`, `add-pattern` and `remove-pattern` on **Blocked**, `add-exception` and `remove-exception` on **Exceptions**, and `add-keyword`, `remove-keyword` and `threshold` on **Page words** (a text list, made when first needed). Upgrading turns each block's sites and patterns, exceptions and page keywords into those three lists, with the block's actions and thresholds; an allowlist block becomes `*.*` in Blocked with its sites as exceptions. `block export` writes the lists, and `block import` also reads exports from before lists.
 

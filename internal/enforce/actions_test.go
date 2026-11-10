@@ -14,14 +14,14 @@ import (
 // too, and so does a block with exceptions by title or text.
 func TestInputsOnlyBlockingAddressLists(t *testing.T) {
 	url := db.Where{URL: true}
-	grey := withActions(blacklist("Grey", url, "reddit.com", "*casino*"), db.ListAction{Name: db.ActionGreyscale, Distinct: 1})
+	grey := withActions(blacklist("Grey", url, "reddit.com", "*casino*"), db.ListAction{Name: db.ActionGreyscale, Distinct: 1, Hits: 1})
 	active := []db.ActiveBlockDetail{
 		{BlockName: "grey", Lists: db.Lists{grey}, Apps: []string{"steam"}},
 		{BlockName: "words", Lists: db.Lists{blacklist("Words", db.Where{Text: true, Title: true}, "youtube.com")}},
 		{BlockName: "spared", Lists: db.Lists{blacklist("Blocked", url, "youtube.com"),
 			exceptionList("Lectures", db.Where{Title: true}, "lecture")}},
 		{BlockName: "hard", Lists: db.Lists{withActions(blacklist("Blocked", url, "x.com", "y.com"),
-			db.ListAction{Name: db.ActionBlock, Distinct: 1}, db.ListAction{Name: db.ActionGreyscale, Distinct: 1}),
+			db.ListAction{Name: db.ActionBlock, Distinct: 1, Hits: 1}, db.ListAction{Name: db.ActionGreyscale, Distinct: 1, Hits: 1}),
 			exceptionList("Exceptions", url, "y.com/home")}},
 	}
 	hosts, apps, bp := Inputs(active)
@@ -75,9 +75,9 @@ func TestBuildRulesLists(t *testing.T) {
 	except := RuleExcept{URL: []string{"facebook.com/help"}, Title: []string{}, Text: []string{}}
 	want := []ListRule{
 		{Block: "b", Name: "Blocked", URL: []string{"facebook.com"}, Title: []string{}, Text: []string{},
-			Actions: []RuleAction{{Name: "block", Distinct: 1}}, Except: except},
+			Actions: []RuleAction{{Name: "block", Distinct: 1, Hits: 1}}, Except: except},
 		{Block: "b", Name: "Words", URL: []string{}, Title: []string{"nsfw", "18+"}, Text: []string{"nsfw", "18+"},
-			Actions: []RuleAction{{Name: "block", Distinct: 2}, {Name: "greyscale", Distinct: 1}}, Except: except},
+			Actions: []RuleAction{{Name: "block", Distinct: 2, Hits: 1}, {Name: "greyscale", Distinct: 1, Hits: 1}}, Except: except},
 	}
 	if !reflect.DeepEqual(rules.Lists, want) {
 		t.Errorf("lists:\n got %+v\nwant %+v", rules.Lists, want)

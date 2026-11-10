@@ -92,6 +92,16 @@ check("excepted site", kc9kListActions(words, at("https://en.wikipedia.org/wiki/
 check("text unknown yet", kc9kListActions(words, { url: "https://example.com/" }), {});
 check("not a web page", kc9kListActions(words, at("about:blank", { text })), {});
 
+// Hits count repeats: block at 1 different word but 5 times in all.
+const often = kc9kCompileLists([{
+  url: [], title: [], text: ["nsfw", "18+"], except: none,
+  actions: [{ action: "block", distinct: 1, hits: 5 }, { action: "greyscale", distinct: 2, hits: 3 }],
+}]);
+check("too few hits", kc9kListActions(often, at("https://a.com/", { text: "nsfw nsfw nsfw nsfw" })), {});
+check("enough hits", kc9kListActions(often, at("https://a.com/", { text: "nsfw nsfw nsfw nsfw NSFW" })), { block: true });
+check("hits and different words", kc9kListActions(often, at("https://a.com/", { text: "nsfw 18+ nsfw" })), { greyscale: true });
+check("hits are whole words", kc9kTextHits(kc9kKeywordRegexes(["porn", "*porn*"]), "porn pornhub PORN"), { distinct: 2, total: 5 });
+
 // An address list takes every action at once, whatever the thresholds.
 const sites = kc9kCompileLists([{
   url: ["reddit.com", "*casino*"], title: ["youtube"], text: [],

@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS web_list_actions (
     list_id  INTEGER NOT NULL,
     action   TEXT NOT NULL,
     distinct_min INTEGER NOT NULL DEFAULT 1,
+    hits_min     INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (list_id, action),
     FOREIGN KEY (list_id) REFERENCES web_lists(id) ON DELETE CASCADE
 );`
@@ -134,12 +135,14 @@ func (w Where) String() string {
 	return strings.Join(w.List(), ", ")
 }
 
-// ListAction is one action a blacklist takes on the pages it matches.
-// Distinct is, for page text, how many of the list's different entries a page
-// must contain; a match in the address or title always counts.
+// ListAction is one action a blacklist takes on the pages it matches. For
+// page text, Distinct is how many of the list's different entries a page must
+// contain, and Hits how many times they must occur in all (repeats counted);
+// both must be met. A match in the address or title always counts.
 type ListAction struct {
 	Name     string `json:"action"`
 	Distinct int    `json:"distinct"`
+	Hits     int    `json:"hits"`
 }
 
 // WebList is one of a block's website lists.
@@ -311,7 +314,7 @@ func listEntries(q querier, listID int) ([]string, error) {
 }
 
 func listActions(q querier, listID int) ([]ListAction, error) {
-	rows, err := q.Query("SELECT action, distinct_min FROM web_list_actions WHERE list_id = ?", listID)
+	rows, err := q.Query("SELECT action, distinct_min, hits_min FROM web_list_actions WHERE list_id = ?", listID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch list actions: %w", err)
 	}
@@ -319,12 +322,10 @@ func listActions(q querier, listID int) ([]ListAction, error) {
 	found := map[string]ListAction{}
 	for rows.Next() {
 		var a ListAction
-		if err := rows.Scan(&a.Name, &a.Distinct); err != nil {
+		if err := rows.Scan(&a.Name, &a.Distinct, &a.Hits); err != nil {
 			return nil, fmt.Errorf("failed to read a list action: %w", err)
 		}
-		if a.Distinct < 1 {
-			a.Distinct = 1
-		}
+		a.Distinct, a.Hits = max(a.Distinct, 1), max(a.Hits, 1)
 		found[a.Name] = a
 	}
 	if err := rows.Err(); err != nil {
@@ -502,13 +503,24 @@ func (d *DB) SetListAction(listID int, action string, on bool) error {
 // SetListThreshold sets how many different entries of a blacklist a page's
 // text must contain before the action applies. The action must be on.
 func (d *DB) SetListThreshold(listID int, action string, n int) error {
+	return d.setListCount(listID, action, "distinct_min", n)
+}
+
+// SetListHits sets how many times in all a blacklist's entries must occur in
+// a page's text before the action applies. The action must be on.
+func (d *DB) SetListHits(listID int, action string, n int) error {
+	return d.setListCount(listID, action, "hits_min", n)
+}
+
+// setListCount sets one of an action's counts (column is a constant).
+func (d *DB) setListCount(listID int, action, column string, n int) error {
 	if !IsAction(action) {
 		return fmt.Errorf("unknown action %q (use %s)", action, strings.Join(ActionNames, ", "))
 	}
 	if n < 1 || n > MaxThreshold {
 		return fmt.Errorf("a threshold is a number from 1 to %d", MaxThreshold)
 	}
-	res, err := d.conn.Exec("UPDATE web_list_actions SET distinct_min = ? WHERE list_id = ? AND action = ?", n, listID, action)
+	res, err := d.conn.Exec("UPDATE web_list_actions SET "+column+" = ? WHERE list_id = ? AND action = ?", n, listID, action)
 	if err != nil {
 		return fmt.Errorf("failed to set the %s threshold: %w", action, err)
 	}
@@ -540,8 +552,8 @@ func (d *DB) copyLists(from Lists, toBlock string) error {
 				return err
 			}
 			for _, a := range l.Actions {
-				if _, err := d.conn.Exec("INSERT INTO web_list_actions (list_id, action, distinct_min) VALUES (?, ?, ?)",
-					id, a.Name, a.Distinct); err != nil {
+				if _, err := d.conn.Exec("INSERT INTO web_list_actions (list_id, action, distinct_min, hits_min) VALUES (?, ?, ?, ?)",
+					id, a.Name, max(a.Distinct, 1), max(a.Hits, 1)); err != nil {
 					return err
 				}
 			}
@@ -591,6 +603,9 @@ func legacyStrings(q querier, query string, blockID int) ([]string, error) {
 //     actions at its thresholds.
 func migrateWebLists(conn *sql.DB) error {
 	if err := addColumnIfMissing(conn, "blocks", "lists_ready", "BOOLEAN NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(conn, "web_list_actions", "hits_min", "INTEGER NOT NULL DEFAULT 1"); err != nil {
 		return err
 	}
 	ids, err := func() ([]int, error) {

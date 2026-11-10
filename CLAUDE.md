@@ -66,8 +66,8 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
 - **Website lists** (`internal/db/weblists.go`, `internal/cli/weblists.go`,
   `kc9k list …`): each block has named blacklists and exception lists. Each
   list ticks where it looks (url / title / text); each blacklist ticks its
-  actions (block / greyscale / no-images, `actions.go`) with, per action, a
-  threshold of distinct entries for page text. An exception list spares pages
+  actions (block / greyscale / no-images, `actions.go`) with, per action, two
+  counts for page text: distinct entries (threshold) and total hits. An exception list spares pages
   from its own block's blacklists only. Only url blacklists with `block` feed
   hosts, firewall and browser policy (`enforce.Inputs`), and not at all for a
   block with title/text exceptions; everything goes to the extension as
@@ -126,7 +126,7 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 
 Full usage and examples in `README.md`. Summary:
 `list show | create [--exceptions --url --title --text] | rename | delete | add | remove | where | action |
-threshold | export | import`,
+threshold | hits | export | import`,
 `block create [--allowlist] [--template T] | add | add-exception | add-app | add-title | remove-title |
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,

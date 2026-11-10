@@ -35,6 +35,15 @@ Still to try:
 - Clusters: lists made independently of blocks, with all the same features as lists. A cluster can be imported into a block's list or added as a standalone list within a block, so a new block can quickly allowlist e.g. the academia or anime cluster.
 - Keyword test mode: turn it on for a block, then browse; the extension shows the keyword matches on each page (which keywords matched, how often each appears, and how many distinct keywords), so it is easy to see whether a rule would be too harsh.
 - Keyword thresholds by frequency (total matches), not only by distinct keywords.
+- Workaround guard (built in, no per-mirror domain lists): treat any URL that carries a blocked domain inside it as blocked (translate proxies like `www-youtube-com.translate.goog`, `web.archive.org/web/*/youtube.com`, `?url=` web proxies, caches); spot front-ends and mirrors by page fingerprints (generator meta tags, canonical/og:url and embeds pointing at a blocked site, known front-end markup such as Invidious/Piped); kill any process whose command line names a blocked domain (yt-dlp, mpv, curl, streamlink), plus a built-in list of download/stream tools in strict mode.
+- App blocking by more than exact name: match the executable's path and hash, so renaming a binary doesn't escape.
+- Python programs: stop sparing every Python process; spare only scripts that are root-owned in system paths (desktop helpers) and judge user-owned scripts like any other program.
+- Wayland support for the window-title check (Cinnamon's Wayland session is still experimental, so low priority).
+- Close local paths to root: hide or lock recovery mode and `init=`/`single` kernel arguments (check what the no-escape boot lock already covers), lock root login on TTYs and `su`, and warn about firmware password and boot order (live USB).
+- Auto-relock when setting a lock: e.g. after the typing challenge the block pauses for 5 minutes without becoming editable, then relocks by itself.
+- Location-based blocking: by GPS, by nearby Wi-Fi networks, or both (the user picks).
+- Project export/import: the whole setup (blocks, clusters, schedules, keywords, bypass rules, browser options) in one file, to share systems with others.
+- Bypass detection: the user picks which detectors run and what each does, with an escalation ladder customizable in detail, e.g. 1st trigger: close the tab and sign out for 1 minute; 2nd: close the browser and start monk mode for 5 minutes; 3rd: shut down for 15 minutes. Ties in with Nepsis mode.
 - Remove every note saying some parts only work with the extension: it is forced by default, so they no longer apply (interface, README, command help).
 
 ## Later

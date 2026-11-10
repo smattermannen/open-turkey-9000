@@ -37,7 +37,7 @@ var Consequences = []string{ConsequenceWarning, ConsequenceCloseTab, Consequence
 
 // Detectors are the event kinds bypass detection can count. EventSearch is a
 // kind of EventPage: counting pages counts those too.
-var Detectors = []string{EventPage, EventSearch, EventApp, EventTitle, EventBrowser, EventTamper, EventAccess}
+var Detectors = []string{EventPage, EventSearch, EventApp, EventTitle, EventBrowser, EventTamper, EventAccess, EventWorkaround}
 
 // Limits on bypass detection's own numbers.
 const (

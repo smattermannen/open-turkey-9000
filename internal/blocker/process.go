@@ -71,6 +71,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // commMaxLen is the kernel's fixed width for /proc/<pid>/comm (TASK_COMM_LEN-1).
@@ -95,6 +96,17 @@ var noDescend = map[string]bool{
 // executable name, Flatpak app ID or desktop app scope) together with all of
 // its descendants. It returns the number of processes killed.
 func KillBlocked(processNames []string) (int, error) {
+	return killBlocked(processNames, false, time.Time{})
+}
+
+// KillBlockedPolitely is KillBlocked, except that a matched app is first
+// asked to close its windows and killed a cycle later (see polite.go). It
+// returns the processes killed plus the apps newly asked.
+func KillBlockedPolitely(processNames []string, now time.Time) (int, error) {
+	return killBlocked(processNames, true, now)
+}
+
+func killBlocked(processNames []string, politely bool, now time.Time) (int, error) {
 	processNames = withoutEssentialApps(processNames)
 	if len(processNames) == 0 {
 		return 0, nil
@@ -129,6 +141,27 @@ func KillBlocked(processNames []string) (int, error) {
 		}
 	}
 
+	asked := 0
+	if politely {
+		wait, fresh := polite.sort(roots, now, readComm)
+		kept := roots[:0]
+		for _, pid := range roots {
+			if !wait[pid] {
+				kept = append(kept, pid)
+			}
+		}
+		roots = kept
+		// Only apps that may be killed at all are asked.
+		var ask []int
+		for _, pid := range fresh {
+			if ownedByUser(pid) {
+				ask = append(ask, pid)
+			}
+		}
+		asked = len(ask)
+		askToClose(ask)
+	}
+
 	// Never kill init, ourselves or our ancestors.
 	protected := map[int]bool{1: true}
 	for pid := os.Getpid(); pid > 0 && !protected[pid]; pid = parent[pid] {
@@ -159,7 +192,7 @@ func KillBlocked(processNames []string) (int, error) {
 		killed++
 	}
 
-	return killed, nil
+	return killed + asked, nil
 }
 
 // descendants returns every descendant of roots in children, breadth-first

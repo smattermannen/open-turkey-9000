@@ -169,6 +169,10 @@ func activeTitles(active []db.ActiveBlockDetail) []string {
 	return dedup(out)
 }
 
+// deferKills makes Apply leave blocked apps to the daemon (see ApplyFromDB).
+// Only set while the apply lock is held.
+var deferKills bool
+
 // Apply forces every layer to match the active blocks. Used by the CLI right
 // after the desired state changes (start, stop, unlock, edit), where the domain
 // set may have changed and we want the effect immediately.
@@ -185,7 +189,7 @@ func Apply(active []db.ActiveBlockDetail) error {
 	note(blocker.ApplyHosts(hosts))        // empty list => removes our section
 	note(blocker.ApplyFirewall(hosts))     // empty list => removes the chain
 	note(blocker.ApplyBrowserPolicies(bp)) // empty policy => removes files
-	if len(apps) > 0 {
+	if len(apps) > 0 && !deferKills {
 		blocker.KillBlocked(apps)
 	}
 	return firstErr
@@ -201,6 +205,10 @@ func ApplyFromDB(d *db.DB) error {
 	if trusted, err := d.TrustedNow(time.Now()); err == nil {
 		active = withoutBreaks(d, active, trusted)
 	}
+	// With polite closing on, the daemon's next cycle asks the apps to
+	// close instead of this killing them outright.
+	deferKills = OptionOn(d, OptionPoliteClose)
+	defer func() { deferKills = false }()
 	return Apply(active)
 }
 
@@ -307,7 +315,13 @@ func killApps(d *db.DB, apps []string, kind string, blocks ...string) {
 	if len(apps) == 0 {
 		return
 	}
-	killed, err := blocker.KillBlocked(apps)
+	var killed int
+	var err error
+	if kind == db.EventApp && OptionOn(d, OptionPoliteClose) {
+		killed, err = blocker.KillBlockedPolitely(apps, time.Now())
+	} else {
+		killed, err = blocker.KillBlocked(apps)
+	}
 	if err != nil {
 		log.Printf("daemon: error killing blocked processes: %v", err)
 	} else if killed > 0 {

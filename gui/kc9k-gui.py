@@ -28,6 +28,17 @@ STATS_REFRESH_SECONDS = 30
 # Pointer events for the charts' hover.
 POINTER_EVENTS = Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK
 
+# The switches of 'kc9k option' (internal/enforce/options.go).
+OPTIONS = (
+    ("polite-close", "Ask blocked apps to close first",
+     "A blocked app with a window is asked to close, so it can offer to save, and is "
+     "closed for good a few seconds later if it is still open. Off: closed at once."),
+    ("block-page-details", "Say why on the block page",
+     "The block page names the block and list that stopped the page, and when the block "
+     "ends. It changes nothing about what a list does: redirects, pictures and closed tabs "
+     "work as before."),
+)
+
 LIBREWOLF_OPTIONS = (
     ("force-librewolf", "Allow only LibreWolf",
      "Closes every other browser at once, even when no block is on."),
@@ -1628,6 +1639,13 @@ class Window(Gtk.ApplicationWindow):
         # window still fits small screens.
         websites_help.set_max_width_chars(70)
         websites.pack_start(websites_help, False, False, 0)
+        self.keyword_test_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.keyword_test_switch.connect("state-set", self.toggle_keyword_test)
+        websites.pack_start(self.switch_row(
+            self.keyword_test_switch, "Keyword test mode",
+            "Lists that read a page's title or text do nothing; instead a panel on each page "
+            "shows which words were found, how often, and whether each action's thresholds "
+            "are met. For tuning a list. Turning it on loosens the block."), False, False, 0)
         self.list_cards = {}
         self.list_boxes = {}
         for kind, title, button_label, detail in (
@@ -1806,6 +1824,7 @@ class Window(Gtk.ApplicationWindow):
         self.titles.set_items(block.get("titles", []), owner=block["name"])
         self.schedules.set_items(block["schedules"])
         self.calendar.set_windows(block.get("schedule_windows", []))
+        set_switch(self.keyword_test_switch, block.get("keyword_test", False))
 
         self.start_button.set_label("Add locks…" if block["active"] else "Start…")
         self.stop_button.set_sensitive(
@@ -2364,6 +2383,15 @@ class Window(Gtk.ApplicationWindow):
                                    "locked."), *rows),
             False, False, 0)
 
+        self.option_switches = {}
+        option_rows = []
+        for name, title, detail in OPTIONS:
+            switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+            switch.connect("state-set", self.toggle_option, name)
+            self.option_switches[name] = switch
+            option_rows.append(self.switch_row(switch, title, detail))
+        box.pack_start(section("Behaviour", *option_rows), False, False, 0)
+
         self.stats_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.stats_switch.connect("state-set", self.toggle_stats)
         clear = Gtk.Button(label="Delete all statistics…", halign=Gtk.Align.START)
@@ -2502,6 +2530,8 @@ class Window(Gtk.ApplicationWindow):
         locked = bool(self.setting_locks["force-librewolf"][0].get_text())
         switch.set_sensitive(not locked and (bool(version) or switch.get_active()))
         set_switch(self.stats_switch, self.state["stats"])
+        for name, switch in self.option_switches.items():
+            set_switch(switch, (self.state.get("options") or {}).get(name, False))
         has_password = self.state.get("settings_password", False)
         self.password_status.set_markup("<b>On.</b>" if has_password else "Not set.")
         self.password_set_button.set_label("Change password…" if has_password else "Set password…")
@@ -2616,6 +2646,18 @@ class Window(Gtk.ApplicationWindow):
         if self.updating:
             return False
         self.run(["browser", name, "on" if wanted else "off"])
+        return True
+
+    def toggle_option(self, _switch, wanted, name):
+        if self.updating:
+            return False
+        self.run(["option", name, "on" if wanted else "off"])
+        return True
+
+    def toggle_keyword_test(self, _switch, wanted):
+        if self.updating or not self.selected:
+            return False
+        self.run(["list", "test", self.selected, "on" if wanted else "off"])
         return True
 
     def toggle_stats(self, _switch, wanted):

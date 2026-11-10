@@ -23,7 +23,7 @@ Sizes: S = under a day of work, M = a few days, L = a week or more.
 
 ## Phase 1: finish what is in flight
 
-**1.1 Keyword test mode (M).** Next in the agreed order.
+**1.1 Keyword test mode (M). Done 2026-11-10** (`kc9k list test`, extension 1.13.0, tried in LibreWolf). Next in the agreed order.
 - `kc9k list test <block> on|off` sets a flag per block; `rules` carries
   `test: true` for its lists.
 - `match.js` already counts distinct entries and total hits per list; return
@@ -41,7 +41,7 @@ a block's own ladder already gives a stricter track where one is wanted.
 
 ## Phase 2: holes in blocking
 
-**2.1 Workaround guard (L).** No per-mirror domain lists.
+**2.1 Workaround guard (L). Extension part done 2026-11-10** (proxy addresses, canonical/front-end fingerprints, `workaround` events); command lines still to do. No per-mirror domain lists.
 - URL carrying a blocked domain: extend the translate/archive decoder in
   `match.js` to any query parameter or path segment that parses as a URL or
   host (`?url=`, `?q=cache:`, base64 of a URL). Judge the inner address with
@@ -70,7 +70,7 @@ root-owned and under `/usr`, `/opt` or `/snap`; judge everything else by the
 script's name and path like any program. Test with the Cinnamon applets that
 made the exception necessary.
 
-**2.4 Polite app closing (S, from Focuser).** For an app with a window, send
+**2.4 Polite app closing (S, from Focuser). Done 2026-11-10** as the option `polite-close` (default on; not tried with a real app yet). For an app with a window, send
 `_NET_CLOSE_WINDOW` first and kill after `TitleCloseGrace`, as titles do, so
 the app can ask to save. Background processes are still killed at once. A
 held block never waits longer than the grace period.
@@ -103,7 +103,7 @@ an allowance on a held block is gated.
 **3.4 Pomodoro additions (S, from Focuser).** A long break after N work
 periods, and quota sessions closed during a work period.
 
-**3.5 Time left in the extension (M).**
+**3.5 Time left in the extension (M). Done 2026-11-10** (badge, popup, add-site; tried in LibreWolf through the popup's message, the badge itself not looked at).
 - `rules` gains per block `ends_at` / `starts_at`: quota seconds left in an
   open session, the next schedule start within 2 h, break or relock end.
 - `background.js` sets the toolbar badge for the focused tab: minutes left
@@ -193,7 +193,7 @@ of the playlist's (read from the playlist panel on the page, cached). A
 watch page that loses the parameter is blocked. Hosts/firewall/policy are
 already skipped for a block with such exceptions.
 
-**6.4 Block page (S, from Focuser).** Show which block and list stopped the
+**6.4 Block page (S, from Focuser). Done 2026-11-10** as the option `block-page-details`. Show which block and list stopped the
 page, the matched entry (hidden lists show nothing), and when the block ends
 if it has an end.
 

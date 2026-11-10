@@ -141,3 +141,51 @@ check("greyscale takes nothing away", kc9kTakesAway(outcome("https://grey.com/")
 const total = cases.length + keywordCases.length + checks;
 console.log(failed ? `${failed} of ${total} failed` : `all ${total} passed`);
 process.exit(failed ? 1 : 0);
+
+// Proxies of any kind: a full address in the query or the path.
+{
+  const f = kc9kFilter({ match: ["reddit.com"], except: [] });
+  const proxied = [
+    ["https://someproxy.example/browse.php?u=https%3A%2F%2Fwww.reddit.com%2Fr%2Ffunny", true],
+    ["https://proxy.example/?url=https://old.reddit.com/", true],
+    ["https://proxy.example/go?b64=" + Buffer.from("https://reddit.com/r/x").toString("base64"), true],
+    ["https://proxy.example/fetch/https://reddit.com/r/x", true],
+    ["https://proxy.example/?url=https://wikipedia.org/", false],
+    // Searching for an address is not visiting it.
+    ["https://www.google.com/search?q=https://reddit.com/", false],
+    ["https://duckduckgo.com/?q=https%3A%2F%2Freddit.com", false],
+    ["https://example.com/?ref=reddit.com", false],
+  ];
+  for (const [url, want] of proxied) {
+    if (kc9kMatches(f, url) !== want) {
+      console.error("FAIL proxy", url, "want", want);
+      process.exitCode = 1;
+    }
+  }
+  if (kc9kDirectly(() => kc9kMatches(f, "https://proxy.example/?url=https://reddit.com/")) !== false) {
+    console.error("FAIL kc9kDirectly still unwraps");
+    process.exitCode = 1;
+  }
+}
+
+// Keyword test mode: a list in test mode never acts, and reports what it found.
+{
+  const compiled = kc9kCompileLists([{
+    id: 7, block: "b", name: "Words", test: true, url: [], title: [], text: ["casino", "poker", "*bet*"],
+    actions: [{ action: "greyscale", distinct: 1, hits: 1 }, { action: "block", distinct: 2, hits: 5 }],
+    except: { url: [], title: [], text: [] },
+  }]);
+  const page = { url: "https://example.com/", title: "", text: "casino casino poker and betting" };
+  const report = kc9kTestReport(compiled, page);
+  const ok = kc9kListMatches(compiled, page).length === 0 && report.length === 1 &&
+    report[0].distinct === 3 && report[0].total === 4 && report[0].entries[0].entry === "casino" &&
+    report[0].entries[0].count === 2 && report[0].actions[0].met === true && report[0].actions[1].met === false;
+  if (!ok) {
+    console.error("FAIL test mode report", JSON.stringify(report));
+    process.exitCode = 1;
+  }
+  if (kc9kTimeLeft(42) !== "42s" || kc9kTimeLeft(125) !== "2m" || kc9kTimeLeft(3 * 3600) !== "3h") {
+    console.error("FAIL kc9kTimeLeft");
+    process.exitCode = 1;
+  }
+}

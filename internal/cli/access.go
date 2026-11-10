@@ -44,7 +44,7 @@ var accessAreas = []string{areaApp, areaDashboard, areaBlocks, areaDevice, areaS
 
 // settingAccessPrefix + area holds that area's salted hash. Areas given one
 // password in one command share the same hash, so it is checked once.
-const settingAccessPrefix = "access.password."
+const settingAccessPrefix = db.AccessPasswordSetting
 
 // commandAreas maps a command (its path below kc9k; the longest match wins)
 // to the pages it belongs to. A command on several pages runs when any of
@@ -73,6 +73,7 @@ var commandAreas = map[string][]string{
 	"stats clear": {areaStats, areaSettings},
 	"browser":     {areaSettings},
 	"hotkey":      {areaSettings},
+	"option":      {areaSettings},
 	"password":    {areaSettings},
 	"master":      {areaSettings},
 	"master-set":  {areaSettings},

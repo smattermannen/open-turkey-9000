@@ -1,22 +1,17 @@
 package enforce
 
 import (
-	"log"
-
 	"github.com/smattermannen/kc9k/internal/db"
-	"github.com/smattermannen/kc9k/internal/quota"
 )
 
-// withoutBreaks drops blocks in a Pomodoro break. They stay active, with their
-// locks, so blocking resumes by itself when the break ends.
+// withoutBreaks drops blocks that are lifted for now: in a Pomodoro break, or
+// paused (a break taken, an unlocked block waiting to relock; see
+// pausedFor). They stay active, with their locks, so blocking resumes by
+// itself when the time is up.
 func withoutBreaks(d *db.DB, active []db.ActiveBlockDetail, trusted int64) []db.ActiveBlockDetail {
 	out := make([]db.ActiveBlockDetail, 0, len(active))
 	for _, b := range active {
-		p, err := d.GetPomodoro(b.BlockName)
-		if err != nil {
-			log.Printf("pomodoro: %v", err)
-		}
-		if p == nil || !quota.OnBreak(p.On, p.Off, p.Anchor, trusted) {
+		if pausedFor(d, b.BlockName, trusted) <= 0 {
 			out = append(out, b)
 		}
 	}

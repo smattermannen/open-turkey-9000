@@ -4,6 +4,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -115,6 +116,7 @@ type guiBlock struct {
 	QuotaUsed   int64     `json:"quota_used"`
 	QuotaOpen   bool      `json:"quota_open"`
 	QuotaNext   int64     `json:"quota_next"`
+	KeywordTest bool      `json:"keyword_test"`
 }
 
 // guiSettingLock is a browser setting's locks for the interface.
@@ -147,6 +149,7 @@ type guiState struct {
 	// Access says per area "none", "open" or "locked"; AccessUnused lists
 	// the given passwords (by position) that opened nothing: wrong, or
 	// changed since.
+	Options      map[string]bool   `json:"options"`
 	Access       map[string]string `json:"access"`
 	AccessUnused []int             `json:"access_unused"`
 }
@@ -238,6 +241,7 @@ var guiStateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		testing := database.TestBlocks()
 		for _, b := range blocks {
 			detail, err := database.GetBlock(b.Name)
 			if err != nil {
@@ -298,6 +302,7 @@ var guiStateCmd = &cobra.Command{
 				s := q.Step(now.Unix(), quota.DayOf(now))
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 			}
+			g.KeywordTest = slices.Contains(testing, b.Name)
 			state.Blocks = append(state.Blocks, g)
 		}
 
@@ -305,6 +310,10 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 
+		state.Options = map[string]bool{}
+		for _, o := range enforce.Options {
+			state.Options[o.Name] = enforce.OptionOn(database, o.Name)
+		}
 		if state.Access, state.AccessUnused, err = accessStatus(cmd, database); err != nil {
 			return err
 		}

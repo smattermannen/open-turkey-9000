@@ -471,7 +471,7 @@ kc9k nepsis unlock                                                # challenge or
 
 Each step trips when its number of events happens within its window, then takes its actions; the next time, the next step; past the last, the last again. After `--quiet` without tripping, the ladder falls back a step. Actions: `warning` (a notification), `close-tab` (the tab of the page that tripped it), `close-browser`, `lock-screen D`, `logout [D]`, `shutdown [D]` and `monk D`. With a time, locked, logged out or off lasts that long through Frozen Chicken (at most a day); a one-off logout or shutdown happens at most every 10 minutes. `--count N --within D --then ACTION [--then-for D]` is a short way to give one step.
 
-Detectors (`--detect`, default all): `page` (a blacklist took a page away; greyscale or no-images alone don't count), `search` (such a page opened from a search engine's results: Google, Bing, DuckDuckGo, Brave, Startpage and others, or any `/search?q=` page; `page` counts these too, so pick `search` alone to count only pages that were looked for), `app` (a blocked app was closed), `title` (a window was closed for its title), `browser` (a browser without the extension was closed), `tamper` (the daemon started again within a boot, or the clock moved more than 2 minutes against the boot clock), `access` (a wrong [access password](#access-passwords)). Asking to stop, unlock or loosen a held block is refused and logged, but never counted: that is ordinary use.
+Detectors (`--detect`, default all): `page` (a blacklist took a page away; greyscale or no-images alone don't count), `search` (such a page opened from a search engine's results: Google, Bing, DuckDuckGo, Brave, Startpage and others, or any `/search?q=` page; `page` counts these too, so pick `search` alone to count only pages that were looked for), `app` (a blocked app was closed), `title` (a window was closed for its title), `browser` (a browser without the extension was closed), `tamper` (the daemon started again within a boot, or the clock moved more than 2 minutes against the boot clock), `access` (a wrong [access password](#access-passwords)), `workaround` (a blocked site [reached another way](#sites-reached-another-way)). Asking to stop, unlock or loosen a held block is refused and logged, but never counted: that is ordinary use.
 
 The global ladder counts every block's events; a block's own counts that block's events while it is on (a closed browser counts for every active block with websites, tampering for every active block, and once for the whole computer); when both are set, both apply. A blocked page is judged at once, so close-tab hits the right tab; everything else every daemon cycle. Making one stricter (more detectors, a later fall-back, steps that trip on fewer events over longer windows and keep every action for at least as long, more steps at the end) is always allowed. Anything else loosens it: a block's is gated like other edits to the block, and the global one can be locked like a browser option (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart` on `set`). Events are kept for a day. A setting from before the ladder became one step that closes the browsers and then takes its old consequence.
 
@@ -520,6 +520,34 @@ kc9k password remove
 With it set, these ask for it: any loosening edit, `stop`, `unlock`, starting a block with any lock, schedules, quotas (setting or removing), Pomodoro, Frozen Chicken, turning browser options off or locking them, strict mode, no-escape, and uninstalling. These stay free: reading the state, starting a block without a lock, adding sites, apps and patterns, ticking a website action on, and opening a quota session. The interface asks for it the first time a change needs it and remembers it until it closes.
 
 Passwords are read from standard input, hidden on a terminal; when a command also takes a lock's own password, the settings password comes first. If it's lost, root can remove it while nothing is locked (`kc9k password --help` shows how), and the testing build's master password clears it too.
+
+## The toolbar button
+
+The extension puts a button in LibreWolf's toolbar. On the tab in front it shows the time left until the site is blocked: what remains of an open quota session, of a break, or until a schedule starts (announced two hours ahead). It turns red for the last five minutes, and shows `!` when Killer Chicken 9000 isn't answering. Clicking it shows which blocks cover the site and lets you add the site to a block's Blocked list (adding only makes a block stricter, so it is always allowed; it is switched off when the Blocks page has an [access password](#access-passwords)).
+
+## Keyword test mode
+
+```bash
+kc9k list test adult on     # refused while the block is held: it loosens
+kc9k list test adult off
+```
+
+While it is on, the block's lists that read a page's title or text do nothing. Instead a panel in the corner of every page shows which entries were found, how often each, how many different ones, and for each action whether its two thresholds are met. Use it to see whether a rule would be too harsh before you rely on it. Lists that only look at addresses keep working.
+
+## Sites reached another way
+
+A blocked site is also stopped when it is reached through another address: Google Translate, web archives, and any proxy that carries the address in its own (`?url=https://…`, also base64 or after a slash in the path; a search for an address doesn't count). A page that says it is another site (its canonical address) or that is a known alternative front-end (Invidious and Piped for YouTube, Nitter for X, Redlib for Reddit, ProxiTok for TikTok and others) is treated as that site. Each such page is logged as a `workaround` event, which bypass detection can count.
+
+## Options
+
+```bash
+kc9k option                          # shows them
+kc9k option polite-close off
+kc9k option block-page-details off
+```
+
+- `polite-close` (on): a blocked app with a window is asked to close, as if you pressed its close button, so it can offer to save; it is killed about five seconds later if it is still open. An app without a window is killed at once, and so is one started again within a minute of being asked. Off: every blocked app is killed at once.
+- `block-page-details` (on): the block page names the block and the list that stopped the page, and when the block ends if it has an end. It is only what the block page says: redirects, pictures, closed tabs and every other action work exactly as before.
 
 ## Access passwords
 

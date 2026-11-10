@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -169,6 +170,15 @@ type Rules struct {
 	WebOnly    bool       `json:"web_only"`
 	Titles     []string   `json:"titles"`
 	Recording  bool       `json:"recording"` // report opened addresses to /visit (see recording.go)
+	// Details: the block page may say which block and list stopped a page.
+	Details bool `json:"details"`
+	// Ends: when each active block ends (unix seconds), where that is known.
+	Ends map[string]int64 `json:"ends"`
+	// Soon: blocks that will take their pages away, with the time left.
+	Soon []SoonRule `json:"soon"`
+	// Blocks: every block's name, for adding a site from the toolbar. Empty
+	// when the Blocks page has an access password.
+	Blocks []string `json:"blocks"`
 }
 
 // ListRule is one blacklist: the entries it looks for in a page's address,
@@ -184,6 +194,9 @@ type ListRule struct {
 	Text    []string     `json:"text"`
 	Actions []RuleAction `json:"actions"`
 	Except  RuleExcept   `json:"except"`
+	// Test: the block is in keyword test mode. The extension shows what the
+	// list found on each page instead of acting on it.
+	Test bool `json:"test,omitempty"`
 }
 
 // RuleAction is one action of a ListRule. Param is the address for
@@ -263,10 +276,22 @@ func BuildRules(d *db.DB) (Rules, error) {
 	if err != nil {
 		return rules, err
 	}
+	now := time.Now()
+	rules.Details = OptionOn(d, OptionPageDetails)
+	rules.Ends = blockEnds(d, active, now, trusted)
+	rules.Soon = soonRules(d, active, now, trusted)
+	rules.Blocks = addableBlocks(d)
+	testing := d.TestBlocks()
 	for _, b := range withoutBreaks(d, active, trusted) {
 		rules.Titles = append(rules.Titles, b.Titles...)
 		for _, rule := range listRules(b) {
+			// Test mode is for tuning what a list finds in pages: lists that
+			// read the title or text are shown, not run.
+			rule.Test = slices.Contains(testing, b.BlockName) && len(rule.Title)+len(rule.Text) > 0
 			rules.Lists = append(rules.Lists, rule)
+			if rule.Test {
+				continue
+			}
 			if len(rule.URL) > 0 && len(rule.Except.Title)+len(rule.Except.Text) == 0 {
 				for _, a := range rule.Actions {
 					if a.Name == db.ActionBlock {
@@ -302,6 +327,7 @@ func ServeRules(d *db.DB) error {
 	mux.HandleFunc("/usage", usageHandler(d))
 	mux.HandleFunc("/hit", hitHandler(d))
 	mux.HandleFunc("/visit", visitHandler(d))
+	mux.HandleFunc("/add", addHandler(d))
 	mux.HandleFunc("/image/", imageHandler)
 	return http.Serve(listener, mux)
 }

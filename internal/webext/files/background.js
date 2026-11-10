@@ -157,7 +157,27 @@ function noteVisit(url) {
   }).catch(() => visited.delete(host));
 }
 
-function report(tabId, url, outcome) {
+// Which block and list last took a page away in each tab, for the block
+// page to show (see the "why" message).
+const lastHit = new Map();
+
+function noteHit(tabId, outcome) {
+  const first = outcome.lists[0];
+  const list = first && lists.find((l) => l.id === first.id);
+  if (tabId >= 0 && list) {
+    lastHit.set(tabId, { block: list.block, list: list.name });
+  }
+}
+
+// viaProxy reports whether url is blocked only for the site it shows (a
+// proxy, translator or archive address), not for its own address.
+function viaProxy(url) {
+  return isBlocked(url) && !kc9kDirectly(() => isBlocked(url));
+}
+
+function report(tabId, url, outcome, via) {
+  noteHit(tabId, outcome);
+  via = via || (viaProxy(url) ? "proxy" : "");
   const key = tabId + " " + url;
   const now = Date.now();
   if (now - (reported.get(key) || 0) < 10000) {
@@ -173,7 +193,7 @@ function report(tabId, url, outcome) {
   return Promise.all(outcome.lists.map((hit) => fetch(HIT_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-KC9K-Extension": "1" },
-    body: JSON.stringify({ list: hit.id, actions: hit.actions, url, from }),
+    body: JSON.stringify({ list: hit.id, actions: hit.actions, url, from, via }),
   }).then((response) => response.json()).then((answer) => {
     // A bypass detection step that fired on this page closes its tab.
     if (answer && answer.close_tab && tabId >= 0) {
@@ -185,8 +205,8 @@ function report(tabId, url, outcome) {
 // closeEverything tells the daemon (first: closing the last tab quits the
 // browser), then closes the tab, so a restored session doesn't bring the page
 // back, then every window: the browser quits cleanly.
-async function closeEverything(tabId, url, outcome) {
-  await Promise.race([report(tabId, url, outcome), new Promise((done) => setTimeout(done, 2000))]);
+async function closeEverything(tabId, url, outcome, via) {
+  await Promise.race([report(tabId, url, outcome, via), new Promise((done) => setTimeout(done, 2000))]);
   try {
     await browser.tabs.remove(tabId);
   } catch (error) {
@@ -201,11 +221,12 @@ async function closeEverything(tabId, url, outcome) {
 // act carries out an outcome on a tab showing url (not from a request:
 // see onBeforeRequest for those).
 function act(tabId, url, outcome, reason) {
+  const via = reason === "mirror" ? "mirror" : "";
   if (outcome.device) {
-    closeEverything(tabId, url, outcome);
+    closeEverything(tabId, url, outcome, via);
     return;
   }
-  report(tabId, url, outcome);
+  report(tabId, url, outcome, via);
   if (outcome.page === "close-tab") {
     browser.tabs.remove(tabId).catch(() => {});
     return;
@@ -253,7 +274,38 @@ browser.tabs.onRemoved.addListener((tabId) => {
   keywordNoImages.delete(tabId);
   cameFrom.delete(tabId);
   trail.delete(tabId);
+  lastHit.delete(tabId);
 });
+
+// mirrorHit acts on a content script's report that its page shows another
+// site: a mirror or an alternative front-end (see content.js). The page is
+// treated as the first of those sites that is blocked.
+function mirrorHit(message, sender) {
+  const tab = sender && sender.tab;
+  if (!tab || sender.frameId !== 0 || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
+    return;
+  }
+  for (const as of Array.isArray(message.as) ? message.as.slice(0, 8) : []) {
+    if (typeof as !== "string" || !/^https?:\/\//i.test(as)) {
+      continue;
+    }
+    const outcome = addressOutcome(as);
+    if (kc9kTakesAway(outcome)) {
+      act(tab.id, message.url, outcome, "mirror");
+      return;
+    }
+  }
+}
+
+// why tells the block page what stopped its page, when the rules allow it.
+function why(sender) {
+  const tab = sender && sender.tab;
+  const hit = tab && lastHit.get(tab.id);
+  if (!showWhy || !hit) {
+    return null;
+  }
+  return { block: hit.block, list: hit.list, ends: ends[hit.block] || 0 };
+}
 
 // pageHit acts on a content script's report of the lists that matched its
 // page (by address, title and text). Only the tab's own page counts, and
@@ -289,7 +341,7 @@ function pageHit(message, sender) {
 
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
-    if (details.url.startsWith(RULES_URL) || details.url.startsWith(HIT_URL) || details.url.startsWith(VISIT_URL)) {
+    if (details.url.startsWith("http://127.0.0.1:47613/")) {
       return {};
     }
     if (details.type === "main_frame" || details.type === "sub_frame") {
@@ -355,13 +407,40 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message && message.type === "page-hits") {
     pageHit(message, sender);
   }
+  if (message && message.type === "mirror") {
+    mirrorHit(message, sender);
+  }
+  if (message && message.type === "why") {
+    return Promise.resolve(why(sender));
+  }
+  if (message && message.type === "popup") {
+    return popupState(message);
+  }
+  if (message && message.type === "add-site" && typeof message.block === "string" && typeof message.url === "string") {
+    return addSite(message.block, message.url);
+  }
   if (message && message.type === "playing" && sender && sender.tab) {
     playing.set(sender.tab.id, Date.now());
   }
   return undefined;
 });
 
+// From the rules: whether the block page may say what stopped a page, when
+// each active block ends, the blocks that will take pages away soon (for
+// the time left on the toolbar button), and every block's name.
+let showWhy = false;
+let ends = {};
+let soon = [];
+let blockNames = [];
+let daemonUp = true;
+
 function apply(rules) {
+  showWhy = Boolean(rules.details);
+  ends = rules.ends || {};
+  soon = (rules.soon || []).map((s) => ({
+    block: s.block, kind: s.kind, seconds: s.seconds, lists: kc9kCompileLists(s.lists),
+  }));
+  blockNames = rules.blocks || [];
   lists = kc9kCompileLists(rules.lists);
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
@@ -400,9 +479,115 @@ async function poll() {
         page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0 },
       });
       await closeNewlyBlockedTabs();
+      daemonUp = true;
+    } else {
+      daemonUp = false;
     }
   } catch (error) {
     // The daemon is down: keep enforcing the last rules.
+    daemonUp = false;
+  }
+  updateBadges();
+}
+
+// Time left. timeLeftFor returns the blocks that will take the page away
+// soon, soonest first: [{ block, kind, seconds }].
+function timeLeftFor(tab) {
+  if (!tab || !tab.url || !/^https?:/i.test(tab.url)) {
+    return [];
+  }
+  const page = { url: tab.url, title: tab.title || "" };
+  return soon
+    .filter((s) => kc9kListMatches(s.lists, page).length > 0)
+    .map((s) => ({ block: s.block, kind: s.kind, seconds: s.seconds }))
+    .sort((a, b) => a.seconds - b.seconds);
+}
+
+// The toolbar button shows, on the tab in front, the time until its site
+// is blocked; "!" when the daemon doesn't answer.
+async function updateBadges() {
+  if (!browser.browserAction) {
+    return;
+  }
+  try {
+    const tabs = await browser.tabs.query({ active: true });
+    for (const tab of tabs) {
+      const left = timeLeftFor(tab)[0];
+      let text = "";
+      let color = "#3b6ea8";
+      let title = "Killer Chicken 9000";
+      if (!daemonUp) {
+        text = "!";
+        color = "#c0392b";
+        title = "Killer Chicken 9000 isn't answering. The last rules still apply.";
+      } else if (left) {
+        text = kc9kTimeLeft(left.seconds);
+        color = left.seconds <= 300 ? "#c0392b" : "#3b6ea8";
+        title = leftSentence(left);
+      }
+      browser.browserAction.setBadgeText({ text, tabId: tab.id });
+      browser.browserAction.setBadgeBackgroundColor({ color, tabId: tab.id });
+      browser.browserAction.setTitle({ title, tabId: tab.id });
+    }
+  } catch (error) {
+    // A tab closed meanwhile.
+  }
+}
+
+function leftSentence(left) {
+  const time = kc9kTimeLeft(left.seconds);
+  if (left.kind === "quota") {
+    return time + " of today's quota left for '" + left.block + "'";
+  }
+  if (left.kind === "break") {
+    return time + " of break left; then '" + left.block + "' blocks this again";
+  }
+  return "'" + left.block + "' blocks this in " + time;
+}
+
+browser.tabs.onActivated.addListener(updateBadges);
+
+// popupState describes the tab in front (or, for the tests, the page given
+// in the message).
+async function popupState(message) {
+  let tab;
+  if (message && typeof message.url === "string") {
+    tab = { url: message.url, title: typeof message.title === "string" ? message.title : "" };
+  } else {
+    const win = await browser.windows.getLastFocused();
+    [tab] = await browser.tabs.query({ active: true, windowId: win.id });
+  }
+  const url = tab && tab.url && /^https?:/i.test(tab.url) ? tab.url : "";
+  let site = "";
+  if (url) {
+    site = new URL(url).hostname.replace(/^www\./, "");
+  }
+  const page = { url, title: (tab && tab.title) || "" };
+  const acting = url ? kc9kListMatches(lists, page).map((m) => ({
+    block: m.list.block, list: m.list.name, actions: m.actions.map((a) => a.action),
+  })) : [];
+  return {
+    up: daemonUp, url, site, acting,
+    left: timeLeftFor(tab).map((l) => ({ block: l.block, kind: l.kind, seconds: l.seconds, text: leftSentence(l) })),
+    blocks: blockNames,
+  };
+}
+
+async function addSite(block, url) {
+  try {
+    const response = await fetch("http://127.0.0.1:47613/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-KC9K-Extension": "1" },
+      body: JSON.stringify({ block, url }),
+    });
+    if (!response.ok) {
+      return { ok: false };
+    }
+    const answer = await response.json();
+    poll();
+    return { ok: true, site: answer.site };
+  } catch (error) {
+    return { ok: false };
   }
 }
 

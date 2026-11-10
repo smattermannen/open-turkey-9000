@@ -84,7 +84,44 @@ function kc9kUnwrap(url) {
       out.push(kc9kEmbedded(m[1]));
     }
   }
+  // Any other proxy: a full web address carried in the query (?url=https://…,
+  // also percent-encoded or base64) or after a slash in the path. A search
+  // for an address is not a visit to it, so search pages are left alone.
+  const searching = /(^|\/)(search|results?)(\/|$)/i.test(u.pathname);
+  for (const [name, value] of u.searchParams) {
+    if (searching || /^(q|query|search|text|p|s|k|keywords?)$/i.test(name)) {
+      continue;
+    }
+    let inner = value;
+    if (/^aHR0c(HM6Ly|DovL)/.test(inner)) {
+      try {
+        inner = atob(inner.replace(/-/g, "+").replace(/_/g, "/"));
+      } catch (error) {
+        continue;
+      }
+    }
+    if (/^https?:\/\/[^/\s]+\.[^/\s]+/i.test(inner)) {
+      out.push(inner);
+    }
+  }
+  const inPath = u.pathname.match(/\/(https?:\/{1,2}[^/\s]+\.[^\s]+)$/i);
+  if (inPath) {
+    out.push(kc9kEmbedded(inPath[1] + u.search));
+  }
   return out.filter(Boolean);
+}
+
+// kc9kUnwrapOff turns the proxy unwrapping off for a moment, to tell a page
+// blocked for its own address from one blocked for the site it shows.
+let kc9kUnwrapOff = false;
+
+function kc9kDirectly(run) {
+  kc9kUnwrapOff = true;
+  try {
+    return run();
+  } finally {
+    kc9kUnwrapOff = false;
+  }
 }
 
 function kc9kMatchesOne(filter, url) {
@@ -98,7 +135,8 @@ function kc9kMatchesOne(filter, url) {
 // kc9kMatches reports whether the filter applies to url or to a site shown
 // through it.
 function kc9kMatches(filter, url) {
-  return kc9kMatchesOne(filter, url) || kc9kUnwrap(url).some((inner) => kc9kMatchesOne(filter, inner));
+  return kc9kMatchesOne(filter, url) ||
+    (!kc9kUnwrapOff && kc9kUnwrap(url).some((inner) => kc9kMatchesOne(filter, inner)));
 }
 
 // Page keywords. A plain keyword counts only as a whole word: "porn" misses
@@ -157,6 +195,10 @@ function kc9kCompileLists(lists) {
     return {
       id: list.id,
       block: list.block,
+      name: list.name || "",
+      test: Boolean(list.test),
+      titleRaw: (list.title || []).filter(kc9kUsableKeyword),
+      textRaw: (list.text || []).filter(kc9kUsableKeyword),
       url: kc9kFilter({ match: list.url || [] }),
       title: kc9kKeywordRegexes(list.title),
       text: kc9kKeywordRegexes(list.text),
@@ -193,6 +235,9 @@ function kc9kListMatches(compiled, page) {
   const hasText = typeof page.text === "string";
   for (const list of compiled) {
     const except = list.except;
+    if (list.test) {
+      continue; // shown, not run: see kc9kTestReport
+    }
     if ((except.title.length > 0 && !hasTitle) || (except.text.length > 0 && !hasText)) {
       continue;
     }
@@ -211,6 +256,60 @@ function kc9kListMatches(compiled, page) {
     }
   }
   return out;
+}
+
+// kc9kTestReport describes, for each list in keyword test mode, what it
+// finds on a page: [{ block, name, spared, address, title, entries: [{ entry,
+// count }], distinct, total, actions: [{ action, distinct, hits, met }] }].
+// spared is true when one of the block's exceptions matches the page.
+function kc9kTestReport(compiled, page) {
+  const out = [];
+  if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
+    return out;
+  }
+  const title = typeof page.title === "string" ? page.title : "";
+  const text = typeof page.text === "string" ? page.text : "";
+  for (const list of compiled) {
+    if (!list.test) {
+      continue;
+    }
+    const except = list.except;
+    const spared = (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
+      except.title.some((regex) => regex.test(title)) || except.text.some((regex) => regex.test(text));
+    const address = list.url.match.length > 0 && kc9kMatches(list.url, page.url);
+    const inTitle = list.titleRaw.filter((entry, i) => list.title[i].test(title));
+    const entries = [];
+    let total = 0;
+    list.textRaw.forEach((entry, i) => {
+      const all = text.match(new RegExp(list.text[i].source, "giu"));
+      if (all) {
+        entries.push({ entry, count: all.length });
+        total += all.length;
+      }
+    });
+    entries.sort((a, b) => b.count - a.count);
+    const whole = address || inTitle.length > 0;
+    out.push({
+      block: list.block, name: list.name, spared, address, title: inTitle, entries,
+      distinct: entries.length, total,
+      actions: list.actions.map((action) => ({
+        action: action.action, distinct: action.distinct || 1, hits: action.hits || 1,
+        met: !spared && (whole || (entries.length > 0 && entries.length >= (action.distinct || 1) && total >= (action.hits || 1))),
+      })),
+    });
+  }
+  return out;
+}
+
+// kc9kTimeLeft renders seconds as a few characters for the toolbar badge.
+function kc9kTimeLeft(seconds) {
+  if (seconds < 60) {
+    return Math.max(0, Math.round(seconds)) + "s";
+  }
+  if (seconds < 100 * 60) {
+    return Math.round(seconds / 60) + "m";
+  }
+  return Math.round(seconds / 3600) + "h";
 }
 
 // kc9kListActions is which actions the lists take on a page: an object with

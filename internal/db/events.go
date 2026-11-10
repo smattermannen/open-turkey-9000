@@ -21,6 +21,10 @@ const (
 	EventRefused = "refused" // a loosening command was refused: logged, never counted (ordinary use)
 	EventTamper  = "tamper"  // the daemon restarted within a boot, or the clock jumped
 	EventAccess  = "access"  // a wrong access password was given
+	// EventWorkaround is a blocked site reached another way: through a proxy
+	// or archive address, on a mirror or alternative front-end, or by a
+	// program given its address.
+	EventWorkaround = "workaround"
 )
 
 // EventsKept is how long events are kept.

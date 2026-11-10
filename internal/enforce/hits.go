@@ -38,6 +38,9 @@ type hitReport struct {
 	Actions []string `json:"actions"`
 	URL     string   `json:"url"`
 	From    string   `json:"from"` // the page whose link led here, if any
+	// Via says the site was reached another way: "proxy" (inside a proxy or
+	// archive address) or "mirror" (another site showing it).
+	Via string `json:"via"`
 }
 
 // searchHosts are search engines by host name: the name itself, or a
@@ -135,6 +138,9 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 		kind := db.EventPage
 		if fromSearch(hit.From) {
 			kind = db.EventSearch
+		}
+		if hit.Via != "" {
+			kind = db.EventWorkaround
 		}
 		logEvent(d, kind, block, hit.URL)
 		closeTab = checkScopes(d, time.Now(), []string{"", block})

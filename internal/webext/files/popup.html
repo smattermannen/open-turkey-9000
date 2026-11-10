@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px/1.45 sans-serif; margin: 0; padding: 12px 14px; width: 300px; background: #1b1d21; color: #eceff4; }
+  h1 { font-size: 14px; margin: 0 0 2px; word-break: break-all; }
+  p { margin: 6px 0; }
+  .dim { color: #a7b0c0; }
+  .warn { color: #ff8a80; }
+  .left { font-size: 15px; font-weight: bold; }
+  select, button { font: inherit; padding: 4px 6px; }
+  .row { display: flex; gap: 6px; margin-top: 8px; }
+  select { flex: 1; min-width: 0; }
+  hr { border: 0; border-top: 1px solid #3b4252; margin: 10px 0; }
+</style>
+</head>
+<body>
+  <h1 id="site"></h1>
+  <div id="status"></div>
+  <div id="add" hidden>
+    <hr>
+    <div class="dim">Add this site to a block</div>
+    <div class="row"><select id="block"></select><button id="go">Add</button></div>
+    <p id="result" class="dim"></p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

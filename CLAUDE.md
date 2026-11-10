@@ -156,6 +156,22 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   `--access-lines N` (before the settings password), or are asked on a
   terminal. `gui-state` reports `access`/`access_unused` and empties what
   locked pages own (`hideLocked`); the GUI covers locked pages (`guarded`).
+- **Options** (`enforce/options.go`, `kc9k option [<name> on|off]`):
+  behaviour switches, never held: `polite-close` (`blocker/polite.go`: a
+  blocked app's windows are asked to close, killed a cycle later; `Apply`
+  leaves kills to the daemon then) and `block-page-details`.
+- **Pauses** (`db/pauses.go`, `enforce/soon.go`): `block_pauses` lifts an
+  active block until a trusted time; `pausedFor` (Pomodoro break or pause)
+  is what `withoutBreaks` checks. `rules.soon` (quota left, break left,
+  schedule start within 2 h) feeds the toolbar badge and popup
+  (`timeLeftFor`, `popup.js`); `/add` adds the tab's site to a block's
+  Blocked list (refused with an access password on blocks).
+- **Keyword test mode** (`db/testmode.go`, `kc9k list test <block> on|off`):
+  title/text lists of the block go out with `test: true`; the extension
+  shows `kc9kTestReport` in a panel and skips them in `kc9kListMatches`.
+- **Workarounds**: `kc9kUnwrap` reads any full address carried in a query or
+  path; `checkMirror` (content.js) reports canonical addresses and known
+  front-ends; `/hit` with `via` logs `EventWorkaround` (a detector).
 - **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL; every
   pooled connection gets busy_timeout and foreign_keys via `_pragma`);
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
@@ -183,7 +199,7 @@ threshold | hits | export | import` (`action … on --url/--image/--for`), `monk
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N]` (loosening edits take `--now`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

@@ -86,7 +86,6 @@ type guiBlock struct {
 	Actions     []string      `json:"actions"`
 	Sites       []string      `json:"sites"`
 	Exceptions  []string      `json:"exceptions"`
-	Limited     []string      `json:"firefox_only"`
 	Apps        []string      `json:"apps"`
 	Titles      []string      `json:"titles"`
 	Keywords    []string      `json:"page_keywords"`
@@ -225,9 +224,9 @@ var guiStateCmd = &cobra.Command{
 			g := guiBlock{
 				Name: detail.Name, Mode: detail.Mode, Actions: detail.Actions.List(),
 				Sites: append(append([]string{}, detail.Sites...), detail.Patterns...), Apps: append([]string{}, detail.Apps...),
-				Exceptions: append([]string{}, detail.Exceptions...), Limited: []string{},
-				Titles:   append([]string{}, detail.Titles...),
-				Keywords: append([]string{}, detail.Keywords...), Thresholds: detail.Thresholds,
+				Exceptions: append([]string{}, detail.Exceptions...),
+				Titles:     append([]string{}, detail.Titles...),
+				Keywords:   append([]string{}, detail.Keywords...), Thresholds: detail.Thresholds,
 				Schedules: []string{},
 				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && detail.Locked,
 				Scheduled: detail.Scheduled,
@@ -240,11 +239,6 @@ var guiStateCmd = &cobra.Command{
 				g.Schedules = append(g.Schedules, s.Window().String())
 				w := s.Window()
 				g.Windows = append(g.Windows, guiWin{Days: w.Days, Start: w.Start, End: w.End, Allow: w.Allow})
-			}
-			for _, p := range append(append([]string{}, detail.Patterns...), detail.Exceptions...) {
-				if blocker.BrowserLimited(p) {
-					g.Limited = append(g.Limited, p)
-				}
 			}
 			g.Password, g.Restart, g.Delay = hold.passwordHash != "", hold.restartLocked, hold.extras.Delay
 			if hold.extras.StopAt > trusted {

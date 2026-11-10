@@ -1024,8 +1024,7 @@ class Window(Gtk.ApplicationWindow):
             action_row.pack_start(check, False, False, 0)
         websites.pack_start(action_row, False, False, 0)
         websites.pack_start(dim(
-            "Tick any combination. Greyscale and Block images work in browsers with the "
-            "extension. Unticking loosens the block, so it isn't possible while it is locked."),
+            "Tick any combination. Unticking loosens the block, so it isn't possible while it is locked."),
             False, False, 0)
         self.sites = EditableList(
             "Blocked", "reddit.com  reddit.com/r/funny  *.xxx  *casino*",
@@ -1039,10 +1038,8 @@ class Window(Gtk.ApplicationWindow):
             lambda value, _num: self.block_cmd("remove-exception", [value]),
             lambda: self.import_list("exceptions"), lambda: self.export_list("exceptions"),
             "Allowed even when they match a blocked entry.")
-        self.limited_label = dim("")
         for widget in (self.sites, self.exceptions):
             websites.pack_start(widget, True, True, 0)
-        websites.pack_start(self.limited_label, False, False, 0)
         tabs.append_page(websites, Gtk.Label(label="Websites"))
 
         apps = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=12)
@@ -1050,6 +1047,7 @@ class Window(Gtk.ApplicationWindow):
             "Apps and folders", "discord  com.discordapp.Discord  /opt/games/",
             lambda values: self.block_cmd("add-app", values),
             lambda value, _num: self.block_cmd("remove-app", [value]),
+            lambda: self.import_list("apps"), lambda: self.export_list("apps"),
             help_text="Executable names, Flatpak app IDs (see 'flatpak list --app'), or folders "
                       "whose programs can't run. Everything a blocked app started is closed too.")
         apps.pack_start(self.apps, True, True, 0)
@@ -1057,6 +1055,7 @@ class Window(Gtk.ApplicationWindow):
             "Window titles", "YouTube  Twitch",
             lambda values: self.block_cmd("add-title", values),
             lambda value, _num: self.block_cmd("remove-title", [value]),
+            lambda: self.import_list("titles"), lambda: self.export_list("titles"),
             help_text="Any app whose window title contains one of these words is closed while "
                       "the block is on; in LibreWolf, just that tab. Separate words with spaces.")
         apps.set_spacing(14)
@@ -1193,7 +1192,6 @@ class Window(Gtk.ApplicationWindow):
             for widget in (self.sites, self.exceptions, self.apps, self.titles, self.keywords, self.schedules):
                 widget.set_items([])
             self.calendar.set_windows([])
-            self.limited_label.set_text("")
             self.quota_label.set_text("")
             return
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
@@ -1205,9 +1203,6 @@ class Window(Gtk.ApplicationWindow):
         self.filling_actions = False
         self.sites.set_items(block["sites"])
         self.exceptions.set_items(block["exceptions"])
-        limited = block["firefox_only"]
-        self.limited_label.set_text(
-            "Only enforced in browsers with the extension: " + ", ".join(limited) if limited else "")
         self.apps.set_items(block["apps"])
         self.titles.set_items(block.get("titles", []))
         self.keywords.set_items(block.get("page_keywords", []))
@@ -1626,7 +1621,7 @@ class Window(Gtk.ApplicationWindow):
 
         box.pack_start(dim(
             "App time counts the app in the focused window; website time counts the active "
-            "tab in browsers with the extension. Time behind a locked screen or after two "
+            "tab in LibreWolf. Time behind a locked screen or after two "
             "minutes without input isn't counted. Everything stays on this computer."), False, False, 0)
         return scroll
 

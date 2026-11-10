@@ -51,12 +51,6 @@ func TranslatePattern(p string) (firefox, chromium string) {
 	return firefox, chromium
 }
 
-// BrowserLimited reports whether an entry only works in Firefox.
-func BrowserLimited(p string) bool {
-	_, chromium := TranslatePattern(p)
-	return chromium == ""
-}
-
 func translated(patterns []string) (firefox, chromium []string) {
 	for _, p := range ValidPatterns(patterns) {
 		ff, cr := TranslatePattern(p)

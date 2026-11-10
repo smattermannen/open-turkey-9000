@@ -15,7 +15,12 @@ import (
 const (
 	listBlocked    = "blocked"
 	listExceptions = "exceptions"
+	listApps       = "apps"
+	listTitles     = "titles"
 )
+
+// listKinds are the lists export-list and import-list know.
+var listKinds = []string{listBlocked, listExceptions, listApps, listTitles}
 
 // splitEntries separates plain domains from URLs and wildcard patterns.
 func splitEntries(entries []string) (domains, patterns []string, err error) {
@@ -182,14 +187,41 @@ var blockRemoveExceptionCmd = &cobra.Command{
 }
 
 func checkListKind(kind string) error {
-	if kind != listBlocked && kind != listExceptions {
-		return fmt.Errorf("unknown list %q (use '%s' or '%s')", kind, listBlocked, listExceptions)
+	for _, k := range listKinds {
+		if k == kind {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("unknown list %q (use %s)", kind, strings.Join(listKinds, ", "))
+}
+
+// addApps adds apps to a block. Apps are blocked in both modes, so adding
+// one only strengthens it.
+func addApps(database *db.DB, name string, apps []string) error {
+	for _, a := range apps {
+		if err := blocker.ValidAppEntry(a); err != nil {
+			return err
+		}
+	}
+	if err := database.AddApps(name, apps); err != nil {
+		return err
+	}
+	return reapplyIfActive(database, name)
+}
+
+// addTitles adds window-title keywords, which only strengthens a block.
+func addTitles(database *db.DB, name string, titles []string) error {
+	if err := checkTitleKeywords(titles); err != nil {
+		return err
+	}
+	if err := database.AddTitles(name, titles); err != nil {
+		return err
+	}
+	return reapplyIfActive(database, name)
 }
 
 var blockExportListCmd = &cobra.Command{
-	Use:   "export-list [block] [blocked|exceptions]",
+	Use:   "export-list [block] [blocked|exceptions|apps|titles]",
 	Short: "Print one list, one entry per line",
 	Args:  cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
@@ -201,13 +233,20 @@ var blockExportListCmd = &cobra.Command{
 			return err
 		}
 		lines := detail.Exceptions
-		if args[1] == listBlocked {
+		switch args[1] {
+		case listApps:
+			lines = detail.Apps
+		case listTitles:
+			lines = detail.Titles
+		case listBlocked:
 			lines = append(append([]string{}, detail.Sites...), detail.Patterns...)
 			if detail.Mode == db.ModeAllowlist {
 				lines = detail.Patterns
 			}
-		} else if detail.Mode == db.ModeAllowlist {
-			lines = append(append([]string{}, detail.Sites...), detail.Exceptions...)
+		default:
+			if detail.Mode == db.ModeAllowlist {
+				lines = append(append([]string{}, detail.Sites...), detail.Exceptions...)
+			}
 		}
 		for _, line := range lines {
 			fmt.Println(line)
@@ -217,7 +256,7 @@ var blockExportListCmd = &cobra.Command{
 }
 
 var blockImportListCmd = &cobra.Command{
-	Use:   "import-list [block] [blocked|exceptions] [file]",
+	Use:   "import-list [block] [blocked|exceptions|apps|titles] [file]",
 	Short: "Add entries from a text file with one entry per line",
 	Args:  cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
@@ -237,9 +276,14 @@ var blockImportListCmd = &cobra.Command{
 		if len(entries) == 0 {
 			return fmt.Errorf("%s has no entries", args[2])
 		}
-		if args[1] == listBlocked {
+		switch args[1] {
+		case listBlocked:
 			err = addBlockedEntries(cmd, database, args[0], entries)
-		} else {
+		case listApps:
+			err = addApps(database, args[0], entries)
+		case listTitles:
+			err = addTitles(database, args[0], entries)
+		default:
 			err = addExceptions(cmd, database, args[0], entries)
 		}
 		if err != nil {

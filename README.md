@@ -88,7 +88,7 @@ kc9k block create work  --allowlist
 kc9k block set-mode work allowlist   # or blocklist
 ```
 
-Choose what a block does to its websites. Each block has three boxes to tick, in any combination: **block** them (the default), show them in **greyscale**, and block their **images**. In allowlist mode the actions apply to every site except the listed ones. A block without `block` leaves its sites reachable and only changes how they look; its apps are still blocked. Greyscale and no-images work in browsers with the extension (see Browser options). The interface shows the same three boxes on a block's Websites tab.
+Choose what a block does to its websites. Each block has three boxes to tick, in any combination: **block** them (the default), show them in **greyscale**, and block their **images**. In allowlist mode the actions apply to every site except the listed ones. A block without `block` leaves its sites reachable and only changes how they look; its apps are still blocked. The interface shows the same three boxes on a block's Websites tab.
 
 ```bash
 kc9k block action social-media greyscale on   # greyscale as well as blocked
@@ -281,9 +281,11 @@ kc9k block add-exception work reddit.com/r/programming
 kc9k block export-list work blocked > blocked.txt
 kc9k block export-list work exceptions > exceptions.txt
 kc9k block import-list work blocked blocked.txt
+kc9k block export-list work apps > apps.txt       # also: titles
+kc9k block import-list work apps apps.txt
 ```
 
-Files hold one entry per line, and `#` starts a comment. `*.*` blocks every website, so combine it with exceptions to allow only what you need. A domain with an exception leaves `/etc/hosts` and the firewall, because those block whole hosts, so only browser policy enforces it. Chromium-based browsers cannot match wildcards inside a path or keywords in policy, so those entries work only in Firefox for now, and the interface says which ones.
+Files hold one entry per line, and `#` starts a comment. `*.*` blocks every website, so combine it with exceptions to allow only what you need. A domain with an exception leaves `/etc/hosts` and the firewall, because those block whole hosts, so only browser policy enforces it.
 
 ## Daily quotas
 

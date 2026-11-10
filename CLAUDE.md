@@ -173,6 +173,10 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   ends the block). Looser settings go through `ensureEditable`. Pomodoro
   has an optional long break (`quota.Cycle`); `PomodoroWorking` keeps a
   quota session closed during a work period.
+- **Project** (`cli/project.go`, `kc9k project export | import <file>
+  [--dry-run]`): everything except locks, passwords, hotkeys and
+  statistics in one versioned JSON; import validates all first, then only
+  adds (existing blocks/clusters untouched, options only strengthened).
 - **Keyword test mode** (`db/testmode.go`, `kc9k list test <block> on|off`):
   title/text lists of the block go out with `test: true`; the extension
   shows `kc9kTestReport` in a panel and skips them in `kc9kListMatches`.

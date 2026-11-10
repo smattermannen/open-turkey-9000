@@ -159,6 +159,9 @@ the same or all differ.
 
 ## Phase 5: project export and import (M)
 
+**Done 2026-11-10** (hotkeys are left out: each needs the settings password
+and a desktop to bind on). No `--queue`: what exists is simply left alone.
+
 `kc9k project export <file>` / `import <file> [--dry-run]`: one versioned
 JSON file with every block (lists, apps, titles, schedules, quota, Pomodoro,
 breaks, bypass detection), clusters, browser options, freeze schedules,

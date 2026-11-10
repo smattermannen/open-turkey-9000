@@ -2187,6 +2187,35 @@ class Window(Gtk.ApplicationWindow):
         except OSError as error:
             self.message(str(error))
 
+    def export_project(self, _button):
+        path = self.choose_file("Export the whole setup", Gtk.FileChooserAction.SAVE, "Save")
+        if not path:
+            return
+        ok, output = cli_with_access(self.access_passwords, ["project", "export"])
+        if not ok:
+            self.message(output)
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(output + "\n")
+        except OSError as error:
+            self.message(str(error))
+
+    def import_project(self, _button):
+        path = self.choose_file("Import a setup", Gtk.FileChooserAction.OPEN, "Import")
+        if not path:
+            return
+        ok, output = cli_with_access(self.access_passwords, ["project", "import", "--dry-run", path])
+        if not ok:
+            self.message(output)
+            return
+        if "Would:" not in output:
+            self.message(output or "The file adds nothing new.", Gtk.MessageType.INFO)
+            return
+        if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import"):
+            self.run(["project", "import", path],
+                     then=lambda result: self.message(result, Gtk.MessageType.INFO))
+
     # Device Blocks -------------------------------------------------------
     def build_device(self):
         scroll, box = page_box()
@@ -2516,6 +2545,18 @@ class Window(Gtk.ApplicationWindow):
                 "uninstalling all ask for it. Starting a block without a lock and adding sites "
                 "don't."),
             self.password_status, password_row), False, False, 0)
+
+        project_row = Gtk.Box(spacing=6)
+        for label, handler in (("Export…", self.export_project), ("Import…", self.import_project)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", handler)
+            project_row.pack_start(button, False, False, 0)
+        box.pack_start(section(
+            "Whole setup",
+            dim("Save every block, cluster and option to one file, to move to another computer "
+                "or to share. Locks, passwords and statistics are left out. Importing only adds "
+                "what isn't here yet, so it never weakens a block."),
+            project_row), False, False, 0)
 
         self.access_status = Gtk.Label(xalign=0, wrap=True)
         access_row = Gtk.Box(spacing=6)

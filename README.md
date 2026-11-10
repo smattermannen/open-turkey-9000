@@ -569,6 +569,16 @@ kc9k option block-page-details off
 - `polite-close` (on): a blocked app with a window is asked to close, as if you pressed its close button, so it can offer to save; it is killed about five seconds later if it is still open. An app without a window is killed at once, and so is one started again within a minute of being asked. Off: every blocked app is killed at once.
 - `block-page-details` (on): the block page names the block and the list that stopped the page, and when the block ends if it has an end. It is only what the block page says: redirects, pictures, closed tabs and every other action work exactly as before.
 
+## The whole setup in one file
+
+```bash
+kc9k project export > my-setup.json
+kc9k project import my-setup.json --dry-run   # says what would be added
+kc9k project import my-setup.json
+```
+
+A project file holds every block (lists, apps, window titles, schedules, quota, Pomodoro, breaks, bypass detection), the clusters, browser options, the options above, the global bypass detection, scheduled Frozen Chicken windows, and the pictures lists show. Locks, passwords, hotkeys and statistics are left out. Importing only adds: a block or cluster that exists already is left as it is, browser options are only turned on, and bypass detection is replaced only by a stricter one, so an import never weakens anything. Imported blocks aren't started. In the interface: Settings > Whole setup.
+
 ## Access passwords
 
 Optional passwords to open Killer Chicken 9000 and each of its pages. There is one for opening the program (`app`) and one per page: `dashboard`, `blocks`, `device`, `stats` and `settings`. Set none, one for everything, or a different one for each:

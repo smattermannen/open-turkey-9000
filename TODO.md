@@ -31,6 +31,10 @@ Still to try:
 - Nepsis mode (optional, lockable like the other options): when many block rules trigger within a short time (likely hunting for loopholes), take an action the user chooses, e.g. shut down for 1 hour, or start and lock monk mode for 1 hour, so the user really shifts mental state. Think about more ways to notice attempts to bypass KC9K or find loopholes.
 - The terms in a list are hidden until the list's terms area is clicked, like sensitive content on Reddit.
 - A search box in each list to find terms in it.
+- Link recording: start recording, then every link opened in the browser is added to a list until recording is stopped. Makes allowlisting school sites with many verification steps easy.
+- Clusters: lists made independently of blocks, with all the same features as lists. A cluster can be imported into a block's list or added as a standalone list within a block, so a new block can quickly allowlist e.g. the academia or anime cluster.
+- Keyword test mode: turn it on for a block, then browse; the extension shows the keyword matches on each page (frequency and distinct keywords), so it is easy to see whether a rule would be too harsh.
+- Keyword thresholds by frequency (total matches), not only by distinct keywords.
 - Remove every note saying some parts only work with the extension: it is forced by default, so they no longer apply (interface, README, command help).
 
 ## Later

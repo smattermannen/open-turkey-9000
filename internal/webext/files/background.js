@@ -81,6 +81,55 @@ function replacement(url, outcome, reason) {
 const HIT_URL = "http://127.0.0.1:47613/hit";
 const reported = new Map();
 
+// Where each tab's page was opened from: the page whose link led to it, as
+// the request for it said. The daemon counts a blocked page opened from a
+// search engine's results as looked for.
+const cameFrom = new Map();
+
+function noteOrigin(details) {
+  if (details.tabId >= 0) {
+    cameFrom.set(details.tabId, { url: details.url, from: details.originUrl || "" });
+  }
+}
+
+// What each tab shows and what it showed before that (for a tab opened from
+// another, what that one showed). The browser's own policy stops many blocked
+// pages before any request, so there is nothing in cameFrom for them: then
+// the page the tab was on just before stands in.
+const trail = new Map();
+
+function noteTabUrl(tabId, url) {
+  const seen = trail.get(tabId) || { url: "", prev: "" };
+  if (url !== seen.url) {
+    trail.set(tabId, { url, prev: seen.url || seen.prev });
+  }
+}
+
+browser.tabs.onCreated.addListener((tab) => {
+  const opener = tab.openerTabId === undefined ? undefined : trail.get(tab.openerTabId);
+  if (opener) {
+    trail.set(tab.id, { url: "", prev: opener.url });
+  }
+});
+
+function sameAddress(a, b) {
+  return a.split("#")[0] === b.split("#")[0];
+}
+
+// originOf is where a tab's page at url was opened from, or "". A redirect
+// keeps the origin of the request that started it.
+function originOf(tabId, url) {
+  const seen = cameFrom.get(tabId);
+  if (seen && seen.from && sameAddress(seen.url, url)) {
+    return seen.from;
+  }
+  // A page stopped by policy may never be announced as the tab's address:
+  // then the last address heard of is the page it was opened from.
+  const before = trail.get(tabId);
+  const prev = !before ? "" : sameAddress(before.url, url) ? before.prev : before.url;
+  return /^https?:/i.test(prev) ? prev : "";
+}
+
 function report(tabId, url, outcome) {
   const key = tabId + " " + url;
   const now = Date.now();
@@ -88,6 +137,7 @@ function report(tabId, url, outcome) {
     return Promise.resolve();
   }
   reported.set(key, now);
+  const from = originOf(tabId, url);
   for (const [k, at] of reported) {
     if (now - at > 60000) {
       reported.delete(k);
@@ -96,7 +146,7 @@ function report(tabId, url, outcome) {
   return Promise.all(outcome.lists.map((hit) => fetch(HIT_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-KC9K-Extension": "1" },
-    body: JSON.stringify({ list: hit.id, actions: hit.actions, url }),
+    body: JSON.stringify({ list: hit.id, actions: hit.actions, url, from }),
   }).then((response) => response.json()).then((answer) => {
     // A bypass detection step that fired on this page closes its tab.
     if (answer && answer.close_tab && tabId >= 0) {
@@ -164,11 +214,18 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url !== undefined && keywordNoImages.get(tabId) !== changeInfo.url) {
     keywordNoImages.delete(tabId);
   }
+  if (changeInfo.url !== undefined) {
+    noteTabUrl(tabId, changeInfo.url);
+  }
   if (changeInfo.title !== undefined) {
     blockTitledTab(tab);
   }
 });
-browser.tabs.onRemoved.addListener((tabId) => keywordNoImages.delete(tabId));
+browser.tabs.onRemoved.addListener((tabId) => {
+  keywordNoImages.delete(tabId);
+  cameFrom.delete(tabId);
+  trail.delete(tabId);
+});
 
 // pageHit acts on a content script's report of the lists that matched its
 // page (by address, title and text). Only the tab's own page counts, and
@@ -212,6 +269,9 @@ browser.webRequest.onBeforeRequest.addListener(
         return { cancel: true };
       }
       return kc9kListActions(lists, { url: pageUrl(details) })["no-images"] ? { cancel: true } : {};
+    }
+    if (details.type === "main_frame") {
+      noteOrigin(details);
     }
     const outcome = addressOutcome(details.url);
     if (kc9kTakesAway(outcome)) {

@@ -38,7 +38,7 @@ func NoteDaemonStart(d *db.DB) {
 	}
 	if last == boot {
 		log.Printf("tamper: the daemon started again within this boot")
-		logEvent(d, db.EventTamper, "", "daemon restarted")
+		logEventFor(d, db.EventTamper, activeNames(d), "daemon restarted")
 	}
 	if err := d.SetSetting(settingDaemonBoot, boot); err != nil {
 		log.Printf("tamper: %v", err)
@@ -73,7 +73,7 @@ func watchClock(d *db.DB, now time.Time) {
 	}
 	if jump := clockDrift(prevWall, prevBoot, wall, boot); jump > clockJump {
 		log.Printf("tamper: the clock moved by %s", jump.Round(time.Second))
-		logEvent(d, db.EventTamper, "", fmt.Sprintf("clock moved by %s", strings.TrimSuffix(jump.Round(time.Second).String(), "0s")))
+		logEventFor(d, db.EventTamper, activeNames(d), fmt.Sprintf("clock moved by %s", strings.TrimSuffix(jump.Round(time.Second).String(), "0s")))
 	}
 }
 

@@ -6,11 +6,13 @@ Run on a disposable machine, like browser_test.py:
 
     GECKOWEBDRIVER=<dir with geckodriver> python3 ci/actions_test.py
 """
+import http.server
 import os
 import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import zlib
 
@@ -91,6 +93,31 @@ def png(path, size=40):
                 + chunk(b"IDAT", zlib.compress(row * size)) + chunk(b"IEND", b""))
 
 
+class SearchPage:
+    """A local page shaped like a search engine's results, linking to a
+    blocked site."""
+
+    def __init__(self):
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = b'<!doctype html><title>results</title><a id="result" href="https://example.org/">a result</a>'
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def stop(self):
+        self.server.shutdown()
+
+
 cleanup()
 subprocess.run(["sudo", "touch", REMOTE_CONTROL_MARKER], check=True)
 # The marker changes LibreWolf's settings (developer tools); the daemon closes
@@ -156,6 +183,30 @@ try:
         visit(driver, "https://example.org/")
         check("a ladder's second step closes the browser", closed(driver, 30))
     finally:
+        try:
+            driver.quit()
+        except WebDriverException:
+            pass
+    ot("nepsis", "off", "--block", "nepsistest")
+
+    # The search detector: a blocked page opened by hand doesn't count, one
+    # opened from a search engine's results does (any /search?q= page is one).
+    ot("nepsis", "set", "--block", "nepsistest", "--detect", "search",
+       "--step", "1 in 5m: close-browser")
+    results = SearchPage()
+    driver = start()
+    try:
+        visit(driver, "https://example.net/")
+        check("a blocked page opened by hand isn't a search hit", not closed(driver, 8))
+        driver.switch_to.new_window("tab")
+        driver.get(f"http://127.0.0.1:{results.port}/search?q=mirror")
+        try:
+            driver.find_element("id", "result").click()
+        except WebDriverException:
+            pass  # the blocked page shows up as an error page, or the browser is gone
+        check("a blocked page opened from search results is", closed(driver, 30))
+    finally:
+        results.stop()
         try:
             driver.quit()
         except WebDriverException:

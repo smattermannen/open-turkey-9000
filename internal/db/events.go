@@ -6,6 +6,7 @@ package db
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -13,6 +14,7 @@ import (
 // Event kinds.
 const (
 	EventPage    = "page"    // the extension took a page away
+	EventSearch  = "search"  // ... a page reached from a search engine's results (a kind of page)
 	EventApp     = "app"     // a blocked app was closed
 	EventTitle   = "title"   // a window was closed for its title
 	EventBrowser = "browser" // a browser without the extension was closed
@@ -28,7 +30,8 @@ const eventsSchema = `CREATE TABLE IF NOT EXISTS events (
     at     INTEGER NOT NULL,
     kind   TEXT NOT NULL,
     block  TEXT NOT NULL DEFAULT '',
-    detail TEXT NOT NULL DEFAULT ''
+    detail TEXT NOT NULL DEFAULT '',
+    extra  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS events_at ON events (at);`
 
@@ -42,12 +45,33 @@ type Event struct {
 
 // RecordEvent logs an event now.
 func (d *DB) RecordEvent(kind, block, detail string) error {
+	return d.RecordEventFor(kind, []string{block}, detail)
+}
+
+// RecordEventFor logs one event that several blocks are to blame for (none:
+// no block in particular). Each block gets a row, so each block's own bypass
+// detection counts it; the rows after the first are marked extra, so the
+// event counts once for the whole computer.
+func (d *DB) RecordEventFor(kind string, blocks []string, detail string) error {
 	if len(detail) > 300 {
 		detail = detail[:300]
 	}
-	_, err := d.conn.Exec("INSERT INTO events (at, kind, block, detail) VALUES (?, ?, ?, ?)",
-		time.Now().Unix(), kind, block, detail)
+	if len(blocks) == 0 {
+		blocks = []string{""}
+	}
+	tx, err := d.conn.Begin()
 	if err != nil {
+		return fmt.Errorf("failed to log an event: %w", err)
+	}
+	defer tx.Rollback()
+	at := time.Now().Unix()
+	for i, block := range blocks {
+		if _, err := tx.Exec("INSERT INTO events (at, kind, block, detail, extra) VALUES (?, ?, ?, ?, ?)",
+			at, kind, block, detail, i > 0); err != nil {
+			return fmt.Errorf("failed to log an event: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to log an event: %w", err)
 	}
 	return nil
@@ -64,6 +88,11 @@ func (d *DB) CountEventsOf(block string, since int64, kinds []string) (int, erro
 	query, args := "SELECT COUNT(*) FROM events WHERE at >= ?", []any{since}
 	if block != "" {
 		query, args = query+" AND block = ?", append(args, block)
+	} else {
+		query += " AND extra = 0"
+	}
+	if slices.Contains(kinds, EventPage) && !slices.Contains(kinds, EventSearch) {
+		kinds = append(slices.Clone(kinds), EventSearch) // a kind of page
 	}
 	if len(kinds) > 0 {
 		query += " AND kind IN (?" + strings.Repeat(", ?", len(kinds)-1) + ")"
@@ -80,7 +109,7 @@ func (d *DB) CountEventsOf(block string, since int64, kinds []string) (int, erro
 
 // RecentEvents returns the events since a time, newest first.
 func (d *DB) RecentEvents(since int64, limit int) ([]Event, error) {
-	rows, err := d.conn.Query("SELECT at, kind, block, detail FROM events WHERE at >= ? ORDER BY at DESC, id DESC LIMIT ?", since, limit)
+	rows, err := d.conn.Query("SELECT at, kind, block, detail FROM events WHERE at >= ? AND extra = 0 ORDER BY at DESC, id DESC LIMIT ?", since, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read events: %w", err)
 	}

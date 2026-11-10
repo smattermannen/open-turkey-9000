@@ -271,6 +271,8 @@ detectors (--detect; default all) are the kinds of events that count:
   page     a blacklist took a page away       browser  a browser without the extension was closed
   app      a blocked app was closed           refused  an attempt to stop, unlock or loosen a held block
   title    a window was closed for its title  tamper   the daemon restarted in a boot, or the clock jumped
+  search   a page taken away that was opened from a search engine's results
+           (page counts these too; alone, it counts only pages looked for)
 
 Each --step trips when its number of events happens within its window, then
 takes its actions; the next time, the next step; past the last, the last
@@ -287,8 +289,9 @@ long, through Frozen Chicken, at most a day; without: once, at most every
 way to give one step with one action.
 
 The whole computer has one (it counts every block's events), and each block
-can have its own (--block: that block's events, while it is on); when both
-are set, both apply. Without a subcommand, shows them and where they stand.
+can have its own (--block: that block's events, while it is on; a closed
+browser counts for every active block with websites, tampering for every
+active block); when both are set, both apply. Without a subcommand, shows them and where they stand.
 
 Making one stricter is always allowed: more detectors, a later fall-back,
 steps that trip on fewer events over longer windows and keep every action

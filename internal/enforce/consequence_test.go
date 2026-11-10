@@ -271,6 +271,83 @@ func TestHitHandler(t *testing.T) {
 	if count() != 1 {
 		t.Errorf("%d events; want 1", count())
 	}
+	// A page opened from a search engine's results is a search event, which
+	// counts as a page too.
+	post(true, `{"list": `+itoa(id)+`, "actions": ["block"], "url": "https://reddit.com/r/x", "from": "https://www.google.se/search?q=reddit"}`)
+	if n, _ := d.CountEventsOf("b", 0, []string{db.EventSearch}); n != 1 {
+		t.Errorf("%d search events; want 1", n)
+	}
+	if n, _ := d.CountEventsOf("b", 0, []string{db.EventPage}); n != 2 {
+		t.Errorf("%d page events; want 2 (search hits are pages too)", n)
+	}
+}
+
+func TestFromSearch(t *testing.T) {
+	for address, want := range map[string]bool{
+		"https://www.google.com/search?q=x":      true,
+		"https://google.co.uk/":                  true,
+		"https://duckduckgo.com/?q=x":            true,
+		"https://html.duckduckgo.com/html":       true,
+		"https://search.brave.com/search?q=x":    true,
+		"https://yandex.ru/search/?text=x":       true,
+		"https://searx.example.org/search?q=x":   true,
+		"http://127.0.0.1:8888/search?q=x":       true,
+		"https://example.org/search":             false,
+		"https://example.org/":                   false,
+		"https://notbing.com/":                   false,
+		"https://brave.com/":                     false,
+		"moz-extension://abc/blocked.html?url=x": false,
+		"":                                       false,
+	} {
+		if got := fromSearch(address); got != want {
+			t.Errorf("fromSearch(%q) = %v; want %v", address, got, want)
+		}
+	}
+}
+
+// An event several blocks are to blame for counts for each of them, and
+// once for the whole computer.
+func TestEventsForSeveralBlocks(t *testing.T) {
+	d := testDB(t)
+	for _, name := range []string{"a", "b", "apps"} {
+		if err := d.CreateBlock(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustAdd(t, d, "a", db.DefaultBlockedList, "reddit.com")
+	mustAdd(t, d, "b", db.DefaultBlockedList, "example.org")
+	if err := d.AddApps("apps", []string{"steam"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"a", "b", "apps"} {
+		if err := d.ActivateBlock(name, false, 0, 0, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	active, err := d.GetActiveBlocks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A browser closed for lacking the extension: the website blocks' doing.
+	logEventFor(d, db.EventBrowser, websiteBlocks(active), "")
+	for scope, want := range map[string]int{"": 1, "a": 1, "b": 1, "apps": 0} {
+		if n, _ := d.CountEvents(scope, 0); n != want {
+			t.Errorf("browser events for %q = %d; want %d", scope, n, want)
+		}
+	}
+	// Tampering gets around every active block.
+	NoteDaemonStart(d)
+	NoteDaemonStart(d)
+	for scope, want := range map[string]int{"": 2, "a": 2, "b": 2, "apps": 1} {
+		if n, _ := d.CountEvents(scope, 0); n != want {
+			t.Errorf("events for %q after tampering = %d; want %d", scope, n, want)
+		}
+	}
+	// With no block to blame, the event still counts for the computer.
+	logEventFor(d, db.EventBrowser, nil, "")
+	if n, _ := d.CountEvents("", 0); n != 3 {
+		t.Errorf("global events = %d; want 3", n)
+	}
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }

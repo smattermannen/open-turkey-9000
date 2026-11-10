@@ -416,7 +416,7 @@ func enforceExtension(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
 		return
 	}
 	if extensionGuard.Enforce(now, protectionChanged(d)) > 0 {
-		logEvent(d, db.EventBrowser, "", "")
+		logEventFor(d, db.EventBrowser, websiteBlocks(active), "")
 	}
 }
 

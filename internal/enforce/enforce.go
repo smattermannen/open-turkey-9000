@@ -126,6 +126,39 @@ func logEvent(d *db.DB, kind, block, detail string) {
 	}
 }
 
+// logEventFor records one event that several blocks are to blame for.
+func logEventFor(d *db.DB, kind string, blocks []string, detail string) {
+	if err := d.RecordEventFor(kind, blocks, detail); err != nil {
+		log.Printf("daemon: %v", err)
+	}
+}
+
+// websiteBlocks names the active blocks whose websites need the extension:
+// the ones a browser without it, or another browser, gets around.
+func websiteBlocks(active []db.ActiveBlockDetail) []string {
+	var names []string
+	for _, b := range active {
+		if b.Lists.Enforces() {
+			names = append(names, b.BlockName)
+		}
+	}
+	return names
+}
+
+// activeNames names the active blocks: the ones tampering gets around.
+func activeNames(d *db.DB) []string {
+	active, err := d.GetActiveBlocks()
+	if err != nil {
+		log.Printf("daemon: %v", err)
+		return nil
+	}
+	var names []string
+	for _, b := range active {
+		names = append(names, b.BlockName)
+	}
+	return names
+}
+
 // activeTitles collects the window-title keywords of the active blocks.
 func activeTitles(active []db.ActiveBlockDetail) []string {
 	var out []string
@@ -263,13 +296,13 @@ func Tick(d *db.DB, now time.Time) error {
 	for _, b := range active {
 		killApps(d, b.Apps, db.EventApp, b.BlockName)
 	}
-	killApps(d, forcedKills(d), db.EventBrowser, "")
+	killApps(d, forcedKills(d), db.EventBrowser, websiteBlocks(active)...)
 	enforceNepsis(d, now, active)
 	return nil
 }
 
 // killApps closes apps and logs an event when any were running.
-func killApps(d *db.DB, apps []string, kind, block string) {
+func killApps(d *db.DB, apps []string, kind string, blocks ...string) {
 	if len(apps) == 0 {
 		return
 	}
@@ -278,7 +311,7 @@ func killApps(d *db.DB, apps []string, kind, block string) {
 		log.Printf("daemon: error killing blocked processes: %v", err)
 	} else if killed > 0 {
 		log.Printf("daemon: %d blocked processes terminated", killed)
-		logEvent(d, kind, block, "")
+		logEventFor(d, kind, blocks, "")
 	}
 }
 

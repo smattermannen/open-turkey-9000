@@ -35,8 +35,9 @@ const (
 var Consequences = []string{ConsequenceWarning, ConsequenceCloseTab, ConsequenceCloseBrowser,
 	ConsequenceLockScreen, ConsequenceLogout, ConsequenceShutdown, ConsequenceMonk}
 
-// Detectors are the event kinds bypass detection can count.
-var Detectors = []string{EventPage, EventApp, EventTitle, EventBrowser, EventRefused, EventTamper}
+// Detectors are the event kinds bypass detection can count. EventSearch is a
+// kind of EventPage: counting pages counts those too.
+var Detectors = []string{EventPage, EventSearch, EventApp, EventTitle, EventBrowser, EventRefused, EventTamper}
 
 // Limits on bypass detection's own numbers.
 const (
@@ -114,7 +115,8 @@ func (n Nepsis) normalize() Nepsis {
 
 // Counts reports whether events of a kind count.
 func (n Nepsis) Counts(kind string) bool {
-	return len(n.Detectors) == 0 || slices.Contains(n.Detectors, kind)
+	return len(n.Detectors) == 0 || slices.Contains(n.Detectors, kind) ||
+		kind == EventSearch && slices.Contains(n.Detectors, EventPage)
 }
 
 // Step returns the step for a level (0-based), the last one past the end.
@@ -213,14 +215,9 @@ func (n Nepsis) StricterThan(old Nepsis) bool {
 	if !old.On() {
 		return true
 	}
-	if len(n.Detectors) > 0 {
-		if len(old.Detectors) == 0 {
+	for _, kind := range Detectors {
+		if old.Counts(kind) && !n.Counts(kind) {
 			return false
-		}
-		for _, d := range old.Detectors {
-			if !slices.Contains(n.Detectors, d) {
-				return false
-			}
 		}
 	}
 	if old.QuietMinutes == 0 && n.QuietMinutes != 0 || old.QuietMinutes != 0 && n.QuietMinutes != 0 && n.QuietMinutes < old.QuietMinutes {

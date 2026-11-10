@@ -105,7 +105,7 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   quiet time; global setting lockable as setting lock `nepsis`; per block,
   gated) climbs a step when a step's Count events of its detectors fall
   within its window (state per scope in setting `nepsis.ladder[.<block>]`);
-  `/hit` judges at once and answers `close_tab`. Old one-step settings are
+  `/hit` judges at once and answers `close_tab`. `search` is a kind of `page` (the extension sends the page's origin as `from`; `fromSearch` in `hits.go`); an event blamed on several blocks (`RecordEventFor`: closed browsers, tamper) has a row per block, `extra` on all but the first so it counts once globally. Old one-step settings are
   read as a ladder (`normalize`).
 - **Hotkeys** (`internal/db/hotkeys.go`, `internal/cli/hotkeys.go`,
   `internal/blocker/hotkeys.go`): Cinnamon and GNOME custom keybindings in dconf named

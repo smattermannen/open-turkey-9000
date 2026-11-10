@@ -1,8 +1,9 @@
 // hits.go — what the extension reports when a blacklist takes a page away,
 // and the images it shows instead of pages.
 //
-// POST /hit {"list": id, "actions": [...], "url": "..."} logs the event for
-// bypass detection, judges it at once, and carries out the list's logout,
+// POST /hit {"list": id, "actions": [...], "url": "...", "from": "..."} logs
+// the event for bypass detection (as a search event when the page was reached
+// from a search engine's results: see fromSearch), judges it at once, and carries out the list's logout,
 // shutdown and monk actions (the extension closes the tab and the browser
 // itself). It answers {"close_tab": true} when a bypass detection step that
 // fired closes the tab of the page. Only
@@ -18,8 +19,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,6 +37,41 @@ type hitReport struct {
 	List    int      `json:"list"`
 	Actions []string `json:"actions"`
 	URL     string   `json:"url"`
+	From    string   `json:"from"` // the page whose link led here, if any
+}
+
+// searchHosts are search engines by host name: the name itself, or a
+// subdomain of it. Google, Yandex and Yahoo are matched by label, for their
+// many country domains.
+var searchHosts = []string{"bing.com", "duckduckgo.com", "search.brave.com", "startpage.com",
+	"ecosia.org", "qwant.com", "kagi.com", "baidu.com", "mojeek.com", "swisscows.com",
+	"metager.org", "metager.de", "presearch.com", "you.com", "perplexity.ai", "ask.com", "aol.com", "naver.com"}
+
+// searchLabels are search engines with many country domains (google.se,
+// google.co.uk, yandex.ru): any host with this label counts.
+var searchLabels = []string{"google", "yandex", "yahoo"}
+
+// fromSearch reports whether an address is a search engine's: a blocked
+// page opened from there was looked for, not stumbled upon. Besides the
+// engines known by name, a results page of a self-hosted engine (SearXNG and
+// the like) counts by its shape: a /search path with a q parameter.
+func fromSearch(address string) bool {
+	u, err := url.Parse(address)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, h := range searchHosts {
+		if host == h || strings.HasSuffix(host, "."+h) {
+			return true
+		}
+	}
+	for _, label := range strings.Split(host, ".") {
+		if slices.Contains(searchLabels, label) {
+			return true
+		}
+	}
+	return strings.TrimSuffix(u.Path, "/") == "/search" && u.Query().Has("q")
 }
 
 // findActiveList returns the active block (not on a break) and the
@@ -94,7 +132,11 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 		if !blocking {
 			return
 		}
-		logEvent(d, db.EventPage, block, hit.URL)
+		kind := db.EventPage
+		if fromSearch(hit.From) {
+			kind = db.EventSearch
+		}
+		logEvent(d, kind, block, hit.URL)
 		closeTab = checkScopes(d, time.Now(), []string{"", block})
 		for _, a := range device {
 			c := Consequence{Kind: map[string]string{db.ActionLogout: db.ConsequenceLogout,

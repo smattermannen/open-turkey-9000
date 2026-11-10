@@ -85,6 +85,12 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   picks the strongest page action, closes the tab and browser itself, and
   POSTs `/hit` (`enforce/hits.go`, extension header required) so the daemon
   logs the event and runs logout/shutdown/monk.
+- **Clusters** (`internal/db/clusters.go`, `internal/cli/clusters.go`,
+  `kc9k cluster …`): website lists outside any block (name, where, entries;
+  no kind, no actions, never enforced, always editable). `cluster copy`
+  copies one into a block as a new list (blacklist, or `--exceptions`) or
+  `--into` an existing list, through `listAdd`, so the block's gating
+  applies; `cluster save` makes one from a block's list.
 - **Consequences** (`internal/enforce/consequence.go`): one engine for list
   device actions, bypass prevention and monk mode: close browsers, lock
   screen/logout/shutdown (for a while through Frozen Chicken, only
@@ -153,6 +159,7 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 ## Commands
 
 Full usage and examples in `README.md`. Summary:
+`cluster list | show | create [--url --title --text] | rename | delete | add | remove | where | export | import | copy [--into L | --as N] [--exceptions] | save`,
 `list show | create [--exceptions --url --title --text] | rename | delete | add | remove | where | action |
 threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
 `nepsis [set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,

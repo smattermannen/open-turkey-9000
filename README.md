@@ -326,6 +326,30 @@ What makes a block stricter is always allowed, even while it is held: adding to 
 
 The commands from before lists still work on a block's default lists: `block add`, `remove-entry`, `add-site`, `remove-site`, `add-pattern` and `remove-pattern` on **Blocked**, `add-exception` and `remove-exception` on **Exceptions**, and `add-keyword`, `remove-keyword` and `threshold` on **Page words** (a text list, made when first needed). Upgrading turns each block's sites and patterns, exceptions and page keywords into those three lists, with the block's actions and thresholds; an allowlist block becomes `*.*` in Blocked with its sites as exceptions. `block export` writes the lists, and `block import` also reads exports from before lists.
 
+## Clusters
+
+A cluster is a website list of its own, outside any block: a name, where it looks (address, title, text) and entries. Nothing enforces a cluster; it is a stock to build blocks from, so a new block can spare the academia cluster or block the anime cluster in one command.
+
+```bash
+kc9k cluster create academia                        # looks at addresses; or --title / --text
+kc9k cluster add academia arxiv.org scholar.google.com jstor.org
+kc9k cluster list
+kc9k cluster show academia
+kc9k cluster copy academia study --exceptions       # a new exception list 'academia' in block 'study'
+kc9k cluster copy anime focus                       # a new blacklist 'anime' in block 'focus' (it blocks)
+kc9k cluster copy anime focus --as Shows            # ... under another name
+kc9k cluster copy anime focus --into Blocked        # add the entries to a list the block has
+kc9k cluster save focus Blocked distractions        # a block's list saved as a cluster
+kc9k cluster export academia > academia.txt         # one entry per line, with a line saying where it looks
+kc9k cluster import academia academia.txt           # makes the cluster if needed
+kc9k cluster where academia title on
+kc9k cluster remove academia jstor.org
+kc9k cluster rename academia school
+kc9k cluster delete school
+```
+
+A copy is a copy: later changes to the cluster don't reach the block, and deleting the cluster leaves the copied lists alone. Editing a cluster is always allowed. Copying into a block follows the block's rules: into a blacklist strengthens it (always allowed), into an exception list loosens it (refused while the block is held, queued or challenged for a block with allow windows). A new blacklist made from a cluster blocks what it matches; choose other actions with `kc9k list action`. An exported cluster is a plain entry file, so `kc9k list import` reads it too.
+
 ## Daily quotas
 
 ```bash

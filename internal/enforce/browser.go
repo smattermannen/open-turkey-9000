@@ -168,6 +168,7 @@ type Rules struct {
 	Exceptions []string   `json:"exceptions"`
 	WebOnly    bool       `json:"web_only"`
 	Titles     []string   `json:"titles"`
+	Recording  bool       `json:"recording"` // report opened addresses to /visit (see recording.go)
 }
 
 // ListRule is one blacklist: the entries it looks for in a page's address,
@@ -249,6 +250,11 @@ func BuildRules(d *db.DB) (Rules, error) {
 		WebOnly: BrowserOn(d, "web-only"),
 		Titles:  []string{},
 	}
+	if recording, err := d.GetRecording(); err != nil {
+		return rules, err
+	} else if recording != nil {
+		rules.Recording = true
+	}
 	active, err := d.GetActiveBlocks()
 	if err != nil {
 		return rules, err
@@ -295,6 +301,7 @@ func ServeRules(d *db.DB) error {
 	mux.HandleFunc("/rules", rulesHandler(d, checkInRecorder(d)))
 	mux.HandleFunc("/usage", usageHandler(d))
 	mux.HandleFunc("/hit", hitHandler(d))
+	mux.HandleFunc("/visit", visitHandler(d))
 	mux.HandleFunc("/image/", imageHandler)
 	return http.Serve(listener, mux)
 }

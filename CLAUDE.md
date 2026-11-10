@@ -91,6 +91,12 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   copies one into a block as a new list (blacklist, or `--exceptions`) or
   `--into` an existing list, through `listAdd`, so the block's gating
   applies; `cluster save` makes one from a block's list.
+- **Link recording** (`db/recording.go`, `enforce/recording.go`,
+  `cli/record.go`, `kc9k record [start <block> <list> | start --cluster C |
+  stop [--discard]]`): while on, `rules.recording` makes the extension POST
+  each opened page/frame address to `/visit` (extension header required);
+  the daemon only buffers sites. `record stop` adds them through
+  `listAdd`/`clusterAdd`, so gating happens there, in the CLI.
 - **Consequences** (`internal/enforce/consequence.go`): one engine for list
   device actions, bypass prevention and monk mode: close browsers, lock
   screen/logout/shutdown (for a while through Frozen Chicken, only

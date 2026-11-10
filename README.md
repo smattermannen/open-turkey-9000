@@ -350,6 +350,20 @@ kc9k cluster delete school
 
 A copy is a copy: later changes to the cluster don't reach the block, and deleting the cluster leaves the copied lists alone. Editing a cluster is always allowed. Copying into a block follows the block's rules: into a blacklist strengthens it (always allowed), into an exception list loosens it (refused while the block is held, queued or challenged for a block with allow windows). A new blacklist made from a cluster blocks what it matches; choose other actions with `kc9k list action`. An exported cluster is a plain entry file, so `kc9k list import` reads it too.
 
+## Link recording
+
+Start a recording, browse, stop: every site opened in the browser in between is added to a block's list or to a cluster. It collects what a task really needs, such as a school's pages with all their sign-in steps, to spare them in a block.
+
+```bash
+kc9k record start study Exceptions      # into a block's list (one that looks at addresses)
+kc9k record start --cluster school      # ... or into a cluster, made if needed
+kc9k record                             # what was recorded so far
+kc9k record stop                        # add the sites and stop
+kc9k record stop --discard              # stop and drop them
+```
+
+The sites (domains, without `www.`) come from the extension in LibreWolf: pages and the frames inside them (a login or captcha from another site), private windows included, and pages a block stops too, so you can record with the block on and see what it would need. They stay on this computer. Nothing changes until `stop`, which follows the target's rules: into a blacklist or a cluster is always allowed; into an exception list it loosens the block, so it is refused while the block is held (the recording then stays, to stop later or discard) and queued or challenged for a block with allow windows. One recording at a time, at most 2000 sites.
+
 ## Daily quotas
 
 ```bash

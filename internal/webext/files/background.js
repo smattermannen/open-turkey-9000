@@ -130,6 +130,33 @@ function originOf(tabId, url) {
   return /^https?:/i.test(prev) ? prev : "";
 }
 
+// Link recording ('kc9k record'): while the rules say so, the address of
+// every page and frame opened goes to the daemon, once per site.
+const VISIT_URL = "http://127.0.0.1:47613/visit";
+let recording = false;
+const visited = new Set();
+
+function noteVisit(url) {
+  if (!recording || !/^https?:/i.test(url)) {
+    return;
+  }
+  let host;
+  try {
+    host = new URL(url).hostname;
+  } catch (error) {
+    return;
+  }
+  if (!host || visited.has(host)) {
+    return;
+  }
+  visited.add(host);
+  fetch(VISIT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-KC9K-Extension": "1" },
+    body: JSON.stringify({ url }),
+  }).catch(() => visited.delete(host));
+}
+
 function report(tabId, url, outcome) {
   const key = tabId + " " + url;
   const now = Date.now();
@@ -216,6 +243,7 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
   if (changeInfo.url !== undefined) {
     noteTabUrl(tabId, changeInfo.url);
+    noteVisit(changeInfo.url);
   }
   if (changeInfo.title !== undefined) {
     blockTitledTab(tab);
@@ -261,8 +289,11 @@ function pageHit(message, sender) {
 
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
-    if (details.url.startsWith(RULES_URL) || details.url.startsWith(HIT_URL)) {
+    if (details.url.startsWith(RULES_URL) || details.url.startsWith(HIT_URL) || details.url.startsWith(VISIT_URL)) {
       return {};
+    }
+    if (details.type === "main_frame" || details.type === "sub_frame") {
+      noteVisit(details.url);
     }
     if (details.type === "image" || details.type === "imageset" || details.type === "media") {
       if (keywordNoImages.has(details.tabId)) {
@@ -334,6 +365,10 @@ function apply(rules) {
   lists = kc9kCompileLists(rules.lists);
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
+  if (recording !== Boolean(rules.recording)) {
+    recording = Boolean(rules.recording);
+    visited.clear();
+  }
   titleWords = (rules.titles || []).map((word) => String(word).toLowerCase()).filter(Boolean);
 }
 

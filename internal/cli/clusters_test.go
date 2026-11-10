@@ -135,3 +135,67 @@ func TestClusterExportImport(t *testing.T) {
 		t.Error("a failed import left a cluster behind")
 	}
 }
+
+func TestRecording(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "list", "create", "b", "Words", "--text")
+	if err := runCLI(t, "record", "start", "b", "Words"); err == nil {
+		t.Error("recording into a list that doesn't look at addresses started")
+	}
+	if err := runCLI(t, "record", "start"); err == nil {
+		t.Error("recording without a target started")
+	}
+	// Into a cluster, made on the way.
+	mustRun(t, "record", "start", "--cluster", "school")
+	if err := runCLI(t, "record", "start", "b", "Exceptions"); err == nil {
+		t.Error("a second recording started")
+	}
+	for _, site := range []string{"login.school.example", "school.example", "login.school.example"} {
+		if err := d.AddRecordedSite(site); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustRun(t, "record")
+	mustRun(t, "record", "stop")
+	if c, _ := d.GetCluster("school"); !reflect.DeepEqual(c.Entries, []string{"login.school.example", "school.example"}) {
+		t.Errorf("cluster after recording = %q", c.Entries)
+	}
+	if r, _ := d.GetRecording(); r != nil {
+		t.Error("still recording after stop")
+	}
+
+	// Into a list; a rename in between doesn't lose it.
+	mustRun(t, "record", "start", "b", "Exceptions")
+	if sites, _ := d.RecordedSites(); len(sites) != 0 {
+		t.Errorf("a new recording started with %q", sites)
+	}
+	mustRun(t, "list", "rename", "b", "Exceptions", "Spared")
+	if err := d.AddRecordedSite("arxiv.org"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "record", "stop")
+	if got := list(t, d, "b", "Spared").Entries; !reflect.DeepEqual(got, []string{"arxiv.org"}) {
+		t.Errorf("Spared = %q", got)
+	}
+
+	// Into the exceptions of a locked block: refused, and the recording stays.
+	mustRun(t, "list", "add", "b", "Blocked", "reddit.com")
+	mustRun(t, "record", "start", "b", "Spared")
+	if err := d.AddRecordedSite("jstor.org"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ActivateBlock("b", true, 300, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(t, "record", "stop"); err == nil || !strings.Contains(err.Error(), "held") {
+		t.Errorf("stop into a locked block's exceptions: %v; want refused as held", err)
+	}
+	if sites, _ := d.RecordedSites(); len(sites) != 1 {
+		t.Errorf("a refused stop lost the recording: %q", sites)
+	}
+	mustRun(t, "record", "stop", "--discard")
+	if got := list(t, d, "b", "Spared").Entries; len(got) != 1 {
+		t.Errorf("Spared after a discarded recording = %q", got)
+	}
+}

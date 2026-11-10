@@ -462,3 +462,43 @@ func TestScheduleLeavesQuotaBlockOn(t *testing.T) {
 		t.Fatal("a scheduled block without schedules or a quota stayed on")
 	}
 }
+
+// The extension's visits are kept only while recording, as sites.
+func TestVisitsRecorded(t *testing.T) {
+	d := testDB(t)
+	handler := visitHandler(d)
+	post := func(header bool, address string) int {
+		r := httptest.NewRequest(http.MethodPost, "http://"+RulesAddress+"/visit", strings.NewReader(`{"url": "`+address+`"}`))
+		r.Host = RulesAddress
+		if header {
+			r.Header.Set(ExtensionHeader, "1")
+		}
+		w := httptest.NewRecorder()
+		handler(w, r)
+		return w.Code
+	}
+	post(true, "https://example.org/")
+	if sites, _ := d.RecordedSites(); len(sites) != 0 {
+		t.Fatalf("recorded %q while not recording", sites)
+	}
+	if rules, _ := BuildRules(d); rules.Recording {
+		t.Error("the rules say recording while it is off")
+	}
+	if err := d.StartRecording(db.Recording{Cluster: "c"}); err != nil {
+		t.Fatal(err)
+	}
+	if rules, _ := BuildRules(d); !rules.Recording {
+		t.Error("the rules don't say recording")
+	}
+	if post(false, "https://nope.example/") != http.StatusForbidden {
+		t.Error("a visit without the extension's header was accepted")
+	}
+	for _, address := range []string{"https://www.Example.org/a?b=c", "https://example.org/other", "http://login.example.org:8080/",
+		"http://127.0.0.1:8000/", "http://localhost/", "about:blank", "moz-extension://x/blocked.html"} {
+		post(true, address)
+	}
+	sites, _ := d.RecordedSites()
+	if got := strings.Join(sites, " "); got != "example.org login.example.org" {
+		t.Errorf("recorded %q", got)
+	}
+}

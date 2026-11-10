@@ -1,6 +1,7 @@
 """Checks list actions and bypass prevention inside a real LibreWolf: a
 picture instead of the page, close-tab, bypass prevention closing the
-browser, close-browser, and monk mode from a list (which ends by itself).
+browser (one step, a ladder, the search detector), close-browser, link
+recording, and monk mode from a list (which ends by itself).
 Logout and shutdown are left out: they would end the session running this.
 Run on a disposable machine, like browser_test.py:
 
@@ -22,7 +23,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 
 failures = 0
-BLOCKS = ("actions", "nepsistest", "closer", "monklist")
+BLOCKS = ("actions", "nepsistest", "closer", "monklist", "rectest")
 REMOTE_CONTROL_MARKER = "/var/lib/kc9k/allow-remote-control"
 
 
@@ -40,7 +41,13 @@ def ot_quiet(*args):
     subprocess.run(["kc9k", *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def output(*args):
+    return subprocess.run(["kc9k", *args], capture_output=True, text=True).stdout
+
+
 def cleanup():
+    ot_quiet("record", "stop", "--discard")
+    ot_quiet("cluster", "delete", "rectest")
     for name in BLOCKS:
         ot_quiet("nepsis", "off", "--block", name)
         ot_quiet("stop", name)
@@ -223,6 +230,33 @@ try:
     visit(driver, "https://example.net/")
     check("close-browser closes the browser", closed(driver))
     ot("stop", "closer")
+
+    # Link recording: the sites opened while it is on, blocked ones too,
+    # land in the cluster when it stops.
+    ot("block", "create", "rectest")
+    ot("list", "add", "rectest", "Blocked", "example.org")
+    ot("start", "rectest")
+    driver = start()
+    try:
+        visit(driver, "https://example.com/")
+        ot("record", "start", "--cluster", "rectest")
+        time.sleep(5)  # the extension fetches its rules every 3 s
+        visit(driver, "https://www.example.net/")
+        visit(driver, "https://example.org/")
+        ot("record", "stop")
+        sites = output("cluster", "export", "rectest").split()
+        check("recording keeps the sites opened, blocked ones too", "example.net" in sites and "example.org" in sites)
+        check("a site opened before the recording isn't kept", "example.com" not in sites)
+        time.sleep(5)
+        visit(driver, "https://example.edu/")
+        ot_quiet("record", "stop")
+        check("nothing is kept after stopping", "example.edu" not in output("cluster", "export", "rectest"))
+    finally:
+        try:
+            driver.quit()
+        except WebDriverException:
+            pass
+    ot("stop", "rectest")
 
     # monk mode from a list, for a minute: the browser closes and monk-mode
     # starts, then ends by itself.

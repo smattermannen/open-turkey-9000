@@ -34,6 +34,10 @@ Tried on 2026-11-10 after installing (extension 1.9.1), unattended. Passed:
 `ci/browser_test.py` passed in LibreWolf on 2026-11-09 (all checks, with page keywords and no-private added). It could not run while block-devtools was on: the DisableDeveloperTools policy turns off Marionette, so testing builds now leave that policy out while the remote-control marker exists.
 
 ## Next
+Supported: Linux Mint Cinnamon on X11 only (Mint's Wayland session is experimental; window titles, app statistics and quota counting rely on X11).
+
+Interface work waits until the functionality below is pinned down: build each feature in the daemon, CLI and extension first.
+
 - The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
 - Bypass detection, a full system (grows out of bypass prevention, `kc9k nepsis`):
   - The user picks which detectors run (blocked pages, apps, window titles, browsers without the extension, refused loosening, daemon restarts, clock jumps, and new ones: e.g. a burst of blocked pages from search results; tie "other browser closed" to a block) and what each does.
@@ -49,8 +53,7 @@ Tried on 2026-11-10 after installing (extension 1.9.1), unattended. Passed:
 - Location-based activation: a block (or monk mode) starts when the computer is at a place, sensed by nearby Wi-Fi networks (nmcli scan: SSIDs/BSSIDs, e.g. the neighbours' networks) and/or GPS; the user picks which, or both. Locking such a block forces Wi-Fi on and guards against GPS tampering (no fix or a jump counts as being there, or as a bypass event). Note: most laptops have no GPS receiver, and geoclue's network location service (Mozilla's) is gone, so GPS needs real hardware.
 - Project export and import: the whole setup (every block with its lists, apps, titles, schedules, quota, Pomodoro and bypass detection; clusters; browser options; freeze schedules; hotkeys) in one file, to share setups with the community. Locks and passwords are never exported; importing never weakens anything that is held.
 - More list actions, ticked like the others: block audio (mute the page's sound), block video (stop and hide videos), declutter (experimental: render the page bare-bones, reader-style), force dark mode (Dark Reader's engine, MIT licensed, bundled and configured from KC9K).
-- Social media settings: per major site, presets such as "DMs only", "No reels/shorts", "No feed", "No discover/explore page", enforced by redirecting addresses (and hiding elements where needed), e.g. YouTube, Instagram, Facebook, X, Reddit, TikTok.
-- Wayland support for the window-title check (Cinnamon's Wayland session is still experimental, so low priority).
+- Social media settings (their own tab in the interface): per major site, presets such as "DMs only", "No reels/shorts", "No feed", "No discover/explore page", enforced by redirecting addresses (and hiding elements where needed), e.g. YouTube, Instagram, Facebook, X, Reddit, TikTok.
 
 ## Before release
 Build without `TAGS=devmaster`. Remove `ci/vm.sh`. Rename the GitHub repository to `kc9k`. On the test laptop, remove `/etc/sudoers.d/99-claude-test`.

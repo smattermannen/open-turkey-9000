@@ -6,6 +6,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -55,9 +56,20 @@ func (d *DB) RecordEvent(kind, block, detail string) error {
 // CountEvents counts the events since a time (unix seconds), all of them for
 // block "", or one block's.
 func (d *DB) CountEvents(block string, since int64) (int, error) {
+	return d.CountEventsOf(block, since, nil)
+}
+
+// CountEventsOf is CountEvents for the given kinds only (none: every kind).
+func (d *DB) CountEventsOf(block string, since int64, kinds []string) (int, error) {
 	query, args := "SELECT COUNT(*) FROM events WHERE at >= ?", []any{since}
 	if block != "" {
 		query, args = query+" AND block = ?", append(args, block)
+	}
+	if len(kinds) > 0 {
+		query += " AND kind IN (?" + strings.Repeat(", ?", len(kinds)-1) + ")"
+		for _, k := range kinds {
+			args = append(args, k)
+		}
 	}
 	var n int
 	if err := d.conn.QueryRow(query, args...).Scan(&n); err != nil {

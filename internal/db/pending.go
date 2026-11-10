@@ -33,7 +33,7 @@ const (
 	EditListSetParams    = "list-set-params"    // Values: action, param, minutes
 	EditListDelete       = "list-delete"        // a blacklist
 
-	EditSetNepsis = "set-nepsis" // Values: count, minutes, consequence, action minutes (count 0: off)
+	EditSetNepsis = "set-nepsis" // Values: the bypass detection as JSON ("": off)
 )
 
 // Edits queued before website lists. They still apply, to the lists made from
@@ -163,20 +163,28 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 		legacySetMode, legacyUnsetAction, legacyRemoveKeywords, legacySetThreshold:
 		err = d.applyLegacyEdit(blockName, e)
 	case EditSetNepsis:
-		if len(e.Values) != 4 {
-			return fmt.Errorf("set-nepsis needs a count, minutes, a consequence and its minutes")
-		}
 		var n Nepsis
-		var convErr error
-		if n.Count, convErr = strconv.Atoi(e.Values[0]); convErr == nil {
-			if n.Minutes, convErr = strconv.Atoi(e.Values[1]); convErr == nil {
-				n.ActionMinutes, convErr = strconv.Atoi(e.Values[3])
+		switch len(e.Values) {
+		case 1: // the setting as JSON ("" or "{}": off)
+			if e.Values[0] != "" {
+				if jsonErr := json.Unmarshal([]byte(e.Values[0]), &n); jsonErr != nil {
+					return fmt.Errorf("bad set-nepsis edit: %v", jsonErr)
+				}
 			}
+		case 4: // queued before the ladder: count, minutes, consequence, its minutes
+			var convErr error
+			if n.Count, convErr = strconv.Atoi(e.Values[0]); convErr == nil {
+				if n.Minutes, convErr = strconv.Atoi(e.Values[1]); convErr == nil {
+					n.ActionMinutes, convErr = strconv.Atoi(e.Values[3])
+				}
+			}
+			if convErr != nil {
+				return fmt.Errorf("bad set-nepsis edit: %v", convErr)
+			}
+			n.Consequence = e.Values[2]
+		default:
+			return fmt.Errorf("bad set-nepsis edit")
 		}
-		if convErr != nil {
-			return fmt.Errorf("bad set-nepsis edit: %v", convErr)
-		}
-		n.Consequence = e.Values[2]
 		err = d.SetBlockNepsis(blockName, n)
 	case EditAddSchedule:
 		err = d.AddSchedule(blockName, e.Window)

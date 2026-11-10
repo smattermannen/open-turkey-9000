@@ -30,6 +30,7 @@ func upgradeSchema(conn *sql.DB) error {
 		{"blocks", "act_block", "BOOLEAN NOT NULL DEFAULT 1"},
 		{"blocks", "act_greyscale", "BOOLEAN NOT NULL DEFAULT 0"},
 		{"blocks", "act_no_images", "BOOLEAN NOT NULL DEFAULT 0"},
+		{"block_nepsis", "config", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {

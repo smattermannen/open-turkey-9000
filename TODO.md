@@ -1,5 +1,15 @@
 # KC9K status
 
+## Note to the next session (2026-11-10)
+Read this first, then `git fetch origin`: other sessions push TODO ideas straight to GitHub.
+
+- Everything here is committed and pushed. Installed on this machine (it is the test laptop) up to extension 1.9.1, with `TAGS=devmaster`. The bypass-detection ladder below is committed but NOT installed or tried in a real browser yet: reinstall (`sudo env TAGS=devmaster ./install.sh`), then run `ci/actions_test.py` and try a ladder with `close-tab` by hand (the extension 1.10.0 closes the tab when `/hit` answers `close_tab`).
+- Done this session: website lists (blacklists/exceptions ticking url/title/text, per-list actions, thresholds by different words and by hits), more actions (redirect, picture, close-tab, close-browser, logout, shutdown, monk), monk mode, events and bypass detection with an escalation ladder (`kc9k nepsis set --step ... --detect ... --quiet ...`), quota spent only while in use, GNOME hotkeys, hidden/searchable lists in the interface, tamper events. Real-browser scripts: `ci/browser_test.py`, `ci/actions_test.py`, `ci/quota_test.py` (run with `GECKOWEBDRIVER=~/.local/share/kc9k-browsertest ~/.local/share/kc9k-browsertest/venv/bin/python ci/...`).
+- Agreed with the user: Linux Mint Cinnamon on X11 only (no Wayland). Interface work waits until the functionality is pinned down; build daemon/CLI/extension first. The interface only needs to keep showing things correctly (e.g. it shows a ladder's first step; the full ladder is CLI-only for now).
+- Agreed order for "Next": 1) bypass detection (the ladder is done; left: new detectors such as a burst of blocked pages from search results, "browser closed" tied to a block, and the workaround guard feeding it), 2) clusters, then link recording into lists/clusters, 3) keyword test mode (show which keywords matched, how often, how many distinct, against each action's thresholds), 4) workaround guard and app matching by path/hash, 5) auto-relock, 6) project export/import (after clusters), 7) new list actions (audio, video, declutter, dark mode), then social media settings (their own interface tab), 8) location (Wi-Fi now; GPS only with real hardware), 9) root-path hardening, interface design pass.
+- Left on the test machine: block `quotatest` (has a quota, so it stays on until midnight; it only blocks addresses with "kc9kquota"; delete it after midnight), `monk-mode` (kept on purpose), `hej` (an empty block of unknown origin, created 12:41; ask the user).
+
+
 Works on Linux Mint 22.3: strict mode, noexec, no-escape reboot, master password, screen lock in Frozen Chicken.
 Tested on a real Mint/Windows dual boot: the LibreWolf extension (`ci/browser_test.py`) and no-escape (Mint and Windows boot without the password, entry editing is locked, the firmware boot menu still reaches Windows).
 
@@ -39,7 +49,7 @@ Supported: Linux Mint Cinnamon on X11 only (Mint's Wayland session is experiment
 Interface work waits until the functionality below is pinned down: build each feature in the daemon, CLI and extension first.
 
 - The interface looks rough throughout and needs a design pass. (Its window now fits small and scaled screens: the block details scroll.)
-- Bypass detection, a full system (grows out of bypass prevention, `kc9k nepsis`):
+- Bypass detection, a full system (the ladder, detector choice and quiet fall-back are done: `kc9k nepsis set --step`; left below):
   - The user picks which detectors run (blocked pages, apps, window titles, browsers without the extension, refused loosening, daemon restarts, clock jumps, and new ones: e.g. a burst of blocked pages from search results; tie "other browser closed" to a block) and what each does.
   - An escalation ladder instead of one consequence, customizable in detail: each step has its own trigger (count within a window) and actions, e.g. 1) a warning: the tab closes and you are signed out for 1 minute; 2) the browser closes and monk mode runs for 5 minutes; 3) the computer shuts down for 15 minutes. The ladder falls back a step after a quiet time the user sets. Add a "warning" consequence (a notification).
 - Workaround guard (built in, no per-mirror domain lists): treat any URL that carries a blocked domain inside it as blocked (translate proxies and web archives are done; still: `?url=` web proxies, caches); spot front-ends and mirrors by page fingerprints (generator meta tags, canonical/og:url and embeds pointing at a blocked site, known front-end markup such as Invidious/Piped); kill any process whose command line names a blocked domain (yt-dlp, mpv, curl, streamlink), plus a built-in list of download/stream tools in strict mode. Detections feed bypass detection.

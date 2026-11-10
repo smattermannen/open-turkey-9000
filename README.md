@@ -412,22 +412,26 @@ kc9k monk --for 2h
 
 Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. It is an ordinary block, so add exceptions (documentation you need), apps or anything else to it. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password, like any lock.
 
-## Bypass prevention
+## Bypass detection
 
-Many blocked pages, closed apps or refused commands in a short time usually mean someone is hunting for a loophole. Bypass prevention ("nepsis", watchfulness) counts what Killer Chicken stops and, past a number within a time, takes the consequence you chose, so you really step away:
+Many blocked pages, closed apps or refused commands in a short time usually mean someone is hunting for a loophole. Bypass detection ("nepsis", watchfulness) counts what Killer Chicken stops and climbs a ladder of steps you choose, so you really step away:
 
 ```bash
-kc9k nepsis set --count 10 --within 5m --then monk --then-for 1h       # the whole computer
-kc9k nepsis set --block social --count 5 --within 10m --then shutdown --then-for 30m
-kc9k nepsis set --count 10 --within 5m --then monk --then-for 1h --for 7d   # locked for a week
-kc9k nepsis                                                              # show them and the count so far
+kc9k nepsis set --step "3 in 10m: warning, close-tab, logout 1m" \
+                --step "3 in 10m: close-browser, monk 5m" \
+                --step "2 in 30m: shutdown 15m" --quiet 2h      # the whole computer
+kc9k nepsis set --block social --step "5 in 10m: close-browser, monk 30m" --detect page,refused
+kc9k nepsis set ... --for 7d                                      # global only: locked for a week
+kc9k nepsis                                                       # the ladders and where they stand
 kc9k nepsis off [--block social]
-kc9k nepsis unlock                                                       # challenge or password lock
+kc9k nepsis unlock                                                # challenge or password lock
 ```
 
-What counts: pages a blacklist takes away (not greyscale or no-images alone), blocked apps closed, windows closed for their title, browsers closed for running without the extension, refused attempts to stop, unlock or loosen a held block, and signs of tampering: the daemon starting again within the same boot (killed, stopped or restarted; an upgrade counts once too), and the clock moving more than 2 minutes against the boot clock. Consequences: `close-browser`, `lock-screen` (`--then-for` required), `logout` and `shutdown` (`--then-for` to stay so; without it, once), and `monk` (`--then-for` required). Staying locked, logged out or off goes through Frozen Chicken, at most a day.
+Each step trips when its number of events happens within its window, then takes its actions; the next time, the next step; past the last, the last again. After `--quiet` without tripping, the ladder falls back a step. Actions: `warning` (a notification), `close-tab` (the tab of the page that tripped it), `close-browser`, `lock-screen D`, `logout [D]`, `shutdown [D]` and `monk D`. With a time, locked, logged out or off lasts that long through Frozen Chicken (at most a day); a one-off logout or shutdown happens at most every 10 minutes. `--count N --within D --then ACTION [--then-for D]` is a short way to give one step.
 
-The global one counts everything; a block's own counts that block's events while it is on (other browsers and tampering count only globally); when both are set, both apply. After firing, only newer events count. Making either stricter (fewer events, a longer window, the same consequence for longer) is always allowed. Anything else loosens it: a block's is gated like other edits to the block, and the global one can be locked like a browser option (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart` on `set`). Events are kept for a day. The interface has the global one under Settings and each block's on its Bypass prevention tab.
+Detectors (`--detect`, default all): `page` (a blacklist took a page away; greyscale or no-images alone don't count), `app` (a blocked app was closed), `title` (a window was closed for its title), `browser` (a browser without the extension was closed), `refused` (an attempt to stop, unlock or loosen a held block), `tamper` (the daemon started again within a boot, or the clock moved more than 2 minutes against the boot clock).
+
+The global ladder counts every block's events; a block's own counts that block's events while it is on (browsers and tampering count only globally); when both are set, both apply. A blocked page is judged at once, so close-tab hits the right tab; everything else every daemon cycle. Making one stricter (more detectors, a later fall-back, steps that trip on fewer events over longer windows and keep every action for at least as long, more steps at the end) is always allowed. Anything else loosens it: a block's is gated like other edits to the block, and the global one can be locked like a browser option (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart` on `set`). Events are kept for a day. A setting from before the ladder became one step that closes the browsers and then takes its old consequence.
 
 ## Page keywords
 

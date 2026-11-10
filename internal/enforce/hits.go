@@ -2,8 +2,10 @@
 // and the images it shows instead of pages.
 //
 // POST /hit {"list": id, "actions": [...], "url": "..."} logs the event for
-// bypass prevention, and carries out the list's logout, shutdown and monk
-// actions (the extension closes the tab and the browser itself). Only
+// bypass detection, judges it at once, and carries out the list's logout,
+// shutdown and monk actions (the extension closes the tab and the browser
+// itself). It answers {"close_tab": true} when a bypass detection step that
+// fired closes the tab of the page. Only
 // requests with the extension's header count: a web page can't add it (see
 // ExtensionHeader). A request can only trigger what an active blacklist
 // already does, so the worst a local program can do is what the user chose.
@@ -68,7 +70,11 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 			http.Error(w, "bad report", http.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
+		closeTab := false
+		defer func() {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]bool{"close_tab": closeTab})
+		}()
 		block, list, ok := findActiveList(d, hit.List)
 		if !ok {
 			return
@@ -89,12 +95,13 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 			return
 		}
 		logEvent(d, db.EventPage, block, hit.URL)
+		closeTab = checkScopes(d, time.Now(), []string{"", block})
 		for _, a := range device {
 			c := Consequence{Kind: map[string]string{db.ActionLogout: db.ConsequenceLogout,
 				db.ActionShutdown: db.ConsequenceShutdown, db.ActionMonk: db.ConsequenceMonk}[a.Name], Minutes: a.Minutes}
 			why := "A page matched the list '" + list.Name + "' of block '" + block + "'."
 			time.AfterFunc(deviceDelay, func() {
-				if err := Run(d, c, why, false); err != nil {
+				if err := Run(d, c, why); err != nil {
 					log.Printf("hit: %v", err)
 				}
 			})

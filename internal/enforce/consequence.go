@@ -53,11 +53,12 @@ func (c Consequence) String() string {
 // server and the daemon cycle both run them).
 var consequenceMu sync.Mutex
 
-// Run carries out a consequence, telling the user why first. killBrowsers
-// closes every browser at once; the extension asks for false, since it
-// closes the page and the browser itself, cleanly, so a restored session
-// doesn't bring the page back.
-func Run(d *db.DB, c Consequence, why string, killBrowsers bool) error {
+// Run carries out a consequence, telling the user why first (unless why is
+// ""). Each does only what it says: close-browser closes every browser,
+// lock-screen, logout and shutdown leave them to the session ending, monk
+// mode blocks them. A warning is only the notification; close-tab is for the
+// extension (see hits.go) and does nothing here.
+func Run(d *db.DB, c Consequence, why string) error {
 	consequenceMu.Lock()
 	defer consequenceMu.Unlock()
 	if err := db.CheckConsequence(c.Kind, c.Minutes); err != nil {
@@ -79,16 +80,14 @@ func Run(d *db.DB, c Consequence, why string, killBrowsers bool) error {
 		}
 	}
 	log.Printf("consequence: %s (%s)", c, why)
-	notifyDesktop("Killer Chicken 9000: "+c.String(), why)
-
-	if killBrowsers {
-		if err := closeBrowsers(); err != nil {
-			log.Printf("consequence: closing browsers: %v", err)
-		}
+	if why != "" {
+		notifyDesktop("Killer Chicken 9000: "+c.String(), why)
 	}
 	switch c.Kind {
-	case db.ConsequenceCloseBrowser:
+	case db.ConsequenceWarning, db.ConsequenceCloseTab:
 		return nil
+	case db.ConsequenceCloseBrowser:
+		return closeBrowsers()
 	case db.ConsequenceMonk:
 		return StartMonk(d, time.Duration(c.Minutes)*time.Minute)
 	}

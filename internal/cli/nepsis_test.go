@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -91,7 +92,8 @@ func TestNepsisCommands(t *testing.T) {
 			t.Errorf("%s on a held block was allowed", strings.Join(args, " "))
 		}
 	}
-	if n, _ := d.BlockNepsis("b"); n != (db.Nepsis{Count: 5, Minutes: 10, Consequence: "monk", ActionMinutes: 120}) {
+	want := []db.NepsisStep{{Count: 5, Minutes: 10, Actions: []db.NepsisAction{{Kind: "monk", Minutes: 120}}}}
+	if n, _ := d.BlockNepsis("b"); !reflect.DeepEqual(n.Steps, want) {
 		t.Errorf("block bypass prevention = %+v", n)
 	}
 
@@ -101,10 +103,27 @@ func TestNepsisCommands(t *testing.T) {
 		t.Errorf("turning off a time-locked bypass prevention: %v", err)
 	}
 	mustRun(t, "nepsis", "set", "--count", "10", "--within", "10m", "--then", "lock-screen", "--then-for", "30m")
-	if n, _ := d.GlobalNepsis(); n.Count != 10 || n.ActionMinutes != 30 {
+	if n, _ := d.GlobalNepsis(); n.Steps[0].Count != 10 || n.Steps[0].Actions[0].Minutes != 30 {
 		t.Errorf("global bypass prevention = %+v", n)
 	}
 	if err := runCLI(t, "nepsis", "set", "--block", "b", "--count", "5", "--within", "10m", "--then", "monk", "--then-for", "2h", "--lock"); err == nil {
 		t.Error("a lock on a block's bypass prevention was accepted")
+	}
+}
+
+func TestNepsisLadderCommand(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "nepsis", "set", "--step", "3 in 10m: warning, close-tab, logout 1m",
+		"--step", "3 in 10m: close-browser, monk 5m", "--step", "2 in 30m: shutdown 15m",
+		"--detect", "page,refused", "--quiet", "2h")
+	n, _ := d.GlobalNepsis()
+	if len(n.Steps) != 3 || n.QuietMinutes != 120 || !reflect.DeepEqual(n.Detectors, []string{"page", "refused"}) ||
+		!reflect.DeepEqual(n.Steps[0].Actions, []db.NepsisAction{{Kind: "warning"}, {Kind: "close-tab"}, {Kind: "logout", Minutes: 1}}) {
+		t.Errorf("ladder = %+v", n)
+	}
+	for _, bad := range []string{"3 within 10m: warning", "3 in 10m: dance", "3 in 10m: monk", "0 in 10m: warning"} {
+		if err := runCLI(t, "nepsis", "set", "--step", bad); err == nil {
+			t.Errorf("step %q was accepted", bad)
+		}
 	}
 }

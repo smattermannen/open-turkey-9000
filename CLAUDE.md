@@ -100,9 +100,13 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
 - **Events and bypass prevention** (`db/events.go`, `db/nepsis.go`,
   `enforce/nepsis.go`, `cli/nepsis.go`): what KC9K stops is logged (pages
   via `/hit`, app kills per block, title closes, browsers closed, refused
-  loosening via `refused()` in the CLI), kept a day. Nepsis (global setting,
-  lockable as setting lock `nepsis`; per block, gated) fires a consequence
-  when Count events fall within Minutes; only newer events count after.
+  loosening via `refused()` in the CLI, tamper: daemon restart, clock jump),
+  kept a day. Bypass detection (`db.Nepsis`: detectors, a ladder of steps,
+  quiet time; global setting lockable as setting lock `nepsis`; per block,
+  gated) climbs a step when a step's Count events of its detectors fall
+  within its window (state per scope in setting `nepsis.ladder[.<block>]`);
+  `/hit` judges at once and answers `close_tab`. Old one-step settings are
+  read as a ladder (`normalize`).
 - **Hotkeys** (`internal/db/hotkeys.go`, `internal/cli/hotkeys.go`,
   `internal/blocker/hotkeys.go`): Cinnamon and GNOME custom keybindings in dconf named
   `kc9k<id>`, running `kc9k hotkey run <id>` (starts the block in-process with

@@ -81,13 +81,21 @@ def fmt_minutes(minutes):
 
 
 def describe_nepsis(nepsis, count=None):
-    """One line for a bypass prevention setting."""
-    if not nepsis or not nepsis.get("count"):
+    """One line for a bypass detection setting (its first step, and how many
+    steps follow; the full ladder is set with 'kc9k nepsis set --step')."""
+    steps = (nepsis or {}).get("steps") or []
+    if not steps:
         return "Off."
-    then = dict(CONSEQUENCES).get(nepsis["consequence"], nepsis["consequence"])
-    if nepsis.get("action_minutes"):
-        then += f" for {fmt_minutes(nepsis['action_minutes'])}"
-    line = f"{nepsis['count']} stopped things within {fmt_minutes(nepsis['minutes'])}: {then.lower()}."
+    first = steps[0]
+    actions = []
+    for action in first["actions"]:
+        text = dict(CONSEQUENCES).get(action["action"], action["action"]).lower()
+        if action.get("minutes"):
+            text += f" for {fmt_minutes(action['minutes'])}"
+        actions.append(text)
+    line = f"{first['count']} stopped things within {fmt_minutes(first['minutes'])}: {', '.join(actions)}."
+    if len(steps) > 1:
+        line += f" Then {len(steps) - 1} more step{'s' if len(steps) > 2 else ''}."
     if count is not None:
         line += f" {count} so far."
     return line

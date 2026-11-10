@@ -219,7 +219,7 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 		if state.Nepsis.On() {
-			state.NepsisCount, _ = enforce.NepsisCount(database, now, "", state.Nepsis)
+			_, state.NepsisCount, _ = enforce.NepsisState(database, now, "", state.Nepsis)
 		}
 		if s, err := loadSettingLock(database, db.NepsisLockName); err == nil {
 			state.NepsisLock = guiSettingLock{CharLocked: s.lock.LockChars > 0, Password: s.lock.PasswordHash != "",
@@ -284,7 +284,7 @@ var guiStateCmd = &cobra.Command{
 				return err
 			}
 			if g.Nepsis.On() {
-				g.NepsisCount, _ = enforce.NepsisCount(database, now, b.Name, g.Nepsis)
+				_, g.NepsisCount, _ = enforce.NepsisState(database, now, b.Name, g.Nepsis)
 			}
 			g.QuotaNext = quota.NoPending
 			if q, err := database.GetQuota(b.Name); err != nil {

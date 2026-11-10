@@ -1,78 +1,171 @@
-// nepsis.go — bypass prevention in the daemon cycle: count recent events
-// (db/events.go) and take the chosen consequence when there are too many.
-// The global setting counts every event; a block's own counts that block's
-// events while it is on. After firing, only newer events count.
+// nepsis.go — bypass detection in the daemon: count recent events of the
+// chosen detectors (db/events.go) and climb the ladder of steps when there
+// are too many. The global setting counts every block's events; a block's
+// own counts that block's while it is on. Each scope keeps its level, when
+// it last fired (only newer events count after that), and a quiet clock:
+// after the quiet time without firing, it falls back a step.
+//
+// It runs every daemon cycle, and at once when the extension reports a
+// blocked page (see hits.go), so a step's close-tab closes that page's tab.
 package enforce
 
 import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
 )
 
-// enforceNepsis checks the global and each active block's bypass prevention.
+// nepsisMu keeps the cycle and the rules server from judging a scope at once.
+var nepsisMu sync.Mutex
+
+// enforceNepsis checks the global and each active block's bypass detection.
 func enforceNepsis(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
 	if err := d.PruneEvents(now); err != nil {
 		log.Printf("nepsis: %v", err)
 	}
-	if n, err := d.GlobalNepsis(); err != nil {
-		log.Printf("nepsis: %v", err)
-	} else if n.On() {
-		checkNepsis(d, now, "", n)
-	}
+	scopes := []string{""}
 	for _, b := range active {
-		n, err := d.BlockNepsis(b.BlockName)
+		scopes = append(scopes, b.BlockName)
+	}
+	checkScopes(d, now, scopes)
+}
+
+// checkScopes judges each scope ("" is the global one), and reports whether
+// a step that fired asks to close the tab of the page that tripped it.
+func checkScopes(d *db.DB, now time.Time, scopes []string) (closeTab bool) {
+	nepsisMu.Lock()
+	defer nepsisMu.Unlock()
+	for _, scope := range scopes {
+		n, err := loadNepsis(d, scope)
 		if err != nil {
 			log.Printf("nepsis: %v", err)
 			continue
 		}
-		if n.On() {
-			checkNepsis(d, now, b.BlockName, n)
+		if n.On() && checkNepsis(d, now, scope, n) {
+			closeTab = true
 		}
 	}
+	return closeTab
 }
 
-func nepsisFiredKey(block string) string {
-	if block == "" {
-		return "nepsis.fired"
+func loadNepsis(d *db.DB, scope string) (db.Nepsis, error) {
+	if scope == "" {
+		return d.GlobalNepsis()
 	}
-	return "nepsis.fired." + block
+	return d.BlockNepsis(scope)
 }
 
-// NepsisCount returns how many events count towards a bypass prevention now
-// (block "" for the global one).
-func NepsisCount(d *db.DB, now time.Time, block string, n db.Nepsis) (int, error) {
-	since := now.Add(-n.Window()).Unix()
-	if value, _ := d.GetSetting(nepsisFiredKey(block)); value != "" {
-		if fired, err := strconv.ParseInt(value, 10, 64); err == nil && fired >= since {
-			since = fired + 1
-		}
+// ladder is one scope's place on its ladder; times are unix seconds.
+type ladder struct {
+	Level int   // the step that fires next (0-based)
+	Fired int64 // when a step last fired
+	Calm  int64 // when the quiet clock last started: firing or falling back
+}
+
+func ladderKey(scope string) string {
+	if scope == "" {
+		return "nepsis.ladder"
 	}
-	return d.CountEvents(block, since)
+	return "nepsis.ladder." + scope
 }
 
-func checkNepsis(d *db.DB, now time.Time, block string, n db.Nepsis) {
-	count, err := NepsisCount(d, now, block, n)
+func loadLadder(d *db.DB, scope string) ladder {
+	var l ladder
+	value, _ := d.GetSetting(ladderKey(scope))
+	parts := strings.Fields(value)
+	if len(parts) == 3 {
+		l.Level, _ = strconv.Atoi(parts[0])
+		l.Fired, _ = strconv.ParseInt(parts[1], 10, 64)
+		l.Calm, _ = strconv.ParseInt(parts[2], 10, 64)
+	}
+	return l
+}
+
+func saveLadder(d *db.DB, scope string, l ladder) {
+	if err := d.SetSetting(ladderKey(scope), fmt.Sprintf("%d %d %d", l.Level, l.Fired, l.Calm)); err != nil {
+		log.Printf("nepsis: %v", err)
+	}
+}
+
+// settle falls back a step for every quiet time that passed since Calm.
+func (l ladder) settle(n db.Nepsis, now int64) ladder {
+	l.Level = min(l.Level, len(n.Steps)-1)
+	if n.QuietMinutes <= 0 {
+		return l
+	}
+	quiet := int64(n.QuietMinutes) * 60
+	for l.Level > 0 && now-l.Calm >= quiet {
+		l.Level--
+		l.Calm += quiet
+	}
+	return l
+}
+
+// NepsisState returns a scope's current step (0-based) and how many events
+// count towards it now.
+func NepsisState(d *db.DB, now time.Time, scope string, n db.Nepsis) (level, count int, err error) {
+	l := loadLadder(d, scope).settle(n, now.Unix())
+	count, err = d.CountEventsOf(scope, since(l, n.Step(l.Level), now), n.Detectors)
+	return l.Level, count, err
+}
+
+// since is when events start to count for a step: within its window, and
+// after the last time a step fired.
+func since(l ladder, step db.NepsisStep, now time.Time) int64 {
+	from := now.Add(-step.Window()).Unix()
+	if l.Fired >= from {
+		from = l.Fired + 1
+	}
+	return from
+}
+
+// checkNepsis fires the scope's current step if enough events happened, and
+// reports whether that step closes the tab.
+func checkNepsis(d *db.DB, now time.Time, scope string, n db.Nepsis) (closeTab bool) {
+	before := loadLadder(d, scope)
+	l := before.settle(n, now.Unix())
+	step := n.Step(l.Level)
+	count, err := d.CountEventsOf(scope, since(l, step, now), n.Detectors)
 	if err != nil {
 		log.Printf("nepsis: %v", err)
-		return
+		return false
 	}
-	if count < n.Count {
-		return
+	if count < step.Count {
+		if l != before {
+			saveLadder(d, scope, l)
+		}
+		return false
 	}
-	if err := d.SetSetting(nepsisFiredKey(block), strconv.FormatInt(now.Unix(), 10)); err != nil {
-		log.Printf("nepsis: %v", err)
-		return
-	}
+	fired := l.Level
+	l.Fired, l.Calm = now.Unix(), now.Unix()
+	l.Level = min(l.Level+1, len(n.Steps)-1)
+	saveLadder(d, scope, l)
+
 	who := "Your blocks"
-	if block != "" {
-		who = fmt.Sprintf("Block '%s'", block)
+	if scope != "" {
+		who = fmt.Sprintf("Block '%s'", scope)
 	}
-	why := fmt.Sprintf("%s stopped %d things within %d minutes. Time to step away.", who, count, n.Minutes)
-	if err := Run(d, Consequence{Kind: n.Consequence, Minutes: n.ActionMinutes}, why, true); err != nil {
-		log.Printf("nepsis: %v", err)
+	var did []string
+	for _, a := range step.Actions {
+		did = append(did, Consequence{Kind: a.Kind, Minutes: a.Minutes}.String())
 	}
+	why := fmt.Sprintf("%s stopped %d things within %d minutes (step %d of %d): %s.",
+		who, count, step.Minutes, fired+1, len(n.Steps), strings.Join(did, ", "))
+	log.Printf("nepsis: %s", why)
+	notifyDesktop("Killer Chicken 9000: bypass detection", why)
+	for _, a := range step.Actions {
+		if a.Kind == db.ConsequenceCloseTab {
+			closeTab = true
+			continue
+		}
+		if err := Run(d, Consequence{Kind: a.Kind, Minutes: a.Minutes}, ""); err != nil {
+			log.Printf("nepsis: %v", err)
+		}
+	}
+	return closeTab
 }

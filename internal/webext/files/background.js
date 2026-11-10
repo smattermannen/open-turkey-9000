@@ -97,6 +97,11 @@ function report(tabId, url, outcome) {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-KC9K-Extension": "1" },
     body: JSON.stringify({ list: hit.id, actions: hit.actions, url }),
+  }).then((response) => response.json()).then((answer) => {
+    // A bypass detection step that fired on this page closes its tab.
+    if (answer && answer.close_tab && tabId >= 0) {
+      browser.tabs.remove(tabId).catch(() => {});
+    }
   }).catch(() => {})));
 }
 

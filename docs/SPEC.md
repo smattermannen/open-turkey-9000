@@ -1,274 +1,356 @@
-# KC9K Specification and Glossary — DRAFT 1
+# KC9K Specification and Glossary — DRAFT 2
 
-Status: **draft for the owner's review.** Nothing here is final until the owner
-has corrected it. Code that disagrees with an approved rule is a bug; a rule
-nobody has approved is a question.
+Status: **draft for the owner's review.** Nothing is final until the owner has
+corrected it. Code that disagrees with an approved rule is a bug; a rule nobody
+has approved is a question.
+
+Sources: the owner's notes, the current code, and Cold Turkey Blocker's
+*Features* page and *User Guide* (including *Command Line Parameters*), as
+pasted by the owner on 2026-11-11. The owner wants every Cold Turkey feature
+in KC9K.
 
 How to read this:
 
-- **Terms** are in bold where they are defined (§1). Everywhere else they mean
-  exactly that and nothing else.
-- **Rules** have IDs (`R-LOCK-3`). Tests should name the rule they prove.
-- Tags: **[HAVE]** exists in the code today · **[NEW]** to build ·
-  **[CT]** matches a Cold Turkey feature (from memory: the getcoldturkey.com
-  pages could not be fetched in this session, so check every [CT] item
-  against them) · **[?]** open question for the owner.
+- **Terms** are defined in §1 and mean exactly that everywhere else.
+- **Rules** have IDs (`R-LOCK-3`); tests should name the rule they prove.
+- Status tags: **HAVE** exists today · **PART** partly exists · **NEW** to
+  build · **?** open question (§5).
+- **CT** marks a function that Cold Turkey has. *CT name* gives Cold Turkey's
+  word where KC9K's differs.
+- **n/a** marks a Cold Turkey feature that has no meaning on Linux (stated why).
 
 ---
 
 ## 1. Glossary
 
-### 1.1 What gets blocked
+### 1.1 Targets — what can be blocked
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Target** | Anything a block can act on: a site, an app, a window title, page words. | — |
-| **Site** | A domain, with or without wildcards (`*.reddit.com`, `*.*`). | A URL path (that is a URL entry). |
-| **URL entry** | A domain plus path/query fragment (`youtube.com/shorts`). | — |
-| **App** | A program identified by process name, path, script, file hash, Flatpak ID or desktop unit. | A window. |
-| **Title entry** | A word or phrase matched against window titles (apps) and tab titles (browser). | — |
-| **Page word** | A word or phrase matched against the rendered text of a page. | Title entry. |
-| **Folder entry** [NEW][CT] | A directory: any program started from inside it counts as a blocked app. | — |
-| **Whole internet** | The target `*.*`: every site. | — |
+| **Target** | Anything a block acts on: site, URL entry, search, app, folder, window title, page word. | — |
+| **Site** | A domain with its subdomains (`reddit.com`), or a wildcard domain (`*.xxx`). | A URL entry. |
+| **URL entry** | A domain plus path or query (`reddit.com/r/funny`, `youtube.com/@channel`), wildcards allowed. | A site. |
+| **Wildcard** | `*` = any text, in URL entries (`google.com/*q=*unicorn*`). In word lists: plain words match whole words, `*` matches inside words. | — |
+| **Search entry** | A word that blocks searches containing it, on any search engine. *CT: "All searches containing…" (made from wildcards).* | A page word. |
+| **Whole internet** | The target `*.*`. | — |
+| **File URL** | A `file://` entry. Local files are allowed by default (a default exception `file://*`). | — |
+| **App** | A program, matched by name, path, Python script, file hash, Flatpak ID or desktop unit. *CT: exe / application / binary / Microsoft Store app.* | A window. |
+| **Folder entry** | A directory: every program run from inside it is a blocked app; file managers showing it are closed. | — |
+| **Title entry** | Matched against window titles. In a browser only the matching **tab** is blocked, not the browser. | — |
+| **Page word** | Matched against the rendered text of a page. | Title entry. |
 
-### 1.2 How targets are grouped
-
-| Term | Meaning | Not |
-|---|---|---|
-| **Block** | A named set of rules: lists, apps, titles, schedule, actions, social settings, place rules. A block by itself does nothing. | A lock. |
-| **List** | A named set of entries that belongs to one block. It has a **scope** (url / title / text) and a **kind**. | A cluster. |
-| **Blacklist** | A list of kind *blacklist*: matching pages/apps get the list's actions. | — |
-| **Exception list** | A list of kind *exception*: matching pages are spared from the blacklists **of the same block only**. | An allowlist block. |
-| **Allowlist block** | A block whose blacklist is `*.*` with exception lists: everything is blocked except the exceptions. | — |
-| **Cluster** | A list that belongs to no block. Never enforced, always freely editable. Raw material for lists. | A list. |
-| **Default list** [NEW] | A cluster shipped with KC9K (e.g. "Social media", "Adult", "News"), read-only, copyable. | A template block. |
-| **Template block** [HAVE] | A ready-made block definition that `block create --template` copies. | A default list. |
-| **Scope** | Where a list looks: *url*, *title*, *text*. A list may tick several. | — |
-
-### 1.3 States of a block
+### 1.2 Grouping
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Inactive** | Not being enforced. | Unlocked. |
-| **Active** | Being enforced right now. | Locked. |
-| **Started** | Made active by hand (`start`), a hotkey, or a consequence. | Scheduled. |
-| **Scheduled** | Made active by a schedule window, a place rule, or a quota running out. | Started. |
-| **Paused** | Active but lifted until a set time (a pause or a break). | Inactive. |
-| **Held** | Cannot currently be weakened, because it is locked, frozen, or allow-windowed. | Active. |
+| **Block** | A named set of rules: lists, apps, folders, titles, schedule, break, locks-to-apply, autostart, affected users. On its own it does nothing; it acts only when **active**. | A lock. |
+| **List** | A named set of entries inside one block, with a **scope** and a **kind**. | A cluster. |
+| **Scope** | Where a list looks: *url*, *title*, *text* (one or several). | — |
+| **Blacklist** | List kind: matches get the list's **actions**. *CT: "Websites" tab.* | — |
+| **Exception list** | List kind: matches are spared from the blacklists **of the same block only**. *CT: "Website Exceptions" tab.* | An allowlist. |
+| **Allowlist block** | A block whose blacklist is `*.*`, so only its exceptions work. | — |
+| **Cluster** | A list that belongs to no block: never enforced, always freely editable. | A list. |
+| **Category** | A read-only list shipped with KC9K (Social, News, Adult, Games, Shopping, …), importable. *CT: "Website categories".* | A cluster (yours) or template (a whole block). |
+| **Default list** | The category set preloaded into a new block (CT's "default distraction list"). | — |
+| **Template** | A ready-made block definition. | A category. |
+| **Affected users** | Which local user accounts a block applies to (default: all). | — |
 
-### 1.4 Locks — what makes a block hard to weaken
+### 1.3 Block states
 
-A **lock** is attached to an *active* block (or to a setting) and decides what
-it costs to **stop** or **weaken** it. Locks never decide what is blocked.
+| Term | Meaning | Not |
+|---|---|---|
+| **Enabled** | The block is switched on: it runs now if continuous, or follows its schedule. *CT: the toggle.* | Active. |
+| **Disabled** | Switched off: never runs, schedule ignored. | Unlocked. |
+| **Continuous** | Block type: active the whole time it is enabled. | Scheduled. |
+| **Scheduled** | Block type: active only inside its **block windows** (or place rules) while enabled. | — |
+| **Active** | Being enforced right now. | Enabled, Locked. |
+| **On break** | Active but currently lifted by a break (pomodoro rest, allowance left, reward, …). | Disabled. |
+| **Locked** | Has at least one lock in force. | Active. |
+| **Held** | Cannot currently be weakened (locked, schedule-locked, edit-frozen, or allow-windowed). | — |
+
+KC9K today has no separate *enabled*: `start` = enable + active, `stop` =
+disable. **?** Q1: adopt CT's split (toggle + type)?
+
+### 1.4 Locks — what protects a block
+
+A **lock** decides what it costs to **disable or weaken** a block. A lock never
+changes what is blocked. Blocks are rules; locks protect rules.
+
+| Term | Meaning | CT | Status |
+|---|---|---|---|
+| **Timer lock** | No weakening until a trusted end time; can always be extended. | Timer | HAVE (`--for`, `--until`) |
+| **Text lock** | Weakening needs a typed challenge: random characters, random words, or custom text, 1–5000 chars. | Random and custom text | PART (random characters only, ≤?) |
+| **Range lock** | Weakening is refused (or only allowed) between set times on set days. | Time range | NEW |
+| **Delay lock** | Weakening starts a countdown (1 min–40 days); it happens only when it ends. | Delay | HAVE (`--delay`) |
+| **Schedule lock** | The schedule can't be changed while a window is running, or up to 24 h before one starts. | Schedule | PART (fixed 2 h **edit freeze**) |
+| **Restart lock** | Can be disabled only after the computer has restarted. Continuous blocks only. | Restart | HAVE (`--restart`) |
+| **Password lock** | Weakening needs a password (for an accountability partner). | Password | HAVE (`--password-stdin`) |
+| **Trusted time** | Time KC9K believes despite clock changes. | — | HAVE |
+
+What **any lock** also does while in force (CT "a locked block will also…"):
+
+- uninstalling is refused;
+- the browser extension is required;
+- the protective settings (§2.10) can't be turned off;
+- escape routes are closed: Tor windows, guest profiles, unsupported
+  browsers, containers/VMs (**strict mode**).
+
+### 1.5 Weakening
 
 | Term | Meaning |
 |---|---|
-| **Time lock** [HAVE][CT] | Cannot be stopped/weakened until a trusted time (`--for`, `--until`). |
-| **Typing lock** [HAVE][CT "random text"] | Stopping requires typing N random characters (the challenge). |
-| **Password lock** [HAVE][CT] | Stopping requires the settings password. |
-| **Restart lock** [NEW][CT] | Stopping is only possible after the computer has rebooted. |
-| **Window lock** [NEW][CT "range"] | Stopping is only possible during a set time-of-day window (e.g. Sundays 18–19). |
-| **Unlocked** | No lock: an active block can be stopped and edited freely. |
-| **Trusted time** [HAVE] | Time KC9K believes despite clock changes; time locks count on it. |
+| **Strengthening** | Blocks more or makes locks stronger. Always allowed, instantly. |
+| **Weakening** | Blocks less: removing or narrowing entries, removing actions, raising thresholds, shrinking windows, disabling, removing a lock, shortening a timer, a looser break. |
+| **Gate** | What a weakening must pass: *free*, *password*, *text*, *delay*, *refused*. Decided by the locks in force. |
+| **Pending edit** | A weakening waiting for its delay. |
+| **Allow-window delay** | Today's rule: blocks with allow windows queue every weakening 24 h. **?** Q2: fold into **delay lock**? |
+| **Edit freeze** | 2 h before a block window, weakening that block is refused. **?** Q3: replace with **schedule lock** (configurable 0–24 h)? |
 
-### 1.5 Weakening — the central concept
+### 1.6 Time and breaks
 
-| Term | Meaning |
-|---|---|
-| **Strengthening** | A change that blocks more or makes locks stronger. Always allowed, instantly. |
-| **Weakening** (= loosening) | A change that blocks less: removing entries, narrowing an entry, removing actions, raising a threshold, shrinking schedule windows, stopping, unlocking, shortening a lock. |
-| **Gate** | What a weakening must pass before it happens. One of: *free*, *password*, *typing challenge*, *queue*, *refused*. |
-| **Queue** (pending edit) [HAVE] | A weakening stored and applied after the **loosen delay** (default 24 h, per block). |
-| **Edit freeze** [HAVE] | The 2 h before a schedule window: weakening edits to that block are refused. |
+| Term | Meaning | CT | Status |
+|---|---|---|---|
+| **Block window** | Recurring weekly time when a scheduled block is active. 5-minute precision; one block's windows can't overlap. | Scheduled block | HAVE |
+| **Allow window** | Recurring time when an otherwise-on block is lifted. | — | HAVE |
+| **Break** | A rule that lifts an active block for a while. One break per continuous block, or per block window. | Break | — |
+| **Pomodoro** | Work (active) and rest (lifted) alternate, starting with work. Anchored at midnight, at the start time on the day it was started, and at each window's start for scheduled blocks. Optional long rest. | Pomodoro | HAVE |
+| **Allowance** | Blocked items usable for N minutes per period, then active. Period: rolling window, per window, day, week or month, with a refill time. Counts only **use** (§1.7). | Allowance | PART (periods?) |
+| **Reward** | Rest time **earned** by working (being blocked) for a while; it adds up but expires each window/day/week/month. | Reward | PART (`break allowance … --per`) |
+| **Text break** | A break of a preset length, taken after typing a challenge. | Random and custom text | NEW |
+| **Delay break** | A break of a preset length, taken after a countdown. | Delay | NEW |
+| **Session break** | Blocked items may be opened N times per period; a session ends a few minutes after you do something else. | Sessions | NEW |
+| **Pause** | A one-off lift until a time (also what `relock` makes `unlock` do). | — | HAVE |
+| **Autostart** | Re-enables a disabled block: *once* at a time, at a *time of day* on set days, on *sign-in/wake*, or at the *next block window*. | Autostart | NEW |
 
-Rule of thumb the owner set: **blocks are rules; locks protect rules.** An
-unlocked, un-scheduled block is ordinary editable data.
+Proposal: today's **quota** = **allowance**; one word only. (Q4)
 
-### 1.6 Time
-
-| Term | Meaning | Not |
-|---|---|---|
-| **Block window** | Recurring time when a block is active (Mon–Fri 9–17). | Allow window. |
-| **Allow window** | Recurring time when an otherwise-always-on block is lifted. | Break. |
-| **Pause** | One-off lifting of an active block until a time. | Break. |
-| **Break** | Pause time **earned** by an allowance or given by Pomodoro. | Pause. |
-| **Allowance** [HAVE][CT] | A block lifted for X minutes per period of *use*, then active. | Quota. [?] merge the two names |
-| **Quota** [HAVE] | Same mechanism, counted by time in use. [?] Proposal: call both "**allowance**". |
-| **Pomodoro** [HAVE][CT] | Alternating work (active) / break (lifted) periods. |
-
-### 1.7 Device-level
-
-| Term | Meaning | Not |
-|---|---|---|
-| **Frozen Chicken** (screen freeze) [HAVE][CT "Frozen Turkey"] | Locks, logs out or shuts down the whole computer for a time. Modes: *lock*, *logout*, *shutdown*, *allowed apps only* [NEW][CT]. | Edit freeze. |
-| **Monk mode** [HAVE] | A system-owned whole-internet block, time-locked, started by `kc9k monk` or a `monk` action. [?] Proposal: reserve the block, hide it from Blocks, forbid the `monk` action inside it. | An ordinary block. |
-| **Consequence** | Something KC9K does to the device: close browser, close tab, lock screen, logout, shutdown, monk mode. |
-| **Strict mode** [HAVE] | While any lock exists, closes escape routes (containers, VM sockets, uninstall). |
-| **No-escape** [HAVE] | [?] owner to define relative to strict mode. |
-
-### 1.8 Page actions (what happens to a matching page)
+### 1.7 Use
 
 | Term | Meaning |
 |---|---|
-| **Block** | Replace the page with the block page. |
-| **Close tab** | Close the tab. |
-| **Redirect** | Send to another URL. |
-| **Image** | Show an image instead. |
-| **Greyscale / No images / No video / Mute / Declutter / Dark** | **Look actions**: alter, don't block. |
-| **Threshold** | For page words: minimum distinct entries matched before the action fires. |
-| **Hit count** | For page words: minimum total matches. |
-| **Rate** [NEW] | For page words: matches ÷ rendered words, as a percentage. |
+| **Use** | Time a blocked item is foreground (focused app, focused tab) **and** there has been input in the last 3 min (or media is playing). |
+| **Strict use counting** | Setting: also count background tabs and minimised apps. *CT: Allowance Strictness.* |
 
-### 1.9 Bypass prevention
-
-| Term | Meaning |
-|---|---|
-| **Event** | Something KC9K stopped or noticed (page hit, app kill, tamper). |
-| **Detector** | An event type that counts toward bypass prevention. |
-| **Ladder** | Escalating steps: N events within T → consequence C. |
-| **Workaround** | An event where a block was dodged (mirror site, proxy URL, fetch tool). |
-| **Tamper** | Daemon restart, clock jump, file change. |
-
-### 1.10 Access
+### 1.8 Device blocks
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Settings password** | Guards weakening everywhere. | Access password. |
-| **Access password** | Guards *viewing* areas of the app (dashboard, blocks…). | Password lock. |
-| **Setting lock** | A lock on one browser/system option instead of a block. | Block lock. |
+| **Frozen Chicken** | KC9K's device block: lock, log out or shut down for a time, on demand or scheduled. *CT: Frozen Turkey / Device Blocks.* | Edit freeze. |
+| **Freeze mode** | *lock* / *logout* / *shutdown* / *allowed apps only* (**?** Q5). | — |
+| **Monk mode** | A system-owned whole-internet block started by `kc9k monk` or a `monk` action, time-locked. Proposal: reserved, hidden from Blocks, `monk` action not offered inside it. | An ordinary block. |
+| **Consequence** | What KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. | — |
+
+### 1.9 Page actions
+
+| Term | Meaning |
+|---|---|
+| **Block page** | Replaces a blocked page; shows a motivational message. |
+| **Close tab / Redirect / Image** | Alternatives to the block page. |
+| **Look actions** | Greyscale, no images, no video, mute, declutter, dark: alter, don't block. |
+| **Threshold** | Page words: minimum distinct entries matched. |
+| **Hit count** | Page words: minimum total matches. |
+| **Rate** (NEW) | Page words: matches ÷ rendered words, %. |
+
+### 1.10 Bypass prevention
+
+| Term | Meaning |
+|---|---|
+| **Event** | Something KC9K stopped or noticed. |
+| **Detector** | An event type that counts toward escalation. |
+| **Ladder** | N events within T → consequence; climbing steps. *(code: nepsis)* |
+| **Workaround** | A dodged block (mirror, proxy URL, fetch tool). |
+| **Tamper** | Daemon restart, clock jump. |
+
+### 1.11 Passwords
+
+| Term | Meaning | Not |
+|---|---|---|
+| **Settings password** | Guards every weakening and settings change. | Password lock. |
+| **Access password** | Guards *viewing* parts of the app (per area). *CT: "Password" settings tab (privacy).* | Password lock. |
+| **Setting lock** | A lock on a single setting, not a block. | — |
 
 ---
 
 ## 2. Functions
 
-Each function: name · what it does · status. Commands are the CLI form; the
-GUI must offer the same thing.
+### 2.1 Overview (Dashboard)
+| Function | Does | CT | Status |
+|---|---|---|---|
+| Active now | Lists active blocks with lock, end time. | ✓ | HAVE |
+| Later today | Scheduled windows still to come. | ✓ | ? |
+| Break status | Allowance left, pomodoro phase/time. | ✓ | HAVE |
 
-### 2.1 Blocks
-| Name | Does | Status |
+### 2.2 Blocks tab
+| Function | Does | CT | Status |
+|---|---|---|---|
+| Create block | Empty, from template, allowlist. | ✓ | HAVE |
+| Enable / disable toggle | See §1.3. | ✓ | PART |
+| Rename | | ✓ | HAVE |
+| Duplicate | Copy comes disabled. | ✓ | HAVE |
+| Delete | Refused while locked. | ✓ | HAVE |
+| Affected users | Per-block user selection. | ✓ | NEW |
+| Export / import all blocks | | ✓ | HAVE (`project`) |
+| Edit schedule / break / lock | From the block row. | ✓ | PART (GUI) |
+
+### 2.3 Block editor
+| Function | Does | CT | Status |
+|---|---|---|---|
+| Add entry | Type, Enter; focus **stays** in the box. | ✓ | PART (focus bug) |
+| Remove entry | Delete/Backspace key or button; selection moves to the next entry. | ✓ | PART |
+| Multi-select | Ctrl/Shift-click, Select all, Ctrl+A. | ✓ | ? |
+| Edit entry | Double-click: moved to the text box for editing (remove+add, gated if narrowing). | ✓ | NEW |
+| Find entry | Ctrl+F. | ✓ | ? |
+| Save changes / Cancel | One draft per block; nothing reverts; Save says what is free, gated, delayed. | — | NEW |
+| Import picker | *From KC9K*: categories, lists of other blocks, clusters — multi-select. *From file*: `.txt`, one entry per line. Plus *Whole internet* and *All searches containing…*. | ✓ | NEW |
+| Export list | `.txt`. | ✓ | HAVE |
+| Lists: create, rename, delete, scope, actions, thresholds, rate, test mode | | — | HAVE (rate NEW) |
+| Apps: add program, add folder, add title | Linux: file picker for programs; Flatpak list instead of Store apps. | ✓ | PART (folder NEW) |
+| Social presets, playlists | | — | HAVE |
+
+### 2.4 Clusters and recording
+| Function | Does | Status |
 |---|---|---|
-| Create block | Empty, from template, or as allowlist. | HAVE |
-| Rename / duplicate block | | Rename ? / duplicate NEW |
-| Delete block | Weakening; gated. | HAVE |
-| Block info | Everything about a block in one view. | HAVE |
-| Export / import block | File. | HAVE |
-| Enable whole-internet | One switch for `*.*`. | HAVE (as entry) |
-| Block embedded content [CT] | Also block the site when embedded in other pages (iframes, video). | ? check |
-| Block local files / file:// [CT] | | NEW ? |
-| Block incognito when extension missing [CT] | | HAVE via extension guard |
+| Clusters: create, edit, copy into block, save from block | | HAVE |
+| Record links | Visited sites into a list/cluster. | HAVE |
+| Record words | Rendered, visible words with counts. | NEW |
+| Word ranking | By specificity vs normal browsing. | NEW |
+| Cut bottom X % | Before saving. | NEW |
 
-### 2.2 Lists and clusters
-| Name | Does | Status |
+### 2.5 Schedules
+| Function | Does | CT | Status |
+|---|---|---|---|
+| Weekly grid | Drag to add, drag to move, click to edit, 15-min grid, 5-min times. | ✓ | ? (GUI) |
+| Copy to days | Checkboxes; similar windows edited together. | ✓ | ? |
+| Show other blocks | Greyed out on the grid. | ✓ | NEW |
+| Break per window | | ✓ | ? |
+| Allow windows | | — | HAVE |
+| Place rules | Active at Wi-Fi places. | — | HAVE |
+
+### 2.6 Locks
+All of §1.4. Missing today: **range lock**, **text lock** with words/custom
+text and length up to 5000, **schedule lock** as an option (0–24 h). Extending a
+timer lock: HAVE (`start` only strengthens).
+
+### 2.7 Breaks and autostart
+All of §1.6. Missing: allowance periods and refill time, rolling allowance,
+reward expiry, text break, delay break, session break, autostart (4 kinds).
+
+### 2.8 Frozen Chicken
+| Function | Does | CT | Status |
+|---|---|---|---|
+| Start for a time | | ✓ | HAVE |
+| Schedule | | ✓ | HAVE |
+| Schedule **and** on-demand at once | CT can't; KC9K should. | ✗ | HAVE? |
+| Mode lock/logout/shutdown | | ✓ | HAVE |
+
+### 2.9 Statistics
+| Function | Does | CT | Status |
+|---|---|---|---|
+| Time per site/app, blocked counts | | ✓ | HAVE |
+| Time frame | Presets + custom range. | ✓ | PART (`--days`) |
+| Per user | | ✓ | NEW |
+| Top 5 / top 10 / search | Search matches part of URL/app/title. | ✓ | ? |
+| Filter by block | | ✓ | ? |
+| Export JSON | | ✓ | HAVE |
+| Delete, on/off, skip private windows | Private windows still count during locked allowances. | ✓ | PART |
+
+### 2.10 Settings
+| Group | Function | CT | Status |
+|---|---|---|---|
+| Preferences | 24 h clock, week starts Mon/Sun, theme + darkness slider, open at login, tray. | ✓ | PART (slider NEW) |
+| Extension | Show install dialog for missing extensions. | ✓ | ? |
+| Notifications | Lock timer ends; window starts/ends; pomodoro changes; allowance runs out; app blocked. Warnings in minutes, comma-separated ("2,5"). Status in the extension popup. | ✓ | PART |
+| Protection | Block unsupported browsers. | ✓ | HAVE (extension guard) |
+| | Close browsers if the extension is stopped. | ✓ | HAVE |
+| | Grace period for a missing extension (default 60 s). | ✓ | PART (fixed 60 s) |
+| | Block time and date changes. | ✓ | PART (trusted time; settings app not closed) |
+| | Block task managers (System Monitor, htop…). | ✓ | NEW |
+| | Block inactive tabs. | ✓ | ? |
+| | Block embedded content (iframes, embedded videos). | ✓ | ? |
+| | Block reinstalling / the installer. | ✓ | ? |
+| | Allow `file://` blocking. | ✓ | ? |
+| | Block screen-time settings | macOS | n/a |
+| | Pause for a Cause (pay charity for 10 min) | ✓ | ? Q6 |
+| Use counting | Strict use counting. | ✓ | ? |
+| Dark pages | off / always / time window, exempt sites. | — | NEW |
+| Passwords | Settings password, access passwords. | ✓ | HAVE |
+| Options | polite-close, block-page-details, … | — | HAVE |
+
+### 2.11 Command line
+Every GUI function has a command. CT parity:
+
+| CT | KC9K | Status |
 |---|---|---|
-| Create / rename / delete list | | HAVE |
-| Add / remove entries | Enter adds and keeps focus; remove selects next. | HAVE (UI fixes NEW) |
-| Edit entry | Double-click → editor bar. Treated as remove+add; gated if narrowing. | NEW |
-| Set scope / actions / threshold / hits / rate | | HAVE (rate NEW) |
-| Test mode | Lists report, don't act. | HAVE |
-| Import picker | "From KC9K" (default lists / block lists / clusters, multi-select) or "From file". | NEW |
-| Clusters: create, copy into block, save from block | | HAVE |
-| Default lists | Shipped read-only clusters. | NEW |
+| `-add "B" -web "URL"` | `kc9k block add B URL` | HAVE |
+| `-add "B" -exception "URL"` (unlocked only) | `kc9k block add-exception B URL` (gated) | HAVE |
+| `-start "B"` | `kc9k start B` | HAVE |
+| `-start "B" -lock X` (X ≥ remaining) | `kc9k start B --for Xm` | HAVE |
+| `-start "B" -password X` | `kc9k start B --password-stdin` | HAVE |
+| `-start "B" -random-text X` (1–999) | `kc9k start B --lock --lock-chars X` | HAVE |
+| `-stop "B"` | `kc9k stop B` | HAVE |
+| `-stop "B" -password X` | `kc9k stop B` + password on stdin | HAVE |
+| `-toggle "B"` (not Frozen) | `kc9k toggle B` | NEW |
 
-### 2.3 Recording
-| Name | Does | Status |
-|---|---|---|
-| Record links | Collect visited sites into a list or cluster. | HAVE |
-| Record words | Collect rendered visible words with counts per page. | NEW |
-| Word ranking | Rank by specificity (recorded vs baseline browsing), not raw frequency. | NEW |
-| Cut bottom X % | Trim ranked words before saving. | NEW |
-
-### 2.4 Apps
-| Name | Does | Status |
-|---|---|---|
-| Block app by name/path/script/hash/Flatpak/unit | | HAVE |
-| Block folder [CT] | | NEW |
-| Window-title blocking | | HAVE |
-| Polite close | Ask windows to close first. | HAVE |
-| App allowlist mode [CT "Micromanager"] | Only listed apps may run while active. | NEW [?] |
-
-### 2.5 Activation
-| Name | Does | Status |
-|---|---|---|
-| Start / stop | | HAVE |
-| Start with lock | `--lock`, `--lock-chars`, `--for`, `--until`. | HAVE |
-| Restart lock, window lock | | NEW |
-| Toggle [CT `-toggle`] | Start if inactive, stop if active. | NEW |
-| Schedule (block / allow windows) | Grid editor in GUI [CT]. | HAVE (grid ?) |
-| Place rules | Active at Wi-Fi places. | HAVE |
-| Hotkeys | | HAVE |
-| Pause / break / allowance / Pomodoro | | HAVE |
-
-### 2.6 Device
-| Name | Does | Status |
-|---|---|---|
-| Frozen Chicken: lock / logout / shutdown | | HAVE |
-| Frozen Chicken: allowed apps only [CT] | Only listed apps usable. | NEW |
-| Frozen Chicken schedule | | HAVE |
-| Monk mode | | HAVE (cleanup NEW) |
-| Strict mode / no-escape / prevent uninstall [CT] | | HAVE |
-| Prevent clock change [CT] | | HAVE (trusted time) |
-
-### 2.7 Browser
-| Name | Does | Status |
-|---|---|---|
-| Extension required / guard | | HAVE |
-| Force LibreWolf, block devtools, disable DoH | | HAVE |
-| Social media presets, playlists | | HAVE |
-| Dark pages setting | Settings: off / always / time window; exempt sites. | NEW |
-
-### 2.8 App (GUI) itself
-| Name | Does | Status |
-|---|---|---|
-| Block editor draft | One **Save changes / Cancel** per block; no auto-revert. Save shows which changes are free, gated or queued. | NEW |
-| Theme darkness slider | Dark grey → black. | NEW |
-| Statistics [CT] | Time per site/app, per day. | HAVE |
-
-### 2.9 Command line [CT parity]
-Every GUI action has a command. Cold Turkey's CLI (from memory) has
-`-start "Block" [-lock N]`, `-stop "Block"`, `-add "Block" -web site`,
-`-toggle "Block"`. KC9K equivalents: `start`, `stop`, `block add`, and
-`toggle` [NEW]. [?] verify the full CT command list against the guide.
+### 2.12 Not applicable or replaced
+- Windows Store apps → Flatpak apps (HAVE).
+- Exe file locking against rename → hash matching (HAVE).
+- Reinstall Windows service → `systemctl` (HAVE).
+- Safari / macOS-only items → n/a.
 
 ---
 
 ## 3. Rules
 
 **Locks**
-- **R-LOCK-1** An inactive block is never held by its locks.
-- **R-LOCK-2** Starting an already active block may only strengthen its locks.
-- **R-LOCK-3** An unlocked, unscheduled, allow-window-free block can be edited in any direction without delay (settings password still applies if set).
-- **R-LOCK-4** A time-locked block cannot be stopped or weakened before its trusted end time.
-- **R-LOCK-5** A typing-locked block can be stopped only after the challenge is passed.
+- **R-LOCK-1** A disabled block is never held by its locks — except it cannot be *deleted* while a lock is in force.
+- **R-LOCK-2** Starting an already active block may only strengthen its locks; a timer may always be extended.
+- **R-LOCK-3** An unlocked block with no schedule lock, no edit freeze and no allow windows can be edited in any direction at once (settings password still applies).
+- **R-LOCK-4** A timer lock refuses every weakening before its trusted end time.
+- **R-LOCK-5** A text lock allows weakening only after the challenge is typed correctly, paste refused.
+- **R-LOCK-6** A delay lock turns every weakening into a pending edit applied when the countdown ends.
+- **R-LOCK-7** A restart lock can be removed only after a boot later than the lock's start.
+- **R-LOCK-8** A range lock refuses weakening inside (or, inverted, outside) its ranges.
+- **R-LOCK-9** While any lock is in force: uninstall refused, extension required, protective settings can't be turned off, strict mode on.
 
 **Weakening**
 - **R-WEAK-1** Strengthening is never gated.
-- **R-WEAK-2** Every weakening goes through exactly one gate decision, made in the CLI.
-- **R-WEAK-3** On a block with allow windows, weakening is queued for the loosen delay, or with `--now` requires the typing challenge.
-- **R-WEAK-4** Editing an entry is remove+add; it is weakening if the new entry matches less.
-- **R-WEAK-5** A refused weakening is logged, never counted as a bypass.
+- **R-WEAK-2** Every weakening gets exactly one gate decision, in the CLI; the GUI only calls the CLI.
+- **R-WEAK-3** Editing an entry is remove+add; it is weakening if the new entry matches less.
+- **R-WEAK-4** A refused weakening is logged, never counted as a bypass.
+- **R-WEAK-5** Several gates combine as the strictest of them (all must pass).
 
-**Schedules**
-- **R-SCHED-1** A block is active during each of its block windows.
-- **R-SCHED-2** Within 2 h before a block window, weakening edits to that block/schedule are refused.
-- **R-SCHED-3** An allow-window block is active except during its windows.
+**Schedules and breaks**
+- **R-SCHED-1** An enabled scheduled block is active inside its windows; a disabled one never is.
+- **R-SCHED-2** A block's windows may not overlap.
+- **R-SCHED-3** Pomodoro starts with work and is anchored as in §1.6.
+- **R-BREAK-1** Allowance counts only use (§1.7).
 
 **Lists**
-- **R-LIST-1** An exception list spares pages only from its own block's blacklists.
-- **R-LIST-2** Clusters are never enforced and always editable.
-- **R-LIST-3** Plain words match whole words; `*` matches inside words.
-- **R-LIST-4** Page words are matched against rendered, visible text only. [NEW — today: ?]
+- **R-LIST-1** Exceptions spare pages only from their own block's blacklists.
+- **R-LIST-2** Clusters and categories are never enforced.
+- **R-LIST-3** `file://*` is a default exception in every new block.
+- **R-LIST-4** Page words are matched against rendered, visible text only.
+- **R-TITLE-1** A title match in a browser blocks the tab, not the browser.
 
 **Monk mode**
-- **R-MONK-1** The monk-mode block is system-owned; the `monk` action is not offered inside it. [NEW]
+- **R-MONK-1** The monk-mode block is system-owned and the `monk` action is not offered inside it.
 
 ---
 
-## 4. Open questions for the owner
+## 4. Already in KC9K beyond Cold Turkey
+Clusters, link recording, page-word lists with actions, look actions,
+social-media presets and playlists, places, ladder (bypass escalation),
+hotkeys, access passwords per area, project export, polite close, Flatpak/script/hash
+app matching, monk mode, quota by use, LibreWolf hardening.
 
-1. Merge *quota* and *allowance* into one term?
-2. Define *no-escape* vs *strict mode*.
-3. Is Micromanager-style "only these apps" wanted, and is it a block kind or a Frozen Chicken mode?
-4. Should KC9K have a Writer-style distraction-free mode (Cold Turkey Writer)?
-5. Default lists: which ones, and who maintains them?
-6. Rate threshold: replace hits/threshold or sit beside them?
-7. Confirm the [CT] items against getcoldturkey.com (allow that domain in the environment and I'll check).
+## 5. Open questions
+1. **Enabled vs active**: adopt CT's toggle + continuous/scheduled type?
+2. **Allow-window 24 h delay**: keep, or make it a delay lock the user chooses?
+3. **Edit freeze**: replace with an optional schedule lock (0–24 h before)?
+4. **Quota = allowance**: one term?
+5. **Frozen Chicken "allowed apps only"**: wanted? (CT keeps app whitelists in a separate product, Micromanager.)
+6. **Pause for a Cause**: wanted? KC9K has no payments; it could be replaced by a "costly break" (long text challenge).
+7. **Rate**: beside threshold/hit count, or instead?
+8. **Affected users**: per block, or per whole install?
+9. **Categories**: which ones, and where do the lists come from?
+10. Items marked **?** in §2 need checking in code.

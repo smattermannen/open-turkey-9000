@@ -69,7 +69,7 @@ changes what is blocked. *Blocks are rules; locks protect rules.*
 | **Text lock** | Weakening needs a typed challenge: random characters, random words or custom text, 1–5000 characters, paste refused. | Random and custom text |
 | **Range lock** | Weakening is refused, or only allowed, between set times on set days. | Time range |
 | **Delay lock** | Weakening starts a countdown (1 min to 40 days) and happens only when it ends. | Delay |
-| **Schedule lock** | The schedule can't be changed while a window runs, or for a set time (up to 24 h) before one starts. | Schedule |
+| **Schedule lock** | The schedule can't be changed while a window runs, nor for a lead time the user chooses before one starts. No lead time is built in. | Schedule |
 | **Restart lock** | The block can be disabled only after the computer has restarted. Continuous blocks only. | Restart |
 | **Password lock** | Weakening needs a password, e.g. one an accountability partner holds. | Password |
 | **Trusted time** | The time KC9K believes despite clock changes. All time-based locks count on it. | — |
@@ -117,7 +117,8 @@ Tor windows, guest profiles, unsupported browsers, containers and VMs).
 | Term | Meaning | Not |
 |---|---|---|
 | **Frozen Chicken** | The device block: locks the screen, logs out or shuts down for a time, on demand or by schedule. *CT: Frozen Turkey / Device Blocks.* | A schedule lock. |
-| **Freeze mode** | What Frozen Chicken does: *lock*, *logout* or *shutdown*. | — |
+| **Freeze mode** | What Frozen Chicken does: *lock*, *logout*, *shutdown*, or *allowed apps only*. | — |
+| **Allowed apps only** | Freeze mode: the computer stays usable, but only the programs on the freeze's app list may run; every other user program is closed. | An allowlist block (websites). |
 | **Monk mode** | A system-owned whole-internet block with a timer lock, started by `kc9k monk` or by the `monk` action. | An ordinary block. |
 | **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. | A page action. |
 | **Strict mode** | Closing escape routes (containers, VMs, uninstall) while locks are in force. | — |
@@ -210,7 +211,12 @@ browser extension's popup.
 
 ### 2.8 Frozen Chicken
 Start for a time; schedule; both may exist together. Freeze mode lock / logout /
-shutdown.
+shutdown / allowed apps only (with its own app list).
+
+### 2.8a No built-in protection
+Nothing protects a block unless the user chose it. There is no fixed edit
+freeze and no fixed delay: every lock, lead time and duration is set by the
+user per block.
 
 ### 2.9 Statistics
 Time used and times blocked, per site, app and title. Time frame (presets or
@@ -287,3 +293,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 
 **Monk mode**
 - **R-MONK-1** The monk-mode block is system-owned, and the `monk` action is not offered inside it.
+- **R-LOCK-10** No lock, delay or freeze applies unless the user set it on that block.
+
+**Device**
+- **R-FREEZE-1** In *allowed apps only* mode, only programs on the freeze's app list (and system processes) may run.

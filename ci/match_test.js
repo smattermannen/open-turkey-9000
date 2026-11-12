@@ -60,6 +60,47 @@ const keywordCases = [
   ["hentai", "ヘンタイ hentai!", true],
   ["café", "the cafés", false],
   ["café", "le café ouvert", true],
+  // Word combinations: a word of one group right next to one of the other.
+  ["cars(red, big, blue, beautiful)", "red beautiful cars", true],
+  ["cars(red, big, blue, beautiful)", "Big cars for sale", true],
+  ["cars(red, big, blue, beautiful)", "cars, big and red", false],
+  ["cars(red, big, blue, beautiful)", "red cars", true],
+  ["cars(red, big, blue, beautiful)", "cheap cars", false],
+  ["cars(red, big, blue, beautiful)", "red car", false],
+  ["car*(red, big)", "red carpets", true],
+  ["car*(red, big)", "big   cars", true],
+  ["car*(red, big)", "big scars", false],
+  ["(car, lambo*, ferrari)(red, big, beautiful)", "a beautiful Lamborghini", true],
+  ["(car, lambo*, ferrari)(red, big, beautiful)", "ferrari red", true],
+  ["(car, lambo*, ferrari)(red, big, beautiful)", "a red toyota", false],
+  ["(car, lambo*, ferrari)(red, big, beautiful)", "a cheap red car", true],
+  ["(red, big) cars", "big cars", true],
+  ["car(cheap)", "cheap car", true],
+  ["car(cheap)", "car cheap", true],
+  ["car(cheap)", "cheap reliable car", false],
+  ["car(cheap)", "cheapest car", false],
+  ["car(cheap)", "cheap", false],
+  ["car(cheap)", "car", false],
+  ["car (very cheap)", "a very cheap car", true],
+  ["car (very cheap)", "a cheap car", false],
+  // Several boxes, each needing a number of different words of it.
+  ["(car, lambo*, sheep)(big, small, nice):2(sport, hello, *niece*)", "a big nice sport car", true],
+  ["(car, lambo*, sheep)(big, small, nice):2(sport, hello, *niece*)", "small sheep nice nieces", true],
+  ["(car, lambo*, sheep)(big, small, nice):2(sport, hello, *niece*)", "a big sport car", false],
+  ["(car, lambo*, sheep)(big, small, nice):2(sport, hello, *niece*)", "a big big sport car", false],
+  ["(car, lambo*, sheep)(big, small, nice):2(sport, hello, *niece*)", "big nice car, sport", false],
+  ["(car, lambo*, sheep)(big, small, nice):2(sport, hello, *niece*)", "big nice car and sport", false],
+  ["(car, lambo*, sheep)(big, small, nice):2(sport, hello, *niece*)", "big nice car", false],
+  ["(car, lambo*) (big, small, nice):2 (sport, hello)", "Hello, a nice big Lamborghini sport", true],
+  ["(a, b, c):2", "c a", true],
+  ["(a, b, c):2", "a a", false],
+  ["(a, b, c):3", "b c a b", true],
+  // A word in two boxes goes to one of them.
+  ["(red, big)(big, car)", "big", false],
+  ["(red, big)(big, car)", "big red", true],
+  ["(red, big)(big, car)", "big big", false],
+  ["(red, big):2(big, car)", "red big car", true],
+  ["(red, big):2(big, car)", "red big", false],
 ];
 for (const [keyword, text, want] of keywordCases) {
   const got = kc9kCountKeywords(text, [keyword]) === 1;
@@ -101,7 +142,13 @@ const often = kc9kCompileLists([{
 check("too few hits", kc9kListActions(often, at("https://a.com/", { text: "nsfw nsfw nsfw nsfw" })), {});
 check("enough hits", kc9kListActions(often, at("https://a.com/", { text: "nsfw nsfw nsfw nsfw NSFW" })), { block: true });
 check("hits and different words", kc9kListActions(often, at("https://a.com/", { text: "nsfw 18+ nsfw" })), { greyscale: true });
-check("hits are whole words", kc9kTextHits(kc9kKeywordRegexes(["porn", "*porn*"]), "porn pornhub PORN"), { distinct: 2, total: 5 });
+check("a run counts once", kc9kTextHits(kc9kKeywordMatchers(["(car)(red, big, blue):2"]), "red big blue car. big car, red. blue red car big"), { distinct: 1, total: 2 });
+check("a combination counts once per pair", kc9kTextHits(kc9kKeywordMatchers(["car(red, big)"]), "red car, big car, big red car, car"), { distinct: 1, total: 3 });
+check("not a combination", ["cars", "cars(red, )", "a, b(c)", "(a)", "(a, b):0", "(a)(b", "a(b)c:2", "(a):x", ")(a)(b)", "(a))(b)"].map(kc9kCombination), [null, null, null, null, null, null, null, null, null, null]);
+check("combination boxes", kc9kCombination(" (car, lambo*) ( red ,big beautiful):2 (x) cars"), [
+  { terms: ["car", "lambo*"], min: 1 }, { terms: ["red", "big beautiful"], min: 2 }, { terms: ["x"], min: 1 }, { terms: ["cars"], min: 1 }]);
+check("one box needing two", kc9kCombination("(a, b):2"), [{ terms: ["a", "b"], min: 2 }]);
+check("hits are whole words",kc9kTextHits(kc9kKeywordMatchers(["porn", "*porn*"]), "porn pornhub PORN"), { distinct: 2, total: 5 });
 
 // An address list takes every action at once, whatever the thresholds.
 const sites = kc9kCompileLists([{

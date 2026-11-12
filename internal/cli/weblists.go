@@ -72,6 +72,8 @@ func prepareEntries(where db.Where, entries []string) ([]string, error) {
 			e = normalizeURLEntry(e)
 		} else if !word {
 			return nil, fmt.Errorf("invalid entry %q: %s", raw, entryHelp(where))
+		} else {
+			e = normalizeCombination(e)
 		}
 		out = append(out, e)
 	}
@@ -113,7 +115,7 @@ func entryHelp(where db.Where) string {
 		parts = append(parts, "an address needs a domain (example.com), a path (example.com/x) or a pattern with * (*.xxx, *casino*)")
 	}
 	if where.Title || where.Text {
-		parts = append(parts, fmt.Sprintf("a word or phrase is one line of at most %d characters, not only *", maxPageKeyword))
+		parts = append(parts, fmt.Sprintf("a word or phrase is one line of at most %d characters, not only *; a word combination is written cars(red, big) or (car, lambo*) (big, small, nice):2", maxPageKeyword))
 	}
 	return strings.Join(parts, "; ")
 }
@@ -165,10 +167,16 @@ func listRemove(cmd *cobra.Command, database *db.DB, block, list string, entries
 	if err != nil {
 		return err
 	}
-	// Domains are kept normalized, so look them up the same way.
+	// Domains and word combinations are kept normalized, so look them up the
+	// same way.
 	for i, e := range entries {
-		if !containsString(l.Entries, e) && l.Where.URL {
+		if containsString(l.Entries, e) {
+			continue
+		}
+		if l.Where.URL && containsString(l.Entries, normalizeURLEntry(e)) {
 			entries[i] = normalizeURLEntry(e)
+		} else if l.Where.Title || l.Where.Text {
+			entries[i] = normalizeCombination(e)
 		}
 	}
 	if err := requireAll("entry", block, l.Entries, entries); err != nil {
@@ -469,6 +477,18 @@ Address entries are domains (reddit.com), paths (reddit.com/r/funny) or
 patterns (*.xxx, *casino*, *.* for every site). Title and text entries are
 words or phrases: a plain word counts only on its own ("porn" misses
 "pornhub"); a * matches inside words ("*porn*" hits "pornhub").
+
+A word combination is boxes of words side by side, as many as needed, each
+a list in brackets or one bare word; ":N" after a box asks for N different
+words of it (1 if left out):
+
+  cars(red, big)       (red, big) cars       (car, lambo*)(red, big)
+  (car, lambo*, sheep) (big, small, nice):2 (sport, hello, *niece*)
+
+It counts where a run of words, with only spaces between them and each a
+word of some box, holds what every box needs, in any order: car(cheap)
+counts in "cheap car" and "car cheap", not in "cheap reliable car"; the last
+one above counts in "a nice big sport car". Quote it in the shell.
 
 A blacklist's actions (block, greyscale, no-images) apply to the pages it
 matches. A match in the address or the title takes every action; in the

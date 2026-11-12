@@ -2,6 +2,10 @@
 
 A command-line (CLI) productivity blocker for Linux, backed by a `systemd` service.
 
+**Read `VISION.md` first.** It holds the goal, the principles, the product
+roadmap (TODO) and the vocabulary. Use its words as defined, and raise
+contradictions with the owner instead of resolving them alone.
+
 Blocking is organized into **blocks** (named groups) of **sites** (domains) and
 **apps** (process names). When a block is activated, a systemd daemon
 continuously ensures the blocking layers stay applied.

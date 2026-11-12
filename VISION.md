@@ -119,10 +119,12 @@ every change.
    weakens a held block, a locked option or a locked setting goes through
    `gateEdit`/`ensureEditable` and the settings password. Anything that
    strengthens needs no permission.
-2. **Be honest about how hard it is.** With strict mode, no-escape and a
-   firmware password set by someone else, getting out takes other boot media
-   or a reinstall. Without them, KC9K is friction meant to outlast an
-   impulse. Never claim more than the current setup gives.
+2. **Custom security.** The user makes KC9K as secure as they want, in the
+   settings. The defaults outlast an impulse; strict mode takes away `sudo`
+   during a lock; no-escape closes the boot-time exits; factory reset
+   protection makes even a reset slow. Describe KC9K by what the user's
+   chosen settings give, never as "only friction" and never as more than
+   those settings deliver.
 3. **The user can never be trapped by a bug.** There is always a recovery
    path (the `kc9k.nofreeze` boot option, recovery mode) unless the user has
    explicitly chosen no-escape.
@@ -212,7 +214,8 @@ Settings that follow the time of day, each lockable like a browser option
 
 ### 5. Layered sequential locks (M) — Partial
 
-Several locks on one block, lifted in the order the user specified. Today the
+Several locks on one block, browser option or setting lock, lifted in the
+order the user specified. Every kind of lock can take part. Today the
 locks stack, but `unlock` checks every lock at once in a fixed order (time,
 restart, password, typing challenge; the delay runs after `stop`).
 
@@ -223,7 +226,8 @@ restart, password, typing challenge; the delay runs after `stop`).
       from the start. To be decided with the owner.
 - [ ] Strengthening stays free: adding a lock, or putting a new one anywhere
       in the order. Removing one or moving it earlier loosens and is gated.
-- [ ] The same for browser options and setting locks, if the owner wants it.
+- [ ] The same for every lock: browser options and setting locks (the
+      global bypass prevention lock included), not just blocks.
 - [ ] `kc9k status` and the interface show the order and which lock is next.
 
 ### 6. Factory reset protection (M) — Not started
@@ -271,6 +275,9 @@ browser option:
   software allows.
 - 2026-11-12: "Layered sequential locking" means several locks on one block,
   lifted in the order the user specified.
+- 2026-11-12: Sequential locks can be set on all locks, not only on blocks.
+- 2026-11-12: KC9K is custom security, not "friction, not a security
+  boundary": the user makes it as secure as they want in the settings.
 - 2026-11-12: KC9K is for youth too. Tech-savvy young people, some as young as
   ten, have their own computers and want to quit habits; the project speaks
   of "youth", not "kids".
@@ -280,10 +287,7 @@ browser option:
 Contradictions between this vision and earlier decisions. Raise these with
 the owner; don't resolve them alone.
 
-- **How hard to get around.** The vision says the only way out should be a
-  factory reset. `README.md` says KC9K is "friction, not a security
-  boundary". Principle 2 is the current reconciliation; once factory reset
-  protection exists, the README's wording should follow.
+None right now.
 
 ---
 
@@ -354,7 +358,11 @@ Command and code names are in `backticks`.
   being loosened. Kinds: **timer** (`--for`), **time range** (`--until`),
   **typing challenge** or **char lock** (`--lock`), **password**,
   **restart**, **delay**. Locks stack and can only grow.
-- **Layered sequential locks** — several locks on one block, lifted one at a
+- **Custom security** — how KC9K describes its strength: the user sets how
+  hard it is to get around, from the defaults (outlast an impulse) through
+  strict mode and no-escape to factory reset protection.
+- **Layered sequential locks** — several locks on one block, browser option
+  or setting lock, lifted one at a
   time in the order the user specified. *Partial*: today all are checked at
   once.
 - **Held** — a block that can't be weakened right now: locked, in a schedule
@@ -430,3 +438,4 @@ Command and code names are in `backticks`.
 | system (for a block or feature) | the feature's name | |
 | unblock | stop, unlock, pause, loosen | each means something different |
 | kids, children | youth, young people | decided 2026-11-12 |
+| friction, not a security boundary (for KC9K as a whole) | custom security | decided 2026-11-12; "friction" is fine for what one lock, such as the typing challenge, does |

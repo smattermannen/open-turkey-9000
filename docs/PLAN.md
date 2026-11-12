@@ -283,24 +283,4 @@ Build without `TAGS=devmaster`, remove `ci/vm.sh`, rename the repository to
 `kc9k`, remove `/etc/sudoers.d/99-claude-test` from the test laptop, README
 pass, a tagged release.
 
-## What the suggested projects add
 
-Only what a user would notice as better was kept.
-
-- **open-turkey:** nothing new. KC9K grew out of it and has all of it.
-- **Focuser:** polite closing (2.4), Pomodoro long break (3.4), toolbar
-  popup (3.5), block page details (6.4), schedule presets, tray, ready-made
-  lists (9).
-- **CtblPlusPlus:** loosening delay per block (8.2).
-- **not-for-you:** the presets in 6.2.
-- **freedxm, ulysse:** nothing KC9K lacks.
-- **Left out as clutter or no gain:** blocked-attempt charts, statistics
-  retention setting, delete-all-data, block folders, Help page, Pomodoro
-  presets, translations, app allowlist, forced DNS and integrity checks
-  (the hosts file already wins over DNS and the installed files are
-  root-owned), a Chromium extension, Windows/macOS.
-
-## Decided with the user (2026-11-10)
-
-All phases are to be done; the order is free. English only. Access
-passwords apply to terminal commands too.

@@ -130,7 +130,8 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   `force-librewolf` is also held by block locks (`GuardsBlocks`).
 - **Extension guard** (`internal/blocker/extguard.go`): the extension is
   mandatory. While `enforce.ExtensionRequired` (an active block with
-  websites, or web-only/force-search on) and LibreWolf is installed, the
+  websites, or web-only/force-search on) and LibreWolf or Chrome is installed
+  (`blocker.ExtensionBrowserInstalled`), the
   daemon closes browsers whose extension hasn't fetched `/rules` with the
   `X-KC9K-Extension` header within 60 s (connection traced via
   `/proc/net/tcp` to the PID), and at once those started for remote control
@@ -140,6 +141,18 @@ check that everything compiles: `CGO_ENABLED=0 go build ./...`.
   DisableDeveloperTools policy); five prefs locked at the end of
   librewolf.cfg, with the user's overrides file replaced by a cleaned copy
   (`librewolfprefs.go`).
+- **Google Chrome** (`webext/chrome.go`, `blocker/chromesetup.go`): the same
+  extension for Chrome and Chromium. `PackChrome` swaps in a Manifest V3
+  manifest built from Firefox's and a service worker (`chrome-worker.js`,
+  `importScripts` of the background scripts), and signs a CRX3 with a key
+  made per computer (`webext.ChromeKeyPath`). The daemon serves
+  `/chrome/update.xml` and the `.crx`; `kc9k-setup.json` force-installs it
+  (`ExtensionSettings`), turns incognito, guest and developer mode off.
+  `compat.js` aliases `browser` to `chrome`; `onMessage` answers through
+  `sendResponse`; a keepalive holds the service worker; `rules.extension_version`
+  makes Chrome's copy ask for an update. Root test: `go test -tags roottest
+  -run Chrome ./internal/enforce` (Chrome for Testing reads
+  `/etc/opt/chrome_for_testing/policies`).
 - **Settings password** (`internal/cli/settingspassword.go`): when set,
   `requireSettingsPassword` guards every loosening (it sits in `gateEdit` and
   `ensureEditable`), stop/unlock, anything creating a lock, browser options

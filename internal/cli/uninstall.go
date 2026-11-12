@@ -166,6 +166,7 @@ func undoSystemChanges() []string {
 		}
 	}
 	note("remove the extension from browsers", blocker.EnsureBrowserSetup(blocker.BrowserSetup{RemoveExtensionID: webext.ID}))
+	note("remove the extension from Chrome", blocker.RemoveChromeSetup())
 	note("restore LibreWolf's extension signing", blocker.SyncLibreWolfSigning(false))
 	note("remove KC9K's locks from LibreWolf's settings", blocker.SyncLibreWolfLocks(false))
 	note("remove forced SafeSearch", blocker.SyncSafeSearch(false))
@@ -173,6 +174,7 @@ func undoSystemChanges() []string {
 		note("remove the no-escape boot lock", blocker.RemoveBootLock())
 	}
 	files, _ := filepath.Glob(filepath.Join(webext.Dir, "kc9k*.xpi"))
+	files = append(files, webext.ChromeKeyPath)
 	for _, f := range files {
 		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
 			note("remove "+f, err)

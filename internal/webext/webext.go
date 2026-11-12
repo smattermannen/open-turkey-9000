@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"sort"
 )
 
@@ -59,6 +60,12 @@ func StaleFiles() []string {
 // Pack returns the extension as an .xpi. The output is the same on every call,
 // so the daemon can tell whether the installed file is current.
 func Pack() ([]byte, error) {
+	return pack(nil)
+}
+
+// pack zips the extension's files, with replace taking the place of (or
+// adding to) the files of the same names.
+func pack(replace map[string][]byte) ([]byte, error) {
 	entries, err := fs.ReadDir(files, "files")
 	if err != nil {
 		return nil, err
@@ -67,14 +74,22 @@ func Pack() ([]byte, error) {
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
+	for name := range replace {
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
 	sort.Strings(names)
 
 	var out bytes.Buffer
 	archive := zip.NewWriter(&out)
 	for _, name := range names {
-		data, err := files.ReadFile("files/" + name)
-		if err != nil {
-			return nil, err
+		data, ok := replace[name]
+		if !ok {
+			var err error
+			if data, err = files.ReadFile("files/" + name); err != nil {
+				return nil, err
+			}
 		}
 		w, err := archive.Create(name)
 		if err != nil {

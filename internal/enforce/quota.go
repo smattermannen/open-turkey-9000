@@ -54,10 +54,10 @@ func openQuotaBlocks(d *db.DB) []*db.BlockDetail {
 }
 
 // countsByUse reports whether a block's session can be spent by use: its
-// websites need the extension to be seen, which needs LibreWolf. Without
-// it, a session with websites spends all of its time.
+// websites need the extension to be seen, which needs a browser that runs
+// it. Without one, a session with websites spends all of its time.
 func countsByUse(detail *db.BlockDetail) bool {
-	return !detail.Lists.Enforces() || blocker.LibreWolfVersion() != ""
+	return !detail.Lists.Enforces() || blocker.ExtensionBrowserInstalled()
 }
 
 // noteQuotaApps adds seconds to the open sessions of blocks whose apps are

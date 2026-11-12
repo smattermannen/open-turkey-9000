@@ -16,8 +16,8 @@ order of work and what each step consists of.
   `ci/actions_test.py` when the extension is involved, a README section,
   the CLAUDE.md summary line, and the item struck from `TODO.md`.
 - Extension changes bump the version in `manifest.json`.
-- Supported: Linux Mint Cinnamon on X11, LibreWolf. No Wayland, no Chromium
-  extension.
+- Supported: Linux Mint Cinnamon on X11, LibreWolf, Google Chrome (and
+  Chromium; asked for before release, 2026-11-12). No Wayland.
 
 Sizes: S = under a day of work, M = a few days, L = a week or more.
 
@@ -298,7 +298,8 @@ Only what a user would notice as better was kept.
   retention setting, delete-all-data, block folders, Help page, Pomodoro
   presets, translations, app allowlist, forced DNS and integrity checks
   (the hosts file already wins over DNS and the installed files are
-  root-owned), a Chromium extension, Windows/macOS.
+  root-owned), Windows/macOS. (A Chromium extension was left out here, then
+  built for Google Chrome on 2026-11-12, before release.)
 
 ## Decided with the user (2026-11-10)
 

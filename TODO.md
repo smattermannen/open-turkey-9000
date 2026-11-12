@@ -65,4 +65,5 @@ See "Left to do" at the top and `docs/PLAN.md`. Everything that was listed here 
 - The suggested projects (open-turkey, Focuser, CtblPlusPlus, not-for-you): what was taken and what was left out is at the end of `docs/PLAN.md`.
 
 ## Before release
+Google Chrome: built 2026-11-12 (extension 1.15.0; `go test -tags roottest -run Chrome ./internal/enforce` passes with Chrome for Testing 153 in a disposable container). Still to try on the laptop: install real Google Chrome (`.deb`), check it gets the extension pinned within seconds, can't remove or disable it, incognito and guest are greyed out, a block works, and the toolbar popup and badge. Then run `ci/browser_test.py` and `ci/extras_test.py` again in LibreWolf: `background.js` changed (message replies, request types) and wasn't run in LibreWolf.
 Build without `TAGS=devmaster`. Remove `ci/vm.sh`. Rename the GitHub repository to `kc9k`. On the test laptop, remove `/etc/sudoers.d/99-claude-test`.

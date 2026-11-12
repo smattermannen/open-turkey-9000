@@ -43,8 +43,8 @@ for the profit of a few. KC9K is built to fight back against that design.
 ### How it gets there
 
 **It is very hard to get around.** In its strictest setup, the only way out
-should be a reinstall of the operating system. Even that should be made hard
-enough that nobody does it on impulse.
+should be a factory reset. Even that should be made hard enough that nobody
+does one on impulse, with options the user chooses for how hard.
 
 **It does more than block.** Cold Turkey Blocker has two actions: block a
 page in the browser, or close an app. KC9K can also take the images out of a
@@ -88,19 +88,21 @@ friends ask.
 exports a whole project — blocks, lists, actions, schedules, bypass
 prevention — so people can share setups with each other.
 
-**It is completely free.** Children as young as ten are hooked on harmful
-media. They won't ask a parent to pay 45 dollars for a blocker. KC9K costs
-nothing.
+**It is completely free.** Young people, some as young as ten and with
+computers of their own, are hooked on harmful media, and some of them want
+out. They won't ask a parent to pay 45 dollars for a blocker. KC9K costs
+nothing, so anyone who wants to quit can.
 
 ### In one paragraph
 
 Everything Cold Turkey does, plus: bypass detection the user shapes, more
 triggers, more actions, any trigger to any action, several lists per block
-each with its own actions, locks that build on each other, whole projects
+each with its own actions, layered sequential locks (several locks on one
+block, lifted in the order the user chose), whole projects
 exported and imported, ready-made modes such as monk mode, lockable
 SafeSearch, and circadian rhythm support.
 
-### Coming later
+### After publishing
 
 - A **page score**: KC9K weighs what a page delivers (word frequencies, ad
   networks, page layout) and acts on the score.
@@ -154,14 +156,15 @@ What the vision asks for, and where the code stands (checked 2026-11-12).
 | Pomodoro, breaks, quotas, schedules, allow windows, places | Built | |
 | Monk mode | Built | |
 | Locks: timer, time range, typing challenge, password, restart, delay | Built | stack on one block; can only grow |
+| Layered sequential locks (lifted in the user's order) | Partial | locks stack, but `unlock` checks them all at once in a fixed order (`cli/control.go`) |
 | Enforce SafeSearch, lockable | Partial | Google only |
 | Social media feed killers | Built | YouTube Shorts tested; other sites' selectors untested |
 | Export and import a whole project | Built | `cli/project.go`; locks, passwords, hotkeys, statistics stay out |
 | Hard to get around (strict mode, no-escape) | Built | root-path hardening (`docs/PLAN.md` 8.1) not done |
-| Making a reinstall hard to do on impulse | Not started | see TODO |
+| Factory reset protection | Not started | see TODO |
 | Circadian rhythm | Not started | |
-| Page score | Not started | later |
-| Windows support | Not started | later; see Open decisions |
+| Page score | Not started | after publishing |
+| Windows support | Not started | after publishing |
 | App recognition beyond names | Built | Flatpak IDs, desktop units, Python scripts, file fingerprints, browser engines, window titles |
 
 ---
@@ -207,53 +210,80 @@ Settings that follow the time of day, each lockable like a browser option
 
 - [ ] Bing, DuckDuckGo and YouTube Restricted Mode, each lockable.
 
-### 5. Make a reinstall hard to do on impulse (M) — Not started
+### 5. Layered sequential locks (M) — Partial
+
+Several locks on one block, lifted in the order the user specified. Today the
+locks stack, but `unlock` checks every lock at once in a fixed order (time,
+restart, password, typing challenge; the delay runs after `stop`).
+
+- [ ] Store the user's order of a block's locks (DB, then `blockHold`).
+- [ ] `unlock` lifts only the first remaining lock; the next one takes over.
+      A lock lifted stays lifted until the block ends.
+- [ ] A time lock in the middle starts counting only when it is reached, or
+      from the start. To be decided with the owner.
+- [ ] Strengthening stays free: adding a lock, or putting a new one anywhere
+      in the order. Removing one or moving it earlier loosens and is gated.
+- [ ] The same for browser options and setting locks, if the owner wants it.
+- [ ] `kc9k status` and the interface show the order and which lock is next.
+
+### 6. Factory reset protection (M) — Not started
 
 From the owner's note: *it must be possible to make a factory reset hard, so
-nobody does one on impulse; the user chooses how hard.*
+nobody does one on impulse; the user chooses how hard.* The owner wants
+options in the software for this, as far as it can go.
 
-Software can't stop booting from a USB stick or reinstalling the system. What
-KC9K can do:
+Software can't forbid a factory reset outright. It can make one slow and
+deliberate. Each option below is the user's choice, and lockable like a
+browser option:
 
+- [ ] **Firmware lock.** Where the firmware exposes it to Linux (the
+      `firmware-attributes` class in `/sys/class/firmware-attributes/`: many
+      Dell, Lenovo and HP models), set an admin password, turn off booting
+      from USB and the network, and fix the boot order. The password is given
+      to someone the user trusts, never random: an unknown firmware password
+      can't be undone. Elsewhere, a guide for doing it by hand.
+- [ ] **Boot order guard.** The daemon puts back the EFI boot order and
+      clears a one-time boot entry (`BootNext`) if they change during a lock.
+- [ ] **Installer media guard.** During a lock, block the sites operating
+      system images are downloaded from (a template list), close the tools
+      that write them to USB sticks (mintstick, balenaEtcher, Ventoy,
+      Popsicle, Startup Disk Creator, GNOME Disks restoring an image), and
+      writes of an image to a whole disk.
+- [ ] **Other systems in GRUB behind the password.** no-escape leaves Mint
+      and Windows bootable without it; an option to lock the other entries.
 - [ ] Root-path hardening (`docs/PLAN.md` 8.1; needs a disposable machine).
-- [ ] A guided setup when turning on strict mode or no-escape: set a firmware
-      password and boot order, and give that password and the settings
-      password to someone the user trusts.
-- [ ] Other friction the user can choose. To be designed with the owner.
+- [ ] A guided setup when turning on strict mode or no-escape that offers all
+      of the above.
 
-### 6. Page score (L) — Later
+### After publishing
 
-- [ ] Weigh word frequencies, ad networks and page layout into a score per
-      kind of content; lists act on a score above a threshold. Needs item 2
-      first.
+- **Page score (L).** Weigh word frequencies, ad networks and page layout
+  into a score per kind of content; lists act on a score above a threshold.
+  Needs item 2 first.
+- **Windows support (L).** Everything in `internal/blocker/` is
+  Linux-specific (systemd, iptables, `/proc`, X11, cgroups). This is a port
+  behind a platform layer, not a feature.
 
-### 7. Windows support (L) — Later
+### Decided with the owner
 
-Everything in `internal/blocker/` is Linux-specific (systemd, iptables,
-`/proc`, X11, cgroups). This is a port behind a platform layer, not a
-feature. See Open decisions.
-
-### 8. Words in the vision still to define
-
-- [ ] "Layered sequential locking": locks already stack on one block and can
-      only grow. Does the owner mean something more, such as one lock starting
-      when another ends? To be defined before building.
+- 2026-11-12: Windows support and the page score come after publishing.
+- 2026-11-12: KC9K gets options to make a factory reset hard, as far as
+  software allows.
+- 2026-11-12: "Layered sequential locking" means several locks on one block,
+  lifted in the order the user specified.
+- 2026-11-12: KC9K is for youth too. Tech-savvy young people, some as young as
+  ten, have their own computers and want to quit habits; the project speaks
+  of "youth", not "kids".
 
 ### Open decisions
 
 Contradictions between this vision and earlier decisions. Raise these with
 the owner; don't resolve them alone.
 
-- **Windows.** The vision plans Windows support. `docs/PLAN.md` (decided
-  2026-11-10) lists Windows/macOS under "left out as no gain" and the
-  supported platform as Mint Cinnamon on X11 only.
 - **How hard to get around.** The vision says the only way out should be a
-  reinstall. `README.md` says KC9K is "friction, not a security boundary".
-  Principle 2 above is the current reconciliation; the README's wording may
-  need to follow.
-- **Children as users.** The vision speaks to ten-year-olds. A child won't
-  install a systemd service; a parent will. If that is the audience, the
-  settings password held by a parent and the interface matter most.
+  factory reset. `README.md` says KC9K is "friction, not a security
+  boundary". Principle 2 is the current reconciliation; once factory reset
+  protection exists, the README's wording should follow.
 
 ---
 
@@ -324,6 +354,9 @@ Command and code names are in `backticks`.
   being loosened. Kinds: **timer** (`--for`), **time range** (`--until`),
   **typing challenge** or **char lock** (`--lock`), **password**,
   **restart**, **delay**. Locks stack and can only grow.
+- **Layered sequential locks** — several locks on one block, lifted one at a
+  time in the order the user specified. *Partial*: today all are checked at
+  once.
 - **Held** — a block that can't be weakened right now: locked, in a schedule
   window, or within the **edit freeze** (2 h) before one.
 - **Strengthen / loosen** — any change that makes blocking stricter / less
@@ -345,6 +378,11 @@ Command and code names are in `backticks`.
   options) and puts an unknown password on GRUB.
 - **Frozen Chicken** — keeps every session locked, logged out or shut down
   for a time (at most 24 h). Also on a schedule. `kc9k freeze`.
+- **Factory reset** — wiping or reinstalling the operating system, or
+  booting another one, to get rid of KC9K. Software can't forbid it.
+- **Factory reset protection** — *planned*: the options that make a factory
+  reset slow and deliberate (firmware lock, boot order guard, installer
+  media guard).
 - **Monk mode** — the ordinary block `monk-mode`, blocking all websites
   (`*.*`), time-locked. `kc9k monk`.
 
@@ -391,4 +429,4 @@ Command and code names are in `backticks`.
 | profile (for a block) | block, template | "preset" is taken: social media presets, schedule presets |
 | system (for a block or feature) | the feature's name | |
 | unblock | stop, unlock, pause, loosen | each means something different |
-| factory reset | reinstall | KC9K has no reset feature; this means reinstalling the system |
+| kids, children | youth, young people | decided 2026-11-12 |

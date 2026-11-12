@@ -298,7 +298,7 @@ Only what a user would notice as better was kept.
   retention setting, delete-all-data, block folders, Help page, Pomodoro
   presets, translations, app allowlist, forced DNS and integrity checks
   (the hosts file already wins over DNS and the installed files are
-  root-owned), a Chromium extension, Windows/macOS.
+  root-owned), a Chromium extension, macOS. Windows: after publishing (decided 2026-11-12, see `VISION.md`).
 
 ## Decided with the user (2026-11-10)
 

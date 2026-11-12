@@ -115,26 +115,31 @@ SafeSearch, and circadian rhythm support.
 These follow from the vision and from decisions already made. They apply to
 every change.
 
-1. **Strengthening is always free; loosening always costs.** Anything that
+1. **Fix current functionality before adding new features.** Known bugs,
+   failing tests and features that don't work as documented come before any
+   new feature. Whoever finds one fixes it first, or, if it is too big for
+   now, puts it at the top of [Fix what exists](#0-fix-what-exists) before
+   going on.
+2. **Strengthening is always free; loosening always costs.** Anything that
    weakens a held block, a locked option or a locked setting goes through
    `gateEdit`/`ensureEditable` and the settings password. Anything that
    strengthens needs no permission.
-2. **Custom security.** The user makes KC9K as secure as they want, in the
+3. **Custom security.** The user makes KC9K as secure as they want, in the
    settings. The defaults outlast an impulse; strict mode takes away `sudo`
    during a lock; no-escape closes the boot-time exits; factory reset
    protection makes even a reset slow. Describe KC9K by what the user's
    chosen settings give, never as "only friction" and never as more than
    those settings deliver.
-3. **The user can never be trapped by a bug.** There is always a recovery
+4. **The user can never be trapped by a bug.** There is always a recovery
    path (the `kc9k.nofreeze` boot option, recovery mode) unless the user has
    explicitly chosen no-escape.
-4. **A refused attempt to loosen is ordinary use.** It is logged, never
+5. **A refused attempt to loosen is ordinary use.** It is logged, never
    counted by bypass detection.
-5. **Free, forever.** No paid tiers, no accounts, no telemetry. What KC9K
+6. **Free, forever.** No paid tiers, no accounts, no telemetry. What KC9K
    records (events, statistics, link recordings) stays on the computer.
-6. **Only what improves the experience gets built.** Behaviour changes are
+7. **Only what improves the experience gets built.** Behaviour changes are
    options, not new defaults.
-7. **Current platform:** Linux Mint Cinnamon on X11, with LibreWolf as the
+8. **Current platform:** Linux Mint Cinnamon on X11, with LibreWolf as the
    browser the extension runs in. English only.
 
 ---
@@ -176,6 +181,32 @@ What the vision asks for, and where the code stands (checked 2026-11-12).
 The product roadmap from the vision. Sizes as in `docs/PLAN.md`: S under a
 day, M a few days, L a week or more. Day-to-day testing and handover notes
 stay in `TODO.md`.
+
+### 0. Fix what exists
+
+Comes before every item below (principle 1). Known bugs first, then features
+that have never been tried for real: they aren't known to be broken, but
+nothing new should be built on them until they are confirmed.
+
+Known bugs:
+
+- [x] 2026-11-12: `TestProjectExportImport` failed on weekdays 07:00–17:00
+      (its schedule held the block). Fixed: the window is now two days ahead.
+- [x] 2026-11-12: run as root, the `internal/cli` tests used the real
+      database (`KC9K_DB` is ignored for root), setting blocks and access
+      passwords in it. Fixed: they now refuse to run as root.
+
+Not yet confirmed in real use (details in `TODO.md`, "Still to try", and
+`docs/PLAN.md` phase 10):
+
+- [ ] The nine "Still to try" items in `TODO.md`.
+- [ ] Mute, declutter and dark on real sites; polite closing with a real app.
+- [ ] Social media settings beyond YouTube Shorts (the selectors in
+      `webext/files/social.js` are from memory and need checking).
+- [ ] A playlist's videos playing; a block following the user between
+      places; relocking after a break.
+- [ ] The interface's design pass: no page added since 2026-11-10 has been
+      looked at on a real screen.
 
 ### 1. Circadian rhythm (L) — Not started
 
@@ -278,6 +309,8 @@ browser option:
 - 2026-11-12: Sequential locks can be set on all locks, not only on blocks.
 - 2026-11-12: KC9K is custom security, not "friction, not a security
   boundary": the user makes it as secure as they want in the settings.
+- 2026-11-12: Fix current functionality before adding new features
+  (principle 1).
 - 2026-11-12: KC9K is for youth too. Tech-savvy young people, some as young as
   ten, have their own computers and want to quit habits; the project speaks
   of "youth", not "kids".

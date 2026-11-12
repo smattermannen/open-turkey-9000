@@ -7,6 +7,8 @@ order of work and what each step consists of.
 
 ## Rules for every step
 
+- Fix current functionality before adding new features (`VISION.md`,
+  principle 1): known bugs and failing tests come first.
 - Order inside a step: database, then `enforce`/daemon, then CLI, then
   extension, then interface. The interface for a feature is built in phase 9
   unless the feature is nothing without it (access passwords, the badge).

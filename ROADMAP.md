@@ -55,6 +55,21 @@ Last checked against the code: 2026-11-13.
       commands (`kc9k quota`, `break allowance`, `--template`) needs a plan
       agreed with the owner. (M)
 
+- [ ] **Page reading is slow on big pages** (principle 9). In every frame,
+      `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
+      makes the browser lay out the page) every 1.5 s while the page changes,
+      so a feed that keeps loading is read again and again. Then
+      `match.js` runs one regular expression per term over all of it. Must
+      be reworked before phrase sets are built:
+      - read only the text that is new since the last scan;
+      - one pass over the words, looking each up in one table of all terms
+        (prefix and suffix tables for `*`), so the cost doesn't grow with the
+        number of terms; phrases checked only where a term was found;
+      - work in small pieces in idle time, never blocking scrolling or typing;
+      - stop reading a page once its strongest action has been taken;
+      - a speed test in `ci/` with a large page and many rules, run on every
+        change to the matcher. (M)
+
 ### 0.2 Not yet confirmed in real use
 
 Built and tested by scripts, never tried by a person. Each becomes a
@@ -68,7 +83,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
       another user account and the guest session are blocked too.
 - [ ] Shutdown mode and the `kc9k.nofreeze` GRUB escape; measure the fast
       relock.
-- [ ] Keywords on real sites over a few days (false hits, slow pages); a
+- [ ] Rendered terms on real sites over a few days (false hits, slow pages); a
       hotkey pressed on the real keyboard.
 - [ ] A page that changes address without loading (YouTube) caught by a url
       list; the Websites tab on a real screen (hidden lists, search box).
@@ -106,7 +121,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | App (name, path, script, fingerprint, Flatpak, desktop unit) | Built | `blocker/scripts.go`, `blocker/process.go` |
 | Folder entry | Partial | programs inside it are closed; windows showing it are not |
 | Title entry | Built | X11 only |
-| Keyword | Built | |
+| Rendered term | Built | |
 | Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
 | Phrase set | Not built | |
 
@@ -186,7 +201,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Look actions | Built | see 0.2 |
 | Close browser, logout, shutdown, monk | Built | |
 | No downloads | Not built | section 2.3 |
-| Threshold, hit count (keywords) | Built | per action |
+| Threshold, hit count (rendered terms) | Built | per action |
 | Threshold (phrase sets) | Not built | |
 | Rate | Not built | |
 | Ad trigger | Not built | section 2.2 |

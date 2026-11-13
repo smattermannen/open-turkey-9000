@@ -139,7 +139,11 @@ They apply to every change.
 8. **Platform.** Linux Mint Cinnamon on X11. The extension runs in LibreWolf
    and in Google Chrome/Chromium. English only. An Android companion app runs
    the extension in IronFox (`android/`).
-9. **One rule-maker.** Every decision about what may be weakened is made in
+9. **Browsing stays fast.** KC9K must never make browsing feel slower.
+   However many lists, rendered terms and phrases a user adds, reading and
+   judging a page happens in the background, without holding up scrolling,
+   typing or page loads.
+10. **One rule-maker.** Every decision about what may be weakened is made in
    the CLI; the GUI and the extension only run CLI commands or follow the
    daemon (R-WEAK-2).
 
@@ -153,18 +157,18 @@ Command and code names are in `backticks`.
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Target** | Anything a block acts on: site, URL entry, search entry, app, folder, title entry, keyword, phrase. | — |
+| **Target** | Anything a block acts on: site, URL entry, search entry, app, folder, title entry, rendered term, phrase. | — |
 | **Site** | A domain with all its subdomains (`reddit.com`, written without `www.`), or a wildcard domain (`*.xxx`). | A URL entry. |
 | **URL entry** | A domain plus path or query (`reddit.com/r/funny`, `youtube.com/@channel`). | A site. |
-| **Wildcard** | In URL entries, `*` is any text (`google.com/*q=*unicorn*`). In keywords and phrases, a plain word matches whole words and `*` matches inside a word (`*gorilla` matches "silverbackgorilla", `porn*` matches "pornstar"). | — |
-| **Search entry** | A word that blocks searches containing it, on any search engine. | A keyword. |
+| **Wildcard** | In URL entries, `*` is any text (`google.com/*q=*unicorn*`). In rendered terms and phrases, a plain word matches whole words and `*` matches inside a word (`*gorilla` matches "silverbackgorilla", `porn*` matches "pornstar"). | — |
+| **Search entry** | A word that blocks searches containing it, on any search engine. | A rendered term. |
 | **Whole internet** | The target `*.*`. | — |
 | **File URL** | A `file://` entry. Local files are allowed by the default exception `file://*`. | — |
 | **App** | A program, matched by name, path, script, file fingerprint (`sha256:…`), Flatpak ID or desktop unit. Everything it started is closed with it. | A window. |
 | **Folder entry** | A directory: every program run from inside it is a blocked app, and windows showing it are closed. | — |
-| **Title entry** | A word or phrase matched against window titles. The window is asked to close, then its program is killed. In a browser only the matching tab is blocked, never the browser. | A keyword. |
-| **Keyword** | A word or several words (one **term**) matched on its own, in a list that looks at the page title or the rendered, visible text of a page. | A phrase, a title entry. |
-| **Phrase** | Terms from two or more **word sets** that occur together (formerly *word combination*). Rules R-PHRASE-1 to 8. Example: `[eat, nice] [hello, grandpa]` matches "Let's eat grandpa", not "Let's eat, grandpa!". | A keyword. |
+| **Title entry** | A word or phrase matched against window titles. The window is asked to close, then its program is killed. In a browser only the matching tab is blocked, never the browser. | A rendered term. |
+| **Rendered term** | A word or several words (one **term**) matched on its own, in a list that looks at the page title or the rendered, visible text of a page. | A phrase, a title entry. |
+| **Phrase** | Terms from two or more **word sets** that occur together (formerly *word combination*). Rules R-PHRASE-1 to 8. Example: `[eat, nice] [hello, grandpa]` matches "Let's eat grandpa", not "Let's eat, grandpa!". | A rendered term. |
 | **Term** | One entry in a word set: a word or several words (`long cat`). | — |
 | **Word set** | The terms one place in a phrase may be filled with. *Necessary* (a match needs a term from it) or *optional*. A phrase has at least two necessary word sets. | — |
 | **Bridge** | A term written with a dash, `big-` or `-gorilla`: between `big-` and the next set's `-gorilla`, any words of the same sentence may be skipped. A term with both, `-strong-`, is a middle link. | A wildcard (`*`). |
@@ -284,9 +288,9 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
 | **Look actions** | Greyscale, no images, no video, mute, declutter, dark: they change a page, they don't block it. |
 | **No downloads** | Action: downloads started from matching pages are cancelled. |
-| **Threshold** | Set per action. For keywords: how many different keywords must match. For a phrase set: how many different phrases must match (default 1). |
-| **Hit count** | Set per action, for keywords only: how many keyword matches in total, repeats included. Phrase sets have no hit count. |
-| **Rate** | Set per action, for keywords: keyword matches ÷ rendered words, as a percentage. |
+| **Threshold** | Set per action. For rendered terms: how many different rendered terms must match. For a phrase set: how many different phrases must match (default 1). |
+| **Hit count** | Set per action, for rendered terms only: how many rendered term matches in total, repeats included. Phrase sets have no hit count. |
+| **Rate** | Set per action, for rendered terms: rendered term matches ÷ rendered words, as a percentage. |
 | **Ad trigger** | A fourth scope beside url, title and text: the ad networks a page loads, named by industry (gambling, adult, …). |
 | **Page score** | *After publishing:* a score for what a page delivers, from its words, ads and layout; lists act on a score above a threshold. |
 
@@ -346,7 +350,7 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 | nepsis, bypass detection (in prose) | bypass prevention | `nepsis` is only the command name |
 | rule (for a block) | block, list or entry | `rules` is only the extension's data feed |
 | blocklist | blacklist | |
-| word combination, page word | phrase, keyword | renamed 2026-11-13 |
+| word combination, page word, keyword | phrase, rendered term | renamed 2026-11-13 |
 | whitelist (for exceptions) | exception list | an **allowlist block** is something else |
 | profile (for a block) | block, template | |
 | unblock | disable, unlock, pause, weaken | each means something different |
@@ -503,7 +507,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 - **R-LIST-1** Exceptions spare pages only from their own block's blacklists.
 - **R-LIST-2** Clusters and categories are never enforced.
 - **R-LIST-3** Every new block has the exception `file://*`.
-- **R-LIST-4** Keywords and phrases are matched against rendered, visible text only (or the title or URL, when ticked).
+- **R-LIST-4** Rendered terms and phrases are matched against rendered, visible text only (or the title or URL, when ticked).
 - **R-PHRASE-1** A phrase has at least two word sets, both necessary. Further word sets are each necessary or optional.
 - **R-PHRASE-2** A match takes one term from each necessary word set, plus terms from optional sets until it reaches the phrase's **length**. The length is at least the number of necessary sets (its default) and at most the number of sets.
 - **R-PHRASE-3** One word set gives at most one term to a match: with `[long cat, neko] [running, sitting]`, "long cat running" matches, and "long cat neko" doesn't: both terms come from the same set.
@@ -568,9 +572,12 @@ Made with the owner. Newest last.
   and turning it off is itself refused while a block is active.
 - 2026-11-13: Word combinations are renamed phrases and leave ordinary
   lists; blocks get phrase sets, each with its own actions (R-PHRASE-1 to
-  8). Thresholds are per action; keyword lists also have hits and rate,
+  8). Thresholds are per action; rendered term lists also have hits and rate,
   phrase sets have neither hits nor phrase exceptions. Bridges are written
   with a dash; `*` keeps matching inside a word.
+- 2026-11-13: "Keyword" is renamed **rendered term**: one term can be
+  several words.
+- 2026-11-13: Browsing must stay fast, however complex the rules (principle 9).
 
 ## 7. Open decisions
 

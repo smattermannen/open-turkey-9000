@@ -1,19 +1,11 @@
-// loosen.go — gating edits that loosen a block, and the queue of pending edits.
+// loosen.go — gating edits that weaken a block, and what is left of the
+// queue of pending edits.
 //
-// A block with allow windows (schedule add --allow) is meant to be on at all
-// times except during those windows. If it could be loosened freely while an
-// allow window is open, that window would be the moment to dismantle it, so a
-// loosening edit to such a block never applies on its own:
-//
-//   - by default it is queued, and the daemon applies it LoosenDelay later
-//     (kc9k pending lists the queue; pending cancel drops an entry);
-//   - with --now it applies immediately, after the same typing challenge as
-//     unlock.
-//
-// Either way it is refused while the block is char-locked or time-locked, and
-// a queued edit waits for such a lock to lift. Edits that only make a block
-// stricter are never gated. Blocks without allow windows keep the plain rule:
-// loosening edits are refused while the block is held (see ensureEditable).
+// Only locks protect a block (R-LOCK-1, R-LOCK-10): an edit that weakens it
+// is refused while it is locked (see ensureEditable), and goes ahead at once
+// otherwise. Blocks with allow windows used to queue such edits for a day;
+// that built-in delay is gone (a schedule lock protects them now, see
+// db/schedulelock.go), and the daemon only applies what was queued before.
 //
 //	kc9k pending
 //	kc9k pending cancel <number>
@@ -25,7 +17,6 @@ import (
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
-	"github.com/smattermannen/kc9k/internal/lock"
 	"github.com/spf13/cobra"
 )
 
@@ -34,10 +25,9 @@ import (
 const LoosenDelay = db.DefaultLoosenDelay * time.Second
 
 // gateEdit decides whether an edit to a block may go ahead right now, and
-// reports true if so. Edits that strengthen the block always may. A loosening
-// edit to a block with allow windows is queued (gateEdit then reports false
-// and the caller stops) unless --now is given and the typing challenge is
-// passed. Other blocks refuse loosening edits while held.
+// reports true if so. Edits that strengthen the block always may (except on
+// monk mode while it is on); edits that weaken it may unless it is locked.
+// e is what the edit would have been queued as, kept for the callers.
 func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool, e db.Edit) (bool, error) {
 	if err := refuseMonkEdit(database, name); err != nil {
 		return false, err
@@ -45,52 +35,7 @@ func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool
 	if strengthens {
 		return true, nil
 	}
-	if err := requireSettingsPassword(database); err != nil {
-		return false, err
-	}
-	allowBlock, err := database.HasAllowWindows(name)
-	if err != nil {
-		return false, err
-	}
-	if !allowBlock {
-		return true, ensureEditable(database, name, false)
-	}
-
-	hold, err := blockHold(database, name, time.Now())
-	if err != nil {
-		return false, err
-	}
-	if hold.active && hold.timeLocked() {
-		return false, refused(database, name, fmt.Errorf("block '%s' is time-locked until %s and can't be loosened before then", name, hold.until()))
-	}
-	if hold.active && hold.charLocked {
-		return false, refused(database, name, fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", name, name))
-	}
-
-	if now, _ := cmd.Flags().GetBool("now"); now {
-		fmt.Printf("Block '%s' has allow windows, so loosening it right away needs the typing challenge.\n", name)
-		ok, err := lock.RunChallenge(lock.DefaultLockChars)
-		if err != nil {
-			return false, fmt.Errorf("failed to run the typing challenge: %w", err)
-		}
-		if !ok {
-			return false, fmt.Errorf("challenge failed; block '%s' is unchanged", name)
-		}
-		return true, nil
-	}
-
-	delay, err := database.LoosenDelay(name)
-	if err != nil {
-		return false, err
-	}
-	applyAt := time.Now().Add(time.Duration(delay) * time.Second)
-	if err := database.QueueEdit(name, e, applyAt.Unix()); err != nil {
-		return false, err
-	}
-	fmt.Printf("Block '%s' has allow windows, so this change is queued: %s\n", name, e)
-	fmt.Printf("It takes effect at %s. See 'kc9k pending'; to apply it now instead, cancel it and rerun with --now (typing challenge).\n",
-		applyAt.Format("2006-01-02 15:04"))
-	return false, nil
+	return true, ensureEditable(database, name, false)
 }
 
 // refused logs a refused attempt to loosen or stop a held block as an event
@@ -106,7 +51,8 @@ func refused(database *db.DB, block string, err error) error {
 // addNowFlag adds --now to commands whose edits gateEdit may queue.
 func addNowFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().Bool("now", false, "For a block with allow windows: apply a loosening change immediately after the typing challenge, instead of queueing it")
+		c.Flags().Bool("now", false, "No longer needed: changes are never queued (kept for old scripts)")
+		_ = c.Flags().MarkHidden("now")
 	}
 }
 
@@ -127,7 +73,7 @@ func requireAll(kind, block string, have, want []string) error {
 
 var pendingCmd = &cobra.Command{
 	Use:   "pending",
-	Short: "List queued changes to blocks with allow windows",
+	Short: "List changes queued by earlier versions, which the daemon still applies",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		database, err := openDB()
@@ -186,8 +132,9 @@ var pendingCancelCmd = &cobra.Command{
 }
 
 var pendingDelayCmd = &cobra.Command{
-	Use:   "delay [block] [time]",
-	Short: "How long a block's queued loosening changes wait (default 24h)",
+	Hidden: true, // changes are no longer queued
+	Use:    "delay [block] [time]",
+	Short:  "How long a block's queued loosening changes wait (default 24h)",
 	Long: `A block with allow windows is never loosened directly: the change is queued
 and applied later. This sets how much later for one block, from 1h to 720h.
 A longer delay applies at once. A shorter one loosens the block, so it is

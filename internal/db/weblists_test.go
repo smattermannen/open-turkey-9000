@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
 func openTest(t *testing.T) (*DB, string) {
@@ -270,5 +272,40 @@ func TestNewBlockSparesLocalFiles(t *testing.T) {
 	}
 	if !b.Empty() {
 		t.Error("the default exception made a new block enforce something")
+	}
+}
+
+// Upgrading keeps the protection blocks with schedules had: they get a
+// schedule lock with the old 2-hour lead; other blocks get none.
+func TestScheduleLockMigration(t *testing.T) {
+	d, path := openTest(t)
+	for _, name := range []string{"sched", "plain"} {
+		if err := d.CreateBlock(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.AddSchedule("sched", schedule.Window{Days: 127, Start: 540, End: 600}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.conn.Exec("ALTER TABLE blocks DROP COLUMN schedule_lock_lead"); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	d, err := OpenDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if on, lead, _ := d.ScheduleLock("sched"); !on || lead != 120 {
+		t.Errorf("scheduled block: lock %v, lead %d", on, lead)
+	}
+	if on, _, _ := d.ScheduleLock("plain"); on {
+		t.Error("a block without schedules got a schedule lock")
+	}
+	if err := d.CreateBlock("new"); err != nil {
+		t.Fatal(err)
+	}
+	if on, _, _ := d.ScheduleLock("new"); on {
+		t.Error("a new block got a schedule lock")
 	}
 }

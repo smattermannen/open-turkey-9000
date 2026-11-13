@@ -36,7 +36,6 @@ import (
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
-	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 )
 
@@ -70,19 +69,16 @@ func openDB() (*db.DB, error) {
 	return db.OpenDB(path)
 }
 
-// ensureEditable refuses edits that would weaken a held block.
+// ensureEditable refuses edits that would weaken a locked block (R-LOCK-1).
 //
-// A held block (char-locked, time-locked, or held by its schedule) is meant to
-// be immovable until the hold lifts. Allowing its lists to be trimmed would be
-// a trivial bypass: emptying a block deactivates it, and even removing entries
-// weakens a hold the user set precisely so they couldn't weaken it on impulse.
-// The same applies from schedule.EditFreeze before a schedule window opens:
-// otherwise a block could be emptied minutes before it is due to start.
+// A block is locked while any of its locks is on: a text, timer, password,
+// restart or delay lock, or its schedule lock during its windows and for its
+// lead time before each. An unlocked block is free to edit in any direction.
 //
 // Edits that can only make the block stricter (strengthens) are always
-// allowed, held or not: adding sites to a blocklist block, removing sites from
-// an allowlist block (without emptying it), and adding apps or patterns. Every
-// other edit (removals, mode changes, deleting the block) passes false.
+// allowed, locked or not: adding sites to a blacklist, removing exceptions,
+// adding apps or patterns. Every other edit (removals, mode changes,
+// deleting the block) passes false.
 func ensureEditable(database *db.DB, name string, strengthens bool) error {
 	if err := refuseMonkEdit(database, name); err != nil {
 		return err
@@ -99,9 +95,9 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 	}
 	if hold.held() {
 		if hold.scheduleFrozen && !hold.active {
-			return refused(database, name, fmt.Errorf("block '%s' is held by its schedule now or within %s; until its schedule lifts it, it can only be made stricter (%s)", name, freezeLead(), strengtheningEdits))
+			return refused(database, name, fmt.Errorf("block '%s' is locked by its schedule lock (a window is open or opens within %s); until then it can only be made stricter (%s)", name, time.Duration(hold.scheduleLead)*time.Minute, strengtheningEdits))
 		}
-		return refused(database, name, fmt.Errorf("block '%s' is currently held (locked, time-locked or by its schedule); until the hold lifts, it can only be made stricter (%s)", name, strengtheningEdits))
+		return refused(database, name, fmt.Errorf("block '%s' is locked; until its locks are lifted it can only be made stricter (%s)", name, strengtheningEdits))
 	}
 	return nil
 }
@@ -127,10 +123,6 @@ const strengtheningEdits = "add apps, window titles, blacklists or blacklist ent
 // db.BlockDetail.Empty).
 func blockEmpty(d *db.BlockDetail) bool { return d.Empty() }
 
-// freezeLead renders schedule.EditFreeze for messages ("2 hours").
-func freezeLead() string {
-	return fmt.Sprintf("%d hours", int(schedule.EditFreeze/time.Hour))
-}
 
 // --------------------------------------------------------------------------
 // Parent command: block

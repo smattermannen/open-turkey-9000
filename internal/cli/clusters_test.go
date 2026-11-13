@@ -89,7 +89,7 @@ func TestClusterCopyGating(t *testing.T) {
 	if err := d.ActivateBlock("b", true, 300, 0, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLI(t, "cluster", "copy", "anime", "b", "--exceptions"); err == nil || !strings.Contains(err.Error(), "held") {
+	if err := runCLI(t, "cluster", "copy", "anime", "b", "--exceptions"); err == nil || !strings.Contains(err.Error(), "locked") {
 		t.Errorf("copying exceptions into a locked block: %v; want refused as held", err)
 	}
 	if b, _ := d.GetBlock("b"); len(b.Lists) != 2 {
@@ -188,7 +188,7 @@ func TestRecording(t *testing.T) {
 	if err := d.ActivateBlock("b", true, 300, 0, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLI(t, "record", "stop"); err == nil || !strings.Contains(err.Error(), "held") {
+	if err := runCLI(t, "record", "stop"); err == nil || !strings.Contains(err.Error(), "locked") {
 		t.Errorf("stop into a locked block's exceptions: %v; want refused as held", err)
 	}
 	if sites, _ := d.RecordedSites(); len(sites) != 1 {

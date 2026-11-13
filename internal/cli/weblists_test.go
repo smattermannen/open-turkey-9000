@@ -146,7 +146,7 @@ func TestListGating(t *testing.T) {
 		{"list", "hits", "b", "Page words", "block", "9"},
 	}
 	for _, args := range refused {
-		if err := runCLI(t, args...); err == nil || !strings.Contains(err.Error(), "held") {
+		if err := runCLI(t, args...); err == nil || !strings.Contains(err.Error(), "locked") {
 			t.Errorf("%s on a locked block: %v; want refused as held", strings.Join(args, " "), err)
 		}
 	}

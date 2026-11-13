@@ -2193,8 +2193,8 @@ class Window(Gtk.ApplicationWindow):
         self.schedules = EditableList(
             "Schedule", "weekdays 09:00 17:00", self.add_schedule, self.remove_schedule,
             help_text="Days, start and end: weekdays 09:00 17:00, or mon,wed,fri 18:00 22:00. "
-                      "The block turns on and off by itself, and can't be weakened from "
-                      "2 hours before a window opens.")
+                      "The block turns on and off by itself. With a schedule lock (below) it "
+                      "can't be weakened during its windows and for a lead time before them.")
         schedule.pack_start(self.schedules, True, True, 0)
         preset_row = Gtk.Box(spacing=6)
         preset_row.pack_start(Gtk.Label(label="Add:"), False, False, 0)
@@ -2206,17 +2206,21 @@ class Window(Gtk.ApplicationWindow):
         self.schedule_total = dim("")
         preset_row.pack_end(self.schedule_total, False, False, 0)
         schedule.pack_start(preset_row, False, False, 0)
-        delay_row = Gtk.Box(spacing=6)
-        delay_row.pack_start(Gtk.Label(label="With allow windows, loosening changes wait"), False, False, 0)
-        self.loosen_hours = Gtk.SpinButton.new_with_range(1, 720, 1)
-        delay_row.pack_start(self.loosen_hours, False, False, 0)
-        delay_row.pack_start(Gtk.Label(label="hours"), False, False, 0)
-        delay_save = Gtk.Button(label="Save")
-        delay_save.connect("clicked", lambda _b: self.selected and self.run(
-            ["pending", "delay", self.selected, f"{self.loosen_hours.get_value_as_int()}h"],
-            then=self.queued_note))
-        delay_row.pack_start(delay_save, False, False, 0)
-        schedule.pack_start(delay_row, False, False, 0)
+        lock_row = Gtk.Box(spacing=6)
+        self.schedule_lock = Gtk.CheckButton(label="Schedule lock, from")
+        lock_row.pack_start(self.schedule_lock, False, False, 0)
+        self.schedule_lead = Gtk.SpinButton.new_with_range(0, 7 * 24 * 60, 15)
+        lock_row.pack_start(self.schedule_lead, False, False, 0)
+        lock_row.pack_start(Gtk.Label(label="minutes before each window"), False, False, 0)
+        lock_save = Gtk.Button(label="Save")
+        lock_save.connect("clicked", self.save_schedule_lock)
+        lock_row.pack_start(lock_save, False, False, 0)
+        schedule.pack_start(lock_row, False, False, 0)
+        schedule.pack_start(dim(
+            "While the lock is on (during the windows, at the block's places, for the lead time "
+            "before each window, and outside allow windows) the block can't be weakened or "
+            "switched off. A longer lead time is always allowed; a shorter one or off is refused "
+            "while the lock is on."), False, False, 0)
         tabs.append_page(schedule, Gtk.Label(label="Schedule"))
 
         places = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
@@ -2476,8 +2480,9 @@ class Window(Gtk.ApplicationWindow):
         self.places_label.set_text(
             "Saved places: " + ", ".join(f"{p['name']} ({p['networks']} networks)" for p in self.state.get("places") or [])
             if saved else "No places saved yet.")
-        if not self.loosen_hours.has_focus():
-            self.loosen_hours.set_value(block.get("loosen_delay", 86400) // 3600)
+        if not self.schedule_lead.has_focus():
+            self.schedule_lock.set_active(block.get("schedule_lock", False))
+            self.schedule_lead.set_value(block.get("schedule_lead", 0))
         allowance, balance = block.get("break_allowance", 0), block.get("break_balance", 0)
         paused = block.get("paused_seconds", 0)
         self.break_start.set_sensitive(block["active"] and allowance > 0 and balance >= 60 and not paused)
@@ -2665,6 +2670,14 @@ class Window(Gtk.ApplicationWindow):
     def stop_block(self, _button):
         if self.selected:
             self.run(["stop", self.selected])
+
+    def save_schedule_lock(self, _button):
+        if not self.selected:
+            return
+        if self.schedule_lock.get_active():
+            self.run(["schedule", "lock", self.selected, "on", "--lead", f"{self.schedule_lead.get_value_as_int()}m"])
+        elif self.blocks.get(self.selected, {}).get("schedule_lock"):
+            self.run(["schedule", "lock", self.selected, "off"])
 
     def unlock_block(self, _button):
         block = self.blocks.get(self.selected)

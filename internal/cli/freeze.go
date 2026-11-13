@@ -122,6 +122,8 @@ type guiBlock struct {
 	KeywordTest   bool      `json:"keyword_test"`
 	Places        []string  `json:"places"`
 	LoosenDelay   int64     `json:"loosen_delay"`
+	ScheduleLock  bool      `json:"schedule_lock"`
+	ScheduleLead  int       `json:"schedule_lead"` // minutes
 	Social        []string  `json:"social"`
 	// Breaks: the allowance (seconds per BreakPer of blocking), what is
 	// earned, the relock time, and how long the block is lifted for now.
@@ -409,6 +411,7 @@ var guiStateCmd = &cobra.Command{
 			g.KeywordTest = slices.Contains(testing, b.Name)
 			g.Places = placeNames(places, b.Name)
 			g.LoosenDelay, _ = database.LoosenDelay(b.Name)
+			g.ScheduleLock, g.ScheduleLead = hold.scheduleLock, hold.scheduleLead
 			g.Social = append([]string{}, detail.Social...)
 			k, err := database.GetBreaks(b.Name)
 			if err != nil {

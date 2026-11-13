@@ -25,6 +25,7 @@ func TestPlaces(t *testing.T) {
 	}
 	mustRun(t, "block", "add", "b", "reddit.com")
 	mustRun(t, "place", "rule", "b", "home", "on")
+	mustRun(t, "schedule", "lock", "b", "on") // places protect a block only through it (§3.4)
 	p, err := d.GetPlace("home")
 	if err != nil || len(p.Networks) != 3 || len(p.Blocks) != 1 {
 		t.Fatalf("place = %+v, %v", p, err)
@@ -38,7 +39,7 @@ func TestPlaces(t *testing.T) {
 	if err != nil || !on["b"] {
 		t.Fatalf("at home the rule doesn't turn the block on: %v %v", on, err)
 	}
-	// The block counts as held by its schedule there: the rule can't be taken away.
+	// The block's schedule lock is on there: the rule can't be taken away.
 	if held, _ := enforce.ScheduleActiveNow(d, "b", time.Now()); !held {
 		t.Error("the block isn't held at the place")
 	}

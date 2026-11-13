@@ -98,25 +98,7 @@ var prepareUninstallCmd = &cobra.Command{
 			}
 		}
 		if len(held) > 0 {
-			return fmt.Errorf("cannot uninstall: held block(s): %v. Clear the hold first (unlock, or wait for a time lock / schedule window to end; schedules hold from %s before their window opens)", held, freezeLead())
-		}
-
-		// A block with allow windows is meant to stay on outside them; it
-		// isn't held during an allow window, but uninstalling then would undo
-		// it without the delay or challenge any other loosening edit needs
-		// (see gateEdit). Its allow windows have to go first.
-		var allowBlocks []string
-		for _, b := range blocks {
-			has, err := database.HasAllowWindows(b.Name)
-			if err != nil {
-				return err
-			}
-			if has {
-				allowBlocks = append(allowBlocks, b.Name)
-			}
-		}
-		if len(allowBlocks) > 0 {
-			return fmt.Errorf("cannot uninstall: block(s) %v have allow windows. Remove those schedules first ('schedule remove'; removing the last one is queued for %s, or use --now with the typing challenge)", allowBlocks, LoosenDelay)
+			return fmt.Errorf("cannot uninstall: locked block(s): %v. Unlock them first, or wait for their timer locks and schedule locks", held)
 		}
 
 		// Deactivate everything so the daemon (and this command) leave nothing

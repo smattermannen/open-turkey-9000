@@ -28,13 +28,12 @@ Last checked against the code: 2026-11-13.
 ### 0.1 Code that contradicts `SPEC.md`
 
 - [ ] **The lock model** (§3.3, §3.4, R-LOCK-1 to 11). Today:
-      - a block is protected without a lock: while its schedule window is
-        open, while a place rule has it on, and always once it has allow
-        windows (weakening is queued for 24 h: `db.DefaultLoosenDelay`,
-        `gateEdit`, `pending`, `--now`); a built-in 2 h edit freeze
-        (`schedule.EditFreeze`) comes before every window, Frozen Chicken
-        schedules included. All of that goes: only locks protect, and a
-        schedule lock's lead time is the user's;
+      - done for blocks: the **schedule lock** (`kc9k schedule lock B on
+        --lead D`) replaces the built-in schedule/place protection, the 2 h
+        edit freeze and the 24 h allow-window queue; upgrading gives blocks
+        that had schedules or place rules a schedule lock with a 2 h lead.
+        Left: Frozen Chicken schedules still have the built-in 2 h
+        (`schedule.EditFreeze`, R-FREEZE-2 wants locks like a block);
       - done: `unlock` lifts text and password locks and leaves the block
         on; the delay lock counts down from `unlock` and is then lifted
         (`delay_until`); a timer lock ending lifts only the lock (only a
@@ -43,8 +42,12 @@ Last checked against the code: 2026-11-13.
         must be the real clock, with the tamper settings of §4.10;
       - done: `kc9k break text` (alias `relock`). **Re-lock**, the lock
         option, is not built;
-      - uninstalling is refused in schedule windows and for allow windows,
-        not only while something is locked (R-LOCK-9). (L)
+      - done: uninstalling is refused only while something is locked
+        (R-LOCK-9), apart from freeze schedules (above);
+      - not built: blocks are still switched on and off by their schedule
+        (the daemon activates them); §3.3 wants active (the user's switch)
+        apart from enabled (what the schedule says), and layered locks in
+        the user's order (R-LOCK-6, R-LOCK-7). (L)
 - [ ] **Lists by type** (§3.2): a list ticks url, title and text with mixed
       entries; it must be an address, term or search list. (M)
 - [ ] **Project** (§3.13): export leaves out locks, passwords, hotkeys and
@@ -183,7 +186,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Text lock | Built | random characters, random words (`--lock-words`) or custom text (`--lock-text`), 1–5000 |
 | Range lock | Not built | |
 | Delay lock | Differs | `start --delay`, 1 min to 40 days, counted from `stop` |
-| Schedule lock | Differs | built in, fixed 2 h; see 0.1 |
+| Schedule lock | Built | `kc9k schedule lock B on --lead D`, Schedule tab |
 | Re-lock | Not built | |
 | Restart lock | Built | |
 | Password lock | Built | |

@@ -56,7 +56,7 @@ func TestActionSettings(t *testing.T) {
 		{"list", "action", "b", "Blocked", "redirect", "on", "--url", "https://youtube.com/"},
 		{"list", "action", "b", "Blocked", "close-tab", "off"},
 	} {
-		if err := runCLI(t, args...); err == nil || !strings.Contains(err.Error(), "held") {
+		if err := runCLI(t, args...); err == nil || !strings.Contains(err.Error(), "locked") {
 			t.Errorf("%s on a held block: %v; want refused", strings.Join(args, " "), err)
 		}
 	}

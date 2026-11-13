@@ -508,14 +508,14 @@ func ScheduleActiveNow(d *db.DB, blockName string, now time.Time) (bool, error) 
 }
 
 // ScheduleFrozen reports whether a block's schedule enforces it now or at any
-// point within schedule.EditFreeze. The CLI refuses edits that could weaken the
-// block while this holds, whether or not the block is active yet.
-func ScheduleFrozen(d *db.DB, blockName string, now time.Time) (bool, error) {
+// point within lead: while it has a schedule lock (§3.4), the CLI refuses
+// edits that could weaken the block then, whether or not it is active yet.
+func ScheduleFrozen(d *db.DB, blockName string, now time.Time, lead time.Duration) (bool, error) {
 	schedules, err := d.ListSchedules(blockName)
 	if err != nil {
 		return false, err
 	}
-	return schedule.EnforcedWithin(db.Windows(schedules), now, schedule.EditFreeze), nil
+	return schedule.EnforcedWithin(db.Windows(schedules), now, lead), nil
 }
 
 // firewallDomains is the domain set the daemon last applied to the firewall.

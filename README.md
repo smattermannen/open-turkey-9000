@@ -58,9 +58,10 @@ The installed program is independent of the source directory — once installed,
 - **Active**: a block currently in effect (the system is enforcing it).
 - **Text lock (`--lock`)**: prevents `stop`. The only way out is `unlock`, which shows a string of random characters and requires typing all of it in one go, with at least 98% accuracy (at most 6 errors in the default 300 characters). Mistakes aren't highlighted (Backspace works, but you have to spot them yourself), paste is rejected, and `--lock-chars` sets the length, from 1 to 5000 characters (default 300, several minutes of typing; 5000 is about an hour). Instead of random characters, `--lock-words` asks for random common words (about `--lock-chars` characters), and `--lock-text "…"` for your own text, typed exactly (plain characters, up to 5000; a text you wrote to yourself works well). Either sets the text lock; `--text-lock` is another name for `--lock`. The kind is chosen when the lock is set and can't change while it is on. Browser settings, strict mode and the global bypass prevention take the same flags. In the interface, the lock dialogs choose the kind and the length. Deliberate friction to outlast an impulse. Each character is a letter (upper or lower case) 60% of the time, a digit 35% of the time and a symbol 5% of the time; symbols can be any printable ASCII symbol on a US keyboard (`` !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ``).
 - **Timer lock (`--for` / `--until`)**: the block cannot be removed *at all* — not even with the challenge — until the time passes. The strongest lock. While it runs, only time the computer is on or suspended counts: changing the system clock has no effect, and time powered off is not counted, so a shutdown extends the lock by that long.
-- **Schedule**: recurring windows (e.g. weekdays 09:00–17:00). The daemon turns the block on when a window opens and off when it closes; while a window is open the block can't be stopped. With **allow windows** it's the other way round: the block is on at all times *except* during its allow windows (e.g. allow games only on Friday and Saturday evenings), and it can never be loosened on the spot — loosening changes are queued for 24 hours, or applied with `--now` after the typing challenge. Starting **2 hours before** a window opens, the block is frozen: it can't be weakened or removed (only made stricter), and that schedule can't be removed, until the window closes.
+- **Schedule**: recurring windows (e.g. weekdays 09:00–17:00). The daemon turns the block on when a window opens and off when it closes. With **allow windows** it's the other way round: the block is on at all times *except* during its allow windows (e.g. allow games only on Friday and Saturday evenings). A schedule on its own protects nothing: add a **schedule lock** for that (below).
+- **Schedule lock** (`kc9k schedule lock <block> on --lead 2h`): the block is locked during its windows, while a place rule has it on, for the lead time you choose before each window, and, with allow windows, outside them.
 
-While a block is *held* (text-locked, timer-locked, in a schedule window, or within 2 hours of one opening) it can't be removed or weakened, and `make uninstall` refuses. It can still be made **stricter**: see [Strengthening a held block](#strengthening-a-held-block). How hard a held block is to get around depends on your settings (see the custom security note above).
+While a block is *locked* (any of its locks is on) it can't be switched off, removed or weakened, and `make uninstall` refuses. It can still be made **stricter**: see [Strengthening a held block](#strengthening-a-held-block). A block without locks is free to change in any direction. How hard a locked block is to get around depends on your settings (see the custom security note above).
 
 ## Commands
 
@@ -156,28 +157,19 @@ A block's schedules must be all block windows or all allow windows. `--to 24:00`
 
 Schedules are numbered `1, 2, 3, …` per block. Removing one moves the later ones down a number (remove `1` from `1, 2, 3` and the old `2`/`3` become `1`/`2`), and a new schedule takes the next number.
 
-Windows are same-day; for an overnight span (e.g. 17:00–05:00) add two windows (`17:00–24:00` and `00:00–05:00`). From **2 hours before** a schedule's window opens until it closes, that schedule **can't be removed** — otherwise deleting it would end the block early or stop it from starting, defeating the point. Schedules whose windows aren't open or about to open can still be removed at any time, and you can always add new block windows.
+Windows are same-day; for an overnight span (e.g. 17:00–05:00) add two windows (`17:00–24:00` and `00:00–05:00`).
 
-Whenever its schedule has the block on, or will within 2 hours, the block itself is frozen: it can't be weakened (removing apps or list entries, adding exceptions, …) or removed, though it can still be made stricter (see [Strengthening a held block](#strengthening-a-held-block)).
+#### Schedule lock
 
-#### Loosening a block with allow windows
-
-A block with allow windows is meant to stay blocked outside them, so it can't be loosened directly **at any time** — not even during an allow window, which would otherwise be the moment to dismantle it. Loosening changes are:
-
-- removing apps, window titles or blacklist entries, adding exceptions, unticking a blacklist's places or actions, ticking more places on an exception list, raising a threshold or hits, and deleting a blacklist (see [Website lists](#website-lists));
-- `block remove`;
-- adding another allow window, or removing the **last** one (removing one of several only makes the block stricter, so that's immediate).
-
-Such a change is **queued** and applied by the daemon **24 hours** later. Add `--now` to apply it immediately instead, after passing the same typing challenge as `unlock`:
+Without a lock, a schedule only switches its block on and off: you can still stop the block, weaken it or remove a window at any time. A **schedule lock** keeps it: during the block's windows, while a [place](#places) rule has it on, and for a lead time you choose before each window (for allow windows: at all times outside them, and for the lead time before an allow window ends), the block can't be stopped, removed or weakened (removing apps or list entries, adding exceptions, removing a window, adding an allow window, …), though it can still be made stricter.
 
 ```bash
-kc9k block remove-app games steam          # queued; takes effect in 24h
-kc9k block remove-app games steam --now    # typing challenge, then immediate
-kc9k pending                               # list queued changes
-kc9k pending cancel 1                      # drop one
+kc9k schedule lock games on --lead 2h    # the lock, from 2 hours before each window
+kc9k schedule lock games                 # show it
+kc9k schedule lock games off             # refused while the lock is on
 ```
 
-The wait is 24 hours unless the block has its own: `kc9k pending delay <block> 48h` (1h to 720h). A longer delay applies at once; a shorter one is itself queued for the delay the block has now. Queued changes also show in `block info` and `status`. If the block is also text- or timer-locked (from `start --lock/--for/--until`), loosening is refused, and an already-queued change waits until those locks lift. Changes that make the block stricter (adding apps, sites to a blacklist, patterns, locks) always apply immediately.
+A longer lead time is always allowed; a shorter one, or off, weakens the block. In the interface: the Schedule tab. Upgrading from a version before schedule locks gives every block that had schedules or place rules a schedule lock with a 2-hour lead, which is how those blocks were protected before. Changes queued for blocks with allow windows by those versions are still applied by the daemon (`kc9k pending` lists them, `pending cancel N` drops one); new ones aren't queued.
 
 Show status:
 
@@ -216,7 +208,7 @@ kc9k list remove social-media Blocked instagram.com
 Notes:
 
 - If the block is **active**, Killer Chicken 9000 re-applies the layers so the change takes effect immediately.
-- If the block is **held** (text-locked, timer-locked, in an open schedule window, or within 2 hours of one opening), you **cannot** loosen it: removing apps, window titles or blacklist entries, adding exceptions, and unticking a blacklist's places or actions are refused (see [Website lists](#website-lists) for the full list). Clear the hold first (unlock, or wait for the time lock / schedule window to end), make your changes, then activate again. Edits that only make it stricter are always allowed (next section).
+- If the block is **locked** (any of its locks is on, its schedule lock included), you **cannot** weaken it: removing apps, window titles or blacklist entries, adding exceptions, and unticking a blacklist's places or actions are refused (see [Website lists](#website-lists) for the full list). Lift the locks first (unlock, or wait for the timer lock / schedule lock), then make your changes. Edits that only make it stricter are always allowed (next section).
 
 #### Strengthening a held block
 
@@ -244,7 +236,7 @@ Remove an app (process) from a block:
 kc9k block remove-app social-media discord
 ```
 
-Remove an entire block (must be inactive, and not within 2 hours of a schedule window):
+Remove an entire block (must be inactive and not locked):
 
 ```bash
 kc9k block remove social-media
@@ -266,7 +258,7 @@ journalctl -u kc9k -f
 sudo make uninstall
 ```
 
-Uninstalling first runs a guard that **refuses while any block is held** (text-locked, timer-locked, in an open schedule window, or within 2 hours of one opening) **or has allow windows**, so uninstalling can't be used to sidestep a lock — clear the hold first, and remove allow windows (queued or `--now`, see above). When it proceeds, it deactivates all blocks and removes every blocking layer (`/etc/hosts` entries, firewall rules, browser policies) so the system is left clean rather than blocked-with-no-tool. It also undoes KC9K's other changes: forced SafeSearch, the forced search engine, LibreWolf's permission for the unsigned extension, and the no-escape boot lock. Browsers are told to remove the extension at their next start, since a leftover copy would keep enforcing its last rules with no daemon to update them; that one small policy stays in `/etc/librewolf/policies/` and `/etc/firefox/policies/`, and can be deleted once LibreWolf has started once. LibreWolf itself stays installed.
+Uninstalling first runs a guard that **refuses while any block or setting is locked** (R-LOCK-9), so uninstalling can't be used to sidestep a lock — lift the locks first. When it proceeds, it deactivates all blocks and removes every blocking layer (`/etc/hosts` entries, firewall rules, browser policies) so the system is left clean rather than blocked-with-no-tool. It also undoes KC9K's other changes: forced SafeSearch, the forced search engine, LibreWolf's permission for the unsigned extension, and the no-escape boot lock. Browsers are told to remove the extension at their next start, since a leftover copy would keep enforcing its last rules with no daemon to update them; that one small policy stays in `/etc/librewolf/policies/` and `/etc/firefox/policies/`, and can be deleted once LibreWolf has started once. LibreWolf itself stays installed.
 
 ## Website lists
 
@@ -338,7 +330,7 @@ kc9k block export-list work apps > apps.txt       # also: titles, blocked, excep
 kc9k block import-list work apps apps.txt
 ```
 
-What makes a block stricter is always allowed, even while it is held: adding to a blacklist, ticking a blacklist's places or actions, lowering a threshold or hits, adding a list, and removing exceptions or unticking an exception list's places. Everything else loosens it, so it is refused while the block is held and queued for a block with allow windows. A blacklist keeps at least one place and one action.
+What makes a block stricter is always allowed, even while it is held: adding to a blacklist, ticking a blacklist's places or actions, lowering a threshold or hits, adding a list, and removing exceptions or unticking an exception list's places. Everything else loosens it, so it is refused while the block is locked. A blacklist keeps at least one place and one action.
 
 The commands from before lists still work on a block's default lists: `block add`, `remove-entry`, `add-site`, `remove-site`, `add-pattern` and `remove-pattern` on **Blocked**, `add-exception` and `remove-exception` on **Exceptions**, and `add-keyword`, `remove-keyword` and `threshold` on **Page words** (a text list, made when first needed). Upgrading turns each block's sites and patterns, exceptions and page keywords into those three lists, with the block's actions and thresholds; an allowlist block becomes `*.*` in Blocked with its sites as exceptions. `block export` writes the lists, and `block import` also reads exports from before lists.
 
@@ -364,7 +356,7 @@ kc9k cluster rename academia school
 kc9k cluster delete school
 ```
 
-A copy is a copy: later changes to the cluster don't reach the block, and deleting the cluster leaves the copied lists alone. Editing a cluster is always allowed. Copying into a block follows the block's rules: into a blacklist strengthens it (always allowed), into an exception list loosens it (refused while the block is held, queued or challenged for a block with allow windows). A new blacklist made from a cluster blocks what it matches; choose other actions with `kc9k list action`. An exported cluster is a plain entry file, so `kc9k list import` reads it too.
+A copy is a copy: later changes to the cluster don't reach the block, and deleting the cluster leaves the copied lists alone. Editing a cluster is always allowed. Copying into a block follows the block's rules: into a blacklist strengthens it (always allowed), into an exception list weakens it (refused while the block is locked). A new blacklist made from a cluster blocks what it matches; choose other actions with `kc9k list action`. An exported cluster is a plain entry file, so `kc9k list import` reads it too.
 
 ## Link recording
 
@@ -378,7 +370,7 @@ kc9k record stop                        # add the sites and stop
 kc9k record stop --discard              # stop and drop them
 ```
 
-The sites (domains, without `www.`) come from the extension in LibreWolf: pages and the frames inside them (a login or captcha from another site), private windows included, and pages a block stops too, so you can record with the block on and see what it would need. They stay on this computer. Nothing changes until `stop`, which follows the target's rules: into a blacklist or a cluster is always allowed; into an exception list it loosens the block, so it is refused while the block is held (the recording then stays, to stop later or discard) and queued or challenged for a block with allow windows. One recording at a time, at most 2000 sites.
+The sites (domains, without `www.`) come from the extension in LibreWolf: pages and the frames inside them (a login or captcha from another site), private windows included, and pages a block stops too, so you can record with the block on and see what it would need. They stay on this computer. Nothing changes until `stop`, which follows the target's rules: into a blacklist or a cluster is always allowed; into an exception list it loosens the block, so it is refused while the block is locked (the recording then stays, to stop later or discard). One recording at a time, at most 2000 sites.
 
 ## Places
 

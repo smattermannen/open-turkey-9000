@@ -551,10 +551,14 @@ type holdState struct {
 	charLocked   bool
 	lockChars    int
 	lockedUntil  int64
+	// scheduledNow: the block has a schedule lock (§3.4) and a window or
+	// place has it on now.
 	scheduledNow bool
-	// scheduleFrozen: a schedule window is open now or opens within
-	// schedule.EditFreeze, whether or not the block is active yet.
+	// scheduleFrozen: the block has a schedule lock, and a window is open
+	// now or opens within its lead time, whether or not the block is active.
 	scheduleFrozen bool
+	scheduleLock   bool
+	scheduleLead   int // minutes
 	quota          bool // a daily quota keeps the block on
 	extras         db.LockExtras
 	passwordHash   string
@@ -593,7 +597,10 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 		now:         now,
 		trusted:     trusted,
 	}
-	if detail.Active {
+	if h.scheduleLock, h.scheduleLead, err = database.ScheduleLock(name); err != nil {
+		return holdState{}, err
+	}
+	if detail.Active && h.scheduleLock {
 		sched, err := enforce.ScheduleActiveNow(database, name, now)
 		if err != nil {
 			return holdState{}, err
@@ -616,11 +623,13 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 		return holdState{}, err
 	}
 	h.quota = q != nil
-	frozen, err := enforce.ScheduleFrozen(database, name, now)
-	if err != nil {
-		return holdState{}, err
+	if h.scheduleLock {
+		frozen, err := enforce.ScheduleFrozen(database, name, now, time.Duration(h.scheduleLead)*time.Minute)
+		if err != nil {
+			return holdState{}, err
+		}
+		h.scheduleFrozen = frozen
 	}
-	h.scheduleFrozen = frozen
 	return h, nil
 }
 

@@ -98,14 +98,16 @@ build and is **used for real**. On it:
   and daemon agree.
 - **Schedule** (`internal/schedule/`): pure time logic for recurring windows
   (block windows, or `--allow` windows that keep a block on except while open);
-  `EditFreeze` (2 h) is the lead time before a window during which the CLI
-  refuses weakening edits/removals of that block or schedule.
-- **Holds** (`internal/cli/`): `blockHold` decides whether a block is held;
-  `ensureEditable` refuses only edits that would weaken a held block, and
-  `start` on an active block can only strengthen its locks. A block with allow
-  windows is never loosened directly: `gateEdit` (`loosen.go`) queues the edit
-  for `LoosenDelay` (24h, applied by the daemon) or, with `--now`, runs the
-  typing challenge first.
+  `EditFreeze` (2 h) is now used only by freeze schedules.
+- **Locks and weakening** (`internal/cli/`): `blockHold` decides whether a
+  block is locked (text, timer, password, restart, delay, or its schedule
+  lock: `db/schedulelock.go`, `kc9k schedule lock`, on in its windows and
+  places and for its own lead time); `ensureEditable` refuses only edits that
+  would weaken a locked block, and `start` on an active block can only
+  strengthen its locks. `gateEdit` (`loosen.go`) no longer queues anything;
+  the daemon still applies edits older versions queued. `unlock` lifts text
+  and password locks and starts the delay lock's countdown (`delay_until`);
+  the block stays on.
 - **Daemon** (`internal/daemon/`): systemd service, calls `enforce.Tick` every 5s; also samples the foreground app for statistics every 5s and relocks the screen every 0.5s during a lock freeze.
 - **GUI** (`gui/kc9k-gui.py`): GTK 3 Python, English; Dashboard, Blocks, Device Blocks, Statistics, Settings. Reads `kc9k gui-state` and `kc9k stats --json`; every change runs a `kc9k` command.
 - **Website lists** (`internal/db/weblists.go`, `internal/cli/weblists.go`,

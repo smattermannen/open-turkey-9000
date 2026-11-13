@@ -44,6 +44,9 @@ func upgradeSchema(conn *sql.DB) error {
 			return err
 		}
 	}
+	if err := migrateScheduleLocks(conn); err != nil {
+		return err
+	}
 	return migrateWebLists(conn)
 }
 

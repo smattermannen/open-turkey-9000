@@ -89,19 +89,11 @@ var scheduleAddCmd = &cobra.Command{
 				return fmt.Errorf("that window overlaps schedule %d (%s); a block's windows never overlap", i+1, s.Window())
 			}
 		}
-		// An allow window opens a gap in the block. On a block that already
-		// has allow windows that is a loosening edit (queued, or --now with
-		// the typing challenge). Otherwise it can't be added if the gap would
-		// start now or within schedule.EditFreeze.
-		if allow && len(schedules) > 0 && schedules[0].Allow {
-			proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditAddSchedule, Window: w})
-			if err != nil || !proceed {
+		// An allow window opens a gap in the block: a weakening, refused
+		// while the block is locked (R-LOCK-1). A block window only adds.
+		if allow {
+			if err := ensureEditable(database, name, false); err != nil {
 				return err
-			}
-		} else {
-			from := db.Windows(schedules)
-			if schedule.Weakens(from, append(from, w), time.Now(), schedule.EditFreeze) {
-				return fmt.Errorf("that allow window would lift '%s' now or within %s; add it at least %s before it opens", name, freezeLead(), freezeLead())
 			}
 		}
 
@@ -160,12 +152,10 @@ var scheduleRemoveCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Don't let removing a schedule become a way around it: removing the
-		// block window that is holding the block (or is about to), or the
-		// last allow window while the block is on, would make the daemon
-		// deactivate it, or never activate it. So a removal that would lift
-		// the block now or within schedule.EditFreeze is refused; others are
-		// fine (removing one of several allow windows only strengthens it).
+		// Removing a block window, or the last allow window, weakens the
+		// block: refused while it is locked (a schedule lock included, from
+		// its lead time before a window). Removing one of several allow
+		// windows only makes it stricter.
 		schedules, err := database.ListSchedules(name)
 		if err != nil {
 			return err
@@ -173,20 +163,10 @@ var scheduleRemoveCmd = &cobra.Command{
 		if num < 1 || num > len(schedules) {
 			return fmt.Errorf("schedule %d not found in block '%s'", num, name)
 		}
-		from := db.Windows(schedules)
-		to := append(append([]schedule.Window{}, from[:num-1]...), from[num:]...)
-		switch {
-		case from[num-1].Allow && len(schedules) == 1:
-			// Removing the last allow window leaves the block unscheduled:
-			// a loosening edit (queued, or --now with the typing challenge).
-			proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditRemoveSchedule, Window: from[num-1]})
-			if err != nil || !proceed {
+		if !schedules[num-1].Allow || len(schedules) == 1 {
+			if err := ensureEditable(database, name, false); err != nil {
 				return err
 			}
-		case from[num-1].Allow:
-			// Removing one of several allow windows only makes it stricter.
-		case schedule.Weakens(from, to, time.Now(), schedule.EditFreeze):
-			return fmt.Errorf("schedule %d for '%s' is in its window or starts within %s, and can't be removed until the window closes", num, name, freezeLead())
 		}
 
 		if err := database.RemoveSchedule(name, num); err != nil {
@@ -197,6 +177,76 @@ var scheduleRemoveCmd = &cobra.Command{
 	},
 }
 
+var scheduleLockCmd = &cobra.Command{
+	Use:   "lock [block] [on|off] [--lead D]",
+	Short: "Schedule lock: the block is locked during its windows and at its places, and for a lead time before each window",
+	Long: `A schedule lock (§3.4) keeps a block from being weakened, switched off or
+deleted during its block windows, while a place rule has it on, and for the
+lead time you choose before each window. For a block with allow windows it is
+on outside them. Without it, a schedule only switches the block on and off.
+
+  kc9k schedule lock work on --lead 2h
+  kc9k schedule lock work            # shows it
+  kc9k schedule lock work off        # a weakening: refused while it is locked
+
+A longer lead time is always allowed; a shorter one, or off, weakens the block.`,
+	Args: cobra.RangeArgs(1, 2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		name := args[0]
+		on, lead, err := database.ScheduleLock(name)
+		if err != nil {
+			return err
+		}
+		if len(args) == 1 {
+			if !on {
+				fmt.Printf("Block '%s' has no schedule lock.\n", name)
+			} else {
+				fmt.Printf("Block '%s' has a schedule lock, on from %s before each window.\n", name, time.Duration(lead)*time.Minute)
+			}
+			return nil
+		}
+		want := db.NoScheduleLock
+		switch args[1] {
+		case "on":
+			d, err := time.ParseDuration(cmd.Flag("lead").Value.String())
+			if err != nil || d < 0 {
+				return fmt.Errorf("invalid --lead %q (e.g. 2h)", cmd.Flag("lead").Value.String())
+			}
+			if d%time.Minute != 0 {
+				return fmt.Errorf("--lead is in whole minutes")
+			}
+			want = int(d / time.Minute)
+			if want > db.MaxScheduleLockLead {
+				return fmt.Errorf("the lead time is at most 7 days")
+			}
+		case "off":
+			if !on {
+				return fmt.Errorf("block '%s' has no schedule lock", name)
+			}
+		default:
+			return fmt.Errorf("use 'on' or 'off'")
+		}
+		strengthens := want >= 0 && (!on || want >= lead)
+		if strengthens {
+			if err := requireLockPassword(database); err != nil {
+				return err
+			}
+		}
+		if err := ensureEditable(database, name, strengthens); err != nil {
+			return err
+		}
+		if err := database.SetScheduleLock(name, want); err != nil {
+			return err
+		}
+		if want < 0 {
+			fmt.Printf("Block '%s' has no schedule lock any more.\n", name)
+		} else {
+			fmt.Printf("Block '%s' has a schedule lock, on from %s before each window.\n", name, time.Duration(want)*time.Minute)
+		}
+		return nil
+	}),
+}
+
 func init() {
 	scheduleAddCmd.Flags().String("days", "daily", "Days: daily, weekdays, weekends, mon-fri, or mon,wed,fri")
 	scheduleAddCmd.Flags().String("from", "", "Start time HH:MM (required)")
@@ -204,6 +254,8 @@ func init() {
 	scheduleAddCmd.Flags().Bool("allow", false, "Allow window: keep the block on at all times except during its allow windows")
 
 	addNowFlag(scheduleAddCmd, scheduleRemoveCmd)
+	scheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h; at most 7 days)")
+	scheduleCmd.AddCommand(scheduleLockCmd)
 
 	scheduleCmd.AddCommand(scheduleAddCmd)
 	scheduleCmd.AddCommand(scheduleListCmd)

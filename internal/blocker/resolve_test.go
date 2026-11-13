@@ -1,7 +1,10 @@
 package blocker
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -97,5 +100,52 @@ func TestParseResponseTruncatedIsSafe(t *testing.T) {
 		if got := parseResponse(msg, dnsTypeA); len(got) != 0 {
 			t.Errorf("parseResponse(%v) = %v; want empty", msg, got)
 		}
+	}
+}
+
+func TestParseResolvConf(t *testing.T) {
+	got := parseResolvConf("# comment\nnameserver 127.0.0.53\nnameserver 10.0.0.1\nnameserver fe80::1%wlan0\nnameserver ::1\noptions edns0\nsearch .\n")
+	want := []string{"10.0.0.1", "fe80::1%wlan0"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("parseResolvConf = %v; want %v", got, want)
+	}
+}
+
+func TestDNSServers(t *testing.T) {
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "stub")
+	upstream := filepath.Join(dir, "upstream")
+	if err := os.WriteFile(stub, []byte("nameserver 127.0.0.53\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := resolvConfPaths
+	t.Cleanup(func() { resolvConfPaths = old; SetDNSChoice("") })
+
+	// Only a local stub: Quad9 alone.
+	resolvConfPaths = []string{upstream, stub}
+	SetDNSChoice("")
+	if got := dnsServers(); strings.Join(got, " ") != "9.9.9.9:53" {
+		t.Errorf("stub only: %v", got)
+	}
+	// The network's own server first, then Quad9.
+	if err := os.WriteFile(upstream, []byte("nameserver 192.168.1.1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := dnsServers(); strings.Join(got, " ") != "192.168.1.1:53 9.9.9.9:53" {
+		t.Errorf("network: %v", got)
+	}
+	SetDNSChoice(DNSQuad9)
+	if got := dnsServers(); strings.Join(got, " ") != "9.9.9.9:53" {
+		t.Errorf("quad9: %v", got)
+	}
+	SetDNSChoice("1.0.0.1, 2606:4700::1111")
+	if got := dnsServers(); strings.Join(got, " ") != "1.0.0.1:53 [2606:4700::1111]:53" {
+		t.Errorf("own: %v", got)
+	}
+	if ValidDNSChoice("1.2.3.4,nope") == nil {
+		t.Error("a name was taken for an address")
+	}
+	if got := realAddresses([]string{"0.0.0.0", "1.2.3.4", "::", "127.0.0.1", "2001:db8::1"}); strings.Join(got, " ") != "1.2.3.4 2001:db8::1" {
+		t.Errorf("realAddresses = %v", got)
 	}
 }

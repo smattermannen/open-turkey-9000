@@ -8,13 +8,16 @@
 // (net.LookupHost) and even a local stub resolver like systemd-resolved would
 // hand back 0.0.0.0, and the firewall would "block" a useless address.
 //
-// To get the true addresses we query PUBLIC recursive resolvers directly over
-// UDP port 53, parsing the raw DNS response ourselves. This bypasses
-// /etc/hosts and any local stub entirely. Port 53 to these resolvers stays
-// open (we only drop their port 443 to stop DNS-over-HTTPS), so the queries
-// succeed while blocking remains effective.
+// To get the true addresses we ask a DNS server directly over UDP port 53,
+// parsing the raw response ourselves, which bypasses /etc/hosts. By default
+// (§4.10) that is the network's own DNS server, the one the computer already
+// uses, read from systemd-resolved's upstream list (never its local stub, which
+// answers from /etc/hosts), so nobody new learns which sites are blocked; Quad9
+// when it can't answer. The user can choose Quad9 only, or their own servers
+// (SetDNSChoice). Answers that point at this computer or nowhere (0.0.0.0, ::,
+// 127.x) are dropped, so a local resolver that reads /etc/hosts can't fool it.
 //
-// If every resolver is unreachable (e.g. the machine is offline) we simply
+// If every server is unreachable (e.g. the machine is offline) we simply
 // return no addresses: the firewall's IP rules are skipped, and the /etc/hosts
 // and browser-policy layers continue to do their job.
 package blocker
@@ -22,9 +25,12 @@ package blocker
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
+	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -32,13 +38,94 @@ import (
 // encode in a DNS query.
 var errInvalidLabel = errors.New("invalid DNS label")
 
-// publicResolvers are queried, in order, for the real IPs of a domain. We stop
-// at the first one that answers. These are well-known recursive resolvers that
-// have no knowledge of the local /etc/hosts file.
-var publicResolvers = []string{
-	"1.1.1.1:53", // Cloudflare
-	"8.8.8.8:53", // Google
-	"9.9.9.9:53", // Quad9
+// quad9 is the fallback server, and the one chosen by DNSQuad9.
+const quad9 = "9.9.9.9"
+
+// DNS choices for SetDNSChoice; anything else is a comma-separated list of
+// server addresses.
+const (
+	DNSNetwork = "network" // the network's own server, then Quad9 (default)
+	DNSQuad9   = "quad9"
+)
+
+var dnsChoice atomic.Value // string
+
+// SetDNSChoice sets which servers resolveIPs asks: DNSNetwork (or ""),
+// DNSQuad9, or a comma-separated list of IP addresses.
+func SetDNSChoice(choice string) { dnsChoice.Store(choice) }
+
+// resolvConfPaths are read, in order, for the network's DNS servers: the
+// upstream list of systemd-resolved first, then the system's own.
+var resolvConfPaths = []string{"/run/systemd/resolve/resolv.conf", "/etc/resolv.conf"}
+
+// ValidDNSChoice checks a choice for SetDNSChoice.
+func ValidDNSChoice(choice string) error {
+	if choice == "" || choice == DNSNetwork || choice == DNSQuad9 {
+		return nil
+	}
+	for _, s := range strings.Split(choice, ",") {
+		if net.ParseIP(strings.TrimSpace(s)) == nil {
+			return fmt.Errorf("%q is not an IP address (use network, quad9 or IP addresses separated by commas)", s)
+		}
+	}
+	return nil
+}
+
+// dnsServers returns the servers to ask, in order, as host:port.
+func dnsServers() []string {
+	choice, _ := dnsChoice.Load().(string)
+	var ips []string
+	switch choice {
+	case DNSQuad9:
+		ips = []string{quad9}
+	case "", DNSNetwork:
+		ips = append(networkDNS(), quad9)
+	default:
+		for _, s := range strings.Split(choice, ",") {
+			if s = strings.TrimSpace(s); net.ParseIP(s) != nil {
+				ips = append(ips, s)
+			}
+		}
+	}
+	servers := make([]string, 0, len(ips))
+	for _, ip := range ips {
+		servers = append(servers, net.JoinHostPort(ip, "53"))
+	}
+	return servers
+}
+
+// networkDNS reads the network's DNS servers from the first resolv.conf that
+// names any besides this computer's own (a local stub reads /etc/hosts).
+func networkDNS() []string {
+	for _, path := range resolvConfPaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if servers := parseResolvConf(string(data)); len(servers) > 0 {
+			return servers
+		}
+	}
+	return nil
+}
+
+// parseResolvConf returns the nameservers of a resolv.conf, leaving out
+// loopback addresses.
+func parseResolvConf(text string) []string {
+	var servers []string
+	for _, line := range strings.Split(text, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] != "nameserver" {
+			continue
+		}
+		host := fields[1]
+		ip := net.ParseIP(strings.SplitN(host, "%", 2)[0])
+		if ip == nil || ip.IsLoopback() || ip.IsUnspecified() {
+			continue
+		}
+		servers = append(servers, host)
+	}
+	return servers
 }
 
 // DNS record type constants.
@@ -51,14 +138,26 @@ const (
 // /etc/hosts. It returns the first resolver's answer; if none respond, both
 // slices are empty.
 func resolveIPs(domain string) (ipv4 []string, ipv6 []string) {
-	for _, server := range publicResolvers {
-		v4 := queryDNS(server, domain, dnsTypeA)
-		v6 := queryDNS(server, domain, dnsTypeAAAA)
+	for _, server := range dnsServers() {
+		v4 := realAddresses(queryDNS(server, domain, dnsTypeA))
+		v6 := realAddresses(queryDNS(server, domain, dnsTypeAAAA))
 		if len(v4) > 0 || len(v6) > 0 {
 			return v4, v6
 		}
 	}
 	return nil, nil
+}
+
+// realAddresses drops answers that point nowhere or at this computer, as a
+// resolver that reads /etc/hosts would give for a blocked site.
+func realAddresses(ips []string) []string {
+	out := ips[:0]
+	for _, s := range ips {
+		if ip := net.ParseIP(s); ip != nil && !ip.IsUnspecified() && !ip.IsLoopback() {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // queryDNS sends a single UDP DNS query for one record type to one server and
@@ -84,8 +183,8 @@ func queryDNS(server, domain string, qtype uint16) []string {
 
 	resp := make([]byte, 1500)
 	n, err := conn.Read(resp)
-	if err != nil {
-		return nil
+	if err != nil || n < 2 || resp[0] != query[0] || resp[1] != query[1] {
+		return nil // no answer, or not the answer to this query
 	}
 
 	return parseResponse(resp[:n], qtype)
@@ -196,3 +295,6 @@ func skipName(msg []byte, off int) int {
 		off += 1 + length
 	}
 }
+
+// DNSServers lists the servers resolveIPs asks now, in order.
+func DNSServers() []string { return dnsServers() }

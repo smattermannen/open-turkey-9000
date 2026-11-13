@@ -3092,6 +3092,18 @@ class Window(Gtk.ApplicationWindow):
             return
         self.run(["password", "locks", "on" if check.get_active() else "off"])
 
+    def dns_choice_changed(self, combo):
+        self.dns_servers.set_visible(combo.get_active_id() == "own")
+
+    def apply_dns(self, _button):
+        choice = self.dns_choice.get_active_id()
+        if choice == "own":
+            choice = ",".join(s.strip() for s in self.dns_servers.get_text().split(",") if s.strip())
+            if not choice:
+                self.message("Enter one or more server addresses, separated by commas.")
+                return
+        self.run(["dns", choice])
+
     def toggle_no_weakening(self, _switch, wanted):
         if self.updating:
             return False
@@ -3331,6 +3343,25 @@ class Window(Gtk.ApplicationWindow):
                 "for it. Starting a block and adding sites don't."),
             self.password_status, password_row, self.password_locks), False, False, 0)
 
+        dns_row = Gtk.Box(spacing=6)
+        self.dns_choice = Gtk.ComboBoxText()
+        for key, label in (("network", "The network's own server, then Quad9"),
+                           ("quad9", "Quad9 only"), ("own", "My own servers")):
+            self.dns_choice.append(key, label)
+        self.dns_choice.connect("changed", self.dns_choice_changed)
+        self.dns_servers = Gtk.Entry(placeholder_text="e.g. 192.168.1.1, 9.9.9.9", no_show_all=True)
+        dns_apply = Gtk.Button(label="Apply")
+        dns_apply.connect("clicked", self.apply_dns)
+        dns_row.pack_start(self.dns_choice, False, False, 0)
+        dns_row.pack_start(self.dns_servers, True, True, 0)
+        dns_row.pack_end(dns_apply, False, False, 0)
+        box.pack_start(section(
+            "DNS",
+            dim("The firewall needs the real addresses of blocked sites, so Killer Chicken 9000 "
+                "asks a DNS server for them. By default that is the server the computer already "
+                "uses, so nobody new learns which sites are blocked."),
+            dns_row), False, False, 0)
+
         self.no_weakening_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.no_weakening_switch.connect("state-set", self.toggle_no_weakening)
         box.pack_start(section(
@@ -3485,6 +3516,12 @@ class Window(Gtk.ApplicationWindow):
         self.password_locks.set_active(self.state.get("password_for_locks", False))
         self.updating = was
         set_switch(self.no_weakening_switch, self.state.get("no_weakening", False))
+        dns = self.state.get("dns") or "network"
+        if dns in ("network", "quad9"):
+            self.dns_choice.set_active_id(dns)
+        else:
+            self.dns_choice.set_active_id("own")
+            self.dns_servers.set_text(dns)
         hotkeys = self.state.get("hotkeys") or []
         self.hotkey_ids = [h["id"] for h in hotkeys]
         self.hotkeys.set_items([

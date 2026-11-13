@@ -72,6 +72,7 @@ var commandAreas = map[string][]string{
 	"strict":       {areaDevice},
 	"no-escape":    {areaDevice},
 	"no-weakening": {areaSettings},
+	"dns":          {areaSettings},
 	"stats":        {areaStats, areaDashboard},
 	"stats on":     {areaStats, areaSettings},
 	"stats off":    {areaStats, areaSettings},

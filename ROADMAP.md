@@ -45,9 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **DNS** (§4.10): real addresses are asked of Cloudflare, Google and
-      Quad9 (`blocker/resolve.go`); the default must be the network's own DNS
-      server, then Quad9, and the user can choose. (S)
 - [ ] **Bypass prevention warnings** (R-WARN-2): a notification only from a
       `warning` step; it must come at every event and every step. (S)
 - [ ] **Use** (§3.7): input in the last 3 minutes. The code uses 1 minute
@@ -283,7 +280,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Browser settings | Built | |
 | SafeSearch | Partial | Google only; section 2.4 |
 | Behaviour settings | Built | called options |
-| DNS server setting | Not built | |
+| DNS server setting | Built | `kc9k dns`, Settings > DNS |
 | Tamper settings (§4.10) | Not built | |
 | Hotkeys | Built | Cinnamon tried; GNOME see 0.2 |
 | Project export / import | Differs | see 0.1 |

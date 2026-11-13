@@ -67,7 +67,9 @@ build and is **used for real**. On it:
   `control.go` (`start`/`stop`/`unlock`/`status`).
 - **Blocking layers** (`internal/blocker/`): `/etc/hosts` (atomic writes),
   iptables + ip6tables firewall (real-IP resolution via a small built-in DNS
-  client that bypasses `/etc/hosts`; expanded DoH blocklist), browser policies
+  client that bypasses `/etc/hosts` and asks the network's own server, then
+  Quad9, or the user's choice: `kc9k dns`, `SetDNSChoice`, loopback answers
+  dropped; expanded DoH blocklist), browser policies
   for Firefox/Chrome/Chromium/Brave/Edge/Opera/Vivaldi (blocklist, allowlist,
   wildcard patterns, DoH disabled), and exact-name process killing (plus Flatpak app IDs, matched via the
   `app-flatpak-<ID>-<n>.scope` cgroup or `/.flatpak-info`, and desktop app units

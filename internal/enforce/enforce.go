@@ -201,9 +201,25 @@ func Apply(active []db.ActiveBlockDetail) error {
 	return firstErr
 }
 
+// SettingDNS is which DNS server the firewall layer asks for blocked sites'
+// real addresses (§4.10): blocker.DNSNetwork (default), blocker.DNSQuad9, or
+// the user's own addresses.
+const SettingDNS = "dns"
+
+// loadDNSChoice hands the DNS setting to the blocker.
+func loadDNSChoice(d *db.DB) {
+	choice, err := d.GetSetting(SettingDNS)
+	if err != nil {
+		log.Printf("daemon: dns setting: %v", err)
+		return
+	}
+	blocker.SetDNSChoice(choice)
+}
+
 // ApplyFromDB reads the active blocks and applies them. Convenience for the CLI.
 func ApplyFromDB(d *db.DB) error {
 	defer applyLock()()
+	loadDNSChoice(d)
 	active, err := d.GetActiveBlocks()
 	if err != nil {
 		return err
@@ -226,6 +242,7 @@ func Tick(d *db.DB, now time.Time) error {
 		log.Printf("daemon: freeze schedule error: %v", err)
 	}
 	enforceFreeze(d, now)
+	loadDNSChoice(d)
 	enforceBrowser(d)
 	watchClock(d, now)
 

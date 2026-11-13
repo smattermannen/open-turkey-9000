@@ -229,7 +229,7 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 | **Weakening** | A change that blocks less: removing or narrowing entries, removing actions, raising thresholds, shrinking windows, a looser break, disabling, deleting, removing or shortening a lock. |
 | **Gate** | What a weakening must pass: *free*, *password*, *text*, *delay*, or *refused*. The locks in force decide it. |
 | **Pending edit** | A weakening waiting for its delay to end. |
-| **No weakening during active blocks** | A global setting: while any block is active, nothing can be weakened (R-WEAK-6). |
+| **No weakening during active blocks** | A global setting: while any block is active, no browser option or setting can be weakened (R-WEAK-6). Unlocked blocks stay freely editable. |
 
 ### 3.6 Time and breaks
 
@@ -465,7 +465,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 **Locks**
 - **R-LOCK-1** A lock protects only an enabled block; a disabled block can't be deleted while a lock is in force.
 - **R-LOCK-2** Starting an active block again may only strengthen its locks; a timer lock may always be extended.
-- **R-LOCK-3** A block that is not held can be enabled, disabled or edited in any direction at once (the settings password still applies), unless *no weakening during active blocks* is on (R-WEAK-6).
+- **R-LOCK-3** A block that is not held can be enabled, disabled or edited in any direction at once (the settings password still applies), also while it is active.
 - **R-LOCK-4** A timer lock refuses every weakening before its trusted end time.
 - **R-LOCK-5** A text lock allows weakening only after the challenge is typed correctly; pasting is refused.
 - **R-LOCK-6** A delay lock turns every weakening into a pending edit applied when its countdown ends.
@@ -482,7 +482,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 - **R-WEAK-3** Editing an entry is remove + add; it is weakening if the new entry matches less.
 - **R-WEAK-4** With several locks, every gate must be passed.
 - **R-WEAK-5** A refused weakening is logged and never counted as a bypass.
-- **R-WEAK-6** With *no weakening during active blocks* on, nothing can be weakened while any block is active: no block, browser option or setting (strict mode included). Disabling an unlocked block stays allowed, so the way to weaken anything is to disable the active blocks first.
+- **R-WEAK-6** With *no weakening during active blocks* on, no browser option or setting (strict mode included) can be weakened while any block is active; disable the active blocks first. Blocks themselves are not affected: only their own locks hold them (R-LOCK-3, R-LOCK-12).
 
 **Schedules and breaks**
 - **R-SCHED-1** An enabled scheduled block is active inside its windows; a disabled block never is.
@@ -543,11 +543,12 @@ Made with the owner. Newest last.
 - 2026-11-13: Strict mode is a voluntary setting against tampering, with
   its own setting lock (R-STRICT-1).
 - 2026-11-13: An unlocked block can always be enabled, disabled or edited
-  freely.
+  freely, also while it is active.
 - 2026-11-13: A global setting *no weakening during active blocks*
   (R-WEAK-6): with it on, a block must be disabled before, for example,
   strict mode can be turned off. With it off, the user decides whether
-  strict mode gets a lock of its own.
+  strict mode gets a lock of its own. The setting doesn't touch blocks,
+  and turning it off is itself refused while a block is active.
 
 ## 7. Open decisions
 

@@ -121,8 +121,8 @@ They apply to every change.
    friction" and never as more than those settings deliver. The levels:
    1. *Basic:* the user keeps `sudo` and can always stop the daemon. Locks
       only need to outlast an impulse.
-   2. *Strict mode during a lock:* no `sudo`, no `pkexec`, nothing runs from
-      `/home` or `/tmp`. The user is an ordinary user, so anything an
+   2. *Strict mode during a lock* (a setting the user turns on): no `sudo`,
+      no `pkexec`, nothing runs from `/home` or `/tmp`. The user is an ordinary user, so anything an
       ordinary user can do to reach a blocked site is a real hole.
    3. *Boot and hardware:* no-escape closes the boot-time exits; a firmware
       password held by someone else, and factory reset protection, make
@@ -196,7 +196,7 @@ Command and code names are in `backticks`.
 | **Active** | Being enforced right now. | Enabled, locked. |
 | **On break** | Active, but currently lifted by its break. | Disabled. |
 | **Locked** | At least one lock is in force on the block. | Active. |
-| **Held** | The block cannot be weakened right now (by a lock, a schedule lock or allow windows). | Locked. |
+| **Held** | The block cannot be weakened right now, because a lock on it is in force (a schedule lock counts). Only locks hold a block: schedules, allow windows and place rules never do. | Active. |
 
 ### 3.4 Locks — what protects a block
 
@@ -218,8 +218,8 @@ changes what is blocked. *Blocks are rules; locks protect rules.*
 While **any** lock is in force on any block:
 uninstalling is refused, the browser extension is required, protective
 settings (§4.10 *Protection*) can't be turned off, and escape routes are
-closed (private or Tor windows, guest profiles, unsupported browsers,
-containers and VMs). See [Open decisions](#7-open-decisions) on strict mode.
+closed (private or Tor windows, guest profiles, unsupported browsers).
+Strict mode is not part of this: it is a setting of its own (§3.8).
 
 ### 3.5 Weakening
 
@@ -235,7 +235,7 @@ containers and VMs). See [Open decisions](#7-open-decisions) on strict mode.
 | Term | Meaning |
 |---|---|
 | **Block window** | A recurring weekly time when a scheduled block is active. Times in 5-minute steps; one block's windows never overlap. |
-| **Allow window** | A recurring time when an otherwise always-on block is lifted. |
+| **Allow window** | The reverse of a block window: a recurring time when a block that is otherwise always active is lifted, e.g. games allowed on Friday evenings only. |
 | **Break** | A rule that lifts an active block for a while. One break per continuous block, or one per block window. |
 | **Pomodoro** | Work (active) and rest (lifted) alternate, starting with work, with an optional long rest every N rounds. |
 | **Allowance** | Blocked items may be used for N minutes per period, then the block takes effect. Period: rolling, per window, day, week or month, with a refill time. Counts only **use** (§3.7). |
@@ -265,7 +265,7 @@ containers and VMs). See [Open decisions](#7-open-decisions) on strict mode.
 | **Allowed apps only** | Freeze mode: the computer stays usable, but only the programs on the freeze's app list may run; every other user program is closed. | An allowlist block (websites). |
 | **Monk mode** | A system-owned whole-internet block with a timer lock, started by `kc9k monk` or by the `monk` action. | An ordinary block. |
 | **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. | A page action. |
-| **Strict mode** | Closing escape routes while locks are in force: `sudo` and `pkexec`, programs started from `/home` and `/tmp`, containers and VMs, uninstall. | — |
+| **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a lock is in force, it closes escape routes: `sudo` and `pkexec`, programs started from `/home` and `/tmp`, containers and VMs. It has its own setting lock. | — |
 | **No-escape** | Removing the boot-time exits: recovery entries, kernel options, and an unknown password on GRUB. | Strict mode. |
 | **Factory reset** | Wiping or reinstalling the operating system, or booting another one, to get rid of KC9K. Software can't forbid it. | — |
 | **Factory reset protection** | Options that make a factory reset slow and deliberate: firmware lock, boot order guard, installer media guard, other systems in GRUB behind the password. | — |
@@ -469,9 +469,10 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 - **R-LOCK-6** A delay lock turns every weakening into a pending edit applied when its countdown ends.
 - **R-LOCK-7** A restart lock can be removed only after a boot later than the lock's start.
 - **R-LOCK-8** A range lock refuses weakening inside (or, inverted, outside) its ranges.
-- **R-LOCK-9** While any lock is in force: uninstall refused, extension required, protective settings can't be turned off, strict mode on.
+- **R-LOCK-9** While any lock is in force: uninstall refused, extension required, protective settings can't be turned off.
 - **R-LOCK-10** No lock, delay or freeze applies unless the user set it on that block.
 - **R-LOCK-11** Layered locks are lifted one at a time, in the user's order; adding a lock or putting one anywhere in the order is strengthening, removing one or moving it earlier is weakening.
+- **R-LOCK-12** Only locks prevent weakening. Schedules, allow windows and place rules never hold a block.
 
 **Weakening**
 - **R-WEAK-1** Strengthening is never gated.
@@ -498,6 +499,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 
 **Device**
 - **R-FREEZE-1** In *allowed apps only* mode, only programs on the freeze's app list (and system processes) may run.
+- **R-STRICT-1** Strict mode is on only if the user turned it on. Turning it off is gated by its own setting lock.
 - **R-ESCAPE-1** Until the user turns on no-escape, a recovery path always exists (principle 4).
 
 ---
@@ -531,16 +533,18 @@ Made with the owner. Newest last.
   browser options, relock) was added.
 - 2026-11-13: Nothing protects a block unless the user chose it: no fixed
   edit freeze, no fixed loosening delay (§4.8a, R-LOCK-10).
+- 2026-11-13: Where the code contradicts this file, the code is fixed.
+- 2026-11-13: Only locks prevent weakening a block, always (R-LOCK-12). A
+  block in a schedule window, with allow windows or at a place can be
+  weakened freely unless a lock is on it.
+- 2026-11-13: Strict mode is a voluntary setting against tampering, with
+  its own setting lock (R-STRICT-1).
 
 ## 7. Open decisions
 
 Contradictions not yet settled by the owner. Don't resolve them alone.
 
-1. **Strict mode: automatic or chosen?** R-LOCK-9 says strict mode is on
-   while any lock is in force. R-LOCK-10, principle 3 and the code say
-   nothing protects unless the user chose it, and `kc9k strict on` is a
-   separate switch.
-2. **Weakening a block with allow windows.** §3.3 says allow windows hold a
-   block. Today such a weakening waits a built-in 24 h, which §4.8a rules
-   out. Without it, what gate does it get: free, or only the locks the user
-   set?
+1. **Strict mode and block locks.** Strict mode has its own lock
+   (R-STRICT-1). Should a lock on a block also keep strict mode from being
+   turned off while it runs? Without that, turning strict mode off gives
+   `sudo` back, and with it a way to stop the daemon and end the block.

@@ -29,10 +29,16 @@ Last checked against the code: 2026-11-13.
 - [ ] **Fixed 2 h edit freeze** (`schedule.EditFreeze`, also used for
       Frozen Chicken schedules). §4.8a and R-LOCK-10: a schedule lock has a
       lead time the user chooses, none by default. (M)
-- [ ] **Fixed 24 h loosening delay** for blocks with allow windows
-      (`db.DefaultLoosenDelay`, `kc9k pending delay`). Only a delay lock the
-      user set delays a weakening (R-LOCK-6, R-LOCK-10). Depends on
-      `SPEC.md` open decision 2. (M)
+- [ ] **Holds that aren't locks** (R-LOCK-12). Today a block can't be
+      weakened while its schedule window is open, while it has allow windows
+      (weakening is queued for 24 h: `db.DefaultLoosenDelay`, `gateEdit`,
+      `kc9k pending delay`), or while a place rule has it on. Only locks may
+      hold a block; a delay comes only from a delay lock (R-LOCK-6). (M)
+- [ ] **Strict mode's lock** (R-STRICT-1). Strict mode is already a switch
+      (`kc9k strict on`), but it has no lock of its own: it can't be turned
+      off while *any* lock is in force (`enforce.AnyLock` in
+      `cli/strict.go`). Give it its own setting lock; whether block locks
+      hold it too is `SPEC.md` open decision 1. (S)
 - [ ] **Use** (§3.7): input in the last 3 minutes. The code uses 1 minute
       for allowances (`quota`) and 2 minutes for statistics. (S)
 - [ ] **Monk mode** is an ordinary block named `monk-mode`; R-MONK-1 makes it
@@ -139,7 +145,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Password lock | Built | |
 | Layered sequential locks | Partial | locks stack, but `unlock` checks them all at once in a fixed order (`cli/control.go`) |
 | Trusted time | Built | |
-| "While any lock is in force" (uninstall, extension, protection, escape routes) | Unchecked | uninstall refusal is built; the rest depends on `SPEC.md` open decision 1 |
+| "While any lock is in force" (uninstall, extension, protection, escape routes) | Unchecked | uninstall refusal is built; extension, protection and escape routes: Unchecked |
 
 ### §3.6–3.7 Time, breaks and use
 
@@ -166,7 +172,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Allowed apps only | Not built | |
 | Monk mode | Differs | see 0.1 |
 | Consequences | Built | `enforce/consequence.go` |
-| Strict mode | Built | a separate switch (`kc9k strict on`) |
+| Strict mode | Differs | a voluntary switch, but no lock of its own; see 0.1 |
 | No-escape | Built | |
 | Factory reset protection | Not built | section 2.6 |
 

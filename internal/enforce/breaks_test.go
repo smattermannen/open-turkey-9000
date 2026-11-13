@@ -96,3 +96,36 @@ func TestStoppedInWindowStaysOff(t *testing.T) {
 		t.Error("the next window didn't switch the block on")
 	}
 }
+
+// §3.4: a schedule lock counts as a lock for strict mode and the settings
+// that hold while anything is locked; a schedule alone doesn't.
+func TestScheduleLockIsALock(t *testing.T) {
+	d := testDB(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	start := (now.Hour()*60 + now.Minute() + 30) % (24 * 60) / 5 * 5
+	w := schedule.Window{Days: schedule.AllDays, Start: start, End: min(start+60, 24*60)}
+	if w.End <= w.Start {
+		t.Skip("too close to midnight for this window")
+	}
+	if err := d.AddSchedule("b", w); err != nil {
+		t.Fatal(err)
+	}
+	if locked, _ := BlocksLocked(d, now, now.Unix()); locked {
+		t.Fatal("a schedule without a lock counted as a lock")
+	}
+	if err := d.SetScheduleLock("b", 60); err != nil {
+		t.Fatal(err)
+	}
+	if locked, _ := BlocksLocked(d, now, now.Unix()); !locked {
+		t.Error("a schedule lock within its lead time didn't count")
+	}
+	if err := d.SetScheduleLock("b", 5); err != nil {
+		t.Fatal(err)
+	}
+	if locked, _ := BlocksLocked(d, now, now.Unix()); locked {
+		t.Error("a schedule lock outside its lead time counted")
+	}
+}

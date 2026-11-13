@@ -21,8 +21,8 @@ const (
 	StrictLockName = "strict"
 )
 
-// BlockLocked reports whether an active block has a lock in force. Quotas and
-// schedules are not locks: they can't take away administrator rights.
+// BlockLocked reports whether an active block has a lock in force, apart
+// from its schedule lock (see BlocksLocked). Allowances are not locks.
 func BlockLocked(detail *db.BlockDetail, extras db.LockExtras, trusted int64, bootID string) bool {
 	if !detail.Active {
 		return false
@@ -98,6 +98,17 @@ func BlocksLocked(d *db.DB, now time.Time, trusted int64) (bool, error) {
 		}
 		if BlockLocked(detail, extras, trusted, bootID) {
 			return true, nil
+		}
+		// The schedule lock (§3.4) is a lock like the others.
+		if on, lead, err := d.ScheduleLock(b.Name); err == nil && on {
+			if frozen, err := ScheduleFrozen(d, b.Name, now, time.Duration(lead)*time.Minute); err == nil && frozen {
+				return true, nil
+			}
+			if detail.Active {
+				if within, err := ScheduleActiveNow(d, b.Name, now); err == nil && within {
+					return true, nil
+				}
+			}
 		}
 	}
 	return false, nil

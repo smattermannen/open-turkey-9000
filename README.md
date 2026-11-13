@@ -663,7 +663,7 @@ Access passwords decide who may look; the [settings password](#settings-password
 
 ## Strict mode
 
-`kc9k strict on` denies sudo and pkexec for every user while a block or setting is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
+`kc9k strict on` denies sudo and pkexec for every user while a block or setting is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Allowances and schedules without a schedule lock do not trigger it; a schedule lock does, while it is on. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
 
 Strict mode is off until you turn it on, and `kc9k strict off` works at any time, unless strict mode has its own setting lock or [no weakening during active locks](#no-weakening-during-active-locks) is on while something is locked. Its lock is set when turning it on, with the same flags as a browser setting's (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart`); `kc9k strict unlock` lifts a text or password lock and leaves strict mode on. Strict mode's own lock only keeps it on: sudo is taken away only while something else is locked.
 

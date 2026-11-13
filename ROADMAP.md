@@ -72,14 +72,18 @@ Last checked against the code: 2026-11-13.
       so a feed that keeps loading is read again and again. Then
       `match.js` runs one regular expression per term over all of it. Must
       be reworked before phrase sets are built:
-      - read only the text that is new since the last scan;
+      - done: the page is read whole once per address, then only the
+        visible text of what is added (`readPageText` in `content.js`), with
+        a whole re-read at most every 30 s for text changed in place;
       - done: one pass over the words, each looked up in tables of all
         one-word terms (`kc9kWordIndex`: exact, prefix, suffix, and globs by
         their first or last part): 1,000 terms on 40,000 words went from
         1.6 s to 37 ms. Terms of several words, with symbols, and
         combinations still use one regular expression each;
-      - work in small pieces in idle time, never blocking scrolling or typing;
-      - stop reading a page once its strongest action has been taken;
+      - done: scans run in idle time (`requestIdleCallback`), within 0.5 s
+        of new text; reading stops once the page is taken away or every
+        list has done all it can. Left: splitting one big first read into
+        pieces under 16 ms;
       - a speed test in `ci/` with a large page and many rules, run on every
         change to the matcher. (M)
 

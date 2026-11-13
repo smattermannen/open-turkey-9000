@@ -49,6 +49,13 @@ let keywordsFor = null;
 let textChanged = true;
 // Only so much of a page's text is read, so a huge page can't slow it down.
 const MAX_TEXT = 2000000;
+// Principle 9: the page is read whole once per address, then only what is
+// added to it (pageText grows), in idle time; reading stops once the page
+// is taken away or every list has done all it can (readingDone).
+let pageText = "";
+let readWhole = false;
+let addedNodes = new Set();
+let readingDone = false;
 
 // topUrl is the address of the tab, so a frame follows the page around it.
 function topUrl() {
@@ -229,13 +236,18 @@ function scanKeywords() {
     keywordLooks = new Set();
     reportedHits = new Set();
     keywordsFor = url;
+    readWhole = false;
+    readingDone = false;
+  }
+  const testing = lists.some((list) => list.test);
+  if (readingDone && !testing) {
+    return;
   }
   // Lists that only look at addresses need no reading: this still catches a
   // page that changed address without loading (the background script only
   // sees real loads).
-  const testing = lists.some((list) => list.test);
   const page = kc9kReadsPage(lists) || testing
-    ? { url, title: document.title || "", text: (body.innerText || body.textContent || "").slice(0, MAX_TEXT) }
+    ? { url, title: document.title || "", text: readPageText(body) }
     : { url };
   if (testing) {
     showTestPanel(kc9kTestReport(lists, page));
@@ -243,6 +255,13 @@ function scanKeywords() {
     hideTestPanel();
   }
   const matches = kc9kListMatches(lists, page);
+  // Nothing more to learn once the page is taken away, or once every list
+  // that reads it has reported all its actions.
+  if (kc9kTakesAway(kc9kOutcome(matches)) || lists.every((list) =>
+    list.test || list.actions.every((a) => reportedHits.has(list.id + " " + a.action) ||
+      matches.some((m) => m.list.id === list.id && m.actions.some((x) => x.action === a.action))))) {
+    readingDone = true;
+  }
   const fresh = [];
   for (const match of matches) {
     const names = match.actions.map((action) => action.action);
@@ -258,6 +277,51 @@ function scanKeywords() {
   }
   render();
   browser.runtime.sendMessage({ type: "page-hits", url, matches: fresh }).catch(() => {});
+}
+
+// readPageText returns the page's rendered text: all of it the first time
+// for an address, then the text so far plus the visible text of what was
+// added since, so a feed that keeps loading isn't read again and again.
+// Text changed in place (not added) is caught by reading the whole page
+// again, at most this often.
+const REREAD_MS = 30000;
+let readWholeAt = 0;
+
+function readPageText(body) {
+  if (!readWhole || (Date.now() - readWholeAt > REREAD_MS && addedNodes.size === 0)) {
+    readWhole = true;
+    readWholeAt = Date.now();
+    addedNodes = new Set();
+    pageText = (body.innerText || body.textContent || "").slice(0, MAX_TEXT);
+    return pageText;
+  }
+  const nodes = addedNodes;
+  addedNodes = new Set();
+  const inside = (node) => {
+    for (let p = node.parentNode; p; p = p.parentNode) {
+      if (nodes.has(p)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const node of nodes) {
+    if (pageText.length >= MAX_TEXT) {
+      break;
+    }
+    const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    // Only what is shown (R-LIST-4): an element that isn't rendered has no
+    // boxes, and its innerText would be all of its text. A node inside
+    // another added one is read with it.
+    if (!el || !el.isConnected || el.closest("#" + PANEL_ID) || el.getClientRects().length === 0 || inside(node)) {
+      continue;
+    }
+    const text = node.nodeType === Node.ELEMENT_NODE ? el.innerText : node.textContent;
+    if (text && text.trim()) {
+      pageText = (pageText + "\n" + text).slice(0, MAX_TEXT);
+    }
+  }
+  return pageText;
 }
 
 // Keyword test mode: a panel in the corner shows what each list in test
@@ -406,11 +470,34 @@ document.addEventListener("DOMContentLoaded", checkMirror);
 setInterval(checkMirror, 3000);
 
 // Pages that fill in their text later (most of them) are scanned again when
-// it changes, at most every second and a half.
-new MutationObserver(() => {
+// it changes, within half a second (principle 9), in idle time so scrolling
+// and typing come first. Only what was added is read again.
+new MutationObserver((records) => {
   textChanged = true;
+  if (readWhole && !readingDone && addedNodes.size < 5000) {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        addedNodes.add(node);
+      }
+    }
+  }
 }).observe(document.documentElement || document, { childList: true, subtree: true, characterData: true });
-setInterval(scanKeywords, 1500);
+let scanQueued = false;
+setInterval(() => {
+  if (!textChanged || scanQueued) {
+    return;
+  }
+  scanQueued = true;
+  const run = () => {
+    scanQueued = false;
+    scanKeywords();
+  };
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(run, { timeout: 500 });
+  } else {
+    run();
+  }
+}, 250);
 document.addEventListener("DOMContentLoaded", () => {
   textChanged = true;
   scanKeywords();

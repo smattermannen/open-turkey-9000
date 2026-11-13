@@ -12,7 +12,8 @@ Where the code stands against `SPEC.md`, and what comes next. This is the
 2. Update this file in the same commit as the code it describes.
 3. A status is a claim about the code. If you find one wrong, fix it; don't
    build on it. Write "Unchecked" rather than guess.
-4. Order of work: section 0 before anything else (principle 1), then section 2.
+4. Order of work: section 0 before anything else (principle 1), top to
+   bottom, then section 2.
 
 Status: **Built**, **Partial**, **Differs** (built, but not as `SPEC.md`
 says), **Not built**, **Unchecked** (nobody has compared it with the code).
@@ -42,8 +43,8 @@ Last checked against the code: 2026-11-13.
         must be the real clock, with the tamper settings of §4.10;
       - `kc9k break relock` is a text break (rename it); **re-lock**, the
         lock option, is not built;
-      - uninstalling is refused in schedule windows and for allow windows, not only
-        while something is locked (R-LOCK-9). (L)
+      - uninstalling is refused in schedule windows and for allow windows,
+        not only while something is locked (R-LOCK-9). (L)
 - [ ] **Strict mode's lock** (R-STRICT-1). Strict mode is already a switch
       (`kc9k strict on`), but it has no lock of its own: it can't be turned
       off while any lock is on (`enforce.AnyLock` in `cli/strict.go`). Only
@@ -80,10 +81,11 @@ Last checked against the code: 2026-11-13.
       say active (for enforcing), char lock, time lock, held, quota,
       `break allowance` (a reward), `break relock` (a text break), option,
       browser option, template (for shipped lists, which `SPEC.md` calls
-      categories), loosen, bypass detection; `kc9k nepsis` becomes `kc9k bypass`. Commands get the glossary's
-      names (`--text-lock`, `list scope`), keeping the old ones for a while.
-      (M)
-
+      categories), loosen, bypass detection; `kc9k nepsis` becomes
+      `kc9k bypass`. Commands get the glossary's names (`--text-lock`,
+      `list scope`), keeping the old ones for a while. (M)
+- [ ] **Warnings** (R-WARN-1): a scheduled freeze is announced 5 minutes
+      ahead; a list's logout or shutdown is not announced at all. (S)
 - [ ] **Page reading is slow on big pages** (principle 9). In every frame,
       `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
       makes the browser lay out the page) every 1.5 s while the page changes,
@@ -117,6 +119,11 @@ Last checked against the code: 2026-11-13.
       - **`/etc/hosts`:** one line per domain; how fast Mint's resolver
         reads a huge hosts file: Unchecked.
       A speed test in `ci/` with 100,000 entries. (M)
+- [ ] **Phrases** (R-PHRASE-1 to 10): today's word combinations sit inside
+      title and text lists, need every box, take several words from one box
+      (`:N`), and have no length, bridges, URL scope or phrase sets. Rebuild
+      them as phrase sets, after the page reading rework. Existing
+      combinations are turned into phrases. (L)
 
 ### 0.2 Not yet confirmed in real use
 
@@ -145,7 +152,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 - [ ] Social presets beyond YouTube Shorts (the selectors in
       `webext/files/social.js` were written from memory).
 - [ ] A playlist's videos playing; a block following the user between
-      places; relock after a break.
+      places; a text break (`break relock`) coming back.
 - [ ] Google Chrome on the laptop: the extension pinned within seconds,
       can't be removed or disabled, incognito and guest greyed out, a block
       works, toolbar button and popup. Then `ci/browser_test.py` and
@@ -163,7 +170,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Site, URL entry, wildcard, word combination | Built | website lists |
+| Site, URL entry, wildcard | Built | website lists |
 | Search list, search entry | Not built | the `search` detector exists, not the list |
 | File URL, `file://*` default | Not built | see 0.1 |
 | App (name, path, script, fingerprint, Flatpak, desktop unit) | Built | `blocker/scripts.go`, `blocker/process.go` |
@@ -212,8 +219,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Restart lock | Built | |
 | Password lock | Built | |
 | Layered sequential locks | Partial | locks stack, but `unlock` checks them all at once in a fixed order (`cli/control.go`) |
-| Trusted time | Built | |
-| "While any lock is in force" (uninstall, extension, protection, escape routes) | Unchecked | uninstall refusal is built; extension, protection and escape routes: Unchecked |
+| Trusted time | Differs | counts only time the computer is on; see 0.1 |
+| While any block or setting is locked (R-LOCK-9) | Partial | uninstalling is refused (also without a lock, see 0.1); extension and protection settings: Unchecked |
 
 ### §3.6–3.7 Time, breaks and use
 
@@ -224,9 +231,9 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Pomodoro, long rest | Built | the R-SCHED-3 rhythm: Unchecked |
 | Allowance | Partial | daily only (`kc9k quota`); no rolling, window, week or month periods, no refill time |
 | Reward | Partial | `kc9k break allowance`; the expiry rule: Unchecked |
-| Text break, delay break, session break | Not built | |
 | Text break | Built | as `kc9k break relock` |
 | Delay break | Not built | |
+| Session limit | Not built | |
 | Pause | Built | |
 | Autostart | Not built | |
 | Place, place rule | Built | Wi-Fi only |
@@ -238,7 +245,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Item | Status | Notes |
 |---|---|---|
 | Frozen Chicken: lock screen, logout, shutdown, scheduled | Built | a running freeze can't be ended; locks on scheduled freezes: Not built |
-| Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Partial | 5 minutes before a scheduled freeze; none before a list's or ladder's logout or shutdown |
+| Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Differs | see 0.1 |
+| Bypass prevention notices at every event and step (R-WARN-2) | Differs | see 0.1 |
 | Allowed apps only | Not built | |
 | Monk mode | Differs | see 0.1 |
 | Consequences | Built | `enforce/consequence.go` |
@@ -256,7 +264,9 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Look actions | Built | see 0.2 |
 | Close browser, logout, shutdown, monk | Built | |
 | No downloads | Not built | section 2.3 |
-| Threshold, hit count (rendered terms) | Built | per action |
+| Threshold, hit count (rendered terms) | Built | per action; both must be met (R-LIST-6) |
+| Strongest action across blocks | Unchecked | close tab, image, redirect, block page is built within a page |
+| Matching details (R-LIST-4, R-LIST-5) | Unchecked | case is ignored; accents, look-alike letters, hidden text, frames: Unchecked |
 | Threshold (phrase sets) | Not built | |
 | Rate | Not built | |
 | Ad trigger | Not built | section 2.2 |
@@ -265,9 +275,10 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Bypass prevention: events, detectors, ladder, steps, quiet time | Built | `kc9k nepsis` |
+| Bypass prevention: events, detectors, ladder, steps, quiet time | Built | as `kc9k nepsis`; see 0.1 for the name |
 | Workaround detection | Built | proxies, mirrors, front-ends, fetch tools |
-| Settings password, access passwords, setting locks | Built | |
+| Settings password | Differs | always needed to set a lock; see 0.1 |
+| Access passwords, setting locks | Built | |
 | No weakening during active locks (R-WEAK-4) | Not built | strict mode alone behaves this way today |
 | Event counting (R-EVENT-1) | Unchecked | |
 | Link recording | Built | |
@@ -314,7 +325,7 @@ After section 0. Each item's details are in `SPEC.md`; here only the steps.
       (`/sys/class/backlight`; something else for external screens),
       wallpaper (`org.cinnamon.desktop.background`), GTK colour scheme,
       the `dark` action on every page during chosen hours.
-- [ ] Each lockable like a browser option.
+- [ ] Each lockable like a browser setting.
 
 ### 2.2 Ads as a trigger (M) — §3.9
 
@@ -389,6 +400,5 @@ here) once agreed, or delete it.
 - **Audit the sudo rule.** Anything running as the user can run `kc9k` as
   root: check every command for hostile arguments (symlinks, `..`, files
   written under `/etc`). Keep `env_reset` (never `sudo -E`).
-- **A `.deb` package** (`make deb`) whose `prerm` runs `prepare-uninstall`.
 - **A first-run wizard** when there are no blocks.
 - **The typing challenge in its own GTK window** instead of a terminal.

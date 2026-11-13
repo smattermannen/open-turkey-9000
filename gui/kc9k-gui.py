@@ -402,9 +402,9 @@ def block_summary(block):
     if block["scheduled"]:
         parts.append("scheduled")
     if block["quota_limit"]:
-        parts.append(f"quota {block['quota_used'] // 60} of {block['quota_limit'] // 60} min")
+        parts.append(f"allowance {block['quota_used'] // 60} of {block['quota_limit'] // 60} min")
     if block["quota_open"]:
-        parts.append("quota in use")
+        parts.append("allowance session open")
     return " · ".join(parts)
 
 
@@ -2254,7 +2254,7 @@ class Window(Gtk.ApplicationWindow):
         places.pack_start(self.places_label, False, False, 0)
         tabs.append_page(places, Gtk.Label(label="Places"))
 
-        tabs.append_page(self.build_quota_tab(), Gtk.Label(label="Quota & Pomodoro"))
+        tabs.append_page(self.build_quota_tab(), Gtk.Label(label="Allowance & Pomodoro"))
 
         nepsis = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=12)
         nepsis.pack_start(dim(
@@ -2311,9 +2311,9 @@ class Window(Gtk.ApplicationWindow):
         self.quota_minutes = Gtk.SpinButton.new_with_range(1, 1440, 5)
         self.quota_minutes.set_value(30)
         quota_row.pack_start(self.quota_minutes, False, False, 0)
-        self.quota_set = Gtk.Button(label="Save quota")
+        self.quota_set = Gtk.Button(label="Save allowance")
         self.quota_set.connect("clicked", self.set_quota)
-        self.quota_start = Gtk.Button(label="Use quota now")
+        self.quota_start = Gtk.Button(label="Use allowance now")
         self.quota_start.connect("clicked", self.start_quota)
         self.quota_end = Gtk.Button(label="End session")
         self.quota_end.connect("clicked", self.end_quota)
@@ -2326,7 +2326,7 @@ class Window(Gtk.ApplicationWindow):
             session_row.pack_start(button, False, False, 0)
         self.quota_label = dim("")
         box.pack_start(section(
-            "Daily quota",
+            "Daily allowance",
             dim("The block stays on, except during sessions you open, until the day's minutes are "
                 "spent. A session only spends time while the block is in use: its app in front, "
                 "its site in the focused tab, or playing sound or video."),
@@ -2361,7 +2361,7 @@ class Window(Gtk.ApplicationWindow):
         long_row.pack_start(Gtk.Label(label="work periods"), False, False, 0)
         box.pack_start(section(
             "Pomodoro", dim("While the block is on, it pauses for the break after each work period. "
-                            "During a work period the block's quota can't be used."),
+                            "During a work period the block's allowance can't be used."),
             pomodoro_row, long_row), False, False, 0)
 
         allowance_row = Gtk.Box(spacing=6)
@@ -2490,10 +2490,10 @@ class Window(Gtk.ApplicationWindow):
         if paused:
             text = f"On a break for {fmt_seconds(paused)} more."
         elif allowance:
-            text = (f"Allowance: {allowance // 60} min per {block.get('break_per', 0) // 60} min of blocking. "
+            text = (f"Reward: {allowance // 60} min per {block.get('break_per', 0) // 60} min of blocking. "
                     f"Earned: {balance // 60} min.")
         else:
-            text = "No break allowance."
+            text = "No reward."
         if block.get("relock"):
             text += f" Unlocking gives a break of {block['relock'] // 60} min."
         self.break_label.set_text(text)
@@ -2518,7 +2518,7 @@ class Window(Gtk.ApplicationWindow):
         self.quota_remove.set_sensitive(limit > 0)
         self.quota_label.set_text(
             f"Used today: {block['quota_used'] // 60} of {limit // 60} min"
-            + (" · session open" if block["quota_open"] else "") if limit else "No quota set.")
+            + (" · session open" if block["quota_open"] else "") if limit else "No allowance set.")
         self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
                                                          if block["active"] else None))
 
@@ -2707,19 +2707,19 @@ class Window(Gtk.ApplicationWindow):
 
     def set_quota(self, _button):
         if self.selected:
-            self.run(["quota", "set", self.selected, f"{self.quota_minutes.get_value_as_int()}m"])
+            self.run(["allowance", "set", self.selected, f"{self.quota_minutes.get_value_as_int()}m"])
 
     def start_quota(self, _button):
         if self.selected:
-            self.run(["quota", "start", self.selected])
+            self.run(["allowance", "start", self.selected])
 
     def end_quota(self, _button):
         if self.selected:
-            self.run(["quota", "end", self.selected])
+            self.run(["allowance", "end", self.selected])
 
     def remove_quota(self, _button):
         if self.selected:
-            self.run(["quota", "remove", self.selected])
+            self.run(["allowance", "remove", self.selected])
 
     def set_pomodoro(self, _button):
         if self.selected:
@@ -2733,13 +2733,13 @@ class Window(Gtk.ApplicationWindow):
 
     def set_allowance(self, _button):
         if self.selected:
-            self.run(["break", "allowance", self.selected,
+            self.run(["break", "reward", self.selected,
                       f"{self.allowance_minutes.get_value_as_int()}m",
                       "--per", f"{self.allowance_per.get_value_as_int()}m"])
 
     def clear_allowance(self, _button):
         if self.selected:
-            self.run(["break", "allowance", self.selected, "off"])
+            self.run(["break", "reward", self.selected, "off"])
 
     def start_break(self, _button):
         if self.selected:

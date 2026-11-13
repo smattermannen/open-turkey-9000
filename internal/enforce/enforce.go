@@ -263,7 +263,7 @@ func Tick(d *db.DB, now time.Time) error {
 		log.Printf("daemon: schedule reconciliation error: %v", err)
 	}
 	if err := reconcileQuotas(d, now, trusted); err != nil {
-		log.Printf("daemon: quota error: %v", err)
+		log.Printf("daemon: allowance error: %v", err)
 	}
 	sendNotices(d, now)
 

@@ -44,7 +44,7 @@ func TestUpcomingNotices(t *testing.T) {
 	}
 
 	quota := UpcomingNotices(nil, nil, nil, map[string]int64{"social": 240, "news": 900}, at(12, 0))
-	if titles(quota) != "'social': 4 minutes of today's quota left" {
+	if titles(quota) != "'social': 4 minutes of today's allowance left" {
 		t.Errorf("quota notices: %s", titles(quota))
 	}
 

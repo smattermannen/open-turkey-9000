@@ -63,9 +63,9 @@ Last checked against the code: 2026-11-13.
       lock, char lock, held, loosen, bypass detection, browser option;
       `kc9k bypass` (alias `nepsis`), `--text-lock`, `list scope` /
       `cluster scope` (alias `where`), `break text` (alias `relock`).
-      Left: quota (allowance), `break allowance` (a reward), option
-      (behaviour setting), template (category), active for enforcing, and
-      `README.md` prose. (S)
+      Also done: `kc9k allowance` (alias `quota`), `break reward` (alias
+      `allowance`) and their messages. Left: option (behaviour setting),
+      template (category), active for enforcing, and `README.md` prose. (S)
 - [ ] **Page reading is slow on big pages** (principle 9). In every frame,
       `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
       makes the browser lay out the page) every 1.5 s while the page changes,

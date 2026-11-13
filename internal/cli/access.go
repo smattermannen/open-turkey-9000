@@ -66,6 +66,7 @@ var commandAreas = map[string][]string{
 	"schedule":     {areaBlocks},
 	"pending":      {areaBlocks},
 	"quota":        {areaBlocks},
+	"allowance":    {areaBlocks},
 	"pomodoro":     {areaBlocks},
 	"nepsis":       {areaBlocks, areaSettings},
 	"bypass":       {areaBlocks, areaSettings},

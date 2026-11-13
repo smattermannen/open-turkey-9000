@@ -26,7 +26,7 @@ breaks is a long one:
 
   kc9k pomodoro set work 25m 5m --long 15m --every 4
 
-While a block's work period runs, its quota session can't be opened.`,
+While a block's work period runs, its allowance session can't be opened.`,
 	Args: cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		on, err := time.ParseDuration(args[1])

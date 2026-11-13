@@ -291,7 +291,7 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' is not active", blockName)
 		}
 		if hold.quota {
-			return fmt.Errorf("block '%s' has a daily quota and stays on. Use 'kc9k quota start %s'", blockName, blockName)
+			return fmt.Errorf("block '%s' has a daily allowance and stays on. Use 'kc9k allowance start %s'", blockName, blockName)
 		}
 		if hold.scheduledNow {
 			return refused(database, blockName, fmt.Errorf("block '%s' is in a scheduled window and can't be stopped until it closes", blockName))

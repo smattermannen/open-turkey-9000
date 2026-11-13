@@ -107,8 +107,8 @@ func UpcomingNotices(blockWindows map[string][]schedule.Window, freezeWindows []
 		left := quotaLeft[name]
 		if left > 0 && left <= int64(NoticeLead/time.Second) {
 			notices = append(notices, Notice{
-				Key:   "quota " + name + " " + now.Format("2006-01-02"),
-				Title: fmt.Sprintf("'%s': %s of today's quota left", name, minutes(int((left+59)/60))),
+				Key:   "allowance " + name + " " + now.Format("2006-01-02"),
+				Title: fmt.Sprintf("'%s': %s of today's allowance left", name, minutes(int((left+59)/60))),
 				Body:  "The block turns back on when it's spent.",
 			})
 		}

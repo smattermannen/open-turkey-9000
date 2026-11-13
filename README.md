@@ -390,13 +390,13 @@ When no network at all can be seen (Wi-Fi switched off, or no adapter) the compu
 
 Schedules follow the clock on the wall. On the night the clocks go forward, the skipped hour doesn't happen: a window that lies wholly inside it doesn't open that day, and one that spans it is an hour shorter. On the night they go back, the repeated hour is covered both times. `start --until 07:00` means 07:00 on the clock, however long the night is. Everything counted in time (`--for`, delays, Pomodoro, the 24-hour wait for loosening, the 2-hour edit freeze before a window) counts real hours.
 
-## Daily allowance (`kc9k quota`)
+## Daily allowance (`kc9k allowance`, formerly `quota`)
 
 ```bash
-kc9k quota set social-media 30m     # the block now stays on
-kc9k quota start social-media       # open it and spend the quota
-kc9k quota end social-media         # close it early
-kc9k quota remove social-media      # takes effect at midnight
+kc9k allowance set social-media 30m     # the block now stays on
+kc9k allowance start social-media       # open it and spend the quota
+kc9k allowance end social-media         # close it early
+kc9k allowance remove social-media      # takes effect at midnight
 ```
 
 An open session spends only the time the block is in use: one of its apps is in the focused window, or one of its websites is in the focused tab (not after 3 minutes without input) or plays sound or video, even muted, in any tab. Websites are matched by the block's address and title lists; page text lists don't count here. While a session with websites is open, browsers without the extension are closed, so another browser can't be used for free. Without LibreWolf the extension can't see tabs, so a session with websites spends all of its time. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
@@ -473,14 +473,14 @@ Google Chrome (the `.deb` from Google) and Chromium run the same extension, buil
 ## Breaks
 
 ```bash
-kc9k break allowance work 10m --per 1h   # earn 10 minutes of break per hour of blocking
+kc9k break reward work 10m --per 1h   # earn 10 minutes of break per hour of blocking
 kc9k break start work                    # take what is earned (or: break start work 5m)
 kc9k break end work                      # back to work early; the rest is kept
 kc9k break text work 5m                # unlocking gives a 5-minute break instead of ending the block
 kc9k break                               # what each block allows and has earned
 ```
 
-A **reward** (`break allowance`) earns break time while the block is on and the computer is in use (input in the last 3 minutes, screen not locked), saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With a **text break** (`break text`, formerly `relock`), passing the typing challenge or giving the password lifts the block for that long instead of unlocking it, and unlocking once more during that break lifts its locks. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `text … off`) is always possible. The toolbar button shows the break time left on the block's sites.
+A **reward** (`break reward`, formerly `break allowance`) earns break time while the block is on and the computer is in use (input in the last 3 minutes, screen not locked), saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With a **text break** (`break text`, formerly `relock`), passing the typing challenge or giving the password lifts the block for that long instead of unlocking it, and unlocking once more during that break lifts its locks. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `text … off`) is always possible. The toolbar button shows the break time left on the block's sites.
 
 ## Window titles
 

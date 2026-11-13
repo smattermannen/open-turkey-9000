@@ -92,9 +92,10 @@ func saveBreaks(database *db.DB, name string, old, k db.Breaks) error {
 }
 
 var breakAllowanceCmd = &cobra.Command{
-	Use:   "allowance [block] [time|off]",
-	Short: "Break time earned per stretch of blocking, e.g. 10m --per 1h",
-	Args:  cobra.ExactArgs(2),
+	Use:     "reward [block] [time|off]",
+	Aliases: []string{"allowance"},
+	Short:   "Break time earned per stretch of blocking, e.g. 10m --per 1h",
+	Args:    cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		old, err := database.GetBreaks(args[0])
 		if err != nil {
@@ -123,7 +124,7 @@ var breakAllowanceCmd = &cobra.Command{
 			return err
 		}
 		if k.Allowance == 0 {
-			fmt.Printf("Block '%s' has no break allowance.\n", args[0])
+			fmt.Printf("Block '%s' has no reward.\n", args[0])
 		} else {
 			fmt.Printf("Block '%s' earns %s of break per %s of blocking.\n", args[0], seconds(k.Allowance), seconds(k.Per))
 		}
@@ -181,7 +182,7 @@ var breakStartCmd = &cobra.Command{
 			return err
 		}
 		if k.Allowance == 0 {
-			return fmt.Errorf("block '%s' has no break allowance", name)
+			return fmt.Errorf("block '%s' has no reward", name)
 		}
 		trusted, err := database.TrustedNow(time.Now())
 		if err != nil {

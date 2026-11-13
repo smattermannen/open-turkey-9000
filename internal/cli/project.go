@@ -239,7 +239,7 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 		}
 	}
 	if in.Quota < 0 || in.Quota > int64(quota.MaxLimit.Seconds()) {
-		return out, fmt.Errorf("quota out of range")
+		return out, fmt.Errorf("allowance out of range")
 	}
 	if p := in.Pomodoro; p != nil && (p.Work < int64(minPomodoroPhase.Seconds()) || p.Break < int64(minPomodoroPhase.Seconds()) ||
 		p.Long < 0 || p.Every < 0 || p.Every > 20) {
@@ -323,7 +323,7 @@ var projectExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Print the whole setup as JSON (redirect to a file to save it)",
 	Long: `Prints every block with its lists, apps, window titles, schedules, schedule
-lock, social media settings, quota, Pomodoro, breaks and bypass prevention,
+lock, social media settings, allowance, Pomodoro, breaks and bypass prevention,
 the clusters, browser settings, behaviour settings, the global bypass
 prevention and the scheduled Frozen Chicken windows.
 

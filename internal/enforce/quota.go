@@ -37,7 +37,7 @@ func takeQuotaUse(block string) int64 {
 func openQuotaBlocks(d *db.DB) []*db.BlockDetail {
 	names, err := d.QuotaBlocks()
 	if err != nil {
-		log.Printf("quota: %v", err)
+		log.Printf("allowance: %v", err)
 		return nil
 	}
 	var out []*db.BlockDetail
@@ -86,7 +86,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 	for _, name := range names {
 		state, err := d.GetQuota(name)
 		if err != nil {
-			log.Printf("daemon: quota: %v", err)
+			log.Printf("daemon: allowance: %v", err)
 			continue
 		}
 		if state == nil {
@@ -94,7 +94,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		}
 		detail, err := d.GetBlock(name)
 		if err != nil {
-			log.Printf("daemon: quota: %v", err)
+			log.Printf("daemon: allowance: %v", err)
 			continue
 		}
 		spent := takeQuotaUse(name)
@@ -104,7 +104,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		s := state.Spend(spent).Step(now.Unix(), quota.DayOf(now))
 		extras, err := d.GetLockExtras(name)
 		if err != nil {
-			log.Printf("daemon: quota: %v", err)
+			log.Printf("daemon: allowance: %v", err)
 			continue
 		}
 		boot, _ := db.BootID()
@@ -112,11 +112,11 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 
 		if s.Limit == 0 {
 			if err := d.DeleteQuota(name); err != nil {
-				log.Printf("daemon: quota: %v", err)
+				log.Printf("daemon: allowance: %v", err)
 			}
 			if detail.Active && detail.Scheduled && !locked {
 				if err := d.DeactivateBlock(name); err != nil {
-					log.Printf("daemon: quota: %v", err)
+					log.Printf("daemon: allowance: %v", err)
 				}
 			}
 			continue
@@ -124,7 +124,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 
 		scheduled, err := ScheduleActiveNow(d, name, now)
 		if err != nil {
-			log.Printf("daemon: quota: %v", err)
+			log.Printf("daemon: allowance: %v", err)
 		}
 		if locked || scheduled || PomodoroWorking(d, name) {
 			s.Open = false
@@ -132,7 +132,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 
 		saved, err := d.UpdateQuotaIfUnchanged(name, *state, s)
 		if err != nil {
-			log.Printf("daemon: quota: %v", err)
+			log.Printf("daemon: allowance: %v", err)
 			continue
 		}
 		if !saved {
@@ -149,7 +149,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 			err = nil
 		}
 		if err != nil {
-			log.Printf("daemon: quota: %v", err)
+			log.Printf("daemon: allowance: %v", err)
 		}
 	}
 	return nil

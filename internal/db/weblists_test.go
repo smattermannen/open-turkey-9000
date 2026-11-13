@@ -309,3 +309,25 @@ func TestScheduleLockMigration(t *testing.T) {
 		t.Error("a new block got a schedule lock")
 	}
 }
+
+// §3.2: test mode is per list; a block in the old per-block test mode
+// gets its title and text lists in test mode.
+func TestTestModeMovesToLists(t *testing.T) {
+	d, _ := openTest(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	words, err := d.CreateList("b", ListBlacklist, "Words", Where{Text: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetSetting(settingKeywordTest, `["b"]`); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.TestLists(); len(got) != 1 || got[0] != words {
+		t.Errorf("test lists = %v; want only Words (%d)", got, words)
+	}
+	if v, _ := d.GetSetting(settingKeywordTest); v != "" {
+		t.Error("the old setting stayed")
+	}
+}

@@ -605,14 +605,16 @@ The playlist's page and its videos stay open; YouTube's front page, search and e
 
 The extension puts a button in LibreWolf's toolbar. On the tab in front it shows the time left until the site is blocked: what remains of an open quota session, of a break, or until a schedule starts (announced two hours ahead). It turns red for the last five minutes, and shows `!` when Killer Chicken 9000 isn't answering. Clicking it shows which blocks cover the site and lets you add the site to a block's Blocked list (adding only makes a block stricter, so it is always allowed; it is switched off when the Blocks page has an [access password](#access-passwords)).
 
-## Keyword test mode
+## Test mode
 
 ```bash
-kc9k list test adult on     # refused while the block is held: it loosens
-kc9k list test adult off
+kc9k list test adult Words on   # one list; refused while the block is locked: it weakens
+kc9k list test adult on         # every list of the block that reads pages
+kc9k list test adult Words off
+kc9k list test                  # the lists in test mode
 ```
 
-While it is on, the block's lists that read a page's title or text do nothing. Instead a panel in the corner of every page shows which entries were found, how often each, how many different ones, and for each action whether its two thresholds are met. Use it to see whether a rule would be too harsh before you rely on it. Lists that only look at addresses keep working.
+A list in test mode that reads a page's title or text does nothing. Instead a panel in the corner of every page shows which entries were found, how often each, how many different ones, and for each action whether its two thresholds are met. Use it to see whether a list would be too harsh before you rely on it. Lists that only look at addresses keep working. In the interface: the Test mode box on each list. (Blocks that were in the old per-block test mode had their title and text lists put in test mode.)
 
 ## Sites reached another way
 

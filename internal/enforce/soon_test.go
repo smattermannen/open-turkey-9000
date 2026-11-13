@@ -81,8 +81,11 @@ func TestRulesSoonTestAndDetails(t *testing.T) {
 	if err := d.SetListAction(id, db.ActionBlock, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.SetTestBlock("on", true); err != nil {
-		t.Fatal(err)
+	blocked, _ := d.ListID("on", db.DefaultBlockedList)
+	for _, l := range []int{id, blocked} {
+		if err := d.SetTestList(l, true); err != nil {
+			t.Fatal(err)
+		}
 	}
 	rules, _ = BuildRules(d)
 	for _, l := range rules.Lists {
@@ -90,8 +93,8 @@ func TestRulesSoonTestAndDetails(t *testing.T) {
 			t.Errorf("list %s: test = %v", l.Name, l.Test)
 		}
 	}
-	if err := d.SetTestBlock("on", false); err != nil || len(d.TestBlocks()) != 0 {
-		t.Errorf("test mode didn't turn off: %v %v", err, d.TestBlocks())
+	if err := d.SetTestList(id, false); err != nil || len(d.TestLists()) != 1 {
+		t.Errorf("test mode didn't turn off: %v %v", err, d.TestLists())
 	}
 
 	// Options and the Blocks password change what the extension is told.

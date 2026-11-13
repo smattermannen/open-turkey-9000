@@ -178,7 +178,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |
 | Social preset, allowed playlist | Built | see 0.2 |
-| Test mode | Differs | per block (`kc9k list test`); must be per list and phrase set |
+| Test mode | Built | per list (`kc9k list test B L on`, a box on each list); phrase sets: with them |
 
 ### §3.3 Block states
 

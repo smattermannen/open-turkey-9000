@@ -89,6 +89,7 @@ type guiList struct {
 	Where   []string        `json:"where"`
 	Actions []db.ListAction `json:"actions"`
 	Entries []string        `json:"entries"`
+	Test    bool            `json:"test"`
 }
 
 type guiBlock struct {
@@ -313,7 +314,7 @@ var guiStateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		testing := database.TestBlocks()
+		testing := database.TestLists()
 		state.Clusters = []guiCluster{}
 		clusters, err := database.ListClusters()
 		if err != nil {
@@ -378,7 +379,10 @@ var guiStateCmd = &cobra.Command{
 					actions = []db.ListAction{}
 				}
 				g.Lists = append(g.Lists, guiList{ID: l.ID, Name: l.Name, Kind: l.Kind, Where: append([]string{}, l.Where.List()...),
-					Actions: actions, Entries: l.Entries})
+					Actions: actions, Entries: l.Entries, Test: slices.Contains(testing, l.ID)})
+				if slices.Contains(testing, l.ID) {
+					g.KeywordTest = true
+				}
 			}
 			if detail.Active && detail.LockedUntil > trusted {
 				g.LockSeconds = detail.LockedUntil - trusted
@@ -416,7 +420,6 @@ var guiStateCmd = &cobra.Command{
 				s := q.Step(now.Unix(), quota.DayOf(now))
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 			}
-			g.KeywordTest = slices.Contains(testing, b.Name)
 			g.Places = placeNames(places, b.Name)
 			g.LoosenDelay, _ = database.LoosenDelay(b.Name)
 			g.ScheduleLock, g.ScheduleLead = hold.scheduleLock, hold.scheduleLead

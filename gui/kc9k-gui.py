@@ -866,7 +866,13 @@ class ListCard(Gtk.Frame):
 
         self.action_checks, self.spins = {}, {}
         self.threshold_row = None
+        self.test_check = None
         if not self.is_exceptions:
+            self.test_check = Gtk.CheckButton(
+                label="Test mode: show what it finds in pages instead of acting",
+                tooltip_text="For lists that read a page's title or text. Turning it on weakens the block.")
+            self.test_check.connect("toggled", self.toggle_test)
+            box.pack_start(self.test_check, False, False, 0)
             box.pack_start(Gtk.Label(label="Actions:", xalign=0), False, False, 0)
             actions = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
                                   column_spacing=12, row_spacing=2)
@@ -958,6 +964,10 @@ class ListCard(Gtk.Frame):
                 self.threshold_row.set_visible("text" in data["where"])
             self.entries.set_items(data["entries"])
             words = "title" in data["where"] or "text" in data["where"]
+            if self.test_check is not None:
+                self.test_check.set_active(data.get("test", False))
+                self.test_check.set_no_show_all(not words)
+                self.test_check.set_visible(words)
             self.combination_row.set_no_show_all(not words)
             self.combination_row.set_visible(words)
             self.entries.entry.set_placeholder_text(
@@ -995,6 +1005,12 @@ class ListCard(Gtk.Frame):
             return
         self.window.run(self.command("add", text), then=lambda _o: self.window.run(
             self.command("remove", value), then=self.window.queued_note))
+
+    def toggle_test(self, check):
+        if self.filling or self.window.updating:
+            return
+        self.window.run(["list", "test", self.window.selected, self.data["name"],
+                         "on" if check.get_active() else "off"])
 
     def toggle_place(self, check, name):
         if self.filling or self.window.updating:

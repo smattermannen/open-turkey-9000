@@ -199,8 +199,8 @@ type ListRule struct {
 	Text    []string     `json:"text"`
 	Actions []RuleAction `json:"actions"`
 	Except  RuleExcept   `json:"except"`
-	// Test: the block is in keyword test mode. The extension shows what the
-	// list found on each page instead of acting on it.
+	// Test: the list is in test mode (§3.2). The extension shows what it
+	// found on each page instead of acting on it.
 	Test bool `json:"test,omitempty"`
 }
 
@@ -290,7 +290,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 	rules.Ends = blockEnds(d, active, now, trusted)
 	rules.Soon = soonRules(d, active, now, trusted)
 	rules.Blocks = addableBlocks(d)
-	testing := d.TestBlocks()
+	testing := d.TestLists()
 	rules.Social = []string{}
 	for _, b := range withoutBreaks(d, active, trusted) {
 		for _, preset := range b.Social {
@@ -301,7 +301,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 		for _, rule := range listRules(b) {
 			// Test mode is for tuning what a list finds in pages: lists that
 			// read the title or text are shown, not run.
-			rule.Test = slices.Contains(testing, b.BlockName) && len(rule.Title)+len(rule.Text) > 0
+			rule.Test = slices.Contains(testing, rule.ID) && len(rule.Title)+len(rule.Text) > 0
 			rules.Lists = append(rules.Lists, rule)
 			if rule.Test {
 				continue

@@ -52,7 +52,7 @@ func TestSocialSettings(t *testing.T) {
 	mustRun(t, "social", "b", "playlist", "PLzyxwvutsrq98", "on")
 	detail, _ = d.GetBlock("b")
 	l, _ := detail.Lists.Find(db.DefaultExceptionsList)
-	if len(l.Entries) != 3 { // two playlist pages and the video pages
+	if len(l.Entries) != 4 { // file://*, two playlist pages and the video pages
 		t.Errorf("exceptions = %q", l.Entries)
 	}
 	if err := runCLI(t, "social", "b", "playlist", "not a playlist", "on"); err == nil {
@@ -61,12 +61,12 @@ func TestSocialSettings(t *testing.T) {
 	// Removing one keeps the video pages open for the other; removing both closes them.
 	mustRun(t, "social", "b", "playlist", "PLabcdefghij12", "off")
 	detail, _ = d.GetBlock("b")
-	if l, _ = detail.Lists.Find(db.DefaultExceptionsList); len(l.Entries) != 2 {
+	if l, _ = detail.Lists.Find(db.DefaultExceptionsList); len(l.Entries) != 3 {
 		t.Errorf("after removing one playlist: %q", l.Entries)
 	}
 	mustRun(t, "social", "b", "playlist", "PLzyxwvutsrq98", "off")
 	detail, _ = d.GetBlock("b")
-	if l, _ = detail.Lists.Find(db.DefaultExceptionsList); len(l.Entries) != 0 || len(detail.Social) != 3 {
+	if l, _ = detail.Lists.Find(db.DefaultExceptionsList); !reflect.DeepEqual(l.Entries, []string{db.FileException}) || len(detail.Social) != 3 {
 		t.Errorf("after removing both: exceptions %q, social %v", l.Entries, detail.Social)
 	}
 }

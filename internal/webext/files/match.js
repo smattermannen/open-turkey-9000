@@ -9,7 +9,13 @@ function kc9kEscapeRegex(text) {
 
 // Entries work as in Cold Turkey: reddit.com, reddit.com/r/funny, *.xxx, *.*,
 // and keywords such as *casino*.
+// An entry for another scheme (file://*) never matches a web address: with
+// its scheme stripped it would read as "*", every address.
 function kc9kCompile(entry) {
+  const scheme = /^([a-z*]+):\/\//i.exec(entry);
+  if (scheme && !/^(https?|ftp|\*)$/i.test(scheme[1])) {
+    return /(?!)/;
+  }
   const value = entry.replace(/^[a-z*]+:\/\//i, "").replace(/^www\./, "").toLowerCase();
   if (value === "*" || value === "*.*") {
     return /.*/;

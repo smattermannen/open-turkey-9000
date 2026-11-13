@@ -114,7 +114,7 @@ func TestListEntries(t *testing.T) {
 	if l := list(t, d, "b", db.DefaultWordsList); l.Where != (db.Where{Text: true}) || len(l.Entries) != 3 {
 		t.Errorf("Page words = %+v", l)
 	}
-	if got := list(t, d, "b", "Exceptions").Entries; !reflect.DeepEqual(got, []string{"reddit.com/r/golang"}) {
+	if got := list(t, d, "b", "Exceptions").Entries; !reflect.DeepEqual(got, []string{db.FileException, "reddit.com/r/golang"}) {
 		t.Errorf("Exceptions = %q", got)
 	}
 }

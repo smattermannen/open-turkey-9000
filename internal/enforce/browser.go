@@ -225,7 +225,9 @@ type RuleExcept struct {
 func urlEntries(entries []string) []string {
 	out := []string{}
 	for _, e := range entries {
-		if blocker.IsURLEntry(e) {
+		// file://* (R-LIST-3) is for local files, which only the browser
+		// itself opens: it never spares or blocks a web address.
+		if blocker.IsURLEntry(e) && blocker.WebPattern(e) {
 			out = append(out, e)
 		}
 	}

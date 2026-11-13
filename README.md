@@ -72,7 +72,7 @@ kc9k block add social-media instagram.com x.com facebook.com   # to its "Blocked
 kc9k block add-app social-media discord telegram
 ```
 
-A new block has a blacklist named **Blocked** and an exception list named **Exceptions**, both looking at addresses. `block add` and `block add-exception` are shortcuts to them; [Website lists](#website-lists) covers more lists, page titles, page text and actions.
+A new block has a blacklist named **Blocked** and an exception list named **Exceptions**, both looking at addresses. Exceptions starts with `file://*`, so local files you open in the browser stay reachable; it never spares a website. `block add` and `block add-exception` are shortcuts to them; [Website lists](#website-lists) covers more lists, page titles, page text and actions.
 
 Blocking an app also kills everything it launched — block `lutris` and the games started from Lutris close too.
 

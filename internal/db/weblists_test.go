@@ -253,3 +253,22 @@ func TestConcurrentWritesAndCascade(t *testing.T) {
 		t.Errorf("%d lists outlived their block", lists)
 	}
 }
+
+// R-LIST-3: every new block has the exception file://*.
+func TestNewBlockSparesLocalFiles(t *testing.T) {
+	d, _ := openTest(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := d.GetBlock("b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, ok := b.Lists.Find(DefaultExceptionsList)
+	if !ok || len(l.Entries) != 1 || l.Entries[0] != FileException {
+		t.Errorf("exceptions of a new block = %+v", l)
+	}
+	if !b.Empty() {
+		t.Error("the default exception made a new block enforce something")
+	}
+}

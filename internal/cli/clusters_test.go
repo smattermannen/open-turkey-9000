@@ -98,7 +98,7 @@ func TestClusterCopyGating(t *testing.T) {
 	if err := runCLI(t, "cluster", "copy", "anime", "b", "--into", "Exceptions"); err == nil {
 		t.Error("copying into the exception list of a locked block succeeded")
 	}
-	if got := list(t, d, "b", "Exceptions").Entries; len(got) != 0 {
+	if got := list(t, d, "b", "Exceptions").Entries; len(got) != 1 { // file://*
 		t.Errorf("Exceptions = %q", got)
 	}
 }
@@ -175,7 +175,7 @@ func TestRecording(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustRun(t, "record", "stop")
-	if got := list(t, d, "b", "Spared").Entries; !reflect.DeepEqual(got, []string{"arxiv.org"}) {
+	if got := list(t, d, "b", "Spared").Entries; !reflect.DeepEqual(got, []string{db.FileException, "arxiv.org"}) {
 		t.Errorf("Spared = %q", got)
 	}
 
@@ -195,7 +195,7 @@ func TestRecording(t *testing.T) {
 		t.Errorf("a refused stop lost the recording: %q", sites)
 	}
 	mustRun(t, "record", "stop", "--discard")
-	if got := list(t, d, "b", "Spared").Entries; len(got) != 1 {
+	if got := list(t, d, "b", "Spared").Entries; len(got) != 2 {
 		t.Errorf("Spared after a discarded recording = %q", got)
 	}
 }

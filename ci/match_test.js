@@ -32,6 +32,9 @@ const cases = [
 const allowlist = kc9kFilter({ match: ["*.*"], except: ["wikipedia.org"] });
 cases.push(["https://news.ycombinator.com/", true, allowlist]);
 cases.push(["https://en.wikipedia.org/wiki/X", false, allowlist]);
+// R-LIST-3: the default exception file://* never spares a web address.
+const withFiles = kc9kFilter({ match: ["reddit.com"], except: ["file://*"] });
+cases.push(["https://www.reddit.com/", true, withFiles]);
 
 let failed = 0;
 for (const [url, want, f] of cases) {

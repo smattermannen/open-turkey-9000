@@ -599,9 +599,16 @@ func createDefaultLists(q querier, blockID int) error {
 	if _, err := createList(q, blockID, ListBlacklist, DefaultBlockedList, Where{URL: true}); err != nil {
 		return err
 	}
-	_, err := createList(q, blockID, ListExceptions, DefaultExceptionsList, Where{URL: true})
-	return err
+	id, err := createList(q, blockID, ListExceptions, DefaultExceptionsList, Where{URL: true})
+	if err != nil {
+		return err
+	}
+	// R-LIST-3: local files stay reachable in every new block.
+	return addListEntries(q, int(id), []string{FileException})
 }
+
+// FileException is the exception every new block starts with (R-LIST-3).
+const FileException = "file://*"
 
 // legacyStrings reads one column of an old per-block table.
 func legacyStrings(q querier, query string, blockID int) ([]string, error) {

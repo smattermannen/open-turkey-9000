@@ -51,8 +51,27 @@ func TranslatePattern(p string) (firefox, chromium string) {
 	return firefox, chromium
 }
 
+// WebPattern reports whether an entry is for web addresses: without a
+// scheme, or with http, https, ftp or *. Others (file://) are left to the
+// extension: written as a policy, "file://*" would lose its scheme and match
+// every address.
+func WebPattern(p string) bool {
+	i := strings.Index(p, "://")
+	if i <= 0 {
+		return true
+	}
+	switch strings.ToLower(p[:i]) {
+	case "http", "https", "ftp", "*":
+		return true
+	}
+	return false
+}
+
 func translated(patterns []string) (firefox, chromium []string) {
 	for _, p := range ValidPatterns(patterns) {
+		if !WebPattern(p) {
+			continue
+		}
 		ff, cr := TranslatePattern(p)
 		firefox = append(firefox, ff)
 		if cr != "" {

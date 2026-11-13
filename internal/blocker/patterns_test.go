@@ -43,3 +43,15 @@ func TestExceptionsReachBothBrowsers(t *testing.T) {
 	assertContains(t, firefoxExceptionSet(p), "*://*.reddit.com/r/programming*")
 	assertContains(t, chromiumAllowSet(p), "reddit.com/r/programming")
 }
+
+// R-LIST-3: the default exception file://* must not reach the browser
+// policy, where it would lose its scheme and except every address.
+func TestFileExceptionStaysOutOfPolicy(t *testing.T) {
+	ff, cr := translated([]string{"file://*", "file:///home/*"})
+	if len(ff)+len(cr) != 0 {
+		t.Errorf("file entries in the policy: %v %v", ff, cr)
+	}
+	if ff, _ := translated([]string{"https://*.example.com/x"}); len(ff) != 1 {
+		t.Errorf("a web pattern was dropped: %v", ff)
+	}
+}

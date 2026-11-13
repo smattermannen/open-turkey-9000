@@ -45,7 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **R-LIST-3**: new blocks don't get the exception `file://*`. (S)
 - [ ] **R-SCHED-2** and §3.6: block windows may overlap, and times are not
       held to 5-minute steps. (S)
 - [ ] **Text lock** (§3.4): random characters only, 10–5000. Random words,
@@ -154,7 +153,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 |---|---|---|
 | Site, URL entry, wildcard | Built | website lists |
 | Search list, search entry | Not built | the `search` detector exists, not the list |
-| File URL, `file://*` default | Not built | see 0.1 |
+| File URL, `file://*` default | Partial | every new block has the exception `file://*` (R-LIST-3); file URL entries in blacklists don't block anything yet |
 | App (name, path, script, fingerprint, Flatpak, desktop unit) | Built | `blocker/scripts.go`, `blocker/process.go` |
 | Folder entry | Partial | programs inside it are closed; windows showing it are not |
 | Window title entry | Differs | X11 only; also acts in browsers, see 0.1 |

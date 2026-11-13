@@ -34,11 +34,67 @@ function kc9kTarget(url) {
   return url.replace(/^[a-z-]+:\/\//i, "").replace(/^www\./i, "").toLowerCase();
 }
 
+// kc9kIndex compiles entries into a lookup that costs about the same with 10
+// entries or 100,000 (principle 9): plain sites ("reddit.com") and wildcard
+// subdomains ("*.reddit.com", subdomains only) go in sets looked up by each
+// suffix of the address's host, entries with a path but no wildcard in their
+// domain ("reddit.com/r/funny") are filed under their domain, and only the
+// rest ("*casino*", "*.*") are tried one by one. It answers exactly as
+// testing every kc9kCompile'd entry would (ci/match_test.js checks).
+function kc9kIndex(entries) {
+  const index = { length: 0, sites: new Set(), subs: new Set(), byDomain: new Map(), rest: [] };
+  for (const entry of entries || []) {
+    index.length++;
+    const scheme = /^([a-z*]+):\/\//i.exec(entry);
+    if (scheme && !/^(https?|ftp|\*)$/i.test(scheme[1])) {
+      continue; // file://* and the like never match a web address
+    }
+    const value = entry.replace(/^[a-z*]+:\/\//i, "").replace(/^www\./, "").toLowerCase();
+    const slash = value.indexOf("/");
+    const domain = (slash < 0 ? value : value.slice(0, slash)).replace(/^\*\./, "");
+    if (value === "*" || value === "*.*" || domain === "" || domain.includes("*")) {
+      index.rest.push(kc9kCompile(entry));
+    } else if (slash < 0) {
+      (value.startsWith("*.") ? index.subs : index.sites).add(domain);
+    } else {
+      const rules = index.byDomain.get(domain) || [];
+      rules.push(kc9kCompile(entry));
+      index.byDomain.set(domain, rules);
+    }
+  }
+  return index;
+}
+
+// kc9kIndexTest reports whether an index matches a target (kc9kTarget).
+function kc9kIndexTest(index, text) {
+  if (index.length === 0) {
+    return false;
+  }
+  const slash = text.indexOf("/");
+  const host = slash < 0 ? text : text.slice(0, slash);
+  if (index.sites.size > 0 || index.subs.size > 0 || index.byDomain.size > 0) {
+    for (let at = -1; ; at = host.indexOf(".", at + 1)) {
+      const suffix = host.slice(at + 1);
+      if (index.sites.has(suffix) || (at >= 0 && index.subs.has(suffix))) {
+        return true;
+      }
+      const rules = index.byDomain.get(suffix);
+      if (rules && rules.some((rule) => rule.test(text))) {
+        return true;
+      }
+      if (host.indexOf(".", at + 1) < 0) {
+        break;
+      }
+    }
+  }
+  return index.rest.some((rule) => rule.test(text));
+}
+
 // A compiled filter: an entry in match that no entry in except matches.
 function kc9kFilter(raw) {
   return {
-    match: ((raw && raw.match) || []).map(kc9kCompile),
-    except: ((raw && raw.except) || []).map(kc9kCompile),
+    match: kc9kIndex((raw && raw.match) || []),
+    except: kc9kIndex((raw && raw.except) || []),
   };
 }
 
@@ -135,7 +191,7 @@ function kc9kMatchesOne(filter, url) {
     return false;
   }
   const text = kc9kTarget(url);
-  return filter.match.some((rule) => rule.test(text)) && !filter.except.some((rule) => rule.test(text));
+  return kc9kIndexTest(filter.match, text) && !kc9kIndexTest(filter.except, text);
 }
 
 // kc9kMatches reports whether the filter applies to url or to a site shown

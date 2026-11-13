@@ -36,7 +36,55 @@ cases.push(["https://en.wikipedia.org/wiki/X", false, allowlist]);
 const withFiles = kc9kFilter({ match: ["reddit.com"], except: ["file://*"] });
 cases.push(["https://www.reddit.com/", true, withFiles]);
 
-let failed = 0;
+const failed0 = [];
+// The index (kc9kIndex) answers exactly as testing every entry's regular
+// expression would, and costs about the same with 100,000 entries.
+{
+  const entries = ["reddit.com", "*.xxx", "*.example.org", "news.ycombinator.com", "youtube.com/shorts",
+    "*.tumblr.com/tagged", "*casino*", "google.com/*q=*unicorn*", "a.b.c.d", "file://*", "https://imgur.com",
+    "*.*", "x.com/home", "co.uk"];
+  const urls = ["https://www.reddit.com/r/x", "https://old.reddit.com", "https://reddit.com.evil.net/",
+    "https://notreddit.com/", "https://site.xxx/", "https://xxx/", "https://example.org/", "https://a.example.org/z",
+    "https://news.ycombinator.com/item", "https://youtube.com/shorts/abc", "https://m.youtube.com/shorts/x",
+    "https://youtube.com/watch", "https://staff.tumblr.com/tagged/art", "https://tumblr.com/tagged",
+    "https://bigcasino.net", "https://google.com/search?q=pink+unicorn", "https://e.a.b.c.d/", "https://imgur.com/a",
+    "https://reddit.com:8080/", "https://reddit.com?x=1", "https://x.com/home", "https://bbc.co.uk/", "ftp://reddit.com/f"];
+  const naive = (list, url) => list.map(kc9kCompile).some((rule) => rule.test(kc9kTarget(url)));
+  for (let n = 0; n < 300; n++) {
+    const list = entries.filter((_, i) => (n * 2654435761 >>> i) % 3 === 0 || i === n % entries.length).slice(0, 1 + n % 8);
+    if (list.includes("*.*")) {
+      continue;
+    }
+    const index = kc9kIndex(list);
+    for (const url of urls) {
+      if (kc9kIndexTest(index, kc9kTarget(url)) !== naive(list, url)) {
+        failed0.push(JSON.stringify(list) + " " + url);
+
+      }
+    }
+  }
+  const big = [];
+  for (let i = 0; i < 100000; i++) {
+    big.push("site" + i + ".example" + (i % 7 === 0 ? "/path" + i : ""));
+  }
+  const bigIndex = kc9kFilter({ match: big });
+  const start = Date.now();
+  for (let i = 0; i < 1000; i++) {
+    kc9kMatches(bigIndex, "https://cdn" + i + ".static.example.net/script.js?v=" + i);
+  }
+  const each = (Date.now() - start) / 1000;
+  if (each > 1) {
+    failed0.push("100,000 entries: " + each + " ms per address");
+  }
+  if (!kc9kMatches(bigIndex, "https://www.site99999.example/") || !kc9kMatches(bigIndex, "https://site14.example/path14/x")) {
+    failed0.push("the big index misses its own entries");
+  }
+}
+
+let failed = failed0.length;
+for (const line of failed0) {
+  console.error("index: " + line);
+}
 for (const [url, want, f] of cases) {
   const got = kc9kMatches(f || filter, url);
   if (got !== want) {

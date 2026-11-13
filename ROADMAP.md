@@ -74,11 +74,10 @@ Last checked against the code: 2026-11-13.
 
 - [ ] **Gigantic URL lists are slow** (principle 9). Four places grow with
       the size of a list:
-      - **Extension:** every request a page makes (scripts, images,
-        frames: often 100–300 per page) is tested against every URL entry,
-        one regular expression each (`kc9kMatchesOne` in `match.js`), and the
-        request waits for the answer. Needs a lookup table by domain, with
-        regular expressions only for entries that really need them.
+      - **Extension:** done. `kc9kIndex` looks sites up by host suffix and
+        files path entries under their domain; only wildcard entries are
+        tried one by one. `ci/match_test.js` checks it against the regular
+        expressions and times 100,000 entries.
       - **Firewall:** the chain is now loaded in one `iptables-restore` run
         (one process for any number of addresses), but every outgoing
         packet still walks one rule per IP. Needs one set (nftables set or

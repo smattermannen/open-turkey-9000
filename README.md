@@ -1,5 +1,3 @@
-This repository was originally forked from [bdcdo/open-turkey](https://github.com/bdcdo/open-turkey). The README below comes directly from that repo. This repo adds some changes to that repo that I added while testing out AI coding tools that I found particularly useful.
-
 # Killer Chicken 9000 (KC9K)
 
 A command-line productivity blocker for Linux, backed by a `systemd` service.
@@ -12,6 +10,8 @@ It organizes blocking into **blocks** — named groups of:
 - **Apps** (process names, e.g. `discord`, `telegram-desktop`, or Flatpak app IDs, e.g. `com.discordapp.Discord`)
 
 When you **activate** a block, a daemon continuously ensures the blocking layers stay applied.
+
+This file explains how to use what is built. What KC9K is meant to be, and the words it uses, are in [SPEC.md](SPEC.md); what is built and what comes next is in [ROADMAP.md](ROADMAP.md).
 
 ## How it works — 4 enforcement layers
 
@@ -56,11 +56,11 @@ The installed program is independent of the source directory — once installed,
 - **Block**: website lists, apps and window titles you block together. A block has **blacklists** and **exception lists**; each list ticks where it looks (the address, the page title, the page text), and each blacklist chooses its actions. See [Website lists](#website-lists).
 - **Overlapping blocks**: several blocks can be active at once, and everything they enforce is combined. A block's exceptions spare pages only from that block's own blacklists. To make a held block stricter, see [Strengthening a held block](#strengthening-a-held-block).
 - **Active**: a block currently in effect (the system is enforcing it).
-- **Character lock (`--lock`)**: prevents `stop`. The only way out is `unlock`, which shows a string of random characters and requires typing all of it in one go, with at least 98% accuracy (at most 6 errors in the default 300 characters). Mistakes aren't highlighted (Backspace works, but you have to spot them yourself), paste is rejected, and `--lock-chars` sets the length, from 10 to 5000 characters (default 300, several minutes of typing; 5000 is about an hour). In the interface, the lock dialogs have a length field. Deliberate friction to outlast an impulse. Each character is a letter (upper or lower case) 60% of the time, a digit 35% of the time and a symbol 5% of the time; symbols can be any printable ASCII symbol on a US keyboard (`` !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ``).
-- **Time lock (`--for` / `--until`)**: the block cannot be removed *at all* — not even with the challenge — until the time passes. The strongest lock. While it runs, only time the computer is on or suspended counts: changing the system clock has no effect, and time powered off is not counted, so a shutdown extends the lock by that long.
+- **Text lock (`--lock`)**: prevents `stop`. The only way out is `unlock`, which shows a string of random characters and requires typing all of it in one go, with at least 98% accuracy (at most 6 errors in the default 300 characters). Mistakes aren't highlighted (Backspace works, but you have to spot them yourself), paste is rejected, and `--lock-chars` sets the length, from 10 to 5000 characters (default 300, several minutes of typing; 5000 is about an hour). In the interface, the lock dialogs have a length field. Deliberate friction to outlast an impulse. Each character is a letter (upper or lower case) 60% of the time, a digit 35% of the time and a symbol 5% of the time; symbols can be any printable ASCII symbol on a US keyboard (`` !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ``).
+- **Timer lock (`--for` / `--until`)**: the block cannot be removed *at all* — not even with the challenge — until the time passes. The strongest lock. While it runs, only time the computer is on or suspended counts: changing the system clock has no effect, and time powered off is not counted, so a shutdown extends the lock by that long.
 - **Schedule**: recurring windows (e.g. weekdays 09:00–17:00). The daemon turns the block on when a window opens and off when it closes; while a window is open the block can't be stopped. With **allow windows** it's the other way round: the block is on at all times *except* during its allow windows (e.g. allow games only on Friday and Saturday evenings), and it can never be loosened on the spot — loosening changes are queued for 24 hours, or applied with `--now` after the typing challenge. Starting **2 hours before** a window opens, the block is frozen: it can't be weakened or removed (only made stricter), and that schedule can't be removed, until the window closes.
 
-While a block is *held* (char-locked, time-locked, in a schedule window, or within 2 hours of one opening) it can't be removed or weakened, and `make uninstall` refuses. It can still be made **stricter**: see [Strengthening a held block](#strengthening-a-held-block). How hard a held block is to get around depends on your settings (see the custom security note above).
+While a block is *held* (text-locked, timer-locked, in a schedule window, or within 2 hours of one opening) it can't be removed or weakened, and `make uninstall` refuses. It can still be made **stricter**: see [Strengthening a held block](#strengthening-a-held-block). How hard a held block is to get around depends on your settings (see the custom security note above).
 
 ## Commands
 
@@ -126,7 +126,7 @@ Activate:
 kc9k start social-media
 ```
 
-Activate with a character lock, or a time lock:
+Activate with a text lock, or a timer lock:
 
 ```bash
 kc9k start social-media --lock              # typing challenge to remove
@@ -175,7 +175,7 @@ kc9k pending                               # list queued changes
 kc9k pending cancel 1                      # drop one
 ```
 
-The wait is 24 hours unless the block has its own: `kc9k pending delay <block> 48h` (1h to 720h). A longer delay applies at once; a shorter one is itself queued for the delay the block has now. Queued changes also show in `block info` and `status`. If the block is also character- or time-locked (from `start --lock/--for/--until`), loosening is refused, and an already-queued change waits until those locks lift. Changes that make the block stricter (adding apps, sites to a blocklist, patterns, locks) always apply immediately.
+The wait is 24 hours unless the block has its own: `kc9k pending delay <block> 48h` (1h to 720h). A longer delay applies at once; a shorter one is itself queued for the delay the block has now. Queued changes also show in `block info` and `status`. If the block is also text- or timer-locked (from `start --lock/--for/--until`), loosening is refused, and an already-queued change waits until those locks lift. Changes that make the block stricter (adding apps, sites to a blacklist, patterns, locks) always apply immediately.
 
 Show status:
 
@@ -189,7 +189,7 @@ Deactivate (only if the block isn't held — see Concepts):
 kc9k stop social-media
 ```
 
-Unlock a character-locked block (this also **deactivates** it). Time locks and open schedule windows can't be unlocked — they lift on their own. A long challenge is shown a page at a time, sized to your terminal: type a page and press Enter for the next. Accuracy is counted over the whole text:
+Unlock a text-locked block (this also **deactivates** it). Time locks and open schedule windows can't be unlocked — they lift on their own. A long challenge is shown a page at a time, sized to your terminal: type a page and press Enter for the next. Accuracy is counted over the whole text:
 
 ```bash
 kc9k unlock social-media
@@ -214,7 +214,7 @@ kc9k list remove social-media Blocked instagram.com
 Notes:
 
 - If the block is **active**, Killer Chicken 9000 re-applies the layers so the change takes effect immediately.
-- If the block is **held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening), you **cannot** loosen it: removing apps, window titles or blacklist entries, adding exceptions, and unticking a blacklist's places or actions are refused (see [Website lists](#website-lists) for the full list). Clear the hold first (unlock, or wait for the time lock / schedule window to end), make your changes, then activate again. Edits that only make it stricter are always allowed (next section).
+- If the block is **held** (text-locked, timer-locked, in an open schedule window, or within 2 hours of one opening), you **cannot** loosen it: removing apps, window titles or blacklist entries, adding exceptions, and unticking a blacklist's places or actions are refused (see [Website lists](#website-lists) for the full list). Clear the hold first (unlock, or wait for the time lock / schedule window to end), make your changes, then activate again. Edits that only make it stricter are always allowed (next section).
 
 #### Strengthening a held block
 
@@ -226,7 +226,7 @@ A held block can always be made stricter, since that can't be used to escape it:
 | `list add` to a blacklist (`block add`, `add-keyword`), `list create` | matches more pages |
 | `list where … on` and `list action … on` on a blacklist, a lower `list threshold` | looks in more places, does more, or needs fewer words |
 | `list remove` from an exception list (`block remove-exception`), `list where … off` on one, `list delete` of one | spares fewer pages |
-| `start <block> --lock [--lock-chars N]` on an **active** block | adds a char lock, or lengthens the challenge (a shorter `--lock-chars` is refused) |
+| `start <block> --lock [--lock-chars N]` on an **active** block | adds a text lock, or lengthens the challenge (a shorter `--lock-chars` is refused) |
 | `start <block> --for D` / `--until HH:MM` on an **active** block | adds a time lock, or extends it (an earlier end is refused) |
 
 ```bash
@@ -234,7 +234,7 @@ kc9k start social-media --for 3h       # already active: extend its time lock
 kc9k block add-site social-media reddit.com
 ```
 
-If you lock a block that its schedule switched on, the lock outlives the schedule: when the window closes, a time-locked block stays on until its time lock expires (the daemon then switches it off), and a char-locked one stays on until you `unlock` it.
+If you lock a block that its schedule switched on, the lock outlives the schedule: when the window closes, a timer-locked block stays on until its timer lock expires (the daemon then switches it off), and a text-locked one stays on until you `unlock` it.
 
 Remove an app (process) from a block:
 
@@ -264,7 +264,7 @@ journalctl -u kc9k -f
 sudo make uninstall
 ```
 
-Uninstalling first runs a guard that **refuses while any block is held** (character-locked, time-locked, in an open schedule window, or within 2 hours of one opening) **or has allow windows**, so uninstalling can't be used to sidestep a lock — clear the hold first, and remove allow windows (queued or `--now`, see above). When it proceeds, it deactivates all blocks and removes every blocking layer (`/etc/hosts` entries, firewall rules, browser policies) so the system is left clean rather than blocked-with-no-tool. It also undoes KC9K's other changes: forced SafeSearch, the forced search engine, LibreWolf's permission for the unsigned extension, and the no-escape boot lock. Browsers are told to remove the extension at their next start, since a leftover copy would keep enforcing its last rules with no daemon to update them; that one small policy stays in `/etc/librewolf/policies/` and `/etc/firefox/policies/`, and can be deleted once LibreWolf has started once. LibreWolf itself stays installed.
+Uninstalling first runs a guard that **refuses while any block is held** (text-locked, timer-locked, in an open schedule window, or within 2 hours of one opening) **or has allow windows**, so uninstalling can't be used to sidestep a lock — clear the hold first, and remove allow windows (queued or `--now`, see above). When it proceeds, it deactivates all blocks and removes every blocking layer (`/etc/hosts` entries, firewall rules, browser policies) so the system is left clean rather than blocked-with-no-tool. It also undoes KC9K's other changes: forced SafeSearch, the forced search engine, LibreWolf's permission for the unsigned extension, and the no-escape boot lock. Browsers are told to remove the extension at their next start, since a leftover copy would keep enforcing its last rules with no daemon to update them; that one small policy stays in `/etc/librewolf/policies/` and `/etc/firefox/policies/`, and can be deleted once LibreWolf has started once. LibreWolf itself stays installed.
 
 ## Website lists
 
@@ -396,7 +396,7 @@ When no network at all can be seen (Wi-Fi switched off, or no adapter) the compu
 
 Schedules follow the clock on the wall. On the night the clocks go forward, the skipped hour doesn't happen: a window that lies wholly inside it doesn't open that day, and one that spans it is an hour shorter. On the night they go back, the repeated hour is covered both times. `start --until 07:00` means 07:00 on the clock, however long the night is. Everything counted in time (`--for`, delays, Pomodoro, the 24-hour wait for loosening, the 2-hour edit freeze before a window) counts real hours.
 
-## Daily quotas
+## Daily allowance (`kc9k quota`)
 
 ```bash
 kc9k quota set social-media 30m     # the block now stays on
@@ -412,8 +412,8 @@ An open session spends only the time the block is in use: one of its apps is in 
 | Lock | Command | Ends when |
 |---|---|---|
 | Timer | `start b --for 2h` | the time has passed |
-| Time range | `start b --until 17:00` | the clock time is reached |
-| Random text | `start b --lock` | the challenge is typed with `unlock` |
+| Timer (clock time) | `start b --until 17:00` | the clock time is reached |
+| Text | `start b --lock` | the challenge is typed with `unlock` |
 | Password | `start b --password-stdin` | someone enters it with `unlock`, from standard input |
 | Restart | `start b --restart` | the computer has restarted, then `stop` works |
 | Delay | `start b --delay 30m` | the delay has passed after `stop` |
@@ -484,7 +484,7 @@ kc9k break relock work 5m                # unlocking gives a 5-minute break inst
 kc9k break                               # what each block allows and has earned
 ```
 
-An allowance earns break time while the block is on, saved up to one allowance. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With `relock`, passing the typing challenge or giving the password lifts the block for that long instead of ending it, and unlocking once more during that break ends it. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `relock … off`) is always possible. The toolbar button shows the break time left on the block's sites.
+A **reward** (`break allowance`) earns break time while the block is on, saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With `relock`, passing the typing challenge or giving the password lifts the block for that long instead of ending it, and unlocking once more during that break ends it. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `relock … off`) is always possible. The toolbar button shows the break time left on the block's sites.
 
 ## Window titles
 
@@ -505,9 +505,9 @@ kc9k monk --for 2h
 
 Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. It is an ordinary block, so add exceptions (documentation you need), apps or anything else to it. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password, like any lock.
 
-## Bypass detection
+## Bypass prevention
 
-Many blocked pages or closed apps in a short time usually mean someone is hunting for a loophole. Bypass detection ("nepsis", watchfulness) counts what Killer Chicken stops and climbs a ladder of steps you choose, so you really step away:
+Many blocked pages or closed apps in a short time usually mean someone is hunting for a loophole. Bypass prevention (command `nepsis`, watchfulness) counts what Killer Chicken stops and climbs a ladder of steps you choose, so you really step away:
 
 ```bash
 kc9k nepsis set --step "3 in 10m: warning, close-tab, logout 1m" \
@@ -618,7 +618,7 @@ While it is on, the block's lists that read a page's title or text do nothing. I
 
 ## Sites reached another way
 
-A blocked site is also stopped when it is reached through another address: Google Translate, web archives, and any proxy that carries the address in its own (`?url=https://…`, also base64 or after a slash in the path; a search for an address doesn't count). A page that says it is another site (its canonical address) or that is a known alternative front-end (Invidious and Piped for YouTube, Nitter for X, Redlib for Reddit, ProxiTok for TikTok and others) is treated as that site. Each such page is logged as a `workaround` event, which bypass detection can count.
+A blocked site is also stopped when it is reached through another address: Google Translate, web archives, and any proxy that carries the address in its own (`?url=https://…`, also base64 or after a slash in the path; a search for an address doesn't count). A page that says it is another site (its canonical address) or that is a known alternative front-end (Invidious and Piped for YouTube, Nitter for X, Redlib for Reddit, ProxiTok for TikTok and others) is treated as that site. Each such page is logged as a `workaround` event, which bypass prevention can count.
 
 ## Options
 
@@ -639,7 +639,7 @@ kc9k project import my-setup.json --dry-run   # says what would be added
 kc9k project import my-setup.json
 ```
 
-A project file holds every block (lists, apps, window titles, schedules, quota, Pomodoro, breaks, bypass detection), the clusters, browser options, the options above, the global bypass detection, scheduled Frozen Chicken windows, and the pictures lists show. Locks, passwords, hotkeys and statistics are left out. Importing only adds: a block or cluster that exists already is left as it is, browser options are only turned on, and bypass detection is replaced only by a stricter one, so an import never weakens anything. Imported blocks aren't started. In the interface: Settings > Whole setup.
+A project file holds every block (lists, apps, window titles, schedules, quota, Pomodoro, breaks, bypass prevention), the clusters, browser options, the options above, the global bypass prevention, scheduled Frozen Chicken windows, and the pictures lists show. Locks, passwords, hotkeys and statistics are left out. Importing only adds: a block or cluster that exists already is left as it is, browser options are only turned on, and bypass prevention is replaced only by a stricter one, so an import never weakens anything. Imported blocks aren't started. In the interface: Settings > Whole setup.
 
 ## Access passwords
 
@@ -657,7 +657,7 @@ In the interface they are under Settings > Access passwords. A locked page shows
 
 The check is made by `kc9k` itself, not by the interface, so the commands ask too: every command belongs to a page (`block`, `list`, `schedule`, `quota` … to Blocks; `freeze`, `strict`, `no-escape` to Device Blocks; `browser`, `hotkey`, `password`, `access` to Settings; `status`, `start`, `stop`, `unlock` to the Dashboard or Blocks, whichever is open) and runs only with the `app` password and that page's. On a terminal it asks; the interface passes them along. The daemon and hotkeys are not affected, so blocking goes on as before.
 
-Changing or removing a password asks for the one it has (and for the settings password, when set). A wrong password takes a second and is logged as an `access` event, which bypass detection can count. If one is lost, root can remove them all (`kc9k access --help` shows the command).
+Changing or removing a password asks for the one it has (and for the settings password, when set). A wrong password takes a second and is logged as an `access` event, which bypass prevention can count. If one is lost, root can remove them all (`kc9k access --help` shows the command).
 
 Access passwords decide who may look; the [settings password](#settings-password) decides who may loosen. They are separate and can be the same text.
 

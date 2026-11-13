@@ -2,11 +2,23 @@
 
 A command-line (CLI) productivity blocker for Linux, backed by a `systemd` service.
 
-**Read `VISION.md` first.** It holds the goal, the principles, the product
-roadmap (TODO) and the vocabulary. Use its words as defined, and raise
-contradictions with the owner instead of resolving them alone. **Fix current
-functionality before adding new features**: known bugs and failing tests
-come first.
+## Documents
+
+There are four, and each fact lives in exactly one of them:
+
+| File | Holds | Who changes it |
+|---|---|---|
+| `SPEC.md` | What KC9K should be: vision, principles, glossary, functions, rules, decisions | Only with the owner's agreement |
+| `ROADMAP.md` | Where the code stands against `SPEC.md`, and what comes next. The only file with status | Agents, in the same commit as the code |
+| `README.md` | How to use what is built | Agents, in the same commit as the code |
+| `CLAUDE.md` | How the code is laid out, how to build and test | Agents |
+
+**Read `SPEC.md` and `ROADMAP.md` first.** Use the glossary's words exactly.
+Where code or docs disagree with `SPEC.md`, `SPEC.md` is what was meant:
+note the gap in `ROADMAP.md`. If `SPEC.md` itself seems wrong or silent,
+ask the owner; don't decide alone and don't invent features. **Fix current
+functionality before adding new features** (`ROADMAP.md` section 0). Don't
+create other planning or status files.
 
 Blocking is organized into **blocks** (named groups) of **sites** (domains) and
 **apps** (process names). When a block is activated, a systemd daemon
@@ -24,6 +36,29 @@ Built without CGo because the SQLite driver is `modernc.org/sqlite` (pure Go). T
 check that everything compiles: `CGO_ENABLED=0 go build ./...`. Run tests
 as an ordinary user, never with `sudo`: as root `KC9K_DB` is ignored, so the
 `internal/cli` tests would write to the real database (they refuse to run).
+
+### The test laptop
+
+The owner's laptop (Mint 22.3, dual boot with Windows) runs a `TAGS=devmaster`
+build and is **used for real**. On it:
+
+- Tests add and remove blocks, restart the daemon (a tamper event) and get
+  pages blocked, which all count for the owner's bypass prevention ladder.
+  `ci/extras_test.py` once tripped it and started monk mode; it now paces
+  itself when a global ladder is on. Don't leave test blocks with schedules
+  behind: a schedule holds its block before each window.
+- Browser tests: `GECKOWEBDRIVER=~/.local/share/kc9k-browsertest
+  ~/.local/share/kc9k-browsertest/venv/bin/python ci/<name>.py`
+  (`browser_test.py`, `extras_test.py`, `actions_test.py`, `quota_test.py`).
+  There is no Node: `cjs ci/match_test_cjs.js` runs the matcher tests.
+- GUI smoke tests: build a binary, point a wrapper at it with `KC9K_DB` set to
+  a scratch file, load `gui/kc9k-gui.py` as a module with `CLI` replaced, give
+  the app another application ID, and never `show()` the window. A database
+  opened through `KC9K_DB` never applies layers.
+- The browser policy stops many blocked pages before the extension sees a
+  request, so the extension then learns of them from the tab (every 3 s).
+  Anything needing the request itself needs a fallback (`trail` in
+  `background.js`).
 
 ## Architecture
 

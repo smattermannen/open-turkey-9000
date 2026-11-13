@@ -204,3 +204,25 @@ func TestUnlockOnlyLifts(t *testing.T) {
 		t.Error("stop worked while the delay lock counted down")
 	}
 }
+
+// §4.10, R-LOCK-9: tamper protection can't be turned off while locked.
+func TestTamperClockSetting(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "tamper", "clock", "on")
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	if err := d.ActivateBlock("b", true, 0, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(t, "tamper", "clock", "off"); err == nil {
+		t.Error("tamper protection turned off during a lock")
+	}
+	if err := d.DeactivateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "tamper", "clock", "off")
+	if v, _ := d.GetSetting(db.SettingTamperClock); v != "off" {
+		t.Errorf("tamper.clock = %q", v)
+	}
+}

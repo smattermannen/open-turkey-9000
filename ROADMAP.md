@@ -38,8 +38,12 @@ Last checked against the code: 2026-11-13.
         on; the delay lock counts down from `unlock` and is then lifted
         (`delay_until`); a timer lock ending lifts only the lock (only a
         schedule or monk mode's own end switches a block off);
-      - trusted time counts only time the computer is on or suspended; it
-        must be the real clock, with the tamper settings of §4.10;
+      - done: trusted time is the real clock unless the tamper setting
+        `kc9k tamper clock` is on (then clock changes are ignored while a
+        timer lock runs, and powered-off time isn't counted; installs from
+        before have it on). Not built: checking against the hardware clock
+        and internet time (§4.10), which would let powered-off time count
+        with protection on;
       - done: `kc9k break text` (alias `relock`). **Re-lock**, the lock
         option, is not built;
       - done: uninstalling is refused only while something is locked
@@ -264,7 +268,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | SafeSearch | Partial | Google only; section 2.4 |
 | Behaviour settings | Built | called options |
 | DNS server setting | Built | `kc9k dns`, Settings > DNS |
-| Tamper settings (§4.10) | Not built | |
+| Tamper settings (§4.10) | Partial | `kc9k tamper clock` (block time and date changes); the hardware clock and internet time checks: Not built |
 | Hotkeys | Built | Cinnamon tried; GNOME see 0.2 |
 | Project export / import | Differs | see 0.1 |
 | `.deb` package | Not built | |

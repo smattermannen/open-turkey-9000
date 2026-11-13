@@ -74,6 +74,7 @@ var commandAreas = map[string][]string{
 	"no-escape":    {areaDevice},
 	"no-weakening": {areaSettings},
 	"dns":          {areaSettings},
+	"tamper":       {areaSettings},
 	"stats":        {areaStats, areaDashboard},
 	"stats on":     {areaStats, areaSettings},
 	"stats off":    {areaStats, areaSettings},

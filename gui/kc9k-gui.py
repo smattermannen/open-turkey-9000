@@ -3175,6 +3175,12 @@ class Window(Gtk.ApplicationWindow):
                 return
         self.run(["dns", choice])
 
+    def toggle_tamper_clock(self, _switch, wanted):
+        if self.updating:
+            return False
+        self.run(["tamper", "clock", "on" if wanted else "off"])
+        return True
+
     def toggle_no_weakening(self, _switch, wanted):
         if self.updating:
             return False
@@ -3433,6 +3439,16 @@ class Window(Gtk.ApplicationWindow):
                 "uses, so nobody new learns which sites are blocked."),
             dns_row), False, False, 0)
 
+        self.tamper_clock_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.tamper_clock_switch.connect("state-set", self.toggle_tamper_clock)
+        box.pack_start(section(
+            "Tamper protection",
+            self.switch_row(self.tamper_clock_switch, "Ignore clock changes during timer locks",
+                            "Timer locks follow the real clock. With this on, changing the date or "
+                            "time doesn't shorten a running timer lock (time the computer is off "
+                            "isn't counted then either). It can't be turned off while anything is "
+                            "locked.")), False, False, 0)
+
         self.no_weakening_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.no_weakening_switch.connect("state-set", self.toggle_no_weakening)
         box.pack_start(section(
@@ -3589,6 +3605,7 @@ class Window(Gtk.ApplicationWindow):
         self.password_locks.set_active(self.state.get("password_for_locks", False))
         self.updating = was
         set_switch(self.no_weakening_switch, self.state.get("no_weakening", False))
+        set_switch(self.tamper_clock_switch, self.state.get("tamper_clock", False))
         dns = self.state.get("dns") or "network"
         if dns in ("network", "quad9"):
             self.dns_choice.set_active_id(dns)

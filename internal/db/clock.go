@@ -1,10 +1,12 @@
-// clock.go — a time source for time locks that survives clock changes.
+// clock.go — trusted time (§3.4): the time timer locks are measured in.
 //
-// While a time lock (on a block or a browser setting) is active, trusted time only moves with CLOCK_BOOTTIME,
-// which keeps counting during suspend and which `date` cannot change. Time
-// spent powered off is not counted: after a reboot nothing distinguishes real
-// downtime from a clock moved forward. With no time lock active, trusted time
-// simply follows the wall clock.
+// By default it is the real clock. With the tamper protection setting
+// "block time and date changes" on (SettingTamperClock), while a timer lock
+// (on a block or a setting) runs, trusted time only moves with
+// CLOCK_BOOTTIME, which keeps counting during suspend and which `date` can't
+// change; time spent powered off isn't counted then, since after a reboot
+// nothing tells real downtime from a clock moved forward. With no timer lock
+// running, it follows the clock either way.
 package db
 
 import (
@@ -28,6 +30,29 @@ type clockState struct {
 	BootID   string
 	Boottime int64
 	Trusted  int64
+}
+
+// SettingTamperClock is "on" when clock changes are ignored while a timer
+// lock runs (§4.10, tamper protection). Installs from before the setting
+// get it on, as that is how they worked; new ones start with it off.
+const SettingTamperClock = "tamper.clock"
+
+// migrateTamperClock decides the setting once: on where trusted time was
+// already in use.
+func migrateTamperClock(conn *sql.DB) error {
+	var n int
+	if err := conn.QueryRow("SELECT COUNT(*) FROM settings WHERE key = ?", SettingTamperClock).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	if err := conn.QueryRow("SELECT COUNT(*) FROM clock_state").Scan(&n); err != nil {
+		return err
+	}
+	value := "off"
+	if n > 0 {
+		value = "on"
+	}
+	_, err := conn.Exec("INSERT INTO settings (key, value) VALUES (?, ?)", SettingTamperClock, value)
+	return err
 }
 
 // advanceClock computes the next state. prev is nil on first use.
@@ -66,8 +91,12 @@ func (d *DB) TrustedNow(wall time.Time) (int64, error) {
 		return 0, fmt.Errorf("failed to read clock state: %w", err)
 	}
 
+	protect, err := d.GetSetting(SettingTamperClock)
+	if err != nil {
+		return 0, err
+	}
 	lockActive := false
-	if prevPtr != nil {
+	if prevPtr != nil && protect == "on" {
 		var n int
 		// Setting locks count too, or moving the clock forward would end them.
 		if err := d.conn.QueryRow(`SELECT (SELECT COUNT(*) FROM active_blocks WHERE locked_until > ?) +

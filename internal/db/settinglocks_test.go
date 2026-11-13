@@ -52,14 +52,24 @@ func TestSettingLocks(t *testing.T) {
 	}
 }
 
-// A setting's time lock freezes trusted time against the wall clock, like a
-// block's: moving the clock forward must not end it.
+// With "block time and date changes" on, a setting's time lock freezes
+// trusted time against the wall clock, like a block's: moving the clock
+// forward must not end it. Without it, trusted time is the real clock.
 func TestSettingTimeLockHoldsTrustedTime(t *testing.T) {
 	d, err := OpenDB(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer d.Close()
+	if v, _ := d.GetSetting(SettingTamperClock); v != "off" {
+		t.Errorf("a new install has tamper.clock %q; want off", v)
+	}
+	if got, _ := d.TrustedNow(time.Now().Add(time.Hour)); got != time.Now().Add(time.Hour).Unix() && got != time.Now().Add(time.Hour).Unix()-1 {
+		t.Errorf("without tamper protection trusted time is %d, not the clock", got)
+	}
+	if err := d.SetSetting(SettingTamperClock, "on"); err != nil {
+		t.Fatal(err)
+	}
 
 	now := time.Now()
 	trusted, err := d.TrustedNow(now)

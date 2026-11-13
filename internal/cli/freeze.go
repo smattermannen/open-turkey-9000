@@ -196,6 +196,7 @@ type guiState struct {
 	NoWeakening   bool                      `json:"no_weakening"`
 	PasswordLocks bool                      `json:"password_for_locks"`
 	DNS           string                    `json:"dns"`
+	TamperClock   bool                      `json:"tamper_clock"`
 	MonkBlock     string                    `json:"monk_block"`
 	// Access says per area "none", "open" or "locked"; AccessUnused lists
 	// the given passwords (by position) that opened nothing: wrong, or
@@ -300,6 +301,9 @@ var guiStateCmd = &cobra.Command{
 		}
 		if state.DNS, err = database.GetSetting(enforce.SettingDNS); err != nil {
 			return err
+		}
+		if v, err := database.GetSetting(db.SettingTamperClock); err == nil {
+			state.TamperClock = v == "on"
 		}
 		if v, err := database.GetSetting(SettingPasswordForLocks); err == nil {
 			state.PasswordLocks = v == "on" && state.SettingsPass

@@ -24,7 +24,7 @@ Killer Chicken 9000 doesn't rely on a single, easily-bypassed mechanism. Each ac
 
 Because the hosts and firewall layers act below the browser, blocking works even for browsers installed via Snap or Flatpak (where the system-wide browser policy file may not be read).
 
-> **Threat model.** Killer Chicken 9000 creates *friction*, not a security boundary. Anyone with root can, with enough determination, tear the blocks down — that's intentional: it's your machine, and there is always a recovery path so you can't lock yourself out. The layers, the locked-block rules and the typing challenge exist to outlast an *impulse*, not a deliberate root-level effort. Blocking is IPv4/IPv6 by IP, but IP rules are best-effort: addresses change and CDNs are shared, so `/etc/hosts` and browser policy are the authoritative layers.
+> **Custom security.** You decide how hard Killer Chicken 9000 is to get around, in its settings. With the defaults you keep `sudo`, so a determined effort can stop the daemon; the locks and the typing challenge are there to outlast an *impulse*. [Strict mode](#strict-mode) takes `sudo` and `pkexec` away during a lock, so you're an ordinary user who can't touch KC9K. `no-escape` closes the boot-time exits, and with a firmware password held by someone else, only other boot media or a factory reset gets past a lock. Until you turn on `no-escape` there is always a recovery path, so a bug can't lock you out. Blocking is IPv4/IPv6 by IP, but IP rules are best-effort: addresses change and CDNs are shared, so `/etc/hosts` and browser policy are the authoritative layers.
 
 ## Installation
 
@@ -60,7 +60,7 @@ The installed program is independent of the source directory — once installed,
 - **Time lock (`--for` / `--until`)**: the block cannot be removed *at all* — not even with the challenge — until the time passes. The strongest lock. While it runs, only time the computer is on or suspended counts: changing the system clock has no effect, and time powered off is not counted, so a shutdown extends the lock by that long.
 - **Schedule**: recurring windows (e.g. weekdays 09:00–17:00). The daemon turns the block on when a window opens and off when it closes; while a window is open the block can't be stopped. With **allow windows** it's the other way round: the block is on at all times *except* during its allow windows (e.g. allow games only on Friday and Saturday evenings), and it can never be loosened on the spot — loosening changes are queued for 24 hours, or applied with `--now` after the typing challenge. Starting **2 hours before** a window opens, the block is frozen: it can't be weakened or removed (only made stricter), and that schedule can't be removed, until the window closes.
 
-While a block is *held* (char-locked, time-locked, in a schedule window, or within 2 hours of one opening) it can't be removed or weakened, and `make uninstall` refuses. It can still be made **stricter**: see [Strengthening a held block](#strengthening-a-held-block). Everything is friction, not a security boundary — a determined root user can always recover (see the threat-model note above).
+While a block is *held* (char-locked, time-locked, in a schedule window, or within 2 hours of one opening) it can't be removed or weakened, and `make uninstall` refuses. It can still be made **stricter**: see [Strengthening a held block](#strengthening-a-held-block). How hard a held block is to get around depends on your settings (see the custom security note above).
 
 ## Commands
 

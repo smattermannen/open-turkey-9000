@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/enforce"
 )
@@ -38,7 +39,10 @@ func TestProjectExportImport(t *testing.T) {
 	mustRun(t, "block", "add-title", "work", "YouTube")
 	mustRun(t, "list", "create", "work", "Words", "--text")
 	mustRun(t, "list", "add", "work", "Words", "casino")
-	mustRun(t, "schedule", "add", "work", "--days", "weekdays", "--from", "09:00", "--to", "17:00")
+	// Two days from now, so the window never holds the block while the test
+	// runs (a held block refuses the looser edits below).
+	day := strings.ToLower(time.Now().AddDate(0, 0, 2).Weekday().String()[:3])
+	mustRun(t, "schedule", "add", "work", "--days", day, "--from", "09:00", "--to", "17:00")
 	mustRun(t, "pomodoro", "set", "work", "25m", "5m", "--long", "15m", "--every", "4")
 	mustRun(t, "break", "allowance", "work", "10m", "--per", "1h")
 	mustRun(t, "break", "relock", "work", "5m")

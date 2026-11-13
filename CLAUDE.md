@@ -2,6 +2,12 @@
 
 A command-line (CLI) productivity blocker for Linux, backed by a `systemd` service.
 
+**Read `VISION.md` first.** It holds the goal, the principles, the product
+roadmap (TODO) and the vocabulary. Use its words as defined, and raise
+contradictions with the owner instead of resolving them alone. **Fix current
+functionality before adding new features**: known bugs and failing tests
+come first.
+
 Blocking is organized into **blocks** (named groups) of **sites** (domains) and
 **apps** (process names). When a block is activated, a systemd daemon
 continuously ensures the blocking layers stay applied.
@@ -15,7 +21,9 @@ sudo ./install.sh     # compiles + installs binary, wrapper, sudoers, systemd an
 ```
 
 Built without CGo because the SQLite driver is `modernc.org/sqlite` (pure Go). To
-check that everything compiles: `CGO_ENABLED=0 go build ./...`.
+check that everything compiles: `CGO_ENABLED=0 go build ./...`. Run tests
+as an ordinary user, never with `sudo`: as root `KC9K_DB` is ignored, so the
+`internal/cli` tests would write to the real database (they refuse to run).
 
 ## Architecture
 

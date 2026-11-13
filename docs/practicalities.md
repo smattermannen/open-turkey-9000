@@ -5,10 +5,10 @@ made, and what to test. Written for whoever picks an item up next.
 
 ## Threat model first
 
-KC9K defends at three levels. Every loophole should be judged at the level
-where it matters:
+KC9K is custom security: the user picks how far it defends, at three levels.
+Every loophole should be judged at the level where it matters:
 
-1. **Friction (strict mode off).** You keep `sudo`, so you can always stop
+1. **Basic (strict mode off).** You keep `sudo`, so you can always stop
    the daemon. Loopholes here only need to be more annoying than waiting.
 2. **Strict mode during a lock.** No `sudo`, no `pkexec`, nothing executes
    from `/home` or `/tmp`. You are an ordinary user. **This is where loophole

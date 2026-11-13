@@ -45,6 +45,9 @@ block stricter, so it is always allowed.`,
 		if err := checkTitleKeywords(keywords); err != nil {
 			return err
 		}
+		if err := ensureEditable(database, name, true); err != nil {
+			return err
+		}
 		if err := database.AddTitles(name, keywords); err != nil {
 			return err
 		}

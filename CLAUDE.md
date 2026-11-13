@@ -150,8 +150,8 @@ build and is **used for real**. On it:
 - **Consequences** (`internal/enforce/consequence.go`): one engine for list
   device actions, bypass prevention and monk mode: close browsers, lock
   screen/logout/shutdown (for a while through Frozen Chicken, only
-  extended; once at most every 10 min), monk mode (`StartMonk`: the ordinary
-  block `monk-mode`, `*.*` by default, time-locked with StopAt ending it).
+  extended; once at most every 10 min), monk mode (`StartMonk`: the system-owned
+  block `monk-mode`, fixed while on (`refuseMonkEdit`), never removed or renamed, `*.*` by default, time-locked with StopAt ending it).
   Device effects go through replaceable vars so tests never touch the machine.
 - **Quota by use** (`internal/quota/`, `enforce/quota.go`): a session spends
   only time in use (`Spend`; `Step` never spends): the daemon's foreground

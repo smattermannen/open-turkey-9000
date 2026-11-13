@@ -119,3 +119,32 @@ func mustTrusted(t *testing.T, d *db.DB) int64 {
 	}
 	return trusted
 }
+
+// R-MONK-1, §3.8: the monk-mode block is system-owned; exceptions and apps
+// change only while it is off; it never gets the monk action.
+func TestMonkBlockIsSystemOwned(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "monk", "--for", "30m")
+	for _, args := range [][]string{
+		{"block", "add-exception", enforce.MonkBlock, "docs.python.org"},
+		{"block", "add-title", enforce.MonkBlock, "chess"},
+		{"block", "rename", enforce.MonkBlock, "calm"},
+		{"start", enforce.MonkBlock},
+	} {
+		if err := runCLI(t, args...); err == nil {
+			t.Errorf("%s while monk mode is on: accepted", strings.Join(args, " "))
+		}
+	}
+	if err := d.DeactivateBlock(enforce.MonkBlock); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "add-exception", enforce.MonkBlock, "docs.python.org")
+	mustRun(t, "block", "add-title", enforce.MonkBlock, "chess")
+	if err := runCLI(t, "list", "action", enforce.MonkBlock, "Blocked", "monk", "on", "--for", "1h"); err == nil {
+		t.Error("the monk action inside monk mode's block was accepted")
+	}
+	if err := runCLI(t, "block", "rename", enforce.MonkBlock, "calm"); err == nil {
+		t.Error("monk mode's block was renamed")
+	}
+}

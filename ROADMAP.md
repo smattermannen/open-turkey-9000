@@ -45,9 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **Monk mode** is an ordinary block named `monk-mode`, editable while
-      on; R-MONK-1 makes it system-owned, without the `monk` action inside
-      it, and §3.8 allows exceptions and apps only while it is off. (S)
 - [ ] **R-LIST-3**: new blocks don't get the exception `file://*`. (S)
 - [ ] **R-SCHED-2** and §3.6: block windows may overlap, and times are not
       held to 5-minute steps. (S)
@@ -233,7 +230,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Differs | see 0.1 |
 | Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |
-| Monk mode | Differs | see 0.1 |
+| Monk mode | Built | system-owned block `monk-mode` (R-MONK-1) |
 | Consequences | Built | `enforce/consequence.go` |
 | Strict mode | Partial | a voluntary switch with its own setting lock (`kc9k strict on --for …`, `strict unlock`). Exempt folders: Not built |
 | Recovery of a forgotten password (§3.11) | Partial | root can remove it while nothing is locked |

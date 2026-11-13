@@ -35,6 +35,7 @@ import (
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 
@@ -285,6 +286,9 @@ func listAction(cmd *cobra.Command, database *db.DB, block, list, action string,
 	}
 	if l.IsExceptions() {
 		return fmt.Errorf("'%s' is an exception list; only blacklists have actions", list)
+	}
+	if on && action == db.ActionMonk && block == enforce.MonkBlock {
+		return fmt.Errorf("monk mode's own block can't start monk mode (R-MONK-1)")
 	}
 	current, has := l.Action(action)
 	switch {

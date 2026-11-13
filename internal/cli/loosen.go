@@ -39,6 +39,9 @@ const LoosenDelay = db.DefaultLoosenDelay * time.Second
 // and the caller stops) unless --now is given and the typing challenge is
 // passed. Other blocks refuse loosening edits while held.
 func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool, e db.Edit) (bool, error) {
+	if err := refuseMonkEdit(database, name); err != nil {
+		return false, err
+	}
 	if strengthens {
 		return true, nil
 	}

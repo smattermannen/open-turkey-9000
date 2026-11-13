@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 
@@ -84,6 +85,9 @@ var blockRenameCmd = &cobra.Command{
 	Short: "Rename a block",
 	Args:  cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if args[0] == enforce.MonkBlock || args[1] == enforce.MonkBlock {
+			return fmt.Errorf("the %s block belongs to monk mode and keeps its name", enforce.MonkBlock)
+		}
 		if err := ensureEditable(database, args[0], false); err != nil {
 			return err
 		}

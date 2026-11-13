@@ -835,11 +835,13 @@ class ListCard(Gtk.Frame):
             box.pack_start(Gtk.Label(label="Actions:", xalign=0), False, False, 0)
             actions = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
                                   column_spacing=12, row_spacing=2)
+            monk_block = self.window.selected == (self.window.state or {}).get("monk_block")
             for name, title in SITE_ACTIONS:
                 check = Gtk.CheckButton(label=title)
                 check.connect("toggled", self.toggle_action, name)
                 self.action_checks[name] = check
-                actions.add(check)
+                if not (monk_block and name == "monk"):  # R-MONK-1
+                    actions.add(check)
             box.pack_start(actions, False, False, 0)
             # The settings of ticked actions that have some, each with Change….
             self.param_rows = {}
@@ -2063,7 +2065,7 @@ class Window(Gtk.ApplicationWindow):
         self.delete_button = Gtk.Button(label="Delete…")
         self.delete_button.get_style_context().add_class("destructive-action")
         self.delete_button.connect("clicked", self.delete_block)
-        rename = Gtk.Button(label="Rename…")
+        self.rename_button = rename = Gtk.Button(label="Rename…")
         rename.connect("clicked", self.rename_block)
         duplicate = Gtk.Button(label="Duplicate…")
         duplicate.connect("clicked", self.duplicate_block)
@@ -2465,7 +2467,11 @@ class Window(Gtk.ApplicationWindow):
         self.unlock_button.set_sensitive(
             (block["char_locked"] or block["password_locked"])
             and not block["lock_seconds"] and not block["restart_locked"])
-        self.delete_button.set_sensitive(not block["active"] and not block["held"])
+        # Monk mode's block is the system's: never deleted or renamed, and
+        # changed only while monk mode is off.
+        monk = block["name"] == self.state.get("monk_block")
+        self.delete_button.set_sensitive(not block["active"] and not block["held"] and not monk)
+        self.rename_button.set_sensitive(not monk)
 
         limit = block["quota_limit"]
         self.quota_start.set_sensitive(limit > 0 and not block["quota_open"] and block["quota_used"] < limit)

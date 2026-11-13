@@ -84,6 +84,9 @@ func openDB() (*db.DB, error) {
 // an allowlist block (without emptying it), and adding apps or patterns. Every
 // other edit (removals, mode changes, deleting the block) passes false.
 func ensureEditable(database *db.DB, name string, strengthens bool) error {
+	if err := refuseMonkEdit(database, name); err != nil {
+		return err
+	}
 	if strengthens {
 		return nil
 	}
@@ -101,6 +104,20 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 		return refused(database, name, fmt.Errorf("block '%s' is currently held (locked, time-locked or by its schedule); until the hold lifts, it can only be made stricter (%s)", name, strengtheningEdits))
 	}
 	return nil
+}
+
+// refuseMonkEdit refuses every change to the monk-mode block while monk
+// mode is on (§3.8): it is system-owned, and its exceptions and apps are
+// changed only while it is off.
+func refuseMonkEdit(database *db.DB, name string) error {
+	if name != enforce.MonkBlock {
+		return nil
+	}
+	active, err := database.IsBlockActive(name)
+	if err != nil || !active {
+		return err
+	}
+	return refused(database, name, fmt.Errorf("monk mode is on; its block can be changed only while it is off"))
 }
 
 // strengtheningEdits lists, for error messages, the edits a held block allows.
@@ -233,7 +250,12 @@ var blockAddAppCmd = &cobra.Command{
 		defer database.Close()
 
 		// Blocked apps are killed in both modes, so adding one only
-		// strengthens the block: no ensureEditable/gateEdit check needed.
+		// strengthens the block (ensureEditable lets it through, except on
+		// monk mode while it is on).
+		if err := ensureEditable(database, name, true); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 
 		// A program given by its full path is also remembered by its
 		// contents, so a renamed or moved copy of it is blocked too.
@@ -534,6 +556,10 @@ var blockRemoveCmd = &cobra.Command{
 		}
 		defer database.Close()
 
+		if name == enforce.MonkBlock {
+			fmt.Fprintf(os.Stderr, "Error: the %s block belongs to monk mode and can't be removed\n", name)
+			os.Exit(1)
+		}
 		detail, err := database.GetBlock(name)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

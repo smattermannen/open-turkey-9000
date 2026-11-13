@@ -503,7 +503,7 @@ While the block is on, any app whose window title contains one of the words (cas
 kc9k monk --for 2h
 ```
 
-Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. It is an ordinary block, so add exceptions (documentation you need), apps or anything else to it. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password only if setting a lock does (`kc9k password locks on`).
+Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. The block belongs to monk mode: it can't be removed or renamed, can't start monk mode itself, and is changed only while monk mode is off, so add exceptions (documentation you need), apps or anything else to it beforehand. `kc9k start monk-mode` is refused; use `kc9k monk --for`. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password only if setting a lock does (`kc9k password locks on`).
 
 ## Bypass prevention
 

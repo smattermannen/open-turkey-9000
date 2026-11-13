@@ -54,6 +54,23 @@ func (w Window) String() string {
 	return s
 }
 
+// Overlaps reports whether two windows share a minute of some day
+// (R-SCHED-2: one block's windows never overlap).
+func (w Window) Overlaps(o Window) bool {
+	return w.Days&o.Days != 0 && w.Start < o.End && o.Start < w.End
+}
+
+// Step is the grain of window times, in minutes (§3.6).
+const Step = 5
+
+// CheckStep refuses window times off the 5-minute grid (§3.6).
+func (w Window) CheckStep() error {
+	if w.Start%Step != 0 || w.End%Step != 0 {
+		return fmt.Errorf("window times go in %d-minute steps (e.g. 09:05, not 09:03)", Step)
+	}
+	return nil
+}
+
 // ActiveAt reports whether the window covers the instant t.
 func (w Window) ActiveAt(t time.Time) bool {
 	if w.Days&(1<<uint(t.Weekday())) == 0 {

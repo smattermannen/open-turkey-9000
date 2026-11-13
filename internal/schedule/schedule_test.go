@@ -190,3 +190,30 @@ func TestParseEndTime(t *testing.T) {
 		t.Errorf("String() = %q", got)
 	}
 }
+
+// R-SCHED-2 and §3.6.
+func TestOverlapsAndStep(t *testing.T) {
+	mon := 1 << uint(time.Monday)
+	tue := 1 << uint(time.Tuesday)
+	a := Window{Days: mon, Start: 9 * 60, End: 12 * 60}
+	cases := []struct {
+		b    Window
+		want bool
+	}{
+		{Window{Days: mon, Start: 11 * 60, End: 13 * 60}, true},
+		{Window{Days: mon, Start: 12 * 60, End: 13 * 60}, false}, // touching
+		{Window{Days: tue, Start: 9 * 60, End: 12 * 60}, false},
+		{Window{Days: mon | tue, Start: 8 * 60, End: 24 * 60}, true},
+	}
+	for _, c := range cases {
+		if got := a.Overlaps(c.b); got != c.want || c.b.Overlaps(a) != c.want {
+			t.Errorf("%v overlaps %v = %v; want %v", a, c.b, got, c.want)
+		}
+	}
+	if (Window{Start: 545, End: 600}).CheckStep() != nil {
+		t.Error("09:05 refused")
+	}
+	if (Window{Start: 543, End: 600}).CheckStep() == nil {
+		t.Error("09:03 accepted")
+	}
+}

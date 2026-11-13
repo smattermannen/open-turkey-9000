@@ -144,6 +144,8 @@ kc9k schedule list social-media
 kc9k schedule remove social-media 1
 ```
 
+Times go in 5-minute steps, and one block's windows never overlap (a window that would is refused; widen the one that is there instead).
+
 Allow windows invert this: the block is on at all times **except** while one of its allow windows is open. For example, to allow a `games` block only on Friday and Saturday evenings:
 
 ```bash

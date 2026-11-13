@@ -45,8 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **R-SCHED-2** and §3.6: block windows may overlap, and times are not
-      held to 5-minute steps. (S)
 - [ ] **Text lock** (§3.4): random characters only, 10–5000. Random words,
       custom text and lengths from 1 are missing. (S)
 - [ ] **Window titles** (R-TITLE-1) also act in browsers, through the
@@ -207,7 +205,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Block window, allow window | Built | see 0.1 for overlap and 5-minute steps |
+| Block window, allow window | Built | 5-minute steps, no overlap (R-SCHED-2) in `schedule add`; project import takes windows as they are |
 | Break per block window | Not built | |
 | Pomodoro, long rest | Built | the R-SCHED-3 rhythm: Unchecked |
 | Allowance | Partial | daily only (`kc9k quota`); no rolling, window, week or month periods, no refill time |

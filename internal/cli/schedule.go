@@ -66,6 +66,9 @@ var scheduleAddCmd = &cobra.Command{
 			return fmt.Errorf("--from (%s) must be before --to (%s); for an overnight window add two schedules", fromSpec, toSpec)
 		}
 		w := schedule.Window{Days: days, Start: start, End: end, Allow: allow}
+		if err := w.CheckStep(); err != nil {
+			return err
+		}
 
 		database, err := openDB()
 		if err != nil {
@@ -80,6 +83,11 @@ var scheduleAddCmd = &cobra.Command{
 		schedules, err := database.ListSchedules(name)
 		if err != nil {
 			return err
+		}
+		for i, s := range schedules {
+			if s.Allow == w.Allow && s.Window().Overlaps(w) {
+				return fmt.Errorf("that window overlaps schedule %d (%s); a block's windows never overlap", i+1, s.Window())
+			}
 		}
 		// An allow window opens a gap in the block. On a block that already
 		// has allow windows that is a loosening edit (queued, or --now with

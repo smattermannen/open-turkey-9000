@@ -16,6 +16,7 @@ package enforce
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -24,14 +25,59 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
 )
 
 // deviceDelay gives the extension time to close the browser cleanly before
-// logging out or shutting down.
+// monk mode starts.
 const deviceDelay = 3 * time.Second
+
+// warnDelay is how long a list's logout or shutdown is announced before it
+// happens (R-WARN-1). A variable for tests.
+var warnDelay = 60 * time.Second
+
+// announced holds the list consequences announced and not yet run, so a
+// second hit meanwhile doesn't announce or schedule them again.
+var announced = struct {
+	sync.Mutex
+	pending map[string]bool
+}{pending: map[string]bool{}}
+
+// runAnnounced runs a list's consequence: logout, shutdown and lock-screen
+// after a notification warnDelay ahead (R-WARN-1), others after deviceDelay.
+func runAnnounced(d *db.DB, c Consequence, why string) {
+	delay := deviceDelay
+	if c.Kind == db.ConsequenceLogout || c.Kind == db.ConsequenceShutdown || c.Kind == db.ConsequenceLockScreen {
+		key := c.String()
+		announced.Lock()
+		if announced.pending[key] {
+			announced.Unlock()
+			return
+		}
+		announced.pending[key] = true
+		announced.Unlock()
+		delay = warnDelay
+		what := map[string]string{db.ConsequenceLogout: "You will be logged out",
+			db.ConsequenceShutdown: "The computer will shut down", db.ConsequenceLockScreen: "The screen will lock"}[c.Kind]
+		notifyDesktop(fmt.Sprintf("Killer Chicken 9000: %s in %d seconds", strings.ToLower(what[:1])+what[1:], int(warnDelay/time.Second)),
+			why+" "+what+". Save your work.")
+		defer func() {
+			time.AfterFunc(delay, func() {
+				announced.Lock()
+				delete(announced.pending, key)
+				announced.Unlock()
+			})
+		}()
+	}
+	time.AfterFunc(delay, func() {
+		if err := Run(d, c, why); err != nil {
+			log.Printf("hit: %v", err)
+		}
+	})
+}
 
 type hitReport struct {
 	List    int      `json:"list"`
@@ -148,11 +194,7 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 			c := Consequence{Kind: map[string]string{db.ActionLogout: db.ConsequenceLogout,
 				db.ActionShutdown: db.ConsequenceShutdown, db.ActionMonk: db.ConsequenceMonk}[a.Name], Minutes: a.Minutes}
 			why := "A page matched the list '" + list.Name + "' of block '" + block + "'."
-			time.AfterFunc(deviceDelay, func() {
-				if err := Run(d, c, why); err != nil {
-					log.Printf("hit: %v", err)
-				}
-			})
+			runAnnounced(d, c, why)
 		}
 	}
 }

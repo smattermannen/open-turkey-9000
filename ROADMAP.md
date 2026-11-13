@@ -57,8 +57,6 @@ Last checked against the code: 2026-11-13.
       categories), loosen, bypass detection; `kc9k nepsis` becomes
       `kc9k bypass`. Commands get the glossary's names (`--text-lock`,
       `list scope`), keeping the old ones for a while. (M)
-- [ ] **Warnings** (R-WARN-1): a scheduled freeze is announced 5 minutes
-      ahead; a list's logout or shutdown is not announced at all. (S)
 - [ ] **Page reading is slow on big pages** (principle 9). In every frame,
       `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
       makes the browser lay out the page) every 1.5 s while the page changes,
@@ -218,7 +216,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Item | Status | Notes |
 |---|---|---|
 | Frozen Chicken: lock screen, logout, shutdown, scheduled | Built | a running freeze can't be ended; locks on scheduled freezes: Not built |
-| Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Differs | see 0.1 |
+| Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Built | list actions wait 60 s after the notice; scheduled freezes are announced at 5 min and 1 min |
 | Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |
 | Monk mode | Built | system-owned block `monk-mode` (R-MONK-1) |

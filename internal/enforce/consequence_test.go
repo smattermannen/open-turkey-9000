@@ -526,3 +526,23 @@ func TestVisitsRecorded(t *testing.T) {
 		t.Errorf("recorded %q", got)
 	}
 }
+
+// R-WARN-1: a list's logout is announced before it happens, once.
+func TestListLogoutAnnounced(t *testing.T) {
+	d := testDB(t)
+	did := fakeDevice(t)
+	old := warnDelay
+	warnDelay = 300 * time.Millisecond
+	t.Cleanup(func() { warnDelay = old })
+	c := Consequence{Kind: db.ConsequenceLogout}
+	runAnnounced(d, c, "test")
+	runAnnounced(d, c, "test") // a second hit meanwhile
+	time.Sleep(100 * time.Millisecond)
+	if got := strings.Join(*did, " "); got != "notify" {
+		t.Fatalf("before the delay: %q; want one announcement", got)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if got := strings.Join(*did, " "); got != "notify notify logout" {
+		t.Errorf("after the delay: %q", got)
+	}
+}

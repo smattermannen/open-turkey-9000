@@ -87,8 +87,12 @@ func UpcomingNotices(blockWindows map[string][]schedule.Window, freezeWindows []
 		}
 		what := map[string]string{"lock": "The screen will lock.", "logout": "You will be logged out.",
 			"shutdown": "The computer will shut down."}[mode]
+		key := "freeze "
+		if m == 1 { // R-WARN-1: announced again 60 seconds before
+			key = "freeze-last "
+		}
 		notices = append(notices, Notice{
-			Key:   "freeze " + at(m),
+			Key:   key + at(m),
 			Title: fmt.Sprintf("Frozen Chicken starts in %s", minutes(m)),
 			Body:  what + " Save your work.",
 		})

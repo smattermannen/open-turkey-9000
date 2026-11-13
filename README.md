@@ -303,7 +303,7 @@ Each blacklist chooses its **actions**, in any combination:
 | `shutdown [--for D]` | the browser closes and the computer shuts down; with `--for`, it stays off that long |
 | `monk --for D` | the browser closes and [monk mode](#monk-mode) starts for that long |
 
-When several apply, the strongest page action wins: close-tab, then image, redirect, block. A redirect to a page that is blocked too shows the block page. Only the page itself triggers close-tab and the device actions, never something embedded in another page (that only gets the block page). A one-off logout or shutdown happens at most every 10 minutes, so a page restored after restarting can't loop the computer; staying logged out or off goes through [Frozen Chicken](#frozen-chicken), at most a day. Changing an action's settings: a longer time and another picture are always allowed; another address loosens the list.
+When several apply, the strongest page action wins: close-tab, then image, redirect, block. A redirect to a page that is blocked too shows the block page. Only the page itself triggers close-tab and the device actions, never something embedded in another page (that only gets the block page). A list's logout, shutdown or lock-screen is announced on the desktop 60 seconds before it happens, so you can save your work. A one-off logout or shutdown happens at most every 10 minutes, so a page restored after restarting can't loop the computer; staying logged out or off goes through [Frozen Chicken](#frozen-chicken), at most a day. Changing an action's settings: a longer time and another picture are always allowed; another address loosens the list.
 
 A match in the address or the title takes every action. In the text, each action has two numbers, and both must be met: a **threshold**, how many *different* entries the page must contain (repeats count once), and **hits**, how many times they occur in all (repeats counted). Both start at 1. Threshold 1 with hits 5 acts on one word five times, or five words once. Once a page meets them, it stays greyed or blocked until you leave it, even if its text changes.
 
@@ -567,7 +567,7 @@ Blocked apps are only ever closed when they run as a regular user, so a block ca
 
 ## Notifications
 
-The daemon warns on the desktop 5 minutes ahead (or less, when something is set up closer than that) before a block's schedule turns it on, before a scheduled Frozen Chicken starts (saying whether the screen will lock, you'll be logged out or the computer shuts down), and when an open quota session has 5 minutes left. Each event is announced once. It needs `notify-send`, which Linux Mint has.
+The daemon warns on the desktop 5 minutes ahead (or less, when something is set up closer than that) before a block's schedule turns it on, before a scheduled Frozen Chicken starts (saying whether the screen will lock, you'll be logged out or the computer shuts down, and again 1 minute before), and when an open quota session has 5 minutes left. Each event is announced once. It needs `notify-send`, which Linux Mint has.
 
 ## Settings password
 

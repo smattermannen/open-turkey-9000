@@ -272,10 +272,8 @@ function act(tabId, url, outcome, reason) {
   browser.tabs.update(tabId, { url: replacement(url, outcome, reason).redirectUrl });
 }
 
-// Window-title keywords from the active blocks: a tab whose title contains
-// one is sent to the block page, as the daemon closes other apps' windows.
-let titleWords = [];
-
+// A tab's title is judged by the title lists only: window title entries
+// never apply to browsers (R-TITLE-1).
 function blockTitledTab(tab) {
   if (!tab.url || !/^https?:/i.test(tab.url)) {
     return;
@@ -284,10 +282,6 @@ function blockTitledTab(tab) {
   if (kc9kTakesAway(outcome)) {
     act(tab.id, tab.url, outcome, "title");
     return;
-  }
-  const text = (tab.title || "").toLowerCase();
-  if (titleWords.some((word) => text.includes(word))) {
-    browser.tabs.update(tab.id, { url: blockedPage(tab.url, "title").redirectUrl });
   }
 }
 
@@ -607,7 +601,6 @@ function apply(rules) {
     recording = Boolean(rules.recording);
     visited.clear();
   }
-  titleWords = (rules.titles || []).map((word) => String(word).toLowerCase()).filter(Boolean);
 }
 
 async function closeNewlyBlockedTabs() {

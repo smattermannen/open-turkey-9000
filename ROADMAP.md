@@ -45,8 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **Window titles** (R-TITLE-1) also act in browsers, through the
-      extension. They must leave browsers to term lists. (S)
 - [ ] **Tamper** (§3.10): every daemon restart within a boot counts, an
       upgrade included. (S)
 - [ ] **Lists by type** (§3.2): a list ticks url, title and text with mixed
@@ -152,7 +150,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | File URL, `file://*` default | Partial | every new block has the exception `file://*` (R-LIST-3); file URL entries in blacklists don't block anything yet |
 | App (name, path, script, fingerprint, Flatpak, desktop unit) | Built | `blocker/scripts.go`, `blocker/process.go` |
 | Folder entry | Partial | programs inside it are closed; windows showing it are not |
-| Window title entry | Differs | X11 only; also acts in browsers, see 0.1 |
+| Window title entry | Built | X11 only; never in browsers (R-TITLE-1) |
 | Rendered term | Built | |
 | Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
 | Phrase set | Not built | |

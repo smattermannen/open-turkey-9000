@@ -142,8 +142,8 @@ try:
         driver.get("https://example.net/")
         time.sleep(3)
         print("titled url:", driver.current_url)
-        check("a tab whose title matches a block is sent to the block page",
-              driver.current_url.startswith("moz-extension:") and "reason=title" in driver.current_url)
+        check("window title entries leave browsers alone (R-TITLE-1)",
+              "example.net" in driver.current_url)
         ot("stop", "titles")
 
         # Page keywords: example.net says "This domain is for use in

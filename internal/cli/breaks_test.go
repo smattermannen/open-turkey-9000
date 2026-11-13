@@ -127,14 +127,16 @@ func TestRelockUnlock(t *testing.T) {
 	if err := runWith(t, 0, nil, "list", "remove", "b", "Blocked", "reddit.com"); err == nil {
 		t.Error("the block could be loosened during its break")
 	}
-	// A wrong password ends nothing; the right one, during the break, ends the block.
+	// A wrong password ends nothing; the right one, during the break, lifts
+	// the lock (§3.4: the block stays on).
 	if err := runWith(t, 0, []string{"nope"}, "unlock", "b"); err == nil {
 		t.Error("a wrong password unlocked")
 	}
 	if err := runWith(t, 0, []string{"secret1"}, "unlock", "b"); err != nil {
 		t.Fatal(err)
 	}
-	if detail, _ = d.GetBlock("b"); detail.Active {
-		t.Error("unlocking during the break didn't end the block")
+	extras, _ := d.GetLockExtras("b")
+	if detail, _ = d.GetBlock("b"); !detail.Active || extras.PasswordHash != "" {
+		t.Errorf("unlocking during the break: active %v, password lock left %v; want on and unlocked", detail.Active, extras.PasswordHash != "")
 	}
 }

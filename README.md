@@ -191,7 +191,7 @@ Deactivate (only if the block isn't held — see Concepts):
 kc9k stop social-media
 ```
 
-Unlock a text-locked block (this also **deactivates** it). Time locks and open schedule windows can't be unlocked — they lift on their own. A long challenge is shown a page at a time, sized to your terminal: type a page and press Enter for the next. Accuracy is counted over the whole text:
+Unlock a block: its text or password lock is lifted, and its delay lock starts counting down. The block **stays on**; `stop` switches it off once nothing is locked. Timer locks and open schedule windows can't be unlocked — they lift on their own. A long challenge is shown a page at a time, sized to your terminal: type a page and press Enter for the next. Accuracy is counted over the whole text:
 
 ```bash
 kc9k unlock social-media
@@ -411,14 +411,16 @@ An open session spends only the time the block is in use: one of its apps is in 
 
 ## Locks
 
-| Lock | Command | Ends when |
+| Lock | Command | Unlocked when |
 |---|---|---|
 | Timer | `start b --for 2h` | the time has passed |
 | Timer (clock time) | `start b --until 17:00` | the clock time is reached |
 | Text | `start b --lock` | the challenge is typed with `unlock` |
 | Password | `start b --password-stdin` | someone enters it with `unlock`, from standard input |
-| Restart | `start b --restart` | the computer has restarted, then `stop` works |
-| Delay | `start b --delay 30m` | the delay has passed after `stop` |
+| Restart | `start b --restart` | the computer has restarted |
+| Delay | `start b --delay 30m` | the delay has passed after `unlock` |
+
+An unlocked lock is gone; the block stays on until you `stop` it or its schedule ends it (§3.4 of `SPEC.md`).
 
 ## Browser options
 
@@ -486,7 +488,7 @@ kc9k break relock work 5m                # unlocking gives a 5-minute break inst
 kc9k break                               # what each block allows and has earned
 ```
 
-A **reward** (`break allowance`) earns break time while the block is on and the computer is in use (input in the last 3 minutes, screen not locked), saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With `relock`, passing the typing challenge or giving the password lifts the block for that long instead of ending it, and unlocking once more during that break ends it. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `relock … off`) is always possible. The toolbar button shows the break time left on the block's sites.
+A **reward** (`break allowance`) earns break time while the block is on and the computer is in use (input in the last 3 minutes, screen not locked), saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With `relock`, passing the typing challenge or giving the password lifts the block for that long instead of unlocking it, and unlocking once more during that break lifts its locks. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `relock … off`) is always possible. The toolbar button shows the break time left on the block's sites.
 
 ## Window titles
 

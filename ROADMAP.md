@@ -35,10 +35,10 @@ Last checked against the code: 2026-11-13.
         (`schedule.EditFreeze`) comes before every window, Frozen Chicken
         schedules included. All of that goes: only locks protect, and a
         schedule lock's lead time is the user's;
-      - a timer lock ending switches the block off, and `unlock` of a text
-        or password lock switches the block off too. A lock must only be
-        lifted; the block goes on until its schedule or the user ends it;
-      - the delay lock counts from `stop`, not from asking to unlock;
+      - done: `unlock` lifts text and password locks and leaves the block
+        on; the delay lock counts down from `unlock` and is then lifted
+        (`delay_until`); a timer lock ending lifts only the lock (only a
+        schedule or monk mode's own end switches a block off);
       - trusted time counts only time the computer is on or suspended; it
         must be the real clock, with the tamper settings of §4.10;
       - `kc9k break relock` is a text break (rename it); **re-lock**, the

@@ -302,18 +302,8 @@ var stopCmd = &cobra.Command{
 		if hold.restartLocked {
 			return refused(database, blockName, fmt.Errorf("block '%s' stays on until the computer restarts", blockName))
 		}
-		if hold.charLocked || hold.passwordHash != "" {
+		if hold.charLocked || hold.passwordHash != "" || hold.extras.Delay > 0 {
 			return refused(database, blockName, fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", blockName, blockName))
-		}
-		if hold.extras.Delay > 0 {
-			if hold.extras.StopAt == 0 {
-				hold.extras.StopAt = hold.trusted + hold.extras.Delay
-				if err := database.SetLockExtras(blockName, hold.extras); err != nil {
-					return err
-				}
-			}
-			fmt.Printf("Block '%s' stops in %s\n", blockName, time.Duration(hold.extras.StopAt-hold.trusted)*time.Second)
-			return nil
 		}
 
 		if err := database.DeactivateBlock(blockName); err != nil {
@@ -334,7 +324,7 @@ var stopCmd = &cobra.Command{
 
 var unlockCmd = &cobra.Command{
 	Use:   "unlock [block]",
-	Short: "Unlock a locked block via the typing challenge",
+	Short: "Unlock a block: its text or password lock is lifted, its delay lock starts counting down; the block stays on",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockName := args[0]
@@ -364,8 +354,8 @@ var unlockCmd = &cobra.Command{
 		if hold.restartLocked {
 			return refused(database, blockName, fmt.Errorf("block '%s' stays on until the computer restarts", blockName))
 		}
-		if !hold.charLocked && hold.passwordHash == "" {
-			return fmt.Errorf("block '%s' is not locked. Use 'kc9k stop' to deactivate it", blockName)
+		if !hold.charLocked && hold.passwordHash == "" && hold.extras.Delay == 0 {
+			return fmt.Errorf("block '%s' is not locked. Use 'kc9k stop' to switch it off", blockName)
 		}
 
 		if hold.passwordHash != "" {
@@ -391,7 +381,7 @@ var unlockCmd = &cobra.Command{
 
 		// With relock set, unlocking is a break: the block is lifted for a
 		// while and comes back with its locks. Unlocking again during that
-		// break ends it.
+		// break lifts the locks.
 		if breaks, err := database.GetBreaks(blockName); err != nil {
 			return err
 		} else if breaks.Relock > 0 {
@@ -412,13 +402,28 @@ var unlockCmd = &cobra.Command{
 			}
 		}
 
-		if err := database.DeactivateBlock(blockName); err != nil {
-			return err
+		// §3.4: the locks are lifted, the block stays on.
+		if hold.charLocked || hold.passwordHash != "" {
+			if err := database.LiftTextAndPasswordLocks(blockName); err != nil {
+				return err
+			}
 		}
-		if err := enforce.ApplyFromDB(database); err != nil {
-			return err
+		if hold.extras.Delay > 0 {
+			extras, err := database.GetLockExtras(blockName)
+			if err != nil {
+				return err
+			}
+			if extras.DelayUntil == 0 {
+				extras.DelayUntil = hold.trusted + extras.Delay
+				if err := database.SetLockExtras(blockName, extras); err != nil {
+					return err
+				}
+			}
+			fmt.Printf("Block '%s': its delay lock is unlocked in %s. The block stays on; then 'kc9k stop %s' switches it off.\n",
+				blockName, time.Duration(extras.DelayUntil-hold.trusted)*time.Second, blockName)
+			return nil
 		}
-		fmt.Printf("Block '%s' unlocked and deactivated successfully\n", blockName)
+		fmt.Printf("Block '%s' is unlocked and stays on. 'kc9k stop %s' switches it off.\n", blockName, blockName)
 		return nil
 	},
 }

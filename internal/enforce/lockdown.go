@@ -236,6 +236,16 @@ func finishDelayedStops(d *db.DB, trusted int64) {
 			log.Printf("daemon: delay: %v", err)
 			continue
 		}
+		if extras.DelayUntil != 0 && trusted >= extras.DelayUntil {
+			// The delay lock's countdown is over: it is unlocked, and the
+			// block stays on (§3.4).
+			extras.Delay, extras.DelayUntil = 0, 0
+			if err := d.SetLockExtras(b.Name, extras); err != nil {
+				log.Printf("daemon: delay: %v", err)
+			} else {
+				log.Printf("daemon: the delay lock of %s is unlocked", b.Name)
+			}
+		}
 		if extras.StopAt != 0 && trusted >= extras.StopAt {
 			if err := d.DeactivateBlock(b.Name); err != nil {
 				log.Printf("daemon: delay: %v", err)

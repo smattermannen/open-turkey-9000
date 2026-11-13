@@ -112,6 +112,7 @@ type guiBlock struct {
 	Restart       bool      `json:"restart_locked"`
 	Delay         int64     `json:"delay_seconds"`
 	StopSeconds   int64     `json:"stop_seconds"`
+	DelayLeft     int64     `json:"delay_left"` // the delay lock unlocks in this many seconds, once asked
 	Scheduled     bool      `json:"scheduled"`
 	LockSeconds   int64     `json:"lock_seconds"`
 	QuotaLimit    int64     `json:"quota_limit"`
@@ -381,6 +382,9 @@ var guiStateCmd = &cobra.Command{
 			g.Password, g.Restart, g.Delay = hold.passwordHash != "", hold.restartLocked, hold.extras.Delay
 			if hold.extras.StopAt > trusted {
 				g.StopSeconds = hold.extras.StopAt - trusted
+			}
+			if hold.extras.DelayUntil > trusted {
+				g.DelayLeft = hold.extras.DelayUntil - trusted
 			}
 			if p, err := database.GetPomodoro(b.Name); err != nil {
 				return err

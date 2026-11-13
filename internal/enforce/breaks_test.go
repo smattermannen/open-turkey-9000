@@ -33,3 +33,27 @@ func TestRewardOnlyWhileInUse(t *testing.T) {
 		t.Fatalf("36 s in use earned %d ms; want 6000", k.BalanceMs)
 	}
 }
+
+// §3.4: when a delay lock's countdown is over, the lock is gone and the
+// block stays on.
+func TestDelayLockEndsOnlyTheLock(t *testing.T) {
+	d := testDB(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ActivateBlock("b", false, 0, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetLockExtras("b", db.LockExtras{Delay: 60, DelayUntil: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	finishDelayedStops(d, 999)
+	if e, _ := d.GetLockExtras("b"); e.Delay != 60 {
+		t.Fatal("the delay lock was lifted early")
+	}
+	finishDelayedStops(d, 1000)
+	e, _ := d.GetLockExtras("b")
+	if b, _ := d.GetBlock("b"); !b.Active || e.Delay != 0 || e.DelayUntil != 0 {
+		t.Errorf("after the countdown: active %v, delay %d until %d", b.Active, e.Delay, e.DelayUntil)
+	}
+}

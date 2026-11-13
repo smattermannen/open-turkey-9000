@@ -177,3 +177,30 @@ func TestTextLockStyles(t *testing.T) {
 		t.Error("custom text with an accent accepted")
 	}
 }
+
+// §3.4, R-LOCK-2: unlocking lifts a lock and leaves the block on; a delay
+// lock counts down from asking to unlock.
+func TestUnlockOnlyLifts(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	if err := runWith(t, 0, []string{"partner"}, "start", "b", "--password-stdin", "--delay", "1m"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(t, "stop", "b"); err == nil {
+		t.Fatal("stop worked on a locked block")
+	}
+	if err := runWith(t, 0, []string{"partner"}, "unlock", "b"); err != nil {
+		t.Fatal(err)
+	}
+	detail, _ := d.GetBlock("b")
+	extras, _ := d.GetLockExtras("b")
+	trusted := mustTrusted(t, d)
+	if !detail.Active || extras.PasswordHash != "" || extras.DelayUntil < trusted+50 || extras.Delay != 60 {
+		t.Fatalf("after unlock: active %v, password %q, delay %d until %d (now %d)", detail.Active, extras.PasswordHash, extras.Delay, extras.DelayUntil, trusted)
+	}
+	if err := runCLI(t, "stop", "b"); err == nil {
+		t.Error("stop worked while the delay lock counted down")
+	}
+}

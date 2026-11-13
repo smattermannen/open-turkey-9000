@@ -389,8 +389,10 @@ def block_summary(block):
         parts.append("on until restart")
     if block["stop_seconds"]:
         parts.append(f"stops in {fmt_seconds(block['stop_seconds'])}")
+    if block.get("delay_left"):
+        parts.append(f"delay lock unlocks in {fmt_seconds(block['delay_left'])}")
     elif block["delay_seconds"]:
-        parts.append(f"{fmt_seconds(block['delay_seconds'])} delay to stop")
+        parts.append(f"delay lock of {fmt_seconds(block['delay_seconds'])}")
     if block["pomodoro_on"]:
         parts.append(f"Pomodoro {block['pomodoro_on'] // 60}+{block['pomodoro_off'] // 60} min")
     if block.get("paused_seconds"):
@@ -2492,13 +2494,12 @@ class Window(Gtk.ApplicationWindow):
         self.break_label.set_text(text)
 
         self.start_button.set_label("Add locks…" if block["active"] else "Start…")
-        self.stop_button.set_sensitive(
-            block["active"] and (not block["held"] or (
-                block["delay_seconds"] > 0 and not block["lock_seconds"]
-                and not block["char_locked"] and not block["password_locked"]
-                and not block["restart_locked"] and not block["quota_limit"])))
+        # §3.4: unlocking lifts locks (a delay lock starts counting down) and
+        # leaves the block on; stopping needs every lock lifted.
+        self.stop_button.set_sensitive(block["active"] and not block["held"])
         self.unlock_button.set_sensitive(
-            (block["char_locked"] or block["password_locked"])
+            (block["char_locked"] or block["password_locked"]
+             or (block["delay_seconds"] > 0 and not block.get("delay_left")))
             and not block["lock_seconds"] and not block["restart_locked"])
         # Monk mode's block is the system's: never deleted or renamed, and
         # changed only while monk mode is off.
@@ -2669,10 +2670,14 @@ class Window(Gtk.ApplicationWindow):
         block = self.blocks.get(self.selected)
         if not block:
             return
-        if block["password_locked"] and not block["char_locked"]:
-            password = self.ask_text(f"Unlock {block['name']}", "Enter the block's password.", password=True)
-            if password:
-                self.run(["unlock", block["name"]], password + "\n")
+        if not block["char_locked"]:
+            if block["password_locked"]:
+                password = self.ask_text(f"Unlock {block['name']}", "Enter the block's password.", password=True)
+                if password:
+                    self.run(["unlock", block["name"]], password + "\n",
+                             then=lambda output: self.message(output, Gtk.MessageType.INFO))
+            else:  # only a delay lock: unlocking starts its countdown
+                self.run(["unlock", block["name"]], then=lambda output: self.message(output, Gtk.MessageType.INFO))
             return
         command = f"{CLI} unlock {shlex.quote(block['name'])}"
         try:

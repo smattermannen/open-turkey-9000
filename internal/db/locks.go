@@ -24,7 +24,8 @@ type LockExtras struct {
 	PasswordHash string
 	RestartBoot  string // the boot the lock lasts for
 	Delay        int64  // seconds between asking to stop and the block stopping
-	StopAt       int64  // trusted unix time of a requested stop
+	StopAt       int64  // trusted unix time the block switches off by itself (monk mode)
+	DelayUntil   int64  // trusted unix time the delay lock is unlocked, once asked; 0: not asked
 	Style        string // the text lock's style (lock.Style*): "" random characters
 }
 
@@ -68,6 +69,20 @@ func CheckPassword(stored, password string) bool {
 	return err == nil && subtle.ConstantTimeCompare(got, want) == 1
 }
 
+// LiftTextAndPasswordLocks unlocks an active block's text and password
+// locks; the block stays on (§3.4: a lock is only lifted).
+func (d *DB) LiftTextAndPasswordLocks(name string) error {
+	blockID, err := d.getBlockID(name)
+	if err != nil {
+		return err
+	}
+	if _, err := d.conn.Exec(`UPDATE active_blocks SET locked = 0, lock_chars = 0, lock_password = '', lock_style = ''
+		WHERE block_id = ?`, blockID); err != nil {
+		return fmt.Errorf("failed to unlock '%s': %w", name, err)
+	}
+	return nil
+}
+
 // GetLockExtras returns an active block's extra locks, or zero values.
 func (d *DB) GetLockExtras(name string) (LockExtras, error) {
 	blockID, err := d.getBlockID(name)
@@ -75,8 +90,8 @@ func (d *DB) GetLockExtras(name string) (LockExtras, error) {
 		return LockExtras{}, err
 	}
 	var e LockExtras
-	err = d.conn.QueryRow(`SELECT lock_password, restart_boot, lock_delay, stop_at, lock_style
-		FROM active_blocks WHERE block_id = ?`, blockID).Scan(&e.PasswordHash, &e.RestartBoot, &e.Delay, &e.StopAt, &e.Style)
+	err = d.conn.QueryRow(`SELECT lock_password, restart_boot, lock_delay, stop_at, lock_style, delay_until
+		FROM active_blocks WHERE block_id = ?`, blockID).Scan(&e.PasswordHash, &e.RestartBoot, &e.Delay, &e.StopAt, &e.Style, &e.DelayUntil)
 	if err == sql.ErrNoRows {
 		return LockExtras{}, nil
 	}
@@ -92,8 +107,8 @@ func (d *DB) SetLockExtras(name string, e LockExtras) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.conn.Exec(`UPDATE active_blocks SET lock_password = ?, restart_boot = ?, lock_delay = ?, stop_at = ?, lock_style = ?
-		WHERE block_id = ?`, e.PasswordHash, e.RestartBoot, e.Delay, e.StopAt, e.Style, blockID)
+	_, err = d.conn.Exec(`UPDATE active_blocks SET lock_password = ?, restart_boot = ?, lock_delay = ?, stop_at = ?, lock_style = ?, delay_until = ?
+		WHERE block_id = ?`, e.PasswordHash, e.RestartBoot, e.Delay, e.StopAt, e.Style, e.DelayUntil, blockID)
 	if err != nil {
 		return fmt.Errorf("failed to save locks of '%s': %w", name, err)
 	}

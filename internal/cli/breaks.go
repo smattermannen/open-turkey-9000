@@ -29,7 +29,7 @@ by itself, locks and all. 'break end' ends a break early and keeps the rest.
 
 With relock set, unlocking the block (its typing challenge or password)
 doesn't end it: it lifts it for that long, then it is back with its locks.
-Unlocking once more during that break ends the block.
+Unlocking once more during that break lifts its locks; the block stays on.
 
 Allowing more breaks loosens a block, so it is refused while the block is
 held. Allowing fewer, or none, is always possible.`,
@@ -154,9 +154,9 @@ var breakRelockCmd = &cobra.Command{
 			return err
 		}
 		if k.Relock == 0 {
-			fmt.Printf("Unlocking block '%s' ends it.\n", args[0])
+			fmt.Printf("Unlocking block '%s' lifts its locks; the block stays on.\n", args[0])
 		} else {
-			fmt.Printf("Unlocking block '%s' gives a break of %s; unlocking again during the break ends it.\n", args[0], seconds(k.Relock))
+			fmt.Printf("Unlocking block '%s' gives a break of %s; unlocking again during the break lifts its locks.\n", args[0], seconds(k.Relock))
 		}
 		return nil
 	}),

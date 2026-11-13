@@ -387,7 +387,7 @@ func applyDueEditsAt(d *db.DB, now time.Time, trusted int64) error {
 			log.Printf("daemon: pending edit: %v", err)
 			continue
 		}
-		if detail.Active && (detail.Locked || detail.LockedUntil > trusted) {
+		if detail.Active && ((detail.Locked && !lockLifted(d, detail.Name, trusted)) || detail.LockedUntil > trusted) {
 			continue
 		}
 		if err := d.ApplyEdit(p.BlockName, p.Edit); err != nil {
@@ -479,7 +479,7 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 			} else {
 				log.Printf("daemon: schedule: activated %s", name)
 			}
-		case !within && detail.Active && detail.Scheduled && !detail.Locked && detail.LockedUntil <= trusted &&
+		case !within && detail.Active && detail.Scheduled && (!detail.Locked || lockLifted(d, name, trusted)) && detail.LockedUntil <= trusted &&
 			!slices.Contains(quotas, name):
 			if err := d.DeactivateBlock(name); err != nil {
 				log.Printf("daemon: schedule: failed to deactivate %s: %v", name, err)
@@ -489,6 +489,13 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 		}
 	}
 	return nil
+}
+
+// lockLifted reports whether a block's text and password locks are lifted
+// for now by their re-lock option.
+func lockLifted(d *db.DB, name string, trusted int64) bool {
+	extras, err := d.GetLockExtras(name)
+	return err == nil && extras.Lifted(trusted)
 }
 
 // ScheduleActiveNow reports whether a block's schedule enforces it now (see

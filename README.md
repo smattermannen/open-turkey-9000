@@ -412,7 +412,7 @@ An open session spends only the time the block is in use: one of its apps is in 
 | Restart | `start b --restart` | the computer has restarted |
 | Delay | `start b --delay 30m` | the delay has passed after `unlock` |
 
-An unlocked lock is gone; the block stays on until you `stop` it or its schedule ends it (§3.4 of `SPEC.md`).
+An unlocked lock is gone; the block stays on until you `stop` it or its schedule ends it (§3.4 of `SPEC.md`). With **re-lock** (`start b --lock --relock 30m`, also with `--password-stdin`), unlocking lifts the text and password locks only for that long; then they are on again by themselves, unless the block was stopped meanwhile.
 
 ## Browser options
 

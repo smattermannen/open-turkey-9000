@@ -27,7 +27,8 @@ func BlockLocked(detail *db.BlockDetail, extras db.LockExtras, trusted int64, bo
 	if !detail.Active {
 		return false
 	}
-	return detail.Locked || detail.LockedUntil > trusted || extras.PasswordHash != "" ||
+	lifted := extras.Lifted(trusted)
+	return (detail.Locked && !lifted) || detail.LockedUntil > trusted || (extras.PasswordHash != "" && !lifted) ||
 		extras.Delay > 0 || (extras.RestartBoot != "" && extras.RestartBoot == bootID)
 }
 

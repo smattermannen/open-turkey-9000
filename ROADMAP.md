@@ -44,8 +44,9 @@ Last checked against the code: 2026-11-13.
         before have it on). Not built: checking against the hardware clock
         and internet time (§4.10), which would let powered-off time count
         with protection on;
-      - done: `kc9k break text` (alias `relock`). **Re-lock**, the lock
-        option, is not built;
+      - done: `kc9k break text` (alias `relock`), and **re-lock** for the
+        text and password locks of blocks (`start --relock D`, GUI start
+        dialog). Not built: re-lock on setting locks;
       - done: uninstalling is refused only while something is locked
         (R-LOCK-9);
       - not built: blocks are still switched on and off by their schedule

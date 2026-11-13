@@ -117,7 +117,17 @@ shortened or removed this way.`,
 			return err
 		}
 		extras.Style = style
-		hasExtras := usePassword || useRestart || delaySpec != "" || style != ""
+		if spec, _ := cmd.Flags().GetString("relock"); spec != "" {
+			d, err := time.ParseDuration(spec)
+			if err != nil || d < time.Minute || d > 30*24*time.Hour {
+				return fmt.Errorf("invalid --relock %q (1m to 720h)", spec)
+			}
+			if !useLock && !usePassword {
+				return fmt.Errorf("--relock goes with a text or password lock")
+			}
+			extras.Relock = int64(d / time.Second)
+		}
+		hasExtras := usePassword || useRestart || delaySpec != "" || style != "" || extras.Relock > 0
 
 		forDur, err := cmd.Flags().GetString("for")
 		if err != nil {
@@ -213,7 +223,7 @@ shortened or removed this way.`,
 
 // startLockRequested reports whether a start asks for any kind of lock.
 func startLockRequested(cmd *cobra.Command) bool {
-	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay", "text-lock", "lock-words", "lock-text"} {
+	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay", "text-lock", "lock-words", "lock-text", "relock"} {
 		if cmd.Flags().Changed(f) {
 			return true
 		}
@@ -402,8 +412,23 @@ var unlockCmd = &cobra.Command{
 			}
 		}
 
-		// §3.4: the locks are lifted, the block stays on.
-		if hold.charLocked || hold.passwordHash != "" {
+		// §3.4: the locks are lifted, the block stays on. With re-lock they
+		// are only lifted for that long, then on again.
+		if (hold.charLocked || hold.passwordHash != "") && hold.extras.Relock > 0 {
+			extras, err := database.GetLockExtras(blockName)
+			if err != nil {
+				return err
+			}
+			extras.LiftedUntil = hold.trusted + extras.Relock
+			if err := database.SetLockExtras(blockName, extras); err != nil {
+				return err
+			}
+			fmt.Printf("Block '%s' is unlocked for %s; then its locks are on again (re-lock). 'kc9k stop %s' switches it off meanwhile.\n",
+				blockName, time.Duration(extras.Relock)*time.Second, blockName)
+			if hold.extras.Delay == 0 {
+				return nil
+			}
+		} else if hold.charLocked || hold.passwordHash != "" {
 			if err := database.LiftTextAndPasswordLocks(blockName); err != nil {
 				return err
 			}
@@ -477,8 +502,13 @@ var statusCmd = &cobra.Command{
 				if detail.Scheduled {
 					tags += " [switched on by its schedule]"
 				}
-				if detail.Locked {
+				if hold.charLocked {
 					tags += " [text lock: " + lock.DescribeStyle(hold.extras.Style, detail.LockChars) + "]"
+				}
+				if hold.extras.Lifted(trusted) {
+					tags += fmt.Sprintf(" [unlocked: locks on again in %s]", time.Duration(hold.extras.LiftedUntil-trusted)*time.Second)
+				} else if hold.extras.Relock > 0 {
+					tags += fmt.Sprintf(" [re-lock after %s]", time.Duration(hold.extras.Relock)*time.Second)
 				}
 				if detail.LockedUntil > trusted {
 					tags += fmt.Sprintf(" [timer lock until %s]", time.Unix(detail.LockedUntil, 0).Format("2006-01-02 15:04"))
@@ -638,6 +668,10 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 		return holdState{}, err
 	}
 	h.passwordHash = h.extras.PasswordHash
+	if h.extras.Lifted(trusted) {
+		// Unlocked with re-lock: off until LiftedUntil, then on again.
+		h.charLocked, h.passwordHash = false, ""
+	}
 	if h.extras.RestartBoot != "" {
 		boot, err := db.BootID()
 		if err != nil {
@@ -684,7 +718,8 @@ func init() {
 	addTextLockFlags(startCmd)
 	startCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	startCmd.Flags().Bool("restart", false, "Restart lock: keep the block on until the computer restarts")
-	startCmd.Flags().String("delay", "", "Delay lock: stopping takes this long (1m to 960h)")
+	startCmd.Flags().String("delay", "", "Delay lock: unlocking takes this long (1m to 960h)")
+	startCmd.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m)")
 	startCmd.Flags().String("for", "", "Timer lock: keep the block un-removable for this duration (e.g. 2h, 90m)")
 	startCmd.Flags().String("until", "", "Timer lock: keep the block un-removable until this clock time (HH:MM)")
 

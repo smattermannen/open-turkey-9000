@@ -369,7 +369,7 @@ var guiStateCmd = &cobra.Command{
 				Name: detail.Name, Lists: []guiList{}, Apps: visibleApps(detail.Apps),
 				Titles:    append([]string{}, detail.Titles...),
 				Schedules: []string{},
-				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && detail.Locked,
+				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && hold.charLocked,
 				Scheduled: detail.Scheduled,
 			}
 			for _, l := range detail.Lists {

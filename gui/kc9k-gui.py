@@ -2638,9 +2638,15 @@ class Window(Gtk.ApplicationWindow):
         grid.attach(typing, 0, 6, 2, 1)
         attach_challenge_length(grid, chars, 7)
         grid.attach(restart, 0, 9, 2, 1)
+        relock = Gtk.SpinButton.new_with_range(0, 43200, 5)
+        grid.attach(Gtk.Label(label="Re-lock after (minutes)", xalign=0), 0, 10, 1, 1)
+        grid.attach(relock, 1, 10, 1, 1)
+        grid.attach(dim("Once the text or password lock is unlocked, it comes on again after this "
+                        "long, unless the block was stopped. 0: it stays unlocked."), 1, 11, 1, 1)
         box.pack_start(grid, False, False, 0)
         dialog.show_all()
         answer = dialog.run()
+        relock_minutes = relock.get_value_as_int()
         values = (minutes.get_value_as_int(), delay.get_value_as_int(), password.get_text(),
                   typing.get_active(), restart.get_active())
         lock_args = challenge_args(chars)
@@ -2660,6 +2666,8 @@ class Window(Gtk.ApplicationWindow):
             args += ["--delay", f"{delay_minutes}m"]
         if secret:
             args.append("--password-stdin")
+        if relock_minutes and (use_typing or secret):
+            args += ["--relock", f"{relock_minutes}m"]
         if lock_minutes and not self.confirm(
                 f"Time-lock {block['name']} for {lock_minutes} minutes?",
                 "It can't be stopped until the time has passed, not even with the typing "

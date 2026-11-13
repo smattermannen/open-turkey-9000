@@ -38,6 +38,8 @@ func upgradeSchema(conn *sql.DB) error {
 		{"active_blocks", "lock_style", "TEXT NOT NULL DEFAULT ''"},
 		{"setting_locks", "lock_style", "TEXT NOT NULL DEFAULT ''"},
 		{"active_blocks", "delay_until", "INTEGER NOT NULL DEFAULT 0"},
+		{"active_blocks", "relock", "INTEGER NOT NULL DEFAULT 0"},
+		{"active_blocks", "lifted_until", "INTEGER NOT NULL DEFAULT 0"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {

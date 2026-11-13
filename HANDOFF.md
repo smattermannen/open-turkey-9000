@@ -1,8 +1,5 @@
 # Handoff: overnight session 2026-11-13 → 14
 
-  modified: 2026-11-13T23:29:59.776Z
----
-
 Overnight session 2026-11-13 → 14 (owner asleep, asked for commits + pushes along the way). Last pushed commit: a45f205. All Go and matcher tests passed; devmaster build installed on the laptop.
 
 **Done** (details in ROADMAP.md §0.1 and git log):

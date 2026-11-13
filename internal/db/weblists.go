@@ -118,6 +118,67 @@ func (w Where) With(place string, on bool) Where {
 // Any reports whether the list looks anywhere.
 func (w Where) Any() bool { return w.URL || w.Title || w.Text }
 
+// List types (§3.2), which follow from where a list looks.
+const (
+	TypeAddress = "address" // sites and URL entries, matched against the address
+	TypeTerm    = "term"    // rendered terms, matched in the title and/or text
+)
+
+// Type is the list type a Where makes: an address list looks only at the
+// address, a term list at the title and/or text.
+func (w Where) Type() string {
+	if w.URL {
+		return TypeAddress
+	}
+	return TypeTerm
+}
+
+// CheckWhere refuses a list that would look at the address and at the page
+// too: a list is an address list or a term list (§3.2).
+func CheckWhere(w Where) error {
+	if !w.Any() {
+		return fmt.Errorf("a list looks at the address (an address list), or at the title and/or text (a term list)")
+	}
+	if w.URL && (w.Title || w.Text) {
+		return fmt.Errorf("a list is an address list (url) or a term list (title, text), not both: make a second list for the other")
+	}
+	return nil
+}
+
+// SplitMixed turns each list that looks at the address and at the page into
+// an address list and a term list with the same entries and actions, which
+// match exactly what the one list did. The term list is named "<name> terms".
+func SplitMixed(lists Lists) Lists {
+	var out Lists
+	taken := map[string]bool{}
+	for _, l := range lists {
+		taken[strings.ToLower(l.Name)] = true
+	}
+	for _, l := range lists {
+		if !(l.Where.URL && (l.Where.Title || l.Where.Text)) {
+			out = append(out, l)
+			continue
+		}
+		address, terms := l, l
+		address.Where = Where{URL: true}
+		terms.Where = Where{Title: l.Where.Title, Text: l.Where.Text}
+		terms.Name = freeListName(l.Name+" terms", taken)
+		terms.ID = 0
+		out = append(out, address, terms)
+	}
+	return out
+}
+
+// freeListName returns name, or name 2, name 3… when taken (lower case).
+func freeListName(name string, taken map[string]bool) string {
+	candidate := name
+	for n := 2; taken[strings.ToLower(candidate)]; n++ {
+		candidate = fmt.Sprintf("%s %d", name, n)
+	}
+	taken[strings.ToLower(candidate)] = true
+	return candidate
+}
+
 // List returns the places, in display order.
 func (w Where) List() []string {
 	var out []string
@@ -389,6 +450,9 @@ func createList(q querier, blockID int, kind, name string, where Where) (int, er
 	if err := CheckListName(name); err != nil {
 		return 0, err
 	}
+	if err := CheckWhere(where); err != nil {
+		return 0, err
+	}
 	res, err := q.Exec("INSERT INTO web_lists (block_id, kind, name, in_url, in_title, in_text) VALUES (?, ?, ?, ?, ?, ?)",
 		blockID, kind, name, where.URL, where.Title, where.Text)
 	if err != nil {
@@ -442,6 +506,9 @@ func (d *DB) DeleteList(listID int) error {
 
 // SetListWhere sets where a list looks.
 func (d *DB) SetListWhere(listID int, where Where) error {
+	if err := CheckWhere(where); err != nil {
+		return err
+	}
 	_, err := d.conn.Exec("UPDATE web_lists SET in_url = ?, in_title = ?, in_text = ? WHERE id = ?",
 		where.URL, where.Title, where.Text, listID)
 	if err != nil {
@@ -566,7 +633,7 @@ func (d *DB) copyLists(from Lists, toBlock string) error {
 	if _, err := d.conn.Exec("DELETE FROM web_lists WHERE block_id = ?", blockID); err != nil {
 		return err
 	}
-	for _, l := range from {
+	for _, l := range SplitMixed(from) {
 		id, err := createList(d.conn, blockID, l.Kind, l.Name, l.Where)
 		if err != nil {
 			return err

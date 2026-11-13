@@ -331,3 +331,57 @@ func TestTestModeMovesToLists(t *testing.T) {
 		t.Error("the old setting stayed")
 	}
 }
+
+// §3.2: a list from before list types that looked at the address and at
+// the page becomes an address list and a term list with the same entries,
+// actions and test mode; a cluster too.
+func TestListTypesMigration(t *testing.T) {
+	d, path := openTest(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	id, err := d.ListID("b", DefaultBlockedList)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddListEntries(id, []string{"reddit.com", "*hentai*"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetListAction(id, ActionGreyscale, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetTestList(id, true); err != nil {
+		t.Fatal(err)
+	}
+	// The old way: the url and the title ticked on one list and one cluster.
+	if _, err := d.conn.Exec("UPDATE web_lists SET in_title = 1 WHERE id = ?", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.conn.Exec("INSERT INTO clusters (name, in_url, in_text) VALUES ('mix', 1, 1)"); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	d, err = OpenDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	b, _ := d.GetBlock("b")
+	address, ok1 := b.Lists.Find(DefaultBlockedList)
+	terms, ok2 := b.Lists.Find(DefaultBlockedList + " terms")
+	if !ok1 || !ok2 || address.ID != id || address.Where != (Where{URL: true}) || terms.Where != (Where{Title: true}) {
+		t.Fatalf("lists after the split: %+v", b.Lists)
+	}
+	if !reflect.DeepEqual(address.Entries, terms.Entries) || len(terms.Actions) != len(address.Actions) || !terms.HasAction(ActionGreyscale) {
+		t.Errorf("the term list differs: %+v vs %+v", terms, address)
+	}
+	if got := d.TestLists(); len(got) != 2 {
+		t.Errorf("test mode lists = %v; want both halves", got)
+	}
+	if c, err := d.GetCluster("mix"); err != nil || c.Where != (Where{URL: true}) {
+		t.Errorf("cluster = %+v, %v", c, err)
+	}
+	if c, err := d.GetCluster("mix terms"); err != nil || c.Where != (Where{Text: true}) {
+		t.Errorf("term cluster = %+v, %v", c, err)
+	}
+}

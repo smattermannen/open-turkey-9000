@@ -81,22 +81,25 @@ func TestListEntries(t *testing.T) {
 	if got := list(t, d, "b", "Blocked").Entries; !reflect.DeepEqual(got, []string{"reddit.com", "reddit.com/r/funny", "*casino*"}) {
 		t.Errorf("Blocked = %q", got)
 	}
-	// A list that also looks at text takes words too.
-	mustRun(t, "list", "create", "b", "Mixed", "--url", "--text")
+	// §3.2: a list is an address list or a term list, not both.
+	if err := runCLI(t, "list", "create", "b", "Both", "--url", "--text"); err == nil {
+		t.Error("a list looking at the address and the text was created")
+	}
+	mustRun(t, "list", "create", "b", "Mixed", "--text")
 	mustRun(t, "list", "add", "b", "Mixed", "nsfw", "18+", "example.com")
 	if err := runCLI(t, "list", "add", "b", "Mixed", "***"); err == nil {
 		t.Error("an entry of only wildcards was accepted")
 	}
-	if l := list(t, d, "b", "Mixed"); l.Where != (db.Where{URL: true, Text: true}) || len(l.Entries) != 3 {
+	if l := list(t, d, "b", "Mixed"); l.Where != (db.Where{Text: true}) || len(l.Entries) != 3 {
 		t.Errorf("Mixed = %+v", l)
+	}
+	if err := runCLI(t, "list", "scope", "b", "Mixed", "url", "on"); err == nil {
+		t.Error("a term list was made to look at the address too")
 	}
 	// Removing a domain finds it however it is written.
 	mustRun(t, "list", "remove", "b", "Blocked", "https://Reddit.com/")
 	if got := list(t, d, "b", "Blocked").Entries; len(got) != 2 {
 		t.Errorf("after removing reddit.com: %q", got)
-	}
-	if err := runCLI(t, "list", "where", "b", "Mixed", "url", "off"); err != nil {
-		t.Fatal(err)
 	}
 	if err := runCLI(t, "list", "where", "b", "Mixed", "text", "off"); err == nil {
 		t.Error("a list was left looking nowhere")

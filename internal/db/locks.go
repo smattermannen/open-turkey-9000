@@ -31,7 +31,7 @@ type LockExtras struct {
 	// then they are on again by themselves.
 	Relock      int64
 	LiftedUntil int64
-	Style        string // the text lock's style (lock.Style*): "" random characters
+	Style       string // the text lock's style (lock.Style*): "" random characters
 }
 
 // BootID identifies the current boot.

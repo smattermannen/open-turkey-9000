@@ -35,9 +35,12 @@ func TestClusters(t *testing.T) {
 	if err := runCLI(t, "cluster", "where", "academia", "url", "off"); err == nil {
 		t.Error("a cluster was left looking nowhere")
 	}
-	mustRun(t, "cluster", "where", "academia", "title", "on")
+	// §3.2: an address cluster can't look at titles too.
+	if err := runCLI(t, "cluster", "where", "academia", "title", "on"); err == nil {
+		t.Error("an address cluster was made to look at titles too")
+	}
 	mustRun(t, "cluster", "rename", "academia", "school")
-	if c, _ = d.GetCluster("school"); c.Where != (db.Where{URL: true, Title: true}) || len(c.Entries) != 2 {
+	if c, _ = d.GetCluster("school"); c.Where != (db.Where{URL: true}) || len(c.Entries) != 2 {
 		t.Errorf("after edits: %+v", c)
 	}
 

@@ -115,7 +115,8 @@ build and is **used for real**. On it:
 - **GUI** (`gui/kc9k-gui.py`): GTK 3 Python, English; Dashboard, Blocks, Device Blocks, Statistics, Settings. Reads `kc9k gui-state` and `kc9k stats --json`; every change runs a `kc9k` command.
 - **Website lists** (`internal/db/weblists.go`, `internal/cli/weblists.go`,
   `kc9k list …`): each block has named blacklists and exception lists. Each
-  list ticks where it looks (url / title / text); each blacklist ticks its
+  list is an address list (url) or a term list (title and/or text;
+  `db.CheckWhere`, mixed lists split once by `migrateListTypes`); each blacklist ticks its
   actions (block / greyscale / no-images, `actions.go`) with, per action, two
   counts for page text: distinct entries (threshold) and total hits. An exception list spares pages
   from its own block's blacklists only. Only url blacklists with `block` feed

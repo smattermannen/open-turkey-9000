@@ -108,8 +108,8 @@ func (d *DB) CreateCluster(name string, where Where) error {
 	if err := CheckListName(name); err != nil {
 		return err
 	}
-	if !where.Any() {
-		return fmt.Errorf("a cluster needs to look somewhere: url, title or text")
+	if err := CheckWhere(where); err != nil {
+		return err
 	}
 	_, err := d.conn.Exec("INSERT INTO clusters (name, in_url, in_title, in_text) VALUES (?, ?, ?, ?)",
 		name, where.URL, where.Title, where.Text)
@@ -146,6 +146,9 @@ func (d *DB) DeleteCluster(id int) error {
 
 // SetClusterWhere sets where a cluster looks.
 func (d *DB) SetClusterWhere(id int, where Where) error {
+	if err := CheckWhere(where); err != nil {
+		return err
+	}
 	_, err := d.conn.Exec("UPDATE clusters SET in_url = ?, in_title = ?, in_text = ? WHERE id = ?",
 		where.URL, where.Title, where.Text, id)
 	if err != nil {

@@ -53,7 +53,7 @@ The installed program is independent of the source directory — once installed,
 
 ## Concepts
 
-- **Block**: website lists, apps and window titles you block together. A block has **blacklists** and **exception lists**; each list ticks where it looks (the address, the page title, the page text), and each blacklist chooses its actions. See [Website lists](#website-lists).
+- **Block**: website lists, apps and window titles you block together. A block has **blacklists** and **exception lists**; each list is an **address list** (it looks at the address) or a **term list** (it looks at the page title, the page text or both), and each blacklist chooses its actions. See [Website lists](#website-lists).
 - **Overlapping blocks**: several blocks can be active at once, and everything they enforce is combined. A block's exceptions spare pages only from that block's own blacklists. To make a held block stricter, see [Strengthening a held block](#strengthening-a-held-block).
 - **Active**: a block currently in effect (the system is enforcing it).
 - **Text lock (`--lock`)**: prevents `stop`. The only way out is `unlock`, which shows a string of random characters and requires typing all of it in one go, with at least 98% accuracy (at most 6 errors in the default 300 characters). Mistakes aren't highlighted (Backspace works, but you have to spot them yourself), paste is rejected, and `--lock-chars` sets the length, from 1 to 5000 characters (default 300, several minutes of typing; 5000 is about an hour). Instead of random characters, `--lock-words` asks for random common words (about `--lock-chars` characters), and `--lock-text "…"` for your own text, typed exactly (plain characters, up to 5000; a text you wrote to yourself works well). Either sets the text lock; `--text-lock` is another name for `--lock`. The kind is chosen when the lock is set and can't change while it is on. Browser settings, strict mode and the global bypass prevention take the same flags. In the interface, the lock dialogs choose the kind and the length. Deliberate friction to outlast an impulse. Each character is a letter (upper or lower case) 60% of the time, a digit 35% of the time and a symbol 5% of the time; symbols can be any printable ASCII symbol on a US keyboard (`` !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ``).
@@ -262,7 +262,7 @@ Uninstalling first runs a guard that **refuses while any block or setting is loc
 
 ## Website lists
 
-A block has **blacklists** and **exception lists**, each with a name. Every list ticks where it looks, in any combination:
+A block has **blacklists** and **exception lists**, each with a name. Each list has a type: an **address list** looks at the page's address (url), a **term list** at the page's title, text, or both. One list can't do both: make a second list for the other. (Lists from before types that looked at both became two when upgrading: the address list kept its name, and a term list `<name> terms` got the same entries and actions, so nothing matches differently.)
 
 - **url**: the page's address. Entries are domains (`reddit.com`), paths (`reddit.com/r/funny`) and wildcards (`*.xxx`, `*casino*`, and `*.*` for every website).
 - **title**: the page title, as shown on its tab.
@@ -303,7 +303,7 @@ An **exception list** spares the pages it matches from every blacklist of its bl
 
 ```bash
 kc9k list show work                                   # the block's lists
-kc9k list create work Videos --url --title            # a blacklist (looks at the address unless told otherwise)
+kc9k list create work Videos --url                    # an address list (the default)
 kc9k list add work Videos youtube.com twitch.tv "*stream*"
 kc9k list create work Words --text
 kc9k list add work Words nsfw 18+ "*porn*"
@@ -316,7 +316,7 @@ kc9k list create work Lectures --exceptions --title   # spare videos titled "lec
 kc9k list add work Lectures lecture tutorial
 kc9k list action work Videos redirect on --url https://example.com/focus
 kc9k list action work Words monk on --for 1h          # close the browser, monk mode for an hour
-kc9k list scope work Videos text on                   # tick or untick a place (also: list where)
+kc9k list scope work Words title on                   # a term list also looks at titles (also: list where)
 kc9k list rename work Videos Video
 kc9k list delete work Video
 ```

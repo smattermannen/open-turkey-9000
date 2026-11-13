@@ -854,14 +854,18 @@ class ListCard(Gtk.Frame):
             top.pack_end(button, False, False, 0)
         box.pack_start(top, False, False, 0)
 
+        # §3.2: an address list looks only at the address; a term list at
+        # the title and/or text, which it can tick.
         self.place_checks = {}
         places = Gtk.Box(spacing=12)
-        places.pack_start(Gtk.Label(label="Looks at:"), False, False, 0)
-        for name, title in LIST_PLACES:
-            check = Gtk.CheckButton(label=title)
-            check.connect("toggled", self.toggle_place, name)
-            self.place_checks[name] = check
-            places.pack_start(check, False, False, 0)
+        address_list = "url" in data["where"]
+        places.pack_start(Gtk.Label(label="Address list" if address_list else "Term list, looking at:"), False, False, 0)
+        if not address_list:
+            for name, title in LIST_PLACES[1:]:
+                check = Gtk.CheckButton(label=title)
+                check.connect("toggled", self.toggle_place, name)
+                self.place_checks[name] = check
+                places.pack_start(check, False, False, 0)
         box.pack_start(places, False, False, 0)
 
         self.action_checks, self.spins = {}, {}
@@ -2562,19 +2566,28 @@ class Window(Gtk.ApplicationWindow):
             transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
             buttons=Gtk.ButtonsType.OK_CANCEL,
             text="New exception list" if kind == "exceptions" else "New blacklist",
-            secondary_text="A name, and where the list looks.")
+            secondary_text="A name, and its type: an address list holds sites and addresses; a term "
+                           "list holds words, looked for in the page title, the page text or both.")
         entry = Gtk.Entry(activates_default=True)
         dialog.set_default_response(Gtk.ResponseType.OK)
         area = dialog.get_message_area()
         area.pack_start(entry, False, False, 0)
+        address = Gtk.RadioButton(label="Address list")
+        term = Gtk.RadioButton(label="Term list, looking at:", group=address)
+        area.pack_start(address, False, False, 0)
+        area.pack_start(term, False, False, 0)
         checks = {}
-        for name, title in LIST_PLACES:
-            checks[name] = Gtk.CheckButton(label=title, active=name == "url")
+        for name, title in LIST_PLACES[1:]:
+            checks[name] = Gtk.CheckButton(label=title, active=name == "text", margin_start=24)
             area.pack_start(checks[name], False, False, 0)
+        for check in checks.values():
+            check.set_sensitive(False)
+        term.connect("toggled", lambda button: [c.set_sensitive(button.get_active()) for c in checks.values()])
         dialog.show_all()
         answer = dialog.run()
         name = entry.get_text().strip()
-        places = [place for place, check in checks.items() if check.get_active()]
+        places = (["url"] if address.get_active()
+                  else [place for place, check in checks.items() if check.get_active()])
         dialog.destroy()
         if answer != Gtk.ResponseType.OK or not name:
             return

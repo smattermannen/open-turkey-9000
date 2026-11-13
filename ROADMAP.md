@@ -53,8 +53,11 @@ Last checked against the code: 2026-11-13.
         (the daemon activates them); §3.3 wants active (the user's switch)
         apart from enabled (what the schedule says), and layered locks in
         the user's order (R-LOCK-6, R-LOCK-7). (L)
-- [ ] **Lists by type** (§3.2): a list ticks url, title and text with mixed
-      entries; it must be an address, term or search list. (M)
+- [ ] **Lists by type** (§3.2): address and term lists are built (a list
+      can't look at the address and the page both; upgrading split mixed
+      lists and clusters losslessly into `<name>` and `<name> terms`).
+      Left: search lists (a new type), and a term list's url scope
+      (terms in the decoded address, R-PHRASE-6). (M)
 - [ ] **Project** (§3.13): *backup* (with places and place rules) and
       *share* (`--share`, without them) are built, with a preview on import
       and new names for taken block names. A backup still leaves out
@@ -173,7 +176,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Allowlist block | Built | `block create --allowlist` |
 | Cluster | Built | |
 | Category | Partial | 14 shipped lists, offered only when creating a block (`--template`) |
-| Address, term and search lists | Differs | see 0.1 |
+| Address, term and search lists | Partial | address and term lists; search lists: Not built |
 | Phrase sets in clusters and categories | Not built | |
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |

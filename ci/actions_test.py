@@ -269,7 +269,7 @@ try:
     check("monk mode closes the browser", closed(driver))
     time.sleep(8)  # the daemon starts it after the extension has closed the browser
     info = subprocess.run(["kc9k", "block", "info", "monk-mode"], capture_output=True, text=True).stdout
-    check("monk mode starts from a list", "Status: Active" in info and "Time-locked" in info)
+    check("monk mode starts from a list", "Status: Active" in info and "Timer-locked" in info)
     ot("stop", "monklist")
     for _ in range(100):
         info = subprocess.run(["kc9k", "block", "info", "monk-mode"], capture_output=True, text=True).stdout

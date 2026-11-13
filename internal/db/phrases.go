@@ -197,6 +197,16 @@ func (s PhraseSet) Action(name string) (ListAction, bool) {
 	return ListAction{}, false
 }
 
+// hasPhrases reports whether a block has a phrase set that can act: with
+// phrases and an action.
+func (d *DB) hasPhrases(blockID int) bool {
+	var n int
+	err := d.conn.QueryRow(`SELECT COUNT(*) FROM phrase_sets s WHERE s.block_id = ?
+		AND EXISTS (SELECT 1 FROM phrases p WHERE p.set_id = s.id)
+		AND EXISTS (SELECT 1 FROM phrase_set_actions a WHERE a.set_id = s.id)`, blockID).Scan(&n)
+	return err == nil && n > 0
+}
+
 // PhraseSets returns a block's phrase sets, in the order they were made.
 func (d *DB) PhraseSets(block string) ([]PhraseSet, error) {
 	blockID, err := d.getBlockID(block)

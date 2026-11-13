@@ -79,6 +79,7 @@ type BlockDetail struct {
 	Apps        []string
 	Titles      []string // window-title keywords
 	Social      []string // social media settings (social.go)
+	HasPhrases  bool     // a phrase set with phrases and actions (phrases.go)
 	Active      bool
 	Locked      bool
 	LockChars   int
@@ -95,6 +96,7 @@ type ActiveBlockDetail struct {
 	Apps        []string
 	Titles      []string
 	Social      []string
+	HasPhrases  bool
 	Locked      bool
 	LockChars   int
 	LockedUntil int64
@@ -462,6 +464,7 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 	if detail.Social, err = d.getBlockSocial(detail.ID); err != nil {
 		return nil, err
 	}
+	detail.HasPhrases = d.hasPhrases(detail.ID)
 
 	return &detail, nil
 }
@@ -646,6 +649,7 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 		if activeBlocks[i].Social, err = d.getBlockSocial(ids[i]); err != nil {
 			return nil, err
 		}
+		activeBlocks[i].HasPhrases = d.hasPhrases(ids[i])
 	}
 
 	if err := rows.Err(); err != nil {
@@ -702,5 +706,5 @@ func (d *DB) getBlockApps(blockID int) ([]string, error) {
 // Empty reports whether a block has nothing to enforce: no apps, window
 // titles, or blacklist that does something (see WebList.Enforces).
 func (b *BlockDetail) Empty() bool {
-	return len(b.Apps) == 0 && len(b.Titles) == 0 && len(b.Social) == 0 && !b.Lists.Enforces()
+	return len(b.Apps) == 0 && len(b.Titles) == 0 && len(b.Social) == 0 && !b.Lists.Enforces() && !b.HasPhrases
 }

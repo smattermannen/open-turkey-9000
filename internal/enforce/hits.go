@@ -136,6 +136,20 @@ func findActiveList(d *db.DB, listID int) (string, db.WebList, bool) {
 		log.Printf("hit: %v", err)
 		return "", db.WebList{}, false
 	}
+	if listID < 0 {
+		// A phrase set (see phraseRules), with its actions.
+		s, block, err := d.PhraseSetByID(-listID)
+		if err != nil {
+			return "", db.WebList{}, false
+		}
+		for _, b := range withoutBreaks(d, active, trusted) {
+			if b.BlockName == block && len(s.Phrases) > 0 {
+				return block, db.WebList{ID: listID, Name: s.Name, Kind: db.ListBlacklist, Where: s.Where,
+					Actions: s.Actions, Entries: []string{"phrases"}}, true
+			}
+		}
+		return "", db.WebList{}, false
+	}
 	for _, b := range withoutBreaks(d, active, trusted) {
 		for _, l := range b.Lists.Blacklists() {
 			if l.ID == listID && l.Enforces() {

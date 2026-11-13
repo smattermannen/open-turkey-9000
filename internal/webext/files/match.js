@@ -545,6 +545,13 @@ function kc9kCompileLists(lists) {
       url: kc9kFilter({ match: list.url || [] }),
       title: kc9kKeywordMatchers(list.title),
       text: kc9kKeywordMatchers(list.text),
+      // A phrase set: its phrases, matched where its scope says.
+      phrases: (list.phrases || []).map((phrase) => ({
+        name: kc9kPhraseText(phrase),
+        url: kc9kPhraseMatcher(phrase, "url"),
+        page: kc9kPhraseMatcher(phrase),
+      })),
+      phraseScope: list.phrase_scope || [],
       actions: list.actions || [],
       except: {
         url: kc9kFilter({ match: except.url || [] }),
@@ -558,6 +565,7 @@ function kc9kCompileLists(lists) {
 // kc9kReadsPage reports whether any list needs the page's title or text.
 function kc9kReadsPage(compiled) {
   return compiled.some((list) => list.title.length > 0 || list.text.length > 0 ||
+    (list.phrases.length > 0 && (list.phraseScope.includes("title") || list.phraseScope.includes("text"))) ||
     list.except.title.length > 0 || list.except.text.length > 0);
 }
 
@@ -589,6 +597,15 @@ function kc9kListMatches(compiled, page) {
       (hasText && except.text.some((matcher) => matcher.test(page.text)))) {
       continue;
     }
+    if (list.phrases.length > 0) {
+      // A phrase set: an action needs its number of different phrases.
+      const n = kc9kPhrasesFound(list, page).length;
+      const acts = list.actions.filter((action) => n > 0 && n >= (action.distinct || 1));
+      if (acts.length > 0) {
+        out.push({ list, actions: acts });
+      }
+      continue;
+    }
     const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
     const found = hasText && list.text.length > 0 ? kc9kTextHits(list.text, page.text) : { distinct: 0, total: 0 };
@@ -599,6 +616,24 @@ function kc9kListMatches(compiled, page) {
     }
   }
   return out;
+}
+
+// kc9kPhraseText writes a phrase as it is typed: [a, b] [c]? :N.
+function kc9kPhraseText(phrase) {
+  const sets = phrase.sets || [];
+  const necessary = sets.filter((set, i) => i < 2 || set.necessary).length;
+  const text = sets.map((set, i) => "[" + (set.terms || []).join(", ") + "]" + (i >= 2 && !set.necessary ? "?" : "")).join(" ");
+  return phrase.length && phrase.length !== necessary ? text + " :" + phrase.length : text;
+}
+
+// kc9kPhrasesFound returns the names of a phrase set's phrases that match
+// the page where the set looks (only the parts of the page known so far).
+function kc9kPhrasesFound(list, page) {
+  const scope = list.phraseScope;
+  return list.phrases.filter((p) =>
+    (scope.includes("url") && p.url.test(page.url)) ||
+    (scope.includes("title") && typeof page.title === "string" && p.page.test(page.title)) ||
+    (scope.includes("text") && typeof page.text === "string" && p.page.test(page.text))).map((p) => p.name);
 }
 
 // kc9kTestReport describes, for each list in keyword test mode, what it
@@ -623,6 +658,10 @@ function kc9kTestReport(compiled, page) {
     const inTitle = list.titleRaw.filter((entry, i) => list.title[i].test(title));
     const entries = [];
     let total = 0;
+    for (const name of list.phrases.length > 0 ? kc9kPhrasesFound(list, { url: page.url, title, text }) : []) {
+      entries.push({ entry: name, count: 1 });
+      total++;
+    }
     list.textRaw.forEach((entry, i) => {
       const n = list.text[i].count(text);
       if (n > 0) {

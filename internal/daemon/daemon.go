@@ -24,6 +24,15 @@ import (
 	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
+// reportCrash records a panic as the daemon's own crash, so the restart
+// systemd makes isn't counted as tampering (§3.10), then crashes on.
+func reportCrash(database *db.DB) {
+	if r := recover(); r != nil {
+		enforce.NoteDaemonCrash(database, r)
+		panic(r)
+	}
+}
+
 // Run starts the enforcement loop and blocks until a shutdown signal arrives.
 func Run() error {
 	database, err := db.OpenDB(db.ResolveDBPath())
@@ -33,8 +42,10 @@ func Run() error {
 	defer database.Close()
 
 	enforce.NoteDaemonStart(database)
+	defer reportCrash(database)
 
 	go func() {
+		defer reportCrash(database)
 		if err := enforce.ServeRules(database); err != nil {
 			log.Printf("daemon: rules server: %v", err)
 		}
@@ -43,6 +54,7 @@ func Run() error {
 	// During a lock freeze, catch an unlocked screen within half a second
 	// instead of waiting for the next enforcement cycle.
 	go func() {
+		defer reportCrash(database)
 		relock := time.NewTicker(500 * time.Millisecond)
 		defer relock.Stop()
 		for range relock.C {
@@ -55,6 +67,7 @@ func Run() error {
 	// Statistics: count the app in the foreground every 5 seconds, and drop
 	// old days once a day.
 	go func() {
+		defer reportCrash(database)
 		sample := time.NewTicker(5 * time.Second)
 		defer sample.Stop()
 		last, pruned := time.Now(), ""

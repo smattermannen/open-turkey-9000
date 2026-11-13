@@ -399,6 +399,20 @@ func TestTamperSigns(t *testing.T) {
 	if n, _ := d.CountEvents("", 0); n != 1 {
 		t.Errorf("a second start in the same boot logged %d events; want 1", n)
 	}
+	// §3.10: not after a crash the daemon reported, nor after an upgrade.
+	NoteDaemonCrash(d, "test")
+	NoteDaemonStart(d)
+	old := daemonBinary
+	t.Cleanup(func() { daemonBinary = old })
+	daemonBinary = func() string { return "a newer program" }
+	NoteDaemonStart(d)
+	if n, _ := d.CountEvents("", 0); n != 1 {
+		t.Errorf("a crash or an upgrade counted as tampering: %d events", n)
+	}
+	NoteDaemonStart(d)
+	if n, _ := d.CountEvents("", 0); n != 2 {
+		t.Errorf("a restart after the upgrade wasn't counted: %d events", n)
+	}
 	if got := clockDrift(0, 0, 10*time.Minute, 5*time.Second); got != 10*time.Minute-5*time.Second {
 		t.Errorf("drift = %s", got)
 	}

@@ -1,14 +1,19 @@
 // tamper.go — signs that someone works on KC9K itself, logged as events for
 // bypass prevention:
 //   - the daemon starting again within the same boot: it was killed, stopped
-//     or restarted (an upgrade counts once too, which a sensible threshold
-//     absorbs);
+//     or restarted. Not an upgrade (the program file changed since the last
+//     start) and not after a crash the daemon reported itself (§3.10); a
+//     normal shutdown starts a new boot;
 //   - the wall clock jumping against the boot clock, which `date` can't move.
 package enforce
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -16,8 +21,44 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// settingDaemonBoot holds the boot the daemon last ran in.
-const settingDaemonBoot = "daemon.boot"
+// Settings that tell a daemon start from tampering.
+const (
+	settingDaemonBoot   = "daemon.boot"   // the boot the daemon last ran in
+	settingDaemonBinary = "daemon.binary" // a fingerprint of the program it ran
+	settingDaemonCrash  = "daemon.crash"  // the boot of a crash it reported
+)
+
+// daemonBinary fingerprints the running program, so a start after an
+// upgrade is told from a restart. Replaced in tests.
+var daemonBinary = func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	f, err := os.Open(exe)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// NoteDaemonCrash records that the daemon is going down from its own fault,
+// so the next start isn't taken for tampering.
+func NoteDaemonCrash(d *db.DB, why any) {
+	log.Printf("daemon: crashed: %v", why)
+	boot, err := db.BootID()
+	if err != nil {
+		return
+	}
+	if err := d.SetSetting(settingDaemonCrash, boot); err != nil {
+		log.Printf("tamper: %v", err)
+	}
+}
 
 // clockJump is how far the wall clock may drift from the boot clock between
 // two cycles before it counts as moved (NTP corrections are far smaller).
@@ -36,12 +77,24 @@ func NoteDaemonStart(d *db.DB) {
 		log.Printf("tamper: %v", err)
 		return
 	}
+	binary := daemonBinary()
 	if last == boot {
-		log.Printf("tamper: the daemon started again within this boot")
-		logEventFor(d, db.EventTamper, activeNames(d), "daemon restarted")
+		lastBinary, _ := d.GetSetting(settingDaemonBinary)
+		crash, _ := d.GetSetting(settingDaemonCrash)
+		switch {
+		case crash == boot:
+			log.Printf("daemon: started again after a crash it reported")
+		case binary != "" && lastBinary != "" && binary != lastBinary:
+			log.Printf("daemon: started again after an upgrade")
+		default:
+			log.Printf("tamper: the daemon started again within this boot")
+			logEventFor(d, db.EventTamper, activeNames(d), "daemon restarted")
+		}
 	}
-	if err := d.SetSetting(settingDaemonBoot, boot); err != nil {
-		log.Printf("tamper: %v", err)
+	for key, value := range map[string]string{settingDaemonBoot: boot, settingDaemonBinary: binary, settingDaemonCrash: ""} {
+		if err := d.SetSetting(key, value); err != nil {
+			log.Printf("tamper: %v", err)
+		}
 	}
 }
 

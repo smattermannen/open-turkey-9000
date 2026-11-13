@@ -272,7 +272,7 @@ var nepsisCmd = &cobra.Command{
 detectors (--detect; default all) are the kinds of events that count:
 
   page     a blacklist took a page away       browser  a browser without the extension was closed
-  app      a blocked app was closed           tamper   the daemon restarted in a boot, or the clock jumped
+  app      a blocked app was closed           tamper   the daemon restarted in a boot (not for an upgrade or its own crash), or the clock jumped
   title    a window was closed for its title  access   a wrong access password
   search   a page taken away that was opened from a search engine's results
            (page counts these too; alone, it counts only pages looked for)

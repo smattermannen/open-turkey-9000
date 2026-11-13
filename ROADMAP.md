@@ -45,8 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **Tamper** (§3.10): every daemon restart within a boot counts, an
-      upgrade included. (S)
 - [ ] **Lists by type** (§3.2): a list ticks url, title and text with mixed
       entries; it must be an address, term or search list. (M)
 - [ ] **Project** (§3.13): export leaves out locks, passwords, hotkeys and

@@ -151,7 +151,7 @@ func strictUnlock(database *db.DB) error {
 		}
 	}
 	if s.lock.LockChars > 0 {
-		ok, err := lock.RunChallenge(s.lock.LockChars)
+		ok, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
 		if err != nil {
 			return fmt.Errorf("failed to run the typing challenge: %w", err)
 		}
@@ -293,5 +293,6 @@ func init() {
 	strictCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	strictCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	strictCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
+	addTextLockFlags(strictCmd)
 	rootCmd.AddCommand(strictCmd, noEscapeCmd)
 }

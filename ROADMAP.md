@@ -45,8 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **Text lock** (§3.4): random characters only, 10–5000. Random words,
-      custom text and lengths from 1 are missing. (S)
 - [ ] **Window titles** (R-TITLE-1) also act in browsers, through the
       extension. They must leave browsers to term lists. (S)
 - [ ] **Tamper** (§3.10): every daemon restart within a boot counts, an
@@ -190,7 +188,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Item | Status | Notes |
 |---|---|---|
 | Timer lock (`--for`, `--until`) | Differs | ends the block; counts only time switched on; see 0.1. Confirmation over 24 h: Unchecked |
-| Text lock | Partial | see 0.1 |
+| Text lock | Built | random characters, random words (`--lock-words`) or custom text (`--lock-text`), 1–5000 |
 | Range lock | Not built | |
 | Delay lock | Differs | `start --delay`, 1 min to 40 days, counted from `stop` |
 | Schedule lock | Differs | built in, fixed 2 h; see 0.1 |

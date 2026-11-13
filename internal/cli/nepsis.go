@@ -397,7 +397,7 @@ var nepsisUnlockCmd = &cobra.Command{
 			}
 		}
 		if s.lock.LockChars > 0 {
-			ok, err := lock.RunChallenge(s.lock.LockChars)
+			ok, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
 			if err != nil {
 				return fmt.Errorf("failed to run the typing challenge: %w", err)
 			}
@@ -433,6 +433,7 @@ func init() {
 	nepsisSetCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	nepsisSetCmd.Flags().Bool("password-stdin", false, "Global only. Password lock, read from standard input")
 	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be loosened until the computer restarts")
+	addTextLockFlags(nepsisSetCmd)
 	addNowFlag(nepsisSetCmd, nepsisOffCmd)
 	nepsisCmd.AddCommand(nepsisSetCmd, nepsisOffCmd, nepsisUnlockCmd)
 	rootCmd.AddCommand(monkCmd, nepsisCmd)

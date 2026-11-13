@@ -50,7 +50,7 @@ const DefaultLockChars = 300
 // MinLockChars and MaxLockChars bound the challenge length, as in Cold
 // Turkey: from a token 10 characters to 5000, about an hour of typing.
 const (
-	MinLockChars = 10
+	MinLockChars = 1
 	MaxLockChars = 5000
 )
 
@@ -158,6 +158,98 @@ func randInt(n int) (int, error) {
 	return int(v.Int64()), nil
 }
 
+// Text lock styles (§3.4): what the challenge is made of. A style is stored
+// as a string: "" for random characters, StyleWords, or StyleCustom followed
+// by the user's text.
+const (
+	StyleChars  = ""
+	StyleWords  = "words"
+	StyleCustom = "custom:"
+)
+
+// CustomStyle returns the style for a custom text, after checking it: printable
+// ASCII (it is typed in raw mode, byte by byte), 1 to MaxLockChars characters.
+// Runs of blank space become one space.
+func CustomStyle(text string) (string, error) {
+	text = strings.Join(strings.Fields(text), " ")
+	if text == "" {
+		return "", fmt.Errorf("the custom text is empty")
+	}
+	if len(text) > MaxLockChars {
+		return "", fmt.Errorf("the custom text is longer than %d characters", MaxLockChars)
+	}
+	for i := 0; i < len(text); i++ {
+		if text[i] < 0x20 || text[i] > 0x7e {
+			return "", fmt.Errorf("the custom text may hold only plain letters, digits, spaces and punctuation (no accents or emoji)")
+		}
+	}
+	return StyleCustom + text, nil
+}
+
+// CheckStyle checks a stored style.
+func CheckStyle(style string) error {
+	switch {
+	case style == StyleChars, style == StyleWords:
+		return nil
+	case strings.HasPrefix(style, StyleCustom):
+		_, err := CustomStyle(strings.TrimPrefix(style, StyleCustom))
+		return err
+	}
+	return fmt.Errorf("unknown text lock style %q", style)
+}
+
+// DescribeStyle names a style for messages: "random characters", ...
+func DescribeStyle(style string, length int) string {
+	switch {
+	case style == StyleWords:
+		return fmt.Sprintf("random words (%d chars)", length)
+	case strings.HasPrefix(style, StyleCustom):
+		return fmt.Sprintf("custom text (%d chars)", len(strings.TrimPrefix(style, StyleCustom)))
+	}
+	return fmt.Sprintf("random characters (%d chars)", length)
+}
+
+// GenerateStyled returns the challenge for a style: length random characters,
+// random words making up about length characters, or the custom text.
+func GenerateStyled(style string, length int) (string, error) {
+	switch {
+	case style == StyleWords:
+		return generateWords(length)
+	case strings.HasPrefix(style, StyleCustom):
+		return strings.TrimPrefix(style, StyleCustom), nil
+	}
+	return GenerateChallenge(length)
+}
+
+// generateWords strings random common words together until the text is at
+// least length characters long.
+func generateWords(length int) (string, error) {
+	if length <= 0 {
+		return "", fmt.Errorf("challenge length must be positive, got %d", length)
+	}
+	var b strings.Builder
+	for b.Len() < length {
+		i, err := randInt(len(challengeWords))
+		if err != nil {
+			return "", fmt.Errorf("failed to pick a random word: %w", err)
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(challengeWords[i])
+	}
+	return b.String(), nil
+}
+
+// RunStyled is RunChallenge for a text lock of any style.
+func RunStyled(style string, length int) (bool, error) {
+	challenge, err := GenerateStyled(style, length)
+	if err != nil {
+		return false, fmt.Errorf("failed to generate challenge: %w", err)
+	}
+	return runChallengeText(challenge)
+}
+
 // RunChallenge generates a challenge, has the user type it, and reports
 // whether they reached MinAccuracy.
 //
@@ -165,11 +257,11 @@ func randInt(n int) (int, error) {
 // When stdin is not a terminal (e.g. piped input in tests), it falls back to
 // reading one line — paste detection isn't meaningful there.
 func RunChallenge(length int) (bool, error) {
-	challenge, err := GenerateChallenge(length)
-	if err != nil {
-		return false, fmt.Errorf("failed to generate challenge: %w", err)
-	}
+	return RunStyled(StyleChars, length)
+}
 
+// runChallengeText has the user type the given challenge.
+func runChallengeText(challenge string) (bool, error) {
 	fmt.Println()
 	fmt.Println("=== UNLOCK CHALLENGE ===")
 	fmt.Println()

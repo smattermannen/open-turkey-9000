@@ -27,6 +27,7 @@ type SettingLock struct {
 	LockChars    int    // typing challenge length; 0 means none
 	PasswordHash string // "" means no password
 	RestartBoot  string // the boot the lock lasts for; "" means none
+	Style        string // the text lock's style (lock.Style*): "" random characters
 }
 
 // TimeLocked reports whether the time lock is still running.
@@ -46,8 +47,8 @@ func (l SettingLock) InForce(trusted int64, bootID string) bool {
 // GetSettingLock returns a setting's locks, or an unlocked SettingLock.
 func (d *DB) GetSettingLock(name string) (SettingLock, error) {
 	l := SettingLock{Name: name}
-	err := d.conn.QueryRow(`SELECT locked_until, lock_chars, password, restart_boot
-		FROM setting_locks WHERE name = ?`, name).Scan(&l.LockedUntil, &l.LockChars, &l.PasswordHash, &l.RestartBoot)
+	err := d.conn.QueryRow(`SELECT locked_until, lock_chars, password, restart_boot, lock_style
+		FROM setting_locks WHERE name = ?`, name).Scan(&l.LockedUntil, &l.LockChars, &l.PasswordHash, &l.RestartBoot, &l.Style)
 	if err == sql.ErrNoRows {
 		return l, nil
 	}
@@ -59,11 +60,11 @@ func (d *DB) GetSettingLock(name string) (SettingLock, error) {
 
 // SetSettingLock stores a setting's locks.
 func (d *DB) SetSettingLock(l SettingLock) error {
-	_, err := d.conn.Exec(`INSERT INTO setting_locks (name, locked_until, lock_chars, password, restart_boot)
-		VALUES (?, ?, ?, ?, ?)
+	_, err := d.conn.Exec(`INSERT INTO setting_locks (name, locked_until, lock_chars, password, restart_boot, lock_style)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET locked_until = excluded.locked_until, lock_chars = excluded.lock_chars,
-			password = excluded.password, restart_boot = excluded.restart_boot`,
-		l.Name, l.LockedUntil, l.LockChars, l.PasswordHash, l.RestartBoot)
+			password = excluded.password, restart_boot = excluded.restart_boot, lock_style = excluded.lock_style`,
+		l.Name, l.LockedUntil, l.LockChars, l.PasswordHash, l.RestartBoot, l.Style)
 	if err != nil {
 		return fmt.Errorf("failed to save the lock on %s: %w", l.Name, err)
 	}
@@ -81,7 +82,7 @@ func (d *DB) ClearSettingLock(name string) error {
 // SettingLocks returns every stored setting lock, in name order. Some may no
 // longer be in force; check InForce.
 func (d *DB) SettingLocks() ([]SettingLock, error) {
-	rows, err := d.conn.Query(`SELECT name, locked_until, lock_chars, password, restart_boot
+	rows, err := d.conn.Query(`SELECT name, locked_until, lock_chars, password, restart_boot, lock_style
 		FROM setting_locks ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list setting locks: %w", err)
@@ -90,7 +91,7 @@ func (d *DB) SettingLocks() ([]SettingLock, error) {
 	var out []SettingLock
 	for rows.Next() {
 		var l SettingLock
-		if err := rows.Scan(&l.Name, &l.LockedUntil, &l.LockChars, &l.PasswordHash, &l.RestartBoot); err != nil {
+		if err := rows.Scan(&l.Name, &l.LockedUntil, &l.LockChars, &l.PasswordHash, &l.RestartBoot, &l.Style); err != nil {
 			return nil, fmt.Errorf("failed to read a setting lock: %w", err)
 		}
 		out = append(out, l)

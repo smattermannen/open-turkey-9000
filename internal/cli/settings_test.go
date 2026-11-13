@@ -7,6 +7,7 @@ import (
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/lock"
 )
 
 // R-STRICT-1: strict mode is turned off freely unless its own setting lock
@@ -146,5 +147,33 @@ func TestMonkBlockIsSystemOwned(t *testing.T) {
 	}
 	if err := runCLI(t, "block", "rename", enforce.MonkBlock, "calm"); err == nil {
 		t.Error("monk mode's block was renamed")
+	}
+}
+
+// §3.4: a text lock of random characters, random words or custom text.
+func TestTextLockStyles(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--lock-text", "I  choose to focus")
+	extras, _ := d.GetLockExtras("b")
+	detail, _ := d.GetBlock("b")
+	if extras.Style != lock.StyleCustom+"I choose to focus" || !detail.Locked || detail.LockChars != len("I choose to focus") {
+		t.Errorf("custom text lock: style %q, locked %v, %d chars", extras.Style, detail.Locked, detail.LockChars)
+	}
+	if err := runCLI(t, "start", "b", "--lock-words"); err == nil {
+		t.Error("a text lock's kind changed on an active block")
+	}
+	mustRun(t, "browser", "safesearch", "on", "--lock-words", "--lock-chars", "40")
+	s, _ := d.GetSettingLock("safesearch")
+	if s.Style != lock.StyleWords || s.LockChars != 40 {
+		t.Errorf("setting lock: %+v", s)
+	}
+	if err := runCLI(t, "browser", "safesearch", "on", "--lock"); err == nil {
+		t.Error("a word lock became a character lock")
+	}
+	if err := runCLI(t, "start", "b", "--lock-text", "café"); err == nil {
+		t.Error("custom text with an accent accepted")
 	}
 }

@@ -25,6 +25,7 @@ type LockExtras struct {
 	RestartBoot  string // the boot the lock lasts for
 	Delay        int64  // seconds between asking to stop and the block stopping
 	StopAt       int64  // trusted unix time of a requested stop
+	Style        string // the text lock's style (lock.Style*): "" random characters
 }
 
 // BootID identifies the current boot.
@@ -74,8 +75,8 @@ func (d *DB) GetLockExtras(name string) (LockExtras, error) {
 		return LockExtras{}, err
 	}
 	var e LockExtras
-	err = d.conn.QueryRow(`SELECT lock_password, restart_boot, lock_delay, stop_at
-		FROM active_blocks WHERE block_id = ?`, blockID).Scan(&e.PasswordHash, &e.RestartBoot, &e.Delay, &e.StopAt)
+	err = d.conn.QueryRow(`SELECT lock_password, restart_boot, lock_delay, stop_at, lock_style
+		FROM active_blocks WHERE block_id = ?`, blockID).Scan(&e.PasswordHash, &e.RestartBoot, &e.Delay, &e.StopAt, &e.Style)
 	if err == sql.ErrNoRows {
 		return LockExtras{}, nil
 	}
@@ -91,8 +92,8 @@ func (d *DB) SetLockExtras(name string, e LockExtras) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.conn.Exec(`UPDATE active_blocks SET lock_password = ?, restart_boot = ?, lock_delay = ?, stop_at = ?
-		WHERE block_id = ?`, e.PasswordHash, e.RestartBoot, e.Delay, e.StopAt, blockID)
+	_, err = d.conn.Exec(`UPDATE active_blocks SET lock_password = ?, restart_boot = ?, lock_delay = ?, stop_at = ?, lock_style = ?
+		WHERE block_id = ?`, e.PasswordHash, e.RestartBoot, e.Delay, e.StopAt, e.Style, blockID)
 	if err != nil {
 		return fmt.Errorf("failed to save locks of '%s': %w", name, err)
 	}

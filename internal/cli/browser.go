@@ -188,7 +188,7 @@ func listBrowserSettings(database *db.DB) error {
 }
 
 func lockFlagsGiven(cmd *cobra.Command) bool {
-	for _, f := range []string{"for", "until", "lock", "lock-chars", "password-stdin", "restart"} {
+	for _, f := range []string{"for", "until", "lock", "lock-chars", "password-stdin", "restart", "text-lock", "lock-words", "lock-text"} {
 		if cmd.Flags().Changed(f) {
 			return true
 		}
@@ -229,11 +229,12 @@ func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.
 		}
 		want.LockedUntil += trusted - now.Unix()
 	}
-	if useLock, _ := cmd.Flags().GetBool("lock"); useLock {
-		want.LockChars, _ = cmd.Flags().GetInt("lock-chars")
-		if err := lock.CheckLockChars(want.LockChars); err != nil {
-			return want, err
-		}
+	useLock, style, length, err := textLockRequested(cmd)
+	if err != nil {
+		return want, err
+	}
+	if useLock {
+		want.LockChars, want.Style = length, style
 	} else if cmd.Flags().Changed("lock-chars") {
 		return want, fmt.Errorf("--lock-chars goes with --lock")
 	}
@@ -280,8 +281,10 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 	if want.LockChars > 0 {
 		switch {
 		case next.LockChars == 0:
-			next.LockChars = want.LockChars
-			changes = append(changes, fmt.Sprintf("typing challenge (%d chars)", next.LockChars))
+			next.LockChars, next.Style = want.LockChars, want.Style
+			changes = append(changes, "text lock: "+lock.DescribeStyle(next.Style, next.LockChars))
+		case want.Style != next.Style:
+			return next, nil, fmt.Errorf("%s already has a text lock (%s); its kind can't change while locked", name, lock.DescribeStyle(next.Style, next.LockChars))
 		case charsGiven && want.LockChars > next.LockChars:
 			next.LockChars = want.LockChars
 			changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", next.LockChars))
@@ -419,7 +422,7 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 		}
 	}
 	if s.lock.LockChars > 0 {
-		success, err := lock.RunChallenge(s.lock.LockChars)
+		success, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
 		if err != nil {
 			return fmt.Errorf("failed to run the typing challenge: %w", err)
 		}
@@ -453,5 +456,6 @@ func init() {
 	browserCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	browserCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	browserCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
+	addTextLockFlags(browserCmd)
 	rootCmd.AddCommand(browserCmd)
 }

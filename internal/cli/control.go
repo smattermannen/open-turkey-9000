@@ -112,16 +112,13 @@ shortened or removed this way.`,
 				return err
 			}
 		}
-		hasExtras := usePassword || useRestart || delaySpec != ""
+		useLock, style, lockChars, err := textLockRequested(cmd)
+		if err != nil {
+			return err
+		}
+		extras.Style = style
+		hasExtras := usePassword || useRestart || delaySpec != "" || style != ""
 
-		useLock, err := cmd.Flags().GetBool("lock")
-		if err != nil {
-			return err
-		}
-		lockChars, err := cmd.Flags().GetInt("lock-chars")
-		if err != nil {
-			return err
-		}
 		forDur, err := cmd.Flags().GetString("for")
 		if err != nil {
 			return err
@@ -131,11 +128,6 @@ shortened or removed this way.`,
 			return err
 		}
 
-		if useLock {
-			if err := lock.CheckLockChars(lockChars); err != nil {
-				return err
-			}
-		}
 		if forDur != "" && untilClock != "" {
 			return fmt.Errorf("use only one of --for or --until")
 		}
@@ -183,7 +175,7 @@ shortened or removed this way.`,
 			return fmt.Errorf("block '%s' has nothing to enforce. Add websites to a list, apps or window titles first", blockName)
 		}
 		if detail.Active && hasExtras {
-			return fmt.Errorf("block '%s' is already active; password, restart and delay locks are set when it starts", blockName)
+			return fmt.Errorf("block '%s' is already active; password, restart and delay locks, and a text lock of words or your own text, are set when it starts", blockName)
 		}
 		if detail.Active {
 			return strengthenLocks(database, detail, useLock, lockChars, cmd.Flags().Changed("lock-chars"), lockedUntil)
@@ -208,7 +200,7 @@ shortened or removed this way.`,
 
 		msg := fmt.Sprintf("Block '%s' activated successfully", blockName)
 		if useLock {
-			msg += fmt.Sprintf(" [LOCKED - %d chars]", chars)
+			msg += " [TEXT LOCK - " + lock.DescribeStyle(style, chars) + "]"
 		}
 		if lockedUntil > 0 {
 			msg += fmt.Sprintf(" [TIME-LOCKED until %s]", time.Unix(lockedUntil, 0).Format("2006-01-02 15:04"))
@@ -221,7 +213,7 @@ shortened or removed this way.`,
 
 // startLockRequested reports whether a start asks for any kind of lock.
 func startLockRequested(cmd *cobra.Command) bool {
-	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay"} {
+	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay", "text-lock", "lock-words", "lock-text"} {
 		if cmd.Flags().Changed(f) {
 			return true
 		}
@@ -386,7 +378,7 @@ var unlockCmd = &cobra.Command{
 			}
 		}
 		if hold.charLocked {
-			success, err := lock.RunChallenge(hold.lockChars)
+			success, err := lock.RunStyled(hold.extras.Style, hold.lockChars)
 			if err != nil {
 				return fmt.Errorf("failed to run unlock challenge: %w", err)
 			}
@@ -648,6 +640,7 @@ func untilToday(now time.Time, clock string) (time.Time, error) {
 func init() {
 	startCmd.Flags().Bool("lock", false, "Lock the block (requires a challenge to deactivate)")
 	startCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
+	addTextLockFlags(startCmd)
 	startCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	startCmd.Flags().Bool("restart", false, "Restart lock: keep the block on until the computer restarts")
 	startCmd.Flags().String("delay", "", "Delay lock: stopping takes this long (1m to 960h)")

@@ -35,6 +35,8 @@ func upgradeSchema(conn *sql.DB) error {
 		{"pomodoro", "long_seconds", "INTEGER NOT NULL DEFAULT 0"},
 		{"pomodoro", "every_n", "INTEGER NOT NULL DEFAULT 0"},
 		{"blocks", "loosen_delay", "INTEGER NOT NULL DEFAULT 0"},
+		{"active_blocks", "lock_style", "TEXT NOT NULL DEFAULT ''"},
+		{"setting_locks", "lock_style", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {

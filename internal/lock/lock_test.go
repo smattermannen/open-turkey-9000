@@ -181,7 +181,7 @@ func TestEchoWrapping(t *testing.T) {
 }
 
 func TestCheckLockChars(t *testing.T) {
-	for n, ok := range map[int]bool{9: false, 10: true, 300: true, 5000: true, 5001: false} {
+	for n, ok := range map[int]bool{0: false, 1: true, 10: true, 300: true, 5000: true, 5001: false} {
 		if got := CheckLockChars(n) == nil; got != ok {
 			t.Errorf("CheckLockChars(%d) ok = %v, want %v", n, got, ok)
 		}
@@ -220,5 +220,30 @@ func TestPageLinesForRows(t *testing.T) {
 		if got := pageLinesForRows(rows); got != want {
 			t.Errorf("%d rows: %d lines, want %d", rows, got, want)
 		}
+	}
+}
+
+func TestStyledChallenges(t *testing.T) {
+	words, err := GenerateStyled(StyleWords, 50)
+	if err != nil || len(words) < 50 || !strings.Contains(words, " ") {
+		t.Fatalf("words = %q, %v", words, err)
+	}
+	style, err := CustomStyle("  I choose   to focus. ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := GenerateStyled(style, 0); got != "I choose to focus." {
+		t.Errorf("custom = %q", got)
+	}
+	for _, bad := range []string{"", "   ", "café", strings.Repeat("a", MaxLockChars+1)} {
+		if _, err := CustomStyle(bad); err == nil {
+			t.Errorf("custom text %q accepted", bad)
+		}
+	}
+	if CheckLockChars(1) != nil {
+		t.Error("a one-character text lock refused")
+	}
+	if CheckStyle("nope") == nil || CheckStyle(StyleWords) != nil || CheckStyle(style) != nil {
+		t.Error("CheckStyle")
 	}
 }

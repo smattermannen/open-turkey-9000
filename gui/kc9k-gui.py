@@ -233,7 +233,7 @@ def dim(text, wrap=True):
     return label
 
 
-CHALLENGE_MIN, CHALLENGE_MAX, CHALLENGE_DEFAULT = 10, 5000, 300
+CHALLENGE_MIN, CHALLENGE_MAX, CHALLENGE_DEFAULT = 1, 5000, 300
 
 # Appearance is a preference of whoever runs the interface, so it lives in
 # their own config, not in the KC9K database.
@@ -304,19 +304,52 @@ class Theme:
 
 
 def challenge_length(typing):
-    """The challenge length chooser, usable only while typing is ticked."""
+    """The text lock chooser, usable only while typing is ticked: its kind
+    (random characters, random words or your own text) and its length."""
     chars = Gtk.SpinButton.new_with_range(CHALLENGE_MIN, CHALLENGE_MAX, 10)
     chars.set_value(CHALLENGE_DEFAULT)
-    chars.set_sensitive(False)
-    typing.connect("toggled", lambda button: chars.set_sensitive(button.get_active()))
+    style = Gtk.ComboBoxText()
+    for key, label in (("chars", "Random characters"), ("words", "Random words"), ("custom", "My own text")):
+        style.append(key, label)
+    style.set_active_id("chars")
+    text = Gtk.Entry(placeholder_text="The text to type", no_show_all=True)
+    chars.kc9k_style, chars.kc9k_text = style, text
+
+    def sync(*_args):
+        on = typing.get_active()
+        custom = style.get_active_id() == "custom"
+        style.set_sensitive(on)
+        chars.set_sensitive(on and not custom)
+        text.set_sensitive(on)
+        text.set_visible(custom)
+        chars.set_visible(not custom)
+
+    typing.connect("toggled", sync)
+    style.connect("changed", sync)
+    sync()
     return chars
 
 
 def attach_challenge_length(grid, chars, row):
-    grid.attach(Gtk.Label(label="Challenge length (characters)", xalign=0), 0, row, 1, 1)
-    grid.attach(chars, 1, row, 1, 1)
-    grid.attach(dim(f"{CHALLENGE_MIN} to {CHALLENGE_MAX}. About 300 characters take a few "
-                    "minutes to type; 5000 take about an hour."), 1, row + 1, 1, 1)
+    grid.attach(Gtk.Label(label="Text to type", xalign=0), 0, row, 1, 1)
+    line = Gtk.Box(spacing=6)
+    line.pack_start(chars.kc9k_style, False, False, 0)
+    line.pack_start(chars, False, False, 0)
+    line.pack_start(chars.kc9k_text, True, True, 0)
+    grid.attach(line, 1, row, 1, 1)
+    grid.attach(dim(f"Length in characters, {CHALLENGE_MIN} to {CHALLENGE_MAX}. About 300 "
+                    "characters take a few minutes to type; 5000 take about an hour. "
+                    "Pasting is refused."), 1, row + 1, 1, 1)
+
+
+def challenge_args(chars):
+    """The text lock flags for what the chooser shows (read it before the
+    dialog is destroyed)."""
+    style = chars.kc9k_style.get_active_id()
+    if style == "custom":
+        return ["--lock-text", chars.kc9k_text.get_text()]
+    args = ["--lock", "--lock-chars", str(chars.get_value_as_int())]
+    return args + ["--lock-words"] if style == "words" else args
 
 
 def set_switch(switch, value):
@@ -2584,7 +2617,7 @@ class Window(Gtk.ApplicationWindow):
         minutes = Gtk.SpinButton.new_with_range(0, 10080, 5)
         delay = Gtk.SpinButton.new_with_range(0, 57600, 5)
         password = Gtk.Entry(visibility=False, placeholder_text="optional")
-        typing = Gtk.CheckButton(label="Typing challenge to stop")
+        typing = Gtk.CheckButton(label="Text lock: type a text to stop")
         chars = challenge_length(typing)
         restart = Gtk.CheckButton(label="Stay on until the computer restarts")
         rows = (
@@ -2604,7 +2637,7 @@ class Window(Gtk.ApplicationWindow):
         answer = dialog.run()
         values = (minutes.get_value_as_int(), delay.get_value_as_int(), password.get_text(),
                   typing.get_active(), restart.get_active())
-        lock_chars = chars.get_value_as_int()
+        lock_args = challenge_args(chars)
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
             return
@@ -2614,7 +2647,7 @@ class Window(Gtk.ApplicationWindow):
         if lock_minutes:
             args += ["--for", f"{lock_minutes}m"]
         if use_typing:
-            args += ["--lock", "--lock-chars", str(lock_chars)]
+            args += lock_args
         if use_restart:
             args.append("--restart")
         if delay_minutes:
@@ -3579,7 +3612,7 @@ class Window(Gtk.ApplicationWindow):
         grid = Gtk.Grid(column_spacing=10, row_spacing=8)
         minutes = Gtk.SpinButton.new_with_range(0, 57600, 5)
         password = Gtk.Entry(visibility=False, placeholder_text="optional")
-        typing = Gtk.CheckButton(label="Typing challenge to turn it off")
+        typing = Gtk.CheckButton(label="Text lock: type a text to turn it off")
         chars = challenge_length(typing)
         restart = Gtk.CheckButton(label="Stay on until the computer restarts")
         rows = (
@@ -3598,7 +3631,7 @@ class Window(Gtk.ApplicationWindow):
         answer = dialog.run()
         lock_minutes, secret = minutes.get_value_as_int(), password.get_text()
         use_typing, use_restart = typing.get_active(), restart.get_active()
-        lock_chars = chars.get_value_as_int()
+        lock_args = challenge_args(chars)
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
             return
@@ -3607,7 +3640,7 @@ class Window(Gtk.ApplicationWindow):
         if lock_minutes:
             args += ["--for", f"{lock_minutes}m"]
         if use_typing:
-            args += ["--lock", "--lock-chars", str(lock_chars)]
+            args += lock_args
         if use_restart:
             args.append("--restart")
         if secret:

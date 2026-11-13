@@ -32,8 +32,8 @@ Last checked against the code: 2026-11-13.
         --lead D`) replaces the built-in schedule/place protection, the 2 h
         edit freeze and the 24 h allow-window queue; upgrading gives blocks
         that had schedules or place rules a schedule lock with a 2 h lead.
-        Left: Frozen Chicken schedules still have the built-in 2 h
-        (`schedule.EditFreeze`, R-FREEZE-2 wants locks like a block);
+        Frozen Chicken schedules have their own lock with a lead time too
+        (`--lock-lead`, `freeze schedule lock`); older ones keep 2 h;
       - done: `unlock` lifts text and password locks and leaves the block
         on; the delay lock counts down from `unlock` and is then lifted
         (`delay_until`); a timer lock ending lifts only the lock (only a
@@ -43,7 +43,7 @@ Last checked against the code: 2026-11-13.
       - done: `kc9k break text` (alias `relock`). **Re-lock**, the lock
         option, is not built;
       - done: uninstalling is refused only while something is locked
-        (R-LOCK-9), apart from freeze schedules (above);
+        (R-LOCK-9);
       - not built: blocks are still switched on and off by their schedule
         (the daemon activates them); §3.3 wants active (the user's switch)
         apart from enabled (what the schedule says), and layered locks in
@@ -218,7 +218,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Frozen Chicken: lock screen, logout, shutdown, scheduled | Built | a running freeze can't be ended; locks on scheduled freezes: Not built |
+| Frozen Chicken: lock screen, logout, shutdown, scheduled | Built | a running freeze can't be ended; a scheduled freeze has a lock with a lead time (other lock kinds on it: Not built) |
 | Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Built | list actions wait 60 s after the notice; scheduled freezes are announced at 5 min and 1 min |
 | Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |

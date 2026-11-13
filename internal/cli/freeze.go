@@ -258,7 +258,11 @@ var guiStateCmd = &cobra.Command{
 		state.FreezeSched = []string{}
 		if schedules, err := database.ListFreezeSchedules(); err == nil {
 			for _, s := range schedules {
-				state.FreezeSched = append(state.FreezeSched, fmt.Sprintf("%s (%s)", s.Window, s.Mode))
+				text := fmt.Sprintf("%s (%s)", s.Window, s.Mode)
+				if s.LockLead >= 0 {
+					text += fmt.Sprintf(", locked from %s before", time.Duration(s.LockLead)*time.Minute)
+				}
+				state.FreezeSched = append(state.FreezeSched, text)
 			}
 		}
 		state.Browser = map[string]bool{}

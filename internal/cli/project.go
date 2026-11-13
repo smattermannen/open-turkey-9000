@@ -47,6 +47,9 @@ type windowExport struct {
 	To    string `json:"to"`
 	Allow bool   `json:"allow,omitempty"`
 	Mode  string `json:"mode,omitempty"` // Frozen Chicken windows only
+	// LockLead is a Frozen Chicken window's lock lead time in minutes; nil:
+	// no lock.
+	LockLead *int `json:"lock_minutes,omitempty"`
 }
 
 type pomodoroExport struct {
@@ -393,6 +396,10 @@ passwords, hotkeys and statistics are never in it.`,
 		for _, f := range freezes {
 			w := exportWindow(f.Window)
 			w.Mode = f.Mode
+			if f.LockLead >= 0 {
+				lead := f.LockLead
+				w.LockLead = &lead
+			}
 			out.Freezes = append(out.Freezes, w)
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
@@ -471,14 +478,19 @@ With --dry-run, says what would happen and changes nothing.`,
 		type checkedFreeze struct {
 			w    schedule.Window
 			mode string
+			lead int
 		}
 		var freezes []checkedFreeze
 		for _, f := range in.Freezes {
 			w, err := f.window()
-			if err != nil || !freeze.ValidMode(f.Mode) {
+			lead := db.NoScheduleLock
+			if f.LockLead != nil {
+				lead = *f.LockLead
+			}
+			if err != nil || !freeze.ValidMode(f.Mode) || lead > db.MaxScheduleLockLead || lead < db.NoScheduleLock {
 				return fmt.Errorf("a Frozen Chicken window is invalid")
 			}
-			freezes = append(freezes, checkedFreeze{w, f.Mode})
+			freezes = append(freezes, checkedFreeze{w, f.Mode, lead})
 		}
 		if in.Nepsis != nil && in.Nepsis.On() {
 			if err := in.Nepsis.Check(); err != nil {
@@ -672,7 +684,7 @@ With --dry-run, says what would happen and changes nothing.`,
 		for _, f := range newFreezes {
 			say("add a scheduled Frozen Chicken: %s (%s)", f.w, f.mode)
 			if !dry {
-				if err := database.AddFreezeSchedule(f.w, f.mode); err != nil {
+				if err := database.AddFreezeSchedule(f.w, f.mode, f.lead); err != nil {
 					return err
 				}
 			}

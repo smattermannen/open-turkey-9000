@@ -67,8 +67,8 @@ var prepareUninstallCmd = &cobra.Command{
 			return err
 		}
 		for _, s := range freezeSchedules {
-			if enforce.FreezeScheduleHeld(s.Window, time.Now()) {
-				return fmt.Errorf("cannot uninstall: freeze schedule %d (%s) runs now or within 2 hours", s.Num, s.Window)
+			if enforce.FreezeScheduleHeld(s, time.Now()) {
+				return fmt.Errorf("cannot uninstall: freeze schedule %d (%s) is locked", s.Num, s.Window)
 			}
 		}
 

@@ -98,7 +98,8 @@ build and is **used for real**. On it:
   and daemon agree.
 - **Schedule** (`internal/schedule/`): pure time logic for recurring windows
   (block windows, or `--allow` windows that keep a block on except while open);
-  `EditFreeze` (2 h) is now used only by freeze schedules.
+  `EditFreeze` (2 h) is no longer used as a built-in protection; freeze
+  schedules have their own lock lead time (`db.FreezeSchedule.LockLead`).
 - **Locks and weakening** (`internal/cli/`): `blockHold` decides whether a
   block is locked (text, timer, password, restart, delay, or its schedule
   lock: `db/schedulelock.go`, `kc9k schedule lock`, on in its windows and

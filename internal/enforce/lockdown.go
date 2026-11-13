@@ -130,11 +130,12 @@ func reconcileFreezeSchedules(d *db.DB, now time.Time) error {
 	return d.SetFreeze(until.Unix(), mode)
 }
 
-// FreezeScheduleHeld reports whether a freeze schedule's window is open now
-// or opens within schedule.EditFreeze: then it can't be removed, since that
-// would cancel a freeze that is running or about to start.
-func FreezeScheduleHeld(w schedule.Window, now time.Time) bool {
-	return w.ActiveWithin(now, schedule.EditFreeze)
+// FreezeScheduleHeld reports whether a freeze schedule's lock is on: its
+// window is open or opens within the lock's lead time. Then it can't be
+// removed (R-FREEZE-2). Without a lock it can always be removed; a freeze
+// that is running goes on regardless.
+func FreezeScheduleHeld(f db.FreezeSchedule, now time.Time) bool {
+	return f.Locked(now)
 }
 
 // escapeHonoured reports whether the kernel parameter may lift enforcement.

@@ -16,7 +16,7 @@ func TestReconcileFreezeSchedules(t *testing.T) {
 	}
 	defer d.Close()
 
-	if err := d.AddFreezeSchedule(schedule.Window{Days: schedule.AllDays, Start: 22 * 60, End: 23 * 60}, "logout"); err != nil {
+	if err := d.AddFreezeSchedule(schedule.Window{Days: schedule.AllDays, Start: 22 * 60, End: 23 * 60}, "logout", db.NoScheduleLock); err != nil {
 		t.Fatal(err)
 	}
 	evening := time.Date(2026, 11, 9, 22, 15, 0, 0, time.Local)
@@ -53,13 +53,20 @@ func TestReconcileFreezeSchedules(t *testing.T) {
 	}
 }
 
+// R-FREEZE-2: a freeze schedule is held only by its lock, from the lock's
+// lead time before its window until it ends.
 func TestFreezeScheduleHeld(t *testing.T) {
 	w := schedule.Window{Days: schedule.AllDays, Start: 22 * 60, End: 23 * 60}
 	day := func(h, m int) time.Time { return time.Date(2026, 11, 9, h, m, 0, 0, time.Local) }
-	if FreezeScheduleHeld(w, day(19, 30)) {
+	locked := db.FreezeSchedule{Window: w, LockLead: 120}
+	if FreezeScheduleHeld(locked, day(19, 30)) {
 		t.Error("held 2.5 hours before the window")
 	}
-	if !FreezeScheduleHeld(w, day(20, 30)) || !FreezeScheduleHeld(w, day(22, 30)) {
+	if !FreezeScheduleHeld(locked, day(20, 30)) || !FreezeScheduleHeld(locked, day(22, 30)) {
 		t.Error("not held 1.5 hours before, or during, the window")
+	}
+	free := db.FreezeSchedule{Window: w, LockLead: db.NoScheduleLock}
+	if FreezeScheduleHeld(free, day(21, 59)) || FreezeScheduleHeld(free, day(22, 30)) {
+		t.Error("a schedule without a lock was held")
 	}
 }

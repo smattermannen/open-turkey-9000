@@ -84,7 +84,9 @@ func NoteDaemonStart(d *db.DB) {
 		switch {
 		case crash == boot:
 			log.Printf("daemon: started again after a crash it reported")
-		case binary != "" && lastBinary != "" && binary != lastBinary:
+		case binary != "" && binary != lastBinary:
+			// No fingerprint stored: the last run was a version from before
+			// fingerprints, so this one is an upgrade too.
 			log.Printf("daemon: started again after an upgrade")
 		default:
 			log.Printf("tamper: the daemon started again within this boot")

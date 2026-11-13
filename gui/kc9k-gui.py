@@ -997,7 +997,7 @@ class ListCard(Gtk.Frame):
     def toggle_place(self, check, name):
         if self.filling or self.window.updating:
             return
-        self.window.run(self.command("where", name, "on" if check.get_active() else "off"),
+        self.window.run(self.command("scope", name, "on" if check.get_active() else "off"),
                         then=self.window.queued_note)
 
     def toggle_action(self, check, name):
@@ -1715,19 +1715,19 @@ class Window(Gtk.ApplicationWindow):
     def change_global_nepsis(self, _button):
         args = self.ask_nepsis("Bypass prevention", self.state.get("nepsis"), True)
         if args:
-            self.run(["nepsis", "set", *args], then=self.queued_note)
+            self.run(["bypass", "set", *args], then=self.queued_note)
 
     def change_block_nepsis(self, _button):
         block = self.blocks.get(self.selected)
         if block:
             args = self.ask_nepsis(f"Bypass prevention for {block['name']}", block.get("nepsis"), False)
             if args:
-                self.run(["nepsis", "set", "--block", block["name"], *args], then=self.queued_note)
+                self.run(["bypass", "set", "--block", block["name"], *args], then=self.queued_note)
 
     def nepsis_off(self, _button, block=None):
         if self.confirm("Turn bypass prevention off?", "This loosens it, so it isn't possible while "
                         "it is locked (or, for a block, while the block is held).", "Turn off"):
-            self.run(["nepsis", "off"] + (["--block", block()] if block else []), then=self.queued_note)
+            self.run(["bypass", "off"] + (["--block", block()] if block else []), then=self.queued_note)
 
     def run_thresholds(self, block_name, list_name, changes):
         """Set each (threshold or hits, action, number) of a list in turn: one
@@ -2935,7 +2935,7 @@ class Window(Gtk.ApplicationWindow):
     def toggle_cluster_where(self, check, place):
         if self.updating or not self.cluster_name():
             return
-        self.run(["cluster", "where", self.cluster_name(), place, "on" if check.get_active() else "off"])
+        self.run(["cluster", "scope", self.cluster_name(), place, "on" if check.get_active() else "off"])
 
     def new_cluster(self, _button):
         name = self.ask_text("New cluster", "A name, such as study or shopping.")

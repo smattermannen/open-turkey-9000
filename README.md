@@ -226,8 +226,8 @@ A held block can always be made stricter, since that can't be used to escape it:
 |---|---|
 | `block add-app`, `block add-title` | closes more apps |
 | `list add` to a blacklist (`block add`, `add-keyword`), `list create` | matches more pages |
-| `list where … on` and `list action … on` on a blacklist, a lower `list threshold` | looks in more places, does more, or needs fewer words |
-| `list remove` from an exception list (`block remove-exception`), `list where … off` on one, `list delete` of one | spares fewer pages |
+| `list scope … on` and `list action … on` on a blacklist, a lower `list threshold` | looks in more places, does more, or needs fewer words |
+| `list remove` from an exception list (`block remove-exception`), `list scope … off` on one, `list delete` of one | spares fewer pages |
 | `start <block> --lock [--lock-chars N]` on an **active** block | adds a text lock, or lengthens the challenge (a shorter `--lock-chars` is refused) |
 | `start <block> --for D` / `--until HH:MM` on an **active** block | adds a time lock, or extends it (an earlier end is refused) |
 
@@ -324,7 +324,7 @@ kc9k list create work Lectures --exceptions --title   # spare videos titled "lec
 kc9k list add work Lectures lecture tutorial
 kc9k list action work Videos redirect on --url https://example.com/focus
 kc9k list action work Words monk on --for 1h          # close the browser, monk mode for an hour
-kc9k list where work Videos text on                   # tick or untick a place
+kc9k list scope work Videos text on                   # tick or untick a place (also: list where)
 kc9k list rename work Videos Video
 kc9k list delete work Video
 ```
@@ -358,7 +358,7 @@ kc9k cluster copy anime focus --into Blocked        # add the entries to a list 
 kc9k cluster save focus Blocked distractions        # a block's list saved as a cluster
 kc9k cluster export academia > academia.txt         # one entry per line, with a line saying where it looks
 kc9k cluster import academia academia.txt           # makes the cluster if needed
-kc9k cluster where academia title on
+kc9k cluster scope academia title on
 kc9k cluster remove academia jstor.org
 kc9k cluster rename academia school
 kc9k cluster delete school
@@ -509,17 +509,17 @@ Monk mode blocks every website for a while, time-locked: it starts the block **m
 
 ## Bypass prevention
 
-Many blocked pages or closed apps in a short time usually mean someone is hunting for a loophole. Bypass prevention (command `nepsis`, watchfulness) counts what Killer Chicken stops and climbs a ladder of steps you choose, so you really step away:
+Many blocked pages or closed apps in a short time usually mean someone is hunting for a loophole. Bypass prevention (command `bypass`; `nepsis` still works) counts what Killer Chicken stops and climbs a ladder of steps you choose, so you really step away:
 
 ```bash
-kc9k nepsis set --step "3 in 10m: warning, close-tab, logout 1m" \
+kc9k bypass set --step "3 in 10m: warning, close-tab, logout 1m" \
                 --step "3 in 10m: close-browser, monk 5m" \
                 --step "2 in 30m: shutdown 15m" --quiet 2h      # the whole computer
-kc9k nepsis set --block social --step "5 in 10m: close-browser, monk 30m" --detect page,app
-kc9k nepsis set ... --for 7d                                      # global only: locked for a week
-kc9k nepsis                                                       # the ladders and where they stand
-kc9k nepsis off [--block social]
-kc9k nepsis unlock                                                # challenge or password lock
+kc9k bypass set --block social --step "5 in 10m: close-browser, monk 30m" --detect page,app
+kc9k bypass set ... --for 7d                                      # global only: locked for a week
+kc9k bypass                                                       # the ladders and where they stand
+kc9k bypass off [--block social]
+kc9k bypass unlock                                                # challenge or password lock
 ```
 
 Each step trips when its number of events happens within its window, then takes its actions; the next time, the next step; past the last, the last again. After `--quiet` without tripping, the ladder falls back a step. Actions: `warning` (a notification), `close-tab` (the tab of the page that tripped it), `close-browser`, `lock-screen D`, `logout [D]`, `shutdown [D]` and `monk D`. With a time, locked, logged out or off lasts that long through Frozen Chicken (at most a day); a one-off logout or shutdown happens at most every 10 minutes. `--count N --within D --then ACTION [--then-for D]` is a short way to give one step.

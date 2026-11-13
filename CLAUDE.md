@@ -296,13 +296,14 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 Android companion app: see `android/CLAUDE.md` (it runs this extension in IronFox and serves it `/rules` itself; `rules.safesearch` comes only from there, `kc9kSafeSearch` in `match.js`).
 
 Full usage and examples in `README.md`. Summary:
-`cluster list | show | create [--url --title --text] | rename | delete | add | remove | where | export | import | copy [--into L | --as N] [--exceptions] | save`,
-`list show | create [--exceptions --url --title --text] | rename | delete | add | remove | where | action |
+`cluster list | show | create [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
+`list show | create [--exceptions --url --title --text] | rename | delete | add | remove | scope | action |
 threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
-`nepsis [set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,
+`bypass` (old name `nepsis`) `[set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,
 `block create [--allowlist] [--template T] | add | add-exception | add-app | add-title | remove-title |
 remove-app | action | export | import | export-list | import-list | list |
-info | remove`, `start [--lock] [--lock-chars N] [--for D | --until HH:MM]`,
+info | remove`, `start [--lock | --text-lock] [--lock-chars N] [--lock-words | --lock-text T] [--for D | --until HH:MM]`,
+`strict on|off|unlock [lock flags]`, `no-weakening on|off`, `password locks on|off`, `dns [network|quad9|IPs]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
 `pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `break …`, `social …`, `place …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).

@@ -54,9 +54,9 @@ Last checked against the code: 2026-11-13.
       say active (for enforcing), char lock, time lock, held, quota,
       `break allowance` (a reward), `break relock` (a text break), option,
       browser option, template (for shipped lists, which `SPEC.md` calls
-      categories), loosen, bypass detection; `kc9k nepsis` becomes
-      `kc9k bypass`. Commands get the glossary's names (`--text-lock`,
-      `list scope`), keeping the old ones for a while. (M)
+      categories), loosen, bypass detection. Done: `kc9k bypass` (alias
+      `nepsis`), `--text-lock`, `list scope` / `cluster scope` (alias
+      `where`). (M)
 - [ ] **Page reading is slow on big pages** (principle 9). In every frame,
       `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
       makes the browser lay out the page) every 1.5 s while the page changes,

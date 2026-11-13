@@ -600,7 +600,8 @@ var listRemoveCmd = &cobra.Command{
 }
 
 var listWhereCmd = &cobra.Command{
-	Use:   "where [block] [list] [url|title|text] [on|off]",
+	Use:     "scope [block] [list] [url|title|text] [on|off]",
+	Aliases: []string{"where"},
 	Short: "Choose where a list looks: the address, the page title, the page text",
 	Args:  cobra.ExactArgs(4),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {

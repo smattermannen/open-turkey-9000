@@ -1,16 +1,16 @@
 // nepsis.go — monk mode and bypass prevention.
 //
 //	kc9k monk --for 1h                       # monk mode: the monk-mode block, time-locked
-//	kc9k nepsis                              # show bypass detection
-//	kc9k nepsis set --step "3 in 10m: close-tab, logout 1m" \
+//	kc9k bypass                              # show bypass prevention
+//	kc9k bypass set --step "3 in 10m: close-tab, logout 1m" \
 //	                --step "3 in 10m: close-browser, monk 5m" \
 //	                --step "2 in 30m: shutdown 15m" [--detect page,app] [--quiet 2h] [--block B]
-//	kc9k nepsis set --count 10 --within 5m --then monk --then-for 1h   # one step
-//	kc9k nepsis set ... --for 7d --lock      # global only: lock it like a browser option
-//	kc9k nepsis off [--block B]
-//	kc9k nepsis unlock                       # global: challenge or password
+//	kc9k bypass set --count 10 --within 5m --then monk --then-for 1h   # one step
+//	kc9k bypass set ... --for 7d --lock      # global only: lock it like a browser option
+//	kc9k bypass off [--block B]
+//	kc9k bypass unlock                       # global: challenge or password
 //
-// Bypass detection counts what KC9K stops (see db/nepsis.go) and climbs a
+// Bypass prevention counts what KC9K stops (see db/nepsis.go) and climbs a
 // ladder of steps. The global one counts every block's events; a block's own
 // counts that block's while it is on. Making either stricter is always
 // allowed. Loosening a block's is gated like other edits to the block;
@@ -65,7 +65,7 @@ is already on, a longer time extends it.`,
 	}),
 }
 
-// describeNepsis renders a bypass detection, one line per step.
+// describeNepsis renders a bypass prevention, one line per step.
 func describeNepsis(n db.Nepsis) string {
 	if !n.On() {
 		return "off"
@@ -200,7 +200,7 @@ func setBlockNepsis(cmd *cobra.Command, database *db.DB, block string, n db.Neps
 	if err := database.SetBlockNepsis(block, n); err != nil {
 		return err
 	}
-	fmt.Printf("Bypass detection for block '%s': %s\n", block, describeNepsis(n))
+	fmt.Printf("Bypass prevention for block '%s': %s\n", block, describeNepsis(n))
 	return nil
 }
 
@@ -223,7 +223,7 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 			return refused(database, "", err)
 		}
 		if s.lock.LockChars > 0 || s.lock.PasswordHash != "" {
-			return refused(database, "", fmt.Errorf("bypass prevention is locked. Use 'kc9k nepsis unlock' first"))
+			return refused(database, "", fmt.Errorf("bypass prevention is locked. Use 'kc9k bypass unlock' first"))
 		}
 		if err := refuseSettingWeakening(database, "bypass prevention"); err != nil {
 			return err
@@ -261,14 +261,15 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 	if err := database.SetGlobalNepsis(n); err != nil {
 		return err
 	}
-	fmt.Printf("Bypass detection for the whole computer: %s\n", describeNepsis(n))
+	fmt.Printf("Bypass prevention for the whole computer: %s\n", describeNepsis(n))
 	return nil
 }
 
 var nepsisCmd = &cobra.Command{
-	Use:   "nepsis",
+	Use:     "bypass",
+	Aliases: []string{"nepsis"},
 	Short: "Bypass prevention: act when KC9K stops many things in a short time",
-	Long: `Bypass detection counts what KC9K stops and climbs a ladder of steps. The
+	Long: `Bypass prevention counts what KC9K stops and climbs a ladder of steps. The
 detectors (--detect; default all) are the kinds of events that count:
 
   page     a blacklist took a page away       browser  a browser without the extension was closed
@@ -281,7 +282,7 @@ Each --step trips when its number of events happens within its window, then
 takes its actions; the next time, the next step; past the last, the last
 again. After --quiet without tripping, it falls back a step. For example:
 
-  kc9k nepsis set --step "3 in 10m: warning, close-tab, logout 1m" \
+  kc9k bypass set --step "3 in 10m: warning, close-tab, logout 1m" \
                   --step "3 in 10m: close-browser, monk 5m" \
                   --step "2 in 30m: shutdown 15m" --quiet 2h
 
@@ -340,7 +341,7 @@ locked like a browser option (--for, --until, --lock, --password-stdin,
 
 var nepsisSetCmd = &cobra.Command{
 	Use:   "set --step \"N in D: action [D], ...\" ... [--detect kinds] [--quiet D] [--block B]",
-	Short: "Turn bypass detection on, or change it",
+	Short: "Turn bypass prevention on, or change it",
 	Args:  cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		n, err := readNepsis(cmd)
@@ -429,7 +430,7 @@ func init() {
 	}
 	nepsisSetCmd.Flags().String("for", "", "Global only. Time lock: can't be loosened for this long")
 	nepsisSetCmd.Flags().String("until", "", "Global only. Time lock until this clock time (HH:MM)")
-	nepsisSetCmd.Flags().Bool("lock", false, "Global only. Typing challenge lock ('kc9k nepsis unlock')")
+	nepsisSetCmd.Flags().Bool("lock", false, "Global only. Typing challenge lock ('kc9k bypass unlock')")
 	nepsisSetCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	nepsisSetCmd.Flags().Bool("password-stdin", false, "Global only. Password lock, read from standard input")
 	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be loosened until the computer restarts")

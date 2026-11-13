@@ -267,7 +267,8 @@ var clusterRemoveCmd = &cobra.Command{
 }
 
 var clusterWhereCmd = &cobra.Command{
-	Use:   "where [cluster] [url|title|text] [on|off]",
+	Use:     "scope [cluster] [url|title|text] [on|off]",
+	Aliases: []string{"where"},
 	Short: "Choose where a cluster looks: the address, the page title, the page text",
 	Args:  cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {

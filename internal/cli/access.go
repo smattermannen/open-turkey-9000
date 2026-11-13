@@ -68,6 +68,7 @@ var commandAreas = map[string][]string{
 	"quota":        {areaBlocks},
 	"pomodoro":     {areaBlocks},
 	"nepsis":       {areaBlocks, areaSettings},
+	"bypass":       {areaBlocks, areaSettings},
 	"freeze":       {areaDevice},
 	"strict":       {areaDevice},
 	"no-escape":    {areaDevice},

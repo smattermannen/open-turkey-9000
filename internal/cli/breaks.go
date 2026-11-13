@@ -3,7 +3,7 @@
 //	kc9k break                           # what each block allows and has earned
 //	kc9k break allowance work 10m --per 1h
 //	kc9k break allowance work off
-//	kc9k break relock work 5m            # unlocking gives a 5-minute break
+//	kc9k break text work 5m            # unlocking gives a 5-minute break
 //	kc9k break start work [5m]           # take earned break time
 //	kc9k break end work
 package cli
@@ -132,8 +132,9 @@ var breakAllowanceCmd = &cobra.Command{
 }
 
 var breakRelockCmd = &cobra.Command{
-	Use:   "relock [block] [time|off]",
-	Short: "Make unlocking a break of this length instead of the end of the block",
+	Use:     "text [block] [time|off]",
+	Aliases: []string{"relock"},
+	Short:   "Text break: unlocking gives a break of this length, and the block stays locked",
 	Args:  cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		old, err := database.GetBreaks(args[0])

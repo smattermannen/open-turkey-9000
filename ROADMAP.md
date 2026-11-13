@@ -41,8 +41,8 @@ Last checked against the code: 2026-11-13.
         schedule or monk mode's own end switches a block off);
       - trusted time counts only time the computer is on or suspended; it
         must be the real clock, with the tamper settings of §4.10;
-      - `kc9k break relock` is a text break (rename it); **re-lock**, the
-        lock option, is not built;
+      - done: `kc9k break text` (alias `relock`). **Re-lock**, the lock
+        option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
 - [ ] **Lists by type** (§3.2): a list ticks url, title and text with mixed
@@ -200,7 +200,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Pomodoro, long rest | Built | the R-SCHED-3 rhythm: Unchecked |
 | Allowance | Partial | daily only (`kc9k quota`); no rolling, window, week or month periods, no refill time |
 | Reward | Partial | `kc9k break allowance`, earned only while in use (R-BREAK-2); capped at one reward instead of adding up and expiring per window/day/week/month |
-| Text break | Built | as `kc9k break relock` |
+| Text break | Built | `kc9k break text` (alias `relock`) |
 | Delay break | Not built | |
 | Session limit | Not built | |
 | Pause | Built | |

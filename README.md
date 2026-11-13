@@ -484,11 +484,11 @@ Google Chrome (the `.deb` from Google) and Chromium run the same extension, buil
 kc9k break allowance work 10m --per 1h   # earn 10 minutes of break per hour of blocking
 kc9k break start work                    # take what is earned (or: break start work 5m)
 kc9k break end work                      # back to work early; the rest is kept
-kc9k break relock work 5m                # unlocking gives a 5-minute break instead of ending the block
+kc9k break text work 5m                # unlocking gives a 5-minute break instead of ending the block
 kc9k break                               # what each block allows and has earned
 ```
 
-A **reward** (`break allowance`) earns break time while the block is on and the computer is in use (input in the last 3 minutes, screen not locked), saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With `relock`, passing the typing challenge or giving the password lifts the block for that long instead of unlocking it, and unlocking once more during that break lifts its locks. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `relock … off`) is always possible. The toolbar button shows the break time left on the block's sites.
+A **reward** (`break allowance`) earns break time while the block is on and the computer is in use (input in the last 3 minutes, screen not locked), saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With a **text break** (`break text`, formerly `relock`), passing the typing challenge or giving the password lifts the block for that long instead of unlocking it, and unlocking once more during that break lifts its locks. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `text … off`) is always possible. The toolbar button shows the break time left on the block's sites.
 
 ## Window titles
 

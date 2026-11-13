@@ -2739,7 +2739,7 @@ class Window(Gtk.ApplicationWindow):
     def set_relock(self, _button):
         if self.selected:
             value = f"{self.relock_minutes.get_value_as_int()}m" if self.relock_check.get_active() else "off"
-            self.run(["break", "relock", self.selected, value])
+            self.run(["break", "text", self.selected, value])
 
     def clear_pomodoro(self, _button):
         if self.selected:

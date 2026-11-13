@@ -455,15 +455,26 @@ only on the computer.
   (`2,5`).
 - **No weakening during active locks** (R-WEAK-4).
 - **Protection settings** (can't be turned off while any block or setting is
-  locked): close private windows and Tor; close guest profiles; block
-  unsupported browsers; close browsers if the extension is stopped; grace
-  period for a missing extension (default 60 s); block task managers; block
-  inactive tabs; block embedded content; block the installer; allow
-  `file://` blocking.
+  locked):
+  - close private windows and Tor; close guest profiles; block unsupported
+    browsers; close browsers if the extension is stopped; grace period for a
+    missing extension (default 60 s); allow `file://` blocking;
+  - *block the installer:* while anything is locked, KC9K can't be
+    reinstalled, downgraded or removed, through its own installer or the
+    package manager;
+  - *block inactive tabs:* when a block is enabled, blocked sites in
+    background tabs are blocked at once, not only when shown;
+  - *block embedded content:* a blocked site shown inside another page is
+    blocked too;
+  - *block task managers:* while anything is locked, programs that can end
+    other programs (System Monitor, htop) are closed.
 - **Tamper protection** (each optional): block time and date changes; check
   the clock against the hardware clock and internet time.
 - **Browser settings** (§3.13), each lockable on its own. SafeSearch on Google,
-  Bing, DuckDuckGo and YouTube (Restricted Mode).
+  Bing, DuckDuckGo and YouTube (Restricted Mode). *force-search:* Google is
+  the only search engine; others are blocked and the browser's search box
+  uses Google. *web-only:* Google shows web results only, without images,
+  shopping or AI answers.
 - **DNS**: which server KC9K asks for blocked sites' real addresses (needed
   only for the firewall layer). By default the network's own DNS server, the
   one the computer already uses, so nobody new learns which sites are
@@ -615,12 +626,11 @@ Made with the owner. Newest last.
   user's choice. Bypass prevention warns at every event and step, without a
   countdown, and acts at once. The DNS default is the network's own server,
   then Quad9. `kc9k nepsis` is renamed `kc9k bypass`.
+- 2026-11-13: Definitions of the protection settings, `force-search` and
+  `web-only` (§4.10).
 
 ## 7. Open decisions
 
 Not yet settled by the owner. Don't resolve them alone.
 
 1. **The app's name.** Killer Chicken 9000 (KC9K), or Nepsis.
-2. **Protection settings without a definition:** block the installer, block
-   inactive tabs, block embedded content, block task managers, `force-search`,
-   `web-only`. Drafts are with the owner.

@@ -37,8 +37,8 @@ Last checked against the code: 2026-11-13.
 - [ ] **Strict mode's lock** (R-STRICT-1). Strict mode is already a switch
       (`kc9k strict on`), but it has no lock of its own: it can't be turned
       off while *any* lock is in force (`enforce.AnyLock` in
-      `cli/strict.go`). Give it its own setting lock; whether block locks
-      hold it too is `SPEC.md` open decision 1. (S)
+      `cli/strict.go`). Only its own optional setting lock, and R-WEAK-6,
+      may keep it on. (S)
 - [ ] **Use** (§3.7): input in the last 3 minutes. The code uses 1 minute
       for allowances (`quota`) and 2 minutes for statistics. (S)
 - [ ] **Monk mode** is an ordinary block named `monk-mode`; R-MONK-1 makes it
@@ -195,6 +195,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Bypass prevention: events, detectors, ladder, steps, quiet time | Built | `kc9k nepsis` |
 | Workaround detection | Built | proxies, mirrors, front-ends, fetch tools |
 | Settings password, access passwords, setting locks | Built | |
+| No weakening during active blocks (R-WEAK-6) | Not built | |
 | Link recording | Built | |
 | Word recording, specificity, cut | Not built | |
 | Four layers, daemon | Built | `internal/blocker/` |

@@ -229,6 +229,7 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 | **Weakening** | A change that blocks less: removing or narrowing entries, removing actions, raising thresholds, shrinking windows, a looser break, disabling, deleting, removing or shortening a lock. |
 | **Gate** | What a weakening must pass: *free*, *password*, *text*, *delay*, or *refused*. The locks in force decide it. |
 | **Pending edit** | A weakening waiting for its delay to end. |
+| **No weakening during active blocks** | A global setting: while any block is active, nothing can be weakened (R-WEAK-6). |
 
 ### 3.6 Time and breaks
 
@@ -265,7 +266,7 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 | **Allowed apps only** | Freeze mode: the computer stays usable, but only the programs on the freeze's app list may run; every other user program is closed. | An allowlist block (websites). |
 | **Monk mode** | A system-owned whole-internet block with a timer lock, started by `kc9k monk` or by the `monk` action. | An ordinary block. |
 | **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. | A page action. |
-| **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a lock is in force, it closes escape routes: `sudo` and `pkexec`, programs started from `/home` and `/tmp`, containers and VMs. It has its own setting lock. | — |
+| **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a lock is in force, it closes escape routes: `sudo` and `pkexec`, programs started from `/home` and `/tmp`, containers and VMs. The user may give it its own setting lock. | — |
 | **No-escape** | Removing the boot-time exits: recovery entries, kernel options, and an unknown password on GRUB. | Strict mode. |
 | **Factory reset** | Wiping or reinstalling the operating system, or booting another one, to get rid of KC9K. Software can't forbid it. | — |
 | **Factory reset protection** | Options that make a factory reset slow and deliberate: firmware lock, boot order guard, installer media guard, other systems in GRUB behind the password. | — |
@@ -420,6 +421,7 @@ allowance). Stored only on the computer.
 - **Notifications**: timer lock ends, window starts/ends, Pomodoro changes,
   allowance runs out, app blocked; advance warnings in minutes, comma-separated
   (`2,5`).
+- **No weakening during active blocks** (R-WEAK-6).
 - **Protection** (can't be turned off while locked): block unsupported browsers;
   close browsers if the extension is stopped; grace period for a missing
   extension (default 60 s); block time and date changes; block task managers;
@@ -463,7 +465,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 **Locks**
 - **R-LOCK-1** A lock protects only an enabled block; a disabled block can't be deleted while a lock is in force.
 - **R-LOCK-2** Starting an active block again may only strengthen its locks; a timer lock may always be extended.
-- **R-LOCK-3** A block that is not held can be edited in any direction at once (the settings password still applies).
+- **R-LOCK-3** A block that is not held can be enabled, disabled or edited in any direction at once (the settings password still applies), unless *no weakening during active blocks* is on (R-WEAK-6).
 - **R-LOCK-4** A timer lock refuses every weakening before its trusted end time.
 - **R-LOCK-5** A text lock allows weakening only after the challenge is typed correctly; pasting is refused.
 - **R-LOCK-6** A delay lock turns every weakening into a pending edit applied when its countdown ends.
@@ -480,6 +482,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 - **R-WEAK-3** Editing an entry is remove + add; it is weakening if the new entry matches less.
 - **R-WEAK-4** With several locks, every gate must be passed.
 - **R-WEAK-5** A refused weakening is logged and never counted as a bypass.
+- **R-WEAK-6** With *no weakening during active blocks* on, nothing can be weakened while any block is active: no block, browser option or setting (strict mode included). Disabling an unlocked block stays allowed, so the way to weaken anything is to disable the active blocks first.
 
 **Schedules and breaks**
 - **R-SCHED-1** An enabled scheduled block is active inside its windows; a disabled block never is.
@@ -499,7 +502,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 
 **Device**
 - **R-FREEZE-1** In *allowed apps only* mode, only programs on the freeze's app list (and system processes) may run.
-- **R-STRICT-1** Strict mode is on only if the user turned it on. Turning it off is gated by its own setting lock.
+- **R-STRICT-1** Strict mode is on only if the user turned it on. Turning it off is gated only by its own setting lock, if the user gave it one, and by R-WEAK-6.
 - **R-ESCAPE-1** Until the user turns on no-escape, a recovery path always exists (principle 4).
 
 ---
@@ -539,12 +542,15 @@ Made with the owner. Newest last.
   weakened freely unless a lock is on it.
 - 2026-11-13: Strict mode is a voluntary setting against tampering, with
   its own setting lock (R-STRICT-1).
+- 2026-11-13: An unlocked block can always be enabled, disabled or edited
+  freely.
+- 2026-11-13: A global setting *no weakening during active blocks*
+  (R-WEAK-6): with it on, a block must be disabled before, for example,
+  strict mode can be turned off. With it off, the user decides whether
+  strict mode gets a lock of its own.
 
 ## 7. Open decisions
 
 Contradictions not yet settled by the owner. Don't resolve them alone.
 
-1. **Strict mode and block locks.** Strict mode has its own lock
-   (R-STRICT-1). Should a lock on a block also keep strict mode from being
-   turned off while it runs? Without that, turning strict mode off gives
-   `sudo` back, and with it a way to stop the daemon and end the block.
+None right now.

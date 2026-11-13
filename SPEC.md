@@ -506,7 +506,7 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 - **R-LIST-4** Keywords and phrases are matched against rendered, visible text only (or the title or URL, when ticked).
 - **R-PHRASE-1** A phrase has at least two word sets, both necessary. Further word sets are each necessary or optional.
 - **R-PHRASE-2** A match takes one term from each necessary word set, plus terms from optional sets until it reaches the phrase's **length**. The length is at least the number of necessary sets (its default) and at most the number of sets.
-- **R-PHRASE-3** One word set gives at most one term to a match: with `[long cat, neko] [running, sitting]`, "long cat running" matches, "long cat neko running" doesn't count "neko".
+- **R-PHRASE-3** One word set gives at most one term to a match: with `[long cat, neko] [running, sitting]`, "long cat running" matches, and "long cat neko" doesn't: both terms come from the same set.
 - **R-PHRASE-4** The terms may come in any order, and must follow each other directly, separated only by blank space. Punctuation between them breaks the match.
 - **R-PHRASE-5** In the URL, every separator (`-` `_` `/` `.` `?` `=` `&` `+`) counts as blank space.
 - **R-PHRASE-6** A bridge skips words between two terms: `[big-, strong] [-gorilla, cat]` matches "big and long gorilla". The skipped part must stay in one sentence (no `.` `!` `?`), and the order is fixed: `big-` before `-gorilla`.

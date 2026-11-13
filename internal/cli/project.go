@@ -460,7 +460,7 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 		}
 		if !dry && (len(newFreezes) > 0 || len(blocks) > 0) {
-			if err := requireSettingsPassword(database); err != nil {
+			if err := requireLockPassword(database); err != nil {
 				return err
 			}
 		}

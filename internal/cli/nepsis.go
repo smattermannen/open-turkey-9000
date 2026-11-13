@@ -47,7 +47,7 @@ is already on, a longer time extends it.`,
 		if err != nil || d < time.Minute {
 			return fmt.Errorf("give --for, at least 1m (e.g. 45m, 2h)")
 		}
-		if err := requireSettingsPassword(database); err != nil {
+		if err := requireLockPassword(database); err != nil {
 			return err
 		}
 		if err := enforce.StartMonk(database, d); err != nil {
@@ -225,6 +225,9 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 		if s.lock.LockChars > 0 || s.lock.PasswordHash != "" {
 			return refused(database, "", fmt.Errorf("bypass prevention is locked. Use 'kc9k nepsis unlock' first"))
 		}
+		if err := refuseSettingWeakening(database, "bypass prevention"); err != nil {
+			return err
+		}
 		if err := database.ClearSettingLock(db.NepsisLockName); err != nil { // locks that ran out
 			return err
 		}
@@ -233,7 +236,7 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 		if !n.On() {
 			return fmt.Errorf("lock options only go with 'set'")
 		}
-		if err := requireSettingsPassword(database); err != nil {
+		if err := requireLockPassword(database); err != nil {
 			return err
 		}
 		want, err := requestedSettingLock(cmd, database, db.NepsisLockName)

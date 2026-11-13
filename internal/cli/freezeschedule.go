@@ -70,7 +70,7 @@ schedule can't be removed from ` + "2 hours" + ` before its window opens until i
 		if !yes {
 			return fmt.Errorf("this freezes the computer %s in %s mode, and the schedule can't be removed from 2 hours before it starts; add --yes to confirm", w, mode)
 		}
-		if err := requireSettingsPassword(database); err != nil {
+		if err := requireLockPassword(database); err != nil {
 			return err
 		}
 		if err := database.AddFreezeSchedule(w, mode); err != nil {

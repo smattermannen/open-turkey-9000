@@ -6,8 +6,9 @@
 //
 //   - every loosening edit (anything gateEdit or ensureEditable sees as not
 //     strengthening), stop and unlock;
-//   - anything that creates a lock: start with a lock, browser options with
-//     a lock, schedules, quotas, Pomodoro, Frozen Chicken;
+//   - if the user chose so (kc9k password locks on), anything that creates a
+//     lock: start with a lock, browser settings with a lock, schedules,
+//     quotas, Frozen Chicken, monk mode (requireLockPassword, R-WEAK-1);
 //   - browser options turned off or unlocked, strict mode, no-escape, and
 //     uninstalling;
 //   - changing or removing the password itself.
@@ -29,6 +30,10 @@ import (
 
 // SettingSettingsPassword holds the password's salted hash.
 const SettingSettingsPassword = "settings.password"
+
+// SettingPasswordForLocks is "on" when the user chose to need the settings
+// password for setting a lock too (§3.11, R-WEAK-1). Off by default.
+const SettingPasswordForLocks = "settings.password.locks"
 
 // settingsPasswordChecked remembers, within one command, that the password
 // was given, so a command with several protected steps asks only once.
@@ -62,13 +67,27 @@ func requireSettingsPassword(database *db.DB) error {
 	return nil
 }
 
+// requireLockPassword asks for the settings password before a lock is set,
+// only when the user chose that (kc9k password locks on): a lock is a
+// strengthening, which is otherwise free (R-WEAK-1).
+func requireLockPassword(database *db.DB) error {
+	v, err := database.GetSetting(SettingPasswordForLocks)
+	if err != nil || v != "on" {
+		return err
+	}
+	return requireSettingsPassword(database)
+}
+
 var passwordCmd = &cobra.Command{
 	Use:   "password",
 	Short: "Set or remove the settings password",
-	Long: `A settings password guards KC9K against anything running as you: loosening a
-block, stopping or unlocking it, creating any kind of lock, turning browser
-options off, strict mode, no-escape and uninstalling all ask for it. Starting
-a block without a lock, adding sites or apps, and reading the state don't.
+	Long: `A settings password guards KC9K against anything running as you: weakening a
+block, stopping or unlocking it, turning browser settings off, strict mode,
+no-escape and uninstalling all ask for it. Starting a block without a lock,
+adding sites or apps, and reading the state don't.
+
+Setting a lock asks for it only if you choose so ('kc9k password locks on'),
+so that nobody else can lock you out.
 
 Give it to someone else to keep, and they decide when your blocks may loosen.
 Passwords are read from standard input (hidden on a terminal), the current
@@ -129,6 +148,9 @@ var passwordRemoveCmd = &cobra.Command{
 		if err := requireSettingsPassword(database); err != nil {
 			return err
 		}
+		if err := refuseSettingWeakening(database, "the settings password"); err != nil {
+			return err
+		}
 		if err := database.SetSetting(SettingSettingsPassword, ""); err != nil {
 			return err
 		}
@@ -137,7 +159,53 @@ var passwordRemoveCmd = &cobra.Command{
 	}),
 }
 
+var passwordLocksCmd = &cobra.Command{
+	Use:       "locks [on|off]",
+	Short:     "Choose whether setting a lock needs the settings password",
+	ValidArgs: []string{"on", "off"},
+	Args:      cobra.MaximumNArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		cur, err := database.GetSetting(SettingPasswordForLocks)
+		if err != nil {
+			return err
+		}
+		if len(args) == 0 {
+			if cur != "on" {
+				cur = "off"
+			}
+			fmt.Printf("Setting a lock needs the settings password: %s\n", cur)
+			return nil
+		}
+		switch args[0] {
+		case "on":
+			set, err := settingsPasswordSet(database)
+			if err != nil {
+				return err
+			}
+			if !set {
+				return fmt.Errorf("set a settings password first: kc9k password set")
+			}
+		case "off":
+			if cur == "on" {
+				if err := requireSettingsPassword(database); err != nil {
+					return err
+				}
+				if err := refuseSettingWeakening(database, "the settings password for locks"); err != nil {
+					return err
+				}
+			}
+		default:
+			return fmt.Errorf("use 'on' or 'off'")
+		}
+		if err := database.SetSetting(SettingPasswordForLocks, args[0]); err != nil {
+			return err
+		}
+		fmt.Printf("Setting a lock needs the settings password: %s\n", args[0])
+		return nil
+	}),
+}
+
 func init() {
-	passwordCmd.AddCommand(passwordSetCmd, passwordRemoveCmd)
+	passwordCmd.AddCommand(passwordSetCmd, passwordRemoveCmd, passwordLocksCmd)
 	rootCmd.AddCommand(passwordCmd)
 }

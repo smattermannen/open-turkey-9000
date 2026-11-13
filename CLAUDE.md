@@ -203,10 +203,16 @@ build and is **used for real**. On it:
   `/etc/opt/chrome_for_testing/policies`).
 - **Settings password** (`internal/cli/settingspassword.go`): when set,
   `requireSettingsPassword` guards every loosening (it sits in `gateEdit` and
-  `ensureEditable`), stop/unlock, anything creating a lock, browser options
-  off, strict, no-escape and prepare-uninstall. Passwords come one per line
-  from `stdinLines` (settings password first). The GUI retries a refused
-  command once after asking for it.
+  `ensureEditable`), stop/unlock, browser settings off, strict off,
+  no-escape and prepare-uninstall; `requireLockPassword` asks for it before
+  a lock is set only with `password locks on` (R-WEAK-1). Passwords come one
+  per line from `stdinLines` (settings password first). The GUI retries a
+  refused command once after asking for it.
+- **No weakening during active locks** (`internal/cli/noweakening.go`,
+  R-WEAK-4): `refuseSettingWeakening` sits in every setting's weakening path
+  (strict off, browser settings off, global bypass prevention, settings
+  password). Strict mode has its own setting lock (`enforce.StrictLockName`),
+  counted by `AnySettingLocked` but not starting the lockdown itself.
 - **Access passwords** (`internal/cli/access.go`, `kc9k access [set|remove
   <area…>|--all]`): optional passwords per area (`app`, `dashboard`,
   `blocks`, `device`, `stats`, `settings`; setting `access.password.<area>`,

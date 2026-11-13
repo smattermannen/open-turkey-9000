@@ -65,13 +65,14 @@ shortened or removed this way.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockName := args[0]
 
-		// A lock needs the settings password, asked before any lock password.
+		// A lock may need the settings password (the user's choice), asked
+		// before any lock password.
 		if startLockRequested(cmd) {
 			database, err := openDB()
 			if err != nil {
 				return err
 			}
-			err = requireSettingsPassword(database)
+			err = requireLockPassword(database)
 			database.Close()
 			if err != nil {
 				return err

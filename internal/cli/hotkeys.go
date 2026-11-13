@@ -54,7 +54,7 @@ var hotkeyAddCmd = &cobra.Command{
 				return fmt.Errorf("--for must be a duration from 1m to 24h, like 1h or 90m")
 			}
 			// The lock is created later without asking, so ask now.
-			if err := requireSettingsPassword(database); err != nil {
+			if err := requireLockPassword(database); err != nil {
 				return err
 			}
 		}

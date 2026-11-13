@@ -45,15 +45,9 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **Strict mode's lock** (R-STRICT-1). Strict mode is already a switch
-      (`kc9k strict on`), but it has no lock of its own: it can't be turned
-      off while any lock is on (`enforce.AnyLock` in `cli/strict.go`). Only
-      its own optional setting lock, and R-WEAK-4, may keep it on. (S)
 - [ ] **DNS** (§4.10): real addresses are asked of Cloudflare, Google and
       Quad9 (`blocker/resolve.go`); the default must be the network's own DNS
       server, then Quad9, and the user can choose. (S)
-- [ ] **Settings password** (§3.11): always needed to set a lock; requiring
-      it must be the user's choice. (S)
 - [ ] **Bypass prevention warnings** (R-WARN-2): a notification only from a
       `warning` step; it must come at every event and every step. (S)
 - [ ] **Use** (§3.7): input in the last 3 minutes. The code uses 1 minute
@@ -250,7 +244,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Allowed apps only | Not built | |
 | Monk mode | Differs | see 0.1 |
 | Consequences | Built | `enforce/consequence.go` |
-| Strict mode | Differs | a voluntary switch, but no lock of its own; see 0.1. Exempt folders: Not built |
+| Strict mode | Partial | a voluntary switch with its own setting lock (`kc9k strict on --for …`, `strict unlock`). Exempt folders: Not built |
 | Recovery of a forgotten password (§3.11) | Partial | root can remove it while nothing is locked |
 | Wayland warning (R-DESKTOP-1) | Unchecked | |
 | No-escape | Built | |
@@ -277,9 +271,9 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 |---|---|---|
 | Bypass prevention: events, detectors, ladder, steps, quiet time | Built | as `kc9k nepsis`; see 0.1 for the name |
 | Workaround detection | Built | proxies, mirrors, front-ends, fetch tools |
-| Settings password | Differs | always needed to set a lock; see 0.1 |
+| Settings password | Built | needed to set a lock only with `kc9k password locks on` |
 | Access passwords, setting locks | Built | |
-| No weakening during active locks (R-WEAK-4) | Not built | strict mode alone behaves this way today |
+| No weakening during active locks (R-WEAK-4) | Built | `kc9k no-weakening`: strict mode, browser settings, global bypass prevention, settings password. Other settings (stats, options, no-escape uses its own rule): Unchecked |
 | Event counting (R-EVENT-1) | Unchecked | |
 | Link recording | Built | |
 | Word recording, specificity, cut | Not built | |

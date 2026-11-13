@@ -310,7 +310,7 @@ func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
 	if !lockFlagsGiven(cmd) {
 		return database.SetSetting("browser."+name, "on")
 	}
-	if err := requireSettingsPassword(database); err != nil {
+	if err := requireLockPassword(database); err != nil {
 		return err
 	}
 	want, err := requestedSettingLock(cmd, database, name)
@@ -383,6 +383,9 @@ func browserSettingOff(database *db.DB, name string) error {
 	if err := refuseForBlocks(database, name, s.trusted); err != nil {
 		return err
 	}
+	if err := refuseSettingWeakening(database, name); err != nil {
+		return err
+	}
 	if err := database.ClearSettingLock(name); err != nil { // locks that ran out
 		return err
 	}
@@ -429,6 +432,10 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 		return err
 	}
 	if err := refuseForBlocks(database, name, s.trusted); err != nil {
+		fmt.Printf("%s is unlocked but stays on: %v\n", name, err)
+		return nil
+	}
+	if err := refuseSettingWeakening(database, name); err != nil {
 		fmt.Printf("%s is unlocked but stays on: %v\n", name, err)
 		return nil
 	}

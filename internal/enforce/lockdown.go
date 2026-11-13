@@ -16,6 +16,9 @@ const (
 	SettingStrict     = "strict"
 	SettingStrictUser = "strict_user"
 	SettingNoEscape   = "no_escape"
+
+	// StrictLockName is the setting lock on strict mode itself (R-STRICT-1).
+	StrictLockName = "strict"
 )
 
 // BlockLocked reports whether an active block has a lock in force. Quotas and
@@ -37,9 +40,14 @@ func AnyLock(d *db.DB, now time.Time, trusted int64) (bool, error) {
 	return AnySettingLocked(d, trusted)
 }
 
-// AnySettingLocked reports whether a lock holds any browser setting or the
-// global bypass prevention.
+// AnySettingLocked reports whether a lock holds any browser setting, the
+// global bypass prevention or strict mode.
 func AnySettingLocked(d *db.DB, trusted int64) (bool, error) {
+	return settingLocked(d, trusted, "")
+}
+
+// settingLocked is AnySettingLocked, leaving out the setting lock skip.
+func settingLocked(d *db.DB, trusted int64, skip string) (bool, error) {
 	bootID, err := db.BootID()
 	if err != nil {
 		return false, err
@@ -51,7 +59,10 @@ func AnySettingLocked(d *db.DB, trusted int64) (bool, error) {
 	for _, l := range locks {
 		// A lock on a retired option (see RetiredBrowserSettings) can no
 		// longer be unlocked, so it no longer counts.
-		if (IsBrowserSetting(l.Name) || l.Name == db.NepsisLockName) && l.InForce(trusted, bootID) {
+		if l.Name == skip {
+			continue
+		}
+		if (IsBrowserSetting(l.Name) || l.Name == db.NepsisLockName || l.Name == StrictLockName) && l.InForce(trusted, bootID) {
 			return true, nil
 		}
 	}
@@ -180,7 +191,12 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 	}
 	want := false
 	if strict == "on" && !escapeHonoured(d) {
-		if want, err = AnyLock(d, now, trusted); err != nil {
+		// Strict mode's own lock only keeps it switched on; it acts while
+		// something else is locked.
+		if want, err = BlocksLocked(d, now, trusted); err == nil && !want {
+			want, err = settingLocked(d, trusted, StrictLockName)
+		}
+		if err != nil {
 			log.Printf("daemon: lockdown: %v", err)
 			return
 		}

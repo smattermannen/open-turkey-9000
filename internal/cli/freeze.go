@@ -50,7 +50,7 @@ Emergency exit: in GRUB, press e on the boot entry and add
 			return err
 		}
 		defer database.Close()
-		if err := requireSettingsPassword(database); err != nil {
+		if err := requireLockPassword(database); err != nil {
 			return err
 		}
 
@@ -140,6 +140,16 @@ type guiSettingLock struct {
 	GuardsBlocks bool  `json:"guards_blocks"`
 }
 
+// gui is the setting lock as the interface shows it.
+func (s settingLockState) gui() guiSettingLock {
+	g := guiSettingLock{CharLocked: s.lock.LockChars > 0, Password: s.lock.PasswordHash != "",
+		Restart: s.lock.RestartLocked(s.bootID)}
+	if s.lock.TimeLocked(s.trusted) {
+		g.Seconds = s.lock.LockedUntil - s.trusted
+	}
+	return g
+}
+
 // guiCluster is a cluster for the interface.
 type guiCluster struct {
 	Name    string   `json:"name"`
@@ -179,6 +189,9 @@ type guiState struct {
 	Nepsis        db.Nepsis                 `json:"nepsis"`
 	NepsisCount   int                       `json:"nepsis_count"`
 	NepsisLock    guiSettingLock            `json:"nepsis_lock"`
+	StrictLock    guiSettingLock            `json:"strict_lock"`
+	NoWeakening   bool                      `json:"no_weakening"`
+	PasswordLocks bool                      `json:"password_for_locks"`
 	MonkBlock     string                    `json:"monk_block"`
 	// Access says per area "none", "open" or "locked"; AccessUnused lists
 	// the given passwords (by position) that opened nothing: wrong, or
@@ -269,11 +282,16 @@ var guiStateCmd = &cobra.Command{
 			_, state.NepsisCount, _ = enforce.NepsisState(database, now, "", state.Nepsis)
 		}
 		if s, err := loadSettingLock(database, db.NepsisLockName); err == nil {
-			state.NepsisLock = guiSettingLock{CharLocked: s.lock.LockChars > 0, Password: s.lock.PasswordHash != "",
-				Restart: s.lock.RestartLocked(s.bootID)}
-			if s.lock.TimeLocked(s.trusted) {
-				state.NepsisLock.Seconds = s.lock.LockedUntil - s.trusted
-			}
+			state.NepsisLock = s.gui()
+		}
+		if s, err := loadSettingLock(database, enforce.StrictLockName); err == nil {
+			state.StrictLock = s.gui()
+		}
+		if v, err := database.GetSetting(SettingNoWeakening); err == nil {
+			state.NoWeakening = v == "on"
+		}
+		if v, err := database.GetSetting(SettingPasswordForLocks); err == nil {
+			state.PasswordLocks = v == "on" && state.SettingsPass
 		}
 
 		blocks, err := database.ListBlocks()

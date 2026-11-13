@@ -503,7 +503,7 @@ While the block is on, any app whose window title contains one of the words (cas
 kc9k monk --for 2h
 ```
 
-Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. It is an ordinary block, so add exceptions (documentation you need), apps or anything else to it. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password, like any lock.
+Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. It is an ordinary block, so add exceptions (documentation you need), apps or anything else to it. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password only if setting a lock does (`kc9k password locks on`).
 
 ## Bypass prevention
 
@@ -576,7 +576,9 @@ kc9k password set        # asks for the current one first, if there is one
 kc9k password remove
 ```
 
-With it set, these ask for it: any loosening edit, `stop`, `unlock`, starting a block with any lock, schedules, quotas (setting or removing), Pomodoro, Frozen Chicken, turning browser options off or locking them, strict mode, no-escape, and uninstalling. These stay free: reading the state, starting a block without a lock, adding sites, apps and patterns, ticking a website action on, and opening a quota session. The interface asks for it the first time a change needs it and remembers it until it closes.
+With it set, these ask for it: any weakening edit, `stop`, `unlock`, schedules, quotas (setting or removing), turning browser settings off, strict mode off, no-escape, and uninstalling. These stay free: reading the state, starting a block, adding sites, apps and patterns, ticking a website action on, and opening a quota session. The interface asks for it the first time a change needs it and remembers it until it closes.
+
+Setting a lock (starting a block with a lock, a locked browser setting or strict mode, Frozen Chicken, monk mode, a hotkey with a lock) asks for it only if you choose so, so that nobody else can lock you out: `kc9k password locks on` (off again with the password). In the interface: the check box under Settings > Settings password.
 
 Passwords are read from standard input, hidden on a terminal; when a command also takes a lock's own password, the settings password comes first. If it's lost, root can remove it while nothing is locked (`kc9k password --help` shows how), and the testing build's master password clears it too.
 
@@ -663,11 +665,17 @@ Access passwords decide who may look; the [settings password](#settings-password
 
 ## Strict mode
 
-`kc9k strict on` denies sudo and pkexec for every user while a block or browser option is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
+`kc9k strict on` denies sudo and pkexec for every user while a block or setting is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
+
+Strict mode is off until you turn it on, and `kc9k strict off` works at any time, unless strict mode has its own setting lock or [no weakening during active locks](#no-weakening-during-active-locks) is on while something is locked. Its lock is set when turning it on, with the same flags as a browser setting's (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart`); `kc9k strict unlock` lifts a text or password lock and leaves strict mode on. Strict mode's own lock only keeps it on: sudo is taken away only while something else is locked.
 
 During a lock, programs also can't start from `/home`, `/tmp`, `/var/tmp` or `/dev/shm`, which stops AppImages and downloaded browsers. Programs already running continue.
 
 Some groups are root in all but name: members of `docker`, `lxd`, `incus` or `libvirt` can start a container or virtual machine with the computer's disk inside it. During a lock, their control sockets are closed to everyone but root, and reopened when the lock ends. Members of `disk` can edit the drives directly, which strict mode can't prevent; `kc9k strict on` warns if you're in it.
+
+### No weakening during active locks
+
+`kc9k no-weakening on` makes every setting hold while any block or setting is locked: strict mode, browser settings, bypass prevention and the settings password can't be weakened, and `kc9k no-weakening off` is refused too. Blocks that aren't locked stay free to edit. In the interface: Settings.
 
 `kc9k no-escape on --yes` removes the remaining exits: the kernel parameter stops working, recovery entries disappear, and GRUB gets a random password nobody knows. After that, only other boot media or a reinstall gets past a lock, even if a bug caused it. Test it in a virtual machine first. It can't stop booting a USB stick unless the firmware has a password.
 

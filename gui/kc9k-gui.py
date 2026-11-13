@@ -165,6 +165,20 @@ LIST_PLACES = (
 
 # Helpers -----------------------------------------------------------------
 
+def describe_setting_lock(info):
+    """The parts of a setting lock that hold, as words."""
+    parts = []
+    if info.get("lock_seconds"):
+        parts.append(f"for {fmt_seconds(info['lock_seconds'])}")
+    if info.get("restart_locked"):
+        parts.append("until restart")
+    if info.get("char_locked"):
+        parts.append("text lock")
+    if info.get("password_locked"):
+        parts.append("password")
+    return parts
+
+
 def fmt_seconds(seconds):
     """A remaining time, rounded to minutes: '2 h 5 min', '3 min'."""
     hours, rest = divmod(int(seconds), 3600)
@@ -2987,12 +3001,25 @@ class Window(Gtk.ApplicationWindow):
 
         self.strict_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.strict_switch.connect("state-set", self.toggle_strict)
+        strict_line = Gtk.Box(spacing=8)
+        self.strict_lock_status = dim("", wrap=False)
+        self.strict_lock_status.set_no_show_all(True)
+        strict_lock = Gtk.Button(label="Lock…")
+        strict_lock.connect("clicked", self.lock_setting, "strict", "Strict mode")
+        self.strict_unlock = Gtk.Button(label="Unlock…")
+        self.strict_unlock.set_no_show_all(True)
+        self.strict_unlock.connect("clicked", self.unlock_setting, "strict", "Strict mode")
+        strict_line.pack_start(self.strict_lock_status, False, False, 0)
+        strict_line.pack_end(self.strict_unlock, False, False, 0)
+        strict_line.pack_end(strict_lock, False, False, 0)
         box.pack_start(section(
             "Strict mode",
             self.switch_row(self.strict_switch, "Take away sudo and pkexec during locks",
-                            "While a block is locked or Frozen Chicken runs, no user can get "
-                            "administrator rights, so the blocks can't be undone from a terminal. "
-                            "Rights return when the lock ends.")), False, False, 0)
+                            "While a block or setting is locked or Frozen Chicken runs, no user "
+                            "can get administrator rights, so the blocks can't be undone from a "
+                            "terminal. Rights return when the lock ends. Strict mode itself can "
+                            "be turned off at any time unless you lock it."),
+            strict_line), False, False, 0)
 
         self.no_escape_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.no_escape_switch.connect("state-set", self.toggle_no_escape)
@@ -3039,6 +3066,13 @@ class Window(Gtk.ApplicationWindow):
         self.freeze_button.set_label("Extend…" if frozen else "Start Frozen Chicken…")
         set_switch(self.strict_switch, self.state["strict"])
         set_switch(self.no_escape_switch, self.state["no_escape"])
+        info = self.state.get("strict_lock") or {}
+        parts = describe_setting_lock(info)
+        self.strict_lock_status.set_text("Locked: " + ", ".join(parts) if parts else "")
+        self.strict_lock_status.set_visible(bool(parts))
+        self.strict_unlock.set_visible(info.get("char_locked", False) or info.get("password_locked", False))
+        self.strict_unlock.set_sensitive(not info.get("lock_seconds") and not info.get("restart_locked"))
+        self.strict_switch.set_sensitive(not parts)
 
     def freeze(self, _button):
         minutes = self.freeze_minutes.get_value_as_int()
@@ -3052,6 +3086,22 @@ class Window(Gtk.ApplicationWindow):
                         f"{effect} It can't be cancelled. Save your work first.",
                         "Freeze", destructive=True):
             self.run(["freeze", "--for", f"{minutes}m", "--mode", mode, "--yes"])
+
+    def toggle_password_locks(self, check):
+        if self.updating:
+            return
+        self.run(["password", "locks", "on" if check.get_active() else "off"])
+
+    def toggle_no_weakening(self, _switch, wanted):
+        if self.updating:
+            return False
+        if wanted and not self.confirm(
+                "Turn on no weakening during active locks?",
+                "While any block or setting is locked, no setting can be weakened, and this "
+                "can't be turned off either until every lock has ended.", "Turn on"):
+            return True
+        self.run(["no-weakening", "on" if wanted else "off"])
+        return True
 
     def toggle_strict(self, switch, wanted):
         if self.updating:
@@ -3271,14 +3321,25 @@ class Window(Gtk.ApplicationWindow):
         self.password_remove_button.connect("clicked", self.remove_settings_password)
         password_row.pack_start(self.password_set_button, False, False, 0)
         password_row.pack_start(self.password_remove_button, False, False, 0)
+        self.password_locks = Gtk.CheckButton(label="Also needed to set a lock, so nobody else can lock me out")
+        self.password_locks.connect("toggled", self.toggle_password_locks)
         box.pack_start(section(
             "Settings password",
             dim("Guards Killer Chicken 9000 against anything running as you, and lets someone "
-                "else decide when your blocks may loosen: loosening, stopping, unlocking, "
-                "creating locks, turning browser options off, strict mode, no-escape and "
-                "uninstalling all ask for it. Starting a block without a lock and adding sites "
-                "don't."),
-            self.password_status, password_row), False, False, 0)
+                "else decide when your blocks may be weakened: weakening, stopping, unlocking, "
+                "turning browser settings off, strict mode, no-escape and uninstalling all ask "
+                "for it. Starting a block and adding sites don't."),
+            self.password_status, password_row, self.password_locks), False, False, 0)
+
+        self.no_weakening_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.no_weakening_switch.connect("state-set", self.toggle_no_weakening)
+        box.pack_start(section(
+            "No weakening during active locks",
+            self.switch_row(self.no_weakening_switch, "Keep every setting while anything is locked",
+                            "While any block or setting is locked, no setting can be weakened: "
+                            "strict mode, browser settings, bypass prevention, the settings "
+                            "password. Blocks without a lock stay free to edit. It can't be "
+                            "turned off while anything is locked.")), False, False, 0)
 
         project_row = Gtk.Box(spacing=6)
         for label, handler in (("Export…", self.export_project), ("Import…", self.import_project)):
@@ -3384,15 +3445,7 @@ class Window(Gtk.ApplicationWindow):
             set_switch(switch, self.state["browser"].get(name, False))
         for name, (label, unlock) in self.setting_locks.items():
             info = self.state.get("browser_locks", {}).get(name, {})
-            parts = []
-            if info.get("lock_seconds"):
-                parts.append(f"for {fmt_seconds(info['lock_seconds'])}")
-            if info.get("restart_locked"):
-                parts.append("until restart")
-            if info.get("char_locked"):
-                parts.append("typing challenge")
-            if info.get("password_locked"):
-                parts.append("password")
+            parts = describe_setting_lock(info)
             label.set_text("Locked: " + ", ".join(parts) if parts else "")
             label.set_visible(bool(parts))
             unlock.set_visible(info.get("char_locked", False) or info.get("password_locked", False))
@@ -3427,6 +3480,11 @@ class Window(Gtk.ApplicationWindow):
         self.password_status.set_markup("<b>On.</b>" if has_password else "Not set.")
         self.password_set_button.set_label("Change password…" if has_password else "Set password…")
         self.password_remove_button.set_visible(has_password)
+        self.password_locks.set_visible(has_password)
+        self.updating, was = True, self.updating
+        self.password_locks.set_active(self.state.get("password_for_locks", False))
+        self.updating = was
+        set_switch(self.no_weakening_switch, self.state.get("no_weakening", False))
         hotkeys = self.state.get("hotkeys") or []
         self.hotkey_ids = [h["id"] for h in hotkeys]
         self.hotkeys.set_items([
@@ -3501,7 +3559,8 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
             return
-        args = ["browser", name, "on"]
+        args = ["strict", "on"] if name == "strict" else ["browser", name, "on"]
+        base = len(args)
         if lock_minutes:
             args += ["--for", f"{lock_minutes}m"]
         if use_typing:
@@ -3510,7 +3569,7 @@ class Window(Gtk.ApplicationWindow):
             args.append("--restart")
         if secret:
             args.append("--password-stdin")
-        if len(args) == 3:
+        if len(args) == base:
             self.message("Choose at least one lock.", Gtk.MessageType.INFO)
             return
         if lock_minutes and not self.confirm(
@@ -3521,13 +3580,16 @@ class Window(Gtk.ApplicationWindow):
         self.run(args, secret + "\n" if secret else None)
 
     def unlock_setting(self, _button, name, title):
-        info = self.state.get("browser_locks", {}).get(name, {})
+        if name == "strict":
+            info, unlock = self.state.get("strict_lock") or {}, ["strict", "unlock"]
+        else:
+            info, unlock = self.state.get("browser_locks", {}).get(name, {}), ["browser", "unlock", name]
         if info.get("password_locked") and not info.get("char_locked"):
-            password = self.ask_text(f"Unlock {title}", "Enter the option's password.", password=True)
+            password = self.ask_text(f"Unlock {title}", "Enter the setting's password.", password=True)
             if password:
-                self.run(["browser", "unlock", name], password + "\n")
+                self.run(unlock, password + "\n")
             return
-        command = f"{CLI} browser unlock {shlex.quote(name)}"
+        command = " ".join([CLI] + [shlex.quote(a) for a in unlock])
         try:
             subprocess.Popen(["x-terminal-emulator", "-e", command])
         except OSError as error:

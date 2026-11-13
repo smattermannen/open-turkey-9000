@@ -110,8 +110,13 @@ Last checked against the code: 2026-11-13.
 - [ ] **Phrases** (R-PHRASE-1 to 10): today's word combinations sit inside
       title and text lists, need every box, take several words from one box
       (`:N`), and have no length, bridges, URL scope or phrase sets. Rebuild
-      them as phrase sets, after the page reading rework. Existing
-      combinations are turned into phrases. (L)
+      them as phrase sets. Done: the matcher (`kc9kPhraseMatcher`,
+      `kc9kPhraseCheck` in `match.js`: word sets, necessary/optional,
+      length, one term per set, adjacency, sentence breaks, hyphens and
+      apostrophes, bridges and middle links, url scope), tested on SPEC's
+      examples in `ci/match_test.js`. Left: phrase sets in the database,
+      CLI, rules feed and extension, GUI, export/import, clusters and
+      categories, and turning existing combinations into phrases. (L)
 
 ### 0.2 Not yet confirmed in real use
 

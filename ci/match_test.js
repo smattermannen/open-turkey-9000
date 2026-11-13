@@ -125,6 +125,46 @@ const failed0 = [];
   }
 }
 
+// Phrases: the examples of SPEC R-PHRASE-1 to 8.
+{
+  const P = (sets, length) => ({ sets: sets.map((terms) => Array.isArray(terms) ? { terms, necessary: true } : terms), length });
+  const phraseCases = [
+    [P([["eat", "nice"], ["hello", "grandpa"]]), "Let's eat grandpa", true],
+    [P([["eat", "nice"], ["hello", "grandpa"]]), "Let's eat, grandpa!", false],
+    [P([["long cat", "neko"], ["running", "sitting"]]), "long cat running", true],
+    [P([["long cat", "neko"], ["running", "sitting"]]), "long cat neko", false],
+    [P([["long cat", "neko"], ["running", "sitting"]]), "a long-cat sitting here", true],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "big and long gorilla", true],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "big gorilla", true],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "big, very long gorilla", true],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "big. A gorilla", false],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "gorilla big", false],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "strong cat", true],
+    [P([["-gorilla", "cat"], ["jumping", "river"]]), "jumping gigantic gorilla", false],
+    [P([["-gorilla", "cat"], ["jumping", "river"]]), "jumping gorilla", false],
+    [P([["-gorilla", "cat"], ["jumping", "river"]]), "cat jumping", true],
+    [P([["red"], ["car"], { terms: ["big"], necessary: false }], 3), "red car", false],
+    [P([["red"], ["car"], { terms: ["big"], necessary: false }], 3), "big red car", true],
+    [P([["red"], ["car"], { terms: ["big"], necessary: false }]), "car red", true],
+    [P([["porn*"], ["video*"]]), "pornstar videos", true],
+    [P([["porn*"], ["video*"]]), "pornstar\nvideos", false],
+    [P([["let's"], ["go"]]), "Let's go", true],
+  ];
+  for (const [phrase, text, want] of phraseCases) {
+    if (kc9kPhraseMatcher(phrase).test(text) !== want) {
+      failed0.push("phrase " + JSON.stringify(phrase.sets) + " on " + JSON.stringify(text) + ": want " + want);
+    }
+  }
+  const inUrl = kc9kPhraseMatcher(P([["long cat"], ["video"]]), "url");
+  if (!inUrl.test("https://example.com/long-cat_video?x=1") || !inUrl.test("https://example.com/long%20cat/video")) {
+    failed0.push("a phrase in a decoded address");
+  }
+  if (kc9kPhraseCheck(P([["-gorilla"], ["x"]])) === "" || kc9kPhraseCheck(P([["a-"], ["-b"]])) !== "" ||
+    kc9kPhraseCheck(P([["-a-"], ["b"]])) === "" || kc9kPhraseCheck(P([["a"]])) === "") {
+    failed0.push("kc9kPhraseCheck");
+  }
+}
+
 let failed = failed0.length;
 for (const line of failed0) {
   console.error("index: " + line);

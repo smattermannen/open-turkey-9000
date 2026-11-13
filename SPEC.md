@@ -142,7 +142,13 @@ They apply to every change.
 9. **Browsing stays fast.** KC9K must never make browsing feel slower.
    However many lists, rendered terms and phrases a user adds, reading and
    judging a page happens in the background, without holding up scrolling,
-   typing or page loads.
+   typing or page loads. KC9K is kind to the hardware:
+   - no single piece of KC9K's work in a page takes longer than 16 ms (one
+     screen frame);
+   - judging a typical page with 1,000 rendered terms and 100 phrases takes
+     under 50 ms in total;
+   - checking an address costs the same with 10 entries or 100,000;
+   - a gigantic list never slows the network or the computer.
 10. **One rule-maker.** Every decision about what may be weakened is made in
    the CLI; the GUI and the extension only run CLI commands or follow the
    daemon (R-WEAK-2).
@@ -577,7 +583,8 @@ Made with the owner. Newest last.
   with a dash; `*` keeps matching inside a word.
 - 2026-11-13: "Keyword" is renamed **rendered term**: one term can be
   several words.
-- 2026-11-13: Browsing must stay fast, however complex the rules (principle 9).
+- 2026-11-13: Browsing must stay fast, however complex the rules, with the
+  limits in principle 9.
 
 ## 7. Open decisions
 

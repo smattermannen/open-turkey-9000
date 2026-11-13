@@ -70,6 +70,25 @@ Last checked against the code: 2026-11-13.
       - a speed test in `ci/` with a large page and many rules, run on every
         change to the matcher. (M)
 
+- [ ] **Gigantic URL lists are slow** (principle 9). Four places grow with
+      the size of a list:
+      - **Extension:** every request a page makes (scripts, images,
+        frames: often 100–300 per page) is tested against every URL entry,
+        one regular expression each (`kc9kMatchesOne` in `match.js`), and the
+        request waits for the answer. Needs a lookup table by domain, with
+        regular expressions only for entries that really need them.
+      - **Firewall:** one `iptables` rule per blocked IP, each added by its
+        own process, and every outgoing packet walks the whole chain. Needs
+        one set (nftables set or `ipset`) that answers in one step.
+      - **DNS when starting a block:** `ApplyFirewall` looks up every
+        domain's real address one after another (up to 3 s each when a
+        server is slow), so starting a block with thousands of sites can
+        take minutes. Needs lookups in parallel, a cache, and the firewall
+        filled in afterwards instead of holding up `start`.
+      - **`/etc/hosts`:** one line per domain; how fast Mint's resolver
+        reads a huge hosts file: Unchecked.
+      A speed test in `ci/` with 100,000 entries. (M)
+
 ### 0.2 Not yet confirmed in real use
 
 Built and tested by scripts, never tried by a person. Each becomes a

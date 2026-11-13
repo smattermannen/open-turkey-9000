@@ -13,10 +13,10 @@
 //     challenge via "unlock".
 //   - Time lock (--for / --until): cannot be removed AT ALL until the time
 //     passes — not even with the challenge. The strongest lock.
-//   - Schedule window: while a scheduled window is open, the block is held; the
-//     daemon turns it off when the window closes. For edits (not stop/unlock)
-//     the hold starts schedule.EditFreeze (2 hours) before the window
-//     opens, so a block can't be emptied just before it is due to start.
+//   - Schedule lock (kc9k schedule lock): on while a window is open or a
+//     place rule has the block on; for edits (not stop/unlock) also for the
+//     lead time the user chose before each window. Without it a schedule
+//     protects nothing (R-LOCK-10).
 //
 // Locks can be strengthened while held ("start" on an active block adds or
 // lengthens a char lock and adds or extends a time lock), never weakened. A

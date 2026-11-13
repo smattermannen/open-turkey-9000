@@ -7,14 +7,14 @@
 //
 // A block's schedules are either block windows (the block is on while one is
 // open) or allow windows (the block is on at all times except while one is
-// open); a block can't mix the two. While its schedule enforces it, the daemon
-// keeps the block active and the CLI refuses to stop/unlock it (see blockHold).
+// open); a block can't mix the two. The daemon switches the block on and off
+// by them. A schedule protects nothing by itself: the block's schedule lock
+// (kc9k schedule lock, §3.4) does, during its windows and for its lead time
+// before them (see blockHold).
 //
-// Schedule changes that would leave the block off when it would otherwise be on
-// (removing a block window, adding an allow window, removing the last allow
-// window) are refused if that would take effect now or within
-// schedule.EditFreeze, so they can't be used to end the block early or stop it
-// from starting. Windows are same-day (the end may be 24:00); express an
+// Schedule changes that weaken the block (removing a block window, adding an
+// allow window, removing the last allow window) are refused while the block
+// is locked. Windows are same-day (the end may be 24:00); express an
 // overnight span as two windows.
 //
 // Schedules are numbered 1..n per block; removing one renumbers the later

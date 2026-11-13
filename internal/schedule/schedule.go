@@ -126,10 +126,9 @@ func Weakens(from, to []Window, t time.Time, lead time.Duration) bool {
 	return false
 }
 
-// EditFreeze is how long before a window opens that its block is frozen: the
-// CLI refuses edits that could weaken it (changing its lists or mode, removing
-// the schedule or the block) from this lead time until the window closes, so
-// a block can't be gutted moments before it is due to start.
+// EditFreeze was the built-in lead time before a window during which its
+// block couldn't be weakened. Locks chosen by the user replaced it (schedule
+// locks, R-LOCK-10); upgrades give older schedules a lock with this lead.
 const EditFreeze = 2 * time.Hour
 
 // ActiveWithin reports whether the window is open at any instant in

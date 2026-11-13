@@ -168,6 +168,7 @@ type guiState struct {
 	NoEscape      bool                      `json:"no_escape"`
 	Stats         bool                      `json:"stats"`
 	LibreWolf     string                    `json:"librewolf"`
+	Chrome        bool                      `json:"chrome"` // Google Chrome or Chromium installed
 	Extension     string                    `json:"extension_status"`
 	SettingsPass  bool                      `json:"settings_password"`
 	FreezeSched   []string                  `json:"freeze_schedules"`
@@ -234,6 +235,7 @@ var guiStateCmd = &cobra.Command{
 		state.NoEscape = noEscape == "on"
 		state.Stats = enforce.StatsOn(database)
 		state.LibreWolf = blocker.LibreWolfVersion()
+		state.Chrome = blocker.ChromeInstalled()
 		state.Extension = extensionStatus(database)
 		state.SettingsPass, _ = settingsPasswordSet(database)
 		state.FreezeSched = []string{}

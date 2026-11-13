@@ -25,6 +25,11 @@ var remoteControlFlags = map[string]bool{
 	"start-debugger-server":      true,
 	"jsdebugger":                 true,
 	"wait-for-jsdebugger":        true,
+	// Chrome: driven through a pipe instead of a port, and started with
+	// extensions switched off (the KC9K extension included).
+	"remote-debugging-pipe":     true,
+	"disable-extensions":        true,
+	"disable-extensions-except": true,
 }
 
 // remoteControlEnv are environment variables that do the same.

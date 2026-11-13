@@ -501,8 +501,8 @@ var statusCmd = &cobra.Command{
 // extensionStatus describes whether the browser extension is working, for
 // 'kc9k status' and the interface.
 func extensionStatus(database *db.DB) string {
-	if blocker.LibreWolfVersion() == "" {
-		return "LibreWolf isn't installed, so wildcards, keywords, greyscale, images and web-only aren't enforced in the browser. Run 'kc9k browser install-librewolf'."
+	if !blocker.ExtensionBrowserInstalled() {
+		return "neither LibreWolf nor Google Chrome is installed, so wildcards, keywords, greyscale, images and web-only aren't enforced in the browser. Run 'kc9k browser install-librewolf'."
 	}
 	required, err := enforce.ExtensionRequiredNow(database)
 	if err != nil {

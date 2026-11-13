@@ -61,11 +61,12 @@ LIBREWOLF_OPTIONS = (
 )
 
 BROWSER_OPTIONS = (
-    ("block-devtools", "Block LibreWolf's developer tools",
-     "They can switch the extension off. Turn this off only to develop websites; "
-     "it applies when LibreWolf restarts."),
+    ("block-devtools", "Block developer tools",
+     "In LibreWolf they can switch the extension off. Turn this off only to develop websites; "
+     "it applies when LibreWolf restarts. Chrome never lets them reach the extension."),
     ("no-private", "Disable private windows",
-     "No private browsing in LibreWolf; it applies when LibreWolf restarts."),
+     "No private browsing in LibreWolf; it applies when LibreWolf restarts. Chrome's incognito "
+     "windows are always off: the extension can't run in them."),
     ("force-search", "Force Google as the search engine", ""),
     ("safesearch", "Force Google SafeSearch", ""),
     ("web-only", "Web results only",
@@ -2127,7 +2128,7 @@ class Window(Gtk.ApplicationWindow):
             lambda: self.import_list(["block", "import-list", self.selected, "titles"]),
             lambda: self.export_list(["block", "export-list", self.selected, "titles"]),
             help_text="Any app whose window title contains one of these words is closed while "
-                      "the block is on; in LibreWolf, just that tab. Separate words with spaces.",
+                      "the block is on; in a browser, just that tab. Separate words with spaces.",
             search=True, hidden=True)
         apps.set_spacing(14)
         apps.pack_start(self.titles, True, True, 0)
@@ -2832,7 +2833,7 @@ class Window(Gtk.ApplicationWindow):
             record_row.pack_start(button, False, False, 0)
         box.pack_start(section(
             "Record the sites you open",
-            dim("While recording, every site opened in LibreWolf (pages and the frames inside "
+            dim("While recording, every site opened in the browser (pages and the frames inside "
                 "them, such as a login from another site) is noted. Stopping adds them to the "
                 "cluster. Use it to collect what a task needs, then copy the cluster into a "
                 "block's exceptions."),
@@ -3131,7 +3132,7 @@ class Window(Gtk.ApplicationWindow):
 
         box.pack_start(dim(
             "App time counts the app in the focused window; website time counts the active "
-            "tab in LibreWolf. Time behind a locked screen or after two "
+            "tab in the browser. Time behind a locked screen or after two "
             "minutes without input isn't counted. Everything stays on this computer."), False, False, 0)
         return scroll
 
@@ -3225,11 +3226,12 @@ class Window(Gtk.ApplicationWindow):
         for name, title, detail in LIBREWOLF_OPTIONS:
             librewolf_rows.append(self.setting_row(name, title, detail))
         box.pack_start(section(
-            "LibreWolf",
-            dim("LibreWolf is a privacy-focused Firefox that, unlike Firefox, runs the Killer "
-                "Chicken extension. The extension is always on: it enforces wildcards, page titles "
-                "and text, greyscale, images and web-only, and while a block has websites, browsers "
-                "without it are closed."),
+            "Browsers",
+            dim("The Killer Chicken extension runs in LibreWolf (a privacy-focused Firefox) and in "
+                "Google Chrome, which install it themselves; Firefox and other browsers can't run "
+                "it. The extension is always on: it enforces wildcards, page titles and text, "
+                "greyscale, images and web-only, and while a block has websites, browsers without "
+                "it are closed."),
             *librewolf_rows), False, False, 0)
 
         rows = [self.setting_row(name, title, detail) for name, title, detail in BROWSER_OPTIONS]
@@ -3398,16 +3400,22 @@ class Window(Gtk.ApplicationWindow):
             # A locked option is on and stays on, so its switch can't be used.
             self.browser_switches[name].set_sensitive(not parts and name != "force-librewolf")
         version = self.state.get("librewolf", "")
+        chrome = self.state.get("chrome", False)
+        chrome_line = " Google Chrome is installed and runs the extension too." if chrome else ""
         if version:
-            self.librewolf_status.set_markup(f"<b>Installed</b> (version {GLib.markup_escape_text(version)}).")
+            self.librewolf_status.set_markup(
+                f"<b>LibreWolf installed</b> (version {GLib.markup_escape_text(version)})." + chrome_line)
+        elif chrome:
+            self.librewolf_status.set_markup(
+                "<b>LibreWolf not installed.</b> Google Chrome is installed and runs the extension.")
         else:
             self.librewolf_status.set_markup(
-                "<b>Not installed.</b> Until it is, the extension can't run, so wildcards, "
-                "keywords, greyscale, images and web-only aren't enforced in the browser.")
+                "<b>LibreWolf not installed.</b> Until it or Google Chrome is, the extension can't run, "
+                "so wildcards, keywords, greyscale, images and web-only aren't enforced in the browser.")
         self.librewolf_install.set_visible(not version)
-        # Without LibreWolf the line above already says the extension can't run.
+        # Without a browser for it the line above already says the extension can't run.
         self.extension_status.set_text("Extension: " + self.state.get("extension_status", ""))
-        self.extension_status.set_visible(bool(version))
+        self.extension_status.set_visible(bool(version) or chrome)
         # Turning it on needs LibreWolf; turning it off must stay possible.
         switch = self.browser_switches["force-librewolf"]
         locked = bool(self.setting_locks["force-librewolf"][0].get_text())

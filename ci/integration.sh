@@ -45,6 +45,8 @@ ot start sites
 check "hosts entry" grep -q 'example.com' /etc/hosts
 check "firewall jump" sudo iptables -C OUTPUT -j KC9K
 check "browser policy" sudo test -f /etc/opt/chrome/policies/managed/kc9k.json
+check "chrome extension policy" sudo grep -q force_installed /etc/opt/chrome/policies/managed/kc9k-setup.json
+check "chrome update manifest" sh -c 'curl -fs http://127.0.0.1:47613/chrome/update.xml | grep -q codebase'
 
 sudo iptables -D OUTPUT -j KC9K
 sleep 8

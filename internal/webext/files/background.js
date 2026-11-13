@@ -39,6 +39,11 @@ function isBlocked(url) {
   return kc9kTakesAway(addressOutcome(url));
 }
 
+// The page each tab is loading or showing, from its main_frame requests.
+// Chrome doesn't say which page a request belongs to (Firefox's
+// frameAncestors and documentUrl), so pageUrl falls back to this.
+const tabPages = new Map();
+
 // pageUrl is the address of the tab a request belongs to, so images are
 // judged by the page showing them, not by the server they come from.
 function pageUrl(details) {
@@ -49,7 +54,7 @@ function pageUrl(details) {
   if (ancestors.length > 0) {
     return ancestors[ancestors.length - 1].url;
   }
-  return details.documentUrl || details.originUrl || "";
+  return details.documentUrl || tabPages.get(details.tabId) || details.originUrl || details.initiator || "";
 }
 
 function isGoogleSearch(url) {
@@ -108,7 +113,10 @@ const cameFrom = new Map();
 
 function noteOrigin(details) {
   if (details.tabId >= 0) {
-    cameFrom.set(details.tabId, { url: details.url, from: details.originUrl || "" });
+    // Chrome gives only the origin (initiator), which is enough to tell a
+    // search engine.
+    cameFrom.set(details.tabId, { url: details.url, from: details.originUrl || details.initiator || "" });
+    tabPages.set(details.tabId, details.url);
   }
 }
 
@@ -338,6 +346,7 @@ browser.tabs.onRemoved.addListener((tabId) => {
   mutedHere.delete(tabId);
   cameFrom.delete(tabId);
   trail.delete(tabId);
+  tabPages.delete(tabId);
   lastHit.delete(tabId);
 });
 
@@ -481,7 +490,7 @@ browser.webRequest.onBeforeRequest.addListener(
     }
     return {};
   },
-  { urls: ["<all_urls>"], types: ["main_frame", "sub_frame", "image", "imageset", "media"] },
+  { urls: ["<all_urls>"], types: requestTypes() },
   ["blocking", "requestBody"]
 );
 
@@ -498,6 +507,17 @@ browser.webRequest.onBeforeSendHeaders.addListener(
   { urls: ["*://youtube.com/*", "*://*.youtube.com/*", "*://*.youtube-nocookie.com/*", "*://youtubei.googleapis.com/*"] },
   ["blocking", "requestHeaders"]
 );
+
+// requestTypes are the kinds of request judged: Chrome has no imageset (and
+// refuses a filter that names it).
+function requestTypes() {
+  const types = ["main_frame", "sub_frame", "image", "media"];
+  const known = browser.webRequest.ResourceType;
+  if (known && Object.values(known).includes("imageset")) {
+    types.push("imageset");
+  }
+  return types;
+}
 
 // stillBlocked tells the block page whether its site is still blocked, so it
 // can go back to the site once the block ends.
@@ -518,7 +538,18 @@ function stillBlocked(url) {
   return false;
 }
 
-browser.runtime.onMessage.addListener((message, sender) => {
+// Chrome ignores a promise returned by an onMessage listener, so answers go
+// through sendResponse, which Firefox takes too.
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const answer = onMessage(message, sender);
+  if (answer === undefined) {
+    return false;
+  }
+  Promise.resolve(answer).then(sendResponse, () => sendResponse(undefined));
+  return true;
+});
+
+function onMessage(message, sender) {
   if (message && message.type === "still-blocked" && typeof message.url === "string") {
     return Promise.resolve(stillBlocked(message.url));
   }
@@ -545,7 +576,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
     playing.set(sender.tab.id, Date.now());
   }
   return undefined;
-});
+}
 
 // From the rules: whether the block page may say what stopped a page, when
 // each active block ends, the blocks that will take pages away soon (for
@@ -619,6 +650,7 @@ async function poll() {
     if (response.ok) {
       const rules = await response.json();
       apply(rules);
+      checkForUpdate(rules.extension_version);
       await browser.storage.local.set({
         rules,
         page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0, social: rules.social || [] },
@@ -633,6 +665,35 @@ async function poll() {
     daemonUp = false;
   }
   updateBadges();
+}
+
+// Chrome only looks for a new version of the extension every few hours, so
+// when the daemon has a newer one, the extension asks for it at once, at most
+// every ten minutes, and restarts on it. (Firefox gets each version through
+// the policy, which names its file.)
+let updateAsked = 0;
+
+function checkForUpdate(version) {
+  if (!version || version === browser.runtime.getManifest().version || !browser.runtime.requestUpdateCheck ||
+    Date.now() - updateAsked < 10 * 60 * 1000) {
+    return;
+  }
+  updateAsked = Date.now();
+  browser.runtime.requestUpdateCheck().catch(() => {});
+}
+
+if (browser.runtime.onUpdateAvailable) {
+  browser.runtime.onUpdateAvailable.addListener(() => browser.runtime.reload());
+}
+
+// Chrome runs this as a service worker, which it stops when the worker does
+// nothing for 30 seconds; the blocking request listener would then start
+// without rules. Any extension call keeps it running, and an alarm starts it
+// again should it stop anyway.
+if (browser.runtime.getManifest().manifest_version === 3) {
+  setInterval(() => browser.runtime.getPlatformInfo().catch(() => {}), 20000);
+  browser.alarms.create("kc9k-keepalive", { periodInMinutes: 0.5 });
+  browser.alarms.onAlarm.addListener(() => {});
 }
 
 // Time left. timeLeftFor returns the blocks that will take the page away
@@ -650,8 +711,10 @@ function timeLeftFor(tab) {
 
 // The toolbar button shows, on the tab in front, the time until its site
 // is blocked; "!" when the daemon doesn't answer.
+// (Chrome's toolbar button is browser.action.)
 async function updateBadges() {
-  if (!browser.browserAction) {
+  const button = browser.action || browser.browserAction;
+  if (!button) {
     return;
   }
   try {
@@ -670,9 +733,9 @@ async function updateBadges() {
         color = left.seconds <= 300 ? "#c0392b" : "#3b6ea8";
         title = leftSentence(left);
       }
-      browser.browserAction.setBadgeText({ text, tabId: tab.id });
-      browser.browserAction.setBadgeBackgroundColor({ color, tabId: tab.id });
-      browser.browserAction.setTitle({ title, tabId: tab.id });
+      button.setBadgeText({ text, tabId: tab.id });
+      button.setBadgeBackgroundColor({ color, tabId: tab.id });
+      button.setTitle({ title, tabId: tab.id });
     }
   } catch (error) {
     // A tab closed meanwhile.

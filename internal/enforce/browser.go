@@ -181,6 +181,9 @@ type Rules struct {
 	Blocks []string `json:"blocks"`
 	// Social: the social media settings of the blocks in force (db/social.go).
 	Social []string `json:"social"`
+	// ExtensionVersion is the extension's current version: Chrome's asks
+	// for an update at once when it is older.
+	ExtensionVersion string `json:"extension_version"`
 }
 
 // ListRule is one blacklist: the entries it looks for in a page's address,
@@ -264,6 +267,8 @@ func BuildRules(d *db.DB) (Rules, error) {
 		Lists: []ListRule{}, Quota: []ListRule{}, Block: []string{}, Exceptions: []string{},
 		WebOnly: BrowserOn(d, "web-only"),
 		Titles:  []string{},
+
+		ExtensionVersion: webext.Version(),
 	}
 	if recording, err := d.GetRecording(); err != nil {
 		return rules, err
@@ -337,7 +342,87 @@ func ServeRules(d *db.DB) error {
 	mux.HandleFunc("/visit", visitHandler(d))
 	mux.HandleFunc("/add", addHandler(d))
 	mux.HandleFunc("/image/", imageHandler)
+	mux.HandleFunc(chromeUpdatePath, chromeUpdateHandler)
+	mux.HandleFunc("/chrome/", chromeExtensionHandler)
 	return http.Serve(listener, mux)
+}
+
+// Chrome installs the extension from the daemon: it reads chromeUpdatePath
+// for the current version and where to download it (see webext.PackChrome).
+const chromeUpdatePath = "/chrome/update.xml"
+
+// ChromeUpdateURL is the update URL in Chrome's policy.
+const ChromeUpdateURL = "http://" + RulesAddress + chromeUpdatePath
+
+// chromeCRXPath is where this version's .crx is served. Its name carries
+// the version, like the .xpi's.
+func chromeCRXPath() string {
+	return "/chrome/kc9k-" + webext.Version() + ".crx"
+}
+
+// chromeExt is the packed Chrome extension, made once per daemon run (the
+// files are built in, so they can't change while it runs).
+var chromeExt struct {
+	sync.Mutex
+	id  string
+	crx []byte
+}
+
+// chromeExtension returns the Chrome extension's ID and .crx, signed with
+// this computer's key (made the first time).
+func chromeExtension() (string, []byte, error) {
+	chromeExt.Lock()
+	defer chromeExt.Unlock()
+	if chromeExt.crx != nil {
+		return chromeExt.id, chromeExt.crx, nil
+	}
+	key, err := webext.ChromeKey(webext.ChromeKeyPath)
+	if err != nil {
+		return "", nil, err
+	}
+	id, err := webext.ChromeID(&key.PublicKey)
+	if err != nil {
+		return "", nil, err
+	}
+	crx, err := webext.PackChrome(key)
+	if err != nil {
+		return "", nil, err
+	}
+	chromeExt.id, chromeExt.crx = id, crx
+	return id, crx, nil
+}
+
+// chromeUpdateHandler answers Chrome's update check. Like /rules, only for
+// requests addressed to the daemon's own address (no DNS rebinding).
+func chromeUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Host != RulesAddress || r.Method != http.MethodGet {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	id, _, err := chromeExtension()
+	if err != nil {
+		log.Printf("chrome: %v", err)
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/xml")
+	_, _ = w.Write(webext.ChromeUpdateXML(id, "http://"+RulesAddress+chromeCRXPath()))
+}
+
+// chromeExtensionHandler serves the .crx.
+func chromeExtensionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Host != RulesAddress || r.Method != http.MethodGet || r.URL.Path != chromeCRXPath() {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	_, crx, err := chromeExtension()
+	if err != nil {
+		log.Printf("chrome: %v", err)
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-chrome-extension")
+	_, _ = w.Write(crx)
 }
 
 // ExtensionHeader marks a request as coming from the KC9K extension. Only
@@ -444,16 +529,26 @@ func enforceBrowser(d *db.DB) {
 	if err := blocker.EnsureBrowserSetup(setup); err != nil {
 		log.Printf("browser: %v", err)
 	}
+	chrome := blocker.ChromeSetup{DisableDevTools: setup.DisableDevTools, ForceSearch: setup.ForceSearch}
+	if id, _, err := chromeExtension(); err != nil {
+		log.Printf("browser: preparing the Chrome extension: %v", err)
+	} else {
+		chrome.ExtensionID, chrome.UpdateURL = id, ChromeUpdateURL
+	}
+	if err := blocker.EnsureChromeSetup(chrome); err != nil {
+		log.Printf("browser: %v", err)
+	}
 	if err := blocker.SyncSafeSearch(BrowserOn(d, "safesearch")); err != nil {
 		log.Printf("browser: safesearch: %v", err)
 	}
 }
 
 // enforceExtension closes browsers without a working extension while it is
-// required (see ExtensionRequired), as long as LibreWolf is there to use
-// instead: without it, every browser would be closed.
+// required (see ExtensionRequired), as long as a browser that runs it
+// (LibreWolf, Google Chrome or Chromium) is there to use instead: without
+// one, every browser would be closed.
 func enforceExtension(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
-	if !ExtensionRequired(d, active) || blocker.LibreWolfVersion() == "" {
+	if !ExtensionRequired(d, active) || !blocker.ExtensionBrowserInstalled() {
 		return
 	}
 	if extensionGuard.Enforce(now, protectionChanged(d)) > 0 {

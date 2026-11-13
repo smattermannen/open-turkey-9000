@@ -81,6 +81,50 @@ const failed0 = [];
   }
 }
 
+// The word index (kc9kWordIndex) counts exactly as each term's regular
+// expression does, and reads a long page with 1,000 terms quickly.
+{
+  const vocab = ["porn", "pornstar", "xporn", "casino", "Casinos", "bet", "betting", "abet", "Ångström", "naïve",
+    "18", "x18x", "cat", "long", "abcab", "ab", "b", "pornporn"];
+  const terms = ["porn", "porn*", "*porn", "*porn*", "casino*", "bet", "*bet", "b*t", "a*c*b", "ab*b", "ångström",
+    "NAÏVE", "18", "18+", "long cat", "*", "c*", "(long, big) cat"];
+  let seed = 7;
+  const rand = (n) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed % n;
+  };
+  for (let n = 0; n < 200; n++) {
+    const words = [];
+    for (let w = 0; w < 30; w++) {
+      words.push(vocab[rand(vocab.length)]);
+    }
+    const text = words.join([" ", ", ", "-", ". ", "\n"][rand(5)]);
+    const chosen = terms.filter(() => rand(2) === 0);
+    const matchers = kc9kKeywordMatchers(chosen);
+    const plain = matchers.slice(); // without the index: every term's own count
+    const want = kc9kTextHits(plain, text);
+    const got = kc9kTextHits(matchers, text);
+    if (want.distinct !== got.distinct || want.total !== got.total) {
+      failed0.push("word index on " + JSON.stringify(chosen) + ": " + JSON.stringify(got) + " want " + JSON.stringify(want));
+    }
+  }
+  const many = [];
+  for (let i = 0; i < 1000; i++) {
+    many.push(["term" + i, "pre" + i + "*", "*suf" + i, "x" + i + "*y"][i % 4]);
+  }
+  const page = [];
+  for (let i = 0; i < 20000; i++) {
+    page.push("word" + (i % 997), "pre" + (i % 1500) + "fix");
+  }
+  const big = kc9kKeywordMatchers(many);
+  const started = Date.now();
+  const hits = kc9kTextHits(big, page.join(" "));
+  const took = Date.now() - started;
+  if (took > 200 || hits.distinct === 0) {
+    failed0.push("1,000 terms on 40,000 words took " + took + " ms, " + JSON.stringify(hits));
+  }
+}
+
 let failed = failed0.length;
 for (const line of failed0) {
   console.error("index: " + line);

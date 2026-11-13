@@ -73,9 +73,11 @@ Last checked against the code: 2026-11-13.
       `match.js` runs one regular expression per term over all of it. Must
       be reworked before phrase sets are built:
       - read only the text that is new since the last scan;
-      - one pass over the words, looking each up in one table of all terms
-        (prefix and suffix tables for `*`), so the cost doesn't grow with the
-        number of terms; phrases checked only where a term was found;
+      - done: one pass over the words, each looked up in tables of all
+        one-word terms (`kc9kWordIndex`: exact, prefix, suffix, and globs by
+        their first or last part): 1,000 terms on 40,000 words went from
+        1.6 s to 37 ms. Terms of several words, with symbols, and
+        combinations still use one regular expression each;
       - work in small pieces in idle time, never blocking scrolling or typing;
       - stop reading a page once its strongest action has been taken;
       - a speed test in `ci/` with a large page and many rules, run on every

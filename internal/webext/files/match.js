@@ -376,7 +376,122 @@ function kc9kUsableKeyword(keyword) {
 }
 
 function kc9kKeywordMatchers(keywords) {
-  return (keywords || []).filter(kc9kUsableKeyword).map(kc9kKeywordMatcher);
+  const usable = (keywords || []).filter(kc9kUsableKeyword);
+  const matchers = usable.map(kc9kKeywordMatcher);
+  matchers.index = kc9kWordIndex(usable);
+  return matchers;
+}
+
+// kc9kWordIndex files the one-word terms of a list (letters and digits, with
+// * for any letters or digits) so that a text is read once, word by word,
+// whatever the number of terms (principle 9): exact words in a map,
+// "porn*" by prefix and "*porn" by suffix, other one-word patterns tested
+// per word. It counts exactly as the terms' regular expressions do: one
+// count per word that matches. Terms of several words, with other
+// characters, and combinations are left to their own matcher (rest).
+function kc9kWordIndex(terms) {
+  const index = {
+    exact: new Map(), prefix: new Map(), suffix: new Map(),
+    globStart: new Map(), globEnd: new Map(), globs: [], rest: [],
+  };
+  const add = (map, key, i) => {
+    const list = map.get(key) || [];
+    list.push(i);
+    map.set(key, list);
+  };
+  terms.forEach((term, i) => {
+    const value = String(term).trim().toLowerCase();
+    if (kc9kCombination(term) || !/^[\p{L}\p{N}*]+$/u.test(value)) {
+      index.rest.push(i);
+      return;
+    }
+    const parts = value.split("*");
+    if (parts.length === 1) {
+      add(index.exact, value, i);
+    } else if (parts.length === 2 && parts[1] === "" && parts[0] !== "") {
+      add(index.prefix, parts[0], i);
+    } else if (parts.length === 2 && parts[0] === "" && parts[1] !== "") {
+      add(index.suffix, parts[1], i);
+    } else if (parts[0] !== "") {
+      add(index.globStart, parts[0], { i, parts });
+    } else if (parts[parts.length - 1] !== "") {
+      add(index.globEnd, parts[parts.length - 1], { i, parts });
+    } else {
+      index.globs.push({ i, parts });
+    }
+  });
+  const lengths = (map) => [...new Set([...map.keys()].map((k) => k.length))];
+  index.prefixLengths = lengths(index.prefix);
+  index.suffixLengths = lengths(index.suffix);
+  index.globStartLengths = lengths(index.globStart);
+  index.globEndLengths = lengths(index.globEnd);
+  return index;
+}
+
+// kc9kGlobWord reports whether a whole word fits a pattern split at its *s:
+// the first part starts it, the last ends it, the others come in order.
+function kc9kGlobWord(word, parts) {
+  if (!word.startsWith(parts[0]) || !word.endsWith(parts[parts.length - 1])) {
+    return false;
+  }
+  let at = parts[0].length;
+  for (let p = 1; p < parts.length - 1; p++) {
+    const found = word.indexOf(parts[p], at);
+    if (found < 0) {
+      return false;
+    }
+    at = found + parts[p].length;
+  }
+  return at <= word.length - parts[parts.length - 1].length;
+}
+
+// kc9kIndexCounts reads a text once and returns how many times each indexed
+// term occurs (by its position in the list); terms in rest are left out.
+function kc9kIndexCounts(index, text) {
+  const counts = new Map();
+  const hit = (list) => {
+    for (const i of list) {
+      counts.set(i, (counts.get(i) || 0) + 1);
+    }
+  };
+  const words = String(text).toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  for (const word of words) {
+    const exact = index.exact.get(word);
+    if (exact) {
+      hit(exact);
+    }
+    for (const n of index.prefixLengths) {
+      const list = n <= word.length && index.prefix.get(word.slice(0, n));
+      if (list) {
+        hit(list);
+      }
+    }
+    for (const n of index.suffixLengths) {
+      const list = n <= word.length && index.suffix.get(word.slice(word.length - n));
+      if (list) {
+        hit(list);
+      }
+    }
+    const globs = (list) => {
+      for (const glob of list || []) {
+        if (kc9kGlobWord(word, glob.parts)) {
+          hit([glob.i]);
+        }
+      }
+    };
+    for (const n of index.globStartLengths) {
+      if (n <= word.length) {
+        globs(index.globStart.get(word.slice(0, n)));
+      }
+    }
+    for (const n of index.globEndLengths) {
+      if (n <= word.length) {
+        globs(index.globEnd.get(word.slice(word.length - n)));
+      }
+    }
+    globs(index.globs);
+  }
+  return counts;
 }
 
 // kc9kCountKeywords returns how many of the keywords occur in text; a keyword
@@ -390,6 +505,20 @@ function kc9kCountKeywords(text, keywords) {
 function kc9kTextHits(matchers, text) {
   let distinct = 0;
   let total = 0;
+  if (matchers.index) {
+    for (const n of kc9kIndexCounts(matchers.index, text).values()) {
+      distinct++;
+      total += n;
+    }
+    for (const i of matchers.index.rest) {
+      const n = matchers[i].count(text);
+      if (n > 0) {
+        distinct++;
+        total += n;
+      }
+    }
+    return { distinct, total };
+  }
   for (const matcher of matchers) {
     const n = matcher.count(text);
     if (n > 0) {

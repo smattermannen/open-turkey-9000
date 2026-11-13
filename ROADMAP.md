@@ -45,10 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **Use** (§3.7): input in the last 3 minutes. The code uses 1 minute
-      for allowances (`quota`) and 2 minutes for statistics. (S)
-- [ ] **Reward** (R-BREAK-2) is earned while the block is enforced, also
-      when the computer is idle. (S)
 - [ ] **Monk mode** is an ordinary block named `monk-mode`, editable while
       on; R-MONK-1 makes it system-owned, without the `monk` action inside
       it, and §3.8 allows exceptions and apps only while it is off. (S)
@@ -219,14 +215,14 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Break per block window | Not built | |
 | Pomodoro, long rest | Built | the R-SCHED-3 rhythm: Unchecked |
 | Allowance | Partial | daily only (`kc9k quota`); no rolling, window, week or month periods, no refill time |
-| Reward | Partial | `kc9k break allowance`; the expiry rule: Unchecked |
+| Reward | Partial | `kc9k break allowance`, earned only while in use (R-BREAK-2); capped at one reward instead of adding up and expiring per window/day/week/month |
 | Text break | Built | as `kc9k break relock` |
 | Delay break | Not built | |
 | Session limit | Not built | |
 | Pause | Built | |
 | Autostart | Not built | |
 | Place, place rule | Built | Wi-Fi only |
-| Use | Differs | see 0.1 |
+| Use | Partial | 3 minutes without input everywhere; statistics leave out sound in background tabs |
 | Strict use counting | Not built | |
 
 ### §3.8 Device-level

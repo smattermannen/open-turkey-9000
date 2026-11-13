@@ -27,8 +27,11 @@ async function frontTab() {
   return tab;
 }
 
+// Use (SPEC §3.7): input within the last 3 minutes.
+const USE_IDLE_SECONDS = 180;
+
 async function userActive() {
-  return !browser.idle || (await browser.idle.queryState(60)) === "active";
+  return !browser.idle || (await browser.idle.queryState(USE_IDLE_SECONDS)) === "active";
 }
 
 function addressOutcome(url) {
@@ -807,7 +810,7 @@ browser.storage.local.get("rules").then((stored) => {
 });
 
 // Statistics: every 5 seconds, count the site in the active tab of the focused
-// window, unless the user has been idle for a minute, and send the totals to
+// window, unless the user has been idle for 3 minutes, and send the totals to
 // the daemon every 30 seconds. The daemon drops them if statistics are off.
 const USAGE_URL = "http://127.0.0.1:47613/usage";
 const SAMPLE_SECONDS = 5;

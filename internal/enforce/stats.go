@@ -18,8 +18,9 @@ const SettingStats = "stats"
 const (
 	// StatsKeepDays is how long statistics are kept.
 	StatsKeepDays = 365
-	// idleLimit is how long without input still counts as using an app.
-	idleLimit = 120
+	// idleLimit is how long without input still counts as using an app
+	// (use, §3.7: input in the last 3 minutes).
+	idleLimit = 180
 	// maxReportSeconds caps one report from the extension per site, so a
 	// stray or forged request can't add more than a moment of use.
 	maxReportSeconds = 120

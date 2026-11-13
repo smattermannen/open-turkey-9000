@@ -405,7 +405,7 @@ kc9k quota end social-media         # close it early
 kc9k quota remove social-media      # takes effect at midnight
 ```
 
-An open session spends only the time the block is in use: one of its apps is in the focused window, or one of its websites is in the focused tab (not while you are idle for a minute) or plays sound or video, even muted, in any tab. Websites are matched by the block's address and title lists; page text lists don't count here. While a session with websites is open, browsers without the extension are closed, so another browser can't be used for free. Without LibreWolf the extension can't see tabs, so a session with websites spends all of its time. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
+An open session spends only the time the block is in use: one of its apps is in the focused window, or one of its websites is in the focused tab (not after 3 minutes without input) or plays sound or video, even muted, in any tab. Websites are matched by the block's address and title lists; page text lists don't count here. While a session with websites is open, browsers without the extension are closed, so another browser can't be used for free. Without LibreWolf the extension can't see tabs, so a session with websites spends all of its time. Lowering a quota applies at once. Raising or removing it applies at midnight. A lock or a scheduled window closes a session. The day follows the system clock, so moving the clock to another date refills the quota.
 
 ## Locks
 
@@ -484,7 +484,7 @@ kc9k break relock work 5m                # unlocking gives a 5-minute break inst
 kc9k break                               # what each block allows and has earned
 ```
 
-A **reward** (`break allowance`) earns break time while the block is on, saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With `relock`, passing the typing challenge or giving the password lifts the block for that long instead of ending it, and unlocking once more during that break ends it. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `relock … off`) is always possible. The toolbar button shows the break time left on the block's sites.
+A **reward** (`break allowance`) earns break time while the block is on and the computer is in use (input in the last 3 minutes, screen not locked), saved up to one reward. A break lifts the block, locked or not, and the block comes back by itself with its locks; editing it stays refused meanwhile. With `relock`, passing the typing challenge or giving the password lifts the block for that long instead of ending it, and unlocking once more during that break ends it. Allowing more breaks loosens a block, so it is refused while the block is held; allowing fewer (`allowance … off`, `relock … off`) is always possible. The toolbar button shows the break time left on the block's sites.
 
 ## Window titles
 

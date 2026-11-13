@@ -49,6 +49,20 @@ func ForegroundApps(idleLimit uint64) []string {
 	return apps
 }
 
+// SomeoneAtDesktop reports whether a desktop user is at the computer: signed
+// in, the screen not locked and input within idleLimit seconds. When it
+// can't tell (no gdbus, no Cinnamon screensaver) it says yes for a signed-in
+// user.
+func SomeoneAtDesktop(idleLimit uint64) bool {
+	gdbus, _ := exec.LookPath("gdbus")
+	for _, u := range desktopUsers() {
+		if gdbus == "" || !awayFromDesktop(u, gdbus, idleLimit) {
+			return true
+		}
+	}
+	return false
+}
+
 // awayFromDesktop reports whether u's Cinnamon screen is locked or u has been
 // idle for longer than idleLimit seconds. Without Cinnamon's screensaver it
 // can't tell, and reports false.

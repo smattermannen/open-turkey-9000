@@ -50,9 +50,11 @@ Last checked against the code: 2026-11-13.
         the user's order (R-LOCK-6, R-LOCK-7). (L)
 - [ ] **Lists by type** (§3.2): a list ticks url, title and text with mixed
       entries; it must be an address, term or search list. (M)
-- [ ] **Project** (§3.13): export leaves out locks, passwords, hotkeys and
-      statistics; it must offer *backup* (everything) and *share* (without
-      places and user names), with a preview on import. (M)
+- [ ] **Project** (§3.13): *backup* (with places and place rules) and
+      *share* (`--share`, without them) are built, with a preview on import
+      and new names for taken block names. A backup still leaves out
+      running locks, passwords, hotkeys and statistics: whether "everything"
+      includes those is for the owner to say. (S)
 - [ ] **Words** (§3.14): commands, GUI labels, messages and `README.md` still
       say active (for enforcing), char lock, time lock, held, quota,
       `break allowance` (a reward), `break relock` (a text break), option,

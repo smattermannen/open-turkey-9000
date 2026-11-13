@@ -1,7 +1,8 @@
 // project.go — kc9k project: the whole setup in one file, to move it to
-// another computer or share it.
+// another computer or share it (§3.13).
 //
-//	kc9k project export > my-setup.json
+//	kc9k project export > my-setup.json            # a backup
+//	kc9k project export --share > for-a-friend.json  # without places
 //	kc9k project import my-setup.json [--dry-run]
 //
 // A project holds every block (lists, apps, window titles, schedules, quota,
@@ -10,8 +11,10 @@
 // Frozen Chicken windows, with the pictures the lists show. Locks,
 // passwords, statistics and what is running right now are never part of it.
 //
-// Importing only adds: a block or cluster that already exists is left as it
-// is, browser options are only ever turned on, and bypass detection is only
+// A backup also holds the places (with their Wi-Fi networks) and the
+// blocks' place rules; a share leaves them out, since they tell where the
+// user lives. Importing only adds: a block whose name exists already comes
+// in under a new name, a cluster or place that exists is left as it is, browser options are only ever turned on, and bypass detection is only
 // replaced by a stricter one. So an import can't weaken anything that is
 // held.
 package cli
@@ -61,10 +64,14 @@ type breaksExport struct {
 
 // blockExtras is what a project adds to a block's export.
 type blockExtras struct {
-	Schedules []windowExport  `json:"schedules,omitempty"`
-	Quota     int64           `json:"quota_seconds,omitempty"`
-	Pomodoro  *pomodoroExport `json:"pomodoro,omitempty"`
-	Breaks    *breaksExport   `json:"breaks,omitempty"`
+	Schedules []windowExport `json:"schedules,omitempty"`
+	// ScheduleLock is the schedule lock's lead time in minutes; nil: none.
+	ScheduleLock *int            `json:"schedule_lock_minutes,omitempty"`
+	Social       []string        `json:"social,omitempty"`
+	Places       []string        `json:"places,omitempty"` // backups only
+	Quota        int64           `json:"quota_seconds,omitempty"`
+	Pomodoro     *pomodoroExport `json:"pomodoro,omitempty"`
+	Breaks       *breaksExport   `json:"breaks,omitempty"`
 }
 
 type projectBlock struct {
@@ -78,8 +85,16 @@ type clusterExport struct {
 	Entries []string `json:"entries"`
 }
 
+// placeExport is a place with the networks it is known by (backups only).
+type placeExport struct {
+	Name     string       `json:"name"`
+	Networks []db.Network `json:"networks"`
+}
+
 type projectExport struct {
 	KC9KProject int               `json:"kc9k_project"`
+	Kind        string            `json:"kind,omitempty"` // "backup" or "share"
+	Places      []placeExport     `json:"places,omitempty"`
 	Blocks      []projectBlock    `json:"blocks"`
 	Clusters    []clusterExport   `json:"clusters,omitempty"`
 	Browser     map[string]bool   `json:"browser_options,omitempty"`
@@ -145,6 +160,12 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	for _, s := range schedules {
 		out.Schedules = append(out.Schedules, exportWindow(s.Window()))
 	}
+	if on, lead, err := database.ScheduleLock(name); err != nil {
+		return out, err
+	} else if on {
+		out.ScheduleLock = &lead
+	}
+	out.Social = detail.Social
 	if q, err := database.GetQuota(name); err != nil {
 		return out, err
 	} else if q != nil {
@@ -206,6 +227,14 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 		}
 		out.windows = append(out.windows, win)
 	}
+	if l := in.ScheduleLock; l != nil && (*l < 0 || *l > db.MaxScheduleLockLead) {
+		return out, fmt.Errorf("schedule lock lead time out of range")
+	}
+	for _, preset := range in.Social {
+		if !db.IsSocialPreset(preset) {
+			return out, fmt.Errorf("unknown social media setting %q", preset)
+		}
+	}
 	if in.Quota < 0 || in.Quota > int64(quota.MaxLimit.Seconds()) {
 		return out, fmt.Errorf("quota out of range")
 	}
@@ -249,6 +278,16 @@ func createBlock(database *db.DB, c checkedBlock) error {
 			return err
 		}
 	}
+	if l := in.ScheduleLock; l != nil {
+		if err := database.SetScheduleLock(in.Name, *l); err != nil {
+			return err
+		}
+	}
+	for _, preset := range in.Social {
+		if err := database.SetSocial(in.Name, preset, true); err != nil {
+			return err
+		}
+	}
 	now := time.Now()
 	if in.Quota > 0 {
 		if err := database.SaveQuota(in.Name, quota.New(in.Quota, now.Unix(), quota.DayOf(now))); err != nil {
@@ -280,14 +319,36 @@ var projectCmd = &cobra.Command{
 var projectExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Print the whole setup as JSON (redirect to a file to save it)",
-	Long: `Prints every block with its lists, apps, window titles, schedules, quota,
-Pomodoro, breaks and bypass detection, the clusters, browser options,
-behaviour options, the global bypass detection and the scheduled Frozen
-Chicken windows. Locks, passwords and statistics are left out.`,
+	Long: `Prints every block with its lists, apps, window titles, schedules, schedule
+lock, social media settings, quota, Pomodoro, breaks and bypass prevention,
+the clusters, browser settings, behaviour settings, the global bypass
+prevention and the scheduled Frozen Chicken windows.
+
+By default it is a backup, which also holds your places (with the Wi-Fi
+networks they are known by) and the blocks' place rules. With --share they
+are left out, so the file says nothing about where you are. Running locks,
+passwords, hotkeys and statistics are never in it.`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		out := projectExport{KC9KProject: projectVersion, Blocks: []projectBlock{}, Browser: map[string]bool{},
+		share, _ := cmd.Flags().GetBool("share")
+		out := projectExport{KC9KProject: projectVersion, Kind: "backup", Blocks: []projectBlock{}, Browser: map[string]bool{},
 			Options: map[string]bool{}, Images: map[string]string{}}
+		if share {
+			out.Kind = "share"
+		}
+		places, err := database.Places()
+		if err != nil {
+			return err
+		}
+		blockPlaces := map[string][]string{}
+		if !share {
+			for _, p := range places {
+				out.Places = append(out.Places, placeExport{Name: p.Name, Networks: p.Networks})
+				for _, b := range p.Blocks {
+					blockPlaces[b] = append(blockPlaces[b], p.Name)
+				}
+			}
+		}
 		blocks, err := database.ListBlocks()
 		if err != nil {
 			return err
@@ -300,6 +361,7 @@ Chicken windows. Locks, passwords and statistics are left out.`,
 			if err != nil {
 				return err
 			}
+			pb.Places = blockPlaces[b.Name]
 			out.Blocks = append(out.Blocks, pb)
 		}
 		clusters, err := database.ListClusters()
@@ -345,8 +407,9 @@ Chicken windows. Locks, passwords and statistics are left out.`,
 var projectImportCmd = &cobra.Command{
 	Use:   "import [file]",
 	Short: "Add what a project file holds to this computer's setup",
-	Long: `Adds the blocks and clusters of a project file that don't exist here yet,
-turns on the browser options it has on, adds its scheduled Frozen Chicken
+	Long: `Adds the blocks of a project file (one whose name is taken here comes in as
+name-2, name-3, …), its clusters and places that don't exist here yet, and
+the blocks' place rules; turns on the browser settings it has on, adds its scheduled Frozen Chicken
 windows, and takes its global bypass detection if that is at least as strict
 as the one here. Nothing that exists is changed or removed, so importing
 never weakens a block. Imported blocks are not started.
@@ -478,15 +541,68 @@ With --dry-run, says what would happen and changes nothing.`,
 				}
 			}
 		}
-		for _, c := range blocks {
-			if _, err := database.GetBlock(c.in.Name); err == nil {
-				fmt.Printf("Block '%s' exists already: left as it is.\n", c.in.Name)
+		// Places first, so the blocks' rules can name them.
+		placeIDs := map[string]int{}
+		if have, err := database.Places(); err != nil {
+			return err
+		} else {
+			for _, p := range have {
+				placeIDs[p.Name] = p.ID
+			}
+		}
+		for _, p := range in.Places {
+			if _, ok := placeIDs[p.Name]; ok {
+				fmt.Printf("Place '%s' exists already: left as it is.\n", p.Name)
 				continue
 			}
-			say("add block '%s' (%d lists, %d apps, %d schedules)", c.in.Name, len(c.lists), len(visibleApps(c.in.Apps)), len(c.windows))
+			say("add place '%s' (%d networks)", p.Name, len(p.Networks))
+			if !dry {
+				if _, err := database.SavePlace(p.Name, p.Networks); err != nil {
+					return fmt.Errorf("place '%s': %w", p.Name, err)
+				}
+				saved, err := database.GetPlace(p.Name)
+				if err != nil {
+					return err
+				}
+				placeIDs[p.Name] = saved.ID
+			} else {
+				placeIDs[p.Name] = -1
+			}
+		}
+		taken := map[string]bool{}
+		for _, c := range blocks {
+			name := c.in.Name
+			for n := 2; ; n++ {
+				_, err := database.GetBlock(name)
+				if err != nil && !taken[name] {
+					break
+				}
+				name = fmt.Sprintf("%s-%d", c.in.Name, n)
+			}
+			taken[name] = true
+			if name != c.in.Name {
+				say("add block '%s' as '%s', since that name is taken here (%d lists, %d apps, %d schedules)",
+					c.in.Name, name, len(c.lists), len(visibleApps(c.in.Apps)), len(c.windows))
+			} else {
+				say("add block '%s' (%d lists, %d apps, %d schedules)", name, len(c.lists), len(visibleApps(c.in.Apps)), len(c.windows))
+			}
+			c.in.Name = name
 			if !dry {
 				if err := createBlock(database, c); err != nil {
-					return fmt.Errorf("block '%s': %w", c.in.Name, err)
+					return fmt.Errorf("block '%s': %w", name, err)
+				}
+			}
+			for _, place := range c.in.Places {
+				id, ok := placeIDs[place]
+				if !ok {
+					fmt.Printf("Block '%s': the place '%s' isn't in the file or here, so its rule is left out.\n", name, place)
+					continue
+				}
+				say("turn block '%s' on at the place '%s'", name, place)
+				if !dry {
+					if err := database.SetPlaceRule(name, id, true); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -573,6 +689,7 @@ With --dry-run, says what would happen and changes nothing.`,
 
 func init() {
 	projectImportCmd.Flags().Bool("dry-run", false, "Say what would be imported and change nothing")
+	projectExportCmd.Flags().Bool("share", false, "Leave out places and place rules, for sharing with others")
 	projectCmd.AddCommand(projectExportCmd, projectImportCmd)
 	rootCmd.AddCommand(projectCmd)
 }

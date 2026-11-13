@@ -2822,11 +2822,15 @@ class Window(Gtk.ApplicationWindow):
         except OSError as error:
             self.message(str(error))
 
-    def export_project(self, _button):
-        path = self.choose_file("Export the whole setup", Gtk.FileChooserAction.SAVE, "Save")
+    def share_project(self, button):
+        self.export_project(button, share=True)
+
+    def export_project(self, _button, share=False):
+        path = self.choose_file("Share the setup (without places)" if share else "Back up the whole setup",
+                                Gtk.FileChooserAction.SAVE, "Save")
         if not path:
             return
-        ok, output = cli_with_access(self.access_passwords, ["project", "export"])
+        ok, output = cli_with_access(self.access_passwords, ["project", "export"] + (["--share"] if share else []))
         if not ok:
             self.message(output)
             return
@@ -3430,15 +3434,17 @@ class Window(Gtk.ApplicationWindow):
                             "turned off while anything is locked.")), False, False, 0)
 
         project_row = Gtk.Box(spacing=6)
-        for label, handler in (("Export…", self.export_project), ("Import…", self.import_project)):
+        for label, handler in (("Back up…", self.export_project), ("Share…", self.share_project),
+                               ("Import…", self.import_project)):
             button = Gtk.Button(label=label)
             button.connect("clicked", handler)
             project_row.pack_start(button, False, False, 0)
         box.pack_start(section(
             "Whole setup",
-            dim("Save every block, cluster and option to one file, to move to another computer "
-                "or to share. Locks, passwords and statistics are left out. Importing only adds "
-                "what isn't here yet, so it never weakens a block."),
+            dim("Save every block, cluster and setting to one file. A backup also holds your "
+                "places (the Wi-Fi networks they are known by); a file to share leaves them out. "
+                "Running locks, passwords, hotkeys and statistics are never in it. Importing shows "
+                "what it adds first, only adds, and gives a block whose name is taken a new name."),
             project_row), False, False, 0)
 
         self.access_status = Gtk.Label(xalign=0, wrap=True)

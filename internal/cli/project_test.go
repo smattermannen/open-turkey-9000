@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
@@ -58,13 +59,17 @@ func TestProjectExportImport(t *testing.T) {
 	}
 	before, _ := d.GetBlock("work")
 
-	// Into the same setup: nothing is touched.
+	// Into the same setup: the block that exists is untouched, and the
+	// imported one gets a new name (§3.13).
 	out := capture(t, "project", "import", file)
-	if !strings.Contains(out, "Block 'work' exists already") || !strings.Contains(out, "Cluster 'papers' exists already") {
+	if !strings.Contains(out, "add block 'work' as 'work-2'") || !strings.Contains(out, "Cluster 'papers' exists already") {
 		t.Errorf("import over itself said: %s", out)
 	}
 	if after, _ := d.GetBlock("work"); !reflect.DeepEqual(before.Lists, after.Lists) {
 		t.Error("importing over an existing block changed it")
+	}
+	if copy, err := d.GetBlock("work-2"); err != nil || len(copy.Lists) != len(before.Lists) || copy.Active {
+		t.Errorf("the renamed import: %+v, %v", copy, err)
 	}
 
 	// Into an empty setup: everything comes back, and nothing is started.
@@ -125,5 +130,53 @@ func TestProjectExportImport(t *testing.T) {
 	os.WriteFile(bad, []byte(`{"name":"x","apps":[]}`), 0o644)
 	if err := runCLI(t, "project", "import", bad); err == nil {
 		t.Error("a single block's export was taken for a project")
+	}
+}
+
+// §3.13: a backup holds places and place rules; a share leaves them out.
+// Schedule locks and social media settings travel in both.
+func TestProjectBackupAndShare(t *testing.T) {
+	testDB(t)
+	oldScan := enforce.ScanWifi
+	enforce.ScanWifi = func(bool) ([]db.Network, error) {
+		return []db.Network{{BSSID: "AA:AA:AA:AA:AA:01", SSID: "mine"}, {BSSID: "AA:AA:AA:AA:AA:02", SSID: "n"}}, nil
+	}
+	t.Cleanup(func() { enforce.ScanWifi = oldScan })
+	mustRun(t, "place", "add", "home")
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "youtube.com")
+	mustRun(t, "place", "rule", "b", "home", "on")
+	mustRun(t, "schedule", "lock", "b", "on", "--lead", "30m")
+	mustRun(t, "social", "b", "youtube:no-shorts", "on")
+	backup, share := capture(t, "project", "export"), capture(t, "project", "export", "--share")
+	if !strings.Contains(backup, "AA:AA:AA:AA:AA:01") || strings.Contains(share, "AA:AA:AA:AA:AA:01") || strings.Contains(share, `"home"`) {
+		t.Fatalf("places: backup %v, share %v", strings.Contains(backup, "AA:AA"), strings.Contains(share, "AA:AA"))
+	}
+
+	for name, text := range map[string]string{"backup": backup, "share": share} {
+		file := filepath.Join(t.TempDir(), name+".json")
+		if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("KC9K_DB", filepath.Join(t.TempDir(), name+".db"))
+		fresh, err := openDB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		capture(t, "project", "import", file)
+		if on, lead, _ := fresh.ScheduleLock("b"); !on || lead != 30 {
+			t.Errorf("%s: schedule lock %v %d", name, on, lead)
+		}
+		if got, _ := fresh.GetBlock("b"); len(got.Social) != 1 {
+			t.Errorf("%s: social = %v", name, got.Social)
+		}
+		p, err := fresh.GetPlace("home")
+		if name == "backup" && (err != nil || len(p.Networks) != 2 || len(p.Blocks) != 1) {
+			t.Errorf("backup: place = %+v, %v", p, err)
+		}
+		if name == "share" && err == nil {
+			t.Error("share: a place came along")
+		}
+		fresh.Close()
 	}
 }

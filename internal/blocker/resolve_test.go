@@ -4,8 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestBuildQuery(t *testing.T) {
@@ -147,5 +150,54 @@ func TestDNSServers(t *testing.T) {
 	}
 	if got := realAddresses([]string{"0.0.0.0", "1.2.3.4", "::", "127.0.0.1", "2001:db8::1"}); strings.Join(got, " ") != "1.2.3.4 2001:db8::1" {
 		t.Errorf("realAddresses = %v", got)
+	}
+}
+
+func TestResolveAllParallelCachedDeduped(t *testing.T) {
+	var mu sync.Mutex
+	calls := map[string]int{}
+	running, most := 0, 0
+	old := lookupIPs
+	t.Cleanup(func() { lookupIPs = old; SetDNSChoice("x"); SetDNSChoice("") })
+	lookupIPs = func(domain string) ([]string, []string) {
+		mu.Lock()
+		calls[domain]++
+		running++
+		most = max(most, running)
+		mu.Unlock()
+		time.Sleep(20 * time.Millisecond)
+		mu.Lock()
+		running--
+		mu.Unlock()
+		if domain == "gone.example" {
+			return nil, nil
+		}
+		return []string{"192.0.2.1", "192.0.2." + strconv.Itoa(len(domain))}, []string{"2001:db8::1"}
+	}
+	SetDNSChoice("fresh") // empties the cache
+	var domains []string
+	for i := 0; i < 40; i++ {
+		domains = append(domains, "d"+strconv.Itoa(i)+".example")
+	}
+	domains = append(domains, "gone.example")
+	start := time.Now()
+	v4, v6 := resolveAll(domains)
+	if time.Since(start) > 400*time.Millisecond || most < 2 {
+		t.Errorf("lookups weren't parallel: %s, at most %d at once", time.Since(start), most)
+	}
+	if len(v6) != 1 || v4[0] != "192.0.2.1" || len(v4) != 3 { // .1, .10, .11
+		t.Errorf("v4 %v v6 %v", v4, v6)
+	}
+	resolveAll(domains)
+	if calls["d1.example"] != 1 || calls["gone.example"] != 1 {
+		t.Errorf("the cache wasn't used: %v", calls)
+	}
+}
+
+func TestRestoreRules(t *testing.T) {
+	got := restoreRules([]string{"192.0.2.1"}, []string{"9.9.9.9"})
+	want := "*filter\n:KC9K - [0:0]\n-A KC9K -d 192.0.2.1 -j DROP\n-A KC9K -d 9.9.9.9 -p tcp --dport 443 -j DROP\nCOMMIT\n"
+	if got != want {
+		t.Errorf("restoreRules =\n%s\nwant\n%s", got, want)
 	}
 }

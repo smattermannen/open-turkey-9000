@@ -168,7 +168,7 @@ type Rules struct {
 	Block      []string   `json:"block"`
 	Exceptions []string   `json:"exceptions"`
 	WebOnly    bool       `json:"web_only"`
-	Titles     []string   `json:"titles"` // always empty: window title entries never apply to browsers (R-TITLE-1)
+	Titles     []string   `json:"titles"`    // always empty: window title entries never apply to browsers (R-TITLE-1)
 	Recording  bool       `json:"recording"` // report opened addresses to /visit (see recording.go)
 	// Details: the block page may say which block and list stopped a page.
 	Details bool `json:"details"`

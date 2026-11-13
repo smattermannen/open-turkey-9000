@@ -268,7 +268,7 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 var nepsisCmd = &cobra.Command{
 	Use:     "bypass",
 	Aliases: []string{"nepsis"},
-	Short: "Bypass prevention: act when KC9K stops many things in a short time",
+	Short:   "Bypass prevention: act when KC9K stops many things in a short time",
 	Long: `Bypass prevention counts what KC9K stops and climbs a ladder of steps. The
 detectors (--detect; default all) are the kinds of events that count:
 

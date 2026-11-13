@@ -89,12 +89,7 @@ func ApplyFirewall(domains []string) error {
 	}
 
 	// Resolve every domain up front (bypassing /etc/hosts) into v4/v6 sets.
-	var ipv4, ipv6 []string
-	for _, domain := range valid {
-		v4, v6 := resolveIPs(domain)
-		ipv4 = append(ipv4, v4...)
-		ipv6 = append(ipv6, v6...)
-	}
+	ipv4, ipv6 := resolveAll(valid)
 
 	if err := applyFamily("iptables", ipv4, dohServersIPv4); err != nil {
 		return err
@@ -116,6 +111,18 @@ func ApplyFirewall(domains []string) error {
 // ip6tables): create/flush the chain, ensure the OUTPUT jump, drop each IP, and
 // drop the DoH resolvers on port 443.
 func applyFamily(cmd string, ips, dohServers []string) error {
+	// The whole chain in one iptables-restore run: one process for any
+	// number of addresses, and the chain is never half full. The rule by
+	// rule way below stays as a fallback.
+	if err := restoreFamily(cmd, ips, dohServers); err == nil {
+		for _, hook := range hookChains {
+			if err := ensureFirstJump(cmd, hook); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	// Create the chain (ignore "already exists").
 	_ = runFW(cmd, "-N", chainName)
 
@@ -146,6 +153,39 @@ func applyFamily(cmd string, ips, dohServers []string) error {
 		}
 	}
 
+	return nil
+}
+
+// restoreRules is the iptables-restore input that fills our chain: declared
+// (created if missing, emptied if not; nothing else is touched with
+// --noflush), then a DROP per address and for each DoH resolver on 443.
+func restoreRules(ips, dohServers []string) string {
+	var b strings.Builder
+	b.WriteString("*filter\n:" + chainName + " - [0:0]\n")
+	for _, ip := range ips {
+		fmt.Fprintf(&b, "-A %s -d %s -j DROP\n", chainName, ip)
+	}
+	for _, ip := range dohServers {
+		fmt.Fprintf(&b, "-A %s -d %s -p tcp --dport 443 -j DROP\n", chainName, ip)
+	}
+	b.WriteString("COMMIT\n")
+	return b.String()
+}
+
+// restoreFamily loads our chain with cmd-restore (iptables-restore or
+// ip6tables-restore).
+func restoreFamily(cmd string, ips, dohServers []string) error {
+	path, err := exec.LookPath(cmd + "-restore")
+	if err != nil {
+		return err
+	}
+	c := exec.Command(path, "--noflush")
+	c.Stdin = strings.NewReader(restoreRules(ips, dohServers))
+	var stderr bytes.Buffer
+	c.Stderr = &stderr
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("%s-restore: %s (%w)", cmd, strings.TrimSpace(stderr.String()), err)
+	}
 	return nil
 }
 

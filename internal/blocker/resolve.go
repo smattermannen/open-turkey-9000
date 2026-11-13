@@ -29,7 +29,9 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -52,7 +54,14 @@ var dnsChoice atomic.Value // string
 
 // SetDNSChoice sets which servers resolveIPs asks: DNSNetwork (or ""),
 // DNSQuad9, or a comma-separated list of IP addresses.
-func SetDNSChoice(choice string) { dnsChoice.Store(choice) }
+func SetDNSChoice(choice string) {
+	if old, _ := dnsChoice.Swap(choice).(string); old != choice {
+		// Other servers may know other addresses.
+		resolveCache.Lock()
+		resolveCache.entries = map[string]resolved{}
+		resolveCache.Unlock()
+	}
+}
 
 // resolvConfPaths are read, in order, for the network's DNS servers: the
 // upstream list of systemd-resolved first, then the system's own.
@@ -146,6 +155,98 @@ func resolveIPs(domain string) (ipv4 []string, ipv6 []string) {
 		}
 	}
 	return nil, nil
+}
+
+// resolveWorkers is how many lookups resolveAll runs at once.
+const resolveWorkers = 16
+
+// Lookups are kept for a while, so the daemon re-applying the firewall
+// (a list changed, a block started) asks again only for new domains.
+const (
+	resolveKeep       = 30 * time.Minute
+	resolveKeepFailed = 2 * time.Minute
+)
+
+var resolveCache = struct {
+	sync.Mutex
+	entries map[string]resolved
+}{entries: map[string]resolved{}}
+
+type resolved struct {
+	v4, v6 []string
+	until  time.Time
+}
+
+// lookupIPs is resolveIPs; a variable for tests.
+var lookupIPs = resolveIPs
+
+// resolveAll looks up every domain's real addresses, several at once and
+// from the cache where it can, and returns them without duplicates, sorted.
+func resolveAll(domains []string) (ipv4, ipv6 []string) {
+	now := time.Now()
+	results := make([]resolved, len(domains))
+	var todo []int
+	resolveCache.Lock()
+	for i, domain := range domains {
+		if r, ok := resolveCache.entries[domain]; ok && now.Before(r.until) {
+			results[i] = r
+		} else {
+			todo = append(todo, i)
+		}
+	}
+	resolveCache.Unlock()
+
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for w := 0; w < min(resolveWorkers, len(todo)); w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				v4, v6 := lookupIPs(domains[i])
+				keep := resolveKeep
+				if len(v4)+len(v6) == 0 {
+					keep = resolveKeepFailed
+				}
+				results[i] = resolved{v4: v4, v6: v6, until: time.Now().Add(keep)}
+			}
+		}()
+	}
+	for _, i := range todo {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+
+	resolveCache.Lock()
+	for _, i := range todo {
+		resolveCache.entries[domains[i]] = results[i]
+	}
+	for domain, r := range resolveCache.entries {
+		if now.After(r.until) {
+			delete(resolveCache.entries, domain)
+		}
+	}
+	resolveCache.Unlock()
+
+	seen4, seen6 := map[string]bool{}, map[string]bool{}
+	for _, r := range results {
+		for _, ip := range r.v4 {
+			if !seen4[ip] {
+				seen4[ip] = true
+				ipv4 = append(ipv4, ip)
+			}
+		}
+		for _, ip := range r.v6 {
+			if !seen6[ip] {
+				seen6[ip] = true
+				ipv6 = append(ipv6, ip)
+			}
+		}
+	}
+	sort.Strings(ipv4)
+	sort.Strings(ipv6)
+	return ipv4, ipv6
 }
 
 // realAddresses drops answers that point nowhere or at this computer, as a

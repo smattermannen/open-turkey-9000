@@ -79,14 +79,13 @@ Last checked against the code: 2026-11-13.
         one regular expression each (`kc9kMatchesOne` in `match.js`), and the
         request waits for the answer. Needs a lookup table by domain, with
         regular expressions only for entries that really need them.
-      - **Firewall:** one `iptables` rule per blocked IP, each added by its
-        own process, and every outgoing packet walks the whole chain. Needs
-        one set (nftables set or `ipset`) that answers in one step.
-      - **DNS when starting a block:** `ApplyFirewall` looks up every
-        domain's real address one after another (up to 3 s each when a
-        server is slow), so starting a block with thousands of sites can
-        take minutes. Needs lookups in parallel, a cache, and the firewall
-        filled in afterwards instead of holding up `start`.
+      - **Firewall:** the chain is now loaded in one `iptables-restore` run
+        (one process for any number of addresses), but every outgoing
+        packet still walks one rule per IP. Needs one set (nftables set or
+        `ipset`) that answers in one step.
+      - **DNS when starting a block:** lookups now run 16 at a time and are
+        cached for 30 minutes (`resolveAll`); the firewall is still filled
+        in before `start` returns instead of afterwards.
       - **`/etc/hosts`:** one line per domain; how fast Mint's resolver
         reads a huge hosts file: Unchecked.
       A speed test in `ci/` with 100,000 entries. (M)

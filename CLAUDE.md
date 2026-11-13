@@ -224,6 +224,8 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 
 ## Commands
 
+Android companion app: see `android/CLAUDE.md` (it runs this extension in IronFox and serves it `/rules` itself; `rules.safesearch` comes only from there, `kc9kSafeSearch` in `match.js`).
+
 Full usage and examples in `README.md`. Summary:
 `cluster list | show | create [--url --title --text] | rename | delete | add | remove | where | export | import | copy [--into L | --as N] [--exceptions] | save`,
 `list show | create [--exceptions --url --title --text] | rename | delete | add | remove | where | action |

@@ -232,3 +232,41 @@ if (typeof kc9kSocialRedirect === "function") {
     process.exitCode = 1;
   }
 }
+
+// SafeSearch: each engine's strict setting, POST searches moved into the
+// address, engines that can't be made strict blocked, nothing else touched.
+{
+  const cases = [
+    ["https://www.google.com/search?q=x", null, "https://www.google.com/search?q=x&safe=active"],
+    ["https://www.google.co.uk/search?q=x&safe=off", null, "https://www.google.co.uk/search?q=x&safe=active"],
+    ["https://www.google.com/search?q=x&safe=active", null, null],
+    ["https://www.google.com/maps", null, null],
+    ["https://www.bing.com/images/search?q=x", null, "https://www.bing.com/images/search?q=x&adlt=strict"],
+    ["https://duckduckgo.com/", { q: ["x y"] }, "https://safe.duckduckgo.com/?q=x+y&kp=1"],
+    ["https://duckduckgo.com/?q=x", null, "https://safe.duckduckgo.com/?q=x&kp=1"],
+    ["https://safe.duckduckgo.com/?q=x&kp=1", { q: ["x"] }, null],
+    ["https://html.duckduckgo.com/html/", { q: ["x"] }, "https://html.duckduckgo.com/html/?q=x&kp=1"],
+    ["https://noai.duckduckgo.com/?q=x&kp=-2", null, "https://noai.duckduckgo.com/?q=x&kp=1"],
+    ["https://search.brave.com/search?q=x", null, "https://search.brave.com/search?q=x&safesearch=strict"],
+    ["https://search.yahoo.com/search?p=x", null, "https://search.yahoo.com/search?p=x&vm=r"],
+    ["https://search.disroot.org/search", { q: ["x"] }, "https://search.disroot.org/search?q=x&safesearch=2"],
+    ["https://example.com/search?q=x", null, null],
+    ["about:blank", null, null],
+  ];
+  for (const [url, form, want] of cases) {
+    const got = kc9kSafeSearch(url, form);
+    const redirect = got && got.redirect ? got.redirect : null;
+    if (redirect !== want || (got && got.block)) {
+      console.error("FAIL safesearch", url, "got", JSON.stringify(got), "want", want);
+      process.exitCode = 1;
+    }
+  }
+  for (const url of ["https://www.startpage.com/sp/search", "https://www.mojeek.com/search?q=x",
+    "https://www.ecosia.org/search?q=x", "https://yandex.ru/search/?text=x", "https://marginalia-search.com/search"]) {
+    const got = kc9kSafeSearch(url, null);
+    if (!got || !got.block) {
+      console.error("FAIL safesearch should block", url, JSON.stringify(got));
+      process.exitCode = 1;
+    }
+  }
+}

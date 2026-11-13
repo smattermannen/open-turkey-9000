@@ -364,3 +364,71 @@ function kc9kOutcome(matches) {
 function kc9kTakesAway(outcome) {
   return outcome.device || outcome.page !== "";
 }
+
+// SafeSearch ("safesearch" in the rules; KC9K on Android sends it): a
+// search gets its engine's strictest setting, and search engines whose
+// setting can't be forced from the address are blocked. form holds a POST
+// search's fields (webRequest requestBody.formData): IronFox sends its
+// searches as POST, so they are moved into the address, which then carries
+// the setting whether the request stays a POST or not. Returns { block: true },
+// { redirect: address } or null when the address is already right.
+const KC9K_UNSAFE_SEARCH = /^(([a-z0-9-]+\.)*(startpage\.com|ecosia\.org|mojeek\.com|marginalia-search\.com|marginalia\.nu)|(www\.)?yandex\.[a-z]{2,3}(\.[a-z]{2})?|ya\.ru)$/;
+
+function kc9kSafeSearch(rawUrl, form) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch (error) {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname;
+  if (KC9K_UNSAFE_SEARCH.test(host)) {
+    return { block: true };
+  }
+  let setting = null; // [parameter, value]
+  let safeHost = host;
+  if (/^([a-z0-9-]+\.)*google(\.[a-z]{2,3}){1,2}$/.test(host) && path === "/search") {
+    setting = ["safe", "active"];
+  } else if (/^(www\.)?bing\.com$/.test(host) && /^\/((images|videos|news)\/)?search$/.test(path)) {
+    setting = ["adlt", "strict"];
+  } else if (/^([a-z0-9-]+\.)?duckduckgo\.com$/.test(host) && /^\/((html|lite)\/?)?$/.test(path)) {
+    setting = ["kp", "1"];
+    // safe.duckduckgo.com is always strict, cookies or not.
+    if (host === "duckduckgo.com" || host === "www.duckduckgo.com") {
+      safeHost = "safe.duckduckgo.com";
+    }
+  } else if (host === "search.brave.com" && /^\/(search|images|videos|news)$/.test(path)) {
+    setting = ["safesearch", "strict"];
+  } else if (/^([a-z0-9-]+\.)*search\.yahoo\.com$/.test(host) && /^\/(search|.*\/search)$/.test(path)) {
+    setting = ["vm", "r"];
+  } else if ((host === "search.disroot.org" || /^searx(ng)?\./.test(host)) && path === "/search") {
+    setting = ["safesearch", "2"]; // SearXNG
+  }
+  if (!setting) {
+    return null;
+  }
+  const fields = form && typeof form === "object" ? Object.keys(form) : [];
+  // Only fields not in the address yet count as a change: a redirected
+  // POST that stays a POST comes back with the same form.
+  let changed = safeHost !== host;
+  for (const name of fields) {
+    if (!url.searchParams.has(name)) {
+      for (const value of [].concat(form[name])) {
+        url.searchParams.append(name, String(value));
+        changed = true;
+      }
+    }
+  }
+  if (url.searchParams.get(setting[0]) !== setting[1]) {
+    url.searchParams.set(setting[0], setting[1]);
+    changed = true;
+  }
+  if (!changed) {
+    return null;
+  }
+  return { redirect: url.protocol + "//" + safeHost + (url.port ? ":" + url.port : "") + url.pathname + url.search };
+}

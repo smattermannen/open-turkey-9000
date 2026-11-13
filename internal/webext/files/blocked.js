@@ -13,6 +13,7 @@ const notes = {
   keyword: "Its title or text contains words one of your blocks looks for.",
   mirror: "It shows a site one of your blocks stops.",
   playlist: "Only the videos of the playlists you let through are open.",
+  safesearch: "SafeSearch is enforced, and Killer Chicken 9000 can't force it on this search engine. Use DuckDuckGo, Google, Bing, Brave Search, Yahoo or SearXNG.",
 };
 if (notes[reason]) {
   const note = document.getElementById("note");

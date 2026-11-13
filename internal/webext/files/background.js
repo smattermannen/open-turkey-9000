@@ -10,6 +10,26 @@ const POLL_MS = 3000;
 // handles greyscale, and reports what the title and text decide.
 let lists = [];
 let webOnly = false;
+let safeSearch = false;
+
+// Firefox for Android (IronFox) has no windows or idle API: there the tab in
+// front is the active one, and the phone counts as in use.
+async function frontTab() {
+  if (browser.windows) {
+    const win = await browser.windows.getLastFocused();
+    if (!win || !win.focused) {
+      return undefined;
+    }
+    const [tab] = await browser.tabs.query({ active: true, windowId: win.id });
+    return tab;
+  }
+  const [tab] = await browser.tabs.query({ active: true });
+  return tab;
+}
+
+async function userActive() {
+  return !browser.idle || (await browser.idle.queryState(60)) === "active";
+}
 
 function addressOutcome(url) {
   return kc9kOutcome(kc9kListMatches(lists, { url }));
@@ -211,6 +231,13 @@ async function closeEverything(tabId, url, outcome, via) {
     await browser.tabs.remove(tabId);
   } catch (error) {
     // Already gone.
+  }
+  if (!browser.windows) {
+    // Android: closing every tab is closing the browser.
+    for (const tab of await browser.tabs.query({})) {
+      browser.tabs.remove(tab.id).catch(() => {});
+    }
+    return;
   }
   const windows = await browser.windows.getAll();
   for (const win of windows) {
@@ -429,6 +456,20 @@ browser.webRequest.onBeforeRequest.addListener(
         return { redirectUrl: elsewhere };
       }
     }
+    if (safeSearch && (details.type === "main_frame" || details.type === "sub_frame")) {
+      const form = details.method === "POST" && details.requestBody ? details.requestBody.formData : null;
+      const action = kc9kSafeSearch(details.url, form);
+      if (action && action.block) {
+        return blockedPage(details.url, "safesearch");
+      }
+      if (action && action.redirect) {
+        const also = webOnly ? webOnlyAction(action.redirect) : null;
+        if (also && also.block) {
+          return blockedPage(details.url);
+        }
+        return { redirectUrl: also && also.redirect ? also.redirect : action.redirect };
+      }
+    }
     if (webOnly && /^https?:/.test(details.url)) {
       const action = webOnlyAction(details.url);
       if (action && action.block) {
@@ -441,7 +482,21 @@ browser.webRequest.onBeforeRequest.addListener(
     return {};
   },
   { urls: ["<all_urls>"], types: ["main_frame", "sub_frame", "image", "imageset", "media"] },
-  ["blocking"]
+  ["blocking", "requestBody"]
+);
+
+// SafeSearch on YouTube: the header Google honours for Restricted Mode.
+browser.webRequest.onBeforeSendHeaders.addListener(
+  (details) => {
+    if (!safeSearch) {
+      return {};
+    }
+    const headers = (details.requestHeaders || []).filter((h) => h.name.toLowerCase() !== "youtube-restrict");
+    headers.push({ name: "YouTube-Restrict", value: "Strict" });
+    return { requestHeaders: headers };
+  },
+  { urls: ["*://youtube.com/*", "*://*.youtube.com/*", "*://*.youtube-nocookie.com/*", "*://youtubei.googleapis.com/*"] },
+  ["blocking", "requestHeaders"]
 );
 
 // stillBlocked tells the block page whether its site is still blocked, so it
@@ -449,6 +504,12 @@ browser.webRequest.onBeforeRequest.addListener(
 function stillBlocked(url) {
   if (isBlocked(url) || kc9kPlaylistBlocks(social, url)) {
     return true;
+  }
+  if (safeSearch) {
+    const action = kc9kSafeSearch(url, null);
+    if (action && action.block) {
+      return true;
+    }
   }
   if (webOnly && /^https?:/i.test(url)) {
     const action = webOnlyAction(url);
@@ -507,6 +568,7 @@ function apply(rules) {
   lists = kc9kCompileLists(rules.lists);
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
+  safeSearch = Boolean(rules.safesearch);
   if (recording !== Boolean(rules.recording)) {
     recording = Boolean(rules.recording);
     visited.clear();
@@ -538,7 +600,22 @@ async function poll() {
   try {
     // The header marks this as the extension checking in (see the daemon's
     // ExtensionHeader); web pages can't send it.
-    const response = await fetch(RULES_URL, { cache: "no-store", headers: { "X-KC9K-Extension": "1" } });
+    // Version and private-tab access tell KC9K on Android that this copy is
+    // current and also sees private tabs.
+    let privateTabs = "0";
+    try {
+      privateTabs = (await browser.extension.isAllowedIncognitoAccess()) ? "1" : "0";
+    } catch (error) {
+      // Not known here.
+    }
+    const response = await fetch(RULES_URL, {
+      cache: "no-store",
+      headers: {
+        "X-KC9K-Extension": "1",
+        "X-KC9K-Version": browser.runtime.getManifest().version,
+        "X-KC9K-Private": privateTabs,
+      },
+    });
     if (response.ok) {
       const rules = await response.json();
       apply(rules);
@@ -622,8 +699,7 @@ async function popupState(message) {
   if (message && typeof message.url === "string") {
     tab = { url: message.url, title: typeof message.title === "string" ? message.title : "" };
   } else {
-    const win = await browser.windows.getLastFocused();
-    [tab] = await browser.tabs.query({ active: true, windowId: win.id });
+    tab = await frontTab();
   }
   const url = tab && tab.url && /^https?:/i.test(tab.url) ? tab.url : "";
   let site = "";
@@ -677,14 +753,10 @@ let usage = {};
 
 async function sampleUsage() {
   try {
-    if ((await browser.idle.queryState(60)) !== "active") {
+    if (!(await userActive())) {
       return;
     }
-    const win = await browser.windows.getLastFocused();
-    if (!win || !win.focused) {
-      return;
-    }
-    const [tab] = await browser.tabs.query({ active: true, windowId: win.id });
+    const tab = await frontTab();
     if (!tab || !tab.url || !/^https?:/i.test(tab.url)) {
       return;
     }
@@ -731,13 +803,10 @@ async function sampleQuota() {
   }
   const tabs = new Map();
   try {
-    if ((await browser.idle.queryState(60)) === "active") {
-      const win = await browser.windows.getLastFocused();
-      if (win && win.focused) {
-        const [tab] = await browser.tabs.query({ active: true, windowId: win.id });
-        if (tab) {
-          tabs.set(tab.id, tab);
-        }
+    if (await userActive()) {
+      const tab = await frontTab();
+      if (tab) {
+        tabs.set(tab.id, tab);
       }
     }
     for (const tab of await browser.tabs.query({ audible: true })) {

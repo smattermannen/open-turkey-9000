@@ -23,9 +23,19 @@ if (typeof globalThis.URL === "undefined") {
       const decode = (v) => decodeURIComponent(v.replace(/\+/g, " "));
       return i < 0 ? [decode(pair), ""] : [decode(pair.slice(0, i)), decode(pair.slice(i + 1))];
     });
-    this.searchParams = { [Symbol.iterator]: () => pairs[Symbol.iterator](), get: (k) => { const f = pairs.find((p) => p[0] === k); return f ? f[1] : null; } };
+    const self = this;
+    const encode = (v) => encodeURIComponent(v).replace(/%20/g, "+");
+    const sync = () => { self.search = pairs.length ? "?" + pairs.map((p) => encode(p[0]) + "=" + encode(p[1])).join("&") : ""; };
+    this.searchParams = {
+      [Symbol.iterator]: () => pairs[Symbol.iterator](),
+      get: (k) => { const f = pairs.find((p) => p[0] === k); return f ? f[1] : null; },
+      has: (k) => pairs.some((p) => p[0] === k),
+      append: (k, v) => { pairs.push([k, String(v)]); sync(); },
+      set: (k, v) => { const f = pairs.find((p) => p[0] === k); if (f) { f[1] = String(v); } else { pairs.push([k, String(v)]); } sync(); },
+    };
     this.protocol = m[1].toLowerCase() + ":";
     this.host = m[2];
+    this.port = (/:(\d+)$/.exec(m[2]) || [])[1] || "";
   };
 }
 const test = read("match_test.js").split("\n").filter((line) => !/require\(|vm\.runInThisContext/.test(line)).join("\n");

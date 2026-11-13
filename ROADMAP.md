@@ -93,10 +93,10 @@ Last checked against the code: 2026-11-13.
         files path entries under their domain; only wildcard entries are
         tried one by one. `ci/match_test.js` checks it against the regular
         expressions and times 100,000 entries.
-      - **Firewall:** the chain is now loaded in one `iptables-restore` run
-        (one process for any number of addresses), but every outgoing
-        packet still walks one rule per IP. Needs one set (nftables set or
-        `ipset`) that answers in one step.
+      - **Firewall:** done. With `nft` (Mint has it), the addresses live in
+        sets of our own table `inet kc9k`, loaded in one atomic `nft -f`
+        and looked up in one step per packet; a drop there is final, so no
+        rule has to come first. The iptables chain stays as the fallback.
       - **DNS when starting a block:** lookups now run 16 at a time and are
         cached for 30 minutes (`resolveAll`); the firewall is still filled
         in before `start` returns instead of afterwards.

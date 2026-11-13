@@ -91,6 +91,19 @@ func ApplyFirewall(domains []string) error {
 	// Resolve every domain up front (bypassing /etc/hosts) into v4/v6 sets.
 	ipv4, ipv6 := resolveAll(valid)
 
+	// nftables first: one set answers for any number of addresses, and a
+	// drop in our own table is final whatever other tables accept. The
+	// iptables chain below is the fallback where nft is missing.
+	if nftAvailable() {
+		if err := applyNft(ipv4, ipv6); err == nil {
+			removeFamily("iptables")
+			if ip6tablesAvailable() {
+				removeFamily("ip6tables")
+			}
+			return nil
+		}
+	}
+
 	if err := applyFamily("iptables", ipv4, dohServersIPv4); err != nil {
 		return err
 	}
@@ -196,6 +209,7 @@ func restoreFamily(cmd string, ips, dohServers []string) error {
 // The function is idempotent and swallows errors (a missing chain is the
 // desired end state).
 func RemoveFirewall() error {
+	removeNft()
 	removeFamily("iptables")
 	if ip6tablesAvailable() {
 		removeFamily("ip6tables")
@@ -261,6 +275,9 @@ func firstRuleJumps(listing, hook string) bool {
 // are always present whenever the firewall is applied. (IPv6 is best-effort
 // and not required for the layer to count as active.)
 func IsFirewallApplied() bool {
+	if nftApplied() {
+		return true
+	}
 	output, err := runFWOutput("iptables", "-L", chainName, "-n")
 	if err != nil {
 		return false
@@ -324,4 +341,83 @@ func runFWOutput(cmd string, args ...string) (string, error) {
 		return "", fmt.Errorf("failed to run %s %s: %s (error: %w)", cmd, strings.Join(args, " "), strings.TrimSpace(string(output)), err)
 	}
 	return string(output), nil
+}
+
+// =============================================================================
+// nftables
+// =============================================================================
+
+// nftTable is our own table. Its base chains hook output (this computer's
+// traffic) and forward (containers and virtual machines); a drop there ends
+// a packet whatever any other table or chain accepts, so nothing has to come
+// "first".
+const nftTable = "kc9k"
+
+// nftAvailable reports whether the nft program is there.
+func nftAvailable() bool {
+	_, err := exec.LookPath("nft")
+	return err == nil
+}
+
+// nftRules is the nft script that replaces our table in one transaction:
+// the blocked addresses and the DoH resolvers in sets, looked up in one step
+// per packet.
+func nftRules(ipv4, ipv6 []string) string {
+	var b strings.Builder
+	// Adding first makes the delete succeed when the table isn't there yet.
+	fmt.Fprintf(&b, "add table inet %s\ndelete table inet %s\n", nftTable, nftTable)
+	fmt.Fprintf(&b, "table inet %s {\n", nftTable)
+	set := func(name, kind string, elems []string) {
+		fmt.Fprintf(&b, "\tset %s {\n\t\ttype %s\n\t\tflags interval\n\t\tauto-merge\n", name, kind)
+		if len(elems) > 0 {
+			fmt.Fprintf(&b, "\t\telements = { %s }\n", strings.Join(elems, ", "))
+		}
+		b.WriteString("\t}\n")
+	}
+	set("blocked4", "ipv4_addr", ipv4)
+	set("blocked6", "ipv6_addr", ipv6)
+	set("doh4", "ipv4_addr", dohServersIPv4)
+	set("doh6", "ipv6_addr", dohServersIPv6)
+	for _, hook := range []string{"output", "forward"} {
+		fmt.Fprintf(&b, "\tchain %s {\n\t\ttype filter hook %s priority filter - 10; policy accept;\n", hook, hook)
+		b.WriteString("\t\tip daddr @blocked4 drop\n\t\tip6 daddr @blocked6 drop\n")
+		b.WriteString("\t\tip daddr @doh4 tcp dport 443 drop\n\t\tip6 daddr @doh6 tcp dport 443 drop\n\t}\n")
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+// applyNft loads our table, all of it at once (nft -f is atomic).
+func applyNft(ipv4, ipv6 []string) error {
+	c := exec.Command("nft", "-f", "-")
+	c.Stdin = strings.NewReader(nftRules(ipv4, ipv6))
+	var stderr bytes.Buffer
+	c.Stderr = &stderr
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("nft: %s (%w)", strings.TrimSpace(stderr.String()), err)
+	}
+	return nil
+}
+
+// removeNft deletes our table if it is there.
+func removeNft() {
+	if nftAvailable() {
+		_ = exec.Command("nft", "delete", "table", "inet", nftTable).Run()
+	}
+}
+
+// nftApplied reports whether our table is there with both of its chains
+// and their rules (listed by chain, so the sets' many addresses aren't
+// printed every cycle).
+func nftApplied() bool {
+	if !nftAvailable() {
+		return false
+	}
+	for _, hook := range []string{"output", "forward"} {
+		out, err := exec.Command("nft", "list", "chain", "inet", nftTable, hook).Output()
+		if err != nil || !strings.Contains(string(out), "@blocked4 drop") || !strings.Contains(string(out), "@doh4") {
+			return false
+		}
+	}
+	return true
 }

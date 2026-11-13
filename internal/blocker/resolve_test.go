@@ -201,3 +201,19 @@ func TestRestoreRules(t *testing.T) {
 		t.Errorf("restoreRules =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestNftRules(t *testing.T) {
+	got := nftRules([]string{"192.0.2.1", "192.0.2.2"}, nil)
+	for _, want := range []string{
+		"add table inet kc9k\ndelete table inet kc9k\ntable inet kc9k {",
+		"set blocked4 {\n\t\ttype ipv4_addr\n\t\tflags interval\n\t\tauto-merge\n\t\telements = { 192.0.2.1, 192.0.2.2 }\n\t}",
+		"set blocked6 {\n\t\ttype ipv6_addr\n\t\tflags interval\n\t\tauto-merge\n\t}",
+		"chain output {\n\t\ttype filter hook output priority filter - 10; policy accept;\n\t\tip daddr @blocked4 drop",
+		"chain forward {",
+		"ip daddr @doh4 tcp dport 443 drop",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("nftRules lacks %q:\n%s", want, got)
+		}
+	}
+}

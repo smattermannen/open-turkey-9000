@@ -76,8 +76,10 @@ build and is **used for real**. On it:
   `app-[<launcher>-]<ID>-<n>.scope`/`@….service` whose ID is or ends in `.<name>`); every
   descendant of a matched process is killed too, except under shells/session processes. Domain
   validation (`validate.go`) guards against `/etc/hosts` injection.
-  The firewall's jump comes first in both OUTPUT and FORWARD (containers/VMs)
-  and the drift check re-tops it. The extension guard (`extguard.go`) knows
+  The firewall is an nftables table `inet kc9k` (sets of addresses, base
+  chains on output and forward, loaded atomically with `nft -f`); without
+  nft, an iptables chain whose jump comes first in OUTPUT and FORWARD and
+  which the drift check re-tops. The extension guard (`extguard.go`) knows
   browsers by name, or by engine (`browserdetect.go`: libxul.so or Chromium's
   icudtl.dat/V8 snapshot mapped by a user-owned executable, minus Electron).
   Strict mode also closes docker/lxd/incus/libvirt sockets (`sockets.go`).

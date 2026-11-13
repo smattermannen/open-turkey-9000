@@ -213,6 +213,7 @@ shortened or removed this way.`,
 		if err := database.ActivateBlock(blockName, useLock, chars, lockedUntil, false); err != nil {
 			return err
 		}
+		_ = database.SetSetting(enforce.StoppedInWindowKey(blockName), "")
 		if hasExtras {
 			if err := database.SetLockExtras(blockName, extras); err != nil {
 				return err
@@ -333,6 +334,14 @@ var stopCmd = &cobra.Command{
 
 		if err := database.DeactivateBlock(blockName); err != nil {
 			return err
+		}
+		// Switched off inside its window: the daemon leaves it off until
+		// the window ends (§3.3: the user's switch, R-LOCK-1).
+		if within, err := enforce.ScheduleActiveNow(database, blockName, time.Now()); err == nil && within {
+			if err := database.SetSetting(enforce.StoppedInWindowKey(blockName), "1"); err != nil {
+				return err
+			}
+			fmt.Printf("Its schedule leaves it off until the current window ends.\n")
 		}
 		if err := enforce.ApplyFromDB(database); err != nil {
 			return err
@@ -681,6 +690,9 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 	}
 	if h.extras, err = database.GetLockExtras(name); err != nil {
 		return holdState{}, err
+	}
+	if h.extras.DelayUntil != 0 && trusted >= h.extras.DelayUntil {
+		h.extras.Delay = 0 // the countdown is over; the daemon lifts it next cycle
 	}
 	h.passwordHash = h.extras.PasswordHash
 	if h.extras.Lifted(trusted) {

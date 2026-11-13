@@ -2,8 +2,10 @@ package enforce
 
 import (
 	"testing"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
 // R-BREAK-2: a reward is earned only while the computer is in use.
@@ -55,5 +57,42 @@ func TestDelayLockEndsOnlyTheLock(t *testing.T) {
 	e, _ := d.GetLockExtras("b")
 	if b, _ := d.GetBlock("b"); !b.Active || e.Delay != 0 || e.DelayUntil != 0 {
 		t.Errorf("after the countdown: active %v, delay %d until %d", b.Active, e.Delay, e.DelayUntil)
+	}
+}
+
+// R-LOCK-1: a block without a schedule lock that is switched off during its
+// window stays off until the window ends, then its schedule works again.
+func TestStoppedInWindowStaysOff(t *testing.T) {
+	d := testDB(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	mustAdd(t, d, "b", db.DefaultBlockedList, "reddit.com")
+	monday := time.Date(2026, 11, 9, 10, 0, 0, 0, time.Local)
+	if err := d.AddSchedule("b", schedule.Window{Days: 1 << uint(time.Monday), Start: 9 * 60, End: 11 * 60}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetSetting(StoppedInWindowKey("b"), "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileSchedulesAt(d, monday, monday.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if active, _ := d.IsBlockActive("b"); active {
+		t.Fatal("the schedule switched a block on that was switched off in its window")
+	}
+	after := monday.Add(2 * time.Hour)
+	if err := reconcileSchedulesAt(d, after, after.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := d.GetSetting(StoppedInWindowKey("b")); v != "" {
+		t.Error("the mark stayed after the window")
+	}
+	next := monday.AddDate(0, 0, 7)
+	if err := reconcileSchedulesAt(d, next, next.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if active, _ := d.IsBlockActive("b"); !active {
+		t.Error("the next window didn't switch the block on")
 	}
 }

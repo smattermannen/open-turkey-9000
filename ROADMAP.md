@@ -68,7 +68,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
       another user account and the guest session are blocked too.
 - [ ] Shutdown mode and the `kc9k.nofreeze` GRUB escape; measure the fast
       relock.
-- [ ] Page words on real sites over a few days (false hits, slow pages); a
+- [ ] Keywords on real sites over a few days (false hits, slow pages); a
       hotkey pressed on the real keyboard.
 - [ ] A page that changes address without loading (YouTube) caught by a url
       list; the Websites tab on a real screen (hidden lists, search box).
@@ -106,7 +106,9 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | App (name, path, script, fingerprint, Flatpak, desktop unit) | Built | `blocker/scripts.go`, `blocker/process.go` |
 | Folder entry | Partial | programs inside it are closed; windows showing it are not |
 | Title entry | Built | X11 only |
-| Page word | Built | |
+| Keyword | Built | |
+| Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
+| Phrase set | Not built | |
 
 ### §3.2 Grouping
 
@@ -184,7 +186,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Look actions | Built | see 0.2 |
 | Close browser, logout, shutdown, monk | Built | |
 | No downloads | Not built | section 2.3 |
-| Threshold, hit count | Built | |
+| Threshold, hit count (keywords) | Built | per action |
+| Threshold (phrase sets) | Not built | |
 | Rate | Not built | |
 | Ad trigger | Not built | section 2.2 |
 

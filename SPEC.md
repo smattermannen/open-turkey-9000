@@ -153,18 +153,21 @@ Command and code names are in `backticks`.
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Target** | Anything a block acts on: site, URL entry, search entry, app, folder, title entry, page word. | — |
+| **Target** | Anything a block acts on: site, URL entry, search entry, app, folder, title entry, keyword, phrase. | — |
 | **Site** | A domain with all its subdomains (`reddit.com`, written without `www.`), or a wildcard domain (`*.xxx`). | A URL entry. |
 | **URL entry** | A domain plus path or query (`reddit.com/r/funny`, `youtube.com/@channel`). | A site. |
-| **Wildcard** | In URL entries, `*` is any text (`google.com/*q=*unicorn*`). In word lists, a plain word matches whole words and `*` matches inside words. | — |
-| **Word combination** | A page-word entry made of boxes of words that must occur together in a run of words (`(car, lambo*) (big, small):2`). Counts as one entry. | — |
-| **Search entry** | A word that blocks searches containing it, on any search engine. | A page word. |
+| **Wildcard** | In URL entries, `*` is any text (`google.com/*q=*unicorn*`). In keywords and phrases, a plain word matches whole words and `*` matches inside a word (`*gorilla` matches "silverbackgorilla", `porn*` matches "pornstar"). | — |
+| **Search entry** | A word that blocks searches containing it, on any search engine. | A keyword. |
 | **Whole internet** | The target `*.*`. | — |
 | **File URL** | A `file://` entry. Local files are allowed by the default exception `file://*`. | — |
 | **App** | A program, matched by name, path, script, file fingerprint (`sha256:…`), Flatpak ID or desktop unit. Everything it started is closed with it. | A window. |
 | **Folder entry** | A directory: every program run from inside it is a blocked app, and windows showing it are closed. | — |
-| **Title entry** | A word or phrase matched against window titles. The window is asked to close, then its program is killed. In a browser only the matching tab is blocked, never the browser. | A page word. |
-| **Page word** | A word or phrase matched against the rendered, visible text of a page. | A title entry. |
+| **Title entry** | A word or phrase matched against window titles. The window is asked to close, then its program is killed. In a browser only the matching tab is blocked, never the browser. | A keyword. |
+| **Keyword** | A word or several words (one **term**) matched on its own, in a list that looks at the page title or the rendered, visible text of a page. | A phrase, a title entry. |
+| **Phrase** | Terms from two or more **word sets** that occur together (formerly *word combination*). Rules R-PHRASE-1 to 8. Example: `[eat, nice] [hello, grandpa]` matches "Let's eat grandpa", not "Let's eat, grandpa!". | A keyword. |
+| **Term** | One entry in a word set: a word or several words (`long cat`). | — |
+| **Word set** | The terms one place in a phrase may be filled with. *Necessary* (a match needs a term from it) or *optional*. A phrase has at least two necessary word sets. | — |
+| **Bridge** | A term written with a dash, `big-` or `-gorilla`: between `big-` and the next set's `-gorilla`, any words of the same sentence may be skipped. A term with both, `-strong-`, is a middle link. | A wildcard (`*`). |
 
 ### 3.2 Grouping
 
@@ -173,7 +176,8 @@ Command and code names are in `backticks`.
 | **Block** | A named set of rules: lists, apps, folders, titles, schedule, break, autostart, affected users. A block does nothing by itself; it acts only while **active**. | A lock. |
 | **List** | A named set of entries inside one block, with a **scope** and a **kind**. | A cluster. |
 | **Entry** | One item in a list: a domain, a pattern with `*`, words, or a word combination. | — |
-| **Scope** | Where a list looks: *url*, *title*, *text* (one or several). `kc9k list where`. | — |
+| **Scope** | Where a list or phrase set looks: *url*, *title*, *text* (one or several). `kc9k list where`. | — |
+| **Phrase set** | A named set of phrases inside one block, with a scope and its own actions, like a blacklist. A block can have any number. There are no phrase exceptions. | A list. |
 | **Blacklist** | List kind: matches get the list's actions. *CT: Websites tab.* | — |
 | **Exception list** | List kind: matches are spared from the blacklists **of the same block only**. *CT: Website Exceptions.* | An allowlist block. |
 | **Allowlist block** | A block whose blacklist is `*.*`, so that only its exceptions are reachable. | — |
@@ -183,7 +187,7 @@ Command and code names are in `backticks`.
 | **Template** | A ready-made block definition to create a block from. | A category. |
 | **Affected users** | The local user accounts a block applies to (default: all). | — |
 | **Social preset** | A switch that keeps a site but takes a part of it away (YouTube without Shorts, Instagram messages only, …). Also: an allowed YouTube playlist. | A list. |
-| **Test mode** | A block's title and text lists report what they would match instead of acting. | — |
+| **Test mode** | A block's title and text lists and its phrase sets report what they would match instead of acting. | — |
 
 ### 3.3 Block states
 
@@ -280,9 +284,9 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
 | **Look actions** | Greyscale, no images, no video, mute, declutter, dark: they change a page, they don't block it. |
 | **No downloads** | Action: downloads started from matching pages are cancelled. |
-| **Threshold** | For page words: how many distinct entries must match. |
-| **Hit count** | For page words: how many matches in total. |
-| **Rate** | For page words: matches ÷ rendered words, as a percentage. |
+| **Threshold** | Set per action. For keywords: how many different keywords must match. For a phrase set: how many different phrases must match (default 1). |
+| **Hit count** | Set per action, for keywords only: how many keyword matches in total, repeats included. Phrase sets have no hit count. |
+| **Rate** | Set per action, for keywords: keyword matches ÷ rendered words, as a percentage. |
 | **Ad trigger** | A fourth scope beside url, title and text: the ad networks a page loads, named by industry (gambling, adult, …). |
 | **Page score** | *After publishing:* a score for what a page delivers, from its words, ads and layout; lists act on a score above a threshold. |
 
@@ -342,6 +346,7 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 | nepsis, bypass detection (in prose) | bypass prevention | `nepsis` is only the command name |
 | rule (for a block) | block, list or entry | `rules` is only the extension's data feed |
 | blocklist | blacklist | |
+| word combination, page word | phrase, keyword | renamed 2026-11-13 |
 | whitelist (for exceptions) | exception list | an **allowlist block** is something else |
 | profile (for a block) | block, template | |
 | unblock | disable, unlock, pause, weaken | each means something different |
@@ -378,6 +383,10 @@ delete (refused while locked) · set affected users · export / import all block
 - **Export list** to `.txt`.
 - **Lists**: create, rename, delete, set scope, actions, threshold, hit count,
   rate, test mode.
+- **Phrase sets**: create, rename, delete, set scope, actions, threshold,
+  test mode, import and export. In each, "+ Create new phrase"; in each
+  phrase, its word sets, each ticked necessary or optional, and the phrase
+  length.
 - **Apps**: add program, add folder, add title entry.
 - **Social presets** and allowed playlists.
 
@@ -494,7 +503,15 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 - **R-LIST-1** Exceptions spare pages only from their own block's blacklists.
 - **R-LIST-2** Clusters and categories are never enforced.
 - **R-LIST-3** Every new block has the exception `file://*`.
-- **R-LIST-4** Page words are matched against rendered, visible text only.
+- **R-LIST-4** Keywords and phrases are matched against rendered, visible text only (or the title or URL, when ticked).
+- **R-PHRASE-1** A phrase has at least two word sets, both necessary. Further word sets are each necessary or optional.
+- **R-PHRASE-2** A match takes one term from each necessary word set, plus terms from optional sets until it reaches the phrase's **length**. The length is at least the number of necessary sets (its default) and at most the number of sets.
+- **R-PHRASE-3** One word set gives at most one term to a match: with `[long cat, neko] [running, sitting]`, "long cat running" matches, "long cat neko running" doesn't count "neko".
+- **R-PHRASE-4** The terms may come in any order, and must follow each other directly, separated only by blank space. Punctuation between them breaks the match.
+- **R-PHRASE-5** In the URL, every separator (`-` `_` `/` `.` `?` `=` `&` `+`) counts as blank space.
+- **R-PHRASE-6** A bridge skips words between two terms: `[big-, strong] [-gorilla, cat]` matches "big and long gorilla". The skipped part must stay in one sentence (no `.` `!` `?`), and the order is fixed: `big-` before `-gorilla`.
+- **R-PHRASE-7** A bridge needs both ends: `-gorilla` matches only after a `term-` of another set. `[-gorilla, cat] [jumping, river]` doesn't match "jumping gigantic gorilla". A middle link (`-strong-`) needs a phrase with at least three word sets.
+- **R-PHRASE-8** Each action of a phrase set has a threshold: how many different phrases of the set must match (default 1).
 - **R-TITLE-1** A title match in a browser blocks the tab, never the whole browser.
 
 **Monk mode**
@@ -549,6 +566,11 @@ Made with the owner. Newest last.
   strict mode can be turned off. With it off, the user decides whether
   strict mode gets a lock of its own. The setting doesn't touch blocks,
   and turning it off is itself refused while a block is active.
+- 2026-11-13: Word combinations are renamed phrases and leave ordinary
+  lists; blocks get phrase sets, each with its own actions (R-PHRASE-1 to
+  8). Thresholds are per action; keyword lists also have hits and rate,
+  phrase sets have neither hits nor phrase exceptions. Bridges are written
+  with a dash; `*` keeps matching inside a word.
 
 ## 7. Open decisions
 

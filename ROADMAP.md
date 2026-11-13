@@ -45,8 +45,6 @@ Last checked against the code: 2026-11-13.
         lock option, is not built;
       - uninstalling is refused in schedule windows and for allow windows,
         not only while something is locked (R-LOCK-9). (L)
-- [ ] **Bypass prevention warnings** (R-WARN-2): a notification only from a
-      `warning` step; it must come at every event and every step. (S)
 - [ ] **Use** (§3.7): input in the last 3 minutes. The code uses 1 minute
       for allowances (`quota`) and 2 minutes for statistics. (S)
 - [ ] **Reward** (R-BREAK-2) is earned while the block is enforced, also
@@ -237,7 +235,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 |---|---|---|
 | Frozen Chicken: lock screen, logout, shutdown, scheduled | Built | a running freeze can't be ended; locks on scheduled freezes: Not built |
 | Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Differs | see 0.1 |
-| Bypass prevention notices at every event and step (R-WARN-2) | Differs | see 0.1 |
+| Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |
 | Monk mode | Differs | see 0.1 |
 | Consequences | Built | `enforce/consequence.go` |

@@ -151,20 +151,26 @@ func TestNepsisLadder(t *testing.T) {
 	addEvents(t, d, db.EventApp, "b", 5)
 	addEvents(t, d, db.EventPage, "other", 5)
 	addEvents(t, d, db.EventPage, "b", 1)
-	if checkScopes(d, now, []string{"b"}) || len(*did) != 0 {
-		t.Fatalf("fired early: %q", *did)
+	// R-WARN-2: the counted event is announced at once, without a step.
+	if checkScopes(d, now, []string{"b"}) || strings.Join(*did, " ") != "notify" {
+		t.Fatalf("one event: %q; want one warning", *did)
+	}
+	// Nothing new: no second warning.
+	if checkScopes(d, now, []string{"b"}) || len(*did) != 1 {
+		t.Fatalf("the same event announced again: %q", *did)
 	}
 	// Step 1: a warning and the tab.
-	addEvents(t, d, db.EventRefused, "b", 5) // asking to loosen never counts
-	if checkScopes(d, now, []string{"b"}) || len(*did) != 0 {
-		t.Fatalf("refused loosening counted: %q", *did)
+	addEvents(t, d, db.EventRefused, "b", 5) // asking to weaken never counts
+	if checkScopes(d, now, []string{"b"}) || len(*did) != 1 {
+		t.Fatalf("refused weakening counted: %q", *did)
 	}
+	*did = nil
 	addEvents(t, d, db.EventTitle, "b", 1)
 	if !checkScopes(d, now.Add(time.Second), []string{"b"}) {
 		t.Fatal("step 1 didn't ask to close the tab")
 	}
 	if got := strings.Join(*did, " "); got != "notify" {
-		t.Fatalf("step 1 did %q", got)
+		t.Fatalf("step 1 did %q; want one notification", got)
 	}
 	// The same events don't count twice; two new ones climb to step 2.
 	if checkScopes(d, now.Add(2*time.Second), []string{"b"}) {

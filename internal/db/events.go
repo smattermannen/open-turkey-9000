@@ -91,7 +91,18 @@ func (d *DB) CountEvents(block string, since int64) (int, error) {
 // CountEventsOf is CountEvents for the given kinds only (none: every kind
 // that counts, which leaves out refused loosening).
 func (d *DB) CountEventsOf(block string, since int64, kinds []string) (int, error) {
-	query, args := "SELECT COUNT(*) FROM events WHERE at >= ?", []any{since}
+	query, args := eventFilter("SELECT COUNT(*) FROM events WHERE at >= ?", block, since, kinds)
+	var n int
+	if err := d.conn.QueryRow(query, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("failed to count events: %w", err)
+	}
+	return n, nil
+}
+
+// eventFilter completes a query over the events that count for block ("":
+// the whole computer, each event once) and kinds since a time.
+func eventFilter(query string, block string, since int64, kinds []string) (string, []any) {
+	args := []any{since}
 	if block != "" {
 		query, args = query+" AND block = ?", append(args, block)
 	} else {
@@ -109,11 +120,18 @@ func (d *DB) CountEventsOf(block string, since int64, kinds []string) (int, erro
 			args = append(args, k)
 		}
 	}
-	var n int
-	if err := d.conn.QueryRow(query, args...).Scan(&n); err != nil {
-		return 0, fmt.Errorf("failed to count events: %w", err)
+	return query, args
+}
+
+// LastEventIDOf returns the id of the newest event CountEventsOf would count
+// for block and kinds (since any time), or 0.
+func (d *DB) LastEventIDOf(block string, kinds []string) (int64, error) {
+	query, args := eventFilter("SELECT COALESCE(MAX(id), 0) FROM events WHERE at >= ?", block, 0, kinds)
+	var id int64
+	if err := d.conn.QueryRow(query, args...).Scan(&id); err != nil {
+		return 0, fmt.Errorf("failed to read events: %w", err)
 	}
-	return n, nil
+	return id, nil
 }
 
 // RecentEvents returns the events since a time, newest first.

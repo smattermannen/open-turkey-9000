@@ -163,6 +163,21 @@ shortened or removed this way.`,
 			lockedUntil = t.Unix()
 		}
 
+		// §3.4: a timer lock over 24 hours is confirmed first.
+		if lockedUntil != 0 && time.Unix(lockedUntil, 0).Sub(now) > 24*time.Hour {
+			if yes, _ := cmd.Flags().GetBool("yes"); !yes {
+				left := time.Unix(lockedUntil, 0).Sub(now).Round(time.Minute)
+				if !isTerminalInput() {
+					return fmt.Errorf("a timer lock of %s is over 24 hours; add --yes to confirm", left)
+				}
+				fmt.Printf("Lock '%s' for %s, until %s? Type yes to confirm: ", blockName, left, time.Unix(lockedUntil, 0).Format("2006-01-02 15:04"))
+				answer, _ := stdinLines.ReadString('\n')
+				if strings.TrimSpace(strings.ToLower(answer)) != "yes" {
+					return fmt.Errorf("not locked")
+				}
+			}
+		}
+
 		database, err := openDB()
 		if err != nil {
 			return err
@@ -719,6 +734,7 @@ func init() {
 	startCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	startCmd.Flags().Bool("restart", false, "Restart lock: keep the block on until the computer restarts")
 	startCmd.Flags().String("delay", "", "Delay lock: unlocking takes this long (1m to 960h)")
+	startCmd.Flags().Bool("yes", false, "Confirm a timer lock over 24 hours")
 	startCmd.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m)")
 	startCmd.Flags().String("for", "", "Timer lock: keep the block un-removable for this duration (e.g. 2h, 90m)")
 	startCmd.Flags().String("until", "", "Timer lock: keep the block un-removable until this clock time (HH:MM)")

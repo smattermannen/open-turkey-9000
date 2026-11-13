@@ -260,3 +260,23 @@ func TestRelockOption(t *testing.T) {
 		t.Errorf("stop after the re-lock time: %v; want refused", err)
 	}
 }
+
+// §3.4: a timer lock over 24 hours needs confirming.
+func TestLongTimerLockConfirmed(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	if err := runCLI(t, "start", "b", "--for", "25h"); err == nil || !strings.Contains(err.Error(), "--yes") {
+		t.Errorf("a 25 h timer lock without --yes: %v", err)
+	}
+	if active, _ := d.IsBlockActive("b"); active {
+		t.Fatal("the block started anyway")
+	}
+	mustRun(t, "start", "b", "--for", "25h", "--yes")
+	// Extending it to beyond 24 hours is confirmed too.
+	if err := runCLI(t, "start", "b", "--for", "26h"); err == nil {
+		t.Error("extending to 26 h without --yes was accepted")
+	}
+	mustRun(t, "start", "b", "--for", "26h", "--yes")
+}

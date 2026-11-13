@@ -2657,7 +2657,7 @@ class Window(Gtk.ApplicationWindow):
 
         args = ["start", block["name"]]
         if lock_minutes:
-            args += ["--for", f"{lock_minutes}m"]
+            args += ["--for", f"{lock_minutes}m", "--yes"]  # confirmed below
         if use_typing:
             args += lock_args
         if use_restart:

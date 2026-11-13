@@ -187,7 +187,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Active / inactive (`start` / `stop`) | Built | the code calls these active and inactive too, but also uses "active" for enforcing |
 | Enabled / disabled, lifted | Partial | enforcing is tracked; the words aren't used |
 | Continuous / scheduled types | Not built | schedules start and stop blocks |
-| Locked | Differs | the code also holds unlocked blocks; see 0.1 |
+| Locked | Built | only locks hold a block (the schedule lock included) |
 | Rename, duplicate | Built | that a duplicate starts disabled: Unchecked |
 | `kc9k toggle` | Not built | |
 
@@ -195,17 +195,17 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Timer lock (`--for`, `--until`) | Differs | ends the block; counts only time switched on; see 0.1. Confirmation over 24 h: Unchecked |
+| Timer lock (`--for`, `--until`) | Built | follows trusted time; over 24 h asks to confirm (`--yes`); only a schedule ends a block it started |
 | Text lock | Built | random characters, random words (`--lock-words`) or custom text (`--lock-text`), 1–5000 |
 | Range lock | Not built | |
-| Delay lock | Differs | `start --delay`, 1 min to 40 days, counted from `stop` |
+| Delay lock | Built | `start --delay`, 1 min to 40 days, counted from `unlock` |
 | Schedule lock | Built | `kc9k schedule lock B on --lead D`, Schedule tab |
-| Re-lock | Not built | |
+| Re-lock | Partial | text and password locks of blocks (`start --relock`); setting locks: Not built |
 | Restart lock | Built | |
 | Password lock | Built | |
 | Layered sequential locks | Partial | locks stack, but `unlock` checks them all at once in a fixed order (`cli/control.go`) |
-| Trusted time | Differs | counts only time the computer is on; see 0.1 |
-| While any block or setting is locked (R-LOCK-9) | Partial | uninstalling is refused (also without a lock, see 0.1); extension and protection settings: Unchecked |
+| Trusted time | Built | the real clock; with `kc9k tamper clock` on, clock changes are ignored while a timer lock runs |
+| While any block or setting is locked (R-LOCK-9) | Partial | uninstalling is refused only then; tamper protection can't be turned off; the extension and other protection settings: Unchecked |
 
 ### §3.6–3.7 Time, breaks and use
 
@@ -277,7 +277,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | DNS server setting | Built | `kc9k dns`, Settings > DNS |
 | Tamper settings (§4.10) | Partial | `kc9k tamper clock` (block time and date changes); the hardware clock and internet time checks: Not built |
 | Hotkeys | Built | Cinnamon tried; GNOME see 0.2 |
-| Project export / import | Differs | see 0.1 |
+| Project export / import | Partial | backup and share; see 0.1 |
 | `.deb` package | Not built | |
 | Circadian rhythm | Not built | section 2.1 |
 

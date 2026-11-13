@@ -11,6 +11,7 @@ import datetime
 import json
 import math
 import os
+import re
 import shlex
 import subprocess
 import threading
@@ -506,6 +507,160 @@ class AppPicker(Gtk.Dialog):
         return [row[3] for row in self.store if row[0]]
 
 
+COMBO_GROUP = re.compile(r"\(([^()]*)\)(?:\s*:\s*(\d+))?")
+MAX_BOXES = 9
+
+
+def parse_combination(text):
+    """A word combination's boxes, [(terms, min)], or None when text isn't
+    one. The same rules as kc9kCombination in the extension's match.js."""
+    value = text.strip()
+    if "(" not in value and ")" not in value:
+        return None
+    boxes = []
+
+    def bare(part):
+        term = part.strip()
+        if not term:
+            return True
+        if any(c in term for c in ",:()") or not term.replace("*", "").strip():
+            return False
+        boxes.append(([term], 1))
+        return True
+
+    last = 0
+    for m in COMBO_GROUP.finditer(value):
+        if not bare(value[last:m.start()]):
+            return None
+        terms = [t.strip() for t in m.group(1).split(",")]
+        need = int(m.group(2)) if m.group(2) else 1
+        if not all(t.replace("*", "").strip() for t in terms) or not 1 <= need <= MAX_BOXES:
+            return None
+        boxes.append((terms, need))
+        last = m.end()
+    rest = value[last:]
+    if "(" in rest or ")" in rest or not bare(rest):
+        return None
+    if sum(need for _t, need in boxes) < 2 or len(boxes) > MAX_BOXES:
+        return None
+    return boxes
+
+
+def combination_text(boxes):
+    """Writes boxes as one list entry: "(car, lambo) (big, small, nice):2"."""
+    parts = []
+    for terms, need in boxes:
+        parts.append(f"({', '.join(terms)})" + (f":{need}" if need > 1 else ""))
+    return " ".join(parts)
+
+
+def split_entries(text):
+    """Splits typed entries at spaces, keeping word combinations whole: a
+    space inside brackets doesn't split, nor one between two boxes, and a
+    box standing alone joins the word before it ("cars (red, big)") or, at
+    the start, the one after it ("(red, big) cars")."""
+    parts, current, depth = [], "", 0
+    for char in text:
+        if char.isspace() and depth == 0:
+            if current:
+                parts.append(current)
+            current = ""
+            continue
+        depth = max(depth + {"(": 1, ")": -1}.get(char, 0), 0)
+        current += char
+    if current:
+        parts.append(current)
+
+    def lone(part):
+        """A single box that isn't a combination on its own."""
+        return re.fullmatch(r"\([^()]*\)(:\d+)?", part) is not None and \
+            parse_combination(part) is None
+
+    out = []
+    for part in parts:
+        if out and ((part.startswith(("(", ":")) and ")" in out[-1]) or lone(out[-1]) or
+                    (lone(part) and "(" not in out[-1])):
+            out[-1] += " " + part
+        else:
+            out.append(part)
+    return out
+
+
+class CombinationDialog(Gtk.Dialog):
+    """Builds a word combination from boxes of words, each with how many of
+    its words a match needs; get_text() gives the list entry."""
+
+    def __init__(self, parent, initial=None, editing=False):
+        super().__init__(title="Word combination", transient_for=parent, modal=True)
+        self.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        self.ok = self.add_button("Save" if editing else "Add", Gtk.ResponseType.OK)
+        self.set_default_size(560, -1)
+        area = self.get_content_area()
+        area.set_spacing(8)
+        area.set_border_width(12)
+        area.pack_start(heading("Word combinations", "medium"), False, False, 0)
+        area.pack_start(dim(
+            "A page counts when words of these boxes follow one another directly, with "
+            "only spaces between, in any order, and each box has at least its minimal count "
+            "of different words there. Separate words with spaces, or with commas when a "
+            "box holds phrases; * matches inside words (lambo*, *niece*)."), False, False, 0)
+        self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        area.pack_start(self.rows, False, False, 0)
+        self.add_box = Gtk.Button(label="+ Add box", halign=Gtk.Align.START)
+        self.add_box.connect("clicked", lambda _b: self.add_row())
+        area.pack_start(self.add_box, False, False, 0)
+        self.preview = dim("", wrap=True)
+        self.preview.set_selectable(True)
+        area.pack_start(self.preview, False, False, 0)
+        for terms, need in initial or [([], 1), ([], 1)]:
+            self.add_row(terms, need)
+        self.changed()
+        self.show_all()
+
+    def add_row(self, terms=(), need=1):
+        row = Gtk.Box(spacing=8)
+        phrases = any(" " in t for t in terms)
+        entry = Gtk.Entry(hexpand=True, placeholder_text="car lambo* sheep",
+                          text=(", " if phrases else " ").join(terms))
+        spin = Gtk.SpinButton.new_with_range(1, MAX_BOXES, 1)
+        spin.set_value(need)
+        remove = Gtk.Button.new_from_icon_name("list-remove-symbolic", Gtk.IconSize.BUTTON)
+        remove.set_tooltip_text("Remove this box")
+        remove.connect("clicked", lambda _b: (self.rows.remove(row), self.changed()))
+        entry.connect("changed", lambda _e: self.changed())
+        spin.connect("value-changed", lambda _s: self.changed())
+        row.pack_start(entry, True, True, 0)
+        row.pack_start(Gtk.Label(label="minimal count:"), False, False, 0)
+        row.pack_start(spin, False, False, 0)
+        row.pack_start(remove, False, False, 0)
+        row.entry, row.spin = entry, spin
+        self.rows.pack_start(row, False, False, 0)
+        row.show_all()
+        self.changed()
+
+    def boxes(self):
+        out = []
+        for row in self.rows.get_children():
+            text = row.entry.get_text().replace("(", " ").replace(")", " ").replace(":", " ")
+            raw = text.split(",") if "," in text else text.split()
+            terms = [" ".join(t.split()) for t in raw if t.replace("*", "").strip()]
+            if terms:
+                out.append((terms, row.spin.get_value_as_int()))
+        return out
+
+    def get_text(self):
+        boxes = self.boxes()
+        text = combination_text(boxes)
+        return text if parse_combination(text) else ""
+
+    def changed(self):
+        text = self.get_text()
+        self.ok.set_sensitive(bool(text))
+        self.add_box.set_sensitive(len(self.rows.get_children()) < MAX_BOXES)
+        self.preview.set_text(f"Entry: {text}" if text else
+                              "Fill in boxes needing two words or more in all.")
+
+
 class EditableList(Gtk.Box):
     """A titled list with an entry for adding and a button for removing.
 
@@ -515,7 +670,8 @@ class EditableList(Gtk.Box):
     comes back when the list is shown for something else (see set_items)."""
 
     def __init__(self, title, placeholder, on_add, on_remove,
-                 on_import=None, on_export=None, help_text="", search=False, hidden=False):
+                 on_import=None, on_export=None, help_text="", search=False, hidden=False,
+                 on_activate=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
         self.hidden, self.owner = hidden, None
@@ -532,6 +688,9 @@ class EditableList(Gtk.Box):
         self.view = Gtk.TreeView(model=self.filtered, headers_visible=False)
         self.view.append_column(
             Gtk.TreeViewColumn("", Gtk.CellRendererText(), text=0))
+        if on_activate:
+            self.view.connect("row-activated", lambda view, path, _c: on_activate(
+                view.get_model()[path][0]))
         scroll = Gtk.ScrolledWindow(min_content_height=120)
         scroll.set_shadow_type(Gtk.ShadowType.IN)
         scroll.add(self.view)
@@ -611,7 +770,7 @@ class EditableList(Gtk.Box):
         self._show_cover()
 
     def _add(self, _widget):
-        values = self.entry.get_text().split()
+        values = split_entries(self.entry.get_text())
         if values:
             self.entry.set_text("")
             self.on_add(values)
@@ -706,8 +865,16 @@ class ListCard(Gtk.Frame):
             "", "reddit.com  *casino*  nsfw", self.add_entries, self.remove_entry,
             lambda: window.import_list(["list", "import", window.selected, self.data["name"]]),
             lambda: window.export_list(["list", "export", window.selected, self.data["name"]]),
-            search=True, hidden=True)
+            search=True, hidden=True, on_activate=self.edit_combination)
         box.pack_start(self.entries, True, True, 0)
+        self.combination_row = Gtk.Box(spacing=8)
+        combine = Gtk.Button(label="Word combination…")
+        combine.connect("clicked", lambda _b: self.edit_combination(None))
+        self.combination_row.pack_start(combine, False, False, 0)
+        self.combination_row.pack_start(dim(
+            "Words that count only next to one another; double-click one to change it.",
+            wrap=True), True, True, 0)
+        box.pack_start(self.combination_row, False, False, 0)
         self.update(data)
 
     def update(self, data):
@@ -739,6 +906,8 @@ class ListCard(Gtk.Frame):
                 self.threshold_row.set_visible("text" in data["where"])
             self.entries.set_items(data["entries"])
             words = "title" in data["where"] or "text" in data["where"]
+            self.combination_row.set_no_show_all(not words)
+            self.combination_row.set_visible(words)
             self.entries.entry.set_placeholder_text(
                 ("reddit.com  *.xxx  nsfw" if words else "reddit.com  *.xxx  *casino*")
                 if "url" in data["where"] else "nsfw  18+  *porn*")
@@ -753,6 +922,27 @@ class ListCard(Gtk.Frame):
 
     def remove_entry(self, value, _num):
         self.window.run(self.command("remove", value), then=self.window.queued_note)
+
+    def edit_combination(self, value):
+        """Adds a word combination, or changes one (value): the new one is
+        added, then the old one removed, which loosens and may be refused or
+        queued like any removal."""
+        old = parse_combination(value) if value else None
+        if value and old is None:
+            return
+        if not ("title" in self.data["where"] or "text" in self.data["where"]):
+            return
+        dialog = CombinationDialog(self.window, old, editing=old is not None)
+        answer = dialog.run()
+        text = dialog.get_text()
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK or not text or parse_combination(text) == old:
+            return
+        if old is None:
+            self.add_entries([text])
+            return
+        self.window.run(self.command("add", text), then=lambda _o: self.window.run(
+            self.command("remove", value), then=self.window.queued_note))
 
     def toggle_place(self, check, name):
         if self.filling or self.window.updating:
@@ -1874,7 +2064,9 @@ class Window(Gtk.ApplicationWindow):
             "Each list ticks where it looks: the address, the page title (the tab title) or the "
             "page text. Addresses take domains, paths and wildcards (*.xxx, *casino*, *.* for "
             "everything); titles and text take words: a plain word counts only on its own "
-            "(porn misses pornhub), * matches inside words (*porn* hits pornhub). A match in "
+            "(porn misses pornhub), * matches inside words (*porn* hits pornhub), and a word "
+            "combination (Word combination…) counts only where words of its boxes follow one "
+            "another directly (cars(red, big) hits \"big red cars\", not \"red toyota\"). A match in "
             "the address or title takes every action; in the text, each action needs its number "
             "of different words. Unticking or removing loosens the block, so it isn't possible "
             "while it is locked.")

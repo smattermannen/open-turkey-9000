@@ -238,3 +238,58 @@ func captureStdout(fn func() error) (string, error) {
 	data, _ := io.ReadAll(r)
 	return string(data), runErr
 }
+
+// Word combinations go in title and text lists, written one way; a
+// malformed one is refused rather than kept as plain text.
+func TestWordCombinations(t *testing.T) {
+	good := map[string]string{
+		"cars(red, big, blue, beautiful)":                  "cars (red, big, blue, beautiful)",
+		"car* (red,big)":                                   "car* (red, big)",
+		"(red, big) cars":                                  "(red, big) cars",
+		" (car, lambo*, ferrari)(red, big beautiful) ":     "(car, lambo*, ferrari) (red, big beautiful)",
+		"(car, lambo, sheep)(big, small, nice) : 2(sport)": "(car, lambo, sheep) (big, small, nice):2 (sport)",
+		"(a, b):2":                 "(a, b):2",
+		"(a):1 (b) (c):3 d":        "(a) (b) (c):3 d",
+		"(very cheap) used (cars)": "(very cheap) used (cars)",
+	}
+	for k, want := range good {
+		if err := checkPageKeywords([]string{k}); err != nil {
+			t.Errorf("%q refused: %v", k, err)
+		}
+		if got := normalizeCombination(k); got != want {
+			t.Errorf("normalizeCombination(%q) = %q, want %q", k, got, want)
+		}
+	}
+	boxes, _ := pageCombination("(car, lambo*) (big, small, nice):2 sport")
+	if want := []comboBox{{Terms: []string{"car", "lambo*"}, Min: 1}, {Terms: []string{"big", "small", "nice"}, Min: 2},
+		{Terms: []string{"sport"}, Min: 1, Bare: true}}; !reflect.DeepEqual(boxes, want) {
+		t.Errorf("boxes = %+v", boxes)
+	}
+	for _, k := range []string{"cars(red, big", "cars)red(", ")(a)(b)", "(a))(b)", "(a) ( (b)", "cars()", "cars(red, )", "(*)(car)", "a, b(c)", "(a)",
+		"(a):2:3", "(a, b):0", "(a):10 (b)", "(a):x", "a:(b)", "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)"} {
+		if err := checkPageKeywords([]string{k}); err == nil {
+			t.Errorf("%q was accepted", k)
+		}
+	}
+	long := "cars(" + strings.Repeat("beautiful, ", 20) + "red)"
+	if err := checkPageKeywords([]string{long}); err != nil {
+		t.Errorf("a %d-character combination was refused: %v", len(long), err)
+	}
+
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add-keyword", "b", "(car,lambo*)(big, small, nice):2", "nsfw")
+	if got := list(t, d, "b", db.DefaultWordsList).Entries; !reflect.DeepEqual(got, []string{"(car, lambo*) (big, small, nice):2", "nsfw"}) {
+		t.Errorf("Page words = %q", got)
+	}
+	if err := runCLI(t, "block", "add-keyword", "b", "cars(red, big"); err == nil {
+		t.Error("an unclosed combination was accepted")
+	}
+	// Removing finds a combination however it is spaced.
+	mustRun(t, "block", "remove-keyword", "b", "(car, lambo*)(big,small,nice):2")
+	if got := list(t, d, "b", db.DefaultWordsList).Entries; !reflect.DeepEqual(got, []string{"nsfw"}) {
+		t.Errorf("after removing: %q", got)
+	}
+	// An address with brackets is still an address.
+	mustRun(t, "list", "add", "b", "Blocked", "en.wikipedia.org/wiki/Mercury_(planet)")
+}

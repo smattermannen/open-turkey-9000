@@ -145,15 +145,167 @@ function kc9kMatches(filter, url) {
 // ignored.
 const KC9K_WORD = "[\\p{L}\\p{N}]";
 
-function kc9kKeywordRegex(keyword) {
-  const value = String(keyword).trim().toLowerCase();
+// kc9kTermSource is the pattern for one word or phrase.
+function kc9kTermSource(term) {
+  const value = String(term).trim().toLowerCase();
   const body = value
     .split("*")
     .map((part) => kc9kEscapeRegex(part).replace(/\s+/g, "\\s+"))
     .join(KC9K_WORD + "*");
   const before = /^[\p{L}\p{N}]/u.test(value) ? "(?<!" + KC9K_WORD + ")" : "";
   const after = /[\p{L}\p{N}]$/u.test(value) ? "(?!" + KC9K_WORD + ")" : "";
-  return new RegExp(before + body + after, "iu");
+  return before + body + after;
+}
+
+// Word combinations: boxes of words side by side, each a list in brackets
+// with how many different words of it are needed (":2"; 1 if left out), or
+// one bare word or phrase: "cars(red, big)", "(red, big) cars",
+// "(car, lambo*) (big, small, nice):2 (sport, *niece*)". A combination counts
+// where a run of words, with only spaces between them and each a word of
+// some box, holds the needed number of different words of every box, in any
+// order: car(cheap) counts in "cheap car" and "car cheap", but not in
+// "cheap reliable car". Each such run counts once toward hits. Keep in step
+// with pageCombination in internal/cli/keywords.go.
+const KC9K_MAX_BOXES = 9;
+const KC9K_MAX_BOX_MIN = 9;
+const KC9K_MAX_COMBINATION_RUN = 64;
+
+// kc9kCombination returns a combination's boxes, [{ terms, min }], or null
+// when the keyword isn't a well-formed one.
+function kc9kCombination(keyword) {
+  const value = String(keyword).trim();
+  if (!/[()]/.test(value)) {
+    return null;
+  }
+  const boxes = [];
+  const bare = (text) => {
+    const term = text.trim();
+    if (term === "") {
+      return true;
+    }
+    if (/[,:()]/.test(term) || !kc9kUsableKeyword(term)) {
+      return false;
+    }
+    boxes.push({ terms: [term], min: 1 });
+    return true;
+  };
+  const group = /\(([^()]*)\)(?:\s*:\s*(\d+))?/g;
+  let last = 0;
+  let m;
+  while ((m = group.exec(value)) !== null) {
+    if (!bare(value.slice(last, m.index))) {
+      return null;
+    }
+    const terms = m[1].split(",").map((term) => term.trim());
+    const min = m[2] === undefined ? 1 : Number(m[2]);
+    if (!terms.every(kc9kUsableKeyword) || min < 1 || min > KC9K_MAX_BOX_MIN) {
+      return null;
+    }
+    boxes.push({ terms, min });
+    last = group.lastIndex;
+  }
+  const rest = value.slice(last);
+  if (/[()]/.test(rest) || !bare(rest)) {
+    return null;
+  }
+  const needed = boxes.reduce((sum, box) => sum + box.min, 0);
+  return needed >= 2 && boxes.length <= KC9K_MAX_BOXES ? boxes : null;
+}
+
+// kc9kCanFill reports whether words, each with the boxes it belongs to, can
+// give every box its minimum when each word goes to one box (a matching of
+// the boxes' places to words).
+function kc9kCanFill(words, boxes) {
+  const places = [];
+  boxes.forEach((box, b) => {
+    for (let i = 0; i < box.min; i++) {
+      places.push(b);
+    }
+  });
+  if (places.length > words.length) {
+    return false;
+  }
+  const owner = new Array(words.length).fill(-1);
+  const take = (p, seen) => {
+    for (let w = 0; w < words.length; w++) {
+      if (!seen[w] && words[w].includes(places[p])) {
+        seen[w] = true;
+        if (owner[w] < 0 || take(owner[w], seen)) {
+          owner[w] = p;
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  return places.every((b, p) => take(p, new Array(words.length).fill(false)));
+}
+
+// kc9kCombinationMatcher counts a combination's runs of words in a text.
+function kc9kCombinationMatcher(boxes) {
+  const terms = [];
+  boxes.forEach((box, b) => box.terms.forEach((term) => terms.push({ term, box: b })));
+  const sources = terms.map((t) => kc9kTermSource(t.term));
+  const whole = sources.map((source) => new RegExp("^(?:" + source + ")$", "iu"));
+  // Longer terms first, so "big beautiful" is read before "big".
+  const order = sources.map((source, i) => i).sort((a, b) => terms[b].term.length - terms[a].term.length);
+  const any = order.map((i) => "(?:" + sources[i] + ")").join("|");
+  const count = (input) => {
+    const text = String(input);
+    const finder = new RegExp(any, "giu");
+    const known = new Map(); // a word -> the boxes it belongs to
+    let found = 0;
+    let run = [];
+    let end = -1;
+    const close = () => {
+      const words = new Map();
+      for (const word of run) {
+        const key = word.toLowerCase().replace(/\s+/g, " ");
+        if (!known.has(key)) {
+          known.set(key, [...new Set(terms.filter((t, i) => whole[i].test(word)).map((t) => t.box))]);
+        }
+        words.set(key, known.get(key));
+      }
+      if (kc9kCanFill([...words.values()], boxes)) {
+        found++;
+      }
+      run = [];
+    };
+    let m;
+    while ((m = finder.exec(text)) !== null) {
+      if (m[0] === "") {
+        finder.lastIndex++;
+        continue;
+      }
+      const joined = run.length > 0 && run.length < KC9K_MAX_COMBINATION_RUN &&
+        /^\s+$/u.test(text.slice(end, m.index));
+      if (run.length > 0 && !joined) {
+        close();
+      }
+      run.push(m[0]);
+      end = m.index + m[0].length;
+    }
+    if (run.length > 0) {
+      close();
+    }
+    return found;
+  };
+  return { count, test: (text) => count(text) > 0 };
+}
+
+// kc9kKeywordMatcher turns a keyword into { test(text), count(text) }:
+// whether it occurs in a text, and how many times.
+function kc9kKeywordMatcher(keyword) {
+  const boxes = kc9kCombination(keyword);
+  if (boxes) {
+    return kc9kCombinationMatcher(boxes);
+  }
+  const source = kc9kTermSource(keyword);
+  const regex = new RegExp(source, "iu");
+  return {
+    test: (text) => regex.test(text),
+    count: (text) => (String(text).match(new RegExp(source, "giu")) || []).length,
+  };
 }
 
 // kc9kUsableKeyword drops entries that are only wildcards or blank.
@@ -161,26 +313,26 @@ function kc9kUsableKeyword(keyword) {
   return String(keyword).replace(/\*/g, "").trim() !== "";
 }
 
-function kc9kKeywordRegexes(keywords) {
-  return (keywords || []).filter(kc9kUsableKeyword).map(kc9kKeywordRegex);
+function kc9kKeywordMatchers(keywords) {
+  return (keywords || []).filter(kc9kUsableKeyword).map(kc9kKeywordMatcher);
 }
 
 // kc9kCountKeywords returns how many of the keywords occur in text; a keyword
 // found many times counts once.
 function kc9kCountKeywords(text, keywords) {
-  return kc9kKeywordRegexes(keywords).filter((regex) => regex.test(text)).length;
+  return kc9kKeywordMatchers(keywords).filter((matcher) => matcher.test(text)).length;
 }
 
-// kc9kTextHits counts, in text, how many of the regexes occur (each once)
+// kc9kTextHits counts, in text, how many of the matchers occur (each once)
 // and how many times they occur in all.
-function kc9kTextHits(regexes, text) {
+function kc9kTextHits(matchers, text) {
   let distinct = 0;
   let total = 0;
-  for (const regex of regexes) {
-    const all = text.match(new RegExp(regex.source, "giu"));
-    if (all) {
+  for (const matcher of matchers) {
+    const n = matcher.count(text);
+    if (n > 0) {
       distinct++;
-      total += all.length;
+      total += n;
     }
   }
   return { distinct, total };
@@ -200,13 +352,13 @@ function kc9kCompileLists(lists) {
       titleRaw: (list.title || []).filter(kc9kUsableKeyword),
       textRaw: (list.text || []).filter(kc9kUsableKeyword),
       url: kc9kFilter({ match: list.url || [] }),
-      title: kc9kKeywordRegexes(list.title),
-      text: kc9kKeywordRegexes(list.text),
+      title: kc9kKeywordMatchers(list.title),
+      text: kc9kKeywordMatchers(list.text),
       actions: list.actions || [],
       except: {
         url: kc9kFilter({ match: except.url || [] }),
-        title: kc9kKeywordRegexes(except.title),
-        text: kc9kKeywordRegexes(except.text),
+        title: kc9kKeywordMatchers(except.title),
+        text: kc9kKeywordMatchers(except.text),
       },
     };
   });
@@ -242,12 +394,12 @@ function kc9kListMatches(compiled, page) {
       continue;
     }
     if ((except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
-      (hasTitle && except.title.some((regex) => regex.test(page.title))) ||
-      (hasText && except.text.some((regex) => regex.test(page.text)))) {
+      (hasTitle && except.title.some((matcher) => matcher.test(page.title))) ||
+      (hasText && except.text.some((matcher) => matcher.test(page.text)))) {
       continue;
     }
     const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
-      (hasTitle && list.title.some((regex) => regex.test(page.title)));
+      (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
     const found = hasText && list.text.length > 0 ? kc9kTextHits(list.text, page.text) : { distinct: 0, total: 0 };
     const actions = list.actions.filter((action) => whole ||
       (found.distinct > 0 && found.distinct >= (action.distinct || 1) && found.total >= (action.hits || 1)));
@@ -275,16 +427,16 @@ function kc9kTestReport(compiled, page) {
     }
     const except = list.except;
     const spared = (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
-      except.title.some((regex) => regex.test(title)) || except.text.some((regex) => regex.test(text));
+      except.title.some((matcher) => matcher.test(title)) || except.text.some((matcher) => matcher.test(text));
     const address = list.url.match.length > 0 && kc9kMatches(list.url, page.url);
     const inTitle = list.titleRaw.filter((entry, i) => list.title[i].test(title));
     const entries = [];
     let total = 0;
     list.textRaw.forEach((entry, i) => {
-      const all = text.match(new RegExp(list.text[i].source, "giu"));
-      if (all) {
-        entries.push({ entry, count: all.length });
-        total += all.length;
+      const n = list.text[i].count(text);
+      if (n > 0) {
+        entries.push({ entry, count: n });
+        total += n;
       }
     });
     entries.sort((a, b) => b.count - a.count);

@@ -48,6 +48,13 @@ Last checked against the code: 2026-11-13.
       (`kc9k strict on`), but it has no lock of its own: it can't be turned
       off while any lock is on (`enforce.AnyLock` in `cli/strict.go`). Only
       its own optional setting lock, and R-WEAK-4, may keep it on. (S)
+- [ ] **DNS** (§4.10): real addresses are asked of Cloudflare, Google and
+      Quad9 (`blocker/resolve.go`); the default must be the network's own DNS
+      server, then Quad9, and the user can choose. (S)
+- [ ] **Settings password** (§3.11): always needed to set a lock; requiring
+      it must be the user's choice. (S)
+- [ ] **Bypass prevention warnings** (R-WARN-2): a notification only from a
+      `warning` step; it must come at every event and every step. (S)
 - [ ] **Use** (§3.7): input in the last 3 minutes. The code uses 1 minute
       for allowances (`quota`) and 2 minutes for statistics. (S)
 - [ ] **Reward** (R-BREAK-2) is earned while the block is enforced, also
@@ -73,7 +80,7 @@ Last checked against the code: 2026-11-13.
       say active (for enforcing), char lock, time lock, held, quota,
       `break allowance` (a reward), `break relock` (a text break), option,
       browser option, template (for shipped lists, which `SPEC.md` calls
-      categories), loosen, bypass detection. Commands get the glossary's
+      categories), loosen, bypass detection; `kc9k nepsis` becomes `kc9k bypass`. Commands get the glossary's
       names (`--text-lock`, `list scope`), keeping the old ones for a while.
       (M)
 
@@ -359,7 +366,7 @@ owner.
 
 - [ ] Build without `TAGS=devmaster` (no master password).
 - [ ] Remove `ci/vm.sh`.
-- [ ] Rename the GitHub repository to `kc9k`.
+- [ ] Rename the GitHub repository after the app's name (`SPEC.md` §7: KC9K or Nepsis).
 - [ ] On the test laptop, remove `/etc/sudoers.d/99-claude-test`.
 - [ ] A pass over `README.md`; a tagged release.
 

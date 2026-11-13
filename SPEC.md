@@ -114,7 +114,7 @@ They apply to every change.
 2. **A locked block can't be weakened; an unlocked block is free.** Only
    locks protect a block (R-LOCK-1). Strengthening never needs a lock to be
    unlocked. When a settings password is set, it is also needed to weaken
-   anything and to set a lock (§3.11).
+   anything, and to set a lock if the user chose that (§3.11).
 3. **Custom security.** The user makes KC9K as secure as they want, in the
    settings. Nothing protects a block unless the user chose it: no built-in
    locks, delays or lead times (R-LOCK-10). Describe KC9K by what the user's
@@ -288,7 +288,7 @@ extension is required, and protection settings (§4.10) can't be turned off.
 | **Freeze mode** | What Frozen Chicken does: *lock screen*, *logout*, *shutdown*, or *allowed apps only*. | — |
 | **Allowed apps only** | Freeze mode: the computer stays usable, but only the programs on the freeze's app list may run; every other user program is closed. | An allowlist block. |
 | **Monk mode** | A system-owned whole-internet block, switched on for a set time with a timer lock of that time, and off when it ends. Started by `kc9k monk`, a list action or a ladder step. Exceptions and apps can be added only while it is off; it can't be deleted. | An ordinary block. |
-| **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. Logout, shutdown and a freeze are announced 60 s ahead. | A page action. |
+| **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. Announced 60 s ahead, except from bypass prevention (R-WARN-1, R-WARN-2). | A page action. |
 | **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a block is locked: no `sudo` or `pkexec`; nothing runs from `/home` or `/tmp` except from folders the user exempted (adding one is a weakening); no containers or VMs. It can have its own setting lock. | — |
 | **No-escape** | Closes the boot-time exits: hides recovery entries and kernel options, and puts a password nobody knows on GRUB. | Strict mode. |
 | **Factory reset** | Wiping or reinstalling the operating system, or booting another one, to get past KC9K. Software can't forbid it. | — |
@@ -314,7 +314,7 @@ extension is required, and protection settings (§4.10) can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Bypass prevention** | Counting what KC9K stops and climbing a ladder of consequences. Its command is `kc9k nepsis` (*nepsis*, watchfulness). |
+| **Bypass prevention** | Counting what KC9K stops and climbing a ladder of consequences. Its command is `kc9k bypass`. |
 | **Event** | Something KC9K stopped or noticed, kept for a day (R-EVENT-1). |
 | **Detector** | An event type a ladder counts, chosen by the user: `page`, `search`, `app`, `title`, `browser`, `tamper`, `access` (a wrong access password), `workaround`. |
 | **Ladder** | Escalation: N events within T trigger consequences, step after step. Global, or per block. |
@@ -327,7 +327,7 @@ extension is required, and protection settings (§4.10) can't be turned off.
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Settings password** | Optional. When set, it is needed to weaken anything and to set any lock, so nobody else can lock the user out. | A password lock. |
+| **Settings password** | Optional. When set, it is needed to weaken anything. The user can also choose to require it for setting a lock, so nobody else can lock them out. | A password lock. |
 | **Access password** | Optional, needed to *view* parts of the app (per area: app, dashboard, blocks, device, stats, settings). | A password lock. |
 | **Setting lock** | A lock on one setting or browser setting instead of a block. | A block's lock. |
 
@@ -368,7 +368,7 @@ mode, unless no-escape is on.
 | allowance (for earned break time) | reward | |
 | session break | session limit | |
 | option (for `polite-close` …), browser option | behaviour setting, browser setting | |
-| nepsis, bypass detection (in prose) | bypass prevention | `nepsis` is only the command name |
+| nepsis, bypass detection | bypass prevention | the command is `kc9k bypass`; *Nepsis* may become the app's name (§7) |
 | rule (for a block or list) | block, list, entry | "rule" is only for rule IDs, place rules and the extension's `rules` feed |
 | blocklist | blacklist | |
 | word combination, page word, keyword | phrase, rendered term | |
@@ -464,7 +464,10 @@ only on the computer.
   the clock against the hardware clock and internet time.
 - **Browser settings** (§3.13), each lockable on its own. SafeSearch on Google,
   Bing, DuckDuckGo and YouTube (Restricted Mode).
-- **DNS**: which server KC9K asks for blocked sites' real addresses.
+- **DNS**: which server KC9K asks for blocked sites' real addresses (needed
+  only for the firewall layer). By default the network's own DNS server, the
+  one the computer already uses, so nobody new learns which sites are
+  blocked; Quad9 when that one can't answer.
 - **Use counting**: strict use counting.
 - **Circadian rhythm**: per time of day (morning, afternoon, evening, night,
   at times the user sets): blue light filter, screen brightness, wallpaper,
@@ -517,7 +520,7 @@ old names keep working for a while.
 - **R-LOCK-11** A lock never starts by itself, except through re-lock.
 
 **Weakening**
-- **R-WEAK-1** Strengthening never needs a lock unlocked (the settings password, when set, still guards setting locks).
+- **R-WEAK-1** Strengthening never needs a lock unlocked. Setting a lock needs the settings password only if the user chose that.
 - **R-WEAK-2** Every decision about weakening is made in the CLI; the GUI only runs CLI commands.
 - **R-WEAK-3** A refused weakening is logged and never counted as a bypass.
 - **R-WEAK-4** With *no weakening during active locks* on, no setting (strict mode included) can be weakened while any block or setting is locked. Turning it off is itself refused then.
@@ -558,7 +561,8 @@ old names keep working for a while.
 **Device**
 - **R-FREEZE-1** In *allowed apps only* mode, only programs on the freeze's app list (and system processes) may run.
 - **R-FREEZE-2** A running freeze can't be ended; removing a scheduled freeze is refused while it is locked.
-- **R-WARN-1** Logout, shutdown and a freeze are announced 60 s before they happen.
+- **R-WARN-1** Logout, shutdown and a freeze started by a list action or a schedule are announced 60 s before they happen.
+- **R-WARN-2** Bypass prevention gives no countdown: it notifies at every event and every step ("Event triggered, be careful"), and acts at once, up to an immediate shutdown if the user's ladder says so.
 - **R-STRICT-1** Strict mode is on only if the user turned it on. Turning it off is refused only by its own setting lock, if it has one, and by R-WEAK-4.
 - **R-ESCAPE-1** Until the user turns on no-escape, a recovery path always exists (principle 4).
 - **R-DESKTOP-1** On Wayland or a desktop other than Cinnamon, KC9K warns that window titles and app time don't work; everything else works.
@@ -607,17 +611,16 @@ Made with the owner. Newest last.
 - 2026-11-13: The answers to the 65 questions on the review of this file
   (lists by type, matching details, events, warnings, project export,
   settings words and more), written into §3–§5.
+- 2026-11-13: Requiring the settings password for setting a lock is the
+  user's choice. Bypass prevention warns at every event and step, without a
+  countdown, and acts at once. The DNS default is the network's own server,
+  then Quad9. `kc9k nepsis` is renamed `kc9k bypass`.
 
 ## 7. Open decisions
 
 Not yet settled by the owner. Don't resolve them alone.
 
-1. **Warnings from bypass prevention.** Should a ladder step's logout or
-   shutdown also be announced 60 s ahead (R-WARN-1), giving 60 s to save
-   work, or happen at once?
-2. **DNS default.** Which server KC9K asks for blocked sites' addresses
-   unless the user picks one.
-3. **`kc9k nepsis`:** keep the command name, or rename it `kc9k bypass`?
-4. **Protection settings without a definition:** block the installer, block
+1. **The app's name.** Killer Chicken 9000 (KC9K), or Nepsis.
+2. **Protection settings without a definition:** block the installer, block
    inactive tabs, block embedded content, block task managers, `force-search`,
-   `web-only`. Definitions to be written and approved.
+   `web-only`. Drafts are with the owner.

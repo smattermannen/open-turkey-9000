@@ -342,7 +342,7 @@ var accessCmd = &cobra.Command{
   blocks     blocks and everything in them
   device     Frozen Chicken, strict mode, no-escape
   stats      statistics
-  settings   browser options, hotkeys, passwords
+  settings   browser settings, hotkeys, passwords
 
 Name several areas in one "set" to give them the same password. Commands ask
 for the app password and for the password of the page they belong to; the

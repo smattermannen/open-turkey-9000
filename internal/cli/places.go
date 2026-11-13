@@ -21,7 +21,7 @@ var placeCmd = &cobra.Command{
 	Long: `A place is the set of Wi-Fi networks in range when you save it: your own and
 the neighbours'. The computer is at the place when two of them are in range
 again. A block with a place rule is on while the computer is there, and is
-held like a block in a schedule window: it can't be stopped or loosened
+held like a block in a schedule window: it can't be stopped or weakened
 until you leave.
 
 When no network at all can be seen (Wi-Fi switched off, or no adapter), the

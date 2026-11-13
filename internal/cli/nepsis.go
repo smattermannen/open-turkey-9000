@@ -36,7 +36,7 @@ import (
 var monkCmd = &cobra.Command{
 	Use:   "monk --for DURATION",
 	Short: "Monk mode: block every website for a while, locked",
-	Long: `Starts the block 'monk-mode' with a time lock that ends it. It is made the
+	Long: `Starts the block 'monk-mode' with a timer lock that ends it. It is made the
 first time with every website blocked (*.* in its Blocked list); add
 exceptions, apps or anything else to it like any block. On a monk mode that
 is already on, a longer time extends it.`,
@@ -299,9 +299,9 @@ active block); when both are set, both apply. Without a subcommand, shows them a
 
 Making one stricter is always allowed: more detectors, a later fall-back,
 steps that trip on fewer events over longer windows and keep every action
-for at least as long, more steps at the end. Anything else loosens it: a
+for at least as long, more steps at the end. Anything else weakens it: a
 block's is gated like other edits to the block, and the global one can be
-locked like a browser option (--for, --until, --lock, --password-stdin,
+locked like a browser setting (--for, --until, --lock, --password-stdin,
 --restart on 'set').`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
@@ -360,7 +360,7 @@ var nepsisSetCmd = &cobra.Command{
 
 var nepsisOffCmd = &cobra.Command{
 	Use:   "off [--block B]",
-	Short: "Turn bypass prevention off (loosens it)",
+	Short: "Turn bypass prevention off (weakens it)",
 	Args:  cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if block, _ := cmd.Flags().GetString("block"); block != "" {
@@ -428,12 +428,12 @@ func init() {
 	for _, c := range []*cobra.Command{nepsisSetCmd, nepsisOffCmd} {
 		c.Flags().String("block", "", "A block's own bypass prevention, instead of the global one")
 	}
-	nepsisSetCmd.Flags().String("for", "", "Global only. Time lock: can't be loosened for this long")
-	nepsisSetCmd.Flags().String("until", "", "Global only. Time lock until this clock time (HH:MM)")
+	nepsisSetCmd.Flags().String("for", "", "Global only. Timer lock: can't be weakened for this long")
+	nepsisSetCmd.Flags().String("until", "", "Global only. Timer lock until this clock time (HH:MM)")
 	nepsisSetCmd.Flags().Bool("lock", false, "Global only. Typing challenge lock ('kc9k bypass unlock')")
 	nepsisSetCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	nepsisSetCmd.Flags().Bool("password-stdin", false, "Global only. Password lock, read from standard input")
-	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be loosened until the computer restarts")
+	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be weakened until the computer restarts")
 	addTextLockFlags(nepsisSetCmd)
 	addNowFlag(nepsisSetCmd, nepsisOffCmd)
 	nepsisCmd.AddCommand(nepsisSetCmd, nepsisOffCmd, nepsisUnlockCmd)

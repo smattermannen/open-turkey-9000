@@ -22,7 +22,7 @@ var socialCmd = &cobra.Command{
 	Long: `Each setting takes one part of a site away while its block is on: Shorts,
 the home feed, everything but messages. The site itself stays reachable, so
 don't put it on the block's blacklist too. Turning a setting on makes the
-block stricter and is always allowed; turning one off loosens it.
+block stricter and is always allowed; turning one off weakens it.
 
   kc9k social                              the settings there are
   kc9k social <block>                      what the block has on

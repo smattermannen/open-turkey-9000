@@ -140,7 +140,7 @@ def describe_step(step):
 
 
 def describe_nepsis(nepsis, count=None):
-    """A bypass detection setting in words: one line per step of its ladder."""
+    """A bypass prevention setting in words: one line per step of its ladder."""
     steps = (nepsis or {}).get("steps") or []
     if not steps:
         return "Off."
@@ -977,8 +977,8 @@ class ListCard(Gtk.Frame):
 
     def edit_combination(self, value):
         """Adds a word combination, or changes one (value): the new one is
-        added, then the old one removed, which loosens and may be refused or
-        queued like any removal."""
+        added, then the old one removed, which weakens and may be refused
+        like any removal."""
         old = parse_combination(value) if value else None
         if value and old is None:
             return
@@ -1074,7 +1074,7 @@ class ListCard(Gtk.Frame):
 
     def delete(self, _button):
         if self.window.confirm(f"Delete the list {self.data['name']}?",
-                               "Its entries go with it. Deleting a blacklist loosens the block.",
+                               "Its entries go with it. Deleting a blacklist weakens the block.",
                                "Delete", destructive=True):
             self.window.run(self.command("delete"), then=self.window.queued_note)
 
@@ -1599,7 +1599,7 @@ class Window(Gtk.ApplicationWindow):
         dialog.get_content_area().pack_start(scroll, True, True, 0)
         intro = dim("A ladder of steps. The first time its number of things is stopped within its "
                     "time, step 1 acts; the next time, step 2; and so on, staying on the last. "
-                    "Making it stricter is always allowed; anything else loosens it.")
+                    "Making it stricter is always allowed; anything else weakens it.")
         intro.set_max_width_chars(70)
         area.pack_start(intro, False, False, 0)
         steps_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -1673,7 +1673,7 @@ class Window(Gtk.ApplicationWindow):
         if allow_lock:
             lock_row = Gtk.Box(spacing=6)
             lock = Gtk.SpinButton.new_with_range(0, 24 * 30, 1)
-            lock_row.pack_start(Gtk.Label(label="Can't be loosened for"), False, False, 0)
+            lock_row.pack_start(Gtk.Label(label="Can't be weakened for"), False, False, 0)
             lock_row.pack_start(lock, False, False, 0)
             lock_row.pack_start(Gtk.Label(label="hours (0: no lock)"), False, False, 0)
             area.pack_start(lock_row, False, False, 0)
@@ -1727,8 +1727,8 @@ class Window(Gtk.ApplicationWindow):
                 self.run(["bypass", "set", "--block", block["name"], *args], then=self.queued_note)
 
     def nepsis_off(self, _button, block=None):
-        if self.confirm("Turn bypass prevention off?", "This loosens it, so it isn't possible while "
-                        "it is locked (or, for a block, while the block is held).", "Turn off"):
+        if self.confirm("Turn bypass prevention off?", "This weakens it, so it isn't possible while "
+                        "it is locked (or, for a block, while the block is locked).", "Turn off"):
             self.run(["bypass", "off"] + (["--block", block()] if block else []), then=self.queued_note)
 
     def run_thresholds(self, block_name, list_name, changes):
@@ -2120,7 +2120,7 @@ class Window(Gtk.ApplicationWindow):
             "combination (Word combination…) counts only where words of its boxes follow one "
             "another directly (cars(red, big) hits \"big red cars\", not \"red toyota\"). A match in "
             "the address or title takes every action; in the text, each action needs its number "
-            "of different words. Unticking or removing loosens the block, so it isn't possible "
+            "of different words. Unticking or removing weakens the block, so it isn't possible "
             "while it is locked.")
         # A wrapped label asks for its whole text on one line; cap it, so the
         # window still fits small screens.
@@ -2132,7 +2132,7 @@ class Window(Gtk.ApplicationWindow):
             self.keyword_test_switch, "Keyword test mode",
             "Lists that read a page's title or text do nothing; instead a panel on each page "
             "shows which words were found, how often, and whether each action's thresholds "
-            "are met. For tuning a list. Turning it on loosens the block."), False, False, 0)
+            "are met. For tuning a list. Turning it on weakens the block."), False, False, 0)
         self.list_cards = {}
         self.list_boxes = {}
         for kind, title, button_label, detail in (
@@ -2228,7 +2228,7 @@ class Window(Gtk.ApplicationWindow):
             "Turn this block on while the computer is at a place. A place is known by the Wi-Fi "
             "networks in range when you save it (yours and the neighbours'); the computer is "
             "there when two of them are in range again. While there, the block can't be stopped "
-            "or loosened. With Wi-Fi switched off the computer counts as being at every place, "
+            "or weakened. With Wi-Fi switched off the computer counts as being at every place, "
             "and Wi-Fi is switched back on.")
         places_help.set_max_width_chars(70)
         places.pack_start(places_help, False, False, 0)
@@ -2279,7 +2279,7 @@ class Window(Gtk.ApplicationWindow):
         social_scroll.add(social)
         help_label = dim(
             "Keep a site, take a part of it away while this block is on. Don't put the site on "
-            "the blacklist too. Ticking is always allowed; unticking loosens the block. Sites "
+            "the blacklist too. Ticking is always allowed; unticking weakens the block. Sites "
             "change their pages now and then, and a setting that hides something may then miss "
             "it until an update.")
         help_label.set_max_width_chars(70)
@@ -2399,7 +2399,7 @@ class Window(Gtk.ApplicationWindow):
             "Breaks",
             dim("Break time is earned while the block is on and saved up to one allowance. Take "
                 "it when you choose, also while the block is locked; the block comes back by "
-                "itself. Allowing more breaks loosens the block, so decide before locking it."),
+                "itself. Allowing more breaks weakens the block, so decide before locking it."),
             allowance_row, allowance_buttons, self.break_label,
             dim("With the box below ticked, passing the typing challenge or giving the password "
                 "doesn't end the block: it lifts it for a while. Unlocking again during that "
@@ -2627,7 +2627,7 @@ class Window(Gtk.ApplicationWindow):
         chars = challenge_length(typing)
         restart = Gtk.CheckButton(label="Stay on until the computer restarts")
         rows = (
-            ("Time lock (minutes)", minutes, "Can't be stopped at all until the time has passed."),
+            ("Timer lock (minutes)", minutes, "Can't be stopped at all until the time has passed."),
             ("Delay to stop (minutes)", delay, "Stopping only takes effect after this long."),
             ("Password", password, "Needed to stop. Give it to someone else to keep."),
         )
@@ -2985,7 +2985,7 @@ class Window(Gtk.ApplicationWindow):
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text=f"Copy {name} into a block",
             secondary_text="It becomes a new list of the block, named after the cluster. As a blacklist it "
-                           "makes the block stricter; as exceptions it loosens it, which a held block refuses.",
+                           "makes the block stricter; as exceptions it weakens it, which a locked block refuses.",
             message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
         combo = Gtk.ComboBoxText()
         for block in self.blocks:
@@ -3375,7 +3375,7 @@ class Window(Gtk.ApplicationWindow):
 
         rows = [self.setting_row(name, title, detail) for name, title, detail in BROWSER_OPTIONS]
         box.pack_start(section(
-            "Browser options", dim("Each option can be locked on its own with Lock…, independently "
+            "Browser settings", dim("Each option can be locked on its own with Lock…, independently "
                                    "of your blocks. A locked option can't be turned off until its "
                                    "lock ends or is unlocked. \"Allow only LibreWolf\" and blocking "
                                    "developer tools also can't be turned off while a block is "
@@ -3552,7 +3552,7 @@ class Window(Gtk.ApplicationWindow):
 
     def remove_settings_password(self, _button):
         if self.confirm("Remove the settings password?",
-                        "Loosening and locks won't ask for it any more.", "Remove"):
+                        "Weakening and locks won't ask for it any more.", "Remove"):
             self.run(["password", "remove"], then=lambda _o: setattr(self, "settings_password", None))
 
     def update_settings(self):
@@ -3628,7 +3628,7 @@ class Window(Gtk.ApplicationWindow):
                      then=lambda output: self.message(output, Gtk.MessageType.INFO))
 
     def setting_row(self, name, title, detail):
-        """A browser option: its switch, plus its lock state and buttons."""
+        """A browser setting: its switch, plus its lock state and buttons."""
         switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         switch.connect("state-set", self.toggle_browser, name)
         self.browser_switches[name] = switch
@@ -3667,7 +3667,7 @@ class Window(Gtk.ApplicationWindow):
         chars = challenge_length(typing)
         restart = Gtk.CheckButton(label="Stay on until the computer restarts")
         rows = (
-            ("Time lock (minutes)", minutes, "Can't be turned off at all until the time has passed."),
+            ("Timer lock (minutes)", minutes, "Can't be turned off at all until the time has passed."),
             ("Password", password, "Needed to turn it off. Give it to someone else to keep."),
         )
         for i, (label, widget, note) in enumerate(rows):

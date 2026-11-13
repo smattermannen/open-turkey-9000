@@ -20,10 +20,8 @@
 //   - kc9k block info [name]
 //   - kc9k block remove [name]
 //
-// A held block (locked, time-locked or held by its schedule) only accepts
-// edits that make it stricter; see ensureEditable. A block with allow windows
-// never takes a loosening edit directly: it is queued, or applied with --now
-// after the typing challenge; see gateEdit in loosen.go.
+// A locked block (any of its locks on, its schedule lock included) only
+// accepts edits that make it stricter; see ensureEditable and gateEdit.
 package cli
 
 import (
@@ -122,7 +120,6 @@ const strengtheningEdits = "add apps, window titles, blacklists or blacklist ent
 // blockEmpty reports whether a block has nothing to enforce (see
 // db.BlockDetail.Empty).
 func blockEmpty(d *db.BlockDetail) bool { return d.Empty() }
-
 
 // --------------------------------------------------------------------------
 // Parent command: block
@@ -457,7 +454,7 @@ var blockInfoCmd = &cobra.Command{
 				os.Exit(1)
 			}
 			if block.LockedUntil > trusted {
-				status += fmt.Sprintf(" [Time-locked until %s]", time.Unix(block.LockedUntil, 0).Format("2006-01-02 15:04"))
+				status += fmt.Sprintf(" [Timer-locked until %s]", time.Unix(block.LockedUntil, 0).Format("2006-01-02 15:04"))
 			}
 			fmt.Printf("Status: %s\n", status)
 		} else {

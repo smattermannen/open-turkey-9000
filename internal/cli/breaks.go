@@ -31,7 +31,7 @@ With relock set, unlocking the block (its typing challenge or password)
 doesn't end it: it lifts it for that long, then it is back with its locks.
 Unlocking once more during that break lifts its locks; the block stays on.
 
-Allowing more breaks loosens a block, so it is refused while the block is
+Allowing more breaks weakens a block, so it is refused while the block is
 held. Allowing fewer, or none, is always possible.`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
@@ -135,7 +135,7 @@ var breakRelockCmd = &cobra.Command{
 	Use:     "text [block] [time|off]",
 	Aliases: []string{"relock"},
 	Short:   "Text break: unlocking gives a break of this length, and the block stays locked",
-	Args:  cobra.ExactArgs(2),
+	Args:    cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		old, err := database.GetBreaks(args[0])
 		if err != nil {

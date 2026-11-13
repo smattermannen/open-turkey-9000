@@ -19,7 +19,7 @@ action whether its thresholds (different entries, and times in all) are
 met. Use it to see whether a rule would be too harsh before relying on it.
 
 Lists that only look at addresses keep working as usual. Turning test mode
-on loosens the block, so it is refused while the block is held; turning it
+on weakens the block, so it is refused while the block is locked; turning it
 off is always allowed. Without on or off, shows the blocks in test mode.`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {

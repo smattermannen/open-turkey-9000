@@ -59,13 +59,13 @@ Last checked against the code: 2026-11-13.
       and new names for taken block names. A backup still leaves out
       running locks, passwords, hotkeys and statistics: whether "everything"
       includes those is for the owner to say. (S)
-- [ ] **Words** (§3.14): commands, GUI labels, messages and `README.md` still
-      say active (for enforcing), char lock, time lock, held, quota,
-      `break allowance` (a reward), `break relock` (a text break), option,
-      browser option, template (for shipped lists, which `SPEC.md` calls
-      categories), loosen, bypass detection. Done: `kc9k bypass` (alias
-      `nepsis`), `--text-lock`, `list scope` / `cluster scope` (alias
-      `where`). (M)
+- [ ] **Words** (§3.14): done in commands, messages and GUI labels: time
+      lock, char lock, held, loosen, bypass detection, browser option;
+      `kc9k bypass` (alias `nepsis`), `--text-lock`, `list scope` /
+      `cluster scope` (alias `where`), `break text` (alias `relock`).
+      Left: quota (allowance), `break allowance` (a reward), option
+      (behaviour setting), template (category), active for enforcing, and
+      `README.md` prose. (S)
 - [ ] **Page reading is slow on big pages** (principle 9). In every frame,
       `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
       makes the browser lay out the page) every 1.5 s while the page changes,

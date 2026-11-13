@@ -89,7 +89,7 @@ adding sites or apps, and reading the state don't.
 Setting a lock asks for it only if you choose so ('kc9k password locks on'),
 so that nobody else can lock you out.
 
-Give it to someone else to keep, and they decide when your blocks may loosen.
+Give it to someone else to keep, and they decide when your blocks may weaken.
 Passwords are read from standard input (hidden on a terminal), the current
 one first.
 

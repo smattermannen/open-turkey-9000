@@ -160,9 +160,8 @@ var blockActionCmd = &cobra.Command{
 the pages they match, show them in greyscale, block their images, or any
 combination. Apps are always blocked.
 
-Turning an action on is always allowed. Turning one off loosens the block, so
-it is refused while the block is held, and queued for a block with allow
-windows (or applied with --now after the typing challenge). Each list keeps
+Turning an action on is always allowed. Turning one off weakens the block, so
+it is refused while the block is locked. Each list keeps
 at least one action. With only the block name, prints each list's actions.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 && len(args) != 3 {

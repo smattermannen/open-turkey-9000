@@ -157,7 +157,7 @@ var blockThresholdCmd = &cobra.Command{
 	Long: `A shortcut for 'kc9k list threshold' on the block's Page words list: how many
 of its different words a page must contain before that action applies.
 Repeats of the same word count once. Lowering a threshold is always allowed;
-raising one loosens the block. With only the block name, prints them.`,
+raising one weakens the block. With only the block name, prints them.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 && len(args) != 3 {
 			return fmt.Errorf("give a block, or a block, an action and a count")

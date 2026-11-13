@@ -24,12 +24,12 @@ const maxHotkeyLock = 24 * time.Hour
 
 var hotkeyCmd = &cobra.Command{
 	Use:   "hotkey",
-	Short: "Key combinations that start a block, optionally time-locked",
+	Short: "Key combinations that start a block, optionally timer-locked",
 	Long: `A hotkey starts a block when you press it, for example to study:
 
   kc9k hotkey add ctrl+alt+s study --for 1h
 
-Pressing Ctrl+Alt+S then starts the block 'study' with a one-hour time lock
+Pressing Ctrl+Alt+S then starts the block 'study' with a one-hour timer lock
 (on a block that is already on, it only extends the lock). Keys are
 modifiers (ctrl, alt, shift, super) and a key joined with +; F1 to F24 also
 work alone. Hotkeys are set up as Cinnamon and GNOME keyboard shortcuts.

@@ -62,8 +62,8 @@ steps, to spare them in a block.
 The sites come from the extension in LibreWolf, private windows included,
 and are kept on this computer only. Pages that a block stops are recorded
 too. Nothing changes until 'stop', which follows the target's rules: into a
-blacklist or a cluster is always allowed; into an exception list loosens the
-block, so it is refused while the block is held (the recording then stays,
+blacklist or a cluster is always allowed; into an exception list weakens the
+block, so it is refused while the block is locked (the recording then stays,
 to stop later or discard). Without a subcommand, shows the recording.`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {

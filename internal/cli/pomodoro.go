@@ -19,7 +19,7 @@ var pomodoroCmd = &cobra.Command{
 
 var pomodoroSetCmd = &cobra.Command{
 	Use:   "set [block] [work] [break]",
-	Short: "Set a cycle, e.g. 25m 5m (refused while the block is held)",
+	Short: "Set a cycle, e.g. 25m 5m (refused while the block is locked)",
 	Long: `Sets the block's rhythm: it is on for the work time and lifted for the
 break, over and over, while it runs. With --long and --every, every so many
 breaks is a long one:

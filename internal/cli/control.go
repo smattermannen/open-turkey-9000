@@ -52,14 +52,14 @@ var startCmd = &cobra.Command{
 Locks (optional, and combinable):
   --lock            Require the typing challenge ('unlock') to deactivate.
   --lock-chars N    Challenge length in characters (default 300, 10 to 5000).
-  --for DURATION    Time lock: cannot be removed for this long (e.g. 2h, 90m, 1h30m).
-  --until HH:MM     Time lock until a clock time today (or tomorrow if already past).
+  --for DURATION    Timer lock: cannot be removed for this long (e.g. 2h, 90m, 1h30m).
+  --until HH:MM     Timer lock until a clock time today (or tomorrow if already past).
 
-A time lock cannot be lifted early by anyone short of root — that is the point.
+A timer lock cannot be lifted early by anyone short of root — that is the point.
 
 On a block that is already active, start only strengthens its locks: --lock
-adds a char lock (or lengthens it with a larger --lock-chars), and --for or
---until adds a time lock or extends it to a later time. Locks can never be
+adds a text lock (or lengthens it with a larger --lock-chars), and --for or
+--until adds a timer lock or extends it to a later time. Locks can never be
 shortened or removed this way.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -200,10 +200,10 @@ shortened or removed this way.`,
 
 		msg := fmt.Sprintf("Block '%s' activated successfully", blockName)
 		if useLock {
-			msg += " [TEXT LOCK - " + lock.DescribeStyle(style, chars) + "]"
+			msg += " [text lock: " + lock.DescribeStyle(style, chars) + "]"
 		}
 		if lockedUntil > 0 {
-			msg += fmt.Sprintf(" [TIME-LOCKED until %s]", time.Unix(lockedUntil, 0).Format("2006-01-02 15:04"))
+			msg += fmt.Sprintf(" [timer lock until %s]", time.Unix(lockedUntil, 0).Format("2006-01-02 15:04"))
 		}
 		fmt.Println(msg)
 		notify("Killer Chicken 9000", fmt.Sprintf("Block '%s' is now active", blockName))
@@ -237,7 +237,7 @@ func strengthenLocks(database *db.DB, detail *db.BlockDetail, useLock bool, lock
 		switch {
 		case !locked:
 			locked, chars = true, lockChars
-			changes = append(changes, fmt.Sprintf("LOCKED - %d chars", chars))
+			changes = append(changes, fmt.Sprintf("text lock of %d chars", chars))
 		case lockChars > chars && charsGiven:
 			chars = lockChars
 			changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", chars))
@@ -247,10 +247,10 @@ func strengthenLocks(database *db.DB, detail *db.BlockDetail, useLock bool, lock
 	}
 	if lockedUntil != 0 {
 		if lockedUntil <= until {
-			return fmt.Errorf("block '%s' is already time-locked until %s; a time lock can only be extended", name, time.Unix(until, 0).Format("2006-01-02 15:04"))
+			return fmt.Errorf("block '%s' is already timer-locked until %s; a timer lock can only be extended", name, time.Unix(until, 0).Format("2006-01-02 15:04"))
 		}
 		until = lockedUntil
-		changes = append(changes, fmt.Sprintf("TIME-LOCKED until %s", time.Unix(until, 0).Format("2006-01-02 15:04")))
+		changes = append(changes, fmt.Sprintf("timer lock until %s", time.Unix(until, 0).Format("2006-01-02 15:04")))
 	}
 	if len(changes) == 0 {
 		return fmt.Errorf("block '%s' is already active with those locks", name)
@@ -297,7 +297,7 @@ var stopCmd = &cobra.Command{
 			return refused(database, blockName, fmt.Errorf("block '%s' is in a scheduled window and can't be stopped until it closes", blockName))
 		}
 		if hold.timeLocked() {
-			return refused(database, blockName, fmt.Errorf("block '%s' is time-locked until %s and can't be stopped before then", blockName, hold.until()))
+			return refused(database, blockName, fmt.Errorf("block '%s' is timer-locked until %s and can't be stopped before then", blockName, hold.until()))
 		}
 		if hold.restartLocked {
 			return refused(database, blockName, fmt.Errorf("block '%s' stays on until the computer restarts", blockName))
@@ -349,7 +349,7 @@ var unlockCmd = &cobra.Command{
 			return refused(database, blockName, fmt.Errorf("block '%s' is in a scheduled window; it will lift automatically when the window closes", blockName))
 		}
 		if hold.timeLocked() {
-			return refused(database, blockName, fmt.Errorf("block '%s' is time-locked until %s; it cannot be unlocked before then", blockName, hold.until()))
+			return refused(database, blockName, fmt.Errorf("block '%s' is timer-locked until %s; it cannot be unlocked before then", blockName, hold.until()))
 		}
 		if hold.restartLocked {
 			return refused(database, blockName, fmt.Errorf("block '%s' stays on until the computer restarts", blockName))
@@ -462,15 +462,38 @@ var statusCmd = &cobra.Command{
 				return err
 			}
 			tags := ""
+			hold, err := blockHold(database, block.Name, time.Now())
+			if err != nil {
+				return err
+			}
+			if hold.scheduleLock {
+				state := "off now"
+				if hold.scheduleFrozen || hold.scheduledNow {
+					state = "on now"
+				}
+				tags += fmt.Sprintf(" [schedule lock, %s lead, %s]", time.Duration(hold.scheduleLead)*time.Minute, state)
+			}
 			if detail.Active {
 				if detail.Scheduled {
-					tags += " [SCHEDULED]"
+					tags += " [switched on by its schedule]"
 				}
 				if detail.Locked {
-					tags += fmt.Sprintf(" [LOCKED - %d chars]", detail.LockChars)
+					tags += " [text lock: " + lock.DescribeStyle(hold.extras.Style, detail.LockChars) + "]"
 				}
 				if detail.LockedUntil > trusted {
-					tags += fmt.Sprintf(" [TIME-LOCKED until %s]", time.Unix(detail.LockedUntil, 0).Format("2006-01-02 15:04"))
+					tags += fmt.Sprintf(" [timer lock until %s]", time.Unix(detail.LockedUntil, 0).Format("2006-01-02 15:04"))
+				}
+				if hold.passwordHash != "" {
+					tags += " [password lock]"
+				}
+				if hold.restartLocked {
+					tags += " [restart lock]"
+				}
+				switch {
+				case hold.extras.DelayUntil > trusted:
+					tags += fmt.Sprintf(" [delay lock: unlocked in %s]", time.Duration(hold.extras.DelayUntil-trusted)*time.Second)
+				case hold.extras.Delay > 0:
+					tags += fmt.Sprintf(" [delay lock of %s]", time.Duration(hold.extras.Delay)*time.Second)
 				}
 				active = append(active, fmt.Sprintf("  %s%s", detail.Name, tags))
 			} else {
@@ -493,7 +516,11 @@ var statusCmd = &cobra.Command{
 		fmt.Println()
 		fmt.Println("Browser extension:", extensionStatus(database))
 		if set, err := settingsPasswordSet(database); err == nil && set {
-			fmt.Println("Settings password: on (loosening, locks and browser options ask for it)")
+			msg := "Settings password: on (weakening asks for it"
+			if v, _ := database.GetSetting(SettingPasswordForLocks); v == "on" {
+				msg += ", and setting a lock"
+			}
+			fmt.Println(msg + ")")
 		}
 		return nil
 	},
@@ -547,10 +574,10 @@ func printLinesOrNone(lines []string) {
 // ============================================================================
 
 type holdState struct {
-	active       bool
-	charLocked   bool
-	lockChars    int
-	lockedUntil  int64
+	active      bool
+	charLocked  bool
+	lockChars   int
+	lockedUntil int64
 	// scheduledNow: the block has a schedule lock (§3.4) and a window or
 	// place has it on now.
 	scheduledNow bool
@@ -558,7 +585,7 @@ type holdState struct {
 	// now or opens within its lead time, whether or not the block is active.
 	scheduleFrozen bool
 	scheduleLock   bool
-	scheduleLead   int // minutes
+	scheduleLead   int  // minutes
 	quota          bool // a daily quota keeps the block on
 	extras         db.LockExtras
 	passwordHash   string
@@ -658,8 +685,8 @@ func init() {
 	startCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	startCmd.Flags().Bool("restart", false, "Restart lock: keep the block on until the computer restarts")
 	startCmd.Flags().String("delay", "", "Delay lock: stopping takes this long (1m to 960h)")
-	startCmd.Flags().String("for", "", "Time lock: keep the block un-removable for this duration (e.g. 2h, 90m)")
-	startCmd.Flags().String("until", "", "Time lock: keep the block un-removable until this clock time (HH:MM)")
+	startCmd.Flags().String("for", "", "Timer lock: keep the block un-removable for this duration (e.g. 2h, 90m)")
+	startCmd.Flags().String("until", "", "Timer lock: keep the block un-removable until this clock time (HH:MM)")
 
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)

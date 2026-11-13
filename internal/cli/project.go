@@ -220,7 +220,7 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 	}
 	if in.Nepsis != nil && in.Nepsis.On() {
 		if err := in.Nepsis.Check(); err != nil {
-			return out, fmt.Errorf("bypass detection: %w", err)
+			return out, fmt.Errorf("bypass prevention: %w", err)
 		}
 	}
 	for _, w := range in.Schedules {
@@ -417,7 +417,7 @@ var projectImportCmd = &cobra.Command{
 	Long: `Adds the blocks of a project file (one whose name is taken here comes in as
 name-2, name-3, …), its clusters and places that don't exist here yet, and
 the blocks' place rules; turns on the browser settings it has on, adds its scheduled Frozen Chicken
-windows, and takes its global bypass detection if that is at least as strict
+windows, and takes its global bypass prevention if that is at least as strict
 as the one here. Nothing that exists is changed or removed, so importing
 never weakens a block. Imported blocks are not started.
 
@@ -494,7 +494,7 @@ With --dry-run, says what would happen and changes nothing.`,
 		}
 		if in.Nepsis != nil && in.Nepsis.On() {
 			if err := in.Nepsis.Check(); err != nil {
-				return fmt.Errorf("bypass detection: %w", err)
+				return fmt.Errorf("bypass prevention: %w", err)
 			}
 		}
 		images := map[string][]byte{}
@@ -644,10 +644,10 @@ With --dry-run, says what would happen and changes nothing.`,
 				continue
 			}
 			if name == "force-librewolf" && blocker.LibreWolfVersion() == "" {
-				fmt.Println("Browser option force-librewolf is left off: LibreWolf isn't installed here.")
+				fmt.Println("Browser setting force-librewolf is left off: LibreWolf isn't installed here.")
 				continue
 			}
-			say("turn on the browser option %s", name)
+			say("turn on the browser setting %s", name)
 			if !dry {
 				if err := database.SetSetting("browser."+name, "on"); err != nil {
 					return err
@@ -671,9 +671,9 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 			switch {
 			case !in.Nepsis.StricterThan(old):
-				fmt.Println("The bypass detection here is stricter in some way: left as it is.")
+				fmt.Println("The bypass prevention here is stricter in some way: left as it is.")
 			default:
-				say("set the global bypass detection (%d steps)", len(in.Nepsis.Steps))
+				say("set the global bypass prevention (%d steps)", len(in.Nepsis.Steps))
 				if !dry {
 					if err := database.SetGlobalNepsis(*in.Nepsis); err != nil {
 						return err

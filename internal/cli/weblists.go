@@ -641,7 +641,7 @@ Frozen Chicken (at most a day). Monk mode starts the block 'monk-mode',
 which blocks every website unless you change it.
 
 Run 'on' again with other settings to change them: a longer time is always
-allowed, another address loosens the list.`,
+allowed, another address weakens the list.`,
 	Args: cobra.ExactArgs(4),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		on, err := parseOnOff(args[3])
@@ -669,7 +669,7 @@ var listThresholdCmd = &cobra.Command{
 	Long: `For a blacklist that looks at page text: how many of its different entries
 a page must contain before the action applies (repeats count once). For
 example greyscale at 1 and block at 3. Lowering it is always allowed; raising
-it loosens the list.`,
+it weakens the list.`,
 	Args: cobra.ExactArgs(4),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		n, err := strconv.Atoi(args[3])
@@ -687,7 +687,7 @@ var listHitsCmd = &cobra.Command{
 occur in a page's text, repeats counted, before the action applies. It works
 together with the threshold of different entries: both must be met. For
 example threshold 1 and hits 5: one word five times, or five words once.
-Lowering it is always allowed; raising it loosens the list.`,
+Lowering it is always allowed; raising it weakens the list.`,
 	Args: cobra.ExactArgs(4),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		n, err := strconv.Atoi(args[3])

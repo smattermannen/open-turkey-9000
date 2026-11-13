@@ -142,7 +142,7 @@ into a list the block already has (--into):
 A copy is a copy: later changes to the cluster don't reach the block, and
 editing a cluster is always allowed. Copying into a block follows the
 block's rules: into a blacklist is always allowed, into an exception list
-loosens the block and is refused, queued or challenged like other edits.`,
+weakens the block and is refused while it is locked, like other edits.`,
 }
 
 var clusterListCmd = &cobra.Command{
@@ -398,7 +398,7 @@ With --into, adds the cluster's entries to that list of the block; every
 entry must fit where the list looks.
 
 Into a blacklist this strengthens the block and is always allowed. Into an
-exception list it loosens the block, like 'kc9k list add' to that list.`,
+exception list it weakens the block, like 'kc9k list add' to that list.`,
 	Args: cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		into, _ := cmd.Flags().GetString("into")

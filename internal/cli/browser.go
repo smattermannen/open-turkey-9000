@@ -23,19 +23,19 @@ import (
 
 var browserCmd = &cobra.Command{
 	Use:   "browser [setting on|off | unlock setting | install-librewolf]",
-	Short: "Set and lock browser options: " + strings.Join(enforce.BrowserSettings, ", "),
-	Long: `Browser options can always be turned on. Each one can be locked on its own,
+	Short: "Set and lock browser settings: " + strings.Join(enforce.BrowserSettings, ", "),
+	Long: `Browser settings can always be turned on. Each one can be locked on its own,
 independently of any block, when it is turned on:
 
-  --for DURATION    Time lock: can't be turned off for this long (e.g. 2h, 7d is 168h).
-  --until HH:MM     Time lock until a clock time today (or tomorrow if already past).
+  --for DURATION    Timer lock: can't be turned off for this long (e.g. 2h, 7d is 168h).
+  --until HH:MM     Timer lock until a clock time today (or tomorrow if already past).
   --lock            Typing challenge ('kc9k browser unlock <setting>') to turn it off.
   --lock-chars N    Challenge length in characters (default 300, 10 to 5000).
   --password-stdin  Password ('kc9k browser unlock <setting>') to turn it off.
   --restart         Stays on until the computer restarts.
 
 Locks can be added to a setting that is already on, and only made stronger: a
-time lock can only be extended and a challenge only lengthened. unlock runs the
+timer lock can only be extended and a challenge only lengthened. unlock runs the
 challenge and asks for the password, then turns the setting off; time and
 restart locks can't be unlocked, only waited out.
 
@@ -273,7 +273,7 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 	var changes []string
 	if want.LockedUntil != 0 {
 		if want.LockedUntil <= next.LockedUntil {
-			return next, nil, fmt.Errorf("%s is already locked until %s; a time lock can only be extended", name, time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
+			return next, nil, fmt.Errorf("%s is already locked until %s; a timer lock can only be extended", name, time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
 		}
 		next.LockedUntil = want.LockedUntil
 		changes = append(changes, "locked until "+time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
@@ -450,8 +450,8 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 }
 
 func init() {
-	browserCmd.Flags().String("for", "", "Time lock: can't be turned off for this long (e.g. 2h, 90m)")
-	browserCmd.Flags().String("until", "", "Time lock: can't be turned off until this clock time (HH:MM)")
+	browserCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 2h, 90m)")
+	browserCmd.Flags().String("until", "", "Timer lock: can't be turned off until this clock time (HH:MM)")
 	browserCmd.Flags().Bool("lock", false, "Typing challenge lock ('kc9k browser unlock <setting>')")
 	browserCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	browserCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")

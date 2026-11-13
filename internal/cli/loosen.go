@@ -134,10 +134,10 @@ var pendingCancelCmd = &cobra.Command{
 var pendingDelayCmd = &cobra.Command{
 	Hidden: true, // changes are no longer queued
 	Use:    "delay [block] [time]",
-	Short:  "How long a block's queued loosening changes wait (default 24h)",
-	Long: `A block with allow windows is never loosened directly: the change is queued
+	Short:  "How long a block's queued weakening changes wait (default 24h)",
+	Long: `A block with allow windows is never weakened directly: the change is queued
 and applied later. This sets how much later for one block, from 1h to 720h.
-A longer delay applies at once. A shorter one loosens the block, so it is
+A longer delay applies at once. A shorter one weakens the block, so it is
 itself queued for the delay the block has now.`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
@@ -147,7 +147,7 @@ itself queued for the delay the block has now.`,
 			return err
 		}
 		if len(args) == 1 {
-			fmt.Printf("Loosening changes to '%s' wait %s.\n", name, time.Duration(current)*time.Second)
+			fmt.Printf("Weakening changes to '%s' wait %s.\n", name, time.Duration(current)*time.Second)
 			return nil
 		}
 		d, err := time.ParseDuration(args[1])
@@ -156,7 +156,7 @@ itself queued for the delay the block has now.`,
 		}
 		want := int64(d.Seconds())
 		if want < db.MinLoosenDelay || want > db.MaxLoosenDelay {
-			return fmt.Errorf("a loosening delay is from 1h to 720h")
+			return fmt.Errorf("a weakening delay is from 1h to 720h")
 		}
 		proceed, err := gateEdit(cmd, database, name, want >= current,
 			db.Edit{Action: db.EditSetDelay, Values: []string{fmt.Sprint(want)}})
@@ -166,7 +166,7 @@ itself queued for the delay the block has now.`,
 		if err := database.SetLoosenDelay(name, want); err != nil {
 			return err
 		}
-		fmt.Printf("Loosening changes to '%s' now wait %s.\n", name, d)
+		fmt.Printf("Weakening changes to '%s' now wait %s.\n", name, d)
 		return nil
 	}),
 }

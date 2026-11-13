@@ -111,19 +111,20 @@ They apply to every change.
 1. **Fix current functionality before adding new features.** Known bugs,
    failing tests, features that don't work as documented and code that
    disagrees with this file come before any new feature.
-2. **Strengthening is always free; weakening always costs.** Anything that
-   weakens a held block, a locked browser option or a locked setting passes
-   its gate and the settings password. Anything that strengthens needs no
-   permission.
+2. **A locked block can't be weakened; an unlocked block is free.** Only
+   locks protect a block (R-LOCK-1). Strengthening never needs a lock to be
+   unlocked. When a settings password is set, it is also needed to weaken
+   anything and to set a lock (§3.11).
 3. **Custom security.** The user makes KC9K as secure as they want, in the
-   settings. Nothing protects a block unless the user chose it (§4.8a).
-   Describe KC9K by what the user's chosen settings give, never as "only
-   friction" and never as more than those settings deliver. The levels:
+   settings. Nothing protects a block unless the user chose it: no built-in
+   locks, delays or lead times (R-LOCK-10). Describe KC9K by what the user's
+   chosen settings give, never as "only friction" and never as more than
+   those settings deliver. The levels:
    1. *Basic:* the user keeps `sudo` and can always stop the daemon. Locks
       only need to outlast an impulse.
-   2. *Strict mode during a lock* (a setting the user turns on): no `sudo`,
-      no `pkexec`, nothing runs from `/home` or `/tmp`. The user is an ordinary user, so anything an
-      ordinary user can do to reach a blocked site is a real hole.
+   2. *Strict mode* (§3.8): while a block is locked, the user is an ordinary
+      user, so anything an ordinary user can do to reach a blocked site is a
+      real hole.
    3. *Boot and hardware:* no-escape closes the boot-time exits; a firmware
       password held by someone else, and factory reset protection, make
       other boot media and reinstalling slow and deliberate.
@@ -131,11 +132,12 @@ They apply to every change.
    path (the `kc9k.nofreeze` boot option, recovery mode) unless the user has
    explicitly chosen no-escape.
 5. **A refused attempt to weaken is ordinary use.** It is logged, never
-   counted by bypass prevention (R-WEAK-5).
+   counted by bypass prevention (R-WEAK-3).
 6. **Free, forever.** No paid tiers, no accounts, no telemetry. What KC9K
-   records (events, statistics, recordings) stays on the computer.
-7. **Only what improves the experience gets built.** Behaviour changes are
-   options, not new defaults.
+   records (events, statistics, recordings) stays on the computer, and what
+   it has to ask other computers (such as DNS servers) is said plainly.
+7. **Only what improves the experience gets built.** Changes in behaviour
+   are settings, not new defaults.
 8. **Platform.** Linux Mint Cinnamon on X11. The extension runs in LibreWolf
    and in Google Chrome/Chromium. English only. An Android companion app runs
    the extension in IronFox (`android/`).
@@ -146,12 +148,14 @@ They apply to every change.
    - no single piece of KC9K's work in a page takes longer than 16 ms (one
      screen frame);
    - judging a typical page with 1,000 rendered terms and 100 phrases takes
-     under 50 ms in total;
+     under 50 ms in total, measured on the test laptop;
+   - an address is judged before its page loads; page text within 0.5 s of
+     appearing;
    - checking an address costs the same with 10 entries or 100,000;
    - a gigantic list never slows the network or the computer.
 10. **One rule-maker.** Every decision about what may be weakened is made in
-   the CLI; the GUI and the extension only run CLI commands or follow the
-   daemon (R-WEAK-2).
+    the CLI; the GUI and the extension only run CLI commands or follow the
+    daemon.
 
 ---
 
@@ -163,141 +167,147 @@ Command and code names are in `backticks`.
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Target** | Anything a block acts on: site, URL entry, search entry, app, folder, title entry, rendered term, phrase. | — |
+| **Target** | Anything a block acts on: site, URL entry, search entry, app, folder, window title entry, rendered term, phrase. | — |
 | **Site** | A domain with all its subdomains (`reddit.com`, written without `www.`), or a wildcard domain (`*.xxx`). | A URL entry. |
 | **URL entry** | A domain plus path or query (`reddit.com/r/funny`, `youtube.com/@channel`). | A site. |
-| **Wildcard** | In URL entries, `*` is any text (`google.com/*q=*unicorn*`). In rendered terms and phrases, a plain word matches whole words and `*` matches inside a word (`*gorilla` matches "silverbackgorilla", `porn*` matches "pornstar"). | — |
-| **Search entry** | A word that blocks searches containing it, on any search engine. | A rendered term. |
-| **Whole internet** | The target `*.*`. | — |
-| **File URL** | A `file://` entry. Local files are allowed by the default exception `file://*`. | — |
+| **Wildcard** | In sites and URL entries, `*` is any text (`google.com/*q=*unicorn*`). In rendered terms and phrases, a plain word matches whole words and `*` matches inside a word (`*gorilla` matches "silverbackgorilla", `porn*` matches "pornstar"). | A bridge. |
+| **Search entry** | A word in a search list: searches containing it are blocked. | A rendered term. |
+| **Whole internet** | The target `*.*`: every website. Local files (`file://`), this computer (localhost) and the local network always stay reachable. | — |
 | **App** | A program, matched by name, path, script, file fingerprint (`sha256:…`), Flatpak ID or desktop unit. Everything it started is closed with it. | A window. |
 | **Folder entry** | A directory: every program run from inside it is a blocked app, and windows showing it are closed. | — |
-| **Title entry** | A word or phrase matched against window titles. The window is asked to close, then its program is killed. In a browser only the matching tab is blocked, never the browser. | A rendered term. |
-| **Rendered term** | A word or several words (one **term**) matched on its own, in a list that looks at the page title or the rendered, visible text of a page. | A phrase, a title entry. |
-| **Phrase** | Terms from two or more **word sets** that occur together (formerly *word combination*). Rules R-PHRASE-1 to 8. Example: `[eat, nice] [hello, grandpa]` matches "Let's eat grandpa", not "Let's eat, grandpa!". | A rendered term. |
-| **Term** | One entry in a word set: a word or several words (`long cat`). | — |
-| **Word set** | The terms one place in a phrase may be filled with. *Necessary* (a match needs a term from it) or *optional*. A phrase has at least two necessary word sets. | — |
-| **Bridge** | A term written with a dash, `big-` or `-gorilla`: between `big-` and the next set's `-gorilla`, any words of the same sentence may be skipped. A term with both, `-strong-`, is a middle link. | A wildcard (`*`). |
+| **Window title entry** | A word or several words matched against the titles of app windows. Never applies to browsers: a tab's title is judged by term lists and phrase sets. | A rendered term. |
+| **Rendered term** | A word or several words (one **term**), matched on its own in a term list. | A phrase. |
+| **Phrase** | Terms from two or more **word sets** that occur together (formerly *word combination*). R-PHRASE-1 to 10. Example: `[eat, nice] [hello, grandpa]` matches "Let's eat grandpa", not "Let's eat, grandpa!". | A rendered term. |
+| **Term** | One entry in a word set or term list: a word or several words (`long cat`). | — |
+| **Word set** | The terms one place in a phrase may be filled with. *Necessary* (a match needs a term from it) or *optional*. | — |
+| **Phrase length** | How many terms a match of a phrase needs. At least the number of necessary word sets (the default), at most the number of word sets. | — |
+| **Bridge** | A term written with a dash, `big-` or `-gorilla`: between a `big-` and a `-gorilla` of another word set, up to 20 words of the same sentence may be skipped, or none. A term with both, `-strong-`, is a middle link. | A wildcard. |
 
 ### 3.2 Grouping
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Block** | A named set of rules: lists, apps, folders, titles, schedule, break, autostart, affected users. A block does nothing by itself; it acts only while **active**. | A lock. |
-| **List** | A named set of entries inside one block, with a **scope** and a **kind**. | A cluster. |
-| **Entry** | One item in a list: a domain, a pattern with `*`, words, or a word combination. | — |
-| **Scope** | Where a list or phrase set looks: *url*, *title*, *text* (one or several). `kc9k list where`. | — |
-| **Phrase set** | A named set of phrases inside one block, with a scope and its own actions, like a blacklist. A block can have any number. There are no phrase exceptions. | A list. |
+| **Block** | A named group of lists, phrase sets, apps, folders, window title entries, schedule, breaks, autostart, affected users and locks. | — |
+| **List** | A named set of entries inside one block. It has a **type** (address, term or search) and a **kind** (blacklist or exception list). | A cluster. |
+| **Address list** | List type: sites and URL entries, matched against a page's address. | — |
+| **Term list** | List type: rendered terms, matched where its scope says. | — |
+| **Search list** | List type: search entries, matched against searches on any search engine and in a site's own search. | — |
+| **Entry** | One item in a list: a site, a URL entry, a rendered term or a search entry. | — |
+| **Scope** | Where a term list or phrase set looks: *url*, *title* (the tab's), *text* (one or several). | — |
+| **Phrase set** | A named set of phrases inside one block, with a scope and its own actions, like a blacklist. A block can have any number. | A list. |
 | **Blacklist** | List kind: matches get the list's actions. *CT: Websites tab.* | — |
-| **Exception list** | List kind: matches are spared from the blacklists **of the same block only**. *CT: Website Exceptions.* | An allowlist block. |
+| **Exception list** | List kind: matches are spared from the blacklists and phrase sets **of the same block only**. There are no phrase exceptions. *CT: Website Exceptions.* | An allowlist block. |
 | **Allowlist block** | A block whose blacklist is `*.*`, so that only its exceptions are reachable. | — |
-| **Cluster** | A list belonging to no block: never enforced, always freely editable, copied into blocks. | A list. |
-| **Category** | A read-only list shipped with KC9K (Social, News, Adult, …), to import into blocks. *CT: Website categories.* | A cluster, a template. |
-| **Default list** | The categories a new block starts with. | — |
+| **Cluster** | A list or phrase set belonging to no block: never enforced, always freely editable, copied into blocks. | A list. |
+| **Category** | A read-only list or phrase set shipped with KC9K (Social, News, Adult, …). Importing one into a block copies it. *CT: Website categories.* | A cluster, a template. |
 | **Template** | A ready-made block definition to create a block from. | A category. |
-| **Affected users** | The local user accounts a block applies to (default: all). | — |
+| **Affected users** | The local user accounts a block applies to (default: all). For shared computers; only an administrator sets them. | — |
 | **Social preset** | A switch that keeps a site but takes a part of it away (YouTube without Shorts, Instagram messages only, …). Also: an allowed YouTube playlist. | A list. |
-| **Test mode** | A block's title and text lists and its phrase sets report what they would match instead of acting. | — |
+| **Test mode** | A term list or phrase set reports what it would match instead of acting. Set per list and per phrase set. | — |
 
 ### 3.3 Block states
 
+A block is **active** or **inactive**, and at any moment **enabled** or
+**disabled**.
+
 | Term | Meaning | Not |
 |---|---|---|
-| **Enabled** | Switched on: runs now if continuous, follows its schedule if scheduled. *CT: the toggle.* | Active. |
-| **Disabled** | Switched off: never active, schedule ignored. | Unlocked. |
-| **Continuous** | Block type: active the whole time it is enabled. | Scheduled. |
-| **Scheduled** | Block type: active only inside its block windows or place rules, while enabled. | — |
-| **Active** | Being enforced right now. | Enabled, locked. |
-| **On break** | Active, but currently lifted by its break. | Disabled. |
-| **Locked** | At least one lock is in force on the block. | Active. |
-| **Held** | The block cannot be weakened right now, because a lock on it is in force (a schedule lock counts). Only locks hold a block: schedules, allow windows and place rules never do. | Active. |
+| **Active** | Switched on by the user (`kc9k start`): it enforces whenever its type, schedule and breaks say so. | Enabled. |
+| **Inactive** | Switched off (`kc9k stop`): never enforces, schedule ignored. | Unlocked. |
+| **Enabled** | Enforcing right now. | Active. |
+| **Disabled** | Not enforcing right now. | Inactive. |
+| **Lifted** | Active but disabled: outside its block windows or place, inside an allow window, on a break, paused, in a Pomodoro rest or in allowance time. | Inactive. |
+| **Continuous** | Block type: enabled the whole time it is active, except during its allow windows and breaks. | Scheduled. |
+| **Scheduled** | Block type: enabled only inside its block windows or at its places, while active. | — |
+| **Locked** | At least one of its locks is on. A locked block can't be weakened. | Active. |
+
+A block's enforcing ends when its schedule says so or when it is switched
+off. A lock never ends a block, and never starts one.
 
 ### 3.4 Locks — what protects a block
 
-A **lock** decides what it costs to **disable or weaken** a block. A lock never
-changes what is blocked. *Blocks are rules; locks protect rules.*
+A **lock** belongs to a block. While it is **on**, the block can't be
+weakened, and so can't be switched off or deleted. It is set when the user
+creates it and is **unlocked** (lifted) as its kind says; then it is gone,
+unless it has re-lock. A lock never changes what is blocked.
 
 | Term | Meaning | CT |
 |---|---|---|
-| **Timer lock** | No weakening until a trusted end time, given as a duration (`--for`) or a clock time (`--until`). It can always be extended. | Timer |
-| **Text lock** | Weakening needs a typed challenge: random characters, random words or custom text, 1–5000 characters, paste refused. `--lock`. | Random and custom text |
-| **Range lock** | Weakening is refused, or only allowed, between set times on set days. | Time range |
-| **Delay lock** | Weakening starts a countdown (1 min to 40 days) and happens only when it ends. | Delay |
-| **Schedule lock** | The schedule can't be changed while a window runs, nor for a lead time the user chooses before one starts. No lead time is built in. | Schedule |
-| **Restart lock** | The block can be disabled only after the computer has restarted. Continuous blocks only. | Restart |
-| **Password lock** | Weakening needs a password, e.g. one an accountability partner holds. | Password |
-| **Layered sequential locks** | Several locks on one block, browser option or setting, lifted one at a time in the order the user chose. | — |
-| **Trusted time** | The time KC9K believes despite clock changes: changing the system clock has no effect, and time powered off is not counted. All time-based locks count on it. | — |
+| **Timer lock** | On until a date and time (`--until`), or for a duration (`--for`). It can always be extended. Over 24 h, the user is asked to confirm; there is no upper limit. | Timer |
+| **Text lock** | Unlocked by typing a challenge: random characters, random words or custom text, 1–5000 characters, paste refused. | Random and custom text |
+| **Range lock** | On between set times on set days (or, inverted, outside them). | Time range |
+| **Delay lock** | Asking to unlock starts a countdown (1 min to 40 days); the lock is unlocked when it ends. | Delay |
+| **Schedule lock** | On during the block's windows, at its places, and for a lead time the user chooses before a window. For a block with allow windows: on outside them. No lead time is built in. | Schedule |
+| **Restart lock** | Unlocked when the computer has restarted. Continuous blocks only. | Restart |
+| **Password lock** | Unlocked by a password, e.g. one an accountability partner holds. | Password |
+| **Re-lock** | An option of a lock: once unlocked, the lock comes on again after a time the user sets, counted from the unlocking. | — |
+| **Layered sequential locks** | Several locks on one block, browser setting or setting, unlocked one at a time in the order the user chose. | — |
+| **Trusted time** | The real date and time, as protected against changes by the tamper settings the user turned on (§4.10). All locks use it. | — |
 
-While **any** lock is in force on any block:
-uninstalling is refused, the browser extension is required, protective
-settings (§4.10 *Protection*) can't be turned off, and escape routes are
-closed (private or Tor windows, guest profiles, unsupported browsers).
-Strict mode is not part of this: it is a setting of its own (§3.8).
+While any block or setting is locked: uninstalling is refused, the browser
+extension is required, and protection settings (§4.10) can't be turned off.
 
 ### 3.5 Weakening
 
 | Term | Meaning |
 |---|---|
-| **Strengthening** | A change that blocks more or makes protection stronger. |
-| **Weakening** | A change that blocks less: removing or narrowing entries, removing actions, raising thresholds, shrinking windows, a looser break, disabling, deleting, removing or shortening a lock. |
-| **Gate** | What a weakening must pass: *free*, *password*, *text*, *delay*, or *refused*. The locks in force decide it. |
-| **Pending edit** | A weakening waiting for its delay to end. |
-| **No weakening during active blocks** | A global setting: while any block is active, no browser option or setting can be weakened (R-WEAK-6). Unlocked blocks stay freely editable. |
+| **Strengthening** | A change that clearly blocks more or protects more. |
+| **Weakening** | Every other change: removing or narrowing entries, adding exceptions, removing actions, raising thresholds, shrinking windows, widening allow windows, a looser break, test mode on, a social preset off, changing a redirect's target, pausing, switching off, deleting, uninstalling, removing or shortening a lock. |
+| **No weakening during active locks** | A global setting: while any block or setting is locked, no setting can be weakened (strict mode included). Unlocked blocks stay freely editable. |
 
 ### 3.6 Time and breaks
 
 | Term | Meaning |
 |---|---|
-| **Block window** | A recurring weekly time when a scheduled block is active. Times in 5-minute steps; one block's windows never overlap. |
-| **Allow window** | The reverse of a block window: a recurring time when a block that is otherwise always active is lifted, e.g. games allowed on Friday evenings only. |
-| **Break** | A rule that lifts an active block for a while. One break per continuous block, or one per block window. |
-| **Pomodoro** | Work (active) and rest (lifted) alternate, starting with work, with an optional long rest every N rounds. |
-| **Allowance** | Blocked items may be used for N minutes per period, then the block takes effect. Period: rolling, per window, day, week or month, with a refill time. Counts only **use** (§3.7). |
-| **Reward** | Rest time earned by working (being blocked) for a while. It adds up, and expires at the end of each window, day, week or month. |
-| **Text break** | A break of preset length, taken after typing a challenge. |
-| **Delay break** | A break of preset length, taken after a countdown. |
-| **Session break** | Blocked items may be opened N times per period. A session ends a few minutes after you switch to something else. |
-| **Relock** | Unlocking a locked block gives a break of set length instead of ending it; unlocking again during that break ends it. |
-| **Pause** | A one-off lift of an active block until a set time. |
-| **Autostart** | Re-enables a disabled block: *once* at a time, at a *time of day* on set days, at *sign-in or wake*, or at the *next block window*. |
+| **Block window** | A recurring weekly time when a scheduled block is enabled. Times in 5-minute steps; one block's windows never overlap. |
+| **Allow window** | The reverse of a block window: a recurring time when a continuous block is lifted, e.g. games allowed on Friday evenings only. |
+| **Break** | A rule that lifts an enabled block for a while. One break per continuous block, or one per block window. |
+| **Pomodoro** | Work (enabled) and rest (lifted) alternate, starting with work, with an optional long rest every N rounds. |
+| **Allowance** | Blocked items may be used for N minutes per period, then the block is enabled. Period: rolling (the last 24 hours), per window, day, week or month, with a refill time. Counts only **use** (§3.7). |
+| **Reward** | Rest time earned by working (blocked, with the computer in use) for a while. It adds up, and expires at the end of each window, day, week or month. |
+| **Text break** | A break of preset length, taken after typing a challenge. The block stays locked. |
+| **Delay break** | A break of preset length, taken after a countdown. The block stays locked. |
+| **Session limit** | Blocked items may be opened N times per period. A session ends 3 minutes after you switch to something else. |
+| **Pause** | A one-off lift of an enabled block until a set time. |
+| **Autostart** | Switches an inactive block on: *once* at a time, at a *time of day* on set days, at *sign-in or wake*, or at the *next block window*. |
 | **Place** | A set of Wi-Fi access points. Wi-Fi only, no GPS. |
-| **Place rule** | A block is active while the computer is at a place. |
+| **Place rule** | A scheduled block is enabled while the computer is at a place. |
 
 ### 3.7 Use
 
 | Term | Meaning |
 |---|---|
-| **Use** | Time a blocked item is in the foreground (focused app or focused tab) with input in the last 3 minutes, or with media playing. |
+| **Use** | Time a blocked item is in the foreground (focused app or focused tab) with input in the last 3 minutes, or plays sound, also in a background tab. |
 | **Strict use counting** | Setting: background tabs and minimised apps count as use too. |
 
 ### 3.8 Device-level
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Frozen Chicken** | The device block: locks the screen, logs out or shuts down for a time (at most 24 h), on demand or by schedule. *CT: Frozen Turkey / Device Blocks.* | A schedule lock. |
-| **Freeze mode** | What Frozen Chicken does: *lock*, *logout*, *shutdown*, or *allowed apps only*. | — |
-| **Allowed apps only** | Freeze mode: the computer stays usable, but only the programs on the freeze's app list may run; every other user program is closed. | An allowlist block (websites). |
-| **Monk mode** | A system-owned whole-internet block with a timer lock, started by `kc9k monk` or by the `monk` action. | An ordinary block. |
-| **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. | A page action. |
-| **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a lock is in force, it closes escape routes: `sudo` and `pkexec`, programs started from `/home` and `/tmp`, containers and VMs. The user may give it its own setting lock. | — |
-| **No-escape** | Removing the boot-time exits: recovery entries, kernel options, and an unknown password on GRUB. | Strict mode. |
-| **Factory reset** | Wiping or reinstalling the operating system, or booting another one, to get rid of KC9K. Software can't forbid it. | — |
-| **Factory reset protection** | Options that make a factory reset slow and deliberate: firmware lock, boot order guard, installer media guard, other systems in GRUB behind the password. | — |
+| **Frozen Chicken** | The device block: in its freeze mode, for a time (at most 24 h), on demand or by schedule. A running freeze can't be ended. A scheduled freeze can have locks like a block. *CT: Frozen Turkey / Device Blocks.* | A schedule lock. |
+| **Freeze mode** | What Frozen Chicken does: *lock screen*, *logout*, *shutdown*, or *allowed apps only*. | — |
+| **Allowed apps only** | Freeze mode: the computer stays usable, but only the programs on the freeze's app list may run; every other user program is closed. | An allowlist block. |
+| **Monk mode** | A system-owned whole-internet block, switched on for a set time with a timer lock of that time, and off when it ends. Started by `kc9k monk`, a list action or a ladder step. Exceptions and apps can be added only while it is off; it can't be deleted. | An ordinary block. |
+| **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. Logout, shutdown and a freeze are announced 60 s ahead. | A page action. |
+| **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a block is locked: no `sudo` or `pkexec`; nothing runs from `/home` or `/tmp` except from folders the user exempted (adding one is a weakening); no containers or VMs. It can have its own setting lock. | — |
+| **No-escape** | Closes the boot-time exits: hides recovery entries and kernel options, and puts a password nobody knows on GRUB. | Strict mode. |
+| **Factory reset** | Wiping or reinstalling the operating system, or booting another one, to get past KC9K. Software can't forbid it. | — |
+| **Factory reset protection** | Settings that make a factory reset slow and deliberate: firmware lock, boot order guard, installer media guard, other systems in GRUB behind the password. | — |
 
-### 3.9 Page actions
+### 3.9 Actions
 
 | Term | Meaning |
 |---|---|
-| **Action** | What a blacklist does to a matching page: page actions and consequences. The strongest page action wins. |
+| **Action** | What a blacklist, phrase set, app or window title entry does on a match: a page action or a consequence, wherever it makes sense. |
 | **Block page** | Replaces a blocked page, with a motivational message. |
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
-| **Look actions** | Greyscale, no images, no video, mute, declutter, dark: they change a page, they don't block it. |
+| **Look actions** | Greyscale, no images, no video, mute, declutter, dark: they change a page, they don't block it. They add up. |
 | **No downloads** | Action: downloads started from matching pages are cancelled. |
-| **Threshold** | Set per action. For rendered terms: how many different rendered terms must match. For a phrase set: how many different phrases must match (default 1). |
-| **Hit count** | Set per action, for rendered terms only: how many rendered term matches in total, repeats included. Phrase sets have no hit count. |
-| **Rate** | Set per action, for rendered terms: rendered term matches ÷ rendered words, as a percentage. |
-| **Ad trigger** | A fourth scope beside url, title and text: the ad networks a page loads, named by industry (gambling, adult, …). |
+| **Strongest action** | When several actions apply, from any blocks: a consequence first, then close tab, image, redirect, block page. Look actions apply only when none of these does. |
+| **Threshold** | Set per action. For a term list: how many different rendered terms must match. For a phrase set: how many different phrases must match (default 1). |
+| **Hit count** | Set per action, for term lists only: how many matches in total, repeats included. |
+| **Rate** | Set per action, for term lists only: matches ÷ words on the page, as a percentage. Counted only on pages of at least 200 words. |
+| **Ad trigger** | A planned fourth scope beside url, title and text: the ad networks a page loads, named by industry (gambling, adult, …). |
 | **Page score** | *After publishing:* a score for what a page delivers, from its words, ads and layout; lists act on a score above a threshold. |
 
 ### 3.10 Bypass prevention
@@ -305,27 +315,30 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 | Term | Meaning |
 |---|---|
 | **Bypass prevention** | Counting what KC9K stops and climbing a ladder of consequences. Its command is `kc9k nepsis` (*nepsis*, watchfulness). |
-| **Event** | Something KC9K stopped or noticed, kept for a day. |
-| **Detector** | An event type that counts toward escalation: `page`, `search`, `app`, `title`, `browser`, `tamper`, `access`, `workaround`. |
-| **Ladder** | Escalation: N events within T trigger a consequence, step after step. Global, or per block. |
+| **Event** | Something KC9K stopped or noticed, kept for a day (R-EVENT-1). |
+| **Detector** | An event type a ladder counts, chosen by the user: `page`, `search`, `app`, `title`, `browser`, `tamper`, `access` (a wrong access password), `workaround`. |
+| **Ladder** | Escalation: N events within T trigger consequences, step after step. Global, or per block. |
 | **Step** | One rung of a ladder: "N events within T: these consequences". |
 | **Quiet time** | After this long without tripping, the ladder falls back a step. |
 | **Workaround** | A dodged block: mirror site, proxy address, alternative front-end, fetch tool. |
-| **Tamper** | Daemon restart, clock jump. |
+| **Tamper** | A clock jump, or the daemon restarting for any reason but an upgrade, a normal shutdown or a crash KC9K reports itself. |
 
 ### 3.11 Passwords
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Settings password** | Needed for every weakening and every settings change. | A password lock. |
-| **Access password** | Needed to *view* parts of the app (per area: app, dashboard, blocks, device, stats, settings). | A password lock. |
-| **Setting lock** | A lock on one setting or browser option instead of a block. | A block lock. |
+| **Settings password** | Optional. When set, it is needed to weaken anything and to set any lock, so nobody else can lock the user out. | A password lock. |
+| **Access password** | Optional, needed to *view* parts of the app (per area: app, dashboard, blocks, device, stats, settings). | A password lock. |
+| **Setting lock** | A lock on one setting or browser setting instead of a block. | A block's lock. |
+
+A forgotten settings password or password lock can be removed from recovery
+mode, unless no-escape is on.
 
 ### 3.12 Recording
 
 | Term | Meaning |
 |---|---|
-| **Link recording** | Collects the sites you visit into a list or cluster. |
+| **Link recording** | Collects the sites you visit into an address list or cluster. |
 | **Word recording** | Collects the rendered, visible words of pages you visit, with counts. |
 | **Specificity** | How much more common a word is on recorded pages than in normal browsing; recorded words are ranked by it. |
 | **Cut** | Dropping the lowest-ranked X % of recorded words before saving. |
@@ -336,33 +349,35 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 |---|---|
 | **Daemon** | The systemd service that re-applies everything every few seconds. |
 | **Layer** | One of the four ways a block is enforced: `/etc/hosts`, firewall, browser policy, closing apps. The extension works on top of them. |
-| **Extension** | The bundled browser extension. Mandatory while any block needs it; browsers without it are closed. |
-| **Browser option** | A lockable browser setting: `safesearch`, `force-search`, `web-only`, `force-librewolf`, `block-devtools`, `no-private`. |
-| **Option** | A behaviour switch that is never held: `polite-close`, `block-page-details`. |
-| **Hotkey** | A desktop key that starts a block, optionally with a lock. |
-| **Project** | The whole setup in one file, minus locks, passwords, hotkeys and statistics. Import only adds. |
-| **Circadian rhythm** | Settings that follow the time of day: blue light filter, brightness, wallpaper, dark mode in apps and browser. Lockable. |
+| **Extension** | The bundled browser extension. Required while any block is locked or uses websites; browsers without it are closed. |
+| **Setting** | Anything the user configures outside blocks. Kinds: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `force-librewolf`, `block-devtools`, `no-private`), **protection setting** (§4.10), **behaviour setting** (never locked, not touched by *no weakening during active locks*: `polite-close`, `block-page-details`), **preference** (the interface only). |
+| **Hotkey** | A desktop key that switches a block on, optionally setting a lock. |
+| **Project** | The whole setup in one file. *Backup*: everything. *Share*: without places and user names. Import shows a preview, only adds, and gives a block that exists already a new name. |
+| **Circadian rhythm** | Settings that follow the time of day: blue light filter, brightness, wallpaper, dark mode in apps and pages. Lockable. |
 
 ### 3.14 Words to avoid
 
 | Don't say | Say | Why |
 |---|---|---|
 | char lock, character lock, typing challenge (as a lock) | text lock | the challenge is what a text lock asks for |
-| time lock | timer lock | |
-| time range (for `--until`) | timer lock | a range lock is days and times |
+| time lock, time range (for `--until`) | timer lock | a range lock is days and times |
+| held, in force | locked, on | |
+| edit freeze | schedule lock | |
+| relock (as a break) | text break | **re-lock** is a lock option |
 | quota | allowance | |
 | allowance (for earned break time) | reward | |
-| edit freeze | schedule lock | its lead time is user-set |
+| session break | session limit | |
+| option (for `polite-close` …), browser option | behaviour setting, browser setting | |
 | nepsis, bypass detection (in prose) | bypass prevention | `nepsis` is only the command name |
-| rule (for a block) | block, list or entry | `rules` is only the extension's data feed |
+| rule (for a block or list) | block, list, entry | "rule" is only for rule IDs, place rules and the extension's `rules` feed |
 | blocklist | blacklist | |
-| word combination, page word, keyword | phrase, rendered term | renamed 2026-11-13 |
+| word combination, page word, keyword | phrase, rendered term | |
 | whitelist (for exceptions) | exception list | an **allowlist block** is something else |
 | profile (for a block) | block, template | |
-| unblock | disable, unlock, pause, weaken | each means something different |
+| unblock | switch off, unlock, pause, weaken | each means something different |
 | loosen | weaken | |
-| kids, children | youth, young people | decided 2026-11-12 |
-| friction, not a security boundary (for KC9K as a whole) | custom security | decided 2026-11-12; "friction" is fine for what one lock does |
+| kids, children | youth, young people | |
+| friction, not a security boundary (for KC9K as a whole) | custom security | "friction" is fine for what one lock does |
 
 ---
 
@@ -371,13 +386,15 @@ Strict mode is not part of this: it is a setting of its own (§3.8).
 What each part of KC9K does. The GUI and the CLI offer the same functions.
 
 ### 4.1 Overview
-Shows active blocks (with locks and end times), windows still to come today,
-and break status (allowance left, Pomodoro phase).
+Shows active blocks (enabled or lifted, with their locks), windows still to
+come today, break status (allowance left, Pomodoro phase) and where each
+ladder stands.
 
 ### 4.2 Blocks
-Create (empty, from a template, as an allowlist block) · enable / disable ·
-choose continuous or scheduled · rename · duplicate (the copy starts disabled) ·
-delete (refused while locked) · set affected users · export / import all blocks.
+Create (empty, from a template, as an allowlist block) · switch on / off ·
+choose continuous or scheduled · rename · duplicate (the copy starts
+inactive) · delete (refused while locked) · set affected users · export /
+import.
 
 ### 4.3 Block editor
 - **Add entry**: type, press Enter; the text box keeps focus for the next one.
@@ -386,23 +403,24 @@ delete (refused while locked) · set affected users · export / import all block
 - **Edit entry**: double-click moves the entry into the text box (remove + add).
 - **Find entry**: Ctrl+F.
 - **Save changes / Cancel**: one draft per block; nothing is applied until
-  Save, which shows which changes are free, gated or delayed.
-- **Import**: *From KC9K* (categories, lists of other blocks, clusters;
-  several at once) or *From file* (`.txt`, one entry per line). Also *Whole
-  internet* and *All searches containing…*.
-- **Export list** to `.txt`.
-- **Lists**: create, rename, delete, set scope, actions, threshold, hit count,
-  rate, test mode.
-- **Phrase sets**: create, rename, delete, set scope, actions, threshold,
-  test mode, import and export. In each, "+ Create new phrase"; in each
-  phrase, its word sets, each ticked necessary or optional, and the phrase
-  length.
-- **Apps**: add program, add folder, add title entry.
+  Save. On a locked block, Save refuses the weakening changes and says which.
+- **Import**: *From KC9K* (categories, lists and phrase sets of other blocks,
+  clusters; several at once) or *From file* (`.txt`, one entry per line).
+  Also *Whole internet* and *All searches containing…*.
+- **Export** a list or phrase set to `.txt`.
+- **Lists**: create (address, term or search; blacklist or exception list),
+  rename, delete, scope, actions, threshold, hit count, rate, test mode.
+- **Phrase sets**: create, rename, delete, scope, actions, threshold, test
+  mode. In each, "+ Create new phrase"; in each phrase, its word sets, each
+  ticked necessary or optional, and the phrase length.
+- **Apps**: add program, add folder, add window title entry; their actions.
 - **Social presets** and allowed playlists.
+- **Bypass prevention**: the block's own ladder.
 
 ### 4.4 Clusters and recording
 Clusters: create, edit, copy into a block, save from a block. Link recording
-and word recording into a list or cluster; ranking and cut before saving.
+into an address list or cluster; word recording into a term list or
+cluster, ranked, with a cut before saving.
 
 ### 4.5 Schedules
 Weekly grid: drag to add, drag to move, click to edit; 15-minute grid, 5-minute
@@ -410,28 +428,23 @@ times; copy to other days; similar windows edited together; other blocks shown
 greyed out; a break per window. Allow windows. Place rules.
 
 ### 4.6 Locks
-All locks of §3.4, alone or combined, lifted in the order the user chose. A
-timer lock can always be extended. The same locks protect browser options and
-setting locks (the global bypass prevention ladder included).
+All locks of §3.4, alone or layered, on blocks, browser settings and
+settings (the global ladder included). The order of layered locks can't be
+changed while the block is locked; a new lock goes last. A timer lock can
+always be extended.
 
 ### 4.7 Breaks and autostart
 All breaks and autostart kinds of §3.6. Break status is also shown in the
 browser extension's toolbar button and popup.
 
 ### 4.8 Frozen Chicken
-Start for a time; schedule; both may exist together. Freeze mode lock / logout /
-shutdown / allowed apps only (with its own app list).
-
-### 4.8a No built-in protection
-Nothing protects a block unless the user chose it. There is no fixed edit
-freeze and no fixed delay: every lock, lead time and duration is set by the
-user per block.
+Start for a time; schedule; both may exist together. Freeze modes as in §3.8.
 
 ### 4.9 Statistics
 Time used and times blocked, per site, app and title. Time frame (presets or
 custom), per user, top 5 / top 10 / search, filter by block, export JSON,
-delete, on/off, optionally skip private windows (except during a locked
-allowance). Stored only on the computer.
+delete, on/off, optionally skip private windows. Kept apart from events, and
+only on the computer.
 
 ### 4.10 Settings
 - **Preferences**: 24-hour clock, first day of the week, theme with a darkness
@@ -440,29 +453,35 @@ allowance). Stored only on the computer.
 - **Notifications**: timer lock ends, window starts/ends, Pomodoro changes,
   allowance runs out, app blocked; advance warnings in minutes, comma-separated
   (`2,5`).
-- **No weakening during active blocks** (R-WEAK-6).
-- **Protection** (can't be turned off while locked): block unsupported browsers;
-  close browsers if the extension is stopped; grace period for a missing
-  extension (default 60 s); block time and date changes; block task managers;
-  block inactive tabs; block embedded content; block the installer; allow
+- **No weakening during active locks** (R-WEAK-4).
+- **Protection settings** (can't be turned off while any block or setting is
+  locked): close private windows and Tor; close guest profiles; block
+  unsupported browsers; close browsers if the extension is stopped; grace
+  period for a missing extension (default 60 s); block task managers; block
+  inactive tabs; block embedded content; block the installer; allow
   `file://` blocking.
-- **Browser options** (§3.13), each lockable on its own. SafeSearch on Google,
+- **Tamper protection** (each optional): block time and date changes; check
+  the clock against the hardware clock and internet time.
+- **Browser settings** (§3.13), each lockable on its own. SafeSearch on Google,
   Bing, DuckDuckGo and YouTube (Restricted Mode).
+- **DNS**: which server KC9K asks for blocked sites' real addresses.
 - **Use counting**: strict use counting.
-- **Dark pages**: off / always / during a time window, with exempt sites.
 - **Circadian rhythm**: per time of day (morning, afternoon, evening, night,
   at times the user sets): blue light filter, screen brightness, wallpaper,
-  dark mode for apps and pages. Lockable.
-- **Device protection**: strict mode, no-escape, factory reset protection
-  (firmware lock, boot order guard, installer media guard, other systems in
-  GRUB behind the password), with a guided setup.
+  dark mode for apps, dark pages (with exempt sites). Lockable.
+- **Device protection**: strict mode, no-escape, factory reset protection,
+  with a guided setup.
 - **Passwords**: settings password, access passwords.
 - **Bypass prevention**: the global ladder, lockable.
-- **Hotkeys**: a key starts a block, optionally with a lock.
-- **Project**: export / import the whole setup.
-- **Options**: polite close, block page details.
+- **Hotkeys**: a key switches a block on, optionally setting a lock.
+- **Project**: backup, share, import.
+- **Behaviour settings**: polite close, block page details.
 
-### 4.11 Command line
+### 4.11 Install and update
+A `.deb` package. Automatic updates are out of scope for now. Uninstalling is
+refused while any block or setting is locked.
+
+### 4.12 Command line
 Every function has a command. Equivalents of Cold Turkey's parameters:
 
 | Cold Turkey | KC9K |
@@ -472,65 +491,77 @@ Every function has a command. Equivalents of Cold Turkey's parameters:
 | `-start "B"` | `kc9k start B` |
 | `-start "B" -lock X` | `kc9k start B --for Xm` |
 | `-start "B" -password X` | `kc9k start B --password-stdin` |
-| `-start "B" -random-text X` | `kc9k start B --lock --lock-chars X` |
+| `-start "B" -random-text X` | `kc9k start B --text-lock --lock-chars X` |
 | `-stop "B"` | `kc9k stop B` |
 | `-stop "B" -password X` | `kc9k stop B` (password on stdin) |
 | `-toggle "B"` | `kc9k toggle B` |
+
+Command and flag names follow this glossary (`--text-lock`, `list scope`);
+old names keep working for a while.
 
 ---
 
 ## 5. Rules
 
 **Locks**
-- **R-LOCK-1** A lock protects only an enabled block; a disabled block can't be deleted while a lock is in force.
-- **R-LOCK-2** Starting an active block again may only strengthen its locks; a timer lock may always be extended.
-- **R-LOCK-3** A block that is not held can be enabled, disabled or edited in any direction at once (the settings password still applies), also while it is active.
-- **R-LOCK-4** A timer lock refuses every weakening before its trusted end time.
-- **R-LOCK-5** A text lock allows weakening only after the challenge is typed correctly; pasting is refused.
-- **R-LOCK-6** A delay lock turns every weakening into a pending edit applied when its countdown ends.
-- **R-LOCK-7** A restart lock can be removed only after a boot later than the lock's start.
-- **R-LOCK-8** A range lock refuses weakening inside (or, inverted, outside) its ranges.
-- **R-LOCK-9** While any lock is in force: uninstall refused, extension required, protective settings can't be turned off.
-- **R-LOCK-10** No lock, delay or freeze applies unless the user set it on that block.
-- **R-LOCK-11** Layered locks are lifted one at a time, in the user's order; adding a lock or putting one anywhere in the order is strengthening, removing one or moving it earlier is weakening.
-- **R-LOCK-12** Only locks prevent weakening. Schedules, allow windows and place rules never hold a block.
+- **R-LOCK-1** Only locks protect a block. A locked block can't be weakened; an unlocked block can be switched on, off or edited in any direction at once, also while enabled.
+- **R-LOCK-2** A lock is on until it is unlocked as its kind says (§3.4); then it is gone, unless it has re-lock.
+- **R-LOCK-3** A locked block can't be deleted or switched off.
+- **R-LOCK-4** A timer lock can always be extended, never shortened.
+- **R-LOCK-5** A text lock's challenge refuses pasting.
+- **R-LOCK-6** Layered locks are unlocked one at a time, in the user's order: a lock can be unlocked only once the one before it is. A timer lock with a date needs that date to have come; one with a duration counts from when the lock before it was unlocked.
+- **R-LOCK-7** The order of layered locks can't change while the block is locked; a new lock goes last.
+- **R-LOCK-8** A restart lock is unlocked by a boot later than the lock's start.
+- **R-LOCK-9** While any block or setting is locked: uninstalling is refused, the extension is required, protection settings can't be turned off.
+- **R-LOCK-10** No lock, delay or lead time applies unless the user set it.
+- **R-LOCK-11** A lock never starts by itself, except through re-lock.
 
 **Weakening**
-- **R-WEAK-1** Strengthening is never gated.
-- **R-WEAK-2** Every weakening gets exactly one gate decision, made in the CLI; the GUI only runs CLI commands.
-- **R-WEAK-3** Editing an entry is remove + add; it is weakening if the new entry matches less.
-- **R-WEAK-4** With several locks, every gate must be passed.
-- **R-WEAK-5** A refused weakening is logged and never counted as a bypass.
-- **R-WEAK-6** With *no weakening during active blocks* on, no browser option or setting (strict mode included) can be weakened while any block is active; disable the active blocks first. Blocks themselves are not affected: only their own locks hold them (R-LOCK-3, R-LOCK-12).
+- **R-WEAK-1** Strengthening never needs a lock unlocked (the settings password, when set, still guards setting locks).
+- **R-WEAK-2** Every decision about weakening is made in the CLI; the GUI only runs CLI commands.
+- **R-WEAK-3** A refused weakening is logged and never counted as a bypass.
+- **R-WEAK-4** With *no weakening during active locks* on, no setting (strict mode included) can be weakened while any block or setting is locked. Turning it off is itself refused then.
+- **R-WEAK-5** Editing an entry is remove + add: weakening unless the new entry clearly matches more.
 
 **Schedules and breaks**
-- **R-SCHED-1** An enabled scheduled block is active inside its windows; a disabled block never is.
+- **R-SCHED-1** An active scheduled block is enabled inside its windows and at its places; an inactive block never is.
 - **R-SCHED-2** A block's windows never overlap.
-- **R-SCHED-3** Pomodoro starts with work. Its rhythm is counted from midnight, except from the start time on the day a continuous block is started, and from each window's start on a scheduled block.
+- **R-SCHED-3** Pomodoro starts with work, and its rhythm starts again each time the block is enabled.
 - **R-BREAK-1** An allowance counts only use (§3.7).
+- **R-BREAK-2** A reward is earned only while the computer is in use.
 
-**Lists**
-- **R-LIST-1** Exceptions spare pages only from their own block's blacklists.
+**Lists and phrases**
+- **R-LIST-1** Exceptions spare pages only from their own block's blacklists and phrase sets.
 - **R-LIST-2** Clusters and categories are never enforced.
 - **R-LIST-3** Every new block has the exception `file://*`.
-- **R-LIST-4** Rendered terms and phrases are matched against rendered, visible text only (or the title or URL, when ticked).
-- **R-PHRASE-1** A phrase has at least two word sets, both necessary. Further word sets are each necessary or optional.
-- **R-PHRASE-2** A match takes one term from each necessary word set, plus terms from optional sets until it reaches the phrase's **length**. The length is at least the number of necessary sets (its default) and at most the number of sets.
-- **R-PHRASE-3** One word set gives at most one term to a match: with `[long cat, neko] [running, sitting]`, "long cat running" matches, and "long cat neko" doesn't: both terms come from the same set.
-- **R-PHRASE-4** The terms may come in any order, and must follow each other directly, separated only by blank space. Punctuation between them breaks the match.
-- **R-PHRASE-5** In the URL, every separator (`-` `_` `/` `.` `?` `=` `&` `+`) counts as blank space.
-- **R-PHRASE-6** A bridge skips words between two terms: `[big-, strong] [-gorilla, cat]` matches "big and long gorilla". The skipped part must stay in one sentence (no `.` `!` `?`), and the order is fixed: `big-` before `-gorilla`.
-- **R-PHRASE-7** A bridge needs both ends: `-gorilla` matches only after a `term-` of another set. `[-gorilla, cat] [jumping, river]` doesn't match "jumping gigantic gorilla". A middle link (`-strong-`) needs a phrase with at least three word sets.
-- **R-PHRASE-8** Each action of a phrase set has a threshold: how many different phrases of the set must match (default 1).
-- **R-TITLE-1** A title match in a browser blocks the tab, never the whole browser.
+- **R-LIST-4** Text means rendered, visible text: hidden or collapsed text doesn't count; text further down the page does. Each frame is judged on its own text.
+- **R-LIST-5** Upper and lower case and accents are ignored (é = e); look-alike letters from other alphabets count as their Latin letters. Languages without spaces between words are out of scope.
+- **R-LIST-6** Every count set on an action (threshold, hit count, rate) must be met.
+- **R-PHRASE-1** A phrase has at least two word sets; the first two are necessary, further ones necessary or optional.
+- **R-PHRASE-2** A match takes one term from each necessary word set, plus terms from optional sets until it reaches the phrase length.
+- **R-PHRASE-3** One word set gives at most one term to a match: with `[long cat, neko] [running, sitting]`, "long cat running" matches, and "long cat neko" doesn't.
+- **R-PHRASE-4** The terms may come in any order, and must follow each other directly, separated only by blank space. Punctuation between them breaks the match. An apostrophe inside a word is part of it ("let's"); a hyphen between letters counts as blank space, so `long cat` matches "long-cat".
+- **R-PHRASE-5** A break between parts of a page (heading, paragraph, list item, button) ends a sentence; phrases and bridges don't cross it.
+- **R-PHRASE-6** In the URL, the address is decoded first (`%20` is a space), and every separator (`-` `_` `/` `.` `?` `=` `&` `+` `#` `:` `,`) counts as blank space.
+- **R-PHRASE-7** A bridge skips up to 20 words, or none, between two terms of different word sets: `[big-, strong] [-gorilla, cat]` matches "big and long gorilla" and "big gorilla". The skipped part may hold commas but stays in one sentence (no `.` `!` `?`), and the order is fixed: `big-` before `-gorilla`.
+- **R-PHRASE-8** A bridge needs both ends: `-gorilla` matches only after a `term-` of another word set, so `[-gorilla, cat] [jumping, river]` doesn't match "jumping gigantic gorilla". A phrase with a one-ended bridge is refused when entered. A middle link (`-strong-`) needs at least three word sets.
+- **R-PHRASE-9** Each action of a phrase set has a threshold: how many different phrases of the set must match (default 1). Phrase sets have no hit count and no rate.
+- **R-PHRASE-10** Phrase sets can be exported, imported, kept as clusters and shipped as categories; they take no part in recording.
+- **R-TITLE-1** Window title entries never apply to browsers.
+
+**Bypass prevention**
+- **R-EVENT-1** At most one event per tab and blocked site per minute. Tabs restored when the browser starts, preloaded pages and embedded frames don't count.
 
 **Monk mode**
-- **R-MONK-1** The monk-mode block is system-owned, and the `monk` action is not offered inside it.
+- **R-MONK-1** The monk-mode block is system-owned, can't be deleted, and the `monk` action is not offered inside it.
 
 **Device**
 - **R-FREEZE-1** In *allowed apps only* mode, only programs on the freeze's app list (and system processes) may run.
-- **R-STRICT-1** Strict mode is on only if the user turned it on. Turning it off is gated only by its own setting lock, if the user gave it one, and by R-WEAK-6.
+- **R-FREEZE-2** A running freeze can't be ended; removing a scheduled freeze is refused while it is locked.
+- **R-WARN-1** Logout, shutdown and a freeze are announced 60 s before they happen.
+- **R-STRICT-1** Strict mode is on only if the user turned it on. Turning it off is refused only by its own setting lock, if it has one, and by R-WEAK-4.
 - **R-ESCAPE-1** Until the user turns on no-escape, a recovery path always exists (principle 4).
+- **R-DESKTOP-1** On Wayland or a desktop other than Cinnamon, KC9K warns that window titles and app time don't work; everything else works.
 
 ---
 
@@ -541,53 +572,52 @@ Made with the owner. Newest last.
 - 2026-11-10: Linux Mint Cinnamon on X11 only. English only. Users work in
   the interface; commands exist for it and ask for access passwords too.
 - 2026-11-10: Only what improves the experience gets built; behaviour changes
-  are options.
-- 2026-11-10: A refused attempt to weaken a held block is ordinary use, never
-  counted by bypass prevention.
+  are settings.
+- 2026-11-10: A refused attempt to weaken a locked block is ordinary use,
+  never counted by bypass prevention.
 - 2026-11-10: Places use Wi-Fi only (no GPS). One ladder for all detectors
   (no ladder per detector).
 - 2026-11-12: Windows support and the page score come after publishing.
-- 2026-11-12: KC9K gets options to make a factory reset hard, as far as
+- 2026-11-12: KC9K gets settings to make a factory reset hard, as far as
   software allows.
 - 2026-11-12: "Layered sequential locks" means several locks on one block,
-  lifted in the order the user specified; they can be set on all locks, not
-  only on blocks.
+  unlocked in the order the user specified; they can be set on all locks,
+  not only on blocks.
 - 2026-11-12: KC9K is custom security, not "friction, not a security
   boundary".
 - 2026-11-12: Fix current functionality before adding new features.
 - 2026-11-12: KC9K is for youth too; the project speaks of "youth", not "kids".
-- 2026-11-13: This file replaces `VISION.md` and `docs/SPEC.md`. Where they
-  disagreed, the SPEC's terms and features were kept; what only `VISION.md`
-  had (goal, principles, circadian rhythm, ads, no downloads, SafeSearch
-  beyond Google, factory reset protection, layered locks, hotkeys, project,
-  browser options, relock) was added.
-- 2026-11-13: Nothing protects a block unless the user chose it: no fixed
-  edit freeze, no fixed loosening delay (§4.8a, R-LOCK-10).
+- 2026-11-13: This file replaces `VISION.md` and `docs/SPEC.md`.
 - 2026-11-13: Where the code contradicts this file, the code is fixed.
-- 2026-11-13: Only locks prevent weakening a block, always (R-LOCK-12). A
-  block in a schedule window, with allow windows or at a place can be
-  weakened freely unless a lock is on it.
+- 2026-11-13: Only locks protect a block. A locked block can't be weakened;
+  an unlocked block can always be switched on, off or edited freely. No
+  built-in locks, delays or lead times.
 - 2026-11-13: Strict mode is a voluntary setting against tampering, with
-  its own setting lock (R-STRICT-1).
-- 2026-11-13: An unlocked block can always be enabled, disabled or edited
-  freely, also while it is active.
-- 2026-11-13: A global setting *no weakening during active blocks*
-  (R-WEAK-6): with it on, a block must be disabled before, for example,
-  strict mode can be turned off. With it off, the user decides whether
-  strict mode gets a lock of its own. The setting doesn't touch blocks,
-  and turning it off is itself refused while a block is active.
-- 2026-11-13: Word combinations are renamed phrases and leave ordinary
-  lists; blocks get phrase sets, each with its own actions (R-PHRASE-1 to
-  8). Thresholds are per action; rendered term lists also have hits and rate,
-  phrase sets have neither hits nor phrase exceptions. Bridges are written
-  with a dash; `*` keeps matching inside a word.
-- 2026-11-13: "Keyword" is renamed **rendered term**: one term can be
-  several words.
-- 2026-11-13: Browsing must stay fast, however complex the rules, with the
-  limits in principle 9.
+  its own setting lock. With *no weakening during active locks* on, it
+  can't be turned off while anything is locked.
+- 2026-11-13: Phrases (formerly word combinations) and phrase sets, with
+  bridges, as in R-PHRASE-1 to 10; "keyword" is renamed rendered term.
+- 2026-11-13: Browsing must stay fast, with the limits in principle 9.
+- 2026-11-13: The lock model, like Cold Turkey's: a lock belongs to the
+  block and is unlocked as its kind says; layered locks one after another;
+  re-lock is an option of a lock; a lock never ends a block. Locks follow the
+  real clock, with optional tamper protection. Blocks are active or inactive
+  (switched on or off), and enabled or disabled (enforcing or not); lifted
+  is active but disabled.
+- 2026-11-13: The answers to the 65 questions on the review of this file
+  (lists by type, matching details, events, warnings, project export,
+  settings words and more), written into §3–§5.
 
 ## 7. Open decisions
 
-Contradictions not yet settled by the owner. Don't resolve them alone.
+Not yet settled by the owner. Don't resolve them alone.
 
-None right now.
+1. **Warnings from bypass prevention.** Should a ladder step's logout or
+   shutdown also be announced 60 s ahead (R-WARN-1), giving 60 s to save
+   work, or happen at once?
+2. **DNS default.** Which server KC9K asks for blocked sites' addresses
+   unless the user picks one.
+3. **`kc9k nepsis`:** keep the command name, or rename it `kc9k bypass`?
+4. **Protection settings without a definition:** block the installer, block
+   inactive tabs, block embedded content, block task managers, `force-search`,
+   `web-only`. Definitions to be written and approved.

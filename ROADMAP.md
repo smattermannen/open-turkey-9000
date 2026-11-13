@@ -26,34 +26,56 @@ Last checked against the code: 2026-11-13.
 
 ### 0.1 Code that contradicts `SPEC.md`
 
-- [ ] **Fixed 2 h edit freeze** (`schedule.EditFreeze`, also used for
-      Frozen Chicken schedules). §4.8a and R-LOCK-10: a schedule lock has a
-      lead time the user chooses, none by default. (M)
-- [ ] **Holds that aren't locks** (R-LOCK-12). Today a block can't be
-      weakened while its schedule window is open, while it has allow windows
-      (weakening is queued for 24 h: `db.DefaultLoosenDelay`, `gateEdit`,
-      `kc9k pending delay`), or while a place rule has it on. Only locks may
-      hold a block; a delay comes only from a delay lock (R-LOCK-6). (M)
+- [ ] **The lock model** (§3.3, §3.4, R-LOCK-1 to 11). Today:
+      - a block is protected without a lock: while its schedule window is
+        open, while a place rule has it on, and always once it has allow
+        windows (weakening is queued for 24 h: `db.DefaultLoosenDelay`,
+        `gateEdit`, `pending`, `--now`); a built-in 2 h edit freeze
+        (`schedule.EditFreeze`) comes before every window, Frozen Chicken
+        schedules included. All of that goes: only locks protect, and a
+        schedule lock's lead time is the user's;
+      - a timer lock ending switches the block off, and `unlock` of a text
+        or password lock switches the block off too. A lock must only be
+        lifted; the block goes on until its schedule or the user ends it;
+      - the delay lock counts from `stop`, not from asking to unlock;
+      - trusted time counts only time the computer is on or suspended; it
+        must be the real clock, with the tamper settings of §4.10;
+      - `kc9k break relock` is a text break (rename it); **re-lock**, the
+        lock option, is not built;
+      - uninstalling is refused in schedule windows and for allow windows, not only
+        while something is locked (R-LOCK-9). (L)
 - [ ] **Strict mode's lock** (R-STRICT-1). Strict mode is already a switch
       (`kc9k strict on`), but it has no lock of its own: it can't be turned
-      off while *any* lock is in force (`enforce.AnyLock` in
-      `cli/strict.go`). Only its own optional setting lock, and R-WEAK-6,
-      may keep it on. (S)
+      off while any lock is on (`enforce.AnyLock` in `cli/strict.go`). Only
+      its own optional setting lock, and R-WEAK-4, may keep it on. (S)
 - [ ] **Use** (§3.7): input in the last 3 minutes. The code uses 1 minute
       for allowances (`quota`) and 2 minutes for statistics. (S)
-- [ ] **Monk mode** is an ordinary block named `monk-mode`; R-MONK-1 makes it
-      system-owned, without the `monk` action inside it. (S)
+- [ ] **Reward** (R-BREAK-2) is earned while the block is enforced, also
+      when the computer is idle. (S)
+- [ ] **Monk mode** is an ordinary block named `monk-mode`, editable while
+      on; R-MONK-1 makes it system-owned, without the `monk` action inside
+      it, and §3.8 allows exceptions and apps only while it is off. (S)
 - [ ] **R-LIST-3**: new blocks don't get the exception `file://*`. (S)
 - [ ] **R-SCHED-2** and §3.6: block windows may overlap, and times are not
       held to 5-minute steps. (S)
 - [ ] **Text lock** (§3.4): random characters only, 10–5000. Random words,
       custom text and lengths from 1 are missing. (S)
+- [ ] **Window titles** (R-TITLE-1) also act in browsers, through the
+      extension. They must leave browsers to term lists. (S)
+- [ ] **Tamper** (§3.10): every daemon restart within a boot counts, an
+      upgrade included. (S)
+- [ ] **Lists by type** (§3.2): a list ticks url, title and text with mixed
+      entries; it must be an address, term or search list. (M)
+- [ ] **Project** (§3.13): export leaves out locks, passwords, hotkeys and
+      statistics; it must offer *backup* (everything) and *share* (without
+      places and user names), with a preview on import. (M)
 - [ ] **Words** (§3.14): commands, GUI labels, messages and `README.md` still
-      say char lock, time lock, quota, `break allowance` (a reward),
-      template (for shipped lists, which `SPEC.md` calls categories),
-      loosen, bypass detection. Prose and labels can change now; renaming
-      commands (`kc9k quota`, `break allowance`, `--template`) needs a plan
-      agreed with the owner. (M)
+      say active (for enforcing), char lock, time lock, held, quota,
+      `break allowance` (a reward), `break relock` (a text break), option,
+      browser option, template (for shipped lists, which `SPEC.md` calls
+      categories), loosen, bypass detection. Commands get the glossary's
+      names (`--text-lock`, `list scope`), keeping the old ones for a while.
+      (M)
 
 - [ ] **Page reading is slow on big pages** (principle 9). In every frame,
       `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
@@ -135,11 +157,11 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Item | Status | Notes |
 |---|---|---|
 | Site, URL entry, wildcard, word combination | Built | website lists |
-| Search entry | Not built | the `search` detector exists, not the entry |
+| Search list, search entry | Not built | the `search` detector exists, not the list |
 | File URL, `file://*` default | Not built | see 0.1 |
 | App (name, path, script, fingerprint, Flatpak, desktop unit) | Built | `blocker/scripts.go`, `blocker/process.go` |
 | Folder entry | Partial | programs inside it are closed; windows showing it are not |
-| Title entry | Built | X11 only |
+| Window title entry | Differs | X11 only; also acts in browsers, see 0.1 |
 | Rendered term | Built | |
 | Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
 | Phrase set | Not built | |
@@ -152,19 +174,21 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Allowlist block | Built | `block create --allowlist` |
 | Cluster | Built | |
 | Category | Partial | 14 shipped lists, offered only when creating a block (`--template`) |
-| Default list | Not built | |
+| Address, term and search lists | Differs | see 0.1 |
+| Phrase sets in clusters and categories | Not built | |
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |
 | Social preset, allowed playlist | Built | see 0.2 |
-| Test mode | Built | `kc9k list test` |
+| Test mode | Differs | per block (`kc9k list test`); must be per list and phrase set |
 
 ### §3.3 Block states
 
 | Item | Status | Notes |
 |---|---|---|
-| Enabled / disabled, continuous / scheduled | Not built | blocks are started and stopped; schedules start them |
-| Active, locked, held | Built | |
-| On break | Built | |
+| Active / inactive (`start` / `stop`) | Built | the code calls these active and inactive too, but also uses "active" for enforcing |
+| Enabled / disabled, lifted | Partial | enforcing is tracked; the words aren't used |
+| Continuous / scheduled types | Not built | schedules start and stop blocks |
+| Locked | Differs | the code also holds unlocked blocks; see 0.1 |
 | Rename, duplicate | Built | that a duplicate starts disabled: Unchecked |
 | `kc9k toggle` | Not built | |
 
@@ -172,11 +196,12 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Timer lock (`--for`, `--until`) | Built | |
+| Timer lock (`--for`, `--until`) | Differs | ends the block; counts only time switched on; see 0.1. Confirmation over 24 h: Unchecked |
 | Text lock | Partial | see 0.1 |
 | Range lock | Not built | |
-| Delay lock | Built | `start --delay`, 1 min to 40 days |
-| Schedule lock | Differs | fixed 2 h, see 0.1 |
+| Delay lock | Differs | `start --delay`, 1 min to 40 days, counted from `stop` |
+| Schedule lock | Differs | built in, fixed 2 h; see 0.1 |
+| Re-lock | Not built | |
 | Restart lock | Built | |
 | Password lock | Built | |
 | Layered sequential locks | Partial | locks stack, but `unlock` checks them all at once in a fixed order (`cli/control.go`) |
@@ -193,7 +218,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Allowance | Partial | daily only (`kc9k quota`); no rolling, window, week or month periods, no refill time |
 | Reward | Partial | `kc9k break allowance`; the expiry rule: Unchecked |
 | Text break, delay break, session break | Not built | |
-| Relock | Built | `kc9k break relock` |
+| Text break | Built | as `kc9k break relock` |
+| Delay break | Not built | |
 | Pause | Built | |
 | Autostart | Not built | |
 | Place, place rule | Built | Wi-Fi only |
@@ -204,11 +230,14 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Frozen Chicken: lock, logout, shutdown, scheduled | Built | |
+| Frozen Chicken: lock screen, logout, shutdown, scheduled | Built | a running freeze can't be ended; locks on scheduled freezes: Not built |
+| Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Partial | 5 minutes before a scheduled freeze; none before a list's or ladder's logout or shutdown |
 | Allowed apps only | Not built | |
 | Monk mode | Differs | see 0.1 |
 | Consequences | Built | `enforce/consequence.go` |
-| Strict mode | Differs | a voluntary switch, but no lock of its own; see 0.1 |
+| Strict mode | Differs | a voluntary switch, but no lock of its own; see 0.1. Exempt folders: Not built |
+| Recovery of a forgotten password (§3.11) | Partial | root can remove it while nothing is locked |
+| Wayland warning (R-DESKTOP-1) | Unchecked | |
 | No-escape | Built | |
 | Factory reset protection | Not built | section 2.6 |
 
@@ -232,17 +261,21 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Bypass prevention: events, detectors, ladder, steps, quiet time | Built | `kc9k nepsis` |
 | Workaround detection | Built | proxies, mirrors, front-ends, fetch tools |
 | Settings password, access passwords, setting locks | Built | |
-| No weakening during active blocks (R-WEAK-6) | Not built | |
+| No weakening during active locks (R-WEAK-4) | Not built | strict mode alone behaves this way today |
+| Event counting (R-EVENT-1) | Unchecked | |
 | Link recording | Built | |
 | Word recording, specificity, cut | Not built | |
 | Four layers, daemon | Built | `internal/blocker/` |
 | Extension in LibreWolf | Built | mandatory, `extguard.go` |
 | Extension in Google Chrome / Chromium | Built | 2026-11-12; see 0.2 |
-| Browser options | Built | |
+| Browser settings | Built | |
 | SafeSearch | Partial | Google only; section 2.4 |
-| Options | Built | |
+| Behaviour settings | Built | called options |
+| DNS server setting | Not built | |
+| Tamper settings (§4.10) | Not built | |
 | Hotkeys | Built | Cinnamon tried; GNOME see 0.2 |
-| Project export / import | Built | |
+| Project export / import | Differs | see 0.1 |
+| `.deb` package | Not built | |
 | Circadian rhythm | Not built | section 2.1 |
 
 ### §4 Functions (interface)
@@ -258,7 +291,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | 4.10 Preferences | Partial | theme light / dark / system; 24-hour clock, first day, darkness slider, open at login: Unchecked; tray: Not built |
 | 4.10 Notifications | Partial | fixed 5 minutes ahead; choosing which and when: Not built |
 | 4.10 Protection settings | Partial | close browsers without the extension (grace fixed at 60 s) is built; the others: Not built |
-| 4.10 Dark pages setting | Not built | the `dark` action exists per list |
+| 4.10 Dark pages (part of circadian rhythm) | Not built | the `dark` action exists per list |
 
 ---
 
@@ -291,13 +324,13 @@ After section 0. Each item's details are in `SPEC.md`; here only the steps.
 
 - [ ] Bing, DuckDuckGo and YouTube Restricted Mode, each lockable.
 
-### 2.5 Layered sequential locks (M) — §3.4, R-LOCK-11
+### 2.5 Layered sequential locks (M) — §3.4, R-LOCK-6, R-LOCK-7
 
 - [ ] Store the user's order of locks; `unlock` lifts only the first
-      remaining one.
-- [ ] Decide with the owner: does a timer lock in the middle start counting
-      when it is reached, or from the start?
-- [ ] The same for browser options and setting locks (the global ladder
+      remaining one (R-LOCK-6, R-LOCK-7).
+- [ ] A timer lock with a date waits for the date; one with a duration
+      counts from when the lock before it was unlocked.
+- [ ] The same for browser settings and setting locks (the global ladder
       included).
 - [ ] `kc9k status` and the interface show the order and which lock is next.
 

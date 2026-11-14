@@ -215,11 +215,11 @@ try:
               on_block_page(driver) and (text_of(driver, "why") or "") == "")
         ot("option", "block-page-details", "on")
 
-        # Actions that change the page: dark, declutter, no video.
+        # Actions that change the page: dark, no video.
         ot("block", "create", "extralooks")
         ot("list", "create", "extralooks", "Looks", "--text")
         ot("list", "add", "extralooks", "Looks", "kcninelooksword")
-        for action in ("dark", "declutter", "no-video", "mute"):
+        for action in ("dark", "no-video", "mute"):
             ot("list", "action", "extralooks", "Looks", action, "on")
         ot("list", "action", "extralooks", "Looks", "block", "off")
         ot("start", "extralooks")
@@ -229,8 +229,6 @@ try:
             "const s = document.getElementById('kc9k-page-style'); return s ? s.textContent : '';")
         check("the page stays for actions that only change it", "/looks" in driver.current_url)
         check("dark turns a light page over", "invert(1)" in css)
-        check("declutter hides side columns",
-              driver.execute_script("return getComputedStyle(document.getElementById('side')).display") == "none")
         check("no-video hides videos",
               driver.execute_script("return getComputedStyle(document.getElementById('v')).display") == "none")
         ot("stop", "extralooks")

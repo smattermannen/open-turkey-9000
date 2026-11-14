@@ -301,3 +301,65 @@ func TestWordCombinations(t *testing.T) {
 	// An address with brackets is still an address.
 	mustRun(t, "list", "add", "b", "Blocked", "en.wikipedia.org/wiki/Mercury_(planet)")
 }
+
+// Files from before declutter was removed still import: the action is
+// skipped, and a list or phrase set left with none gets block.
+func TestImportSkipsDeclutter(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "list", "add", "b", "Blocked", "reddit.com")
+	mustRun(t, "list", "action", "b", "Blocked", "greyscale", "on")
+	mustRun(t, "list", "create", "b", "Words", "--text")
+	mustRun(t, "list", "add", "b", "Words", "nsfw")
+	mustRun(t, "list", "action", "b", "Words", "greyscale", "on")
+	mustRun(t, "list", "action", "b", "Words", "block", "off")
+	mustRun(t, "phrase-set", "create", "b", "P")
+	mustRun(t, "phrase-set", "action", "b", "P", "greyscale", "on")
+	mustRun(t, "phrase-set", "action", "b", "P", "block", "off")
+	dir := t.TempDir()
+	declutter := func(s string) string { return strings.ReplaceAll(s, `"greyscale"`, `"declutter"`) }
+	actions := func(block, name string) []string {
+		var out []string
+		for _, a := range list(t, d, block, name).Actions {
+			out = append(out, a.Name)
+		}
+		return out
+	}
+
+	blockFile := filepath.Join(dir, "b.json")
+	exported := strings.Replace(capture(t, "block", "export", "b"), `"name": "b"`, `"name": "c"`, 1)
+	if err := os.WriteFile(blockFile, []byte(declutter(exported)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "import", blockFile)
+	if got := actions("c", "Blocked"); !reflect.DeepEqual(got, []string{"block"}) {
+		t.Errorf("c Blocked actions = %v; want [block]", got)
+	}
+	if got := actions("c", "Words"); !reflect.DeepEqual(got, []string{"block"}) {
+		t.Errorf("c Words actions = %v; want [block]", got)
+	}
+	sets, err := d.PhraseSets("c")
+	if err != nil || len(sets) != 1 || len(sets[0].Actions) != 1 || sets[0].Actions[0].Name != "block" {
+		t.Errorf("c phrase sets = %+v, %v; want P with block", sets, err)
+	}
+
+	// A block file from before lists.
+	legacy := `{"name": "old", "actions": ["block", "declutter"], "sites": ["x.com"], "apps": []}`
+	if err := os.WriteFile(blockFile, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "import", blockFile)
+	if got := actions("old", "Blocked"); !reflect.DeepEqual(got, []string{"block"}) {
+		t.Errorf("old Blocked actions = %v; want [block]", got)
+	}
+
+	// A project file.
+	projectFile := filepath.Join(dir, "p.json")
+	if err := os.WriteFile(projectFile, []byte(declutter(capture(t, "project", "export"))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "project", "import", projectFile, "--yes")
+	if got := actions("b-2", "Words"); !reflect.DeepEqual(got, []string{"block"}) {
+		t.Errorf("b-2 Words actions = %v; want [block]", got)
+	}
+}

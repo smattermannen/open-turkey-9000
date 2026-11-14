@@ -405,6 +405,10 @@ def page_box():
     return scroll, box
 
 
+LOCK_KIND_NAMES = {"timer": "timer lock", "text": "text lock", "password": "password lock",
+                   "restart": "restart lock", "delay": "delay lock"}
+
+
 def block_summary(block):
     """One line describing a block's state and locks."""
     parts = ["Active" if block["active"] else "Inactive"]
@@ -422,6 +426,11 @@ def block_summary(block):
         parts.append(f"delay lock unlocks in {fmt_seconds(block['delay_left'])}")
     elif block["delay_seconds"]:
         parts.append(f"delay lock of {fmt_seconds(block['delay_seconds'])}")
+    if block.get("timer_after"):
+        parts.append(f"timer lock of {fmt_seconds(block['timer_after'])} after the locks before it")
+    if len(block.get("lock_order") or []) > 1:
+        # R-LOCK-6: unlocked one at a time in this order.
+        parts.append("unlock order: " + " → ".join(LOCK_KIND_NAMES.get(k, k) for k in block["lock_order"]))
     if block["pomodoro_on"]:
         parts.append(f"Pomodoro {block['pomodoro_on'] // 60}+{block['pomodoro_off'] // 60} min")
     if block.get("paused_seconds"):
@@ -3801,6 +3810,8 @@ class Window(Gtk.ApplicationWindow):
         grid.attach(dim("Once the text or password lock is unlocked, it comes on again after this "
                         "long, unless the block was stopped. 0: it stays unlocked."), 1, 11, 1, 1)
         box.pack_start(grid, False, False, 0)
+        box.pack_start(dim("Several locks are unlocked one at a time: timer, restart, password, "
+                           "text, then delay."), False, False, 0)
         dialog.show_all()
         answer = dialog.run()
         relock_minutes = relock.get_value_as_int()
@@ -3815,28 +3826,26 @@ class Window(Gtk.ApplicationWindow):
         args = ["start", block["name"]]
         target = f"block '{block['name']}'"
         relock_note = f", re-lock {relock_minutes} minutes after unlocking" if relock_minutes else ""
-        locks = []
+        # R-LOCK-6: locks unlock one at a time in the order of their flags;
+        # the dialog uses timer, restart, password, text, delay.
+        chosen = []
         if lock_minutes:
-            args += ["--for", f"{lock_minutes}m"]
-            locks.append(f"{target}: timer lock, {lock_minutes} minutes "
-                         "(it can't be stopped until then, not even with the typing challenge; "
-                         "time the computer is off doesn't count)")
-        if use_typing:
-            locks.append(f"{target}: text lock{relock_note}")
-        if secret:
-            locks.append(f"{target}: password lock{relock_note}")
+            chosen.append((["--for", f"{lock_minutes}m"],
+                           f"timer lock, {lock_minutes} minutes (it can't be stopped until then, not even "
+                           "with the typing challenge; time the computer is off doesn't count)"))
         if use_restart:
-            locks.append(f"{target}: restart lock, until the computer restarts")
-        if delay_minutes:
-            locks.append(f"{target}: delay lock, unlocking takes {delay_minutes} minutes")
-        if use_typing:
-            args += lock_args
-        if use_restart:
-            args.append("--restart")
-        if delay_minutes:
-            args += ["--delay", f"{delay_minutes}m"]
+            chosen.append((["--restart"], "restart lock, until the computer restarts"))
         if secret:
-            args.append("--password-stdin")
+            chosen.append((["--password-stdin"], f"password lock{relock_note}"))
+        if use_typing:
+            chosen.append((lock_args, f"text lock{relock_note}"))
+        if delay_minutes:
+            chosen.append((["--delay", f"{delay_minutes}m"], f"delay lock, unlocking takes {delay_minutes} minutes"))
+        locks = []
+        for i, (flags, text) in enumerate(chosen):
+            args += flags
+            order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
+            locks.append(f"{target}: {order}{text}")
         if relock_minutes and (use_typing or secret):
             args += ["--relock", f"{relock_minutes}m"]
         if not self.confirm_lock(locks):

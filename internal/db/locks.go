@@ -32,6 +32,12 @@ type LockExtras struct {
 	Relock      int64
 	LiftedUntil int64
 	Style       string // the text lock's style (lock.Style*): "" random characters
+	// Layered sequential locks (layers.go): the unlock order ("text,timer"),
+	// a timer lock's duration waiting for the locks before it, and which
+	// text/password locks re-lock has lifted.
+	Order       string
+	TimerAfter  int64
+	LiftedKinds string
 }
 
 // BootID identifies the current boot.
@@ -99,9 +105,10 @@ func (d *DB) GetLockExtras(name string) (LockExtras, error) {
 		return LockExtras{}, err
 	}
 	var e LockExtras
-	err = d.conn.QueryRow(`SELECT lock_password, restart_boot, lock_delay, stop_at, lock_style, delay_until, relock, lifted_until
+	err = d.conn.QueryRow(`SELECT lock_password, restart_boot, lock_delay, stop_at, lock_style, delay_until, relock, lifted_until,
+		lock_order, timer_after, lifted_kinds
 		FROM active_blocks WHERE block_id = ?`, blockID).Scan(&e.PasswordHash, &e.RestartBoot, &e.Delay, &e.StopAt, &e.Style, &e.DelayUntil,
-		&e.Relock, &e.LiftedUntil)
+		&e.Relock, &e.LiftedUntil, &e.Order, &e.TimerAfter, &e.LiftedKinds)
 	if err == sql.ErrNoRows {
 		return LockExtras{}, nil
 	}
@@ -118,8 +125,9 @@ func (d *DB) SetLockExtras(name string, e LockExtras) error {
 		return err
 	}
 	_, err = d.conn.Exec(`UPDATE active_blocks SET lock_password = ?, restart_boot = ?, lock_delay = ?, stop_at = ?, lock_style = ?, delay_until = ?,
-		relock = ?, lifted_until = ? WHERE block_id = ?`, e.PasswordHash, e.RestartBoot, e.Delay, e.StopAt, e.Style, e.DelayUntil,
-		e.Relock, e.LiftedUntil, blockID)
+		relock = ?, lifted_until = ?, lock_order = ?, timer_after = ?, lifted_kinds = ? WHERE block_id = ?`,
+		e.PasswordHash, e.RestartBoot, e.Delay, e.StopAt, e.Style, e.DelayUntil,
+		e.Relock, e.LiftedUntil, e.Order, e.TimerAfter, e.LiftedKinds, blockID)
 	if err != nil {
 		return fmt.Errorf("failed to save locks of '%s': %w", name, err)
 	}

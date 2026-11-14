@@ -129,3 +129,53 @@ func TestScheduleLockIsALock(t *testing.T) {
 		t.Error("a schedule lock outside its lead time counted")
 	}
 }
+
+// R-LOCK-3: a scheduled block with a password (or any other) lock outlives
+// its window; the daemon stops it only once nothing holds it. Layered locks
+// move on in the daemon too (R-LOCK-6).
+func TestScheduleEndKeepsAnyLock(t *testing.T) {
+	d := testDB(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	mustAdd(t, d, "b", db.DefaultBlockedList, "reddit.com")
+	monday := time.Date(2026, 11, 9, 10, 0, 0, 0, time.Local)
+	if err := d.AddSchedule("b", schedule.Window{Days: 1 << uint(time.Monday), Start: 9 * 60, End: 11 * 60}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileSchedulesAt(d, monday, monday.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	hash, _ := db.HashPassword("pw")
+	if err := d.SetLockExtras("b", db.LockExtras{PasswordHash: hash, Order: "password,timer", TimerAfter: 600}); err != nil {
+		t.Fatal(err)
+	}
+	after := monday.Add(2 * time.Hour)
+	if err := reconcileSchedulesAt(d, after, after.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if active, _ := d.IsBlockActive("b"); !active {
+		t.Fatal("a password-locked block was stopped at its window's end")
+	}
+	// The password is unlocked: the daemon starts the timer behind it.
+	e, _ := d.GetLockExtras("b")
+	e.PasswordHash = ""
+	_ = d.SetLockExtras("b", e)
+	finishDelayedStops(d, after.Unix())
+	if b, _ := d.GetBlock("b"); b.LockedUntil != after.Unix()+600 {
+		t.Fatalf("timer after the password: until %d", b.LockedUntil)
+	}
+	if err := reconcileSchedulesAt(d, after, after.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if active, _ := d.IsBlockActive("b"); !active {
+		t.Fatal("stopped during the timer lock")
+	}
+	later := after.Add(11 * time.Minute)
+	if err := reconcileSchedulesAt(d, later, later.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if active, _ := d.IsBlockActive("b"); active {
+		t.Error("still on once nothing holds it")
+	}
+}

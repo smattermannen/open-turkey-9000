@@ -27,9 +27,7 @@ func BlockLocked(detail *db.BlockDetail, extras db.LockExtras, trusted int64, bo
 	if !detail.Active {
 		return false
 	}
-	lifted := extras.Lifted(trusted)
-	return (detail.Locked && !lifted) || detail.LockedUntil > trusted || (extras.PasswordHash != "" && !lifted) ||
-		extras.Delay > 0 || (extras.RestartBoot != "" && extras.RestartBoot == bootID)
+	return len(db.LayersOn(detail, extras, trusted, bootID)) > 0
 }
 
 // AnyLock reports whether any block or browser setting is locked, or a freeze
@@ -241,13 +239,25 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 	}
 }
 
-// finishDelayedStops ends blocks whose delay lock has run out.
+// finishDelayedStops ends blocks whose delay lock has run out, and moves
+// layered locks on (R-LOCK-6): the lock after one that is gone starts.
 func finishDelayedStops(d *db.DB, trusted int64) {
 	blocks, err := d.ListBlocks()
 	if err != nil {
 		log.Printf("daemon: delay: %v", err)
 		return
 	}
+	bootID, bootErr := db.BootID()
+	defer func() {
+		if bootErr != nil {
+			return
+		}
+		for _, b := range blocks {
+			if err := d.AdvanceBlockLayers(b.Name, trusted, bootID); err != nil {
+				log.Printf("daemon: lock layers of %s: %v", b.Name, err)
+			}
+		}
+	}()
 	for _, b := range blocks {
 		extras, err := d.GetLockExtras(b.Name)
 		if err != nil {

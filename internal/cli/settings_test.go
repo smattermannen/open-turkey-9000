@@ -185,6 +185,11 @@ func TestUnlockOnlyLifts(t *testing.T) {
 	if err := runWith(t, 0, []string{"partner"}, "unlock", "b"); err != nil {
 		t.Fatal(err)
 	}
+	// R-LOCK-6: one lock per unlock, in the order given (password first).
+	if extras, _ := d.GetLockExtras("b"); extras.PasswordHash != "" || extras.DelayUntil != 0 {
+		t.Fatalf("after the first unlock: %+v; want the password gone, the delay not started", extras)
+	}
+	mustRun(t, "unlock", "b")
 	detail, _ := d.GetBlock("b")
 	extras, _ := d.GetLockExtras("b")
 	trusted := mustTrusted(t, d)

@@ -120,7 +120,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   durations count real hours. Freeze schedules: `db.FreezeSchedule.LockLead`;
   daemon `reconcileFreezeSchedules`.
 - **Locks** (`internal/cli/`): `blockHold` decides lock state (text, timer,
-  password, restart, delay, schedule lock `db/schedulelock.go`).
+  password, restart, delay, schedule lock `db/schedulelock.go`). Layered
+  (R-LOCK-6/7, `db/layers.go`, `cli/layers.go`): `LockExtras.Order` from
+  the lock flags' order (`trackLockFlagOrder`), `LayersOn`, `unlock` lifts
+  only the first; `TimerAfter`/`RestartPending` wait behind others;
+  `AdvanceLayers` in `blockHold` and the daemon (`finishDelayedStops`).
   `ensureEditable` refuses only weakening of locked blocks; `start` on an
   active block only strengthens. `gateEdit` (`loosen.go`) no longer queues;
   daemon still applies old queued edits (`pending.go`). `unlock` lifts

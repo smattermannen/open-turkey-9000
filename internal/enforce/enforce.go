@@ -419,7 +419,7 @@ func applyDueEditsAt(d *db.DB, now time.Time, trusted int64) error {
 			log.Printf("daemon: pending edit: %v", err)
 			continue
 		}
-		if detail.Active && ((detail.Locked && !lockLifted(d, detail.Name, trusted)) || detail.LockedUntil > trusted) {
+		if blockLockedNow(d, detail, trusted) {
 			continue
 		}
 		if err := d.ApplyEdit(p.BlockName, p.Edit); err != nil {
@@ -519,7 +519,7 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 			} else {
 				log.Printf("daemon: schedule: activated %s", name)
 			}
-		case !within && detail.Active && detail.Scheduled && (!detail.Locked || lockLifted(d, name, trusted)) && detail.LockedUntil <= trusted &&
+		case !within && detail.Active && detail.Scheduled && !blockLockedNow(d, detail, trusted) &&
 			!slices.Contains(quotas, name):
 			if err := d.DeactivateBlock(name); err != nil {
 				log.Printf("daemon: schedule: failed to deactivate %s: %v", name, err)
@@ -535,11 +535,22 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 // hand while its schedule window (or place) was open.
 func StoppedInWindowKey(block string) string { return "schedule.stopped." + block }
 
-// lockLifted reports whether a block's text and password locks are lifted
-// for now by their re-lock option.
-func lockLifted(d *db.DB, name string, trusted int64) bool {
-	extras, err := d.GetLockExtras(name)
-	return err == nil && extras.Lifted(trusted)
+// blockLockedNow reports whether any lock of an active block holds it
+// (R-LOCK-3): every kind and layer, not only text and timer locks. On a
+// read error it says locked, so nothing is stopped or weakened by mistake.
+func blockLockedNow(d *db.DB, detail *db.BlockDetail, trusted int64) bool {
+	if !detail.Active {
+		return false
+	}
+	extras, err := d.GetLockExtras(detail.Name)
+	if err != nil {
+		return true
+	}
+	bootID, err := db.BootID()
+	if err != nil {
+		return true
+	}
+	return BlockLocked(detail, extras, trusted, bootID)
 }
 
 // ScheduleActiveNow reports whether a block's schedule enforces it now (see

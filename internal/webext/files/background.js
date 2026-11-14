@@ -293,6 +293,19 @@ const keywordNoImages = new Map();
 const keywordNoVideo = new Map();
 const keywordMute = new Map();
 
+// frameLooks lists what a list decided from the title or text of the page
+// at url in a tab that its frames must do too.
+function frameLooks(tabId, url) {
+  const out = [];
+  if (keywordNoVideo.get(tabId) === url) {
+    out.push("no-video");
+  }
+  if (keywordNoImages.get(tabId) === url) {
+    out.push("no-images");
+  }
+  return out;
+}
+
 // mute: the tab's sound is switched off while its page is one a list mutes,
 // and switched on again when it leaves (only if this is what muted it).
 const mutedHere = new Set();
@@ -403,6 +416,12 @@ function pageHit(message, sender) {
   }
   if (takes("no-video")) {
     keywordNoVideo.set(tab.id, message.url);
+  }
+  // The page's frames (embedded videos) don't read the page's text, so they
+  // are told what it decided; frames that load later ask (frame-looks).
+  const looks = frameLooks(tab.id, message.url);
+  if (looks.length > 0) {
+    browser.tabs.sendMessage(tab.id, { type: "frame-looks", looks }).catch(() => {});
   }
   if (takes("mute")) {
     keywordMute.set(tab.id, message.url);
@@ -552,6 +571,9 @@ function onMessage(message, sender) {
   }
   if (message && message.type === "page-hits") {
     pageHit(message, sender);
+  }
+  if (message && message.type === "frame-looks" && sender && sender.tab && sender.frameId !== 0) {
+    return Promise.resolve({ looks: frameLooks(sender.tab.id, sender.tab.url) });
   }
   if (message && message.type === "mirror") {
     mirrorHit(message, sender);

@@ -9,6 +9,7 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -24,7 +25,6 @@ const (
 	ActionNoImages     = "no-images"
 	ActionMute         = "mute"          // the tab's sound is switched off
 	ActionNoVideo      = "no-video"      // videos and players are stopped and hidden
-	ActionDeclutter    = "declutter"     // sidebars, banners and the like are hidden
 	ActionDark         = "dark"          // a light page is shown dark
 	ActionRedirect     = "redirect"      // Param: the address to open instead
 	ActionImage        = "image"         // Param: a stored image (see ImageName)
@@ -37,7 +37,7 @@ const (
 
 // ActionNames lists the website actions in display order.
 var ActionNames = []string{ActionBlock, ActionGreyscale, ActionNoImages, ActionMute, ActionNoVideo,
-	ActionDeclutter, ActionDark, ActionRedirect, ActionImage,
+	ActionDark, ActionRedirect, ActionImage,
 	ActionCloseTab, ActionCloseBrowser, ActionLogout, ActionShutdown, ActionMonk}
 
 // IsDeviceAction reports whether an action reaches past the page: it closes
@@ -54,7 +54,7 @@ func IsDeviceAction(name string) bool {
 // only changing how it looks). Bypass prevention counts these.
 func IsBlockingAction(name string) bool {
 	switch name {
-	case ActionGreyscale, ActionNoImages, ActionMute, ActionNoVideo, ActionDeclutter, ActionDark:
+	case ActionGreyscale, ActionNoImages, ActionMute, ActionNoVideo, ActionDark:
 		return false
 	}
 	return IsAction(name)
@@ -135,6 +135,35 @@ type Actions struct {
 var DefaultActions = Actions{Block: true}
 
 // IsAction reports whether name is a website action.
+// RemovedActions are actions KC9K no longer has (declutter, removed
+// 2026-11-14): files that name them import without them, and the
+// database drops them once (migrateRemovedActions).
+var RemovedActions = []string{"declutter"}
+
+// IsRemovedAction reports whether name is one of RemovedActions.
+func IsRemovedAction(name string) bool {
+	for _, a := range RemovedActions {
+		if a == name {
+			return true
+		}
+	}
+	return false
+}
+
+// migrateRemovedActions deletes the actions of RemovedActions from lists
+// and phrase sets.
+func migrateRemovedActions(conn *sql.DB) error {
+	for _, a := range RemovedActions {
+		if _, err := conn.Exec(`DELETE FROM web_list_actions WHERE action = ?`, a); err != nil {
+			return err
+		}
+		if _, err := conn.Exec(`DELETE FROM phrase_set_actions WHERE action = ?`, a); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func IsAction(name string) bool {
 	for _, a := range ActionNames {
 		if a == name {
@@ -196,6 +225,9 @@ func ParseActions(names []string) (Actions, error) {
 	var a Actions
 	for _, name := range names {
 		name = strings.ToLower(strings.TrimSpace(name))
+		if IsRemovedAction(name) {
+			continue
+		}
 		if !IsAction(name) {
 			return a, fmt.Errorf("unknown action %q (use %s)", name, strings.Join(ActionNames, ", "))
 		}

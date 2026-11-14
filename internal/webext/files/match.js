@@ -965,10 +965,13 @@ function kc9kPhraseMatcher(phrase, scope) {
           next.push(...at[last.end + 1].filter((p) => !p.into));
         }
         for (const p of next) {
-          if (used & (1 << p.set)) {
+          if (used.has(p.set)) {
             continue;
           }
-          if (extend(p, used | (1 << p.set), count + 1, covered + (sets[p.set].necessary ? 1 : 0))) {
+          used.add(p.set);
+          const found = extend(p, used, count + 1, covered + (sets[p.set].necessary ? 1 : 0));
+          used.delete(p.set);
+          if (found) {
             return true;
           }
         }
@@ -976,7 +979,7 @@ function kc9kPhraseMatcher(phrase, scope) {
       };
       for (const places of at) {
         for (const p of places) {
-          if (!p.into && extend(p, 1 << p.set, 1, sets[p.set].necessary ? 1 : 0)) {
+          if (!p.into && extend(p, new Set([p.set]), 1, sets[p.set].necessary ? 1 : 0)) {
             return true;
           }
         }

@@ -70,7 +70,10 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateCombinations(conn); err != nil {
 		return err
 	}
-	return migrateMonkMode(conn)
+	if err := migrateMonkMode(conn); err != nil {
+		return err
+	}
+	return migrateRemovedActions(conn)
 }
 
 // addColumnIfMissing runs "ALTER TABLE ... ADD COLUMN" only when the column

@@ -152,7 +152,32 @@ class ExtensionGuardTest {
         val s = ExtensionGuard.State(unchecked = 55_000)
         val step = g.step(s, 1, 5_000, true, true, true, good = true)
         assertFalse(step.pause)
-        assertEquals(ExtensionGuard.State(), step.state)
+        assertEquals(ExtensionGuard.State(seenGood = true, goodSince = 1), step.state)
+    }
+
+    // Switching the extension off in IronFox's add-ons manager: once it has checked in, a
+    // short grace, and each pause twice the last, until it runs an hour unbroken.
+    @Test fun switchedOffCostsMoreEachTime() {
+        var s = ExtensionGuard.State(seenGood = true)
+        var t = 0L
+        val pauses = mutableListOf<Long>()
+        repeat(7) {
+            var step: ExtensionGuard.Step
+            var inFront = 0L
+            do {
+                t += 5_000; inFront += 5_000
+                step = g.step(s, t, 5_000, true, true, foreground = true, good = false); s = step.state
+            } while (!step.pause)
+            assertEquals(g.SHORT_GRACE_MS, inFront)
+            pauses += s.pausedUntil - t
+            // Switched back on for a moment after the pause: not forgiven.
+            t = s.pausedUntil
+            s = g.step(s, t, 5_000, true, true, foreground = true, good = true).state
+        }
+        assertEquals(listOf(2L, 4, 8, 16, 32, 60, 60).map { it * 60_000 }, pauses)
+        // An hour with the extension running forgives.
+        s = g.step(s, t + g.FORGIVE_MS, 5_000, true, true, true, good = true).state
+        assertEquals(0, s.strikes)
     }
 
     @Test fun background() {

@@ -184,6 +184,8 @@ type Rules struct {
 	// ExtensionVersion is the extension's current version: Chrome's asks
 	// for an update at once when it is older.
 	ExtensionVersion string `json:"extension_version"`
+	// Dark: the circadian rhythm's dark pages (§4.10), nil when off.
+	Dark *DarkRule `json:"dark,omitempty"`
 }
 
 // ListRule is one blacklist: the entries it looks for in a page's address,
@@ -191,14 +193,17 @@ type Rules struct {
 // the address or the title takes every action; in the text, an action needs
 // Distinct different entries, occurring Hits times in all.
 type ListRule struct {
-	ID      int          `json:"id"`
-	Block   string       `json:"block"`
-	Name    string       `json:"name"`
-	URL     []string     `json:"url"`
-	Title   []string     `json:"title"`
-	Text    []string     `json:"text"`
-	Actions []RuleAction `json:"actions"`
-	Except  RuleExcept   `json:"except"`
+	ID    int      `json:"id"`
+	Block string   `json:"block"`
+	Name  string   `json:"name"`
+	URL   []string `json:"url"`
+	Title []string `json:"title"`
+	Text  []string `json:"text"`
+	// URLTerms are a term list's terms looked for in the decoded address,
+	// separators as blank space (R-PHRASE-6); URL holds address entries.
+	URLTerms []string     `json:"url_terms,omitempty"`
+	Actions  []RuleAction `json:"actions"`
+	Except   RuleExcept   `json:"except"`
 	// Test: the list is in test mode (§3.2). The extension shows what it
 	// found on each page instead of acting on it.
 	Test bool `json:"test,omitempty"`
@@ -244,9 +249,18 @@ type RuleAction struct {
 // RuleExcept holds a block's exceptions by place: a page any of them
 // matches is spared from the block's blacklists.
 type RuleExcept struct {
-	URL   []string `json:"url"`
-	Title []string `json:"title"`
-	Text  []string `json:"text"`
+	URL      []string `json:"url"`
+	Title    []string `json:"title"`
+	Text     []string `json:"text"`
+	URLTerms []string `json:"url_terms,omitempty"`
+}
+
+// blockExcept collects a block's exceptions for its rules (R-LIST-1).
+func blockExcept(lists db.Lists) RuleExcept {
+	return RuleExcept{URL: urlEntries(lists.ExceptionAddresses()),
+		Title:    append([]string{}, lists.ExceptionTerms(db.PlaceTitle)...),
+		Text:     append([]string{}, lists.ExceptionTerms(db.PlaceText)...),
+		URLTerms: lists.ExceptionTerms(db.PlaceURL)}
 }
 
 // urlEntries keeps the entries that can match addresses.
@@ -264,9 +278,7 @@ func urlEntries(entries []string) []string {
 
 // listRules turns a block's blacklists into rules.
 func listRules(b db.ActiveBlockDetail) []ListRule {
-	except := RuleExcept{URL: urlEntries(b.Lists.ExceptionEntries(db.PlaceURL)),
-		Title: append([]string{}, b.Lists.ExceptionEntries(db.PlaceTitle)...),
-		Text:  append([]string{}, b.Lists.ExceptionEntries(db.PlaceText)...)}
+	except := blockExcept(b.Lists)
 	var out []ListRule
 	for _, l := range b.Lists.Blacklists() {
 		if !l.Enforces() {
@@ -274,8 +286,10 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 		}
 		rule := ListRule{ID: l.ID, Block: b.BlockName, Name: l.Name, URL: []string{}, Title: []string{}, Text: []string{},
 			Actions: []RuleAction{}, Except: except}
-		if l.Where.URL {
+		if l.IsAddress() {
 			rule.URL = urlEntries(l.Entries)
+		} else if l.Where.URL {
+			rule.URLTerms = append([]string{}, l.Entries...)
 		}
 		if l.Where.Title {
 			rule.Title = append(rule.Title, l.Entries...)
@@ -315,6 +329,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 	}
 	now := time.Now()
 	rules.Details = OptionOn(d, OptionPageDetails)
+	rules.Dark = CircadianDarkRule(d, now)
 	rules.Ends = blockEnds(d, active, now, trusted)
 	rules.Soon = soonRules(d, active, now, trusted)
 	if until := MonkEnd(d, trusted); until > 0 {
@@ -329,9 +344,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 				rules.Social = append(rules.Social, preset)
 			}
 		}
-		except := RuleExcept{URL: urlEntries(b.Lists.ExceptionEntries(db.PlaceURL)),
-			Title: append([]string{}, b.Lists.ExceptionEntries(db.PlaceTitle)...),
-			Text:  append([]string{}, b.Lists.ExceptionEntries(db.PlaceText)...)}
+		except := blockExcept(b.Lists)
 		blockRules := listRules(b)
 		if b.BlockName != MonkName || len(b.Lists) == 0 || b.Lists[0].ID != MonkListID {
 			blockRules = append(blockRules, phraseRules(d, b.BlockName, except)...)
@@ -340,13 +353,13 @@ func BuildRules(d *db.DB) (Rules, error) {
 			// Test mode is for tuning what a list finds in pages: lists that
 			// read the title or text are shown, not run.
 			if len(rule.Phrases) == 0 {
-				rule.Test = slices.Contains(testing, rule.ID) && len(rule.Title)+len(rule.Text) > 0
+				rule.Test = slices.Contains(testing, rule.ID) && len(rule.Title)+len(rule.Text)+len(rule.URLTerms) > 0
 			}
 			rules.Lists = append(rules.Lists, rule)
 			if rule.Test {
 				continue
 			}
-			if len(rule.URL) > 0 && len(rule.Except.Title)+len(rule.Except.Text) == 0 {
+			if len(rule.URL) > 0 && len(rule.Except.Title)+len(rule.Except.Text)+len(rule.Except.URLTerms) == 0 {
 				for _, a := range rule.Actions {
 					if a.Name == db.ActionBlock {
 						rules.Block = append(rules.Block, rule.URL...)

@@ -83,10 +83,9 @@ For a Flatpak app, block it by its app ID (see `flatpak list --app`). This is mo
 kc9k block add-app social-media com.discordapp.Discord
 ```
 
-Seed from a built-in template (`social-media`, `video`, `streaming`, `news`, `forums`, `games`, `gambling`, `shopping`, `music`, `messaging`, `dating`, `ai-chat`, `sports`, `finance`), or block every website except the ones you add as exceptions:
+KC9K ships no ready-made lists: you build your own, and keep them as [clusters](#clusters) to reuse. To block every website except the ones you add as exceptions:
 
 ```bash
-kc9k block create focus --template social-media
 kc9k block create work  --allowlist          # *.* in Blocked
 kc9k block add-exception work docs.python.org
 ```
@@ -262,22 +261,39 @@ Uninstalling first runs a guard that **refuses while any block or setting is loc
 
 ## Website lists
 
-A block has **blacklists** and **exception lists**, each with a name. Each list has a type: an **address list** looks at the page's address (url), a **term list** at the page's title, text, or both. One list can't do both: make a second list for the other. (Lists from before types that looked at both became two when upgrading: the address list kept its name, and a term list `<name> terms` got the same entries and actions, so nothing matches differently.)
+A block has **blacklists** and **exception lists**, each with a name. Each list has a type: an **address list** holds sites and addresses, matched against the page's address; a **term list** holds words, looked for where its scope says: the page's title, its text, and its address read as words (the address is decoded first, `%20` is a space, and `-_/.?=&+#:,` count as spaces, so `long cat` is found in `example.com/long-cat_2`). `kc9k list create B L --url` makes an address list, `--title`/`--text` a term list (add `--url` for its address too), and `--terms --url` a term list that reads only the address. `list show` names each list's type. (Lists from before types that looked at the address and the page became two when upgrading: the address list kept its name, and a term list `<name> terms` got the same entries and actions, so nothing matches differently.)
 
 - **url**: the page's address. Entries are domains (`reddit.com`), paths (`reddit.com/r/funny`) and wildcards (`*.xxx`, `*casino*`, and `*.*` for every website).
 - **title**: the page title, as shown on its tab.
-- **text**: the page's text. Title and text entries are words or phrases: a plain word counts only on its own (`porn` doesn't count in "pornhub", `18+` not in "1118+"), and `*` matches inside words (`*porn*` counts in "pornhub", `porn*` in "pornstar"). Case is ignored.
+- **text**: the page's text. Term entries (title, text, or the address of a term list) are words or phrases: a plain word counts only on its own (`porn` doesn't count in "pornhub", `18+` not in "1118+"), and `*` matches inside words (`*porn*` counts in "pornhub", `porn*` in "pornstar"). Case is ignored.
 
-**Word combinations** catch words only together. A combination is boxes of words side by side, as many as you like: each box is a list in brackets, or one bare word, and `:N` after a box asks for N *different* words of it (1 if left out):
+**Word combinations** such as `(car, lambo*) (big, small, nice):2` are now phrases. When upgrading, each blacklist's combinations move into a new phrase set `<list> phrases` with the list's scope, test mode and actions (each at threshold 1), and a term cluster's into a phrase cluster `<cluster> phrases`. Each box becomes a word set and its `:N` is dropped (`[car, lambo*] [big, small, nice]`): a phrase set's threshold counts different phrases instead. A combination of a single box, such as `(a, b):2`, isn't a phrase and stays where it is; so do combinations in exception lists, since there are no phrase exceptions. Old block, project and cluster files are moved the same way when imported; typing a combination into a list is refused, with the phrase to add instead.
 
-| Entry | Counts in | Not in |
+**Phrase sets** are the new form of word combinations: a named set of phrases in a block, with a scope (url, title, text) and its own actions, like a blacklist. A phrase is two or more **word sets** in brackets, and a match takes one term from each, directly after each other in any order, in one sentence:
+
+```bash
+kc9k phrase-set create focus Grandpa                  # looks at the text unless --url/--title/--text
+kc9k phrase-set add focus Grandpa "[eat, nice] [hello, grandpa]" "[big-, strong] [-gorilla, cat]"
+kc9k phrase-set show focus Grandpa
+kc9k phrase-set action focus Grandpa greyscale on     # same actions and flags as lists
+kc9k phrase-set threshold focus Grandpa block 2       # how many different phrases (default 1)
+kc9k phrase-set scope focus Grandpa url on            # or title/text, on/off
+kc9k phrase-set test focus Grandpa on                 # report in the page instead of acting
+kc9k phrase-set export focus Grandpa > grandpa.txt   # one phrase per line
+kc9k phrase-set import focus Other grandpa.txt
+kc9k phrase-set remove|rename|delete …
+```
+
+Phrase sets travel with `kc9k block export` / `import` and the project file, and can be kept as [clusters](#clusters).
+
+| Phrase | Counts in | Not in |
 |---|---|---|
-| `car(cheap)` | "cheap car", "car cheap" | "cheap reliable car" |
-| `cars(red, big, blue, beautiful)` | "red beautiful cars", "big cars" | "red toyota", "cars, big and red" |
-| `(car, lambo*, ferrari)(red, big, beautiful)` | "a beautiful Lamborghini", "ferrari red" | "a red toyota" |
-| `(car, lambo, sheep) (big, small, nice):2 (sport, hello, *niece*)` | "a nice big sport car", "small sheep nice nieces" | "a big sport car", "big big sport car" |
+| `[eat, nice] [hello, grandpa]` | "Let's eat grandpa" | "Let's eat, grandpa!" |
+| `[long cat, neko] [running, sitting]` | "long cat running", "long-cat sitting" | "long cat neko" (one term per word set) |
+| `[big-, strong] [-gorilla, cat]` | "big and long gorilla", "big gorilla", "strong cat" | "gorilla big", "big. gorilla" |
+| `[red] [car] [big, small]? :3` | "big red car" | "red car" (`:3`: three terms needed) |
 
-A combination counts where a run of words, with only spaces between them (no commas or other words) and each a word of some box, holds what every box needs, in any order. Each word follows the rules above (whole words, `*` inside words; phrases such as `car(very cheap)`), and a word that fits two boxes counts for one of them. A combination is one entry: it counts once toward a threshold, and once per run toward hits. In the shell, quote it, since brackets mean something there; it is stored with one space between boxes and `, ` between words, so it is found again however it was typed. In the interface, **Word combination…** under a title or text list has one box per bracket, each with its minimal count; double-click a combination to change it.
+Terms follow the rules above (whole words, `*` inside a word); punctuation between terms, and a break between parts of the page (heading, paragraph, list item, button), end a match. A hyphen between letters is a space; an apostrophe belongs to its word. A `?` after a word set (third or later) makes it optional, and `:N` is the **phrase length**, how many terms a match needs (default: the necessary word sets). A **bridge** `big-` … `-gorilla` lets up to 20 words of the same sentence (commas allowed) stand between those two terms, in that order; `-strong-` is a middle link and needs three word sets. A bridge needs both ends in different word sets, or the phrase is refused. In the address, it is decoded first and `-_/.?=&+#:,` count as spaces. The block's exception lists spare pages from its phrase sets too. In the interface, **Phrase sets** on a block's Websites tab has **New phrase set…**, and each set **+ Create new phrase**: one row per word set, each ticked necessary or optional (the first two always necessary), and the phrase length; double-click a phrase to change it. Phrase sets have a threshold per action and no hit count. Adding phrases, ticking a scope or an action, a lower threshold and test mode off are always allowed; the rest is refused while the block is locked.
 
 Each blacklist chooses its **actions**, in any combination:
 
@@ -356,6 +372,16 @@ kc9k cluster rename academia school
 kc9k cluster delete school
 ```
 
+A **phrase cluster** holds phrases instead of entries, and becomes a phrase set when copied (there are no phrase exceptions, and phrases take no part in recording):
+
+```bash
+kc9k cluster create Grandpa --phrases               # looks at the text; or --url / --title
+kc9k cluster add Grandpa "[eat, nice] [hello, grandpa]"
+kc9k cluster copy Grandpa focus                     # a new phrase set 'Grandpa' in block 'focus'
+kc9k cluster copy Grandpa focus --into Words        # add the phrases to a phrase set the block has
+kc9k cluster save focus Words grandpa-phrases       # a block's phrase set saved as a phrase cluster
+```
+
 A copy is a copy: later changes to the cluster don't reach the block, and deleting the cluster leaves the copied lists alone. Editing a cluster is always allowed. Copying into a block follows the block's rules: into a blacklist strengthens it (always allowed), into an exception list weakens it (refused while the block is locked). A new blacklist made from a cluster blocks what it matches; choose other actions with `kc9k list action`. An exported cluster is a plain entry file, so `kc9k list import` reads it too.
 
 ## Link recording
@@ -411,6 +437,8 @@ An open session spends only the time the block is in use: one of its apps is in 
 | Password | `start b --password-stdin` | someone enters it with `unlock`, from standard input |
 | Restart | `start b --restart` | the computer has restarted |
 | Delay | `start b --delay 30m` | the delay has passed after `unlock` |
+
+**Every lock asks you to confirm it when it is set** (R-LOCK-12): a lock on a block (also one added to or extended on an active block), its schedule lock, strict mode's lock, a browser option's lock, bypass prevention's lock, a scheduled freeze's lock, and the locks in an imported project. The question shows what is locked, the kind of lock and, where it has one, how long. Type `yes` to set it; any other answer sets nothing. Without a terminal (scripts) the command is refused unless you add `--yes`, which says you have confirmed already. The interface shows the same question in a dialog before it sets anything; `project import --dry-run` lists the locks a file would set.
 
 An unlocked lock is gone; the block stays on until you `stop` it or its schedule ends it (§3.4 of `SPEC.md`). With **re-lock** (`start b --lock --relock 30m`, also with `--password-stdin`), unlocking lifts the text and password locks only for that long; then they are on again by themselves, unless the block was stopped meanwhile.
 
@@ -499,7 +527,7 @@ While the block is on, any app whose window title contains one of the words (cas
 kc9k monk --for 2h
 ```
 
-Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. The block belongs to monk mode: it can't be removed or renamed, can't start monk mode itself, and is changed only while monk mode is off, so add exceptions (documentation you need), apps or anything else to it beforehand. `kc9k start monk-mode` is refused; use `kc9k monk --for`. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password only if setting a lock does (`kc9k password locks on`).
+Monk mode is a mode, not a block: it isn't in the list of blocks, has no settings, and nothing can be added to it. For the time given it blocks every website (`*.*`; local files, `file://*`, stay open) and cuts the internet connection of the whole computer, three ways at once: the Wi-Fi radio is switched off, every Ethernet interface is brought down, and the firewall drops everything except loopback (KC9K's own daemon and extension still talk). Whatever you switch back on is put back within a few seconds. It ends only when its time does; it can't be ended early, and a longer time extends a running one. Before cutting, KC9K saves how the network was; when monk mode ends, or after a restart or crash once its time is over, that state is restored (Wi-Fi that was off stays off). `kc9k monk` without `--for` shows whether it is on. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password only if setting a lock does (`kc9k password locks on`). Monk mode that starts by itself (a bypass prevention step, or a list's or phrase set's `monk` action) asks nothing when it starts, so setting such a step or action up needs `--no-confirm-ok` (in the interface, the tick "I know this will not ask for confirmation"). An old `monk-mode` block is removed when KC9K is upgraded; a running one goes on as the mode.
 
 ## Bypass prevention
 
@@ -543,7 +571,7 @@ kc9k hotkey list
 kc9k hotkey remove 1
 ```
 
-Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password when you add it, not each time you press it. The interface has them under Settings.
+Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password, and asks you to confirm the lock, when you add it (`--yes` for scripts). Pressing it then asks again in a desktop dialog (Lock / Cancel; nothing is locked if you cancel or don't answer), unless you added it with `--no-confirm` ("Run without confirmation", also a tick in the interface): then the lock is confirmed only when you add the hotkey. Hotkeys from before this ask at each press. The interface has them under Settings.
 
 ## How apps are recognised
 
@@ -631,6 +659,35 @@ kc9k option block-page-details off
 - `polite-close` (on): a blocked app with a window is asked to close, as if you pressed its close button, so it can offer to save; it is killed about five seconds later if it is still open. An app without a window is killed at once, and so is one started again within a minute of being asked. Off: every blocked app is killed at once.
 - `block-page-details` (on): the block page names the block and the list that stopped the page, and when the block ends if it has an end. It is only what the block page says: redirects, pictures, closed tabs and every other action work exactly as before.
 
+## Circadian rhythm
+
+The screen, the wallpaper and dark mode follow the time of day. Nothing of it can be locked, and it never overrides you: change a level by hand (brightness keys, the monitor's buttons, another night light) and that clip pauses until its next point, or until `kc9k circadian resume`.
+
+```bash
+kc9k circadian                       # shows everything (show --json for programs)
+kc9k circadian on                    # or off
+kc9k circadian preset                # lists the ready-made clips
+kc9k circadian preset natural        # replaces the three clips' points
+kc9k circadian lane kelvin on        # clips: backlight, software, kelvin
+kc9k circadian lane kelvin --points "07:00=6500 19:00=6500~-0.4 22:00=2700"
+kc9k circadian point add backlight 23:00 30 --tension 0.3
+kc9k circadian point remove backlight 23:00
+kc9k circadian resume                # or: resume backlight
+kc9k circadian wallpaper add ~/Pictures/dawn.jpg 06:00 12:00
+kc9k circadian wallpaper time 1 05:30 11:00
+kc9k circadian wallpaper remove 1
+kc9k circadian dark light-between 07:00 20:00   # or: system, light, dark
+kc9k circadian dark-pages on
+kc9k circadian exempt add docs.example.com      # or: exempt remove …
+kc9k circadian nightlight off        # the desktop's own night light
+```
+
+- **Automation clips.** Each clip is a curve over 24 hours that repeats every day: `backlight` (the screen's real brightness in percent: a laptop's backlight, and external screens through DDC/CI when `ddcutil` is installed), `software` (brightness drawn by the graphics card, 10 to 100 %; works on every screen) and `kelvin` (colour temperature, 1000 to 10000; 6500 is neutral, lower is warmer). A point is `HH:MM=VALUE`, or `HH:MM=VALUE~TENSION`: the tension, from -1 to 1, bends the curve from that point to the next (above 0 bulges it up). Software brightness and colour temperature need an X11 session.
+- **Wallpapers.** A picture (PNG, JPEG or WebP, up to 32 MB) is the wallpaper between its two times; a time may run past midnight. Where times overlap, the one that started last shows. KC9K sets a wallpaper once, when its time starts: one you pick yourself stays until the next one starts.
+- **Dark mode** is the desktop's own: `system` leaves it alone, `light` and `dark` keep it one way, `light-between` makes it light between two times and dark otherwise. Like wallpapers, it is set when it should change, not held.
+- **Dark pages** show light web pages dark while dark mode is on (pages that are dark already stay as they are), except on exempt sites. With `dark system`, pages follow what the browser says the system prefers; LibreWolf always says light, so choose `dark` or `light-between` there.
+- The desktop's own night light changes the same colours as the clips: turn it off (`nightlight off`), or leave the `kelvin` and `software` clips off.
+
 ## The whole setup in one file
 
 ```bash
@@ -698,7 +755,7 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 
 ## Graphical interface
 
-`make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). Everything goes through the same command-line rules, so the interface can't do anything a lock forbids. It has five sections:
+`make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). Everything goes through the same command-line rules, so the interface can't do anything a lock forbids. Its sections:
 
 - **Dashboard**: active blocks and their locks, the state of Frozen Chicken, strict mode and no-escape, today's most used websites and apps, and a Monk mode… button.
 - **Blocks**: website lists (blacklists and exceptions, each with its own boxes for where it looks and what it does, and import/export), apps, folders and window titles (with import/export), schedules, quota, Pomodoro and bypass prevention per block; starting a block with optional locks (time, text lock of random characters, words or your own text, until restart, delay, password). The typing challenge opens in a terminal. The Schedule tab shows the week as a calendar: drag down a day to add a window, click a window to remove it (filled windows turn the block on, outlined ones are allow windows).
@@ -706,6 +763,7 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 - **Clusters**: website lists outside blocks, with a search box: create, edit, import and export them, copy one into a block, and record the sites you open into one.
 - **Device Blocks**: whole-computer locks: Frozen Chicken, strict mode and no-escape.
 - **Statistics**: time per day and the most used websites or apps, for today or the last 7, 30 or 90 days.
+- **Circadian Rhythm**: the three automation clips as curves you edit with the mouse (right-click adds a point, or removes the one under the pointer; drag a point to move it, with Shift to the minute; drag the curve to bend it; double-click a point to type exact values; while you drag a point the screen shows its value), presets, wallpapers with their times, dark mode and dark pages, and a Resume button when a clip is paused.
 - **Settings**: the theme (light, dark or the system's, saved in `~/.config/kc9k/gui.json`), browser options, statistics, the settings password, bypass prevention for the whole computer, and hotkeys.
 
 ## Frozen Chicken

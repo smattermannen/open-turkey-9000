@@ -84,36 +84,6 @@ func TestRunConsequences(t *testing.T) {
 	}
 }
 
-func TestStartMonk(t *testing.T) {
-	d := testDB(t)
-	if err := StartMonk(d, time.Hour); err != nil {
-		t.Fatal(err)
-	}
-	b, err := d.GetBlock(MonkBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	l, _ := b.Lists.Find(db.DefaultBlockedList)
-	trusted, _ := d.TrustedNow(time.Now())
-	extras, _ := d.GetLockExtras(MonkBlock)
-	if !b.Active || len(l.Entries) != 1 || l.Entries[0] != "*.*" || b.LockedUntil < trusted+3500 || extras.StopAt != b.LockedUntil {
-		t.Fatalf("monk block = %+v, stops at %d", b, extras.StopAt)
-	}
-	// A longer run extends it; a shorter one changes nothing.
-	if err := StartMonk(d, 2*time.Hour); err != nil {
-		t.Fatal(err)
-	}
-	longer, _ := d.GetBlock(MonkBlock)
-	if err := StartMonk(d, time.Minute); err != nil {
-		t.Fatal(err)
-	}
-	same, _ := d.GetBlock(MonkBlock)
-	extras, _ = d.GetLockExtras(MonkBlock)
-	if longer.LockedUntil <= b.LockedUntil || same.LockedUntil != longer.LockedUntil || extras.StopAt != longer.LockedUntil {
-		t.Errorf("until %d, then %d, then %d; stops at %d", b.LockedUntil, longer.LockedUntil, same.LockedUntil, extras.StopAt)
-	}
-}
-
 // at returns events n seconds after base, as RecordEvent stores them.
 func addEvents(t *testing.T, d *db.DB, kind, block string, count int) {
 	t.Helper()

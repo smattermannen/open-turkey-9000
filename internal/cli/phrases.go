@@ -10,6 +10,8 @@
 //	kc9k phrase-set test <block> <set> on|off
 //	kc9k phrase-set rename <block> <set> <new name>
 //	kc9k phrase-set delete <block> <set>
+//	kc9k phrase-set export <block> <set>          (one phrase per line)
+//	kc9k phrase-set import <block> <set> <file>
 //
 // Strengthening is always allowed (adding a phrase, ticking a place or an
 // action, a lower threshold, test mode off); everything else weakens the
@@ -18,6 +20,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -62,6 +65,11 @@ var phraseSetShowCmd = &cobra.Command{
 		}
 		if len(sets) == 0 {
 			fmt.Printf("Block '%s' has no phrase sets.\n", args[0])
+		}
+		if len(args) == 2 {
+			if _, err := database.FindPhraseSet(args[0], args[1]); err != nil {
+				return err
+			}
 		}
 		for _, s := range sets {
 			if len(args) == 2 && !strings.EqualFold(s.Name, args[1]) {
@@ -116,36 +124,71 @@ var phraseSetAddCmd = &cobra.Command{
 	Short: "Add phrases (always allowed: it makes the block stricter)",
 	Args:  cobra.MinimumNArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		return phraseAdd(database, args[0], args[1], args[2:])
+	}),
+}
+
+// phraseAdd adds typed phrases to a set: all are checked before any is
+// added. Adding is always allowed (it makes the block stricter).
+func phraseAdd(database *db.DB, block, set string, texts []string) error {
+	s, err := phraseSetArgs(database, block, set)
+	if err != nil {
+		return err
+	}
+	var phrases []db.Phrase
+	for _, text := range texts {
+		p, err := db.ParsePhrase(text)
+		if err != nil {
+			return fmt.Errorf("%q: %w", text, err)
+		}
+		phrases = append(phrases, p)
+	}
+	if err := ensureEditable(database, block, true); err != nil {
+		return err
+	}
+	added := 0
+	for _, p := range phrases {
+		ok, err := database.AddPhrase(s.ID, p)
+		if err != nil {
+			return err
+		}
+		if ok {
+			added++
+		}
+	}
+	if err := reapplyIfActive(database, block); err != nil {
+		return err
+	}
+	fmt.Printf("%d phrases added to '%s' of '%s'.\n", added, s.Name, block)
+	return nil
+}
+
+var phraseSetExportCmd = &cobra.Command{
+	Use:   "export <block> <set>",
+	Short: "Print a phrase set's phrases, one per line (redirect to a .txt file to save them)",
+	Args:  cobra.ExactArgs(2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		s, err := phraseSetArgs(database, args[0], args[1])
 		if err != nil {
 			return err
 		}
-		var phrases []db.Phrase
-		for _, text := range args[2:] {
-			p, err := db.ParsePhrase(text)
-			if err != nil {
-				return fmt.Errorf("%q: %w", text, err)
-			}
-			phrases = append(phrases, p)
+		for _, p := range s.Phrases {
+			fmt.Println(p)
 		}
-		if err := ensureEditable(database, args[0], true); err != nil {
-			return err
-		}
-		added := 0
-		for _, p := range phrases {
-			ok, err := database.AddPhrase(s.ID, p)
-			if err != nil {
-				return err
-			}
-			if ok {
-				added++
-			}
-		}
-		if err := reapplyIfActive(database, args[0]); err != nil {
-			return err
-		}
-		fmt.Printf("%d phrases added to '%s' of '%s'.\n", added, s.Name, args[0])
 		return nil
+	}),
+}
+
+var phraseSetImportCmd = &cobra.Command{
+	Use:   "import <block> <set> <file>",
+	Short: "Add phrases from a text file with one phrase per line",
+	Args:  cobra.ExactArgs(3),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		texts, err := readEntryFile(args[2])
+		if err != nil {
+			return err
+		}
+		return phraseAdd(database, args[0], args[1], texts)
 	}),
 }
 
@@ -158,22 +201,28 @@ var phraseSetRemoveCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if err := ensureEditable(database, args[0], false); err != nil {
-			return err
-		}
+		// Every phrase must be there before any is removed.
+		var phrases []db.Phrase
 		for _, text := range args[2:] {
 			p, err := db.ParsePhrase(text)
 			if err != nil {
 				return fmt.Errorf("%q: %w", text, err)
 			}
-			if ok, err := database.RemovePhrase(s.ID, p); err != nil {
-				return err
-			} else if !ok {
+			if !slices.ContainsFunc(s.Phrases, func(q db.Phrase) bool { return q.String() == p.String() }) {
 				return fmt.Errorf("'%s' has no phrase %s", s.Name, p)
+			}
+			phrases = append(phrases, p)
+		}
+		if err := ensureEditable(database, args[0], false); err != nil {
+			return err
+		}
+		for _, p := range phrases {
+			if _, err := database.RemovePhrase(s.ID, p); err != nil {
+				return err
 			}
 		}
 		fmt.Printf("Removed from '%s' of '%s'.\n", s.Name, args[0])
-		return reapplyIfActive(database, args[0])
+		return settle(database, args[0])
 	}),
 }
 
@@ -210,7 +259,7 @@ var phraseSetActionCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		action := args[2]
+		action := strings.ToLower(args[2])
 		if !db.IsAction(action) {
 			return fmt.Errorf("unknown action %q (use %s)", action, strings.Join(db.ActionNames, ", "))
 		}
@@ -218,6 +267,14 @@ var phraseSetActionCmd = &cobra.Command{
 			return fmt.Errorf("use 'on' or 'off'")
 		}
 		on := args[3] == "on"
+		if on && action == db.ActionMonk {
+			if err := requireMonkAck(cmd, "a phrase set's monk action"); err != nil {
+				return err
+			}
+		}
+		if !on && (cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for")) {
+			return fmt.Errorf("--url, --image and --for only go with 'on'")
+		}
 		if !on && len(s.Actions) == 1 && s.Actions[0].Name == action {
 			return fmt.Errorf("a phrase set keeps at least one action")
 		}
@@ -238,7 +295,7 @@ var phraseSetActionCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("'%s' of '%s': %s %s\n", s.Name, args[0], action, args[3])
-		return reapplyIfActive(database, args[0])
+		return settle(database, args[0])
 	}),
 }
 
@@ -327,7 +384,7 @@ var phraseSetDeleteCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("Phrase set '%s' removed from '%s'.\n", s.Name, args[0])
-		return reapplyIfActive(database, args[0])
+		return settle(database, args[0])
 	}),
 }
 
@@ -337,8 +394,10 @@ func init() {
 	}
 	phraseSetActionCmd.Flags().String("url", "", "For redirect: the address to open instead")
 	phraseSetActionCmd.Flags().String("image", "", "For image: the picture to show instead")
+	addMonkAckFlag(phraseSetActionCmd)
 	phraseSetActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
 	phraseSetCmd.AddCommand(phraseSetShowCmd, phraseSetCreateCmd, phraseSetAddCmd, phraseSetRemoveCmd, phraseSetScopeCmd,
-		phraseSetActionCmd, phraseSetThresholdCmd, phraseSetTestCmd, phraseSetRenameCmd, phraseSetDeleteCmd)
+		phraseSetActionCmd, phraseSetThresholdCmd, phraseSetTestCmd, phraseSetRenameCmd, phraseSetDeleteCmd,
+		phraseSetExportCmd, phraseSetImportCmd)
 	rootCmd.AddCommand(phraseSetCmd)
 }

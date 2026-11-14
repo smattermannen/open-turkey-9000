@@ -79,6 +79,9 @@ func strictOn(cmd *cobra.Command, database *db.DB) error {
 		if len(changes) == 0 {
 			return fmt.Errorf("strict mode already has those locks")
 		}
+		if err := confirmLocks(cmd, settingLocks("strict mode", cur, next)...); err != nil {
+			return err
+		}
 	}
 	if err := database.SetSetting(enforce.SettingStrictUser, os.Getenv("SUDO_USER")); err != nil {
 		return err
@@ -287,6 +290,7 @@ Booting a USB stick still works unless the firmware is locked with a password.`,
 
 func init() {
 	noEscapeCmd.Flags().Bool("yes", false, "Confirm")
+	addYesFlag(strictCmd)
 	strictCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 2h, 90m)")
 	strictCmd.Flags().String("until", "", "Timer lock: can't be turned off until this clock time (HH:MM)")
 	strictCmd.Flags().Bool("lock", false, "Text lock ('kc9k strict unlock')")

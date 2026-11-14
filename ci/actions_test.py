@@ -258,7 +258,7 @@ try:
             pass
     ot("stop", "rectest")
 
-    # monk mode from a list, for a minute: the browser closes and monk-mode
+    # monk mode from a list, for a minute: the browser closes and monk mode
     # starts, then ends by itself.
     ot("block", "create", "monklist")
     ot("list", "add", "monklist", "Blocked", "example.net")
@@ -268,15 +268,15 @@ try:
     visit(driver, "https://example.net/")
     check("monk mode closes the browser", closed(driver))
     time.sleep(8)  # the daemon starts it after the extension has closed the browser
-    info = subprocess.run(["kc9k", "block", "info", "monk-mode"], capture_output=True, text=True).stdout
-    check("monk mode starts from a list", "Status: Active" in info and "Timer-locked" in info)
+    out = subprocess.run(["kc9k", "monk"], capture_output=True, text=True).stdout
+    check("monk mode starts from a list", "Monk mode is on" in out)
     ot("stop", "monklist")
     for _ in range(100):
-        info = subprocess.run(["kc9k", "block", "info", "monk-mode"], capture_output=True, text=True).stdout
-        if "Status: Inactive" in info:
+        out = subprocess.run(["kc9k", "monk"], capture_output=True, text=True).stdout
+        if "Monk mode is off" in out:
             break
         time.sleep(2)
-    check("monk mode ends by itself", "Status: Inactive" in info)
+    check("monk mode ends by itself", "Monk mode is off" in out)
 finally:
     cleanup()
 

@@ -115,8 +115,13 @@ build and is **used for real**. On it:
 - **GUI** (`gui/kc9k-gui.py`): GTK 3 Python, English; Dashboard, Blocks, Device Blocks, Statistics, Settings. Reads `kc9k gui-state` and `kc9k stats --json`; every change runs a `kc9k` command.
 - **Website lists** (`internal/db/weblists.go`, `internal/cli/weblists.go`,
   `kc9k list …`): each block has named blacklists and exception lists. Each
-  list is an address list (url) or a term list (title and/or text;
-  `db.CheckWhere`, mixed lists split once by `migrateListTypes`); each blacklist ticks its
+  list has a type (`web_lists.type`, `WebList.IsAddress`): an address list
+  (url only) or a term list (any of url, title, text; `db.CheckScope`;
+  untyped lists that mixed url and page were split by `migrateListTypes`,
+  then `fillListTypes` typed everything, clusters too). A term list's url
+  terms reach the extension as `url_terms` and are matched in the address
+  read as words (`kc9kUrlWords`, R-PHRASE-6); only address lists feed hosts,
+  firewall and policy. Each blacklist ticks its
   actions (block / greyscale / no-images, `actions.go`) with, per action, two
   counts for page text: distinct entries (threshold) and total hits. An exception list spares pages
   from its own block's blacklists only. Only url blacklists with `block` feed
@@ -124,12 +129,13 @@ build and is **used for real**. On it:
   block with title/text exceptions; everything goes to the extension as
   `lists` rules (`enforce.BuildRules`, `kc9kListActions` in `match.js`: plain
   words are whole words, `*` matches inside words; a list whose exceptions
-  look at a part of the page not read yet waits; word combinations such as
-  `(car, lambo*) (big, small, nice):2` count runs of directly following words
-  that give each box its minimum of different words: `kc9kCombination` /
-  `kc9kKeywordMatcher`, mirrored by `pageCombination` in `cli/keywords.go`,
-  which stores them normalized, and `parse_combination` plus
-  `CombinationDialog` in the GUI). What strengthens is free;
+  look at a part of the page not read yet waits). Word combinations such
+  as `(car, lambo*) (big, small, nice):2` are the old form of phrases:
+  `migrateCombinations` (`db/combinations.go`, at every open and after
+  imports) moves those of blacklists and term clusters into phrase sets and
+  phrase clusters (`CombinationPhrases`: each box a word set, `:N`
+  dropped); `refuseCombinations` refuses typed ones. Those left (one box,
+  or in exception lists) are still matched by `kc9kCombination`. What strengthens is free;
   the rest is gated/queueable (`EditList*` edits name lists by id). Old
   commands (`block add`, `add-exception`, `add-keyword`, `threshold`,
   `action`) are shortcuts to the default lists Blocked / Exceptions / Page
@@ -141,6 +147,23 @@ build and is **used for real**. On it:
   picks the strongest page action, closes the tab and browser itself, and
   POSTs `/hit` (`enforce/hits.go`, extension header required) so the daemon
   logs the event and runs logout/shutdown/monk.
+- **Phrase sets** (`internal/db/phrases.go`, `internal/cli/phrases.go`,
+  `kc9k phrase-set …`, R-PHRASE-1 to 10): named sets of phrases in a block
+  (scope, actions with a threshold of different phrases, test mode). A
+  phrase is JSON (`db.Phrase`: word sets, necessary or optional, length),
+  typed as `[a, b] [c]? :N` (`ParsePhrase`, `String`); `Check` refuses
+  one-ended bridges per term (mirrored by `kc9kPhraseCheck`). They reach the
+  extension as `lists` rules with negative IDs (`phraseRules`), matched by
+  `kc9kPhraseMatcher`; `HasPhrases` makes a block non-empty. Names are
+  unique regardless of case. `gui-state` gives each block `phrase_sets`;
+  the GUI shows them as `PhraseSetCard` (a `ListCard` keyed by minus the
+  set's ID) with `PhraseDialog`. `ci/gui_phrase_smoke.py` is the GUI smoke
+  test for them (builds its own binary and scratch database). In files
+  (`cli/phraseexport.go`: block export, project) phrases are written as
+  typed and parsed again on import; `db.AddPhraseSet` writes a whole set.
+  A phrase cluster is a cluster with `phrases` set: its entries are typed
+  phrases, `cluster copy` makes a phrase set, `cluster save` takes a phrase
+  set when the block has no list of that name; recording refuses it.
 - **Clusters** (`internal/db/clusters.go`, `internal/cli/clusters.go`,
   `kc9k cluster …`): website lists outside any block (name, where, entries;
   no kind, no actions, never enforced, always editable). `cluster copy`
@@ -153,11 +176,25 @@ build and is **used for real**. On it:
   each opened page/frame address to `/visit` (extension header required);
   the daemon only buffers sites. `record stop` adds them through
   `listAdd`/`clusterAdd`, so gating happens there, in the CLI.
+- **Monk mode** (`internal/enforce/monk.go`, `db/monk.go`,
+  `blocker/netcut.go`, `ApplyFirewallCut`): settings `monk.until` (trusted
+  time) and `monk.net` (`db.MonkNet`: Wi-Fi radio and each Ethernet
+  interface's state, saved once before the first cut, `SaveMonkNetIfNone`).
+  `monkBlock()` is built in memory (`*.*`, `file://*`, list id `MonkListID`)
+  and added by `withMonk` to what is enforced (rules, hosts, policy), never
+  stored, so no command reaches it. `Tick` calls `enforceMonk`: while on it
+  holds the three cuts (nmcli radio, `ip link set down` on every real
+  Ethernet device from /sys/class/net, nft `inet kc9k` or iptables drop all but
+  loopback), at the end or with a saved state and no end time it restores.
+  Devices go through vars (`wifiRadio`, `setLink`, `cutFirewall`...);
+  `enforce`'s `TestMain` fakes them. With `KC9K_DB` set nothing is cut
+  (`monkDeviceless`). `migrateMonkMode` removes the old `monk-mode` block once.
+  `gui-state` has `monk_seconds`.
 - **Consequences** (`internal/enforce/consequence.go`): one engine for list
   device actions, bypass prevention and monk mode: close browsers, lock
   screen/logout/shutdown (for a while through Frozen Chicken, only
-  extended; once at most every 10 min), monk mode (`StartMonk`: the system-owned
-  block `monk-mode`, fixed while on (`refuseMonkEdit`), never removed or renamed, `*.*` by default, time-locked with StopAt ending it).
+  extended; once at most every 10 min), monk mode (`StartMonk`, `enforce/monk.go`: a mode, no block;
+  see Monk mode).
   Device effects go through replaceable vars so tests never touch the machine.
 - **Quota by use** (`internal/quota/`, `enforce/quota.go`): a session spends
   only time in use (`Spend`; `Step` never spends): the daemon's foreground
@@ -235,6 +272,29 @@ build and is **used for real**. On it:
   behaviour switches, never held: `polite-close` (`blocker/polite.go`: a
   blocked app's windows are asked to close, killed a cycle later; `Apply`
   leaves kills to the daemon then) and `block-page-details`.
+- **Circadian rhythm** (§4.10; `internal/circadian/` pure logic,
+  `enforce/circadian.go` engine, `cli/circadian.go`, `CircadianPage` and
+  `ClipEditor` in the GUI): never locked, never gated. Settings are JSON in
+  the settings table: `circadian` (`circadian.Config`: three clips of
+  `Point{Minute, Value, Tension}`, wallpapers, dark mode, dark pages),
+  `circadian.paused`, `.preview`, `.applied`, `.resume`, `.status`.
+  `RunCircadian` steps every 5 s in its own goroutine (`daemon.go`), never
+  inside `Tick`; external screens (`ddcutil`) and the night light check
+  every 30 s. It never overrides the user: a level that isn't what KC9K
+  last wrote pauses its clip until the next point (`PauseBacklight`,
+  `PauseExternal`, `PauseGamma`; software brightness and kelvin are one
+  gamma ramp). Plain ramps count as "apply", someone else's as a pause,
+  except right after start. Wallpaper and dark mode are given once per
+  change of key (`WallpaperKey`, `DarkKey`). `kc9k circadian preview`
+  drives the hardware itself (`PreviewCircadian`) and the engine adopts
+  what it wrote. Hardware is behind the `circadian*` vars
+  (`fakeCircadian` in tests); with `KC9K_DB` set nothing is applied
+  (`circadianDry`). Wallpapers live in `<db dir>/wallpapers` (0644).
+  `rules.dark` (`CircadianDarkRule`) feeds `darkPage` in content.js.
+  The clip curve (`circadian.Shape`) is mirrored by `clip_shape` in the
+  GUI; `ci/gui_circadian_smoke.py` is the GUI smoke test and
+  `ci/circadian_test.py` the dark pages test in LibreWolf (run the first under
+  `xvfb-run -a`).
 - **Pauses** (`db/pauses.go`, `enforce/soon.go`): `block_pauses` lifts an
   active block until a trusted time; `pausedFor` (Pomodoro break or pause)
   is what `withoutBreaks` checks. `rules.soon` (quota left, break left,
@@ -286,6 +346,13 @@ build and is **used for real**. On it:
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (schedules, time locks, schema upgrades) +
   `weblists.go` (website lists) + `pending.go` (queued loosening edits).
+- **Lock confirmation** (`internal/cli/confirm.go`, R-LOCK-12): every path
+  that sets, adds to or extends a lock builds `lockToSet` items (target, kind,
+  length) and calls `confirmLocks` before writing anything: a terminal is
+  asked for "yes", anything else is refused without `--yes` (`addYesFlag`).
+  Tests: `confirm_test.go` (`lockCases`, one per lock kind and target).
+  The GUI's lock dialogs all go through `confirm_lock` and then pass `--yes`.
+  A hotkey's lock is confirmed at `hotkey add` and, unless it has `no_confirm`, at each press (`blocker.ConfirmDesktop`, zenity as the session user; no zenity or answer means no). Automatic monk mode needs `--no-confirm-ok` (`requireMonkAck`).
 - **Lock** (`internal/lock/`): raw-mode, paste-resistant typing challenge (random
   characters: 60% letters, 35% digits, 5% symbols) that gates a char-locked
   block's deactivation.
@@ -302,16 +369,17 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 Android companion app: see `android/CLAUDE.md` (it runs this extension in IronFox and serves it `/rules` itself; `rules.safesearch` comes only from there, `kc9kSafeSearch` in `match.js`).
 
 Full usage and examples in `README.md`. Summary:
-`cluster list | show | create [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
-`list show | create [--exceptions --url --title --text] | rename | delete | add | remove | scope | action |
+`cluster list | show | create [--phrases] [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
+`phrase-set show | create [--url --title --text] | add | remove | scope | action | threshold | test | rename | delete | export | import`,
+`list show | create [--exceptions --terms --url --title --text] | rename | delete | add | remove | scope | action |
 threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
 `bypass` (old name `nepsis`) `[set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,
-`block create [--allowlist] [--template T] | add | add-exception | add-app | add-title | remove-title |
+`block create [--allowlist] | add | add-exception | add-app | add-title | remove-title |
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock | --text-lock] [--lock-chars N] [--lock-words | --lock-text T] [--for D | --until HH:MM]`,
 `strict on|off|unlock [lock flags]`, `no-weakening on|off`, `password locks on|off`, `dns [network|quad9|IPs]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `break …`, `social …`, `place …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `circadian [show --json | on|off | lane L [on|off] [--points P] | point add|remove | preset [N] | preview L V [--end] | resume [L] | wallpaper add|time|remove | dark … | dark-pages on|off | exempt add|remove | nightlight off]`, `break …`, `social …`, `place …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

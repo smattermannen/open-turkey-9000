@@ -23,7 +23,7 @@ func TestActionSettings(t *testing.T) {
 	if err := runCLI(t, "list", "action", "b", "Blocked", "redirect", "on", "--url", "javascript:alert(1)"); err == nil {
 		t.Error("a non-web redirect was accepted")
 	}
-	mustRun(t, "list", "action", "b", "Blocked", "monk", "on", "--for", "30m")
+	mustRun(t, "list", "action", "b", "Blocked", "monk", "on", "--for", "30m", "--no-confirm-ok")
 	mustRun(t, "list", "action", "b", "Blocked", "redirect", "on", "--url", "https://example.com/focus")
 	mustRun(t, "list", "action", "b", "Blocked", "close-tab", "on")
 
@@ -52,7 +52,7 @@ func TestActionSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
-		{"list", "action", "b", "Blocked", "monk", "on", "--for", "10m"},
+		{"list", "action", "b", "Blocked", "monk", "on", "--for", "10m", "--no-confirm-ok"},
 		{"list", "action", "b", "Blocked", "redirect", "on", "--url", "https://youtube.com/"},
 		{"list", "action", "b", "Blocked", "close-tab", "off"},
 	} {
@@ -77,7 +77,7 @@ func TestNepsisCommands(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "list", "add", "b", "Blocked", "reddit.com")
-	mustRun(t, "nepsis", "set", "--block", "b", "--count", "10", "--within", "5m", "--then", "monk", "--then-for", "1h")
+	mustRun(t, "nepsis", "set", "--block", "b", "--count", "10", "--within", "5m", "--then", "monk", "--then-for", "1h", "--no-confirm-ok")
 	if err := runCLI(t, "nepsis", "set", "--count", "5", "--within", "5m", "--then", "monk"); err == nil {
 		t.Error("monk without --then-for was accepted")
 	}
@@ -85,7 +85,7 @@ func TestNepsisCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Stricter is allowed while held; looser isn't.
-	mustRun(t, "nepsis", "set", "--block", "b", "--count", "5", "--within", "10m", "--then", "monk", "--then-for", "2h")
+	mustRun(t, "nepsis", "set", "--block", "b", "--count", "5", "--within", "10m", "--then", "monk", "--then-for", "2h", "--no-confirm-ok")
 	for _, args := range [][]string{
 		{"nepsis", "off", "--block", "b"},
 		{"nepsis", "set", "--block", "b", "--count", "20", "--within", "10m", "--then", "monk", "--then-for", "2h"},
@@ -101,7 +101,7 @@ func TestNepsisCommands(t *testing.T) {
 	}
 
 	// The global one with a time lock: looser is refused until it ends.
-	mustRun(t, "nepsis", "set", "--count", "20", "--within", "10m", "--then", "lock-screen", "--then-for", "15m", "--for", "2h")
+	mustRun(t, "nepsis", "set", "--count", "20", "--within", "10m", "--then", "lock-screen", "--then-for", "15m", "--for", "2h", "--yes")
 	if err := runCLI(t, "nepsis", "off"); err == nil || !strings.Contains(err.Error(), "locked until") {
 		t.Errorf("turning off a time-locked bypass prevention: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestNepsisLadderCommand(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "nepsis", "set", "--step", "3 in 10m: warning, close-tab, logout 1m",
 		"--step", "3 in 10m: close-browser, monk 5m", "--step", "2 in 30m: shutdown 15m",
-		"--detect", "page,app", "--quiet", "2h")
+		"--detect", "page,app", "--quiet", "2h", "--no-confirm-ok")
 	n, _ := d.GlobalNepsis()
 	if len(n.Steps) != 3 || n.QuietMinutes != 120 || !reflect.DeepEqual(n.Detectors, []string{"page", "app"}) ||
 		!reflect.DeepEqual(n.Steps[0].Actions, []db.NepsisAction{{Kind: "warning"}, {Kind: "close-tab"}, {Kind: "logout", Minutes: 1}}) {

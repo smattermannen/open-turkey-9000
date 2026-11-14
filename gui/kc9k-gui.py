@@ -29,13 +29,6 @@ STATS_REFRESH_SECONDS = 30
 # Pointer events for the charts' hover.
 POINTER_EVENTS = Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK
 
-# Ready-made site lists for a new block (internal/cli/templates.go).
-TEMPLATES = (
-    ("social-media", "Social media"), ("video", "Video"), ("streaming", "Streaming services"),
-    ("news", "News"), ("forums", "Forums"), ("games", "Games"), ("gambling", "Gambling"),
-    ("shopping", "Shopping"), ("music", "Music"), ("messaging", "Messaging"), ("dating", "Dating"),
-    ("ai-chat", "AI chat"), ("sports", "Sports"), ("finance", "Finance and trading"),
-)
 # Schedules added with one click: days, from, to.
 SCHEDULE_PRESETS = (
     ("Work hours", "weekdays", "09:00", "17:00"),
@@ -596,14 +589,6 @@ def parse_combination(text):
     return boxes
 
 
-def combination_text(boxes):
-    """Writes boxes as one list entry: "(car, lambo) (big, small, nice):2"."""
-    parts = []
-    for terms, need in boxes:
-        parts.append(f"({', '.join(terms)})" + (f":{need}" if need > 1 else ""))
-    return " ".join(parts)
-
-
 def split_entries(text):
     """Splits typed entries at spaces, keeping word combinations whole: a
     space inside brackets doesn't split, nor one between two boxes, and a
@@ -636,81 +621,6 @@ def split_entries(text):
     return out
 
 
-class CombinationDialog(Gtk.Dialog):
-    """Builds a word combination from boxes of words, each with how many of
-    its words a match needs; get_text() gives the list entry."""
-
-    def __init__(self, parent, initial=None, editing=False):
-        super().__init__(title="Word combination", transient_for=parent, modal=True)
-        self.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        self.ok = self.add_button("Save" if editing else "Add", Gtk.ResponseType.OK)
-        self.set_default_size(560, -1)
-        area = self.get_content_area()
-        area.set_spacing(8)
-        area.set_border_width(12)
-        area.pack_start(heading("Word combinations", "medium"), False, False, 0)
-        area.pack_start(dim(
-            "A page counts when words of these boxes follow one another directly, with "
-            "only spaces between, in any order, and each box has at least its minimal count "
-            "of different words there. Separate words with spaces, or with commas when a "
-            "box holds phrases; * matches inside words (lambo*, *niece*)."), False, False, 0)
-        self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        area.pack_start(self.rows, False, False, 0)
-        self.add_box = Gtk.Button(label="+ Add box", halign=Gtk.Align.START)
-        self.add_box.connect("clicked", lambda _b: self.add_row())
-        area.pack_start(self.add_box, False, False, 0)
-        self.preview = dim("", wrap=True)
-        self.preview.set_selectable(True)
-        area.pack_start(self.preview, False, False, 0)
-        for terms, need in initial or [([], 1), ([], 1)]:
-            self.add_row(terms, need)
-        self.changed()
-        self.show_all()
-
-    def add_row(self, terms=(), need=1):
-        row = Gtk.Box(spacing=8)
-        phrases = any(" " in t for t in terms)
-        entry = Gtk.Entry(hexpand=True, placeholder_text="car lambo* sheep",
-                          text=(", " if phrases else " ").join(terms))
-        spin = Gtk.SpinButton.new_with_range(1, MAX_BOXES, 1)
-        spin.set_value(need)
-        remove = Gtk.Button.new_from_icon_name("list-remove-symbolic", Gtk.IconSize.BUTTON)
-        remove.set_tooltip_text("Remove this box")
-        remove.connect("clicked", lambda _b: (self.rows.remove(row), self.changed()))
-        entry.connect("changed", lambda _e: self.changed())
-        spin.connect("value-changed", lambda _s: self.changed())
-        row.pack_start(entry, True, True, 0)
-        row.pack_start(Gtk.Label(label="minimal count:"), False, False, 0)
-        row.pack_start(spin, False, False, 0)
-        row.pack_start(remove, False, False, 0)
-        row.entry, row.spin = entry, spin
-        self.rows.pack_start(row, False, False, 0)
-        row.show_all()
-        self.changed()
-
-    def boxes(self):
-        out = []
-        for row in self.rows.get_children():
-            text = row.entry.get_text().replace("(", " ").replace(")", " ").replace(":", " ")
-            raw = text.split(",") if "," in text else text.split()
-            terms = [" ".join(t.split()) for t in raw if t.replace("*", "").strip()]
-            if terms:
-                out.append((terms, row.spin.get_value_as_int()))
-        return out
-
-    def get_text(self):
-        boxes = self.boxes()
-        text = combination_text(boxes)
-        return text if parse_combination(text) else ""
-
-    def changed(self):
-        text = self.get_text()
-        self.ok.set_sensitive(bool(text))
-        self.add_box.set_sensitive(len(self.rows.get_children()) < MAX_BOXES)
-        self.preview.set_text(f"Entry: {text}" if text else
-                              "Fill in boxes needing two words or more in all.")
-
-
 class EditableList(Gtk.Box):
     """A titled list with an entry for adding and a button for removing.
 
@@ -721,9 +631,10 @@ class EditableList(Gtk.Box):
 
     def __init__(self, title, placeholder, on_add, on_remove,
                  on_import=None, on_export=None, help_text="", search=False, hidden=False,
-                 on_activate=None):
+                 on_activate=None, split=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
+        self.split = split or split_entries
         self.hidden, self.owner = hidden, None
         if title:
             self.pack_start(heading(title, "medium"), False, False, 0)
@@ -820,7 +731,7 @@ class EditableList(Gtk.Box):
         self._show_cover()
 
     def _add(self, _widget):
-        values = split_entries(self.entry.get_text())
+        values = self.split(self.entry.get_text())
         if values:
             self.entry.set_text("")
             self.on_add(values)
@@ -855,13 +766,13 @@ class ListCard(Gtk.Frame):
         box.pack_start(top, False, False, 0)
 
         # §3.2: an address list looks only at the address; a term list at
-        # the title and/or text, which it can tick.
+        # the address (read as words, R-PHRASE-6), title and/or text.
         self.place_checks = {}
         places = Gtk.Box(spacing=12)
-        address_list = "url" in data["where"]
+        address_list = data.get("type", "address" if data["where"] == ["url"] else "term") == "address"
         places.pack_start(Gtk.Label(label="Address list" if address_list else "Term list, looking at:"), False, False, 0)
         if not address_list:
-            for name, title in LIST_PLACES[1:]:
+            for name, title in LIST_PLACES:
                 check = Gtk.CheckButton(label=title)
                 check.connect("toggled", self.toggle_place, name)
                 self.place_checks[name] = check
@@ -880,13 +791,11 @@ class ListCard(Gtk.Frame):
             box.pack_start(Gtk.Label(label="Actions:", xalign=0), False, False, 0)
             actions = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
                                   column_spacing=12, row_spacing=2)
-            monk_block = self.window.selected == (self.window.state or {}).get("monk_block")
             for name, title in SITE_ACTIONS:
                 check = Gtk.CheckButton(label=title)
                 check.connect("toggled", self.toggle_action, name)
                 self.action_checks[name] = check
-                if not (monk_block and name == "monk"):  # R-MONK-1
-                    actions.add(check)
+                actions.add(check)
             box.pack_start(actions, False, False, 0)
             # The settings of ticked actions that have some, each with Change….
             self.param_rows = {}
@@ -927,16 +836,8 @@ class ListCard(Gtk.Frame):
             "", "reddit.com  *casino*  nsfw", self.add_entries, self.remove_entry,
             lambda: window.import_list(["list", "import", window.selected, self.data["name"]]),
             lambda: window.export_list(["list", "export", window.selected, self.data["name"]]),
-            search=True, hidden=True, on_activate=self.edit_combination)
+            search=True, hidden=True)
         box.pack_start(self.entries, True, True, 0)
-        self.combination_row = Gtk.Box(spacing=8)
-        combine = Gtk.Button(label="Word combination…")
-        combine.connect("clicked", lambda _b: self.edit_combination(None))
-        self.combination_row.pack_start(combine, False, False, 0)
-        self.combination_row.pack_start(dim(
-            "Words that count only next to one another; double-click one to change it.",
-            wrap=True), True, True, 0)
-        box.pack_start(self.combination_row, False, False, 0)
         self.update(data)
 
     def update(self, data):
@@ -972,8 +873,6 @@ class ListCard(Gtk.Frame):
                 self.test_check.set_active(data.get("test", False))
                 self.test_check.set_no_show_all(not words)
                 self.test_check.set_visible(words)
-            self.combination_row.set_no_show_all(not words)
-            self.combination_row.set_visible(words)
             self.entries.entry.set_placeholder_text(
                 ("reddit.com  *.xxx  nsfw" if words else "reddit.com  *.xxx  *casino*")
                 if "url" in data["where"] else "nsfw  18+  *porn*")
@@ -988,27 +887,6 @@ class ListCard(Gtk.Frame):
 
     def remove_entry(self, value, _num):
         self.window.run(self.command("remove", value), then=self.window.queued_note)
-
-    def edit_combination(self, value):
-        """Adds a word combination, or changes one (value): the new one is
-        added, then the old one removed, which weakens and may be refused
-        like any removal."""
-        old = parse_combination(value) if value else None
-        if value and old is None:
-            return
-        if not ("title" in self.data["where"] or "text" in self.data["where"]):
-            return
-        dialog = CombinationDialog(self.window, old, editing=old is not None)
-        answer = dialog.run()
-        text = dialog.get_text()
-        dialog.destroy()
-        if answer != Gtk.ResponseType.OK or not text or parse_combination(text) == old:
-            return
-        if old is None:
-            self.add_entries([text])
-            return
-        self.window.run(self.command("add", text), then=lambda _o: self.window.run(
-            self.command("remove", value), then=self.window.queued_note))
 
     def toggle_test(self, check):
         if self.filling or self.window.updating:
@@ -1060,7 +938,7 @@ class ListCard(Gtk.Frame):
         else:
             details = {
                 "monk": ("Monk mode", "The browser closes and every website is blocked, locked, "
-                         "for this long (the block monk-mode).", 1, 60),
+                         "and the internet connection is cut, for this long.", 1, 60),
                 "logout": ("Log out", "The browser closes and you are logged out. With a time, "
                            "you stay logged out that long; with 0, just once.", 0, 0),
                 "shutdown": ("Shut down", "The browser closes and the computer shuts down. With a "
@@ -1071,6 +949,11 @@ class ListCard(Gtk.Frame):
             minutes = window.ask_minutes(title, detail, minimum, limit, current.get("minutes", initial))
             if minutes is not None:
                 args = ["--for", f"{minutes}m"] if minutes else []
+                if name == "monk":
+                    if window.acknowledge_no_confirmation("This action"):
+                        args.append("--no-confirm-ok")
+                    else:
+                        args = None
         if args is None:
             self.update(self.data)  # untick the box again
             return
@@ -1097,6 +980,281 @@ class ListCard(Gtk.Frame):
                                "Its entries go with it. Deleting a blacklist weakens the block.",
                                "Delete", destructive=True):
             self.window.run(self.command("delete"), then=self.window.queued_note)
+
+
+MAX_WORD_SETS = 9
+
+
+def phrase_text(sets, length=0):
+    """Writes a phrase as it is typed: "[eat, nice] [hello, grandpa] [today]? :3"
+    (like db.Phrase.String). sets is [(terms, necessary)]."""
+    parts, necessary = [], 0
+    for i, (terms, needed) in enumerate(sets):
+        needed = needed or i < 2
+        necessary += 1 if needed else 0
+        parts.append("[" + ", ".join(terms) + "]" + ("" if needed else "?"))
+    text = " ".join(parts)
+    return f"{text} :{length}" if length and length != necessary else text
+
+
+class PhraseDialog(Gtk.Dialog):
+    """Builds a phrase (§4.3): its word sets, each ticked necessary or
+    optional, and the phrase length; get_text() gives the typed form."""
+
+    def __init__(self, parent, initial=None):
+        super().__init__(title="Phrase", transient_for=parent, modal=True)
+        self.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        self.ok = self.add_button("Save" if initial else "Add", Gtk.ResponseType.OK)
+        self.set_default_size(600, -1)
+        area = self.get_content_area()
+        area.set_spacing(8)
+        area.set_border_width(12)
+        area.pack_start(heading("Phrase", "medium"), False, False, 0)
+        area.pack_start(dim(
+            "A page counts when it has one term of each necessary word set, directly after "
+            "each other in any order, in one sentence (no punctuation between). Separate a "
+            "set's terms with commas; * matches inside a word (porn*). A term ending in - "
+            "(big-) and one starting with - (-gorilla) in another set make a bridge: up to "
+            "20 words may stand between them. The first two word sets are always necessary."),
+            False, False, 0)
+        self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        area.pack_start(self.rows, False, False, 0)
+        self.add_set = Gtk.Button(label="+ Add word set", halign=Gtk.Align.START)
+        self.add_set.connect("clicked", lambda _b: self.add_row())
+        area.pack_start(self.add_set, False, False, 0)
+        length_row = Gtk.Box(spacing=8)
+        length_row.pack_start(Gtk.Label(label="Phrase length (terms a match needs):"), False, False, 0)
+        self.length = Gtk.SpinButton.new_with_range(2, MAX_WORD_SETS, 1)
+        self.length.connect("value-changed", lambda _s: self.changed())
+        length_row.pack_start(self.length, False, False, 0)
+        area.pack_start(length_row, False, False, 0)
+        self.preview = dim("", wrap=True)
+        self.preview.set_selectable(True)
+        area.pack_start(self.preview, False, False, 0)
+        sets = (initial or {}).get("sets") or [{"terms": []}, {"terms": []}]
+        for word_set in sets:
+            self.add_row(word_set.get("terms", []), word_set.get("necessary", True))
+        self.last_necessary = self.necessary()
+        self.length.set_value((initial or {}).get("length") or self.last_necessary)
+        self.changed()
+        self.show_all()
+
+    def add_row(self, terms=(), necessary=True):
+        row = Gtk.Box(spacing=8)
+        entry = Gtk.Entry(hexpand=True, placeholder_text="eat, nice", text=", ".join(terms))
+        check = Gtk.CheckButton(label="Necessary", active=necessary)
+        remove = Gtk.Button.new_from_icon_name("list-remove-symbolic", Gtk.IconSize.BUTTON)
+        remove.set_tooltip_text("Remove this word set")
+        remove.connect("clicked", lambda _b: (self.rows.remove(row), self.changed()))
+        entry.connect("changed", lambda _e: self.changed())
+        check.connect("toggled", lambda _c: self.changed())
+        row.pack_start(entry, True, True, 0)
+        row.pack_start(check, False, False, 0)
+        row.pack_start(remove, False, False, 0)
+        row.entry, row.check, row.remove = entry, check, remove
+        self.rows.pack_start(row, False, False, 0)
+        row.show_all()
+        self.changed()
+
+    def word_sets(self):
+        out = []
+        for i, row in enumerate(self.rows.get_children()):
+            terms = [" ".join(t.split()) for t in row.entry.get_text().replace("[", " ").replace("]", " ").split(",")]
+            out.append(([t for t in terms if t.strip("*- ")], i < 2 or row.check.get_active()))
+        return out
+
+    def necessary(self):
+        return sum(1 for _t, needed in self.word_sets() if needed)
+
+    def get_text(self):
+        sets = self.word_sets()
+        if len(sets) < 2 or any(not terms for terms, _n in sets):
+            return ""
+        return phrase_text(sets, self.length.get_value_as_int())
+
+    def changed(self):
+        if not hasattr(self, "length"):
+            return
+        rows = self.rows.get_children()
+        for i, row in enumerate(rows):
+            # R-PHRASE-1: the first two word sets are necessary.
+            row.check.set_sensitive(i >= 2)
+            if i < 2:
+                row.check.set_active(True)
+            row.remove.set_sensitive(len(rows) > 2)
+        # The length follows the necessary word sets until it is set apart.
+        low, high = self.necessary(), max(len(rows), 2)
+        follow = self.length.get_value_as_int() == getattr(self, "last_necessary", low)
+        self.last_necessary = low
+        self.length.set_range(max(low, 2), high)
+        if follow:
+            self.length.set_value(low)
+        self.add_set.set_sensitive(len(rows) < MAX_WORD_SETS)
+        text = self.get_text()
+        self.ok.set_sensitive(bool(text))
+        self.preview.set_text(f"Phrase: {text}" if text else "Fill in at least two word sets.")
+
+
+class PhraseSetCard(ListCard):
+    """One phrase set (§4.3): scope, actions, a threshold of different
+    phrases per action, test mode, and its phrases, each edited in a
+    PhraseDialog. Reuses ListCard's handling of actions and their settings."""
+
+    def __init__(self, window, data):
+        Gtk.Frame.__init__(self)
+        self.window, self.data = window, data
+        self.filling = False
+        self.is_exceptions = False
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        self.add(box)
+
+        top = Gtk.Box(spacing=6)
+        self.title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        top.pack_start(self.title, True, True, 0)
+        for label, handler in (("Delete…", self.delete), ("Rename…", self.rename)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", handler)
+            top.pack_end(button, False, False, 0)
+        box.pack_start(top, False, False, 0)
+
+        self.place_checks = {}
+        places = Gtk.Box(spacing=12)
+        places.pack_start(Gtk.Label(label="Looks at:"), False, False, 0)
+        for name, title in LIST_PLACES:
+            check = Gtk.CheckButton(label=title)
+            check.connect("toggled", self.toggle_place, name)
+            self.place_checks[name] = check
+            places.pack_start(check, False, False, 0)
+        box.pack_start(places, False, False, 0)
+
+        self.test_check = Gtk.CheckButton(
+            label="Test mode: show what it finds in pages instead of acting",
+            tooltip_text="Turning it on weakens the block.")
+        self.test_check.connect("toggled", self.toggle_test)
+        box.pack_start(self.test_check, False, False, 0)
+
+        box.pack_start(Gtk.Label(label="Actions:", xalign=0), False, False, 0)
+        actions = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
+                              column_spacing=12, row_spacing=2)
+        self.action_checks, self.spins = {}, {}
+        for name, title in SITE_ACTIONS:
+            check = Gtk.CheckButton(label=title)
+            check.connect("toggled", self.toggle_action, name)
+            self.action_checks[name] = check
+            actions.add(check)
+        box.pack_start(actions, False, False, 0)
+        self.param_rows = {}
+        for name in PARAM_ACTIONS:
+            row = Gtk.Box(spacing=8)
+            label = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+            change = Gtk.Button(label="Change…")
+            change.connect("clicked", lambda _b, n=name: self.ask_settings(n))
+            row.pack_start(label, True, True, 0)
+            row.pack_start(change, False, False, 0)
+            self.param_rows[name] = (row, label)
+            box.pack_start(row, False, False, 0)
+
+        # R-PHRASE-9: per action, how many different phrases must match.
+        self.threshold_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.threshold_row.pack_start(dim("Threshold: how many different phrases each action needs."),
+                                      False, False, 0)
+        grid = Gtk.Grid(column_spacing=8, row_spacing=4)
+        for row, (name, title) in enumerate(SITE_ACTIONS):
+            label = Gtk.Label(label=title, xalign=0)
+            distinct = Gtk.SpinButton.new_with_range(1, 1000, 1)
+            self.spins[name] = (label, distinct)
+            grid.attach(label, 0, row, 1, 1)
+            grid.attach(distinct, 1, row, 1, 1)
+        save = Gtk.Button(label="Save thresholds", halign=Gtk.Align.START)
+        save.connect("clicked", self.save_numbers)
+        grid.attach(save, 1, len(SITE_ACTIONS), 1, 1)
+        self.threshold_row.pack_start(grid, False, False, 0)
+        box.pack_start(self.threshold_row, False, False, 0)
+
+        self.entries = EditableList(
+            "", "[eat, nice] [hello, grandpa]", self.add_entries, self.remove_entry,
+            search=True, hidden=True, on_activate=self.edit_phrase,
+            split=lambda text: [text.strip()] if text.strip() else [])
+        box.pack_start(self.entries, True, True, 0)
+        create = Gtk.Button(label="+ Create new phrase", halign=Gtk.Align.START)
+        create.connect("clicked", lambda _b: self.edit_phrase(None))
+        box.pack_start(create, False, False, 0)
+        self.update(data)
+
+    def update(self, data):
+        self.data = data
+        self.filling = True
+        try:
+            count = len(data["phrases"])
+            self.title.set_markup(f"<b>{GLib.markup_escape_text(data['name'])}</b>  "
+                                  f"<small>phrase set · {count} {'phrase' if count == 1 else 'phrases'}</small>")
+            for name, check in self.place_checks.items():
+                check.set_active(name in data["where"])
+            self.test_check.set_active(data.get("test", False))
+            actions = {a["action"]: a for a in data["actions"]}
+            for name, check in self.action_checks.items():
+                check.set_active(name in actions)
+            for name, (row, label) in self.param_rows.items():
+                row.set_no_show_all(name not in actions)
+                row.set_visible(name in actions)
+                if name in actions:
+                    label.set_text(self.settings_text(name, actions[name]))
+            for name, (label, distinct) in self.spins.items():
+                distinct.set_value(actions.get(name, {}).get("distinct", 1))
+                for widget in (label, distinct):
+                    widget.set_no_show_all(name not in actions)
+                    widget.set_visible(name in actions)
+            self.entries.set_items([p["text"] for p in data["phrases"]])
+        finally:
+            self.filling = False
+
+    def command(self, *args):
+        return ["phrase-set", args[0], self.window.selected, self.data["name"], *args[1:]]
+
+    def toggle_test(self, check):
+        if self.filling or self.window.updating:
+            return
+        self.window.run(self.command("test", "on" if check.get_active() else "off"))
+
+    def edit_phrase(self, text):
+        """Adds a phrase, or changes one (text): the new one is added, then
+        the old one removed, which weakens and may be refused."""
+        old = next((p for p in self.data["phrases"] if p["text"] == text), None) if text else None
+        if text and old is None:
+            return
+        dialog = PhraseDialog(self.window, old)
+        answer = dialog.run()
+        new = dialog.get_text()
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK or not new or (old and new == old["text"]):
+            return
+        if old is None:
+            self.add_entries([new])
+            return
+        self.window.run(self.command("add", new), then=lambda _o: self.window.run(
+            self.command("remove", text)))
+
+    def save_numbers(self, _button):
+        current = {a["action"]: a for a in self.data["actions"]}
+        changes = [(name, spin.get_value_as_int()) for name, (_l, spin) in self.spins.items()
+                   if name in current and spin.get_value_as_int() != current[name].get("distinct", 1)]
+
+        def run(rest):
+            if rest:
+                (name, value), rest = rest[0], rest[1:]
+                self.window.run(self.command("threshold", name, str(value)), then=lambda _o: run(rest))
+        run(changes)
+
+    def rename(self, _button):
+        name = self.window.ask_text("Rename phrase set", initial=self.data["name"])
+        if name and name != self.data["name"]:
+            self.window.run(self.command("rename", name))
+
+    def delete(self, _button):
+        if self.window.confirm(f"Delete the phrase set {self.data['name']}?",
+                               "Its phrases go with it. Deleting one with phrases weakens the block.",
+                               "Delete", destructive=True):
+            self.window.run(self.command("delete"))
 
 
 class StatTile(Gtk.Box):
@@ -1442,6 +1600,846 @@ class TopChart(Gtk.DrawingArea):
 
 # The window --------------------------------------------------------------
 
+# Circadian rhythm (§4.10) -------------------------------------------------
+# The same curve as circadian.Shape and Lane.ValueAt in internal/circadian.
+DAY_MINUTES = 24 * 60
+
+
+def clip_shape(x, tension, rising):
+    x = max(0.0, min(1.0, x))
+    if not rising:
+        tension = -tension
+    middle = 0.5 + 0.49 * max(-1.0, min(1.0, tension))
+    if abs(middle - 0.5) < 1e-9:
+        return x
+    return x ** (math.log(middle) / math.log(0.5))
+
+
+def clip_segment(points, minute):
+    """The points the curve runs between at minute: (from, to, start, end),
+    with start and end in minutes (before 0 or past 1440 around midnight)."""
+    count = len(points)
+    index = -1
+    for i, point in enumerate(points):
+        if point["minute"] <= minute:
+            index = i
+    if index < 0:
+        return count - 1, 0, points[-1]["minute"] - DAY_MINUTES, points[0]["minute"]
+    if index + 1 < count:
+        return index, index + 1, points[index]["minute"], points[index + 1]["minute"]
+    return index, 0, points[index]["minute"], points[0]["minute"] + DAY_MINUTES
+
+
+def clip_value(points, minute):
+    if not points:
+        return None
+    if len(points) == 1:
+        return points[0]["value"]
+    a, b, start, end = clip_segment(points, minute)
+    first, second = points[a], points[b]
+    if end <= start:
+        return first["value"]
+    way = clip_shape((minute - start) / (end - start), first.get("tension", 0),
+                     second["value"] >= first["value"])
+    return first["value"] + (second["value"] - first["value"]) * way
+
+
+def kelvin_rgb(kelvin):
+    """The white of a colour temperature (Tanner Helland's fit, 6500 K is
+    white), as circadian.WhitePoint draws it."""
+    def black_body(k):
+        t = max(1000.0, min(40000.0, k)) / 100
+        if t <= 66:
+            r = 255.0
+            g = 99.4708025861 * math.log(t) - 161.1195681661
+        else:
+            r = 329.698727446 * (t - 60) ** -0.1332047592
+            g = 288.1221695283 * (t - 60) ** -0.0755148492
+        if t >= 66:
+            b = 255.0
+        elif t <= 19:
+            b = 0.0
+        else:
+            b = 138.5177312231 * math.log(t - 10) - 305.0447927307
+        return [max(1.0, min(255.0, v)) for v in (r, g, b)]
+    here, neutral = black_body(kelvin), black_body(6500)
+    rgb = [h / n for h, n in zip(here, neutral)]
+    top = max(rgb)
+    return tuple(v / top for v in rgb)
+
+
+def clock_text(minute):
+    minute = int(round(minute)) % DAY_MINUTES
+    return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+def points_text(points):
+    """Points as 'kc9k circadian lane --points' reads them."""
+    parts = []
+    for point in points:
+        text = f"{clock_text(point['minute'])}={point['value']:.1f}"
+        if point.get("tension"):
+            text += f"~{point['tension']:.2f}"
+        parts.append(text)
+    return " ".join(parts)
+
+
+# The sky through the day, for the clips' time axis: (hour, red, green, blue).
+SKY = ((0, .04, .06, .15), (5, .10, .16, .32), (6.5, .96, .64, .38), (8, .56, .79, .90),
+       (12, .75, .90, 1.0), (17, .56, .79, .90), (18.5, .96, .64, .38), (20, .10, .16, .32),
+       (24, .04, .06, .15))
+
+
+class ClipEditor(Gtk.DrawingArea):
+    """One automation clip: a 24-hour curve of points. Right-click adds a
+    point (on a point: removes it), dragging a point moves it, dragging the
+    curve bends it, double-click types exact values."""
+
+    LEFT, RIGHT, TOP, BOTTOM = 52, 12, 10, 30
+    GRAB = 9
+
+    def __init__(self, lane, on_change, on_preview):
+        super().__init__()
+        self.lane = lane
+        self.points = [dict(p) for p in lane["points"]]
+        self.minute = 0.0
+        self.active = False  # the clip is on, and so is the circadian rhythm
+        self.on_change, self.on_preview = on_change, on_preview
+        self.drag = None  # ("point", index) or ("tension", index, start y, start tension)
+        self.moved = False
+        self.hover = None
+        self.set_size_request(-1, 190)
+        self.set_has_tooltip(True)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK | POINTER_EVENTS)
+        self.connect("draw", self.draw)
+        self.connect("button-press-event", self.pressed)
+        self.connect("button-release-event", self.released)
+        self.connect("motion-notify-event", self.motion)
+        self.connect("leave-notify-event", self.left)
+        self.connect("query-tooltip", self.tooltip)
+
+    # Geometry
+    def plot(self):
+        width, height = self.get_allocated_width(), self.get_allocated_height()
+        return self.LEFT, self.TOP, max(10, width - self.LEFT - self.RIGHT), max(10, height - self.TOP - self.BOTTOM)
+
+    def x_of(self, minute):
+        x, _y, w, _h = self.plot()
+        return x + w * minute / DAY_MINUTES
+
+    def y_of(self, value):
+        _x, y, _w, h = self.plot()
+        low, high = self.lane["min"], self.lane["max"]
+        return y + h * (1 - (value - low) / (high - low))
+
+    def minute_of(self, px, fine=False):
+        x, _y, w, _h = self.plot()
+        minute = (px - x) / w * DAY_MINUTES
+        step = 1 if fine else 5
+        return int(max(0, min(DAY_MINUTES - 1, round(minute / step) * step)))
+
+    def value_of(self, py):
+        _x, y, _w, h = self.plot()
+        low, high = self.lane["min"], self.lane["max"]
+        value = low + (1 - (py - y) / h) * (high - low)
+        step = 50 if self.lane["unit"] == "K" else 1
+        return max(low, min(high, round(value / step) * step))
+
+    def point_at(self, px, py):
+        for index, point in enumerate(self.points):
+            if abs(self.x_of(point["minute"]) - px) <= self.GRAB and abs(self.y_of(point["value"]) - py) <= self.GRAB:
+                return index
+        return None
+
+    def on_curve(self, px, py):
+        """The index of the point whose curve passes under the pointer."""
+        if len(self.points) < 2:
+            return None
+        x, _y, w, _h = self.plot()
+        if px < x or px > x + w:
+            return None
+        minute = (px - x) / w * DAY_MINUTES
+        if abs(self.y_of(clip_value(self.points, minute)) - py) > self.GRAB:
+            return None
+        return clip_segment(self.points, minute)[0]
+
+    def set_data(self, lane, minute, active):
+        """Takes the stored clip over, unless a drag is under way."""
+        self.minute, self.active = minute, active
+        if self.drag is None:
+            self.lane = lane
+            self.points = [dict(p) for p in lane["points"]]
+        self.queue_draw()
+
+    # Drawing
+    def draw(self, _widget, cr):
+        accent, text, soft, faint = theme_colors(self)
+        x, y, w, h = self.plot()
+        low, high, unit = self.lane["min"], self.lane["max"], self.lane["unit"]
+        alpha = 1.0 if self.active else 0.45
+        layout = self.create_pango_layout("")
+        layout.set_font_description(Pango.FontDescription("Sans 8"))
+
+        # Value grid and labels.
+        cr.set_line_width(1)
+        marks = (1000, 2500, 4000, 5500, 7000, 8500, 10000) if unit == "K" else (low, 25, 50, 75, 100)
+        for mark in marks:
+            py = round(self.y_of(mark)) + 0.5
+            cr.set_source_rgba(*faint)
+            cr.move_to(x, py)
+            cr.line_to(x + w, py)
+            cr.stroke()
+            layout.set_text(f"{mark:g}{'' if unit == 'K' else ' %'}")
+            width, height = layout.get_pixel_size()
+            cr.set_source_rgba(*soft)
+            cr.move_to(x - width - 6, py - height / 2)
+            PangoCairo.show_layout(cr, layout)
+
+        # The time axis: the sky through the day, and the hours.
+        import cairo  # comes with PyGObject's drawing support
+        sky = cairo.LinearGradient(x, 0, x + w, 0)
+        for hour, red, green, blue in SKY:
+            sky.add_color_stop_rgb(hour / 24, red, green, blue)
+        cr.set_source(sky)
+        cr.rectangle(x, y + h + 3, w, 6)
+        cr.fill()
+        for hour in range(0, 25, 3):
+            px = round(x + w * hour / 24) + 0.5
+            cr.set_source_rgba(*faint)
+            cr.move_to(px, y)
+            cr.line_to(px, y + h)
+            cr.stroke()
+            layout.set_text(f"{hour:02d}:00")
+            width, _height = layout.get_pixel_size()
+            cr.set_source_rgba(*soft)
+            cr.move_to(min(max(px - width / 2, x - 10), x + w - width + 10), y + h + 12)
+            PangoCairo.show_layout(cr, layout)
+
+        if not self.points:
+            layout.set_text("No points yet: right-click to add one.")
+            width, height = layout.get_pixel_size()
+            cr.set_source_rgba(*soft)
+            cr.move_to(x + (w - width) / 2, y + (h - height) / 2)
+            PangoCairo.show_layout(cr, layout)
+            return False
+
+        # The curve, sampled every other pixel, and what lies under it.
+        samples = []
+        for step in range(0, int(w) + 1, 2):
+            minute = step / w * DAY_MINUTES
+            samples.append((x + step, clip_value(self.points, min(minute, DAY_MINUTES - 0.001))))
+        base = y + h
+        if unit == "K":
+            # Filled with the colour each temperature gives the screen.
+            for px, value in samples:
+                red, green, blue = kelvin_rgb(value)
+                cr.set_source_rgba(red, green, blue, 0.75 * alpha)
+                cr.rectangle(px, self.y_of(value), 2, base - self.y_of(value))
+                cr.fill()
+        else:
+            cr.move_to(x, base)
+            for px, value in samples:
+                cr.line_to(px, self.y_of(value))
+            cr.line_to(samples[-1][0], base)
+            cr.close_path()
+            cr.set_source_rgba(accent[0], accent[1], accent[2], 0.22 * alpha)
+            cr.fill()
+        cr.set_line_width(2)
+        cr.set_source_rgba(accent[0], accent[1], accent[2], alpha)
+        for index, (px, value) in enumerate(samples):
+            (cr.move_to if index == 0 else cr.line_to)(px, self.y_of(value))
+        cr.stroke()
+
+        # Now.
+        now_x = round(self.x_of(self.minute)) + 0.5
+        cr.set_line_width(1)
+        cr.set_source_rgba(text[0], text[1], text[2], 0.7)
+        cr.move_to(now_x, y)
+        cr.line_to(now_x, y + h + 9)
+        cr.stroke()
+
+        # The points.
+        for index, point in enumerate(self.points):
+            px, py = self.x_of(point["minute"]), self.y_of(point["value"])
+            grabbed = self.hover == index or (self.drag and self.drag[0] == "point" and self.drag[1] == index)
+            cr.arc(px, py, 6 if grabbed else 4.5, 0, 2 * math.pi)
+            cr.set_source_rgba(1, 1, 1, alpha)
+            cr.fill_preserve()
+            cr.set_line_width(2)
+            cr.set_source_rgba(accent[0], accent[1], accent[2], alpha)
+            cr.stroke()
+        return False
+
+    # Pointer
+    def describe(self, value):
+        return f"{value:.0f} K" if self.lane["unit"] == "K" else f"{value:.0f} %"
+
+    def tooltip(self, _widget, px, py, _keyboard, tip):
+        x, _y, w, _h = self.plot()
+        if px < x or px > x + w:
+            return False
+        index = self.point_at(px, py)
+        if index is not None:
+            point = self.points[index]
+            tip.set_text(f"{clock_text(point['minute'])}  {self.describe(point['value'])}\n"
+                         "Drag to move · right-click to remove · double-click to type")
+            return True
+        if not self.points:
+            return False
+        minute = (px - x) / w * DAY_MINUTES
+        tip.set_text(f"{clock_text(minute)}  {self.describe(clip_value(self.points, minute))}")
+        return True
+
+    def pressed(self, _widget, event):
+        index = self.point_at(event.x, event.y)
+        if event.button == 3:
+            if index is not None:
+                del self.points[index]
+            else:
+                fine = bool(event.state & Gdk.ModifierType.SHIFT_MASK)
+                minute = self.minute_of(event.x, fine)
+                self.points = [p for p in self.points if p["minute"] != minute]
+                self.points.append({"minute": minute, "value": self.value_of(event.y), "tension": 0})
+                self.points.sort(key=lambda p: p["minute"])
+            self.hover = None
+            self.queue_draw()
+            self.on_change(self)
+            return True
+        if event.button != 1:
+            return False
+        if event.type == Gdk.EventType.DOUBLE_BUTTON_PRESS:
+            self.drag = None
+            if index is not None:
+                self.type_point(index)
+            return True
+        if index is not None:
+            self.drag, self.moved = ("point", index), False
+        else:
+            segment = self.on_curve(event.x, event.y)
+            if segment is not None:
+                self.drag, self.moved = ("tension", segment, event.y, self.points[segment].get("tension", 0)), False
+        return True
+
+    def motion(self, _widget, event):
+        if self.drag is None:
+            hover = self.point_at(event.x, event.y)
+            if hover != self.hover:
+                self.hover = hover
+                self.queue_draw()
+            self.trigger_tooltip_query()
+            return False
+        self.moved = True
+        if self.drag[0] == "point":
+            index = self.drag[1]
+            point = self.points[index]
+            minute = self.minute_of(event.x, bool(event.state & Gdk.ModifierType.SHIFT_MASK))
+            # A point stays between its neighbours.
+            if index > 0:
+                minute = max(minute, self.points[index - 1]["minute"] + 1)
+            if index + 1 < len(self.points):
+                minute = min(minute, self.points[index + 1]["minute"] - 1)
+            point["minute"], point["value"] = minute, self.value_of(event.y)
+            self.on_preview(self, point["value"])
+        else:
+            _kind, index, start_y, start_tension = self.drag
+            # Up bulges the curve up, whichever way it runs.
+            tension = start_tension + (start_y - event.y) / 80
+            self.points[index]["tension"] = round(max(-1.0, min(1.0, tension)), 2)
+        self.queue_draw()
+        return True
+
+    def released(self, _widget, event):
+        if event.button != 1 or self.drag is None:
+            return False
+        was_point = self.drag[0] == "point"
+        self.drag = None
+        if self.moved:
+            self.on_change(self, preview_over=was_point)
+        self.queue_draw()
+        return True
+
+    def left(self, *_args):
+        if self.hover is not None and self.drag is None:
+            self.hover = None
+            self.queue_draw()
+
+    def type_point(self, index):
+        point = self.points[index]
+        dialog = Gtk.Dialog(title=f"{self.lane['title']}: point", transient_for=self.get_toplevel(), modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Save", Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        grid = Gtk.Grid(row_spacing=8, column_spacing=10, border_width=14)
+        dialog.get_content_area().add(grid)
+        time_entry = Gtk.Entry(text=clock_text(point["minute"]), width_chars=6, activates_default=True)
+        unit = self.lane["unit"]
+        value = Gtk.SpinButton.new_with_range(self.lane["min"], self.lane["max"], 50 if unit == "K" else 1)
+        value.set_value(point["value"])
+        value.set_activates_default(True)
+        tension = Gtk.SpinButton.new_with_range(-1, 1, 0.05)
+        tension.set_digits(2)
+        tension.set_value(point.get("tension", 0))
+        tension.set_tooltip_text("Bends the curve from this point to the next: 0 is straight, "
+                                 "above 0 bulges it up, below 0 down.")
+        for row, (label, widget) in enumerate((("Time (HH:MM)", time_entry),
+                                               (f"Value ({'K' if unit == 'K' else '%'})", value),
+                                               ("Bend to the next point", tension))):
+            grid.attach(Gtk.Label(label=label, xalign=0), 0, row, 1, 1)
+            grid.attach(widget, 1, row, 1, 1)
+        dialog.show_all()
+        answer = dialog.run()
+        clock = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*", time_entry.get_text())
+        new_value, new_tension = value.get_value(), tension.get_value()
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK:
+            return
+        if not clock or int(clock.group(1)) > 23 or int(clock.group(2)) > 59:
+            return
+        minute = int(clock.group(1)) * 60 + int(clock.group(2))
+        self.points = [p for i, p in enumerate(self.points) if i == index or p["minute"] != minute]
+        point["minute"], point["value"], point["tension"] = minute, new_value, round(new_tension, 2)
+        self.points.sort(key=lambda p: p["minute"])
+        self.queue_draw()
+        self.on_change(self)
+
+
+class CircadianPage(Gtk.ScrolledWindow):
+    """Settings that follow the time of day (§4.10). Reads 'kc9k circadian
+    show --json'; every change runs a 'kc9k circadian' command. Nothing here
+    can be locked."""
+
+    PREVIEW_MS = 300
+
+    def __init__(self, window):
+        super().__init__(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        self.window = window
+        self.view = None
+        self.shown = {}  # part of the page -> the data it was built from
+        self.filling = False
+        self.reading = False
+        self.preview_busy = False
+        self.preview_next = None
+        self.preview_at = 0
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18,
+                      margin_start=24, margin_end=24, margin_top=20, margin_bottom=20)
+        self.add(box)
+
+        top = Gtk.Box(spacing=12)
+        top.pack_start(heading("Circadian Rhythm"), False, False, 0)
+        self.master = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.master.connect("state-set", self.switch_master)
+        top.pack_end(self.master, False, False, 0)
+        box.pack_start(top, False, False, 0)
+        box.pack_start(dim(
+            "The screen, the wallpaper and dark mode follow the time of day: cues for the body "
+            "clock. Nothing here can be locked, and it never overrides you: change a level by "
+            "hand and its clip pauses until its next point."), False, False, 0)
+        self.warnings = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, no_show_all=True)
+        box.pack_start(self.warnings, False, False, 0)
+
+        preset_row = Gtk.Box(spacing=8)
+        preset_row.pack_start(Gtk.Label(label="Start from a preset:"), False, False, 0)
+        self.preset = Gtk.ComboBoxText()
+        preset_row.pack_start(self.preset, False, False, 0)
+        apply_preset = Gtk.Button(label="Use it")
+        apply_preset.connect("clicked", self.use_preset)
+        preset_row.pack_start(apply_preset, False, False, 0)
+        self.preset_detail = dim("")
+        clips = section("Automation clips", dim(
+            "Each clip is a curve over 24 hours. Right-click adds a point (on a point: removes "
+            "it). Drag a point to move it (Shift: to the minute), drag the curve to bend it, "
+            "double-click a point to type exact values. While you drag a point, the screen "
+            "shows its value."), preset_row, self.preset_detail)
+        self.preset.connect("changed", self.preset_changed)
+        box.pack_start(clips, False, False, 0)
+        self.editors, self.lane_switches, self.lane_values = {}, {}, {}
+        self.clips_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        clips.pack_start(self.clips_box, False, False, 0)
+
+        self.wallpapers = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        add_wallpaper = Gtk.Button(label="Add a wallpaper…", halign=Gtk.Align.START)
+        add_wallpaper.connect("clicked", self.add_wallpaper)
+        box.pack_start(section("Wallpapers", dim(
+            "Each picture is the wallpaper between its two times. Where times overlap, the one "
+            "that started last shows. A wallpaper you pick yourself stays until the next one starts."),
+            self.wallpapers, add_wallpaper), False, False, 0)
+
+        self.dark_radios = {}
+        dark_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        first = None
+        for mode, label in (("system", "Use the system's setting (KC9K leaves it alone)"),
+                            ("light", "Always light"), ("dark", "Always dark"),
+                            ("scheduled", "Light mode between")):
+            radio = Gtk.RadioButton.new_with_label_from_widget(first, label)
+            first = first or radio
+            radio.connect("toggled", self.dark_toggled, mode)
+            self.dark_radios[mode] = radio
+            if mode != "scheduled":
+                dark_box.pack_start(radio, False, False, 0)
+        times = Gtk.Box(spacing=6)
+        times.pack_start(self.dark_radios["scheduled"], False, False, 0)
+        self.light_from = Gtk.Entry(width_chars=6, max_length=5)
+        self.light_to = Gtk.Entry(width_chars=6, max_length=5)
+        times.pack_start(self.light_from, False, False, 0)
+        times.pack_start(Gtk.Label(label="and"), False, False, 0)
+        times.pack_start(self.light_to, False, False, 0)
+        set_times = Gtk.Button(label="Set")
+        set_times.connect("clicked", lambda _b: self.set_dark_times())
+        self.light_from.connect("activate", lambda _e: self.set_dark_times())
+        self.light_to.connect("activate", lambda _e: self.set_dark_times())
+        times.pack_start(set_times, False, False, 0)
+        dark_box.pack_start(times, False, False, 0)
+        box.pack_start(section("Dark mode", dim(
+            "The dark mode of the desktop and its apps, like a phone's."), dark_box), False, False, 0)
+
+        pages_row = Gtk.Box(spacing=12)
+        pages_row.pack_start(Gtk.Label(label="Show light web pages dark while dark mode is on", xalign=0),
+                             False, False, 0)
+        self.dark_pages = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.dark_pages.connect("state-set", self.switch_dark_pages)
+        pages_row.pack_end(self.dark_pages, False, False, 0)
+        self.exempt = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        exempt_row = Gtk.Box(spacing=6)
+        self.exempt_entry = Gtk.Entry(placeholder_text="A site to leave as it is (example.com)", width_chars=34)
+        self.exempt_entry.connect("activate", self.add_exempt)
+        exempt_add = Gtk.Button(label="Add")
+        exempt_add.connect("clicked", self.add_exempt)
+        exempt_row.pack_start(self.exempt_entry, False, False, 0)
+        exempt_row.pack_start(exempt_add, False, False, 0)
+        box.pack_start(section("Dark pages", pages_row, dim(
+            "Pages that are dark already stay as they are. With the system's setting, pages "
+            "follow what the browser says the system prefers."), self.exempt, exempt_row), False, False, 0)
+
+    # Reading the state
+    def refresh(self, force=False):
+        """Reads the state when the page shows (or was never read)."""
+        showing = self.window.stack.get_visible_child_name() == "circadian"
+        if self.reading or self.window.locked("circadian") or not (showing or force or self.view is None):
+            return
+        self.reading = True
+        passwords = list(self.window.access_passwords)
+
+        def work():
+            ok, output = cli_with_access(passwords, ["circadian", "show", "--json"])
+            GLib.idle_add(self.apply, ok, output)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def apply(self, ok, output):
+        self.reading = False
+        if not ok:
+            return False
+        try:
+            view = json.loads(output)
+        except ValueError:
+            return False
+        self.view = view
+        self.filling = True
+        try:
+            self.fill(view)
+        finally:
+            self.filling = False
+        return False
+
+    def changed(self, key, data):
+        """Whether a part of the page must be built again."""
+        text = json.dumps(data, sort_keys=True)
+        if self.shown.get(key) == text:
+            return False
+        self.shown[key] = text
+        return True
+
+    def fill(self, view):
+        set_switch(self.master, view["on"])
+        if self.changed("presets", view["presets"]):
+            self.preset.remove_all()
+            for preset in view["presets"]:
+                self.preset.append(preset["name"], preset["title"])
+            self.preset.set_active(0)
+        for lane in view["lanes"]:
+            name = lane["name"]
+            if name not in self.editors:
+                self.build_lane(lane)
+            set_switch(self.lane_switches[name], lane["on"])
+            now = (f"now {lane['value']:.0f} {lane['unit']}" if lane["has_value"] else "no points")
+            if lane["paused_until"]:
+                until = datetime.datetime.fromtimestamp(lane["paused_until"]).strftime("%H:%M")
+                now += f" · paused until {until}"
+            elif not lane["on"]:
+                now += " · off"
+            self.lane_values[name].set_text(now)
+            self.editors[name].set_data(lane, view["minute"], view["on"] and lane["on"])
+        self.fill_warnings(view)
+        if self.changed("wallpapers", view["wallpapers"]):
+            self.fill_wallpapers(view["wallpapers"])
+        dark = view["dark"]
+        self.dark_radios[dark["mode"]].set_active(True)
+        if self.changed("dark times", [dark["light_from"], dark["light_to"]]):
+            self.light_from.set_text(dark["light_from"])
+            self.light_to.set_text(dark["light_to"])
+        set_switch(self.dark_pages, view["dark_pages"])
+        if self.changed("exempt", view["dark_exempt"]):
+            for child in self.exempt.get_children():
+                self.exempt.remove(child)
+            for site in view["dark_exempt"]:
+                row = Gtk.Box(spacing=8)
+                row.pack_start(Gtk.Label(label=site, xalign=0), False, False, 0)
+                remove = Gtk.Button.new_from_icon_name("list-remove-symbolic", Gtk.IconSize.BUTTON)
+                remove.set_relief(Gtk.ReliefStyle.NONE)
+                remove.set_tooltip_text("Dark pages change this site again")
+                remove.connect("clicked", lambda _b, s=site: self.window.run(["circadian", "exempt", "remove", s]))
+                row.pack_start(remove, False, False, 0)
+                self.exempt.pack_start(row, False, False, 0)
+            self.exempt.show_all()
+
+    def build_lane(self, lane):
+        name = lane["name"]
+        frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        top = Gtk.Box(spacing=10)
+        title = Gtk.Label(xalign=0)
+        title.set_markup(f"<b>{GLib.markup_escape_text(lane['title'])}</b>")
+        top.pack_start(title, False, False, 0)
+        value = dim("", wrap=False)
+        top.pack_start(value, False, False, 0)
+        switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        switch.connect("state-set", self.switch_lane, name)
+        top.pack_end(switch, False, False, 0)
+        frame.pack_start(top, False, False, 0)
+        frame.pack_start(dim(lane["detail"]), False, False, 0)
+        editor = ClipEditor(lane, self.clip_changed, self.clip_preview)
+        frame.pack_start(editor, False, False, 0)
+        self.editors[name], self.lane_switches[name], self.lane_values[name] = editor, switch, value
+        self.clips_box.pack_start(frame, False, False, 0)
+        frame.show_all()
+
+    def fill_warnings(self, view):
+        hardware = view["hardware"]
+        lanes = {lane["name"]: lane for lane in view["lanes"]}
+        notes = []  # (text, button label, command)
+        paused = [lane for lane in view["lanes"] if lane["paused_until"]]
+        for lane in paused:
+            if lane["name"] == "software" and lanes["kelvin"]["paused_until"]:
+                continue  # one pause, said once with the colour temperature
+            until = datetime.datetime.fromtimestamp(lane["paused_until"]).strftime("%H:%M")
+            what = ("Software brightness and colour temperature are"
+                    if lane["name"] == "kelvin" else f"{lane['title']} is")
+            notes.append((f"{what} paused until {until}, because the level was changed by hand.",
+                          "Resume", ["circadian", "resume", lane["name"]]))
+        if view["on"] and hardware["daemon"]:
+            if hardware["night_light"] and (lanes["kelvin"]["on"] or lanes["software"]["on"]):
+                notes.append(("The desktop's own night light is on. It changes the same colours as "
+                              "these clips, and the two would take turns.",
+                              "Turn the night light off", ["circadian", "nightlight", "off"]))
+            if lanes["backlight"]["on"] and not hardware["backlights"] and not hardware["external"]:
+                notes.append(("No screen brightness to drive: this computer has no backlight"
+                              + (", and no screen answers DDC/CI." if hardware["ddcutil"] else
+                                 ", and external screens need the program ddcutil (sudo apt install ddcutil).")
+                              + " Software brightness works on every screen.", None, None))
+            if (lanes["kelvin"]["on"] or lanes["software"]["on"]) and hardware["gamma"] == "unknown":
+                notes.append(("No screen colours to change: there is no X11 session (on Wayland, "
+                              "software brightness and colour temperature don't work).", None, None))
+        if not self.changed("warnings", notes):
+            return
+        for child in self.warnings.get_children():
+            self.warnings.remove(child)
+        for text, label, command in notes:
+            bar = Gtk.InfoBar(message_type=Gtk.MessageType.WARNING if command is None or "night" in label.lower()
+                              else Gtk.MessageType.INFO)
+            bar.get_content_area().add(Gtk.Label(label=text, xalign=0, wrap=True))
+            if command:
+                button = Gtk.Button(label=label)
+                button.connect("clicked", lambda _b, c=command: self.window.run(c))
+                bar.get_action_area().add(button)
+            self.warnings.pack_start(bar, False, False, 0)
+            bar.show_all()
+        self.warnings.set_visible(bool(notes))
+
+    def fill_wallpapers(self, wallpapers):
+        from gi.repository import GdkPixbuf
+        for child in self.wallpapers.get_children():
+            self.wallpapers.remove(child)
+        for picture in wallpapers:
+            row = Gtk.Box(spacing=10)
+            try:
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(picture["path"], 112, 63, True)
+                thumb = Gtk.Image.new_from_pixbuf(pixbuf)
+            except GLib.Error:
+                thumb = Gtk.Image.new_from_icon_name("image-missing", Gtk.IconSize.DIALOG)
+            thumb.set_size_request(112, 63)
+            row.pack_start(thumb, False, False, 0)
+            name = Gtk.Label(label=picture["name"] + ("  (now)" if picture["active"] else ""), xalign=0,
+                             ellipsize=Pango.EllipsizeMode.MIDDLE, max_width_chars=30)
+            row.pack_start(name, True, True, 0)
+            start = Gtk.Entry(text=picture["from"], width_chars=6, max_length=5)
+            end = Gtk.Entry(text=picture["to"], width_chars=6, max_length=5)
+            save = lambda _w, p=picture, s=start, e=end: self.window.run(
+                ["circadian", "wallpaper", "time", str(p["index"]), s.get_text().strip(), e.get_text().strip()])
+            start.connect("activate", save)
+            end.connect("activate", save)
+            set_button = Gtk.Button(label="Set")
+            set_button.connect("clicked", save)
+            remove = Gtk.Button(label="Remove")
+            remove.connect("clicked", lambda _b, p=picture: self.window.run(
+                ["circadian", "wallpaper", "remove", str(p["index"])]))
+            for widget in (start, Gtk.Label(label="to"), end, set_button, remove):
+                widget.set_valign(Gtk.Align.CENTER)
+                row.pack_start(widget, False, False, 0)
+            self.wallpapers.pack_start(row, False, False, 0)
+        if not wallpapers:
+            self.wallpapers.pack_start(dim("None yet."), False, False, 0)
+        self.wallpapers.show_all()
+
+    # Changes
+    def switch_master(self, switch, state):
+        if not self.filling:
+            self.window.run(["circadian", "on" if state else "off"])
+        return True
+
+    def switch_lane(self, _switch, state, name):
+        if not self.filling:
+            self.window.run(["circadian", "lane", name, "on" if state else "off"])
+        return True
+
+    def switch_dark_pages(self, _switch, state):
+        if not self.filling:
+            self.window.run(["circadian", "dark-pages", "on" if state else "off"])
+        return True
+
+    def preset_changed(self, _combo):
+        chosen = self.preset.get_active_id()
+        for preset in (self.view or {}).get("presets", []):
+            if preset["name"] == chosen:
+                self.preset_detail.set_text(preset["detail"])
+
+    def use_preset(self, _button):
+        name = self.preset.get_active_id()
+        if name and self.window.confirm("Replace the three clips?",
+                                        "Their points are replaced by the preset's. Which clips are on stays.",
+                                        ok_label="Replace"):
+            self.window.run(["circadian", "preset", name])
+
+    def background(self, args, then=None):
+        """Runs a command without greying the window out (a drag goes on)."""
+        passwords = list(self.window.access_passwords)
+
+        def work():
+            ok, output = cli_with_access(passwords, args, timeout=30)
+            GLib.idle_add(done, ok, output)
+
+        def done(ok, output):
+            if then:
+                then(ok, output)
+            return False
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def clip_changed(self, editor, preview_over=False):
+        """Stores a clip's points after an edit."""
+        name = editor.lane["name"]
+
+        def stored(ok, output):
+            if not ok:
+                self.window.message(output or "The clip couldn't be saved.")
+            if preview_over:
+                self.background(["circadian", "preview", name, "--end"], lambda *_a: self.refresh(force=True))
+            else:
+                self.refresh(force=True)
+
+        self.background(["circadian", "lane", name, "--points", points_text(editor.points)], stored)
+
+    def clip_preview(self, editor, value):
+        """Shows a dragged point's value on the screen, at most every
+        PREVIEW_MS, and only for a clip KC9K is driving."""
+        lane = next((l for l in (self.view or {}).get("lanes", []) if l["name"] == editor.lane["name"]), None)
+        if not lane or not self.view["on"] or not lane["on"] or lane["paused_until"]:
+            return
+        self.preview_next = (lane["name"], value)
+        if not self.preview_busy:
+            self.send_preview()
+
+    def send_preview(self):
+        if self.preview_next is None:
+            return False
+        wait = self.PREVIEW_MS - (GLib.get_monotonic_time() - self.preview_at) / 1000
+        if wait > 0:
+            self.preview_busy = True
+            GLib.timeout_add(int(wait) + 1, self.send_preview_now)
+            return False
+        return self.send_preview_now()
+
+    def send_preview_now(self):
+        if self.preview_next is None:
+            self.preview_busy = False
+            return False
+        name, value = self.preview_next
+        self.preview_next = None
+        self.preview_busy = True
+        self.preview_at = GLib.get_monotonic_time()
+
+        def sent(_ok, _output):
+            self.preview_busy = False
+            self.send_preview()
+
+        self.background(["circadian", "preview", name, f"{value:g}"], sent)
+        return False
+
+    def dark_toggled(self, radio, mode):
+        if self.filling or not radio.get_active():
+            return
+        if mode == "scheduled":
+            self.set_dark_times()
+        else:
+            self.window.run(["circadian", "dark", mode])
+
+    def set_dark_times(self):
+        self.window.run(["circadian", "dark", "light-between",
+                         self.light_from.get_text().strip(), self.light_to.get_text().strip()])
+
+    def add_exempt(self, _widget):
+        site = self.exempt_entry.get_text().strip()
+        if site:
+            self.window.run(["circadian", "exempt", "add", site],
+                            then=lambda _o: self.exempt_entry.set_text(""))
+
+    def add_wallpaper(self, _button):
+        chooser = Gtk.FileChooserDialog(title="Choose a wallpaper", transient_for=self.window,
+                                        action=Gtk.FileChooserAction.OPEN)
+        chooser.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        chooser.add_button("Choose", Gtk.ResponseType.OK)
+        pictures = Gtk.FileFilter()
+        pictures.set_name("Pictures (PNG, JPEG, WebP)")
+        for mime in ("image/png", "image/jpeg", "image/webp"):
+            pictures.add_mime_type(mime)
+        chooser.add_filter(pictures)
+        for folder in ("/usr/share/backgrounds", os.path.expanduser("~/Pictures")):
+            if os.path.isdir(folder):
+                try:
+                    chooser.add_shortcut_folder(folder)
+                except GLib.Error:
+                    pass
+        answer = chooser.run()
+        path = chooser.get_filename()
+        chooser.destroy()
+        if answer != Gtk.ResponseType.OK or not path:
+            return
+        dialog = Gtk.Dialog(title="When is it the wallpaper?", transient_for=self.window, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Add", Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        row = Gtk.Box(spacing=8, border_width=14)
+        start = Gtk.Entry(text="06:00", width_chars=6, max_length=5, activates_default=True)
+        end = Gtk.Entry(text="12:00", width_chars=6, max_length=5, activates_default=True)
+        for widget in (Gtk.Label(label="From"), start, Gtk.Label(label="to"), end):
+            row.pack_start(widget, False, False, 0)
+        dialog.get_content_area().add(row)
+        dialog.show_all()
+        answer = dialog.run()
+        times = start.get_text().strip(), end.get_text().strip()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            self.window.run(["circadian", "wallpaper", "add", path, *times])
+
+
 class Window(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="Killer Chicken 9000")
@@ -1490,6 +2488,7 @@ class Window(Gtk.ApplicationWindow):
                 ("clusters", "Clusters", self.build_clusters),
                 ("device", "Device Blocks", self.build_device),
                 ("stats", "Statistics", self.build_stats),
+                ("circadian", "Circadian Rhythm", self.build_circadian),
                 ("settings", "Settings", self.build_settings)):
             self.stack.add_titled(self.guarded(name, title, build()), name, title)
         self.stack.connect("notify::visible-child-name", self.page_changed)
@@ -1573,6 +2572,52 @@ class Window(Gtk.ApplicationWindow):
         answer = dialog.run()
         dialog.destroy()
         return answer == Gtk.ResponseType.OK
+
+    def confirm_lock(self, locks, option=None):
+        """R-LOCK-12: the one confirmation for every lock. locks are lines
+        "what is locked: kind, how long", as the CLI shows them. Returns True
+        only when the user confirms; the caller then passes --yes. With
+        option (a label), a tick box is shown too; whether it was ticked is
+        left in self.lock_option."""
+        self.lock_option = False
+        if not locks:
+            return True
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.WARNING,
+            text="Set this lock?" if len(locks) == 1 else "Set these locks?",
+            secondary_text="\n".join("• " + line for line in locks)
+            + "\n\nWhile a lock is on, this can't be weakened.")
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Lock", Gtk.ResponseType.OK)
+        tick = None
+        if option:
+            tick = Gtk.CheckButton(label=option)
+            dialog.get_message_area().pack_start(tick, False, False, 0)
+            dialog.show_all()
+        answer = dialog.run()
+        self.lock_option = bool(tick and tick.get_active())
+        dialog.destroy()
+        return answer == Gtk.ResponseType.OK
+
+    def acknowledge_no_confirmation(self, what):
+        """R-LOCK-12: monk mode started by itself asks nothing, so setting it
+        up needs the tick "I know this will not ask for confirmation"."""
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.WARNING,
+            text="Monk mode will start without asking",
+            secondary_text=f"{what} starts monk mode by itself, and it will not ask for confirmation "
+                           "when it does.")
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Set it up", Gtk.ResponseType.OK)
+        tick = Gtk.CheckButton(label="I know this will not ask for confirmation")
+        ok.set_sensitive(False)
+        tick.connect("toggled", lambda t: ok.set_sensitive(t.get_active()))
+        dialog.get_message_area().pack_start(tick, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        ticked = tick.get_active()
+        dialog.destroy()
+        return answer == Gtk.ResponseType.OK and ticked
 
     def ask_text(self, title, detail="", password=False, initial=""):
         dialog = Gtk.MessageDialog(
@@ -1728,21 +2773,38 @@ class Window(Gtk.ApplicationWindow):
 
     def monk_mode(self, _button):
         minutes = self.ask_minutes(
-            "Monk mode", "Every website is blocked, locked, for this long (the block monk-mode: add "
-            "exceptions or apps to it under Blocks). A running monk mode can only be extended.",
+            "Monk mode", "Every website is blocked and the internet connection is cut (Wi-Fi off, "
+            "Ethernet down, firewall closed), for this long. It can't be ended early; a running "
+            "monk mode can only be extended.",
             1, 30 * 24 * 60, 60)
         if minutes:
             self.run(["monk", "--for", f"{minutes}m"])
 
     def change_global_nepsis(self, _button):
         args = self.ask_nepsis("Bypass prevention", self.state.get("nepsis"), True)
+        args = self.acknowledge_monk_steps(args)
+        if args and "--for" in args:
+            hours = args[args.index("--for") + 1].rstrip("h")
+            if not self.confirm_lock([f"bypass prevention: timer lock, {hours} hours"]):
+                return
+            args.append("--yes")
         if args:
             self.run(["bypass", "set", *args], then=self.queued_note)
+
+    def acknowledge_monk_steps(self, args):
+        """Bypass prevention steps with monk need the acknowledgement."""
+        steps = [a for i, a in enumerate(args or []) if i and args[i - 1] == "--step"]
+        if any(re.search(r"\bmonk\b", step) for step in steps):
+            if not self.acknowledge_no_confirmation("A bypass prevention step"):
+                return None
+            return args + ["--no-confirm-ok"]
+        return args
 
     def change_block_nepsis(self, _button):
         block = self.blocks.get(self.selected)
         if block:
-            args = self.ask_nepsis(f"Bypass prevention for {block['name']}", block.get("nepsis"), False)
+            args = self.acknowledge_monk_steps(
+                self.ask_nepsis(f"Bypass prevention for {block['name']}", block.get("nepsis"), False))
             if args:
                 self.run(["bypass", "set", "--block", block["name"], *args], then=self.queued_note)
 
@@ -1773,6 +2835,8 @@ class Window(Gtk.ApplicationWindow):
     # State ---------------------------------------------------------------
     def refresh(self):
         self.lock_when_idle()
+        if hasattr(self, "circadian"):
+            self.circadian.refresh()
         if self.busy:
             return True
         self.busy = True
@@ -1831,7 +2895,13 @@ class Window(Gtk.ApplicationWindow):
         self.banner.set_message_type(kind)
         self.banner.set_revealed(True)
 
+    def build_circadian(self):
+        self.circadian = CircadianPage(self)
+        return self.circadian
+
     def page_changed(self, *_args):
+        if hasattr(self, "circadian"):
+            self.circadian.refresh()
         if self.stack.get_visible_child_name() in ("stats", "dashboard"):
             self.refresh_stats()
 
@@ -1863,7 +2933,7 @@ class Window(Gtk.ApplicationWindow):
 
     def locked(self, area):
         # The Clusters page belongs to the Blocks area.
-        return self.access.get({"clusters": "blocks"}.get(area, area)) == "locked"
+        return self.access.get({"clusters": "blocks", "circadian": "settings"}.get(area, area)) == "locked"
 
     def update_covers(self):
         app_locked = self.access.get("app") == "locked"
@@ -2051,6 +3121,8 @@ class Window(Gtk.ApplicationWindow):
         locks = []
         if self.state["freeze_seconds"]:
             locks.append(f"Frozen Chicken ({self.state['freeze_mode']}) for {fmt_seconds(self.state['freeze_seconds'])}")
+        if self.state.get("monk_seconds"):
+            locks.append(f"Monk mode for {fmt_seconds(self.state['monk_seconds'])}")
         locks.append("strict mode on" if self.state["strict"] else "strict mode off")
         locks.append("no-escape on" if self.state["no_escape"] else "no-escape off")
         line = " · ".join(locks)
@@ -2136,9 +3208,8 @@ class Window(Gtk.ApplicationWindow):
             "Each list ticks where it looks: the address, the page title (the tab title) or the "
             "page text. Addresses take domains, paths and wildcards (*.xxx, *casino*, *.* for "
             "everything); titles and text take words: a plain word counts only on its own "
-            "(porn misses pornhub), * matches inside words (*porn* hits pornhub), and a word "
-            "combination (Word combination…) counts only where words of its boxes follow one "
-            "another directly (cars(red, big) hits \"big red cars\", not \"red toyota\"). A match in "
+            "(porn misses pornhub), and * matches inside words (*porn* hits pornhub). Words that "
+            "count only together are phrases, in phrase sets below. A match in "
             "the address or title takes every action; in the text, each action needs its number "
             "of different words. Unticking or removing weakens the block, so it isn't possible "
             "while it is locked.")
@@ -2158,7 +3229,10 @@ class Window(Gtk.ApplicationWindow):
         for kind, title, button_label, detail in (
                 ("blacklist", "Blacklists", "New blacklist…", ""),
                 ("exceptions", "Exceptions", "New exception list…",
-                 "A page an exception list matches is spared from every blacklist of this block.")):
+                 "A page an exception list matches is spared from every blacklist of this block."),
+                ("phrases", "Phrase sets", "New phrase set…",
+                 "Phrases are words that count only together, such as [eat, nice] [hello, grandpa]. "
+                 "The block's exceptions spare pages from its phrase sets too.")):
             head = Gtk.Box(spacing=6)
             head.pack_start(heading(title, "medium"), False, False, 0)
             new = Gtk.Button(label=button_label)
@@ -2474,7 +3548,7 @@ class Window(Gtk.ApplicationWindow):
             return
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
         self.status_label.set_text(block_summary(block))
-        self.update_lists(block.get("lists", []))
+        self.update_lists(block.get("lists", []), block.get("phrase_sets", []))
         self.apps.set_items(block["apps"], owner=block["name"])
         self.titles.set_items(block.get("titles", []), owner=block["name"])
         self.schedules.set_items(block["schedules"])
@@ -2526,11 +3600,7 @@ class Window(Gtk.ApplicationWindow):
             (block["char_locked"] or block["password_locked"]
              or (block["delay_seconds"] > 0 and not block.get("delay_left")))
             and not block["lock_seconds"] and not block["restart_locked"])
-        # Monk mode's block is the system's: never deleted or renamed, and
-        # changed only while monk mode is off.
-        monk = block["name"] == self.state.get("monk_block")
-        self.delete_button.set_sensitive(not block["active"] and not block["held"] and not monk)
-        self.rename_button.set_sensitive(not monk)
+        self.delete_button.set_sensitive(not block["active"] and not block["held"])
 
         limit = block["quota_limit"]
         self.quota_start.set_sensitive(limit > 0 and not block["quota_open"] and block["quota_used"] < limit)
@@ -2542,9 +3612,11 @@ class Window(Gtk.ApplicationWindow):
         self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
                                                          if block["active"] else None))
 
-    def update_lists(self, lists):
-        """Shows the selected block's lists, keeping the cards of lists that
-        are still there, so a refresh doesn't disturb what is being typed."""
+    def update_lists(self, lists, phrase_sets=()):
+        """Shows the selected block's lists and phrase sets, keeping the cards
+        of those still there, so a refresh doesn't disturb what is being
+        typed. Phrase sets are keyed by minus their ID, as in the rules."""
+        lists = list(lists) + [dict(p, id=-p["id"], kind="phrases") for p in phrase_sets]
         ids = [entry["id"] for entry in lists]
         for list_id in list(self.list_cards):
             if list_id not in ids:
@@ -2553,7 +3625,7 @@ class Window(Gtk.ApplicationWindow):
         for entry in lists:
             card = self.list_cards.get(entry["id"])
             if card is None:
-                card = ListCard(self, entry)
+                card = (PhraseSetCard if entry["kind"] == "phrases" else ListCard)(self, entry)
                 self.list_cards[entry["id"]] = card
                 self.list_boxes[entry["kind"]].pack_start(card, False, False, 0)
                 card.show_all()
@@ -2562,12 +3634,15 @@ class Window(Gtk.ApplicationWindow):
     def create_list(self, _button, kind):
         if not self.selected:
             return
+        if kind == "phrases":
+            self.create_phrase_set()
+            return
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
             buttons=Gtk.ButtonsType.OK_CANCEL,
             text="New exception list" if kind == "exceptions" else "New blacklist",
             secondary_text="A name, and its type: an address list holds sites and addresses; a term "
-                           "list holds words, looked for in the page title, the page text or both.")
+                           "list holds words, looked for in the address, the page title, the page text, or several.")
         entry = Gtk.Entry(activates_default=True)
         dialog.set_default_response(Gtk.ResponseType.OK)
         area = dialog.get_message_area()
@@ -2577,8 +3652,9 @@ class Window(Gtk.ApplicationWindow):
         area.pack_start(address, False, False, 0)
         area.pack_start(term, False, False, 0)
         checks = {}
-        for name, title in LIST_PLACES[1:]:
-            checks[name] = Gtk.CheckButton(label=title, active=name == "text", margin_start=24)
+        for name, title in LIST_PLACES:
+            checks[name] = Gtk.CheckButton(label=title + (" (its words)" if name == "url" else ""),
+                                           active=name == "text", margin_start=24)
             area.pack_start(checks[name], False, False, 0)
         for check in checks.values():
             check.set_sensitive(False)
@@ -2592,35 +3668,40 @@ class Window(Gtk.ApplicationWindow):
         if answer != Gtk.ResponseType.OK or not name:
             return
         args = ["list", "create", self.selected, name] + ["--" + place for place in places]
+        if not address.get_active():
+            args.append("--terms")
         if kind == "exceptions":
             args.append("--exceptions")
         self.run(args)
 
-    # Block actions -------------------------------------------------------
-    def create_block(self, _button):
+    def create_phrase_set(self):
         dialog = Gtk.MessageDialog(
-            transient_for=self, modal=True, text="New block",
-            secondary_text="A short name, such as social-media. Starting from a ready-made list fills "
-                           "its Blocked list with well-known sites of that kind; add and remove as you like.",
-            message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
-        entry = Gtk.Entry(activates_default=True, placeholder_text="Name")
-        combo = Gtk.ComboBoxText()
-        combo.append("", "Start empty")
-        for key, label in TEMPLATES:
-            combo.append(key, f"Start from: {label}")
-        combo.set_active_id("")
+            transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL, text="New phrase set",
+            secondary_text="A name, and where its phrases are looked for.")
+        entry = Gtk.Entry(activates_default=True)
         dialog.set_default_response(Gtk.ResponseType.OK)
         area = dialog.get_message_area()
         area.pack_start(entry, False, False, 0)
-        area.pack_start(combo, False, False, 0)
+        checks = {}
+        for name, title in LIST_PLACES:
+            checks[name] = Gtk.CheckButton(label=title, active=name == "text")
+            area.pack_start(checks[name], False, False, 0)
         dialog.show_all()
         answer = dialog.run()
-        name, template = entry.get_text().strip(), combo.get_active_id()
+        name = entry.get_text().strip()
+        places = [place for place, check in checks.items() if check.get_active()]
         dialog.destroy()
         if answer == Gtk.ResponseType.OK and name:
+            self.run(["phrase-set", "create", self.selected, name] + ["--" + p for p in places])
+
+    # Block actions -------------------------------------------------------
+    def create_block(self, _button):
+        name = self.ask_text("New block", "A short name, such as social-media.")
+        if name:
             self.selected = name
             self.stack.set_visible_child_name("blocks")
-            self.run(["block", "create", name] + (["--template", template] if template else []))
+            self.run(["block", "create", name])
 
     def rename_block(self, _button):
         name = self.ask_text("Rename block", initial=self.selected or "")
@@ -2685,8 +3766,22 @@ class Window(Gtk.ApplicationWindow):
         lock_minutes, delay_minutes, secret, use_typing, use_restart = values
 
         args = ["start", block["name"]]
+        target = f"block '{block['name']}'"
+        relock_note = f", re-lock {relock_minutes} minutes after unlocking" if relock_minutes else ""
+        locks = []
         if lock_minutes:
-            args += ["--for", f"{lock_minutes}m", "--yes"]  # confirmed below
+            args += ["--for", f"{lock_minutes}m"]
+            locks.append(f"{target}: timer lock, {lock_minutes} minutes "
+                         "(it can't be stopped until then, not even with the typing challenge; "
+                         "time the computer is off doesn't count)")
+        if use_typing:
+            locks.append(f"{target}: text lock{relock_note}")
+        if secret:
+            locks.append(f"{target}: password lock{relock_note}")
+        if use_restart:
+            locks.append(f"{target}: restart lock, until the computer restarts")
+        if delay_minutes:
+            locks.append(f"{target}: delay lock, unlocking takes {delay_minutes} minutes")
         if use_typing:
             args += lock_args
         if use_restart:
@@ -2697,11 +3792,10 @@ class Window(Gtk.ApplicationWindow):
             args.append("--password-stdin")
         if relock_minutes and (use_typing or secret):
             args += ["--relock", f"{relock_minutes}m"]
-        if lock_minutes and not self.confirm(
-                f"Time-lock {block['name']} for {lock_minutes} minutes?",
-                "It can't be stopped until the time has passed, not even with the typing "
-                "challenge. Time the computer is off doesn't count.", "Lock"):
+        if not self.confirm_lock(locks):
             return
+        if locks:
+            args.append("--yes")
         self.run(args, secret + "\n" if secret else None)
 
     def stop_block(self, _button):
@@ -2712,7 +3806,11 @@ class Window(Gtk.ApplicationWindow):
         if not self.selected:
             return
         if self.schedule_lock.get_active():
-            self.run(["schedule", "lock", self.selected, "on", "--lead", f"{self.schedule_lead.get_value_as_int()}m"])
+            lead = self.schedule_lead.get_value_as_int()
+            if not self.confirm_lock([f"block '{self.selected}': schedule lock, while each window is open"
+                                      + (f" and {lead} minutes before it" if lead else "")]):
+                return
+            self.run(["schedule", "lock", self.selected, "on", "--lead", f"{lead}m", "--yes"])
         elif self.blocks.get(self.selected, {}).get("schedule_lock"):
             self.run(["schedule", "lock", self.selected, "off"])
 
@@ -2888,8 +3986,11 @@ class Window(Gtk.ApplicationWindow):
         if "Would:" not in output:
             self.message(output or "The file adds nothing new.", Gtk.MessageType.INFO)
             return
-        if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import"):
-            self.run(["project", "import", path],
+        locks = [line.split("Would: set a lock: ", 1)[1] for line in output.splitlines()
+                 if "Would: set a lock: " in line]
+        if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import") \
+                and self.confirm_lock(locks):
+            self.run(["project", "import", path] + (["--yes"] if locks else []),
                      then=lambda result: self.message(result, Gtk.MessageType.INFO))
 
     # Clusters ------------------------------------------------------------
@@ -2976,7 +4077,9 @@ class Window(Gtk.ApplicationWindow):
                 f"<b>Recording</b> into {GLib.markup_escape_text(target)}: {recording.get('sites', 0)} sites so far.")
         else:
             self.record_label.set_text("Not recording.")
-        self.record_start.set_sensitive(not recording and bool(self.cluster_name()))
+        shown = next((c for c in self.state.get("clusters") or [] if c["name"] == self.cluster_name()), {})
+        # R-PHRASE-10: phrases take no part in recording.
+        self.record_start.set_sensitive(not recording and bool(self.cluster_name()) and not shown.get("phrases"))
         self.record_stop.set_sensitive(bool(recording))
         self.record_discard.set_sensitive(bool(recording))
 
@@ -2988,6 +4091,10 @@ class Window(Gtk.ApplicationWindow):
                 check.set_active(bool(cluster) and key in cluster["where"])
                 check.set_sensitive(bool(cluster))
             self.cluster_entries.set_items(cluster["entries"] if cluster else [], self.cluster_name())
+            # A phrase cluster takes one phrase per line, as typed.
+            phrases = bool(cluster and cluster.get("phrases"))
+            self.cluster_entries.split = (lambda text: [text.strip()] if text.strip() else []) if phrases else split_entries
+            self.cluster_entries.entry.set_placeholder_text("[eat, nice] [hello, grandpa]" if phrases else "reddit.com  *casino*")
         finally:
             self.updating = was
 
@@ -2997,10 +4104,22 @@ class Window(Gtk.ApplicationWindow):
         self.run(["cluster", "scope", self.cluster_name(), place, "on" if check.get_active() else "off"])
 
     def new_cluster(self, _button):
-        name = self.ask_text("New cluster", "A name, such as study or shopping.")
-        if name:
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL, text="New cluster",
+            secondary_text="A name, such as study or shopping.")
+        entry = Gtk.Entry(activates_default=True)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        phrases = Gtk.CheckButton(label="Holds phrases (copied into blocks as a phrase set)")
+        dialog.get_message_area().pack_start(entry, False, False, 0)
+        dialog.get_message_area().pack_start(phrases, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        name, as_phrases = entry.get_text().strip(), phrases.get_active()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and name:
             self.cluster_wanted = name
-            self.run(["cluster", "create", name])
+            self.run(["cluster", "create", name] + (["--phrases"] if as_phrases else []))
 
     def rename_cluster(self, _button):
         old = self.cluster_name()
@@ -3019,10 +4138,14 @@ class Window(Gtk.ApplicationWindow):
         name = self.cluster_name()
         if not name or not self.blocks:
             return
+        cluster = next((c for c in self.state.get("clusters") or [] if c["name"] == name), {})
+        phrases = cluster.get("phrases", False)
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text=f"Copy {name} into a block",
-            secondary_text="It becomes a new list of the block, named after the cluster. As a blacklist it "
-                           "makes the block stricter; as exceptions it weakens it, which a locked block refuses.",
+            secondary_text=("It becomes a new phrase set of the block, named after the cluster, which "
+                            "makes the block stricter." if phrases else
+                            "It becomes a new list of the block, named after the cluster. As a blacklist it "
+                            "makes the block stricter; as exceptions it weakens it, which a locked block refuses."),
             message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
         combo = Gtk.ComboBoxText()
         for block in self.blocks:
@@ -3031,7 +4154,8 @@ class Window(Gtk.ApplicationWindow):
         exceptions = Gtk.CheckButton(label="As an exception list")
         area = dialog.get_message_area()
         area.pack_start(combo, False, False, 0)
-        area.pack_start(exceptions, False, False, 0)
+        if not phrases:  # there are no phrase exceptions
+            area.pack_start(exceptions, False, False, 0)
         dialog.show_all()
         answer = dialog.run()
         block, as_exceptions = combo.get_active_text(), exceptions.get_active()
@@ -3154,10 +4278,16 @@ class Window(Gtk.ApplicationWindow):
         mode = self.freeze_mode.get_active_id()
         lock = self.freeze_lock.get_active()
         lead = self.freeze_lead.get_value_as_int()
-        if self.confirm(f"Freeze {values[0]} {values[1]}-{values[2]}?",
-                        f"The computer will be frozen then ({self.freeze_mode.get_active_text().lower()})"
-                        + (f", and the schedule can't be removed from {lead} minutes before it starts."
-                           if lock else "."), "Schedule"):
+        if lock:
+            confirmed = self.confirm_lock([
+                f"freeze schedule {values[0]} {values[1]}-{values[2]} "
+                f"({self.freeze_mode.get_active_text().lower()}): schedule lock, while each window is open"
+                + (f" and {lead} minutes before it" if lead else "")])
+        else:
+            confirmed = self.confirm(f"Freeze {values[0]} {values[1]}-{values[2]}?",
+                                     f"The computer will be frozen then "
+                                     f"({self.freeze_mode.get_active_text().lower()}).", "Schedule")
+        if confirmed:
             self.run(["freeze", "schedule", "add", "--days", values[0], "--from", values[1],
                       "--to", values[2], "--mode", mode, "--yes"] + (["--lock-lead", f"{lead}m"] if lock else []))
 
@@ -3563,7 +4693,8 @@ class Window(Gtk.ApplicationWindow):
             help_text="Keys, a block, and optionally how long to lock it: pressing ctrl+alt+s "
                       "then starts 'study' locked for an hour. Use ctrl, alt, shift or super with "
                       "a key; F1 to F24 also work alone. A lock needs the settings password when "
-                      "you add the hotkey, not when you press it.")
+                      "you add the hotkey. Pressing it asks you to confirm the lock, unless you chose "
+                      "Run without confirmation when adding it.")
         box.pack_start(self.hotkeys, False, False, 0)
         return scroll
 
@@ -3574,7 +4705,15 @@ class Window(Gtk.ApplicationWindow):
             return
         args = ["hotkey", "add", values[0], values[1]]
         if len(values) == 3:
-            args += ["--for", values[2]]
+            # R-LOCK-12: a hotkey's lock is confirmed once, when it is added.
+            if not self.confirm_lock([f"block '{values[1]}': timer lock, set each time {values[0]} "
+                                      f"is pressed, {values[2]} from the press"],
+                                     option="Run without confirmation (pressing the hotkey then "
+                                            "locks without asking again)"):
+                return
+            args += ["--for", values[2], "--yes"]
+            if self.lock_option:
+                args.append("--no-confirm")
         self.run(args)
 
     def set_settings_password(self, _button):
@@ -3736,12 +4875,19 @@ class Window(Gtk.ApplicationWindow):
         if len(args) == base:
             self.message("Choose at least one lock.", Gtk.MessageType.INFO)
             return
-        if lock_minutes and not self.confirm(
-                f"Lock {title} for {lock_minutes} minutes?",
-                "It can't be turned off until the time has passed, not even with the typing "
-                "challenge. Time the computer is off doesn't count.", "Lock"):
+        locks = []
+        if lock_minutes:
+            locks.append(f"{title}: timer lock, {lock_minutes} minutes (it can't be turned off until "
+                         "then, not even with the typing challenge; time the computer is off doesn't count)")
+        if use_typing:
+            locks.append(f"{title}: text lock")
+        if secret:
+            locks.append(f"{title}: password lock")
+        if use_restart:
+            locks.append(f"{title}: restart lock, until the computer restarts")
+        if not self.confirm_lock(locks):
             return
-        self.run(args, secret + "\n" if secret else None)
+        self.run(args + ["--yes"], secret + "\n" if secret else None)
 
     def unlock_setting(self, _button, name, title):
         if name == "strict":

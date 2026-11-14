@@ -47,16 +47,80 @@ func addWhereFlags(cmd *cobra.Command) {
 }
 
 func describeCluster(c db.Cluster) string {
-	return fmt.Sprintf("%s looks at: %s; %d entries", c.Name, c.Where, len(c.Entries))
+	if c.Phrases {
+		return fmt.Sprintf("%s (phrases) looks at: %s; %d phrases", c.Name, c.Where, len(c.Entries))
+	}
+	return fmt.Sprintf("%s (%s) looks at: %s; %d entries", c.Name, c.Type, c.Where, len(c.Entries))
 }
 
-// clusterAdd checks entries against where the cluster looks and adds them.
+// typedPhrases parses phrases and writes them back in their stored form.
+func typedPhrases(texts []string) ([]string, error) {
+	var out []string
+	for _, text := range texts {
+		p, err := db.ParsePhrase(text)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", text, err)
+		}
+		out = append(out, p.String())
+	}
+	return out, nil
+}
+
+// clusterAdd checks entries against where the cluster looks (or, in a
+// phrase cluster, that they are phrases) and adds them.
 func clusterAdd(database *db.DB, c db.Cluster, entries []string) (int, error) {
-	entries, err := prepareEntries(c.Where, entries)
+	var err error
+	if c.Phrases {
+		entries, err = typedPhrases(entries)
+	} else if err = refuseCombinations(c.Type == db.ListAddress, entries); err == nil {
+		entries, err = prepareEntries(c.Type, c.Where, entries)
+	}
 	if err != nil {
 		return 0, err
 	}
 	return database.AddClusterEntries(c.ID, entries)
+}
+
+// phraseClusterCopy copies a phrase cluster into a block: into the phrase
+// set named into, or else into a new one (named as, or after the cluster)
+// that looks where the cluster does and blocks what it matches. There are
+// no phrase exceptions (§3.2).
+func phraseClusterCopy(database *db.DB, c db.Cluster, block, into, as string, exceptions bool) error {
+	if exceptions {
+		return fmt.Errorf("'%s' holds phrases, and there are no phrase exceptions", c.Name)
+	}
+	if _, err := database.GetBlock(block); err != nil {
+		return err
+	}
+	target := into
+	if into != "" {
+		if as != "" {
+			return fmt.Errorf("--as is for a new phrase set; --into adds to a phrase set the block has")
+		}
+	} else {
+		target = as
+		if target == "" {
+			target = c.Name
+		}
+		if _, err := database.FindPhraseSet(block, target); err == nil {
+			return fmt.Errorf("block '%s' already has a phrase set named '%s'; add to it with --into, or pick a name with --as", block, target)
+		}
+		if err := ensureEditable(database, block, true); err != nil {
+			return err
+		}
+		if _, err := database.CreatePhraseSet(block, target, c.Where); err != nil {
+			return err
+		}
+	}
+	if err := phraseAdd(database, block, target, c.Entries); err != nil {
+		if into == "" {
+			if s, findErr := database.FindPhraseSet(block, target); findErr == nil {
+				_ = database.DeletePhraseSet(s.ID)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // clusterCopy copies a cluster's entries into a block: into the list named
@@ -69,6 +133,9 @@ func clusterCopy(cmd *cobra.Command, database *db.DB, cluster, block, into, as s
 	}
 	if len(c.Entries) == 0 {
 		return fmt.Errorf("cluster '%s' is empty", cluster)
+	}
+	if c.Phrases {
+		return phraseClusterCopy(database, c, block, into, as, exceptions)
 	}
 	detail, err := database.GetBlock(block)
 	if err != nil {
@@ -91,7 +158,7 @@ func clusterCopy(cmd *cobra.Command, database *db.DB, cluster, block, into, as s
 		if exceptions {
 			kind = db.ListExceptions
 		}
-		if _, err := database.CreateList(block, kind, target, c.Where); err != nil {
+		if _, err := database.CreateTypedList(block, kind, c.Type, target, c.Where); err != nil {
 			return err
 		}
 		created = true
@@ -185,11 +252,28 @@ var clusterCreateCmd = &cobra.Command{
 	Use:   "create [cluster]",
 	Short: "Make an empty cluster",
 	Long: `Makes an empty cluster. It looks at addresses unless --title or --text is
-given (combine them freely).`,
+given (combine them freely).
+
+With --phrases it is a phrase cluster: it holds phrases such as
+"[eat, nice] [hello, grandpa]", is copied into a block as a phrase set, and
+looks at the text unless --url, --title or --text say otherwise.`,
 	Args: cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		where := whereFlags(cmd)
-		if err := database.CreateCluster(args[0], where); err != nil {
+		create := database.CreateCluster
+		if terms, _ := cmd.Flags().GetBool("terms"); terms {
+			create = func(name string, where db.Where) error { return database.CreateTypedCluster(name, db.ListTerm, where) }
+		}
+		if phrases, _ := cmd.Flags().GetBool("phrases"); phrases {
+			create = database.CreatePhraseCluster
+			if !cmd.Flags().Changed("url") {
+				where.URL = false
+			}
+			if !where.Any() {
+				where.Text = true
+			}
+		}
+		if err := create(args[0], where); err != nil {
 			return err
 		}
 		fmt.Printf("Cluster '%s' created (looks at: %s).\n", args[0], where)
@@ -251,9 +335,14 @@ var clusterRemoveCmd = &cobra.Command{
 			return err
 		}
 		entries := args[1:]
+		if c.Phrases {
+			if entries, err = typedPhrases(entries); err != nil {
+				return err
+			}
+		}
 		// Domains are kept normalized, so look them up the same way.
 		for i, e := range entries {
-			if !containsString(c.Entries, e) && c.Where.URL {
+			if !containsString(c.Entries, e) && c.Type == db.ListAddress {
 				entries[i] = normalizeURLEntry(e)
 			}
 		}
@@ -304,7 +393,13 @@ then one entry per line. 'kc9k cluster import' reads it back, and so does
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%s%s\n", clusterHeader, strings.Join(c.Where.List(), ", "))
+		header := clusterHeader
+		if c.Phrases {
+			header = phraseClusterHeader
+		} else if c.Type == db.ListTerm {
+			header = termClusterHeader
+		}
+		fmt.Printf("%s%s\n", header, strings.Join(c.Where.List(), ", "))
 		for _, e := range c.Entries {
 			fmt.Println(e)
 		}
@@ -316,22 +411,43 @@ then one entry per line. 'kc9k cluster import' reads it back, and so does
 // where it looks, e.g. "# kc9k cluster, looks at: url, title".
 const clusterHeader = "# kc9k cluster, looks at: "
 
+// phraseClusterHeader starts that line for a phrase cluster, and
+// termClusterHeader for a term cluster (which may look at the url too).
+const (
+	phraseClusterHeader = "# kc9k phrase cluster, looks at: "
+	termClusterHeader   = "# kc9k term cluster, looks at: "
+)
+
 // exportedWhere reads where an exported cluster looks from its header line.
 func exportedWhere(data string) (db.Where, bool) {
+	where, _, ok := exportedCluster(data)
+	return where, ok
+}
+
+// exportedCluster reads an exported cluster's header line: where it looks,
+// and what it is: "phrases", db.ListTerm, or "" (its places say).
+func exportedCluster(data string) (db.Where, string, bool) {
 	var where db.Where
 	for _, line := range strings.Split(data, "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, clusterHeader) {
+		header, what := "", ""
+		for _, h := range []struct{ prefix, what string }{
+			{phraseClusterHeader, "phrases"}, {termClusterHeader, db.ListTerm}, {clusterHeader, ""}} {
+			if header == "" && strings.HasPrefix(line, h.prefix) {
+				header, what = h.prefix, h.what
+			}
+		}
+		if header == "" {
 			continue
 		}
-		for _, place := range strings.Split(strings.TrimPrefix(line, clusterHeader), ",") {
+		for _, place := range strings.Split(strings.TrimPrefix(line, header), ",") {
 			if place = strings.TrimSpace(place); db.IsPlace(place) {
 				where = where.With(place, true)
 			}
 		}
-		return where, where.Any()
+		return where, what, where.Any()
 	}
-	return where, false
+	return where, "", false
 }
 
 var clusterImportCmd = &cobra.Command{
@@ -356,20 +472,41 @@ making it if there is none by that name. A new cluster looks where --url,
 			return fmt.Errorf("cluster '%s' exists; change where it looks with 'kc9k cluster where'", args[0])
 		}
 		where := whereFlags(cmd)
+		phrases, _ := cmd.Flags().GetBool("phrases")
+		typ := db.DefaultType(where)
+		if terms, _ := cmd.Flags().GetBool("terms"); terms {
+			typ = db.ListTerm
+		}
+		if phrases && !cmd.Flags().Changed("url") {
+			where.URL = false
+		}
 		if !exists && !flagged {
 			if data, err := readAsCaller(args[1]); err == nil {
-				if w, ok := exportedWhere(string(data)); ok {
-					where = w
+				if w, what, ok := exportedCluster(string(data)); ok {
+					where, phrases = w, phrases || what == "phrases"
+					typ = db.DefaultType(w)
+					if what == db.ListTerm {
+						typ = db.ListTerm
+					}
 				}
 			}
+		}
+		if phrases && !where.Any() {
+			where.Text = true
 		}
 		if !exists {
 			// Check the entries before making the cluster, so a bad file
 			// leaves nothing behind.
-			if _, err := prepareEntries(where, entries); err != nil {
+			create := func(name string, where db.Where) error { return database.CreateTypedCluster(name, typ, where) }
+			if phrases {
+				create = database.CreatePhraseCluster
+				if _, err := typedPhrases(entries); err != nil {
+					return err
+				}
+			} else if _, err := prepareEntries(typ, where, entries); err != nil {
 				return err
 			}
-			if err := database.CreateCluster(args[0], where); err != nil {
+			if err := create(args[0], where); err != nil {
 				return err
 			}
 		}
@@ -409,13 +546,17 @@ exception list it weakens the block, like 'kc9k list add' to that list.`,
 }
 
 var clusterSaveCmd = &cobra.Command{
-	Use:   "save [block] [list] [cluster]",
-	Short: "Save a block's list as a cluster (adds to the cluster if it exists)",
+	Use:   "save [block] [list or phrase set] [cluster]",
+	Short: "Save a block's list or phrase set as a cluster (adds to the cluster if it exists)",
 	Args:  cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		_, l, err := findList(database, args[0], args[1])
 		if err != nil {
-			return err
+			s, setErr := database.FindPhraseSet(args[0], args[1])
+			if setErr != nil {
+				return err
+			}
+			return savePhraseCluster(database, args[0], s, args[2])
 		}
 		if len(l.Entries) == 0 {
 			return fmt.Errorf("list '%s' of block '%s' is empty", args[1], args[0])
@@ -425,13 +566,16 @@ var clusterSaveCmd = &cobra.Command{
 			return err
 		}
 		if !exists {
-			if err := database.CreateCluster(args[2], l.Where); err != nil {
+			if err := database.CreateTypedCluster(args[2], l.Type, l.Where); err != nil {
 				return err
 			}
 		}
 		c, err := database.GetCluster(args[2])
 		if err != nil {
 			return err
+		}
+		if c.Phrases {
+			return fmt.Errorf("cluster '%s' holds phrases, not a list's entries", args[2])
 		}
 		added, err := clusterAdd(database, c, l.Entries)
 		if err != nil {
@@ -442,7 +586,44 @@ var clusterSaveCmd = &cobra.Command{
 	}),
 }
 
+// savePhraseCluster saves a block's phrase set as a phrase cluster.
+func savePhraseCluster(database *db.DB, block string, s db.PhraseSet, name string) error {
+	if len(s.Phrases) == 0 {
+		return fmt.Errorf("phrase set '%s' of block '%s' is empty", s.Name, block)
+	}
+	exists, err := database.ClusterExists(name)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		if err := database.CreatePhraseCluster(name, s.Where); err != nil {
+			return err
+		}
+	}
+	c, err := database.GetCluster(name)
+	if err != nil {
+		return err
+	}
+	if !c.Phrases {
+		return fmt.Errorf("cluster '%s' holds entries, not phrases", name)
+	}
+	var texts []string
+	for _, p := range s.Phrases {
+		texts = append(texts, p.String())
+	}
+	added, err := clusterAdd(database, c, texts)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Saved %d new phrases from '%s' of '%s' to cluster '%s'.\n", added, s.Name, block, name)
+	return nil
+}
+
 func init() {
+	clusterCreateCmd.Flags().Bool("phrases", false, "Make a phrase cluster (copied into blocks as a phrase set)")
+	clusterImportCmd.Flags().Bool("phrases", false, "A new cluster holds phrases")
+	clusterCreateCmd.Flags().Bool("terms", false, "A term cluster, even if it looks only at the address")
+	clusterImportCmd.Flags().Bool("terms", false, "A new cluster is a term cluster, even if it looks only at the address")
 	addWhereFlags(clusterCreateCmd)
 	addWhereFlags(clusterImportCmd)
 	clusterCopyCmd.Flags().String("into", "", "Add the entries to this list of the block")

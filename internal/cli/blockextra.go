@@ -26,6 +26,7 @@ import (
 type listExport struct {
 	Name    string          `json:"name"`
 	Kind    string          `json:"kind"`
+	Type    string          `json:"type,omitempty"` // address or term; files from before types have none
 	Where   []string        `json:"where"`
 	Actions []db.ListAction `json:"actions,omitempty"`
 	Entries []string        `json:"entries"`
@@ -35,11 +36,13 @@ type listExport struct {
 // Patterns, Exceptions, Keywords and Thresholds are read from exports made
 // before website lists, and turned into lists as the database did.
 type blockExport struct {
-	Name   string       `json:"name"`
-	Lists  []listExport `json:"lists,omitempty"`
-	Apps   []string     `json:"apps"`
-	Titles []string     `json:"titles,omitempty"`
-	Nepsis *db.Nepsis   `json:"nepsis,omitempty"`
+	Name  string       `json:"name"`
+	Lists []listExport `json:"lists,omitempty"`
+	// PhraseSets: R-PHRASE-10.
+	PhraseSets []phraseSetExport `json:"phrase_sets,omitempty"`
+	Apps       []string          `json:"apps"`
+	Titles     []string          `json:"titles,omitempty"`
+	Nepsis     *db.Nepsis        `json:"nepsis,omitempty"`
 
 	Mode       string         `json:"mode,omitempty"`
 	Actions    []string       `json:"actions,omitempty"`
@@ -98,7 +101,10 @@ func toLists(in []listExport) (db.Lists, error) {
 		if le.Kind != db.ListBlacklist && le.Kind != db.ListExceptions {
 			return nil, fmt.Errorf("list '%s' has an unknown kind %q", le.Name, le.Kind)
 		}
-		l := db.WebList{Name: le.Name, Kind: le.Kind}
+		if le.Type != "" && le.Type != db.ListAddress && le.Type != db.ListTerm {
+			return nil, fmt.Errorf("list '%s' has an unknown type %q", le.Name, le.Type)
+		}
+		l := db.WebList{Name: le.Name, Kind: le.Kind, Type: le.Type}
 		for _, place := range le.Where {
 			if !db.IsPlace(place) {
 				return nil, fmt.Errorf("list '%s' looks at an unknown place %q", le.Name, place)
@@ -108,8 +114,13 @@ func toLists(in []listExport) (db.Lists, error) {
 		if !l.Where.Any() {
 			l.Where.URL = true
 		}
+		if l.Type != "" {
+			if err := db.CheckScope(l.Type, l.Where); err != nil {
+				return nil, fmt.Errorf("list '%s': %w", le.Name, err)
+			}
+		}
 		if len(le.Entries) > 0 {
-			entries, err := prepareEntries(l.Where, le.Entries)
+			entries, err := prepareEntries(l.Type, l.Where, le.Entries)
 			if err != nil {
 				return nil, fmt.Errorf("list '%s': %w", le.Name, err)
 			}
@@ -217,8 +228,11 @@ var blockExportCmd = &cobra.Command{
 			out.Apps = []string{}
 		}
 		for _, l := range detail.Lists {
-			out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Where: l.Where.List(),
+			out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Type: l.Type, Where: l.Where.List(),
 				Actions: l.Actions, Entries: l.Entries})
+		}
+		if out.PhraseSets, err = exportPhraseSets(database, detail.Name); err != nil {
+			return err
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
@@ -257,6 +271,10 @@ var blockImportCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("in import: %w", err)
 		}
+		phraseSets, err := toPhraseSets(in.PhraseSets)
+		if err != nil {
+			return fmt.Errorf("in import: %w", err)
+		}
 		for _, app := range in.Apps {
 			if err := blocker.ValidAppEntry(app); err != nil {
 				return fmt.Errorf("in import: %w", err)
@@ -283,6 +301,9 @@ var blockImportCmd = &cobra.Command{
 		if err := database.SetLists(in.Name, lists); err != nil {
 			return err
 		}
+		if err := addPhraseSets(database, in.Name, phraseSets); err != nil {
+			return err
+		}
 		if len(in.Apps) > 0 {
 			if err := database.AddApps(in.Name, in.Apps); err != nil {
 				return err
@@ -298,7 +319,10 @@ var blockImportCmd = &cobra.Command{
 				return err
 			}
 		}
-		fmt.Printf("Imported block '%s' (%d lists, %d apps).\n", in.Name, len(lists), len(in.Apps))
+		if err := database.MigrateCombinations(); err != nil {
+			return err
+		}
+		fmt.Printf("Imported block '%s' (%d lists, %d phrase sets, %d apps).\n", in.Name, len(lists), len(phraseSets), len(in.Apps))
 		return nil
 	},
 }
@@ -318,6 +342,11 @@ const maxImportSize = 4 << 20
 // The CLI runs as root through sudo, so a plain read could reach files the user
 // may not open. Without SUDO_UID the process really is the user or root.
 func readAsCaller(path string) ([]byte, error) {
+	return readAsCallerUpTo(path, maxImportSize)
+}
+
+// readAsCallerUpTo is readAsCaller for files of up to limit bytes.
+func readAsCallerUpTo(path string, limit int64) ([]byte, error) {
 	uidStr, gidStr := os.Getenv("SUDO_UID"), os.Getenv("SUDO_GID")
 	if uidStr == "" || gidStr == "" || os.Geteuid() != 0 {
 		f, err := os.Open(path)
@@ -325,7 +354,7 @@ func readAsCaller(path string) ([]byte, error) {
 			return nil, err
 		}
 		defer f.Close()
-		return readLimited(f)
+		return readLimited(f, limit)
 	}
 	uid, err := strconv.ParseUint(uidStr, 10, 32)
 	if err != nil {
@@ -344,7 +373,7 @@ func readAsCaller(path string) ([]byte, error) {
 	if err := c.Start(); err != nil {
 		return nil, fmt.Errorf("cannot read file as user %d: %w", uid, err)
 	}
-	data, readErr := readLimited(out)
+	data, readErr := readLimited(out, limit)
 	_ = c.Process.Kill() // stops cat if the file was too large
 	waitErr := c.Wait()
 	if readErr != nil {
@@ -357,13 +386,13 @@ func readAsCaller(path string) ([]byte, error) {
 }
 
 // readLimited reads at most maxImportSize bytes, failing if there are more.
-func readLimited(r io.Reader) ([]byte, error) {
-	data, err := io.ReadAll(io.LimitReader(r, maxImportSize+1))
+func readLimited(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > maxImportSize {
-		return nil, fmt.Errorf("the file is larger than %d MiB", maxImportSize>>20)
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("the file is larger than %d MiB", limit>>20)
 	}
 	return data, nil
 }

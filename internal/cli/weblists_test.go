@@ -81,9 +81,14 @@ func TestListEntries(t *testing.T) {
 	if got := list(t, d, "b", "Blocked").Entries; !reflect.DeepEqual(got, []string{"reddit.com", "reddit.com/r/funny", "*casino*"}) {
 		t.Errorf("Blocked = %q", got)
 	}
-	// §3.2: a list is an address list or a term list, not both.
-	if err := runCLI(t, "list", "create", "b", "Both", "--url", "--text"); err == nil {
-		t.Error("a list looking at the address and the text was created")
+	// §3.2: a list is an address list or a term list; a term list may look
+	// at the url too (R-PHRASE-6), an address list only at the url.
+	mustRun(t, "list", "create", "b", "Both", "--url", "--text")
+	if l := list(t, d, "b", "Both"); l.Type != db.ListTerm || l.Where != (db.Where{URL: true, Text: true}) {
+		t.Errorf("Both = %+v; want a term list looking at the url and the text", l)
+	}
+	if err := runCLI(t, "list", "scope", "b", "Blocked", "title", "on"); err == nil {
+		t.Error("an address list was made to look at the title")
 	}
 	mustRun(t, "list", "create", "b", "Mixed", "--text")
 	mustRun(t, "list", "add", "b", "Mixed", "nsfw", "18+", "example.com")
@@ -93,15 +98,17 @@ func TestListEntries(t *testing.T) {
 	if l := list(t, d, "b", "Mixed"); l.Where != (db.Where{Text: true}) || len(l.Entries) != 3 {
 		t.Errorf("Mixed = %+v", l)
 	}
-	if err := runCLI(t, "list", "scope", "b", "Mixed", "url", "on"); err == nil {
-		t.Error("a term list was made to look at the address too")
+	mustRun(t, "list", "scope", "b", "Mixed", "url", "on")
+	if l := list(t, d, "b", "Mixed"); l.Type != db.ListTerm || len(l.Entries) != 3 {
+		t.Errorf("Mixed after url on = %+v", l)
 	}
 	// Removing a domain finds it however it is written.
 	mustRun(t, "list", "remove", "b", "Blocked", "https://Reddit.com/")
 	if got := list(t, d, "b", "Blocked").Entries; len(got) != 2 {
 		t.Errorf("after removing reddit.com: %q", got)
 	}
-	if err := runCLI(t, "list", "where", "b", "Mixed", "text", "off"); err == nil {
+	mustRun(t, "list", "where", "b", "Mixed", "text", "off")
+	if err := runCLI(t, "list", "where", "b", "Mixed", "url", "off"); err == nil {
 		t.Error("a list was left looking nowhere")
 	}
 	if err := runCLI(t, "list", "action", "b", "Mixed", "block", "off"); err == nil {
@@ -279,19 +286,17 @@ func TestWordCombinations(t *testing.T) {
 		t.Errorf("a %d-character combination was refused: %v", len(long), err)
 	}
 
-	d := testDB(t)
+	// Combinations are phrases now: typing one is refused, with the
+	// phrases it would be.
+	testDB(t)
 	mustRun(t, "block", "create", "b")
-	mustRun(t, "block", "add-keyword", "b", "(car,lambo*)(big, small, nice):2", "nsfw")
-	if got := list(t, d, "b", db.DefaultWordsList).Entries; !reflect.DeepEqual(got, []string{"(car, lambo*) (big, small, nice):2", "nsfw"}) {
-		t.Errorf("Page words = %q", got)
+	err := runCLI(t, "block", "add-keyword", "b", "(car,lambo*)(big, small, nice):2", "nsfw")
+	if err == nil || !strings.Contains(err.Error(), `as "[car, lambo*] [big, small, nice]"`) {
+		t.Errorf("a typed combination: %v", err)
 	}
-	if err := runCLI(t, "block", "add-keyword", "b", "cars(red, big"); err == nil {
-		t.Error("an unclosed combination was accepted")
-	}
-	// Removing finds a combination however it is spaced.
-	mustRun(t, "block", "remove-keyword", "b", "(car, lambo*)(big,small,nice):2")
-	if got := list(t, d, "b", db.DefaultWordsList).Entries; !reflect.DeepEqual(got, []string{"nsfw"}) {
-		t.Errorf("after removing: %q", got)
+	mustRun(t, "cluster", "create", "words", "--text")
+	if err := runCLI(t, "cluster", "add", "words", "cars(red, big)"); err == nil {
+		t.Error("a cluster took a typed combination")
 	}
 	// An address with brackets is still an address.
 	mustRun(t, "list", "add", "b", "Blocked", "en.wikipedia.org/wiki/Mercury_(planet)")

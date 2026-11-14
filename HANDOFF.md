@@ -1,40 +1,27 @@
-# Handoff: branch `monk` (R-MONK-1, R-MONK-2), stopped mid-work 2026-11-14
+# Handoff: phrase-sets session (main, laptop), 2026-11-14
 
-Work in `~/kc9k-monk` on the second computer (test machine). Not merged into main.
-`CGO_ENABLED=0 go build ./...` passes (also `-tags devmaster`). **`go test` does not compile yet** (see 1).
+Read this, then `git fetch`, SPEC.md and ROADMAP.md.
 
-## Done (committed)
-- `internal/db/monk.go`: monk mode is `monk.until` (trusted time) + `monk.net` (saved network state).
-  `ExtendMonk` (only grows), `EndMonkIfOver`, `SaveMonkNetIfNone` (first state wins), `ForgetMonkNetIfOff`,
-  `migrateMonkMode` (removes the `monk-mode` block once, a running one keeps its end). Tests: `monk_test.go` (pass).
-- `internal/blocker/firewall.go`: `ApplyFirewallCut`, `IsFirewallCut` (nft `inet kc9k` input/output/forward, iptables fallback). Tests pass.
-- `internal/blocker/netcut.go`: `WifiRadio`, `SetWifiRadio` (nmcli), `EthernetLinks` (/sys/class/net), `SetLink`. Test passes.
-- `internal/enforce/monk.go`: `StartMonk`, `enforceMonk` (called in `Tick`), `cutNetwork`, `restoreNetwork`, `monkBlock`
-  (in-memory `*.*` + `file://*`, list id `MonkListID`), `withMonk`, `MonkEnd`/`MonkOn`. Device effects are replaceable vars.
-- Wired in: `Tick`/`apply` (firewall stays cut, re-resolve 45 s after restore), `BuildRules` (+ `rules.Ends["Monk mode"]`),
-  `findActiveList` (monk hits are global events), `ExtensionRequiredNow`, `keepWifiOn` (off during monk),
-  `BlocksLocked` (monk counts as a lock), uninstall refused, `master` ends it.
-- CLI: every `enforce.MonkBlock` special case and `refuseMonkEdit` removed; `kc9k monk` without `--for` shows the state;
-  `kc9k status` has a monk line; gui-state has `monk_seconds` instead of `monk_block`.
+**Built and merged into main** (tests named after rule IDs in `internal/cli/phrases_test.go`, `internal/db/*_test.go`, `ci/match_test.js`):
+- R-PHRASE-1 to 9 in the CLI (`kc9k phrase-set …`), tested; one-ended bridges refused per term (a `-x` needs a `y-` in another word set, a middle link both), in Go (`Phrase.Check`) and JS (`kc9kPhraseCheck`). Phrase set names unique regardless of case. Monk action refused inside monk mode (R-MONK-1).
+- GUI (§4.3): `PhraseSetCard` per phrase set on a block's Websites tab, `PhraseDialog` (word sets ticked necessary/optional, length). `ci/gui_phrase_smoke.py` is the GUI smoke test (builds its own binary and scratch DB; needs an X display).
+- R-PHRASE-10: phrase sets in block and project files, `phrase-set export/import` (.txt), phrase clusters (`cluster create --phrases`, `save`, `copy`), no recording into them.
+- R-PHRASE-6 for term lists: lists and clusters have a `type` (address/term); `list create --terms`; `url_terms` in the rules, matched by `kc9kUrlWords`. Fixed on the way: `migrateListTypes` ran on every open and would have split today's url+page term lists and phrase clusters; it now only splits untyped rows.
 
-## Left, in order
-1. Fix tests that still use `MonkBlock`: `internal/enforce/consequence_test.go` (`TestStartMonk`) and
-   `internal/cli/settings_test.go` (`TestMonkBlockIsSystemOwned`). Replace with `TestR_MONK_1_*` / `TestR_MONK_2_*`.
-   **Add a `TestMain` in `internal/enforce` that replaces the network vars in monk.go with fakes first**:
-   enforce tests don't set `KC9K_DB`, so `StartMonk` would cut the real network.
-   Planned cases: no block exists after `StartMonk`; rules carry `*.*`; started by `Run` and by a ladder step;
-   three cuts + state saved once; put back when switched on; restore at the end, after a restart, after a crash
-   (`until` 0 with a saved state); Wi-Fi that was off stays off; `monkDeviceless` never cuts.
-2. GUI (`gui/kc9k-gui.py`): lines 883-888, 1062, 1731, 2529-2533 still use `monk_block` / mention the block.
-   Show `monk_seconds` on the Dashboard; fix the texts.
-3. `ci/actions_test.py` lines 261-279: check `kc9k monk` output instead of `block info monk-mode`.
-4. `ci/monk_live_test.sh` and the live test (take `/tmp/kc9k-live.lock`, install, `systemd-run --on-active=20s`), then the
-   reboot test (ask the owner first). Nothing was installed or run live; the lock was never taken.
-5. ROADMAP rows (lines ~40, 138, 245), README.md, CLAUDE.md (Consequences paragraph: monk is no block) are **not updated yet**.
-6. `git fetch origin && git merge origin/main`, build, test, merge into main, push.
+**Word combinations → phrases** (`db/combinations.go`), merged after the owner's decision: each box a word set, `:N` dropped, thresholds 1; one-box combinations and those in exception lists stay. Tested on a copy of a DB made by the previous build with `(a, b) (c):2` notation.
 
-## Open questions for the owner
-- Pages blocked by monk mode are logged as global `page` events (no block). OK, or should they not count for bypass detection?
-- No NetworkManager: the Wi-Fi radio is left alone (only Ethernet + firewall). Add an `rfkill` fallback?
-- `kc9k master` (devmaster builds) ends monk mode, as it lifted the old block. Keep?
-- Commits here are authored `Claude <noreply@anthropic.com>` via `-c` flags (no git identity on this machine).
+**Categories dropped** (the owner's decision): the 14 shipped lists and `block create --template` are gone; SPEC updated.
+
+**Browser tests on the laptop:** devmaster build of main (03104ce) installed 2026-11-14. browser_test 20/20, actions_test 15/15, quota_test 2/2, extras_test 21/22: "another site inside a proxy address is not" fails only because the owner's locked `test` block lists example.com. quota_test used to fail on a second run the same day: `quotatest` stays on until midnight, and LibreWolf's policy file is rewritten only by the daemon (Firefox's at once by the CLI), so a browser started right after `quota start` read the old policy; the test now waits 12 s.
+
+**For other sessions:** R-LOCK-12's acknowledgement for a phrase set's `monk` action (`phrase-set action … monk on`) is in the locks session's list below; `internal/cli/phrases.go` is where it goes. List names differing only in case are still allowed (ROADMAP §0.1). `TestBreakAllowance` failed once under load and passed 5/5 alone (timing).
+
+---
+
+# Handoff: locks session (branch lock-confirm), 2026-11-14
+
+R-LOCK-12 is merged into main and pushed: `confirmLocks` (`internal/cli/confirm.go`) on every lock path, `--yes` for scripts, GUI `confirm_lock`, tests `TestRLOCK12_*` in `internal/cli/confirm_test.go`, GUI smoke test (scratchpad, not in repo: copy its pattern from `ci/gui_phrase_smoke.py`). Hotkey locks are confirmed at `hotkey add` today; `hotkey run` passes `yes`.
+
+**Follow-up done (hotkeys, automatic monk):** per-hotkey `--no-confirm` ("Run without confirmation"; GUI tick in the hotkey confirmation) with a zenity dialog at each press otherwise; `--no-confirm-ok` (GUI: "I know this will not ask for confirmation") for bypass prevention steps and list/phrase set `monk` actions. Tests `TestRLOCK12_HotkeyConfirmation`, `TestRLOCK12_AutomaticMonkNeedsAcknowledgement`.
+
+**Still open:** (1) `kc9k monk` itself (manual start) should ask through `confirmLocks`: the monk session (branch monk) is rewriting it, add it there. (2) `project import` can bring in monk steps and actions without the acknowledgement. (3) The hotkey press dialog was only tested with a stub, never for real (needs zenity and a session; laptop untouched by this session).

@@ -86,6 +86,8 @@ type clusterExport struct {
 	Name    string   `json:"name"`
 	Where   []string `json:"where"`
 	Entries []string `json:"entries"`
+	Phrases bool     `json:"phrases,omitempty"` // a phrase cluster (R-PHRASE-10)
+	Type    string   `json:"type,omitempty"`    // address or term; none before types
 }
 
 // placeExport is a place with the networks it is known by (backups only).
@@ -147,8 +149,20 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 		out.Nepsis = &n
 	}
 	for _, l := range detail.Lists {
-		out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Where: l.Where.List(), Actions: l.Actions, Entries: l.Entries})
+		out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Type: l.Type, Where: l.Where.List(), Actions: l.Actions, Entries: l.Entries})
 		for _, a := range l.Actions {
+			if a.Name == db.ActionImage && db.IsImageName(a.Param) && images != nil {
+				if data, err := os.ReadFile(filepath.Join(db.ImagesDir(), a.Param)); err == nil {
+					images[a.Param] = base64.StdEncoding.EncodeToString(data)
+				}
+			}
+		}
+	}
+	if out.PhraseSets, err = exportPhraseSets(database, name); err != nil {
+		return out, err
+	}
+	for _, s := range out.PhraseSets {
+		for _, a := range s.Actions {
 			if a.Name == db.ActionImage && db.IsImageName(a.Param) && images != nil {
 				if data, err := os.ReadFile(filepath.Join(db.ImagesDir(), a.Param)); err == nil {
 					images[a.Param] = base64.StdEncoding.EncodeToString(data)
@@ -191,6 +205,7 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 type checkedBlock struct {
 	in      projectBlock
 	lists   db.Lists
+	phrases []db.PhraseSet
 	windows []schedule.Window
 }
 
@@ -208,6 +223,9 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 		}
 	}
 	if out.lists, err = toLists(exported); err != nil {
+		return out, err
+	}
+	if out.phrases, err = toPhraseSets(in.PhraseSets); err != nil {
 		return out, err
 	}
 	for _, app := range in.Apps {
@@ -259,6 +277,9 @@ func createBlock(database *db.DB, c checkedBlock) error {
 		return err
 	}
 	if err := database.SetLists(in.Name, c.lists); err != nil {
+		return err
+	}
+	if err := addPhraseSets(database, in.Name, c.phrases); err != nil {
 		return err
 	}
 	if len(in.Apps) > 0 {
@@ -373,7 +394,7 @@ passwords, hotkeys and statistics are never in it.`,
 			if err != nil {
 				return err
 			}
-			out.Clusters = append(out.Clusters, clusterExport{Name: full.Name, Where: full.Where.List(), Entries: full.Entries})
+			out.Clusters = append(out.Clusters, clusterExport{Name: full.Name, Where: full.Where.List(), Entries: full.Entries, Phrases: full.Phrases, Type: full.Type})
 		}
 		for _, name := range enforce.BrowserSettings {
 			out.Browser[name] = enforce.BrowserOn(database, name)
@@ -465,7 +486,19 @@ With --dry-run, says what would happen and changes nothing.`,
 			if !where.Any() {
 				return fmt.Errorf("cluster '%s' looks nowhere", c.Name)
 			}
-			entries, err := prepareEntries(where, c.Entries)
+			if c.Type == "" && !c.Phrases {
+				c.Type = db.DefaultType(where)
+			}
+			if !c.Phrases {
+				if err := db.CheckScope(c.Type, where); err != nil {
+					return fmt.Errorf("cluster '%s': %w", c.Name, err)
+				}
+			}
+			check := func(entries []string) ([]string, error) { return prepareEntries(c.Type, where, entries) }
+			if c.Phrases {
+				check = typedPhrases
+			}
+			entries, err := check(c.Entries)
 			if err != nil {
 				return fmt.Errorf("cluster '%s': %w", c.Name, err)
 			}
@@ -533,6 +566,28 @@ With --dry-run, says what would happen and changes nothing.`,
 		}
 		if !dry && (len(newFreezes) > 0 || len(blocks) > 0) {
 			if err := requireLockPassword(database); err != nil {
+				return err
+			}
+		}
+		{
+			// R-LOCK-12: the locks in the file are confirmed before anything
+			// is written; a dry run lists them (the interface asks with them).
+			var locks []lockToSet
+			for _, c := range blocks {
+				if l := c.in.ScheduleLock; l != nil {
+					locks = append(locks, lockToSet{"imported block '" + c.in.Name + "'", "schedule lock", leadLength(*l)})
+				}
+			}
+			for _, f := range newFreezes {
+				if f.lead >= 0 {
+					locks = append(locks, lockToSet{fmt.Sprintf("imported freeze schedule %s (%s mode)", f.w, f.mode), "schedule lock", leadLength(f.lead)})
+				}
+			}
+			if dry {
+				for _, l := range locks {
+					say("set a lock: %s", l)
+				}
+			} else if err := confirmLocks(cmd, locks...); err != nil {
 				return err
 			}
 		}
@@ -624,7 +679,11 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 			say("add cluster '%s' (%d entries)", c.c.Name, len(c.c.Entries))
 			if !dry {
-				if err := database.CreateCluster(c.c.Name, c.where); err != nil {
+				create := func(name string, where db.Where) error { return database.CreateTypedCluster(name, c.c.Type, where) }
+				if c.c.Phrases {
+					create = database.CreatePhraseCluster
+				}
+				if err := create(c.c.Name, c.where); err != nil {
 					return err
 				}
 				created, err := database.GetCluster(c.c.Name)
@@ -687,6 +746,9 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 		}
 		if !dry {
+			if err := database.MigrateCombinations(); err != nil {
+				return err
+			}
 			if err := enforce.ApplyFromDB(database); err != nil {
 				return err
 			}
@@ -698,6 +760,7 @@ With --dry-run, says what would happen and changes nothing.`,
 
 func init() {
 	projectImportCmd.Flags().Bool("dry-run", false, "Say what would be imported and change nothing")
+	addYesFlag(projectImportCmd)
 	projectExportCmd.Flags().Bool("share", false, "Leave out places and place rules, for sharing with others")
 	projectCmd.AddCommand(projectExportCmd, projectImportCmd)
 	rootCmd.AddCommand(projectCmd)

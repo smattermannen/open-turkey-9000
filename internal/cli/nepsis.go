@@ -188,6 +188,15 @@ func readNepsis(cmd *cobra.Command) (db.Nepsis, error) {
 	if len(n.Steps) == 0 {
 		return n, fmt.Errorf("give at least one --step (or --count, --within and --then)")
 	}
+	for _, step := range n.Steps {
+		for _, a := range step.Actions {
+			if a.Kind == db.ConsequenceMonk {
+				if err := requireMonkAck(cmd, "a bypass prevention step"); err != nil {
+					return n, err
+				}
+			}
+		}
+	}
 	n.Detectors, _ = cmd.Flags().GetStringSlice("detect")
 	if quiet, _ := cmd.Flags().GetString("quiet"); quiet != "" {
 		var err error
@@ -272,6 +281,9 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 		}
 		next, changes, err := strengthenSettingLock(cur, want, cmd.Flags().Changed("lock-chars"))
 		if err != nil {
+			return err
+		}
+		if err := confirmLocks(cmd, settingLocks("bypass prevention", cur, next)...); err != nil {
 			return err
 		}
 		if err := database.SetSettingLock(next); err != nil {
@@ -458,6 +470,8 @@ func init() {
 	nepsisSetCmd.Flags().Bool("password-stdin", false, "Global only. Password lock, read from standard input")
 	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be weakened until the computer restarts")
 	addTextLockFlags(nepsisSetCmd)
+	addYesFlag(nepsisSetCmd)
+	addMonkAckFlag(nepsisSetCmd)
 	addNowFlag(nepsisSetCmd, nepsisOffCmd)
 	nepsisCmd.AddCommand(nepsisSetCmd, nepsisOffCmd, nepsisUnlockCmd)
 	rootCmd.AddCommand(monkCmd, nepsisCmd)

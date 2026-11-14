@@ -71,9 +71,8 @@ mode loophole hunt against a system like this.
 at the press of a key. Sometimes opening an app is too big a hurdle until it
 is too late. A key that is always there breaks the spell when it is needed.
 
-**The circadian rhythm.** KC9K follows the time of day, and the user can lock
-it: dark mode in the browser and in apps, a blue light filter, screen
-brightness, and wallpapers. A bright and positive wallpaper in the morning, a
+**The circadian rhythm.** KC9K follows the time of day: dark mode in the
+browser and in apps, a blue light filter, screen brightness, and wallpapers. A bright and positive wallpaper in the morning, a
 soothing warm one in the late afternoon, a starlit one at night: these are
 cues for the body clock. It also means KC9K isn't "just a blocking app" when
 friends ask.
@@ -199,8 +198,7 @@ Command and code names are in `backticks`.
 | **Exception list** | List kind: matches are spared from the blacklists and phrase sets **of the same block only**. There are no phrase exceptions. *CT: Website Exceptions.* | An allowlist block. |
 | **Allowlist block** | A block whose blacklist is `*.*`, so that only its exceptions are reachable. | — |
 | **Cluster** | A list or phrase set belonging to no block: never enforced, always freely editable, copied into blocks. | A list. |
-| **Category** | A read-only list or phrase set shipped with KC9K (Social, News, Adult, …). Importing one into a block copies it. *CT: Website categories.* | A cluster, a template. |
-| **Template** | A ready-made block definition to create a block from. | A category. |
+| **Template** | A ready-made block definition to create a block from. | A cluster. |
 | **Affected users** | The local user accounts a block applies to (default: all). For shared computers; only an administrator sets them. | — |
 | **Social preset** | A switch that keeps a site but takes a part of it away (YouTube without Shorts, Instagram messages only, …). Also: an allowed YouTube playlist. | A list. |
 | **Test mode** | A term list or phrase set reports what it would match instead of acting. Set per list and per phrase set. | — |
@@ -353,7 +351,7 @@ mode, unless no-escape is on.
 | **Setting** | Anything the user configures outside blocks. Kinds: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `force-librewolf`, `block-devtools`, `no-private`), **protection setting** (§4.10), **behaviour setting** (never locked, not touched by *no weakening during active locks*: `polite-close`, `block-page-details`), **preference** (the interface only). |
 | **Hotkey** | A desktop key that switches a block on, optionally setting a lock. |
 | **Project** | The whole setup in one file. *Backup*: everything. *Share*: without places and user names. Import shows a preview, only adds, and gives a block that exists already a new name. |
-| **Circadian rhythm** | Settings that follow the time of day: blue light filter, brightness, wallpaper, dark mode in apps and pages. Lockable. |
+| **Circadian rhythm** | Settings that follow the time of day: the screen's brightness and colour temperature (each an **automation clip**: a 24-hour curve of points), wallpaper, dark mode in apps and pages. Never locked, and it never overrides the user. |
 
 ### 3.14 Words to avoid
 
@@ -404,7 +402,7 @@ import.
 - **Find entry**: Ctrl+F.
 - **Save changes / Cancel**: one draft per block; nothing is applied until
   Save. On a locked block, Save refuses the weakening changes and says which.
-- **Import**: *From KC9K* (categories, lists and phrase sets of other blocks,
+- **Import**: *From KC9K* (lists and phrase sets of other blocks,
   clusters; several at once) or *From file* (`.txt`, one entry per line).
   Also *Whole internet* and *All searches containing…*.
 - **Export** a list or phrase set to `.txt`.
@@ -480,9 +478,23 @@ only on the computer.
   one the computer already uses, so nobody new learns which sites are
   blocked; Quad9 when that one can't answer.
 - **Use counting**: strict use counting.
-- **Circadian rhythm**: per time of day (morning, afternoon, evening, night,
-  at times the user sets): blue light filter, screen brightness, wallpaper,
-  dark mode for apps, dark pages (with exempt sites). Lockable.
+- **Circadian rhythm** (owner's decisions, 2026-11-14):
+  - *Automation clips*, one set for every day: a 24-hour curve each for the
+    backlight (the screen's real brightness, %), software brightness (%)
+    and colour temperature (the blue light filter, in kelvin). The user
+    adds, moves and removes points and bends the curve between two points;
+    ready-made presets to start from.
+  - *Wallpapers*: the user picks a picture and the times between which it
+    shows. There are no fixed periods (morning, afternoon, …).
+  - *Dark mode* is the system's dark mode, on or off, like a phone's: left
+    to the system, always light, always dark, or light between two times.
+  - *Dark pages* follow dark mode, with exempt sites.
+  - *Not lockable.* Nothing of the circadian rhythm can be locked, and no
+    lock holds it.
+  - *It never overrides the user.* KC9K never puts a level back. When the
+    user changes a level by hand, that clip pauses until its next point, or
+    until the user resumes it. A wallpaper or dark mode the user picks by
+    hand stays until the next change the settings call for.
 - **Device protection**: strict mode, no-escape, factory reset protection,
   with a guided setup.
 - **Passwords**: settings password, access passwords.
@@ -547,7 +559,7 @@ old names keep working for a while.
 
 **Lists and phrases**
 - **R-LIST-1** Exceptions spare pages only from their own block's blacklists and phrase sets.
-- **R-LIST-2** Clusters and categories are never enforced.
+- **R-LIST-2** Clusters are never enforced.
 - **R-LIST-3** Every new block has the exception `file://*`.
 - **R-LIST-4** Text means rendered, visible text: hidden or collapsed text doesn't count; text further down the page does. Each frame is judged on its own text.
 - **R-LIST-5** Upper and lower case and accents are ignored (é = e); look-alike letters from other alphabets count as their Latin letters. Languages without spaces between words are out of scope.
@@ -561,7 +573,7 @@ old names keep working for a while.
 - **R-PHRASE-7** A bridge skips up to 20 words, or none, between two terms of different word sets: `[big-, strong] [-gorilla, cat]` matches "big and long gorilla" and "big gorilla". The skipped part may hold commas but stays in one sentence (no `.` `!` `?`), and the order is fixed: `big-` before `-gorilla`.
 - **R-PHRASE-8** A bridge needs both ends: `-gorilla` matches only after a `term-` of another word set, so `[-gorilla, cat] [jumping, river]` doesn't match "jumping gigantic gorilla". A phrase with a one-ended bridge is refused when entered. A middle link (`-strong-`) needs at least three word sets.
 - **R-PHRASE-9** Each action of a phrase set has a threshold: how many different phrases of the set must match (default 1). Phrase sets have no hit count and no rate.
-- **R-PHRASE-10** Phrase sets can be exported, imported, kept as clusters and shipped as categories; they take no part in recording.
+- **R-PHRASE-10** Phrase sets can be exported, imported and kept as clusters; they take no part in recording.
 - **R-TITLE-1** Window title entries never apply to browsers.
 
 **Bypass prevention**
@@ -637,6 +649,23 @@ Made with the owner. Newest last.
   only, nothing editable) and also cuts the internet connection (Wi-Fi off,
   Ethernet down, firewall drop-all), so another program can't be used to get
   around it.
+- 2026-11-14: A hotkey's lock is confirmed once, when the hotkey is added
+  (R-LOCK-12); pressing the hotkey then sets it without asking, since a
+  pressed hotkey has no terminal.
+- 2026-11-14 (replaces the entry above): each hotkey has its own option
+  "Run without confirmation". Off, pressing a hotkey with a lock asks in a
+  desktop dialog before anything is locked; on, its lock is confirmed only
+  when the hotkey is set up. Monk mode started automatically (a bypass
+  prevention step, a list's or phrase set's `monk` action) asks nothing when
+  it starts: setting up such a step or action needs ticking "I know this will
+  not ask for confirmation".
+
+- 2026-11-14: Word combinations become phrases once: each box a word set,
+  its `:N` (several words from one box) dropped; a phrase set's threshold of
+  different phrases does that job. The new phrase sets start at threshold 1.
+- 2026-11-14: No categories: KC9K ships no ready-made lists or phrase sets
+  (the 14 lists behind `block create --template` go too). Users build
+  their own and keep them as clusters.
 
 ## 7. Open decisions
 

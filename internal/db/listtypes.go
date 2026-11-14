@@ -6,6 +6,11 @@
 // the url tick; a new term list "<name> terms" gets the title and text ticks
 // with the same entries and actions (and test mode). Together they match
 // exactly what the one list did. Clusters are split the same way.
+//
+// Only lists and clusters without a type (from before types) are split;
+// fillListTypes then gives every list and cluster its type, so a term list
+// that looks at the url and the page later is left alone, and so is a
+// phrase cluster.
 package db
 
 import (
@@ -17,6 +22,15 @@ import (
 )
 
 func migrateListTypes(conn *sql.DB) error {
+	// Nothing left without a type: don't write on every start. A
+	// transaction that reads and then writes fails at once with "database
+	// is locked" when another command wrote in between, so two commands
+	// starting together (the interface reads the state every 5 s) collided.
+	var pending bool
+	if err := conn.QueryRow(`SELECT EXISTS(SELECT 1 FROM web_lists WHERE type = '')
+		OR EXISTS(SELECT 1 FROM clusters WHERE type = '')`).Scan(&pending); err == nil && !pending {
+		return nil
+	}
 	tx, err := conn.Begin()
 	if err != nil {
 		return err
@@ -62,7 +76,7 @@ func migrateListTypes(conn *sql.DB) error {
 	}
 
 	lists, err := read(`SELECT id, block_id, kind, name, in_title, in_text FROM web_lists
-		WHERE in_url = 1 AND (in_title = 1 OR in_text = 1) ORDER BY id`)
+		WHERE type = '' AND in_url = 1 AND (in_title = 1 OR in_text = 1) ORDER BY id`)
 	if err != nil {
 		return fmt.Errorf("list types: %w", err)
 	}
@@ -78,7 +92,7 @@ func migrateListTypes(conn *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		res, err := tx.Exec("INSERT INTO web_lists (block_id, kind, name, in_url, in_title, in_text) VALUES (?, ?, ?, 0, ?, ?)",
+		res, err := tx.Exec("INSERT INTO web_lists (block_id, kind, name, in_url, in_title, in_text, type) VALUES (?, ?, ?, 0, ?, ?, 'term')",
 			l.owner, l.kind, freeListName(l.name+" terms", taken), l.title, l.text)
 		if err != nil {
 			return fmt.Errorf("list types: %w", err)
@@ -110,7 +124,7 @@ func migrateListTypes(conn *sql.DB) error {
 	}
 
 	clusters, err := read(`SELECT id, 0, '', name, in_title, in_text FROM clusters
-		WHERE in_url = 1 AND (in_title = 1 OR in_text = 1) ORDER BY id`)
+		WHERE type = '' AND phrases = 0 AND in_url = 1 AND (in_title = 1 OR in_text = 1) ORDER BY id`)
 	if err != nil {
 		return fmt.Errorf("list types: %w", err)
 	}
@@ -119,7 +133,7 @@ func migrateListTypes(conn *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		res, err := tx.Exec("INSERT INTO clusters (name, in_url, in_title, in_text) VALUES (?, 0, ?, ?)",
+		res, err := tx.Exec("INSERT INTO clusters (name, in_url, in_title, in_text, type) VALUES (?, 0, ?, ?, 'term')",
 			freeListName(c.name+" terms", taken), c.title, c.text)
 		if err != nil {
 			return fmt.Errorf("list types: %w", err)
@@ -133,5 +147,21 @@ func migrateListTypes(conn *sql.DB) error {
 			return err
 		}
 	}
+	if err := fillListTypes(tx); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+// fillListTypes gives lists and clusters without a type the one their
+// places meant before types: the address alone is an address list, anything
+// else a term list (R-PHRASE-6 lets a term list look at the url too).
+func fillListTypes(q querier) error {
+	for _, table := range []string{"web_lists", "clusters"} {
+		if _, err := q.Exec(`UPDATE ` + table + ` SET type = CASE WHEN in_url = 1 AND in_title = 0 AND in_text = 0
+			THEN 'address' ELSE 'term' END WHERE type = ''`); err != nil {
+			return fmt.Errorf("list types: %w", err)
+		}
+	}
+	return nil
 }

@@ -40,6 +40,9 @@ func upgradeSchema(conn *sql.DB) error {
 		{"active_blocks", "delay_until", "INTEGER NOT NULL DEFAULT 0"},
 		{"active_blocks", "relock", "INTEGER NOT NULL DEFAULT 0"},
 		{"active_blocks", "lifted_until", "INTEGER NOT NULL DEFAULT 0"},
+		{"clusters", "phrases", "BOOLEAN NOT NULL DEFAULT 0"},
+		{"web_lists", "type", "TEXT NOT NULL DEFAULT ''"},
+		{"clusters", "type", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {
@@ -52,6 +55,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateFreezeScheduleLocks(conn); err != nil {
 		return err
 	}
+	if err := migrateHotkeys(conn); err != nil {
+		return err
+	}
 	if err := migrateTamperClock(conn); err != nil {
 		return err
 	}
@@ -59,6 +65,9 @@ func upgradeSchema(conn *sql.DB) error {
 		return err
 	}
 	if err := migrateListTypes(conn); err != nil {
+		return err
+	}
+	if err := migrateCombinations(conn); err != nil {
 		return err
 	}
 	return migrateMonkMode(conn)

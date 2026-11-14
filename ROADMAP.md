@@ -56,8 +56,9 @@ Last checked against the code: 2026-11-13.
 - [ ] **Lists by type** (§3.2): address and term lists are built (a list
       can't look at the address and the page both; upgrading split mixed
       lists and clusters losslessly into `<name>` and `<name> terms`).
-      Left: search lists (a new type), and a term list's url scope
-      (terms in the decoded address, R-PHRASE-6). (M)
+      Done: a term list's url scope (R-PHRASE-6: `type` column on lists
+      and clusters, `list create --terms`, `url_terms` in the rules,
+      `kc9kUrlWords` in `match.js`). Left: search lists (a new type). (M)
 - [ ] **Project** (§3.13): *backup* (with places and place rules) and
       *share* (`--share`, without them) are built, with a preview on import
       and new names for taken block names. A backup still leaves out
@@ -69,7 +70,7 @@ Last checked against the code: 2026-11-13.
       `cluster scope` (alias `where`), `break text` (alias `relock`).
       Also done: `kc9k allowance` (alias `quota`), `break reward` (alias
       `allowance`) and their messages. Left: option (behaviour setting),
-      template (category), active for enforcing, and `README.md` prose. (S)
+      active for enforcing, and `README.md` prose. (S)
 - [ ] **Page reading is slow on big pages** (principle 9). In every frame,
       `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
       makes the browser lay out the page) every 1.5 s while the page changes,
@@ -107,16 +108,25 @@ Last checked against the code: 2026-11-13.
       - **`/etc/hosts`:** one line per domain; how fast Mint's resolver
         reads a huge hosts file: Unchecked.
       A speed test in `ci/` with 100,000 entries. (M)
-- [ ] **Phrases** (R-PHRASE-1 to 10): today's word combinations sit inside
-      title and text lists, need every box, take several words from one box
-      (`:N`), and have no length, bridges, URL scope or phrase sets. Rebuild
-      them as phrase sets. Done: the matcher (`kc9kPhraseMatcher`,
+- [ ] **Phrases** (R-PHRASE-1 to 10): built; left to confirm in real use
+      (section 0.2). Done: the matcher (`kc9kPhraseMatcher`,
       `kc9kPhraseCheck` in `match.js`: word sets, necessary/optional,
       length, one term per set, adjacency, sentence breaks, hyphens and
       apostrophes, bridges and middle links, url scope), tested on SPEC's
-      examples in `ci/match_test.js`. Left: phrase sets in the database,
-      CLI, rules feed and extension, GUI, export/import, clusters and
-      categories, and turning existing combinations into phrases. (L)
+      examples in `ci/match_test.js`. Also done: phrase sets in the
+      database (`db/phrases.go`), `kc9k phrase-set` (tested in
+      `cli/phrases_test.go`: R-PHRASE-1, 8, 9, locks), the rules feed and
+      the extension, and the GUI (a phrase set card per set on the
+      Websites tab, `PhraseDialog`; `ci/gui_phrase_smoke.py`), block and
+      project files, `.txt` export/import, and phrase clusters
+      (`cluster create --phrases`, `save`, `copy`). Existing combinations
+      became phrases (`db/combinations.go`, `migrateCombinations`): each
+      box a word set, `:N` dropped, thresholds 1 (the owner's decision,
+      2026-11-14). Categories are dropped (the owner's decision, same day):
+      the 14 shipped lists and `block create --template` are gone. (L)
+- [ ] **List names differ only in case** (§3.2): `list create b words`
+      succeeds beside `Words`, while lists are looked up without regard to
+      case, so one of them can't be reached. Phrase sets refuse this. (S)
 
 ### 0.2 Not yet confirmed in real use
 
@@ -170,8 +180,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Folder entry | Partial | programs inside it are closed; windows showing it are not |
 | Window title entry | Built | X11 only; never in browsers (R-TITLE-1) |
 | Rendered term | Built | |
-| Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
-| Phrase set | Not built | |
+| Phrase (formerly word combination) | Built | phrase sets; old combinations moved into them once (one-box ones and those in exception lists stay) |
+| Phrase set | Built | `kc9k phrase-set`, rules feed, extension, GUI, block/project files, `.txt` |
 
 ### §3.2 Grouping
 
@@ -180,9 +190,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Block, list, scope, blacklist, exception list | Built | |
 | Allowlist block | Built | `block create --allowlist` |
 | Cluster | Built | |
-| Category | Partial | 14 shipped lists, offered only when creating a block (`--template`) |
 | Address, term and search lists | Partial | address and term lists; search lists: Not built |
-| Phrase sets in clusters and categories | Not built | |
+| Phrase sets in clusters | Built | `cluster create --phrases`, `cluster save`, `cluster copy` |
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |
 | Social preset, allowed playlist | Built | see 0.2 |
@@ -203,7 +212,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Timer lock (`--for`, `--until`) | Built | follows trusted time; over 24 h asks to confirm (`--yes`); only a schedule ends a block it started |
+| Timer lock (`--for`, `--until`) | Built | follows trusted time; confirmed when set (R-LOCK-12); only a schedule ends a block it started |
 | Text lock | Built | random characters, random words (`--lock-words`) or custom text (`--lock-text`), 1–5000 |
 | Range lock | Not built | |
 | Delay lock | Built | `start --delay`, 1 min to 40 days, counted from `unlock` |
@@ -241,8 +250,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Built | list actions wait 60 s after the notice; scheduled freezes are announced at 5 min and 1 min |
 | Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |
-| Confirmation when any lock is set (R-LOCK-12) | Gap | only timer locks over 24 h ask today; every lock kind, on every target, must ask |
-| Monk mode | Gap | built as the system-owned block `monk-mode`; SPEC now says it is a fixed mode, not a block (R-MONK-1), and also cuts the whole internet connection three ways (R-MONK-2): Not built |
+| Confirmation when any lock is set (R-LOCK-12) | Partial | CLI: every lock on blocks, schedule locks, strict, browser options, bypass prevention, freeze schedules and project import asks (`confirmLocks`, `cli/confirm.go`; `--yes` for scripts). GUI: one dialog, `confirm_lock`, in every lock dialog (start, schedule lock, setting locks, bypass prevention, freeze schedules, project import; a dry run lists the file's locks). Hotkeys: confirmed at `hotkey add`, and at each press by a desktop dialog (zenity) unless `--no-confirm` ("Run without confirmation"). Automatic monk mode (bypass prevention step, list or phrase set `monk` action) needs `--no-confirm-ok` / the GUI tick when set up; project import of such steps or actions: Unchecked. Monk mode started by `kc9k monk`: not confirmed yet |
+| Monk mode (R-MONK-1, R-MONK-2) | Built, live test pending | a mode with its own end time, no block; migrates the old block; three cuts held every cycle and restored (unit tests with fake devices). **Not yet tested live** on a real machine (`ci/monk_live_test.sh` is not written), nor a reboot in the middle. `kc9k monk` is not yet confirmed (R-LOCK-12) |
 | Consequences | Built | `enforce/consequence.go` |
 | Strict mode | Partial | a voluntary switch with its own setting lock (`kc9k strict on --for …`, `strict unlock`). Exempt folders: Not built |
 | Recovery of a forgotten password (§3.11) | Partial | root can remove it while nothing is locked |
@@ -261,7 +270,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Threshold, hit count (rendered terms) | Built | per action; both must be met (R-LIST-6) |
 | Strongest action across blocks | Unchecked | close tab, image, redirect, block page is built within a page |
 | Matching details (R-LIST-4, R-LIST-5) | Unchecked | case is ignored; accents, look-alike letters, hidden text, frames: Unchecked |
-| Threshold (phrase sets) | Not built | |
+| Threshold (phrase sets) | Built | per action, different phrases (R-PHRASE-9); no hit count, no rate |
 | Rate | Not built | |
 | Ad trigger | Not built | section 2.2 |
 
@@ -288,7 +297,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Hotkeys | Built | Cinnamon tried; GNOME see 0.2 |
 | Project export / import | Partial | backup and share; see 0.1 |
 | `.deb` package | Not built | |
-| Circadian rhythm | Not built | section 2.1 |
+| Circadian rhythm | Built | `kc9k circadian`, the Circadian Rhythm page; see 2.1 for what was and wasn't tried on real hardware |
 
 ### §4 Functions (interface)
 
@@ -303,7 +312,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | 4.10 Preferences | Partial | theme light / dark / system; 24-hour clock, first day, darkness slider, open at login: Unchecked; tray: Not built |
 | 4.10 Notifications | Partial | fixed 5 minutes ahead; choosing which and when: Not built |
 | 4.10 Protection settings | Partial | close browsers without the extension (grace fixed at 60 s) is built; the others: Not built |
-| 4.10 Dark pages (part of circadian rhythm) | Not built | the `dark` action exists per list |
+| 4.10 Dark pages (part of circadian rhythm) | Built | `kc9k circadian dark-pages`, exempt sites; `ci/circadian_test.py` |
 
 ---
 
@@ -313,13 +322,26 @@ After section 0. Each item's details are in `SPEC.md`; here only the steps.
 
 ### 2.1 Circadian rhythm (L) — §4.10
 
-- [ ] Time of day model (morning, afternoon, evening, night, user-set
-      times), reusing `internal/schedule/`.
-- [ ] Blue light filter (Cinnamon's night light), screen brightness
-      (`/sys/class/backlight`; something else for external screens),
-      wallpaper (`org.cinnamon.desktop.background`), GTK colour scheme,
-      the `dark` action on every page during chosen hours.
-- [ ] Each lockable like a browser setting.
+- [x] Automation clips for backlight, software brightness and colour
+      temperature (`internal/circadian/`), with presets.
+- [x] The engine (`enforce/circadian.go`, its own goroutine in the daemon):
+      `/sys/class/backlight`, external screens through DDC/CI (`ddcutil`),
+      gamma ramps over RandR, wallpaper and dark mode through gsettings
+      (Cinnamon, GNOME, MATE). It never overrides the user: a manual change
+      pauses the clip until its next point or `kc9k circadian resume`.
+- [x] `kc9k circadian …` and the Circadian Rhythm page (clip editors,
+      wallpapers, dark mode, dark pages, warnings).
+- [x] Dark pages in the extension (`rules.dark`), with exempt sites.
+- [ ] Not tried on real hardware: a laptop's built-in backlight (unit tests
+      through replaceable vars only; the test machine is a desktop), GNOME
+      and MATE, more than one screen. Wayland has no gamma ramps to set:
+      software brightness and colour temperature do nothing there (the page
+      says so).
+- [ ] Dark pages that follow the *system's* setting rely on the browser's
+      `prefers-color-scheme`, which LibreWolf's fingerprinting protection
+      reports as light. With dark mode set by KC9K (always dark, or light
+      between two times) the daemon decides and it works everywhere.
+- [ ] Circadian settings are not part of `kc9k project export` yet (S).
 
 ### 2.2 Ads as a trigger (M) — §3.9
 

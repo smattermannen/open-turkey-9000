@@ -131,7 +131,7 @@ func strictOff(database *db.DB) error {
 // strictUnlock lifts strict mode's text or password lock. Strict mode stays
 // on: the lock is only lifted (§3.4).
 func strictUnlock(database *db.DB) error {
-	s, relocked, err := unlockSetting(database, enforce.StrictLockName, "strict mode",
+	s, relocked, rest, err := unlockSetting(database, enforce.StrictLockName, "strict mode",
 		"strict mode is not locked by a text or password lock")
 	if err != nil {
 		return err
@@ -139,9 +139,14 @@ func strictUnlock(database *db.DB) error {
 	if relocked {
 		fmt.Printf("Strict mode is unlocked for %s; then its locks are on again (re-lock). 'kc9k strict off' turns it off meanwhile.\n",
 			time.Duration(s.lock.Relock)*time.Second)
+	}
+	if len(rest) > 0 {
+		nextSettingLock("strict mode", s, rest, "kc9k strict unlock")
 		return nil
 	}
-	fmt.Println("Strict mode is unlocked; it stays on until you turn it off.")
+	if !relocked {
+		fmt.Println("Strict mode is unlocked; it stays on until you turn it off.")
+	}
 	return nil
 }
 
@@ -273,5 +278,6 @@ func init() {
 	strictCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(strictCmd)
 	addRelockFlag(strictCmd)
+	trackLockFlagOrder(strictCmd)
 	rootCmd.AddCommand(strictCmd, noEscapeCmd)
 }

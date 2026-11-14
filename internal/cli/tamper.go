@@ -153,5 +153,6 @@ func init() {
 	addTextLockFlags(tamperCmd)
 	addRelockFlag(tamperCmd)
 	addYesFlag(tamperCmd)
+	trackLockFlagOrder(tamperCmd)
 	rootCmd.AddCommand(tamperCmd)
 }

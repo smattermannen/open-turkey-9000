@@ -164,37 +164,52 @@ func loadSettingLock(database *db.DB, name string) (settingLockState, error) {
 		return settingLockState{}, err
 	}
 	l, err := database.GetSettingLock(name)
-	return settingLockState{lock: l, trusted: trusted, bootID: bootID}, err
+	if err != nil {
+		return settingLockState{}, err
+	}
+	// Layered locks (R-LOCK-6): start the lock after any that are gone.
+	if l.Advance(trusted, bootID) {
+		if err := database.SetSettingLock(l); err != nil {
+			return settingLockState{}, err
+		}
+	}
+	return settingLockState{lock: l, trusted: trusted, bootID: bootID}, nil
 }
 
 // describe lists the locks in force, e.g. "locked until 2026-11-07 15:00,
 // typing challenge"; "" when unlocked.
 func (s settingLockState) describe() string {
 	var parts []string
-	if s.lock.TimeLocked(s.trusted) {
-		parts = append(parts, "until "+time.Unix(s.lock.LockedUntil, 0).Format("2006-01-02 15:04"))
-	}
-	if s.lock.RestartLocked(s.bootID) {
-		parts = append(parts, "until restart")
-	}
-	if s.lock.TextOrPasswordLocked(s.trusted) {
-		if s.lock.LockChars > 0 {
+	for _, k := range s.lock.LayersOn(s.trusted, s.bootID) {
+		switch k {
+		case db.LayerTimer:
+			if s.lock.TimerAfter > 0 {
+				parts = append(parts, fmt.Sprintf("timer %s after the locks before it", time.Duration(s.lock.TimerAfter)*time.Second))
+			} else {
+				parts = append(parts, "until "+time.Unix(s.lock.LockedUntil, 0).Format("2006-01-02 15:04"))
+			}
+		case db.LayerRestart:
+			parts = append(parts, "until restart")
+		case db.LayerText:
 			parts = append(parts, fmt.Sprintf("typing challenge (%d chars)", s.lock.LockChars))
-		}
-		if s.lock.PasswordHash != "" {
+		case db.LayerPassword:
 			parts = append(parts, "password")
 		}
-		if s.lock.Relock > 0 {
-			parts = append(parts, "re-lock "+(time.Duration(s.lock.Relock)*time.Second).String())
-		}
 	}
-	if s.lock.PendingRelock(s.trusted) {
+	if s.lock.Relock > 0 && s.lock.TextOrPasswordLocked(s.trusted) {
+		parts = append(parts, "re-lock "+(time.Duration(s.lock.Relock)*time.Second).String())
+	}
+	if s.lock.PendingRelock(s.trusted) && s.lock.LiftedUntil > s.trusted {
 		parts = append(parts, "unlocked: on again at "+time.Unix(s.lock.LiftedUntil, 0).Format("2006-01-02 15:04"))
 	}
 	if len(parts) == 0 {
 		return ""
 	}
-	return "locked: " + strings.Join(parts, ", ")
+	sep := ", "
+	if len(s.lock.LayersOn(s.trusted, s.bootID)) > 1 {
+		sep = " → " // unlocked in this order (R-LOCK-6)
+	}
+	return "locked: " + strings.Join(parts, sep)
 }
 
 func listBrowserSettings(database *db.DB) error {
@@ -248,6 +263,7 @@ func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.
 			return want, fmt.Errorf("--for duration must be positive")
 		}
 		want.LockedUntil = now.Add(d).Unix()
+		want.TimerAfter = int64(d / time.Second)
 	case untilClock != "":
 		t, err := untilToday(now, untilClock)
 		if err != nil {
@@ -255,6 +271,7 @@ func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.
 		}
 		want.LockedUntil = t.Unix()
 	}
+	want.Order = strings.Join(lockKindsInOrder(cmd), ",")
 	if want.LockedUntil != 0 {
 		trusted, err := database.TrustedNow(now)
 		if err != nil {
@@ -319,55 +336,100 @@ func addRelockFlag(cmds ...*cobra.Command) {
 // strengthenSettingLock merges the requested locks into the current ones. It
 // only ever makes the lock stronger: an earlier end, a shorter challenge or a
 // new password over an existing one is refused. Locks that have run out are
-// dropped. changes describes what was added.
+// dropped. New locks go last, in the order their flags were given
+// (want.Order, R-LOCK-6/7); a timer lock for a duration (want.TimerAfter)
+// behind a lock still on waits for it, and so does a restart lock. changes
+// describes what was added.
 func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven bool) (db.SettingLock, []string, error) {
 	next := cur.lock
 	name := next.Name
-	if !next.TimeLocked(cur.trusted) {
+	trusted, boot := cur.trusted, cur.bootID
+	next.Advance(trusted, boot)
+	if next.LockedUntil <= trusted && next.TimerAfter == 0 {
 		next.LockedUntil = 0
 	}
-	if !next.RestartLocked(cur.bootID) {
+	if next.RestartBoot != "" && !next.RestartLocked(boot) {
 		next.RestartBoot = ""
 	}
-	var changes []string
-	if !next.PendingRelock(cur.trusted) {
-		next.LiftedUntil = 0
-	} else if want.LockChars > 0 || want.PasswordHash != "" {
+	if next.PendingRelock(trusted) && (want.LockChars > 0 || want.PasswordHash != "") {
 		// Unlocked with re-lock: a new text or password lock replaces the
 		// lifted ones and holds at once.
-		next.LockChars, next.Style, next.PasswordHash, next.Relock, next.LiftedUntil = 0, "", "", 0, 0
+		next.LockChars, next.Style, next.PasswordHash, next.Relock, next.LiftedUntil, next.LiftedKinds = 0, "", "", 0, 0, ""
 	}
-	if want.LockedUntil != 0 {
-		if want.LockedUntil <= next.LockedUntil {
-			return next, nil, fmt.Errorf("%s is already locked until %s; a timer lock can only be extended", name, time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
+	order := next.Layers()
+	kinds := db.ParseLayerOrder(want.Order)
+	kinds = db.AppendLayers(kinds, db.LayerTimer, db.LayerText, db.LayerPassword, db.LayerRestart)
+	anyOn := func() bool { return len(next.LayersOn(trusted, boot)) > 0 }
+	var changes []string
+	for _, kind := range kinds {
+		switch kind {
+		case db.LayerTimer:
+			if want.LockedUntil == 0 {
+				continue
+			}
+			switch {
+			case next.TimerAfter > 0:
+				if want.TimerAfter == 0 {
+					return next, nil, fmt.Errorf("%s has a timer lock that counts from unlocking the locks before it; extend it with --for", name)
+				}
+				if want.TimerAfter <= next.TimerAfter {
+					return next, nil, fmt.Errorf("%s already has a timer lock of %s after the locks before it; a timer lock can only be extended", name, time.Duration(next.TimerAfter)*time.Second)
+				}
+				next.TimerAfter = want.TimerAfter
+				changes = append(changes, "timer lock of "+(time.Duration(next.TimerAfter)*time.Second).String()+" after the locks before it")
+			case next.LockedUntil != 0:
+				if want.LockedUntil <= next.LockedUntil {
+					return next, nil, fmt.Errorf("%s is already locked until %s; a timer lock can only be extended", name, time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
+				}
+				next.LockedUntil = want.LockedUntil
+				changes = append(changes, "locked until "+time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
+			case want.TimerAfter > 0 && anyOn():
+				next.TimerAfter = want.TimerAfter
+				order = db.AppendLayers(order, db.LayerTimer)
+				changes = append(changes, "timer lock of "+(time.Duration(next.TimerAfter)*time.Second).String()+" after the locks before it")
+			default:
+				next.LockedUntil = want.LockedUntil
+				order = db.AppendLayers(order, db.LayerTimer)
+				changes = append(changes, "locked until "+time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
+			}
+		case db.LayerText:
+			if want.LockChars == 0 {
+				continue
+			}
+			switch {
+			case next.LockChars == 0:
+				next.LockChars, next.Style = want.LockChars, want.Style
+				order = db.AppendLayers(order, db.LayerText)
+				changes = append(changes, "text lock: "+lock.DescribeStyle(next.Style, next.LockChars))
+			case want.Style != next.Style:
+				return next, nil, fmt.Errorf("%s already has a text lock (%s); its kind can't change while locked", name, lock.DescribeStyle(next.Style, next.LockChars))
+			case charsGiven && want.LockChars > next.LockChars:
+				next.LockChars = want.LockChars
+				changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", next.LockChars))
+			case charsGiven && want.LockChars < next.LockChars:
+				return next, nil, fmt.Errorf("%s already has a %d-character challenge; it can't be shortened", name, next.LockChars)
+			}
+		case db.LayerPassword:
+			if want.PasswordHash == "" {
+				continue
+			}
+			if next.PasswordHash != "" {
+				return next, nil, fmt.Errorf("%s already has a password; it can't be replaced while locked", name)
+			}
+			next.PasswordHash = want.PasswordHash
+			order = db.AppendLayers(order, db.LayerPassword)
+			changes = append(changes, "password")
+		case db.LayerRestart:
+			if want.RestartBoot == "" || next.RestartBoot != "" {
+				continue
+			}
+			next.RestartBoot = want.RestartBoot
+			if anyOn() {
+				next.RestartBoot = db.RestartPending
+			}
+			order = db.AppendLayers(order, db.LayerRestart)
+			changes = append(changes, "until restart")
 		}
-		next.LockedUntil = want.LockedUntil
-		changes = append(changes, "locked until "+time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
-	}
-	if want.LockChars > 0 {
-		switch {
-		case next.LockChars == 0:
-			next.LockChars, next.Style = want.LockChars, want.Style
-			changes = append(changes, "text lock: "+lock.DescribeStyle(next.Style, next.LockChars))
-		case want.Style != next.Style:
-			return next, nil, fmt.Errorf("%s already has a text lock (%s); its kind can't change while locked", name, lock.DescribeStyle(next.Style, next.LockChars))
-		case charsGiven && want.LockChars > next.LockChars:
-			next.LockChars = want.LockChars
-			changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", next.LockChars))
-		case charsGiven && want.LockChars < next.LockChars:
-			return next, nil, fmt.Errorf("%s already has a %d-character challenge; it can't be shortened", name, next.LockChars)
-		}
-	}
-	if want.PasswordHash != "" {
-		if next.PasswordHash != "" {
-			return next, nil, fmt.Errorf("%s already has a password; it can't be replaced while locked", name)
-		}
-		next.PasswordHash = want.PasswordHash
-		changes = append(changes, "password")
-	}
-	if want.RestartBoot != "" && next.RestartBoot == "" {
-		next.RestartBoot = want.RestartBoot
-		changes = append(changes, "until restart")
 	}
 	if want.Relock > 0 {
 		switch {
@@ -381,6 +443,7 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 			return next, nil, fmt.Errorf("%s re-locks %s after unlocking; that can't be made longer while locked", name, time.Duration(next.Relock)*time.Second)
 		}
 	}
+	next.Order = strings.Join(order, ",")
 	return next, changes, nil
 }
 
@@ -398,6 +461,9 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 	if next.LockedUntil != old.LockedUntil {
 		locks = append(locks, lockToSet{target, "timer lock", timerLength(cur.trusted, next.LockedUntil)})
 	}
+	if next.TimerAfter != old.TimerAfter {
+		locks = append(locks, lockToSet{target, "timer lock", (time.Duration(next.TimerAfter)*time.Second).String() + ", counting from when the locks before it are unlocked"})
+	}
 	if next.LockChars != old.LockChars {
 		length := ""
 		if old.LockChars > 0 {
@@ -409,7 +475,14 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 		locks = append(locks, lockToSet{target, "password lock", ""})
 	}
 	if next.RestartBoot != old.RestartBoot {
-		locks = append(locks, lockToSet{target, "restart lock", "until the computer restarts"})
+		length := "until the computer restarts"
+		if next.RestartBoot == db.RestartPending {
+			length = "until a restart after the locks before it are unlocked"
+		}
+		locks = append(locks, lockToSet{target, "restart lock", length})
+	}
+	if order := next.Layers(); len(order) > 1 {
+		locks = append(locks, lockToSet{target, "unlock order", strings.Join(order, " → ")})
 	}
 	if next.Relock != old.Relock {
 		locks = append(locks, lockToSet{target, "re-lock", (time.Duration(next.Relock) * time.Second).String() + " after unlocking"})
@@ -458,6 +531,9 @@ func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
 // refuseWhileHeld returns why a setting can't be turned off by unlocking it,
 // or nil. Time and restart locks can only be waited out.
 func (s settingLockState) refuseWhileHeld(name string) error {
+	if s.lock.TimerAfter > 0 {
+		return fmt.Errorf("%s has a timer lock of %s that starts once the locks before it are unlocked", name, time.Duration(s.lock.TimerAfter)*time.Second)
+	}
 	if s.lock.TimeLocked(s.trusted) {
 		return fmt.Errorf("%s is locked until %s and can't be turned off before then", name, time.Unix(s.lock.LockedUntil, 0).Format("2006-01-02 15:04"))
 	}
@@ -528,7 +604,7 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 	if !enforce.IsLockableSetting(name) {
 		return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))
 	}
-	s, relocked, err := unlockSetting(database, name, name,
+	s, relocked, rest, err := unlockSetting(database, name, name,
 		fmt.Sprintf("%s is not locked. Use '%s'", name, settingCommand(name, "off")))
 	if err != nil {
 		return err
@@ -536,6 +612,12 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 	if relocked {
 		fmt.Printf("%s is unlocked for %s and stays on; then its locks are on again (re-lock). '%s' turns it off meanwhile.\n",
 			name, time.Duration(s.lock.Relock)*time.Second, settingCommand(name, "off"))
+	}
+	if len(rest) > 0 {
+		nextSettingLock(name, s, rest, settingCommand(name, "unlock"))
+		return nil
+	}
+	if relocked {
 		return nil
 	}
 	if err := refuseForBlocks(database, name, s.trusted); err != nil {
@@ -553,38 +635,38 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 	return nil
 }
 
-// unlockSetting lifts a setting's text and password locks (setting lock
-// name, shown as label): it asks for the settings password, refuses while
-// a timer or restart lock holds, asks for the lock password and runs the
-// challenge. Without re-lock the locks are removed; with re-lock they are
-// lifted for that long (relocked true), then on again (§3.4).
-func unlockSetting(database *db.DB, name, label, notLocked string) (settingLockState, bool, error) {
+// unlockSetting unlocks the first of a setting's locks still on (setting
+// lock name, shown as label; R-LOCK-6): it asks for the settings password,
+// refuses while that first lock is a timer or restart lock, asks for the
+// lock password or runs the challenge. Without re-lock the lock is gone;
+// with re-lock it is lifted (relocked true once text and password are both
+// lifted), then on again (§3.4). rest are the locks still on after it.
+func unlockSetting(database *db.DB, name, label, notLocked string) (s settingLockState, relocked bool, rest []string, err error) {
 	if err := requireSettingsPassword(database); err != nil {
-		return settingLockState{}, false, err
+		return s, false, nil, err
 	}
-	s, err := loadSettingLock(database, name)
-	if err != nil {
-		return s, false, err
+	if s, err = loadSettingLock(database, name); err != nil {
+		return s, false, nil, err
 	}
-	if err := s.refuseWhileHeld(label); err != nil {
-		return s, false, refused(database, "", err)
+	on := s.lock.LayersOn(s.trusted, s.bootID)
+	if len(on) == 0 {
+		return s, false, nil, errors.New(notLocked)
 	}
-	if !s.lock.TextOrPasswordLocked(s.trusted) {
-		return s, false, errors.New(notLocked)
-	}
-	if s.lock.PasswordHash != "" {
+	switch on[0] {
+	case db.LayerTimer, db.LayerRestart:
+		return s, false, nil, refused(database, "", s.refuseWhileHeld(label))
+	case db.LayerPassword:
 		password, err := readPasswordStdin("Setting password")
 		if err != nil {
-			return s, false, err
+			return s, false, nil, err
 		}
 		if !db.CheckPassword(s.lock.PasswordHash, password) {
-			return s, false, refused(database, "", fmt.Errorf("wrong password; %s stays locked", label))
+			return s, false, nil, refused(database, "", fmt.Errorf("wrong password; %s stays locked", label))
 		}
-	}
-	if s.lock.LockChars > 0 {
+	case db.LayerText:
 		ok, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
 		if err != nil {
-			return s, false, fmt.Errorf("failed to run the typing challenge: %w", err)
+			return s, false, nil, fmt.Errorf("failed to run the typing challenge: %w", err)
 		}
 		if !ok {
 			_ = refused(database, "", fmt.Errorf("failed the unlock challenge"))
@@ -592,11 +674,25 @@ func unlockSetting(database *db.DB, name, label, notLocked string) (settingLockS
 			os.Exit(1)
 		}
 	}
-	if s.lock.Relock > 0 {
-		s.lock.LiftedUntil = s.trusted + s.lock.Relock
-		return s, true, database.SetSettingLock(s.lock)
+	s.lock.LiftTextLayer(on[0], s.trusted, s.bootID)
+	rest = s.lock.LayersOn(s.trusted, s.bootID)
+	relocked = s.lock.Relock > 0 && s.lock.LiftedUntil > s.trusted
+	if len(rest) == 0 && !relocked {
+		return s, false, nil, database.ClearSettingLock(name)
 	}
-	return s, false, database.ClearSettingLock(name)
+	return s, relocked, rest, database.SetSettingLock(s.lock)
+}
+
+// nextSettingLock says which lock holds a setting after one was unlocked.
+func nextSettingLock(label string, s settingLockState, rest []string, unlockCmd string) {
+	switch rest[0] {
+	case db.LayerTimer:
+		fmt.Printf("%s: next, its timer lock until %s.\n", label, time.Unix(s.lock.LockedUntil, 0).Format("2006-01-02 15:04"))
+	case db.LayerRestart:
+		fmt.Printf("%s: next, its restart lock, until the computer restarts.\n", label)
+	default:
+		fmt.Printf("%s: next, its %s ('%s').\n", label, db.LayerName(rest[0]), unlockCmd)
+	}
 }
 
 func init() {
@@ -609,5 +705,6 @@ func init() {
 	addTextLockFlags(browserCmd)
 	addRelockFlag(browserCmd)
 	addYesFlag(browserCmd)
+	trackLockFlagOrder(browserCmd)
 	rootCmd.AddCommand(browserCmd)
 }

@@ -170,6 +170,34 @@ func AdvanceLayers(detail *BlockDetail, e *LockExtras, trusted int64, bootID str
 	return changed
 }
 
+// LiftTextLayer unlocks a text or password lock (kind). Without re-lock it
+// is gone. With re-lock it is lifted: while the other of the two still
+// holds, until that one is unlocked too; then both for the re-lock time.
+// The next layer is started (AdvanceLayers).
+func LiftTextLayer(detail *BlockDetail, e *LockExtras, kind string, trusted int64, bootID string) {
+	if e.Relock > 0 {
+		lifted := ParseLayerOrder(e.LiftedKinds)
+		if len(lifted) == 0 && e.LiftedUntil > trusted {
+			lifted = []string{LayerText, LayerPassword}
+		}
+		lifted = AppendLayers(lifted, kind)
+		e.LiftedKinds = strings.Join(lifted, ",")
+		e.LiftedUntil = 0
+		other := LayerPassword
+		if kind == LayerPassword {
+			other = LayerText
+		}
+		if !LayerOn(other, detail, *e, trusted, bootID) {
+			e.LiftedUntil = trusted + e.Relock
+		}
+	} else if kind == LayerText {
+		detail.Locked, detail.LockChars, e.Style = false, 0, ""
+	} else {
+		e.PasswordHash = ""
+	}
+	AdvanceLayers(detail, e, trusted, bootID)
+}
+
 // SaveLayers stores what AdvanceLayers changed on an active block.
 func (d *DB) SaveLayers(detail *BlockDetail, e LockExtras) error {
 	if err := d.StrengthenLocks(detail.Name, detail.Locked, detail.LockChars, detail.LockedUntil); err != nil {

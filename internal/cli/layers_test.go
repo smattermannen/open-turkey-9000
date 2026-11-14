@@ -118,3 +118,52 @@ func TestLayeredBlockLocks(t *testing.T) {
 	}
 	mustRun(t, "stop", "b")
 }
+
+// R-LOCK-6/7 on setting locks: unlocked one at a time in the flags' order;
+// a duration timer behind a password counts from its unlocking.
+func TestLayeredSettingLocks(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	if err := runWith(t, 0, []string{"pw"}, "browser", "safesearch", "on", "--password-stdin", "--for", "1h", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	l, _ := d.GetSettingLock("safesearch")
+	if l.LockedUntil != 0 || l.TimerAfter != 3600 || l.Order != "password,timer" {
+		t.Fatalf("lock = %+v", l)
+	}
+	if err := runCLI(t, "browser", "safesearch", "off"); err == nil {
+		t.Error("turned off while locked")
+	}
+	if err := runCLI(t, "browser", "safesearch", "on", "--for", "30m", "--yes"); err == nil {
+		t.Error("waiting timer shortened")
+	}
+	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch"); err != nil {
+		t.Fatal(err)
+	}
+	trusted := mustTrusted(t, d)
+	l, _ = d.GetSettingLock("safesearch")
+	if l.PasswordHash != "" || l.TimerAfter != 0 || l.LockedUntil < trusted+3590 {
+		t.Fatalf("after unlocking the password: %+v (now %d)", l, trusted)
+	}
+	if v, _ := d.GetSetting("browser.safesearch"); v != "on" {
+		t.Error("turned off while its timer lock runs")
+	}
+	if err := runCLI(t, "browser", "unlock", "safesearch"); err == nil {
+		t.Error("unlocked during the timer lock")
+	}
+
+	// Timer first: the password behind it can't be unlocked yet.
+	if err := runWith(t, 0, []string{"pw"}, "strict", "on", "--for", "1h", "--password-stdin", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, []string{"pw"}, "strict", "unlock"); err == nil {
+		t.Error("strict mode's password unlocked before its timer ran out")
+	}
+	l, _ = d.GetSettingLock(enforce.StrictLockName)
+	l.LockedUntil = trusted - 1 // the timer ran out
+	_ = d.SetSettingLock(l)
+	if err := runWith(t, 0, []string{"pw"}, "strict", "unlock"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "strict", "off")
+}

@@ -156,25 +156,28 @@ type guiBlock struct {
 
 // guiSettingLock is a browser setting's locks for the interface.
 type guiSettingLock struct {
-	Seconds      int64 `json:"lock_seconds"`
-	CharLocked   bool  `json:"char_locked"`
-	Password     bool  `json:"password_locked"`
-	Restart      bool  `json:"restart_locked"`
-	GuardsBlocks bool  `json:"guards_blocks"`
-	Relock       int64 `json:"relock,omitempty"`    // re-lock seconds after unlocking
-	RelockIn     int64 `json:"relock_in,omitempty"` // unlocked: seconds until the locks are on again
+	Seconds      int64    `json:"lock_seconds"`
+	CharLocked   bool     `json:"char_locked"`
+	Password     bool     `json:"password_locked"`
+	Restart      bool     `json:"restart_locked"`
+	GuardsBlocks bool     `json:"guards_blocks"`
+	Relock       int64    `json:"relock,omitempty"`      // re-lock seconds after unlocking
+	RelockIn     int64    `json:"relock_in,omitempty"`   // unlocked: seconds until the locks are on again
+	TimerAfter   int64    `json:"timer_after,omitempty"` // a timer lock counted once the locks before it are unlocked
+	LockOrder    []string `json:"lock_order,omitempty"`  // locks on, in unlock order (R-LOCK-6)
 }
 
 // gui is the setting lock as the interface shows it.
 func (s settingLockState) gui() guiSettingLock {
-	held := s.lock.TextOrPasswordLocked(s.trusted)
-	g := guiSettingLock{CharLocked: held && s.lock.LockChars > 0, Password: held && s.lock.PasswordHash != "",
-		Restart: s.lock.RestartLocked(s.bootID), Relock: s.lock.Relock}
-	if s.lock.PendingRelock(s.trusted) {
-		g.RelockIn = s.lock.LiftedUntil - s.trusted
+	l, t, boot := s.lock, s.trusted, s.bootID
+	g := guiSettingLock{CharLocked: l.LayerOn(db.LayerText, t, boot), Password: l.LayerOn(db.LayerPassword, t, boot),
+		Restart: l.LayerOn(db.LayerRestart, t, boot), Relock: l.Relock, TimerAfter: l.TimerAfter,
+		LockOrder: l.LayersOn(t, boot)}
+	if l.PendingRelock(t) && l.LiftedUntil > t {
+		g.RelockIn = l.LiftedUntil - t
 	}
-	if s.lock.TimeLocked(s.trusted) {
-		g.Seconds = s.lock.LockedUntil - s.trusted
+	if l.LockedUntil > t {
+		g.Seconds = l.LockedUntil - t
 	}
 	return g
 }

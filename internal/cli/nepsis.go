@@ -422,13 +422,19 @@ var nepsisUnlockCmd = &cobra.Command{
 	Short: "Remove the challenge or password lock on the global bypass prevention",
 	Args:  cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		s, relocked, err := unlockSetting(database, db.NepsisLockName, "bypass prevention", "bypass prevention is not locked")
+		s, relocked, rest, err := unlockSetting(database, db.NepsisLockName, "bypass prevention", "bypass prevention is not locked")
 		if err != nil {
 			return err
 		}
 		if relocked {
 			fmt.Printf("Bypass prevention is unlocked for %s; then its locks are on again (re-lock). 'kc9k bypass off' ends that meanwhile.\n",
 				time.Duration(s.lock.Relock)*time.Second)
+		}
+		if len(rest) > 0 {
+			nextSettingLock("bypass prevention", s, rest, "kc9k bypass unlock")
+			return nil
+		}
+		if relocked {
 			return nil
 		}
 		fmt.Println("Bypass prevention is unlocked; it stays on until you change it.")
@@ -458,6 +464,7 @@ func init() {
 	addTextLockFlags(nepsisSetCmd)
 	addRelockFlag(nepsisSetCmd)
 	addYesFlag(nepsisSetCmd)
+	trackLockFlagOrder(nepsisSetCmd)
 	addMonkAckFlag(nepsisSetCmd)
 	addNowFlag(nepsisSetCmd, nepsisOffCmd)
 	nepsisCmd.AddCommand(nepsisSetCmd, nepsisOffCmd, nepsisUnlockCmd)

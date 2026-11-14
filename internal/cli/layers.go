@@ -102,30 +102,8 @@ func describeLayers(layers []string, detail *db.BlockDetail, e db.LockExtras) st
 }
 
 // liftTextLayer unlocks the text or password lock (kind) of an active
-// block. Without re-lock it is gone. With re-lock it is lifted: while
-// another text/password lock still holds, until that one is unlocked too;
-// then all of them for the re-lock time.
+// block (db.LiftTextLayer) and saves it.
 func liftTextLayer(database *db.DB, detail *db.BlockDetail, e *db.LockExtras, kind string, trusted int64, bootID string) error {
-	if e.Relock > 0 {
-		lifted := db.ParseLayerOrder(e.LiftedKinds)
-		if len(lifted) == 0 && e.LiftedUntil > trusted {
-			lifted = []string{db.LayerText, db.LayerPassword}
-		}
-		lifted = db.AppendLayers(lifted, kind)
-		e.LiftedKinds = strings.Join(lifted, ",")
-		e.LiftedUntil = 0
-		other := db.LayerPassword
-		if kind == db.LayerPassword {
-			other = db.LayerText
-		}
-		if !db.LayerOn(other, detail, *e, trusted, bootID) {
-			e.LiftedUntil = trusted + e.Relock
-		}
-	} else if kind == db.LayerText {
-		detail.Locked, detail.LockChars, e.Style = false, 0, ""
-	} else {
-		e.PasswordHash = ""
-	}
-	db.AdvanceLayers(detail, e, trusted, bootID)
+	db.LiftTextLayer(detail, e, kind, trusted, bootID)
 	return database.SaveLayers(detail, *e)
 }

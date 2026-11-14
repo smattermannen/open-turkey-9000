@@ -30,10 +30,10 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   `db/layers.go`, order of the lock flags, `unlock` lifts only the first,
   duration timer and restart behind others count from their unlocking, new
   locks last; the daemon moves layers on; old blocks: timer, restart,
-  password, text, delay). Not built: hardware/internet clock check; active vs
-  enabled (the daemon still activates blocks by schedule); layered order on
-  setting locks (unlocked all at once); choosing the order in the GUI (fixed
-  order). (L)
+  password, text, delay), and on setting locks (browser settings, tamper,
+  strict mode, global ladder). Not built: hardware/internet clock check;
+  active vs enabled (the daemon still activates blocks by schedule); choosing
+  the order in the GUI (fixed order). (L)
 - [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
   silently creates nothing (`create_phrase_set`). Two editors (typed box and
   pop-up `PhraseDialog`, too tall); want only boxes in the card, unlimited
@@ -108,7 +108,7 @@ Only items not simply Built.
 | §3.3 Duplicate starts inactive | Unchecked | |
 | §3.3 `kc9k toggle` | Not built | |
 | §3.4 Range lock | Not built | |
-| §3.4 Layered sequential locks | Partial | blocks built (CLI flag order; GUI fixed order); setting locks unlock all at once; one lock per kind |
+| §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI fixed order; one lock per kind |
 | §3.4 R-LOCK-9 | Partial | extension/other protection: Unchecked |
 | §3.6 Break per block window | Not built | |
 | §3.6 R-SCHED-3 rhythm | Unchecked | |
@@ -158,9 +158,9 @@ Only items not simply Built.
   (`webRequest`); shipped ad-network list per industry.
 - **2.3 No downloads** (S): extension cancels downloads (`downloads` permission).
 - **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted, each lockable.
-- **2.5 Layered sequential locks** (M): blocks done (stored order, `unlock`
-  lifts only the first, status and GUI show the order). Left: setting locks;
-  order chosen in the GUI.
+- **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
+  order, `unlock` lifts only the first, status and GUI show the order). Left:
+  order chosen in the GUI; several locks of one kind.
 - **2.6 Factory reset protection** (M): firmware lock via
   `/sys/class/firmware-attributes/` (password given to a trusted person,
   no USB/network boot, fixed order); installer media guard (block OS image

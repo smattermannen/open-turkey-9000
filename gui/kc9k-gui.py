@@ -189,8 +189,12 @@ def describe_setting_lock(info):
         parts.append("text lock")
     if info.get("password_locked"):
         parts.append("password")
+    if info.get("timer_after"):
+        parts.append(f"timer {fmt_seconds(info['timer_after'])} after the locks before it")
     if info.get("relock") and (info.get("char_locked") or info.get("password_locked")):
         parts.append(f"re-lock {fmt_seconds(info['relock'])} after unlocking")
+    if len(info.get("lock_order") or []) > 1:
+        parts.append("unlock order: " + " → ".join(LOCK_KIND_NAMES.get(k, k) for k in info["lock_order"]))
     return parts
 
 
@@ -4869,7 +4873,9 @@ class Window(Gtk.ApplicationWindow):
             label.set_text(text)
             label.set_visible(bool(text))
             unlock.set_visible(info.get("char_locked", False) or info.get("password_locked", False))
-            unlock.set_sensitive(not info.get("lock_seconds") and not info.get("restart_locked"))
+            order = info.get("lock_order") or []
+            # R-LOCK-6: only the first lock still on can be unlocked.
+            unlock.set_sensitive(bool(order) and order[0] in ("text", "password"))
             # A locked setting is on and stays on, so its switch can't be used.
             if name in self.browser_switches:
                 self.browser_switches[name].set_sensitive(not parts)
@@ -5048,7 +5054,8 @@ class Window(Gtk.ApplicationWindow):
 
     def unlock_setting(self, _button, name, title):
         info, unlock = self.setting_lock_info(name), self.setting_command(name, "unlock")
-        if info.get("password_locked") and not info.get("char_locked"):
+        order = info.get("lock_order") or []
+        if (order[:1] == ["password"]) or (info.get("password_locked") and not info.get("char_locked")):
             password = self.ask_text(f"Unlock {title}", "Enter the setting's password.", password=True)
             if password:
                 self.run(unlock, password + "\n")

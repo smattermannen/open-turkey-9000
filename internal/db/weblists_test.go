@@ -401,3 +401,31 @@ func TestListTypesMigration(t *testing.T) {
 		t.Errorf("term cluster = %+v, %v", c, err)
 	}
 }
+
+// A list name that differs from another list's of the block only in case is
+// refused, on create and on rename; renaming a list to its own name in another
+// case is fine.
+func TestListNamesIgnoreCase(t *testing.T) {
+	d, _ := openTest(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	where := Where{URL: true}
+	id, err := d.CreateList("b", ListBlacklist, "News", where)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CreateList("b", ListBlacklist, "news", where); err == nil {
+		t.Error("created 'news' next to 'News'")
+	}
+	other, err := d.CreateList("b", ListBlacklist, "Other", where)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.RenameList(other, "NEWS"); err == nil {
+		t.Error("renamed 'Other' to 'NEWS' next to 'News'")
+	}
+	if err := d.RenameList(id, "NEWS"); err != nil {
+		t.Errorf("changing a list's own name's case: %v", err)
+	}
+}

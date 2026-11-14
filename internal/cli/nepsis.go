@@ -62,6 +62,9 @@ Without arguments, shows whether monk mode is on.`,
 		if err := requireLockPassword(database); err != nil {
 			return err
 		}
+		if err := confirmLocks(cmd, lockToSet{Target: "monk mode", Kind: "monk mode (no websites, no internet)", Length: monkLength(d)}); err != nil {
+			return err
+		}
 		if err := enforce.StartMonk(database, d); err != nil {
 			return err
 		}
@@ -71,6 +74,11 @@ Without arguments, shows whether monk mode is on.`,
 		fmt.Println(monkStatus(database))
 		return nil
 	}),
+}
+
+// monkLength describes a monk mode of length d, from now.
+func monkLength(d time.Duration) string {
+	return fmt.Sprintf("%s, until %s", d.Round(time.Minute), time.Now().Add(d).Format("2006-01-02 15:04"))
 }
 
 // monkStatus says whether monk mode is on, and until when by the clock.
@@ -453,6 +461,7 @@ var nepsisUnlockCmd = &cobra.Command{
 
 func init() {
 	monkCmd.Flags().String("for", "", "How long (e.g. 45m, 2h)")
+	addYesFlag(monkCmd)
 	nepsisSetCmd.Flags().StringArray("step", nil, `A step of the ladder, e.g. "3 in 10m: close-tab, logout 1m" (repeat for more)`)
 	nepsisSetCmd.Flags().StringSlice("detect", nil, "Which events count (default all): "+strings.Join(db.Detectors, ", "))
 	nepsisSetCmd.Flags().String("quiet", "", "Fall back a step after this long without firing (e.g. 2h)")

@@ -91,6 +91,10 @@ func lockCases() []lockCase {
 		{name: "browser setting text lock", args: []string{"browser", "safesearch", "on", "--lock"}, isSet: settingLocked("safesearch")},
 		{name: "browser setting password lock", args: []string{"browser", "safesearch", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked("safesearch")},
 		{name: "browser setting restart lock", args: []string{"browser", "safesearch", "on", "--restart"}, isSet: settingLocked("safesearch")},
+		{name: "monk mode", args: []string{"monk", "--for", "30m"}, isSet: func(t *testing.T, d *db.DB) bool {
+			trusted, _ := d.TrustedNow(time.Now())
+			return enforce.MonkOn(d, trusted)
+		}},
 		{name: "bypass prevention lock", args: []string{"bypass", "set", "--count", "3", "--within", "10m", "--then", "close-tab", "--for", "1h"},
 			isSet: settingLocked(db.NepsisLockName)},
 		{name: "freeze schedule with a lock", args: []string{"freeze", "schedule", "add", "--from", from, "--to", to, "--lock-lead", "1h"},
@@ -290,4 +294,29 @@ func TestRLOCK12_AutomaticMonkNeedsAcknowledgement(t *testing.T) {
 	mustRun(t, "bypass", "set", "--count", "3", "--within", "5m", "--then", "monk", "--then-for", "1h", "--no-confirm-ok")
 	// Other consequences need no acknowledgement.
 	mustRun(t, "bypass", "set", "--count", "3", "--within", "5m", "--then", "close-tab")
+}
+
+// R-LOCK-12: a project file with monk steps or monk actions is refused
+// without --no-confirm-ok, and imports nothing.
+func TestRLOCK12_ProjectImportMonkNeedsAcknowledgement(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	files := map[string]string{
+		"list action": `{"kc9k_project":1,"blocks":[{"name":"m","lists":[{"name":"Blocked","kind":"blacklist","type":"address","where":["url"],"actions":[{"action":"monk","distinct":1,"hits":1,"minutes":10}],"entries":["example.com"]}]}]}`,
+		"block step":  `{"kc9k_project":1,"blocks":[{"name":"m","nepsis":{"steps":[{"count":3,"minutes":5,"actions":[{"action":"monk","minutes":10}]}]}}]}`,
+		"global step": `{"kc9k_project":1,"blocks":[],"bypass_detection":{"steps":[{"count":3,"minutes":5,"actions":[{"action":"monk","minutes":10}]}]}}`,
+	}
+	for name, body := range files {
+		file := filepath.Join(t.TempDir(), "p.json")
+		if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		err := runCLI(t, "project", "import", file, "--yes")
+		if err == nil || !strings.Contains(err.Error(), "--no-confirm-ok") {
+			t.Errorf("%s: err = %v; want refused for the acknowledgement", name, err)
+		}
+		if _, err := d.GetBlock("m"); err == nil {
+			t.Errorf("%s: a block was imported anyway", name)
+		}
+	}
 }

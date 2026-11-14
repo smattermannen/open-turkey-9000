@@ -498,6 +498,9 @@ func createList(q querier, blockID int, kind, typ, name string, where Where) (in
 	if err := CheckScope(typ, where); err != nil {
 		return 0, err
 	}
+	if listNameTaken(q, blockID, 0, name) {
+		return 0, fmt.Errorf("the block already has a list named '%s' (names differ only in case)", name)
+	}
 	res, err := q.Exec("INSERT INTO web_lists (block_id, kind, type, name, in_url, in_title, in_text) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		blockID, kind, typ, name, where.URL, where.Title, where.Text)
 	if err != nil {
@@ -516,6 +519,16 @@ func createList(q querier, blockID int, kind, typ, name string, where Where) (in
 		}
 	}
 	return int(id), nil
+}
+
+// listNameTaken reports whether another list of the block (not except) has
+// the name in any case: lists are found by name without regard to case, as
+// phrase sets are (phraseSetNameTaken).
+func listNameTaken(q querier, blockID, except int, name string) bool {
+	var n int
+	err := q.QueryRow("SELECT COUNT(*) FROM web_lists WHERE block_id = ? AND id != ? AND lower(name) = lower(?)",
+		blockID, except, name).Scan(&n)
+	return err == nil && n > 0
 }
 
 // CreateList adds a list to a block, of the type its places suggest (see
@@ -537,6 +550,11 @@ func (d *DB) CreateTypedList(blockName, kind, typ, name string, where Where) (in
 func (d *DB) RenameList(listID int, name string) error {
 	if err := CheckListName(name); err != nil {
 		return err
+	}
+	var blockID int
+	if err := d.conn.QueryRow("SELECT block_id FROM web_lists WHERE id = ?", listID).Scan(&blockID); err == nil &&
+		listNameTaken(d.conn, blockID, listID, name) {
+		return fmt.Errorf("the block already has a list named '%s' (names differ only in case)", name)
 	}
 	if _, err := d.conn.Exec("UPDATE web_lists SET name = ? WHERE id = ?", name, listID); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {

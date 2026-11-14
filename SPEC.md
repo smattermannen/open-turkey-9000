@@ -287,7 +287,7 @@ extension is required, and protection settings (§4.10) can't be turned off.
 | **Frozen Chicken** | The device block: in its freeze mode, for a time (at most 24 h), on demand or by schedule. A running freeze can't be ended. A scheduled freeze can have locks like a block. *CT: Frozen Turkey / Device Blocks.* | A schedule lock. |
 | **Freeze mode** | What Frozen Chicken does: *lock screen*, *logout*, *shutdown*, or *allowed apps only*. | — |
 | **Allowed apps only** | Freeze mode: the computer stays usable, but only the programs on the freeze's app list may run; every other user program is closed. | An allowlist block. |
-| **Monk mode** | A **mode**, not a block: the whole internet is blocked for a set time, and it ends when the time does. Started by `kc9k monk`, a list action or a ladder step. It is locked for its whole time: it can't be edited, switched off early or deleted, and nothing can be added to it while it runs. Its exceptions and apps are settings of the mode, changed only while it is off. | A block, ordinary or system-owned. |
+| **Monk mode** | A **mode**, not a block, and fully preconfigured: nothing in it can be edited or added. For a set time it blocks every website (`*.*`, with only the default exception `file://*`) and cuts the internet connection of the whole computer, so no program can reach the network (for example a game on Steam). Started by `kc9k monk`, a list action or a ladder step; it ends only when its time ends, and can't be switched off early. | A block, ordinary or system-owned. |
 | **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. Announced 60 s ahead, except from bypass prevention (R-WARN-1, R-WARN-2). | A page action. |
 | **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a block is locked: no `sudo` or `pkexec`; nothing runs from `/home` or `/tmp` except from folders the user exempted (adding one is a weakening); no containers or VMs. It can have its own setting lock. | — |
 | **No-escape** | Closes the boot-time exits: hides recovery entries and kernel options, and puts a password nobody knows on GRUB. | Strict mode. |
@@ -568,8 +568,8 @@ old names keep working for a while.
 - **R-EVENT-1** At most one event per tab and blocked site per minute. Tabs restored when the browser starts, preloaded pages and embedded frames don't count.
 
 **Monk mode**
-- **R-MONK-1** Monk mode is a mode, not a block: it is not in the list of blocks, can't be edited, renamed, removed or switched off while it runs, and the `monk` action is not offered in it. It ends only when its time ends.
-- **R-MONK-2** Because it is not a block, nothing a user can do to blocks (edit, delete, unlock) reaches monk mode.
+- **R-MONK-1** Monk mode is a mode, not a block: it is not in the list of blocks and has no settings. It blocks `*.*` with the default exception `file://*` only, takes no exceptions, apps or other entries, and the `monk` action is not offered in it.
+- **R-MONK-2** While monk mode runs, the computer's internet connection is cut, not only the browser's: no program reaches the network. KC9K's own local traffic (the daemon and the extension on this computer) keeps working. It can't be ended early, and nothing a user can do to blocks reaches it.
 
 **Device**
 - **R-FREEZE-1** In *allowed apps only* mode, only programs on the freeze's app list (and system processes) may run.
@@ -633,6 +633,9 @@ Made with the owner. Newest last.
 - 2026-11-14: Monk mode is a mode, not a block. As a block it could be edited
   or deleted while unlocked, which would defeat it. All locks ask for
   confirmation when set, always (R-LOCK-12), not only timer locks over 24 h.
+- 2026-11-14: Monk mode is fully preconfigured (`*.*`, exception `file://*`
+  only, nothing editable) and also cuts the internet connection, so another
+  program can't be used to get around it.
 
 ## 7. Open decisions
 

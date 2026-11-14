@@ -50,29 +50,30 @@ func NewExtensionGuard(port int) *ExtensionGuard {
 }
 
 // CheckIn records that the browser owning the connection from remoteAddr has
-// a working extension, and reports whether it found that browser.
-func (g *ExtensionGuard) CheckIn(remoteAddr string) bool {
+// a working extension, and reports whether it found that browser and which
+// supported browser it is ("" for another).
+func (g *ExtensionGuard) CheckIn(remoteAddr string) (bool, string) {
 	_, portText, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return false
+		return false, ""
 	}
 	clientPort, err := strconv.Atoi(portText)
 	if err != nil {
-		return false
+		return false, ""
 	}
 	inode := socketInode(clientPort, g.port)
 	if inode == "" {
-		return false
+		return false, ""
 	}
 	pid := socketOwner(inode, g.browsers.guarded)
 	if pid == 0 {
-		return false
+		return false, ""
 	}
 	main := browserMain(pid)
 	g.mu.Lock()
 	g.seen[main] = time.Now()
 	g.mu.Unlock()
-	return true
+	return true, supportedExe(main)
 }
 
 // Enforce closes, with all their child processes, the browsers that have run
@@ -83,11 +84,14 @@ func (g *ExtensionGuard) CheckIn(remoteAddr string) bool {
 // started before settingsChanged (KC9K changed something that protects the
 // extension: its version, blocked developer tools, locked settings) are
 // closed too, ExtensionGrace after the change. Zero means no such change.
-func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time) int {
+//
+// With unsupported set (block unsupported browsers, §4.10), every browser
+// that isn't an installed supported browser (see SupportedBrowsers) is
+// closed at once: it can never run the extension.
+func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time, unsupported bool) int {
 	if now.Sub(g.started) < ExtensionGrace {
 		return 0 // the daemon just started: give running browsers time to check in
 	}
-	restartDue := !settingsChanged.IsZero() && now.Sub(settingsChanged) >= ExtensionGrace
 	uptime := systemUptime()
 	parent, children := processTree()
 
@@ -99,26 +103,13 @@ func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time) int {
 		if exeName(parent[pid]) == name || !ownedByUser(pid) || !g.browsers.guarded(pid) {
 			continue // a child process of a browser, a system program, or not a browser
 		}
-		if remoteControlled(pid) && !remoteControlAllowed() {
-			log.Printf("browser: closing %s (pid %d): started for remote control", name, pid)
+		p := guardedProcess{remote: remoteControlled(pid) && !remoteControlAllowed(), supported: supportedExe(pid) != ""}
+		p.age, p.ageKnown = processAge(pid, uptime)
+		p.lastSeen, p.seen = g.seen[pid]
+		if reason := closeReason(p, now, settingsChanged, unsupported); reason != "" {
+			log.Printf("browser: closing %s (pid %d): %s", name, pid, reason)
 			targets = append(targets, pid)
-			continue
 		}
-		if restartDue {
-			if age, ok := processAge(pid, uptime); ok && time.Now().Add(-age).Before(settingsChanged) {
-				log.Printf("browser: closing %s (pid %d): started before KC9K changed its browser settings", name, pid)
-				targets = append(targets, pid)
-				continue
-			}
-		}
-		if age, ok := processAge(pid, uptime); !ok || age < ExtensionGrace {
-			continue
-		}
-		if last, ok := g.seen[pid]; ok && now.Sub(last) < ExtensionGrace {
-			continue
-		}
-		log.Printf("browser: closing %s (pid %d): no Killer Chicken extension", name, pid)
-		targets = append(targets, pid)
 	}
 	for pid := range g.seen {
 		if _, alive := parent[pid]; !alive {
@@ -130,6 +121,37 @@ func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time) int {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 	}
 	return len(targets)
+}
+
+// guardedProcess is what the guard knows of a running browser.
+type guardedProcess struct {
+	remote    bool // started for remote control, which isn't allowed
+	supported bool // an installed supported browser (SupportedBrowsers)
+	age       time.Duration
+	ageKnown  bool
+	lastSeen  time.Time // its extension's last check-in
+	seen      bool
+}
+
+// closeReason says why the guard closes p, or "" to leave it open.
+func closeReason(p guardedProcess, now, settingsChanged time.Time, unsupported bool) string {
+	if p.remote {
+		return "started for remote control"
+	}
+	if unsupported && !p.supported {
+		return "not a supported browser (block unsupported browsers is on)"
+	}
+	if !settingsChanged.IsZero() && now.Sub(settingsChanged) >= ExtensionGrace &&
+		p.ageKnown && now.Add(-p.age).Before(settingsChanged) {
+		return "started before KC9K changed its browser settings"
+	}
+	if !p.ageKnown || p.age < ExtensionGrace {
+		return ""
+	}
+	if p.seen && now.Sub(p.lastSeen) < ExtensionGrace {
+		return ""
+	}
+	return "no Killer Chicken extension"
 }
 
 // socketInode finds the inode of the local TCP socket from clientPort to the

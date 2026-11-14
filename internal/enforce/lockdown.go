@@ -63,7 +63,7 @@ func settingLocked(d *db.DB, trusted int64, skip string) (bool, error) {
 		if l.Name == skip {
 			continue
 		}
-		if (IsBrowserSetting(l.Name) || l.Name == db.NepsisLockName || l.Name == StrictLockName) && l.InForce(trusted, bootID) {
+		if (IsLockableSetting(l.Name) || l.Name == db.NepsisLockName || l.Name == StrictLockName) && l.InForce(trusted, bootID) {
 			return true, nil
 		}
 	}

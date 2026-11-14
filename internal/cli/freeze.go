@@ -218,7 +218,12 @@ type guiState struct {
 	PasswordLocks bool                      `json:"password_for_locks"`
 	DNS           string                    `json:"dns"`
 	TamperClock   bool                      `json:"tamper_clock"`
-	MonkSeconds   int64                     `json:"monk_seconds"` // left of monk mode; 0 when it is off
+	// UnsupportedBrowsers is block unsupported browsers, with its lock;
+	// Browsers the supported browsers (§4.10 Browsers).
+	UnsupportedBrowsers bool           `json:"unsupported_browsers"`
+	UnsupportedLock     guiSettingLock `json:"unsupported_browsers_lock"`
+	Browsers            []guiBrowser   `json:"browsers"`
+	MonkSeconds         int64          `json:"monk_seconds"` // left of monk mode; 0 when it is off
 	// Access says per area "none", "open" or "locked"; AccessUnused lists
 	// the given passwords (by position) that opened nothing: wrong, or
 	// changed since.
@@ -327,6 +332,12 @@ var guiStateCmd = &cobra.Command{
 		if state.DNS, err = database.GetSetting(enforce.SettingDNS); err != nil {
 			return err
 		}
+		state.UnsupportedBrowsers = enforce.UnsupportedBrowsersOn(database)
+		if s, err := loadSettingLock(database, db.UnsupportedBrowsers); err == nil {
+			state.UnsupportedLock = s.gui()
+			state.UnsupportedLock.GuardsBlocks = true
+		}
+		state.Browsers = supportedBrowsers(database)
 		if v, err := database.GetSetting(db.SettingTamperClock); err == nil {
 			state.TamperClock = v == "on"
 		}

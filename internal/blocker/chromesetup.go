@@ -27,16 +27,12 @@ var ChromeSetupPaths = []string{
 	"/etc/chromium/policies/managed/kc9k-setup.json",   // Chromium
 }
 
-// chromeBinaries are where Google Chrome and Chromium are installed (the
-// .deb packages; a portable copy is a browser without the extension, see
-// browserdetect.go).
-var chromeBinaries = []string{"/opt/google/chrome/chrome", "/usr/lib/chromium/chromium"}
-
 // ChromeInstalled reports whether Google Chrome or Chromium is installed,
-// browsers that run the extension (see EnsureChromeSetup).
+// browsers that run the extension (see EnsureChromeSetup). A portable copy
+// is a browser without the extension (see browserdetect.go).
 func ChromeInstalled() bool {
-	for _, path := range chromeBinaries {
-		if _, err := os.Stat(path); err == nil {
+	for _, b := range SupportedBrowsers {
+		if b.ID != "librewolf" && b.Installed() {
 			return true
 		}
 	}

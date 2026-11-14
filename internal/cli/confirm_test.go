@@ -55,6 +55,8 @@ func settingLocked(name string) func(t *testing.T, d *db.DB) bool {
 	}
 }
 
+func supportedInstalled(t *testing.T) { fakeSupportedBrowser(t, true) }
+
 func lockCases() []lockCase {
 	from, to := freeWindow()
 	return []lockCase{
@@ -91,6 +93,11 @@ func lockCases() []lockCase {
 		{name: "browser setting text lock", args: []string{"browser", "safesearch", "on", "--lock"}, isSet: settingLocked("safesearch")},
 		{name: "browser setting password lock", args: []string{"browser", "safesearch", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked("safesearch")},
 		{name: "browser setting restart lock", args: []string{"browser", "safesearch", "on", "--restart"}, isSet: settingLocked("safesearch")},
+		{name: "unsupported browsers timer lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--for", "1h"}, isSet: settingLocked(db.UnsupportedBrowsers)},
+		{name: "unsupported browsers text lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--lock"}, isSet: settingLocked(db.UnsupportedBrowsers)},
+		{name: "unsupported browsers password lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked(db.UnsupportedBrowsers)},
+		{name: "unsupported browsers restart lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--restart"}, isSet: settingLocked(db.UnsupportedBrowsers)},
+		{name: "unsupported browsers lock by the old name", setup: supportedInstalled, args: []string{"browser", "force-librewolf", "on", "--for", "1h"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "monk mode", args: []string{"monk", "--for", "30m"}, isSet: func(t *testing.T, d *db.DB) bool {
 			trusted, _ := d.TrustedNow(time.Now())
 			return enforce.MonkOn(d, trusted)

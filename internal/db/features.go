@@ -61,6 +61,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateTamperClock(conn); err != nil {
 		return err
 	}
+	if err := migrateForceLibreWolf(conn); err != nil {
+		return err
+	}
 	if err := migrateWebLists(conn); err != nil {
 		return err
 	}

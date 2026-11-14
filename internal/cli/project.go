@@ -97,16 +97,19 @@ type placeExport struct {
 }
 
 type projectExport struct {
-	KC9KProject int               `json:"kc9k_project"`
-	Kind        string            `json:"kind,omitempty"` // "backup" or "share"
-	Places      []placeExport     `json:"places,omitempty"`
-	Blocks      []projectBlock    `json:"blocks"`
-	Clusters    []clusterExport   `json:"clusters,omitempty"`
-	Browser     map[string]bool   `json:"browser_options,omitempty"`
-	Options     map[string]bool   `json:"options,omitempty"`
-	Nepsis      *db.Nepsis        `json:"bypass_detection,omitempty"`
-	Freezes     []windowExport    `json:"frozen_chicken_schedules,omitempty"`
-	Images      map[string]string `json:"images,omitempty"` // name -> base64
+	KC9KProject int             `json:"kc9k_project"`
+	Kind        string          `json:"kind,omitempty"` // "backup" or "share"
+	Places      []placeExport   `json:"places,omitempty"`
+	Blocks      []projectBlock  `json:"blocks"`
+	Clusters    []clusterExport `json:"clusters,omitempty"`
+	Browser     map[string]bool `json:"browser_options,omitempty"`
+	// Tamper holds block unsupported browsers (in older files the browser
+	// option force-librewolf).
+	Tamper  map[string]bool   `json:"tamper_protection,omitempty"`
+	Options map[string]bool   `json:"options,omitempty"`
+	Nepsis  *db.Nepsis        `json:"bypass_detection,omitempty"`
+	Freezes []windowExport    `json:"frozen_chicken_schedules,omitempty"`
+	Images  map[string]string `json:"images,omitempty"` // name -> base64
 }
 
 func exportWindow(w schedule.Window) windowExport {
@@ -399,6 +402,7 @@ passwords, hotkeys and statistics are never in it.`,
 		for _, name := range enforce.BrowserSettings {
 			out.Browser[name] = enforce.BrowserOn(database, name)
 		}
+		out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database)}
 		for _, o := range enforce.Options {
 			out.Options[o.Name] = enforce.OptionOn(database, o.Name)
 		}
@@ -705,14 +709,22 @@ With --dry-run, says what would happen and changes nothing.`,
 			if !in.Browser[name] || enforce.BrowserOn(database, name) {
 				continue
 			}
-			if name == "force-librewolf" && blocker.LibreWolfVersion() == "" {
-				fmt.Println("Browser setting force-librewolf is left off: LibreWolf isn't installed here.")
-				continue
-			}
 			say("turn on the browser setting %s", name)
 			if !dry {
 				if err := database.SetSetting("browser."+name, "on"); err != nil {
 					return err
+				}
+			}
+		}
+		if (in.Tamper[db.UnsupportedBrowsers] || in.Browser[forceLibreWolfAlias]) && !enforce.UnsupportedBrowsersOn(database) {
+			if !extensionBrowserInstalled() {
+				fmt.Println("Block unsupported browsers is left off: no supported browser is installed here ('kc9k browsers').")
+			} else {
+				say("turn on block unsupported browsers")
+				if !dry {
+					if err := database.SetSetting(db.SettingUnsupportedBrowsers, "on"); err != nil {
+						return err
+					}
 				}
 			}
 		}

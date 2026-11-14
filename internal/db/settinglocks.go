@@ -98,3 +98,56 @@ func (d *DB) SettingLocks() ([]SettingLock, error) {
 	}
 	return out, rows.Err()
 }
+
+// UnsupportedBrowsers names the tamper protection setting "block unsupported
+// browsers" (§4.10) and its setting lock. SettingUnsupportedBrowsers stores
+// it, "on" or "off".
+const (
+	UnsupportedBrowsers        = "unsupported-browsers"
+	SettingUnsupportedBrowsers = "tamper." + UnsupportedBrowsers
+)
+
+// Before 2026-11-14 the setting was the browser setting force-librewolf.
+const (
+	oldForceLibreWolf        = "force-librewolf"
+	oldForceLibreWolfSetting = "browser." + oldForceLibreWolf
+)
+
+// migrateForceLibreWolf carries force-librewolf over to block unsupported
+// browsers once: its on/off state, and its lock row unchanged (time,
+// challenge and its style, password, restart boot), so a running lock holds
+// exactly as before.
+func migrateForceLibreWolf(conn *sql.DB) error {
+	// Every open runs this: write only when there is something to move, so
+	// opening never waits on, or fails beside, another writer.
+	var n int
+	if err := conn.QueryRow(`SELECT (SELECT COUNT(*) FROM settings WHERE key = ?) + (SELECT COUNT(*) FROM setting_locks WHERE name = ?)`,
+		oldForceLibreWolfSetting, oldForceLibreWolf).Scan(&n); err != nil || n == 0 {
+		return err
+	}
+	tx, err := conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var value string
+	err = tx.QueryRow("SELECT value FROM settings WHERE key = ?", oldForceLibreWolfSetting).Scan(&value)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if err == nil {
+		if _, err := tx.Exec("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", SettingUnsupportedBrowsers, value); err != nil {
+			return err
+		}
+		if _, err := tx.Exec("DELETE FROM settings WHERE key = ?", oldForceLibreWolfSetting); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("UPDATE OR IGNORE setting_locks SET name = ? WHERE name = ?", UnsupportedBrowsers, oldForceLibreWolf); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM setting_locks WHERE name = ?", oldForceLibreWolf); err != nil {
+		return err
+	}
+	return tx.Commit()
+}

@@ -208,7 +208,7 @@ try:
 
     ot("browser", "safesearch", "on")
     ot("browser", "force-search", "on")
-    ot("browser", "force-librewolf", "on")
+    ot("tamper", "unsupported-browsers", "on")
     time.sleep(8)
     hosts = open("/etc/hosts").read()
     check("SafeSearch entry in hosts", " www.google.com" in hosts)
@@ -225,7 +225,7 @@ try:
     driver = start()
     try:
         time.sleep(10)
-        check("LibreWolf survives forcing", True)
+        check("LibreWolf survives block unsupported browsers", True)
         driver.get("https://www.wikipedia.org/")
         time.sleep(4)
         loaded = driver.execute_script(

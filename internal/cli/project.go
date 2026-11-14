@@ -458,6 +458,12 @@ With --dry-run, says what would happen and changes nothing.`,
 			return fmt.Errorf("%s was made by a newer Killer Chicken 9000", args[0])
 		}
 
+		if what := projectMonk(in); what != "" {
+			if err := requireMonkAck(cmd, what); err != nil {
+				return err
+			}
+		}
+
 		// Validate everything before writing anything.
 		var blocks []checkedBlock
 		for _, b := range in.Blocks {
@@ -761,7 +767,54 @@ With --dry-run, says what would happen and changes nothing.`,
 func init() {
 	projectImportCmd.Flags().Bool("dry-run", false, "Say what would be imported and change nothing")
 	addYesFlag(projectImportCmd)
+	addMonkAckFlag(projectImportCmd)
 	projectExportCmd.Flags().Bool("share", false, "Leave out places and place rules, for sharing with others")
 	projectCmd.AddCommand(projectExportCmd, projectImportCmd)
 	rootCmd.AddCommand(projectCmd)
+}
+
+// projectMonk names what in a project file would start monk mode by itself (a
+// list's or phrase set's monk action, a bypass prevention step), or "" when
+// nothing does (R-LOCK-12).
+func projectMonk(in projectExport) string {
+	hasMonk := func(actions []db.ListAction) bool {
+		for _, a := range actions {
+			if a.Name == db.ActionMonk {
+				return true
+			}
+		}
+		return false
+	}
+	ladder := func(n *db.Nepsis) bool {
+		if n == nil {
+			return false
+		}
+		for _, step := range n.Steps {
+			for _, a := range step.Actions {
+				if a.Kind == db.ConsequenceMonk {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, b := range in.Blocks {
+		for _, l := range b.Lists {
+			if hasMonk(l.Actions) {
+				return "a list's monk action"
+			}
+		}
+		for _, s := range b.PhraseSets {
+			if hasMonk(s.Actions) {
+				return "a phrase set's monk action"
+			}
+		}
+		if ladder(b.Nepsis) {
+			return "a bypass prevention step"
+		}
+	}
+	if ladder(in.Nepsis) {
+		return "a bypass prevention step"
+	}
+	return ""
 }

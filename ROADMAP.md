@@ -38,10 +38,6 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   word sets (today 9: `MAX_WORD_SETS`, `db.MaxWordSets`; bit mask in
   `kc9kPhraseMatcher` caps at 31). New sets default to text only, so titles
   seem missed. (S)
-- [ ] **Embedded videos keep playing** (§3.9): `no-video` from title/text
-  reaches only the top frame (`keywordLooks`, `content.js`); hiding the
-  iframe doesn't stop sound. Background must tell all frames; late frames
-  must ask. (S)
 - [ ] **Declutter**: still present (`db.ActionDeclutter`, `content.js`, GUI).
   Remove; upgrade drops stored ones; imports skip it. (S)
 - [ ] **Android extension can be switched off** (§3.13) in IronFox's add-ons
@@ -69,11 +65,11 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   iptables fallback). DNS on start: 16 parallel, 30 min cache
   (`resolveAll`), but still filled before `start` returns. `/etc/hosts`
   size cost: Unchecked. Left: 100,000-entry speed test in `ci/`. (M)
-- [ ] **List names differing only in case** are allowed but lookup ignores
-  case, so one is unreachable. Phrase sets refuse it. (S)
-- [ ] **R-LOCK-12 gaps**: `kc9k monk` (manual) not confirmed; `project
-  import` can bring monk steps/actions without `--no-confirm-ok`; hotkey
-  press dialog tested only with a stub. (S)
+- [ ] **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
+  `project import` refuses monk steps/actions without `--no-confirm-ok`
+  (`projectMonk`); both in `confirm_test.go`. `block import` the same. Left: the hotkey
+  press dialog is tested only with a stub (`blocker.ConfirmDesktop` is never
+  run for real; needs a live check). (S)
 
 ### 0.2 Not yet confirmed in real use
 
@@ -88,6 +84,7 @@ Script-tested, never by a person. Script what can be into `ci/`.
 - [ ] One-off logout/shutdown from a list; Dashboard monk button; locked global ladder refusing `bypass off`.
 - [ ] Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
 - [ ] Mute and dark on real sites; polite close with a real app.
+- [ ] No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
 - [ ] Social presets beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
 - [ ] Chrome on the laptop: extension pinned, unremovable, incognito/guest off, block works, popup. Then rerun `browser_test.py`, `extras_test.py` in LibreWolf.
 - [ ] Monk mode live (`ci/monk_live_test.sh` unwritten), incl. reboot mid-way.

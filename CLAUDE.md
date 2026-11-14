@@ -155,7 +155,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
   picks the strongest, closes tab/browser itself, POSTs `/hit`
   (`enforce/hits.go`, header required) so the daemon logs and runs
-  logout/shutdown/monk.
+  logout/shutdown/monk. `no-video`/`no-images` reach every frame:
+  background `tellFrames` pushes `tab-looks`, new frames ask for it; mute
+  is tab-wide (`applyMute`).
 - **Phrase sets** (`db/phrases.go`, `cli/phrases.go`, `kc9k phrase-set`):
   `db.Phrase` JSON, typed `[a, b] [c]? :N` (`ParsePhrase`, `String`);
   `Check` refuses one-ended bridges (mirrored `kc9kPhraseCheck`). Rules

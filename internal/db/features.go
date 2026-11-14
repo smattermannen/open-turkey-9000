@@ -70,6 +70,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateCombinations(conn); err != nil {
 		return err
 	}
+	if err := migrateListCaseNames(conn); err != nil {
+		return err
+	}
 	return migrateMonkMode(conn)
 }
 

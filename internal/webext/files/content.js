@@ -18,6 +18,10 @@ const LOOKS = ["greyscale", "no-images", "mute", "no-video", "declutter", "dark"
 let lightFor = null;
 let light = true;
 let noVideo = false;
+// The looks the background script says this tab has now (no-video,
+// no-images): a frame can't see the tab's title or text, so it learns them
+// from there, when it starts and whenever they change.
+let tabLooks = new Set();
 
 function pageIsLight() {
   if (lightFor === location.href && document.body) {
@@ -98,7 +102,7 @@ function render() {
     keywordsFor = url;
   }
   const byAddress = kc9kListActions(lists, { url });
-  const on = (name) => Boolean(byAddress[name]) || keywordLooks.has(name);
+  const on = (name) => Boolean(byAddress[name]) || keywordLooks.has(name) || tabLooks.has(name);
   shownFor = url;
   noVideo = on("no-video");
   let css = "";
@@ -522,6 +526,16 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 browser.storage.local.get("page").then((stored) => load(stored.page));
+function setTabLooks(looks) {
+  tabLooks = new Set(Array.isArray(looks) ? looks.filter((name) => LOOKS.includes(name)) : []);
+  render();
+}
+browser.runtime.sendMessage({ type: "tab-looks" }).then(setTabLooks, () => {});
+browser.runtime.onMessage.addListener((message) => {
+  if (message && message.type === "tab-looks") {
+    setTabLooks(message.looks);
+  }
+});
 browser.storage.onChanged.addListener((changes) => {
   if (changes.page) {
     load(changes.page.newValue);

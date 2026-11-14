@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -399,5 +400,73 @@ func TestListTypesMigration(t *testing.T) {
 	}
 	if c, err := d.GetCluster("mix terms"); err != nil || c.Where != (Where{Text: true}) || c.Type != ListTerm {
 		t.Errorf("term cluster = %+v, %v", c, err)
+	}
+}
+
+// A list name that differs from another list's of the block only in case is
+// refused, on create and on rename; renaming a list to its own name in another
+// case is fine.
+func TestListNamesIgnoreCase(t *testing.T) {
+	d, _ := openTest(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	where := Where{URL: true}
+	id, err := d.CreateList("b", ListBlacklist, "News", where)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CreateList("b", ListBlacklist, "news", where); err == nil {
+		t.Error("created 'news' next to 'News'")
+	}
+	other, err := d.CreateList("b", ListBlacklist, "Other", where)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.RenameList(other, "NEWS"); err == nil {
+		t.Error("renamed 'Other' to 'NEWS' next to 'News'")
+	}
+	if err := d.RenameList(id, "NEWS"); err != nil {
+		t.Errorf("changing a list's own name's case: %v", err)
+	}
+}
+
+// Lists of one block that differ only in case, from before the rule, are
+// separated on open: the later one becomes "<name>-2".
+func TestListCaseNamesMigrated(t *testing.T) {
+	d, path := openTest(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	where := Where{URL: true}
+	if _, err := d.CreateList("b", ListBlacklist, "News", where); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CreateList("b", ListBlacklist, "news-2", where); err != nil {
+		t.Fatal(err)
+	}
+	// Plant the old pair behind the rule's back.
+	if _, err := d.conn.Exec("INSERT INTO web_lists (block_id, kind, type, name, in_url) SELECT block_id, kind, type, 'NEWS', 1 FROM web_lists WHERE name = 'News'"); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	d2, err := OpenDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d2.Close()
+	b, err := d2.GetBlock("b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, l := range b.Lists {
+		names = append(names, l.Name)
+	}
+	got := strings.Join(names, ",")
+	for _, want := range []string{"News", "news-2", "NEWS-3"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lists %s lack %s", got, want)
+		}
 	}
 }

@@ -163,32 +163,17 @@ shortened or removed this way.`,
 			lockedUntil = t.Unix()
 		}
 
-		// §3.4: a timer lock over 24 hours is confirmed first.
-		if lockedUntil != 0 && time.Unix(lockedUntil, 0).Sub(now) > 24*time.Hour {
-			if yes, _ := cmd.Flags().GetBool("yes"); !yes {
-				left := time.Unix(lockedUntil, 0).Sub(now).Round(time.Minute)
-				if !isTerminalInput() {
-					return fmt.Errorf("a timer lock of %s is over 24 hours; add --yes to confirm", left)
-				}
-				fmt.Printf("Lock '%s' for %s, until %s? Type yes to confirm: ", blockName, left, time.Unix(lockedUntil, 0).Format("2006-01-02 15:04"))
-				answer, _ := stdinLines.ReadString('\n')
-				if strings.TrimSpace(strings.ToLower(answer)) != "yes" {
-					return fmt.Errorf("not locked")
-				}
-			}
-		}
-
 		database, err := openDB()
 		if err != nil {
 			return err
 		}
 		defer database.Close()
 
+		trusted, err := database.TrustedNow(now)
+		if err != nil {
+			return err
+		}
 		if lockedUntil != 0 {
-			trusted, err := database.TrustedNow(now)
-			if err != nil {
-				return err
-			}
 			lockedUntil += trusted - now.Unix()
 		}
 
@@ -203,12 +188,16 @@ shortened or removed this way.`,
 			return fmt.Errorf("block '%s' is already active; password, restart and delay locks, and a text lock of words or your own text, are set when it starts", blockName)
 		}
 		if detail.Active {
-			return strengthenLocks(database, detail, useLock, lockChars, cmd.Flags().Changed("lock-chars"), lockedUntil)
+			return strengthenLocks(cmd, database, detail, useLock, lockChars, cmd.Flags().Changed("lock-chars"), lockedUntil, trusted)
 		}
 
 		chars := 0
 		if useLock {
 			chars = lockChars
+		}
+		// R-LOCK-12: nothing is locked until the user confirms.
+		if err := confirmLocks(cmd, startLocks(blockName, useLock, style, chars, lockedUntil, trusted, extras)...); err != nil {
+			return err
 		}
 		if err := database.ActivateBlock(blockName, useLock, chars, lockedUntil, false); err != nil {
 			return err
@@ -237,6 +226,33 @@ shortened or removed this way.`,
 	},
 }
 
+// startLocks lists the locks a start of an inactive block sets, for
+// confirmLocks (R-LOCK-12).
+func startLocks(name string, text bool, style string, chars int, until, trusted int64, extras db.LockExtras) []lockToSet {
+	target := "block '" + name + "'"
+	relock := ""
+	if extras.Relock > 0 {
+		relock = fmt.Sprintf(", re-lock %s after unlocking", time.Duration(extras.Relock)*time.Second)
+	}
+	var locks []lockToSet
+	if until != 0 {
+		locks = append(locks, lockToSet{target, "timer lock", timerLength(trusted, until)})
+	}
+	if text {
+		locks = append(locks, lockToSet{target, textLockKind(style, chars) + relock, ""})
+	}
+	if extras.PasswordHash != "" {
+		locks = append(locks, lockToSet{target, "password lock" + relock, ""})
+	}
+	if extras.RestartBoot != "" {
+		locks = append(locks, lockToSet{target, "restart lock", "until the computer restarts"})
+	}
+	if extras.Delay > 0 {
+		locks = append(locks, lockToSet{target, "delay lock", fmt.Sprintf("unlocking takes %s", time.Duration(extras.Delay)*time.Second)})
+	}
+	return locks
+}
+
 // startLockRequested reports whether a start asks for any kind of lock.
 func startLockRequested(cmd *cobra.Command) bool {
 	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay", "text-lock", "lock-words", "lock-text", "relock"} {
@@ -251,7 +267,7 @@ func startLockRequested(cmd *cobra.Command) bool {
 // or lengthen a char lock and add or extend a time lock, but refuses anything
 // that would weaken the current locks. This is safe on a held block, since it
 // can only make the hold stronger.
-func strengthenLocks(database *db.DB, detail *db.BlockDetail, useLock bool, lockChars int, charsGiven bool, lockedUntil int64) error {
+func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail, useLock bool, lockChars int, charsGiven bool, lockedUntil, trusted int64) error {
 	name := detail.Name
 	if !useLock && lockedUntil == 0 {
 		return fmt.Errorf("block '%s' is already active (use --lock, --for or --until to strengthen its locks)", name)
@@ -259,14 +275,18 @@ func strengthenLocks(database *db.DB, detail *db.BlockDetail, useLock bool, lock
 
 	locked, chars, until := detail.Locked, detail.LockChars, detail.LockedUntil
 	var changes []string
+	var confirm []lockToSet
+	target := "block '" + name + "'"
 	if useLock {
 		switch {
 		case !locked:
 			locked, chars = true, lockChars
 			changes = append(changes, fmt.Sprintf("text lock of %d chars", chars))
+			confirm = append(confirm, lockToSet{target, textLockKind("", chars), ""})
 		case lockChars > chars && charsGiven:
 			chars = lockChars
 			changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", chars))
+			confirm = append(confirm, lockToSet{target, textLockKind("", chars), "lengthened"})
 		case lockChars < chars && charsGiven:
 			return fmt.Errorf("block '%s' is already locked with a %d-character challenge; it can't be shortened", name, chars)
 		}
@@ -277,9 +297,13 @@ func strengthenLocks(database *db.DB, detail *db.BlockDetail, useLock bool, lock
 		}
 		until = lockedUntil
 		changes = append(changes, fmt.Sprintf("timer lock until %s", time.Unix(until, 0).Format("2006-01-02 15:04")))
+		confirm = append(confirm, lockToSet{target, "timer lock", timerLength(trusted, until)})
 	}
 	if len(changes) == 0 {
 		return fmt.Errorf("block '%s' is already active with those locks", name)
+	}
+	if err := confirmLocks(cmd, confirm...); err != nil {
+		return err
 	}
 
 	if err := database.StrengthenLocks(name, locked, chars, until); err != nil {
@@ -746,7 +770,7 @@ func init() {
 	startCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	startCmd.Flags().Bool("restart", false, "Restart lock: keep the block on until the computer restarts")
 	startCmd.Flags().String("delay", "", "Delay lock: unlocking takes this long (1m to 960h)")
-	startCmd.Flags().Bool("yes", false, "Confirm a timer lock over 24 hours")
+	addYesFlag(startCmd)
 	startCmd.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m)")
 	startCmd.Flags().String("for", "", "Timer lock: keep the block un-removable for this duration (e.g. 2h, 90m)")
 	startCmd.Flags().String("until", "", "Timer lock: keep the block un-removable until this clock time (HH:MM)")

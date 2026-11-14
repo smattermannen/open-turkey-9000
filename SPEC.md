@@ -637,6 +637,9 @@ Made with the owner. Newest last.
   only, nothing editable) and also cuts the internet connection (Wi-Fi off,
   Ethernet down, firewall drop-all), so another program can't be used to get
   around it.
+- 2026-11-14: A hotkey's lock is confirmed once, when the hotkey is added
+  (R-LOCK-12); pressing the hotkey then sets it without asking, since a
+  pressed hotkey has no terminal.
 
 ## 7. Open decisions
 

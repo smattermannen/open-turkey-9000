@@ -146,7 +146,7 @@ func TestProjectBackupAndShare(t *testing.T) {
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "youtube.com")
 	mustRun(t, "place", "rule", "b", "home", "on")
-	mustRun(t, "schedule", "lock", "b", "on", "--lead", "30m")
+	mustRun(t, "schedule", "lock", "b", "on", "--lead", "30m", "--yes")
 	mustRun(t, "social", "b", "youtube:no-shorts", "on")
 	backup, share := capture(t, "project", "export"), capture(t, "project", "export", "--share")
 	if !strings.Contains(backup, "AA:AA:AA:AA:AA:01") || strings.Contains(share, "AA:AA:AA:AA:AA:01") || strings.Contains(share, `"home"`) {
@@ -163,7 +163,7 @@ func TestProjectBackupAndShare(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		capture(t, "project", "import", file)
+		capture(t, "project", "import", file, "--yes")
 		if on, lead, _ := fresh.ScheduleLock("b"); !on || lead != 30 {
 			t.Errorf("%s: schedule lock %v %d", name, on, lead)
 		}

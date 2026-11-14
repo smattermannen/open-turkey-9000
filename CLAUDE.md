@@ -303,6 +303,13 @@ build and is **used for real**. On it:
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (schedules, time locks, schema upgrades) +
   `weblists.go` (website lists) + `pending.go` (queued loosening edits).
+- **Lock confirmation** (`internal/cli/confirm.go`, R-LOCK-12): every path
+  that sets, adds to or extends a lock builds `lockToSet` items (target, kind,
+  length) and calls `confirmLocks` before writing anything: a terminal is
+  asked for "yes", anything else is refused without `--yes` (`addYesFlag`).
+  Tests: `confirm_test.go` (`lockCases`, one per lock kind and target).
+  The GUI's lock dialogs all go through `confirm_lock` and then pass `--yes`.
+  A hotkey's lock is confirmed at `hotkey add`; `hotkey run` passes `yes`.
 - **Lock** (`internal/lock/`): raw-mode, paste-resistant typing challenge (random
   characters: 60% letters, 35% digits, 5% symbols) that gates a char-locked
   block's deactivation.

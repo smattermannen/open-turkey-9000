@@ -563,6 +563,28 @@ With --dry-run, says what would happen and changes nothing.`,
 				return err
 			}
 		}
+		{
+			// R-LOCK-12: the locks in the file are confirmed before anything
+			// is written; a dry run lists them (the interface asks with them).
+			var locks []lockToSet
+			for _, c := range blocks {
+				if l := c.in.ScheduleLock; l != nil {
+					locks = append(locks, lockToSet{"imported block '" + c.in.Name + "'", "schedule lock", leadLength(*l)})
+				}
+			}
+			for _, f := range newFreezes {
+				if f.lead >= 0 {
+					locks = append(locks, lockToSet{fmt.Sprintf("imported freeze schedule %s (%s mode)", f.w, f.mode), "schedule lock", leadLength(f.lead)})
+				}
+			}
+			if dry {
+				for _, l := range locks {
+					say("set a lock: %s", l)
+				}
+			} else if err := confirmLocks(cmd, locks...); err != nil {
+				return err
+			}
+		}
 
 		if !dry && len(images) > 0 {
 			if err := os.MkdirAll(db.ImagesDir(), 0o755); err != nil {
@@ -729,6 +751,7 @@ With --dry-run, says what would happen and changes nothing.`,
 
 func init() {
 	projectImportCmd.Flags().Bool("dry-run", false, "Say what would be imported and change nothing")
+	addYesFlag(projectImportCmd)
 	projectExportCmd.Flags().Bool("share", false, "Leave out places and place rules, for sharing with others")
 	projectCmd.AddCommand(projectExportCmd, projectImportCmd)
 	rootCmd.AddCommand(projectCmd)

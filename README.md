@@ -448,6 +448,8 @@ An open session spends only the time the block is in use: one of its apps is in 
 | Restart | `start b --restart` | the computer has restarted |
 | Delay | `start b --delay 30m` | the delay has passed after `unlock` |
 
+**Every lock asks you to confirm it when it is set** (R-LOCK-12): a lock on a block (also one added to or extended on an active block), its schedule lock, strict mode's lock, a browser option's lock, bypass prevention's lock, a scheduled freeze's lock, and the locks in an imported project. The question shows what is locked, the kind of lock and, where it has one, how long. Type `yes` to set it; any other answer sets nothing. Without a terminal (scripts) the command is refused unless you add `--yes`, which says you have confirmed already. The interface shows the same question in a dialog before it sets anything; `project import --dry-run` lists the locks a file would set.
+
 An unlocked lock is gone; the block stays on until you `stop` it or its schedule ends it (§3.4 of `SPEC.md`). With **re-lock** (`start b --lock --relock 30m`, also with `--password-stdin`), unlocking lifts the text and password locks only for that long; then they are on again by themselves, unless the block was stopped meanwhile.
 
 ## Browser options
@@ -579,7 +581,7 @@ kc9k hotkey list
 kc9k hotkey remove 1
 ```
 
-Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password when you add it, not each time you press it. The interface has them under Settings.
+Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password, and asks you to confirm the lock, when you add it (`--yes` for scripts), not each time you press it. The interface has them under Settings.
 
 ## How apps are recognised
 

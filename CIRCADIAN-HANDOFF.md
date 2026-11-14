@@ -60,6 +60,43 @@ don't touch that checkout. Fetch `origin/main` and merge before pushing.
     `color-scheme`, plus the gtk and cinnamon theme variants),
     `NightLightOn`, `TurnOffNightLight`.
 
+## State on 2026-11-14, second session (stopped early: out of tokens)
+
+This worktree now lives on the **second computer** (a desktop, test machine;
+HDMI monitor, no built-in backlight, Cinnamon on X11). Live tests are
+allowed here: put the branch name in `/tmp/kc9k-live.lock` before
+`sudo ./install.sh` or a live test, remove it afterwards. `ddcutil` and
+`xvfb` were installed with apt. Git has no identity on this computer:
+commit with `git -c user.name=smattermannen -c user.email=<owner's>`.
+Other sessions: `~/kc9k-monk` here; `~/open-turkey-9000` (main) and
+`~/kc9k-locks` on the laptop. When merging into main, delete this file in
+that merge.
+
+Done in this session:
+- The `show --json` shape (end of this file).
+- Step 1, the engine: `internal/enforce/circadian.go`, started from its own
+  goroutine in `daemon.go` (`RunCircadian`). It compiles but has **no tests
+  yet and never ran**. Pause keys are `backlight`, `external` and `gamma`
+  (`PauseKeys`, `LanePausedUntil`). `PreviewCircadian` lets the CLI drive the
+  hardware itself (the 5 s cycle is too slow for dragging) and the engine
+  adopts what it wrote; a clip that is off or paused isn't previewed.
+  `CircadianDarkRule` is ready for `Rules.Dark`; `WallpapersDir`,
+  `WallpaperKey`, `DarkKey`, `ReadCircadianStatus`, `ResumeCircadian` are
+  ready for the CLI.
+
+Next: tests for the engine with fake hardware (replace the `circadian*`
+vars and set `circadianDry` to return false; cover: applies, manual
+backlight change pauses until the next point, return to the last value
+resumes, expiry applies again, gamma Identity/Ours/Other, Other right
+after start is taken over, both clips off restores once, wallpaper and
+dark applied once per key and retried after a minute, preview adopted,
+nothing applied when dry). Then steps 2 to 6 below, the live tests
+(engine through a clip point change; manual override pause and Resume via
+ddcutil on the monitor, or gamma with `xrandr --output HDMI-0 --gamma
+0.8:0.8:0.8`, since plain ramps count as "apply"), and the merge into main.
+Not yet decided: `wallpaper time N HH:MM HH:MM` (to change an interval) is
+not in the command list below; ask the owner or have the GUI remove and add.
+
 ## To do
 
 1. **Engine** `internal/enforce/circadian.go`, run from its **own goroutine

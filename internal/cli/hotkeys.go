@@ -57,6 +57,12 @@ var hotkeyAddCmd = &cobra.Command{
 			if err := requireLockPassword(database); err != nil {
 				return err
 			}
+			// R-LOCK-12: a hotkey's lock is confirmed once, here; pressing
+			// the hotkey then sets it without asking (the owner's choice).
+			if err := confirmLocks(cmd, lockToSet{"block '" + args[1] + "'", "timer lock, set each time " + accel + " is pressed",
+				d.String() + " from the press"}); err != nil {
+				return err
+			}
 		}
 		id, err := database.AddHotkey(db.Hotkey{Keys: accel, Block: args[1], LockFor: lockFor})
 		if err != nil {
@@ -133,6 +139,10 @@ var hotkeyRunCmd = &cobra.Command{
 			if err := startCmd.Flags().Set("for", h.LockFor); err != nil {
 				return err
 			}
+			// R-LOCK-12: the lock was confirmed at 'hotkey add'.
+			if err := startCmd.Flags().Set("yes", "true"); err != nil {
+				return err
+			}
 		}
 		if err := startCmd.RunE(startCmd, []string{h.Block}); err != nil {
 			notify(fmt.Sprintf("Couldn't start '%s'", h.Block), err.Error())
@@ -150,6 +160,10 @@ func lockText(lockFor string) string {
 	return ", locked for " + lockFor
 }
 
+// syncDesktopHotkeys writes the desktop's shortcuts; tests replace it so
+// they never touch the real desktop.
+var syncDesktopHotkeys = blocker.SyncHotkeys
+
 // syncHotkeys puts the hotkeys on the desktop. A failure there doesn't undo
 // the change: they are synced again with the next one.
 func syncHotkeys(database *db.DB) error {
@@ -164,7 +178,7 @@ func syncHotkeys(database *db.DB) error {
 			Name: fmt.Sprintf("KC9K: start %s%s", h.Block, lockText(h.LockFor)),
 		}
 	}
-	if err := blocker.SyncHotkeys(desktop); err != nil {
+	if err := syncDesktopHotkeys(desktop); err != nil {
 		fmt.Printf("Warning: %v\n", err)
 	}
 	return nil
@@ -172,6 +186,7 @@ func syncHotkeys(database *db.DB) error {
 
 func init() {
 	hotkeyAddCmd.Flags().String("for", "", "Time-lock the block for this long when the hotkey starts it (e.g. 1h, 90m)")
+	addYesFlag(hotkeyAddCmd)
 	hotkeyCmd.AddCommand(hotkeyAddCmd, hotkeyRemoveCmd, hotkeyListCmd, hotkeyRunCmd)
 	rootCmd.AddCommand(hotkeyCmd)
 }

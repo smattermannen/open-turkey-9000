@@ -4,7 +4,9 @@
 // entries (the academia sites, say) to copy into a block's lists, as a new
 // list or into one the block has. Whether those entries are blocked or
 // spared is decided where they are copied to, so a cluster has no kind and
-// no actions. Editing a cluster never changes a block.
+// no actions. Editing a cluster never changes a block. A phrase cluster
+// (Phrases) holds phrases, in their typed form, instead of entries, and
+// looks at any of url, title and text, like a phrase set (R-PHRASE-10).
 package db
 
 import (
@@ -18,7 +20,8 @@ const clustersSchema = `CREATE TABLE IF NOT EXISTS clusters (
     name     TEXT NOT NULL UNIQUE,
     in_url   BOOLEAN NOT NULL DEFAULT 1,
     in_title BOOLEAN NOT NULL DEFAULT 0,
-    in_text  BOOLEAN NOT NULL DEFAULT 0
+    in_text  BOOLEAN NOT NULL DEFAULT 0,
+    phrases  BOOLEAN NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS cluster_entries (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,6 +36,7 @@ type Cluster struct {
 	Name    string
 	Where   Where
 	Entries []string
+	Phrases bool // a phrase cluster: Entries are phrases
 }
 
 func (d *DB) clusterEntries(id int) ([]string, error) {
@@ -55,8 +59,8 @@ func (d *DB) clusterEntries(id int) ([]string, error) {
 // GetCluster returns the named cluster with its entries.
 func (d *DB) GetCluster(name string) (Cluster, error) {
 	c := Cluster{Name: name}
-	err := d.conn.QueryRow("SELECT id, in_url, in_title, in_text FROM clusters WHERE name = ?", name).
-		Scan(&c.ID, &c.Where.URL, &c.Where.Title, &c.Where.Text)
+	err := d.conn.QueryRow("SELECT id, in_url, in_title, in_text, phrases FROM clusters WHERE name = ?", name).
+		Scan(&c.ID, &c.Where.URL, &c.Where.Title, &c.Where.Text, &c.Phrases)
 	if err == sql.ErrNoRows {
 		return c, fmt.Errorf("there is no cluster named '%s'", name)
 	}
@@ -78,14 +82,14 @@ func (d *DB) ClusterExists(name string) (bool, error) {
 
 // ListClusters returns every cluster with its entries, by name.
 func (d *DB) ListClusters() ([]Cluster, error) {
-	rows, err := d.conn.Query("SELECT id, name, in_url, in_title, in_text FROM clusters ORDER BY name COLLATE NOCASE")
+	rows, err := d.conn.Query("SELECT id, name, in_url, in_title, in_text, phrases FROM clusters ORDER BY name COLLATE NOCASE")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list clusters: %w", err)
 	}
 	var out []Cluster
 	for rows.Next() {
 		var c Cluster
-		if err := rows.Scan(&c.ID, &c.Name, &c.Where.URL, &c.Where.Title, &c.Where.Text); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Where.URL, &c.Where.Title, &c.Where.Text, &c.Phrases); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("failed to read a cluster: %w", err)
 		}
@@ -105,14 +109,23 @@ func (d *DB) ListClusters() ([]Cluster, error) {
 
 // CreateCluster adds an empty cluster. Names follow the rules for list names.
 func (d *DB) CreateCluster(name string, where Where) error {
+	return d.createCluster(name, where, false)
+}
+
+// CreatePhraseCluster adds an empty phrase cluster.
+func (d *DB) CreatePhraseCluster(name string, where Where) error {
+	return d.createCluster(name, where, true)
+}
+
+func (d *DB) createCluster(name string, where Where, phrases bool) error {
 	if err := CheckListName(name); err != nil {
 		return err
 	}
-	if err := CheckWhere(where); err != nil {
+	if err := checkClusterWhere(where, phrases); err != nil {
 		return err
 	}
-	_, err := d.conn.Exec("INSERT INTO clusters (name, in_url, in_title, in_text) VALUES (?, ?, ?, ?)",
-		name, where.URL, where.Title, where.Text)
+	_, err := d.conn.Exec("INSERT INTO clusters (name, in_url, in_title, in_text, phrases) VALUES (?, ?, ?, ?, ?)",
+		name, where.URL, where.Title, where.Text, phrases)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return fmt.Errorf("there already is a cluster named '%s'", name)
@@ -144,9 +157,25 @@ func (d *DB) DeleteCluster(id int) error {
 	return nil
 }
 
+// checkClusterWhere: a list cluster is an address or a term cluster; a
+// phrase cluster looks anywhere, like a phrase set.
+func checkClusterWhere(where Where, phrases bool) error {
+	if phrases {
+		if !where.Any() {
+			return fmt.Errorf("a phrase cluster looks at the address, the title or the text")
+		}
+		return nil
+	}
+	return CheckWhere(where)
+}
+
 // SetClusterWhere sets where a cluster looks.
 func (d *DB) SetClusterWhere(id int, where Where) error {
-	if err := CheckWhere(where); err != nil {
+	var phrases bool
+	if err := d.conn.QueryRow("SELECT phrases FROM clusters WHERE id = ?", id).Scan(&phrases); err != nil {
+		return fmt.Errorf("failed to read the cluster: %w", err)
+	}
+	if err := checkClusterWhere(where, phrases); err != nil {
 		return err
 	}
 	_, err := d.conn.Exec("UPDATE clusters SET in_url = ?, in_title = ?, in_text = ? WHERE id = ?",

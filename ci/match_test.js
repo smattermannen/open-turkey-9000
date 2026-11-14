@@ -125,6 +125,76 @@ const failed0 = [];
   }
 }
 
+// Phrases: the examples of SPEC R-PHRASE-1 to 8.
+{
+  const P = (sets, length) => ({ sets: sets.map((terms) => Array.isArray(terms) ? { terms, necessary: true } : terms), length });
+  const phraseCases = [
+    [P([["eat", "nice"], ["hello", "grandpa"]]), "Let's eat grandpa", true],
+    [P([["eat", "nice"], ["hello", "grandpa"]]), "Let's eat, grandpa!", false],
+    [P([["long cat", "neko"], ["running", "sitting"]]), "long cat running", true],
+    [P([["long cat", "neko"], ["running", "sitting"]]), "long cat neko", false],
+    [P([["long cat", "neko"], ["running", "sitting"]]), "a long-cat sitting here", true],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "big and long gorilla", true],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "big gorilla", true],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "big, very long gorilla", true],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "big. A gorilla", false],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "gorilla big", false],
+    [P([["big-", "strong"], ["-gorilla", "cat"]]), "strong cat", true],
+    [P([["-gorilla", "cat"], ["jumping", "river"]]), "jumping gigantic gorilla", false],
+    [P([["-gorilla", "cat"], ["jumping", "river"]]), "jumping gorilla", false],
+    [P([["-gorilla", "cat"], ["jumping", "river"]]), "cat jumping", true],
+    [P([["red"], ["car"], { terms: ["big"], necessary: false }], 3), "red car", false],
+    [P([["red"], ["car"], { terms: ["big"], necessary: false }], 3), "big red car", true],
+    [P([["red"], ["car"], { terms: ["big"], necessary: false }]), "car red", true],
+    [P([["porn*"], ["video*"]]), "pornstar videos", true],
+    [P([["porn*"], ["video*"]]), "pornstar\nvideos", false],
+    [P([["let's"], ["go"]]), "Let's go", true],
+  ];
+  for (const [phrase, text, want] of phraseCases) {
+    if (kc9kPhraseMatcher(phrase).test(text) !== want) {
+      failed0.push("phrase " + JSON.stringify(phrase.sets) + " on " + JSON.stringify(text) + ": want " + want);
+    }
+  }
+  const inUrl = kc9kPhraseMatcher(P([["long cat"], ["video"]]), "url");
+  if (!inUrl.test("https://example.com/long-cat_video?x=1") || !inUrl.test("https://example.com/long%20cat/video")) {
+    failed0.push("a phrase in a decoded address");
+  }
+  if (kc9kPhraseCheck(P([["-gorilla"], ["x"]])) === "" || kc9kPhraseCheck(P([["a-"], ["-b"]])) !== "" ||
+    kc9kPhraseCheck(P([["-a-"], ["b"]])) === "" || kc9kPhraseCheck(P([["a"]])) === "" ||
+    kc9kPhraseCheck(P([["big-", "-gorilla"], ["cat"]])) === "" || kc9kPhraseCheck(P([["-m-"], ["a"], ["b"]])) === "" ||
+    kc9kPhraseCheck(P([["a-"], ["-m-"], ["-b"]])) !== "") {
+    failed0.push("kc9kPhraseCheck");
+  }
+}
+
+// A phrase set as a rule: an action needs its number of different phrases;
+// the block's exceptions spare the page (R-LIST-1, R-PHRASE-9).
+{
+  const rule = (distinct, except) => kc9kCompileLists([{
+    id: -1, block: "b", name: "Grandpa", url: [], title: [], text: [],
+    phrases: [
+      { sets: [{ terms: ["eat"], necessary: true }, { terms: ["grandpa"], necessary: true }] },
+      { sets: [{ terms: ["big-"], necessary: true }, { terms: ["-gorilla"], necessary: true }] },
+    ],
+    phrase_scope: ["text"], actions: [{ action: "block", distinct, hits: 1 }],
+    except: except || { url: [], title: [], text: [] },
+  }]);
+  const page = { url: "https://example.com/", title: "", text: "Let's eat grandpa. A big grey gorilla." };
+  if (kc9kListMatches(rule(1), page).length !== 1 || kc9kListMatches(rule(2), page).length !== 1 ||
+    kc9kListMatches(rule(3), page).length !== 0) {
+    failed0.push("a phrase set's threshold counts different phrases");
+  }
+  if (kc9kListMatches(rule(1), { url: page.url, title: "" }).length !== 0) {
+    failed0.push("a text phrase set acted before the text was read");
+  }
+  if (kc9kListMatches(rule(1, { url: ["example.com"], title: [], text: [] }), page).length !== 0) {
+    failed0.push("a block's exception didn't spare a page from its phrase set");
+  }
+  if (!kc9kReadsPage(rule(1))) {
+    failed0.push("a text phrase set doesn't make the page be read");
+  }
+}
+
 let failed = failed0.length;
 for (const line of failed0) {
   console.error("index: " + line);

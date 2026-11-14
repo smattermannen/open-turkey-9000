@@ -279,6 +279,32 @@ A block has **blacklists** and **exception lists**, each with a name. Each list 
 
 A combination counts where a run of words, with only spaces between them (no commas or other words) and each a word of some box, holds what every box needs, in any order. Each word follows the rules above (whole words, `*` inside words; phrases such as `car(very cheap)`), and a word that fits two boxes counts for one of them. A combination is one entry: it counts once toward a threshold, and once per run toward hits. In the shell, quote it, since brackets mean something there; it is stored with one space between boxes and `, ` between words, so it is found again however it was typed. In the interface, **Word combination…** under a title or text list has one box per bracket, each with its minimal count; double-click a combination to change it.
 
+**Phrase sets** are the new form of word combinations: a named set of phrases in a block, with a scope (url, title, text) and its own actions, like a blacklist. A phrase is two or more **word sets** in brackets, and a match takes one term from each, directly after each other in any order, in one sentence:
+
+```bash
+kc9k phrase-set create focus Grandpa                  # looks at the text unless --url/--title/--text
+kc9k phrase-set add focus Grandpa "[eat, nice] [hello, grandpa]" "[big-, strong] [-gorilla, cat]"
+kc9k phrase-set show focus Grandpa
+kc9k phrase-set action focus Grandpa greyscale on     # same actions and flags as lists
+kc9k phrase-set threshold focus Grandpa block 2       # how many different phrases (default 1)
+kc9k phrase-set scope focus Grandpa url on            # or title/text, on/off
+kc9k phrase-set test focus Grandpa on                 # report in the page instead of acting
+kc9k phrase-set export focus Grandpa > grandpa.txt   # one phrase per line
+kc9k phrase-set import focus Other grandpa.txt
+kc9k phrase-set remove|rename|delete …
+```
+
+Phrase sets travel with `kc9k block export` / `import` and the project file, and can be kept as [clusters](#clusters).
+
+| Phrase | Counts in | Not in |
+|---|---|---|
+| `[eat, nice] [hello, grandpa]` | "Let's eat grandpa" | "Let's eat, grandpa!" |
+| `[long cat, neko] [running, sitting]` | "long cat running", "long-cat sitting" | "long cat neko" (one term per word set) |
+| `[big-, strong] [-gorilla, cat]` | "big and long gorilla", "big gorilla", "strong cat" | "gorilla big", "big. gorilla" |
+| `[red] [car] [big, small]? :3` | "big red car" | "red car" (`:3`: three terms needed) |
+
+Terms follow the rules above (whole words, `*` inside a word); punctuation between terms, and a break between parts of the page (heading, paragraph, list item, button), end a match. A hyphen between letters is a space; an apostrophe belongs to its word. A `?` after a word set (third or later) makes it optional, and `:N` is the **phrase length**, how many terms a match needs (default: the necessary word sets). A **bridge** `big-` … `-gorilla` lets up to 20 words of the same sentence (commas allowed) stand between those two terms, in that order; `-strong-` is a middle link and needs three word sets. A bridge needs both ends in different word sets, or the phrase is refused. In the address, it is decoded first and `-_/.?=&+#:,` count as spaces. The block's exception lists spare pages from its phrase sets too. In the interface, **Phrase sets** on a block's Websites tab has **New phrase set…**, and each set **+ Create new phrase**: one row per word set, each ticked necessary or optional (the first two always necessary), and the phrase length; double-click a phrase to change it. Phrase sets have a threshold per action and no hit count. Adding phrases, ticking a scope or an action, a lower threshold and test mode off are always allowed; the rest is refused while the block is locked.
+
 Each blacklist chooses its **actions**, in any combination:
 
 | Action | What happens |
@@ -356,6 +382,16 @@ kc9k cluster rename academia school
 kc9k cluster delete school
 ```
 
+A **phrase cluster** holds phrases instead of entries, and becomes a phrase set when copied (there are no phrase exceptions, and phrases take no part in recording):
+
+```bash
+kc9k cluster create Grandpa --phrases               # looks at the text; or --url / --title
+kc9k cluster add Grandpa "[eat, nice] [hello, grandpa]"
+kc9k cluster copy Grandpa focus                     # a new phrase set 'Grandpa' in block 'focus'
+kc9k cluster copy Grandpa focus --into Words        # add the phrases to a phrase set the block has
+kc9k cluster save focus Words grandpa-phrases       # a block's phrase set saved as a phrase cluster
+```
+
 A copy is a copy: later changes to the cluster don't reach the block, and deleting the cluster leaves the copied lists alone. Editing a cluster is always allowed. Copying into a block follows the block's rules: into a blacklist strengthens it (always allowed), into an exception list weakens it (refused while the block is locked). A new blacklist made from a cluster blocks what it matches; choose other actions with `kc9k list action`. An exported cluster is a plain entry file, so `kc9k list import` reads it too.
 
 ## Link recording
@@ -411,6 +447,8 @@ An open session spends only the time the block is in use: one of its apps is in 
 | Password | `start b --password-stdin` | someone enters it with `unlock`, from standard input |
 | Restart | `start b --restart` | the computer has restarted |
 | Delay | `start b --delay 30m` | the delay has passed after `unlock` |
+
+**Every lock asks you to confirm it when it is set** (R-LOCK-12): a lock on a block (also one added to or extended on an active block), its schedule lock, strict mode's lock, a browser option's lock, bypass prevention's lock, a scheduled freeze's lock, and the locks in an imported project. The question shows what is locked, the kind of lock and, where it has one, how long. Type `yes` to set it; any other answer sets nothing. Without a terminal (scripts) the command is refused unless you add `--yes`, which says you have confirmed already. The interface shows the same question in a dialog before it sets anything; `project import --dry-run` lists the locks a file would set.
 
 An unlocked lock is gone; the block stays on until you `stop` it or its schedule ends it (§3.4 of `SPEC.md`). With **re-lock** (`start b --lock --relock 30m`, also with `--password-stdin`), unlocking lifts the text and password locks only for that long; then they are on again by themselves, unless the block was stopped meanwhile.
 
@@ -543,7 +581,7 @@ kc9k hotkey list
 kc9k hotkey remove 1
 ```
 
-Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password when you add it, not each time you press it. The interface has them under Settings.
+Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password, and asks you to confirm the lock, when you add it (`--yes` for scripts), not each time you press it. The interface has them under Settings.
 
 ## How apps are recognised
 
@@ -663,7 +701,7 @@ Access passwords decide who may look; the [settings password](#settings-password
 
 ## Strict mode
 
-`kc9k strict on` denies sudo and pkexec for every user while a block or setting is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Quotas and schedules do not trigger it. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
+`kc9k strict on` denies sudo and pkexec for every user while a block or setting is locked or Frozen Chicken runs, in terminals and text consoles alike. Only `kc9k` keeps working, and rights return when the lock ends. Allowances and schedules without a schedule lock do not trigger it; a schedule lock does, while it is on. Recovery mode and another operating system still get around it, and a separately set root password still works with `su`.
 
 Strict mode is off until you turn it on, and `kc9k strict off` works at any time, unless strict mode has its own setting lock or [no weakening during active locks](#no-weakening-during-active-locks) is on while something is locked. Its lock is set when turning it on, with the same flags as a browser setting's (`--for`, `--until`, `--lock`, `--password-stdin`, `--restart`); `kc9k strict unlock` lifts a text or password lock and leaves strict mode on. Strict mode's own lock only keeps it on: sudo is taken away only while something else is locked.
 

@@ -65,7 +65,7 @@ const checkInRecordEvery = 30 * time.Second
 // apps alone doesn't need it.
 func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
 	for _, b := range active {
-		if b.Lists.Enforces() || len(b.Social) > 0 {
+		if b.Lists.Enforces() || len(b.Social) > 0 || b.HasPhrases {
 			return true
 		}
 	}
@@ -202,6 +202,34 @@ type ListRule struct {
 	// Test: the list is in test mode (§3.2). The extension shows what it
 	// found on each page instead of acting on it.
 	Test bool `json:"test,omitempty"`
+	// Phrases makes the rule a phrase set (its ID is minus the set's): an
+	// action's Distinct is how many different phrases must match, in the
+	// places PhraseScope names (url, title, text).
+	Phrases     []db.Phrase `json:"phrases,omitempty"`
+	PhraseScope []string    `json:"phrase_scope,omitempty"`
+}
+
+// phraseRules turns a block's phrase sets into rules, with the block's
+// exceptions (R-LIST-1).
+func phraseRules(d *db.DB, block string, except RuleExcept) []ListRule {
+	sets, err := d.PhraseSets(block)
+	if err != nil {
+		log.Printf("rules: phrase sets of %s: %v", block, err)
+		return nil
+	}
+	var out []ListRule
+	for _, s := range sets {
+		if len(s.Phrases) == 0 || len(s.Actions) == 0 || !s.Where.Any() {
+			continue
+		}
+		rule := ListRule{ID: -s.ID, Block: block, Name: s.Name, URL: []string{}, Title: []string{}, Text: []string{},
+			Actions: []RuleAction{}, Except: except, Test: s.Test, Phrases: s.Phrases, PhraseScope: s.Where.List()}
+		for _, a := range s.Actions {
+			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct, Hits: 1, Param: a.Param})
+		}
+		out = append(out, rule)
+	}
+	return out
 }
 
 // RuleAction is one action of a ListRule. Param is the address for
@@ -298,10 +326,15 @@ func BuildRules(d *db.DB) (Rules, error) {
 				rules.Social = append(rules.Social, preset)
 			}
 		}
-		for _, rule := range listRules(b) {
+		except := RuleExcept{URL: urlEntries(b.Lists.ExceptionEntries(db.PlaceURL)),
+			Title: append([]string{}, b.Lists.ExceptionEntries(db.PlaceTitle)...),
+			Text:  append([]string{}, b.Lists.ExceptionEntries(db.PlaceText)...)}
+		for _, rule := range append(listRules(b), phraseRules(d, b.BlockName, except)...) {
 			// Test mode is for tuning what a list finds in pages: lists that
 			// read the title or text are shown, not run.
-			rule.Test = slices.Contains(testing, rule.ID) && len(rule.Title)+len(rule.Text) > 0
+			if len(rule.Phrases) == 0 {
+				rule.Test = slices.Contains(testing, rule.ID) && len(rule.Title)+len(rule.Text) > 0
+			}
 			rules.Lists = append(rules.Lists, rule)
 			if rule.Test {
 				continue

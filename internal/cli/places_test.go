@@ -25,7 +25,7 @@ func TestPlaces(t *testing.T) {
 	}
 	mustRun(t, "block", "add", "b", "reddit.com")
 	mustRun(t, "place", "rule", "b", "home", "on")
-	mustRun(t, "schedule", "lock", "b", "on") // places protect a block only through it (§3.4)
+	mustRun(t, "schedule", "lock", "b", "on", "--yes") // places protect a block only through it (§3.4)
 	p, err := d.GetPlace("home")
 	if err != nil || len(p.Networks) != 3 || len(p.Blocks) != 1 {
 		t.Fatalf("place = %+v, %v", p, err)

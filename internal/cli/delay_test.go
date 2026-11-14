@@ -24,14 +24,14 @@ func TestAllowWindowsAndScheduleLock(t *testing.T) {
 		t.Fatalf("apps = %v; the removal should apply at once", detail.Apps)
 	}
 
-	mustRun(t, "schedule", "lock", "b", "on", "--lead", "1h")
+	mustRun(t, "schedule", "lock", "b", "on", "--lead", "1h", "--yes")
 	if on, lead, _ := d.ScheduleLock("b"); !on || lead != 60 {
 		t.Fatalf("schedule lock = %v %d", on, lead)
 	}
 	if err := runCLI(t, "list", "remove", "b", "Exceptions", "file://*"); err != nil {
 		t.Errorf("removing an exception (a strengthening) was refused: %v", err)
 	}
-	if err := runCLI(t, "schedule", "lock", "b", "on", "--lead", "10m"); err == nil {
+	if err := runCLI(t, "schedule", "lock", "b", "on", "--lead", "10m", "--yes"); err == nil {
 		t.Error("the lead time was shortened while locked")
 	}
 	if err := runCLI(t, "schedule", "lock", "b", "off"); err == nil {
@@ -40,7 +40,7 @@ func TestAllowWindowsAndScheduleLock(t *testing.T) {
 	if err := runCLI(t, "schedule", "remove", "b", "1"); err == nil {
 		t.Error("the last allow window was removed while locked")
 	}
-	mustRun(t, "schedule", "lock", "b", "on", "--lead", "2h")
+	mustRun(t, "schedule", "lock", "b", "on", "--lead", "2h", "--yes")
 	if _, lead, _ := d.ScheduleLock("b"); lead != 120 {
 		t.Errorf("a longer lead time didn't apply: %d", lead)
 	}

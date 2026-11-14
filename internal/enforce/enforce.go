@@ -470,10 +470,18 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 			continue
 		}
 
+		// A block switched off by hand while its window was open (it had no
+		// schedule lock) stays off until that window or place ends.
+		stopped, _ := d.GetSetting(StoppedInWindowKey(name))
+		if stopped != "" && !within {
+			_ = d.SetSetting(StoppedInWindowKey(name), "")
+			stopped = ""
+		}
 		switch {
+		case within && !detail.Active && stopped != "":
 		case within && !detail.Active:
-			// Activate as a scheduled block (not char-locked, but the CLI
-			// refuses to stop it while the schedule enforces it).
+			// Activate as a scheduled block (its schedule lock, if it has
+			// one, keeps it from being stopped).
 			if err := d.ActivateBlock(name, false, 0, 0, true); err != nil {
 				log.Printf("daemon: schedule: failed to activate %s: %v", name, err)
 			} else {
@@ -490,6 +498,10 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 	}
 	return nil
 }
+
+// StoppedInWindowKey is the setting that says a block was switched off by
+// hand while its schedule window (or place) was open.
+func StoppedInWindowKey(block string) string { return "schedule.stopped." + block }
 
 // lockLifted reports whether a block's text and password locks are lifted
 // for now by their re-lock option.

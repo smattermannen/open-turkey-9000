@@ -101,7 +101,7 @@ func TestNepsisCommands(t *testing.T) {
 	}
 
 	// The global one with a time lock: looser is refused until it ends.
-	mustRun(t, "nepsis", "set", "--count", "20", "--within", "10m", "--then", "lock-screen", "--then-for", "15m", "--for", "2h")
+	mustRun(t, "nepsis", "set", "--count", "20", "--within", "10m", "--then", "lock-screen", "--then-for", "15m", "--for", "2h", "--yes")
 	if err := runCLI(t, "nepsis", "off"); err == nil || !strings.Contains(err.Error(), "locked until") {
 		t.Errorf("turning off a time-locked bypass prevention: %v", err)
 	}

@@ -306,6 +306,36 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 	return next, changes, nil
 }
 
+// settingLocks lists the locks strengthenSettingLock adds to a setting, for
+// confirmLocks (R-LOCK-12).
+func settingLocks(target string, cur settingLockState, next db.SettingLock) []lockToSet {
+	old := cur.lock
+	if !old.TimeLocked(cur.trusted) {
+		old.LockedUntil = 0
+	}
+	if !old.RestartLocked(cur.bootID) {
+		old.RestartBoot = ""
+	}
+	var locks []lockToSet
+	if next.LockedUntil != old.LockedUntil {
+		locks = append(locks, lockToSet{target, "timer lock", timerLength(cur.trusted, next.LockedUntil)})
+	}
+	if next.LockChars != old.LockChars {
+		length := ""
+		if old.LockChars > 0 {
+			length = "lengthened"
+		}
+		locks = append(locks, lockToSet{target, textLockKind(next.Style, next.LockChars), length})
+	}
+	if next.PasswordHash != old.PasswordHash {
+		locks = append(locks, lockToSet{target, "password lock", ""})
+	}
+	if next.RestartBoot != old.RestartBoot {
+		locks = append(locks, lockToSet{target, "restart lock", "until the computer restarts"})
+	}
+	return locks
+}
+
 func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
 	if name == "force-librewolf" && blocker.LibreWolfVersion() == "" {
 		return fmt.Errorf("LibreWolf isn't installed, so every browser would be closed; run 'kc9k browser install-librewolf' first")
@@ -330,6 +360,9 @@ func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
 	}
 	if len(changes) == 0 {
 		return fmt.Errorf("%s already has those locks", name)
+	}
+	if err := confirmLocks(cmd, settingLocks("browser setting '"+name+"'", cur, next)...); err != nil {
+		return err
 	}
 	if err := database.SetSetting("browser."+name, "on"); err != nil {
 		return err
@@ -457,5 +490,6 @@ func init() {
 	browserCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	browserCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(browserCmd)
+	addYesFlag(browserCmd)
 	rootCmd.AddCommand(browserCmd)
 }

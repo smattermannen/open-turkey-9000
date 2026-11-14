@@ -721,9 +721,10 @@ class EditableList(Gtk.Box):
 
     def __init__(self, title, placeholder, on_add, on_remove,
                  on_import=None, on_export=None, help_text="", search=False, hidden=False,
-                 on_activate=None):
+                 on_activate=None, split=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
+        self.split = split or split_entries
         self.hidden, self.owner = hidden, None
         if title:
             self.pack_start(heading(title, "medium"), False, False, 0)
@@ -820,7 +821,7 @@ class EditableList(Gtk.Box):
         self._show_cover()
 
     def _add(self, _widget):
-        values = split_entries(self.entry.get_text())
+        values = self.split(self.entry.get_text())
         if values:
             self.entry.set_text("")
             self.on_add(values)
@@ -1097,6 +1098,283 @@ class ListCard(Gtk.Frame):
                                "Its entries go with it. Deleting a blacklist weakens the block.",
                                "Delete", destructive=True):
             self.window.run(self.command("delete"), then=self.window.queued_note)
+
+
+MAX_WORD_SETS = 9
+
+
+def phrase_text(sets, length=0):
+    """Writes a phrase as it is typed: "[eat, nice] [hello, grandpa] [today]? :3"
+    (like db.Phrase.String). sets is [(terms, necessary)]."""
+    parts, necessary = [], 0
+    for i, (terms, needed) in enumerate(sets):
+        needed = needed or i < 2
+        necessary += 1 if needed else 0
+        parts.append("[" + ", ".join(terms) + "]" + ("" if needed else "?"))
+    text = " ".join(parts)
+    return f"{text} :{length}" if length and length != necessary else text
+
+
+class PhraseDialog(Gtk.Dialog):
+    """Builds a phrase (§4.3): its word sets, each ticked necessary or
+    optional, and the phrase length; get_text() gives the typed form."""
+
+    def __init__(self, parent, initial=None):
+        super().__init__(title="Phrase", transient_for=parent, modal=True)
+        self.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        self.ok = self.add_button("Save" if initial else "Add", Gtk.ResponseType.OK)
+        self.set_default_size(600, -1)
+        area = self.get_content_area()
+        area.set_spacing(8)
+        area.set_border_width(12)
+        area.pack_start(heading("Phrase", "medium"), False, False, 0)
+        area.pack_start(dim(
+            "A page counts when it has one term of each necessary word set, directly after "
+            "each other in any order, in one sentence (no punctuation between). Separate a "
+            "set's terms with commas; * matches inside a word (porn*). A term ending in - "
+            "(big-) and one starting with - (-gorilla) in another set make a bridge: up to "
+            "20 words may stand between them. The first two word sets are always necessary."),
+            False, False, 0)
+        self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        area.pack_start(self.rows, False, False, 0)
+        self.add_set = Gtk.Button(label="+ Add word set", halign=Gtk.Align.START)
+        self.add_set.connect("clicked", lambda _b: self.add_row())
+        area.pack_start(self.add_set, False, False, 0)
+        length_row = Gtk.Box(spacing=8)
+        length_row.pack_start(Gtk.Label(label="Phrase length (terms a match needs):"), False, False, 0)
+        self.length = Gtk.SpinButton.new_with_range(2, MAX_WORD_SETS, 1)
+        self.length.connect("value-changed", lambda _s: self.changed())
+        length_row.pack_start(self.length, False, False, 0)
+        area.pack_start(length_row, False, False, 0)
+        self.preview = dim("", wrap=True)
+        self.preview.set_selectable(True)
+        area.pack_start(self.preview, False, False, 0)
+        sets = (initial or {}).get("sets") or [{"terms": []}, {"terms": []}]
+        for word_set in sets:
+            self.add_row(word_set.get("terms", []), word_set.get("necessary", True))
+        self.last_necessary = self.necessary()
+        self.length.set_value((initial or {}).get("length") or self.last_necessary)
+        self.changed()
+        self.show_all()
+
+    def add_row(self, terms=(), necessary=True):
+        row = Gtk.Box(spacing=8)
+        entry = Gtk.Entry(hexpand=True, placeholder_text="eat, nice", text=", ".join(terms))
+        check = Gtk.CheckButton(label="Necessary", active=necessary)
+        remove = Gtk.Button.new_from_icon_name("list-remove-symbolic", Gtk.IconSize.BUTTON)
+        remove.set_tooltip_text("Remove this word set")
+        remove.connect("clicked", lambda _b: (self.rows.remove(row), self.changed()))
+        entry.connect("changed", lambda _e: self.changed())
+        check.connect("toggled", lambda _c: self.changed())
+        row.pack_start(entry, True, True, 0)
+        row.pack_start(check, False, False, 0)
+        row.pack_start(remove, False, False, 0)
+        row.entry, row.check, row.remove = entry, check, remove
+        self.rows.pack_start(row, False, False, 0)
+        row.show_all()
+        self.changed()
+
+    def word_sets(self):
+        out = []
+        for i, row in enumerate(self.rows.get_children()):
+            terms = [" ".join(t.split()) for t in row.entry.get_text().replace("[", " ").replace("]", " ").split(",")]
+            out.append(([t for t in terms if t.strip("*- ")], i < 2 or row.check.get_active()))
+        return out
+
+    def necessary(self):
+        return sum(1 for _t, needed in self.word_sets() if needed)
+
+    def get_text(self):
+        sets = self.word_sets()
+        if len(sets) < 2 or any(not terms for terms, _n in sets):
+            return ""
+        return phrase_text(sets, self.length.get_value_as_int())
+
+    def changed(self):
+        if not hasattr(self, "length"):
+            return
+        rows = self.rows.get_children()
+        for i, row in enumerate(rows):
+            # R-PHRASE-1: the first two word sets are necessary.
+            row.check.set_sensitive(i >= 2)
+            if i < 2:
+                row.check.set_active(True)
+            row.remove.set_sensitive(len(rows) > 2)
+        # The length follows the necessary word sets until it is set apart.
+        low, high = self.necessary(), max(len(rows), 2)
+        follow = self.length.get_value_as_int() == getattr(self, "last_necessary", low)
+        self.last_necessary = low
+        self.length.set_range(max(low, 2), high)
+        if follow:
+            self.length.set_value(low)
+        self.add_set.set_sensitive(len(rows) < MAX_WORD_SETS)
+        text = self.get_text()
+        self.ok.set_sensitive(bool(text))
+        self.preview.set_text(f"Phrase: {text}" if text else "Fill in at least two word sets.")
+
+
+class PhraseSetCard(ListCard):
+    """One phrase set (§4.3): scope, actions, a threshold of different
+    phrases per action, test mode, and its phrases, each edited in a
+    PhraseDialog. Reuses ListCard's handling of actions and their settings."""
+
+    def __init__(self, window, data):
+        Gtk.Frame.__init__(self)
+        self.window, self.data = window, data
+        self.filling = False
+        self.is_exceptions = False
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        self.add(box)
+
+        top = Gtk.Box(spacing=6)
+        self.title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        top.pack_start(self.title, True, True, 0)
+        for label, handler in (("Delete…", self.delete), ("Rename…", self.rename)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", handler)
+            top.pack_end(button, False, False, 0)
+        box.pack_start(top, False, False, 0)
+
+        self.place_checks = {}
+        places = Gtk.Box(spacing=12)
+        places.pack_start(Gtk.Label(label="Looks at:"), False, False, 0)
+        for name, title in LIST_PLACES:
+            check = Gtk.CheckButton(label=title)
+            check.connect("toggled", self.toggle_place, name)
+            self.place_checks[name] = check
+            places.pack_start(check, False, False, 0)
+        box.pack_start(places, False, False, 0)
+
+        self.test_check = Gtk.CheckButton(
+            label="Test mode: show what it finds in pages instead of acting",
+            tooltip_text="Turning it on weakens the block.")
+        self.test_check.connect("toggled", self.toggle_test)
+        box.pack_start(self.test_check, False, False, 0)
+
+        box.pack_start(Gtk.Label(label="Actions:", xalign=0), False, False, 0)
+        actions = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
+                              column_spacing=12, row_spacing=2)
+        self.action_checks, self.spins = {}, {}
+        monk_block = self.window.selected == (self.window.state or {}).get("monk_block")
+        for name, title in SITE_ACTIONS:
+            check = Gtk.CheckButton(label=title)
+            check.connect("toggled", self.toggle_action, name)
+            self.action_checks[name] = check
+            if not (monk_block and name == "monk"):  # R-MONK-1
+                actions.add(check)
+        box.pack_start(actions, False, False, 0)
+        self.param_rows = {}
+        for name in PARAM_ACTIONS:
+            row = Gtk.Box(spacing=8)
+            label = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+            change = Gtk.Button(label="Change…")
+            change.connect("clicked", lambda _b, n=name: self.ask_settings(n))
+            row.pack_start(label, True, True, 0)
+            row.pack_start(change, False, False, 0)
+            self.param_rows[name] = (row, label)
+            box.pack_start(row, False, False, 0)
+
+        # R-PHRASE-9: per action, how many different phrases must match.
+        self.threshold_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.threshold_row.pack_start(dim("Threshold: how many different phrases each action needs."),
+                                      False, False, 0)
+        grid = Gtk.Grid(column_spacing=8, row_spacing=4)
+        for row, (name, title) in enumerate(SITE_ACTIONS):
+            label = Gtk.Label(label=title, xalign=0)
+            distinct = Gtk.SpinButton.new_with_range(1, 1000, 1)
+            self.spins[name] = (label, distinct)
+            grid.attach(label, 0, row, 1, 1)
+            grid.attach(distinct, 1, row, 1, 1)
+        save = Gtk.Button(label="Save thresholds", halign=Gtk.Align.START)
+        save.connect("clicked", self.save_numbers)
+        grid.attach(save, 1, len(SITE_ACTIONS), 1, 1)
+        self.threshold_row.pack_start(grid, False, False, 0)
+        box.pack_start(self.threshold_row, False, False, 0)
+
+        self.entries = EditableList(
+            "", "[eat, nice] [hello, grandpa]", self.add_entries, self.remove_entry,
+            search=True, hidden=True, on_activate=self.edit_phrase,
+            split=lambda text: [text.strip()] if text.strip() else [])
+        box.pack_start(self.entries, True, True, 0)
+        create = Gtk.Button(label="+ Create new phrase", halign=Gtk.Align.START)
+        create.connect("clicked", lambda _b: self.edit_phrase(None))
+        box.pack_start(create, False, False, 0)
+        self.update(data)
+
+    def update(self, data):
+        self.data = data
+        self.filling = True
+        try:
+            count = len(data["phrases"])
+            self.title.set_markup(f"<b>{GLib.markup_escape_text(data['name'])}</b>  "
+                                  f"<small>phrase set · {count} {'phrase' if count == 1 else 'phrases'}</small>")
+            for name, check in self.place_checks.items():
+                check.set_active(name in data["where"])
+            self.test_check.set_active(data.get("test", False))
+            actions = {a["action"]: a for a in data["actions"]}
+            for name, check in self.action_checks.items():
+                check.set_active(name in actions)
+            for name, (row, label) in self.param_rows.items():
+                row.set_no_show_all(name not in actions)
+                row.set_visible(name in actions)
+                if name in actions:
+                    label.set_text(self.settings_text(name, actions[name]))
+            for name, (label, distinct) in self.spins.items():
+                distinct.set_value(actions.get(name, {}).get("distinct", 1))
+                for widget in (label, distinct):
+                    widget.set_no_show_all(name not in actions)
+                    widget.set_visible(name in actions)
+            self.entries.set_items([p["text"] for p in data["phrases"]])
+        finally:
+            self.filling = False
+
+    def command(self, *args):
+        return ["phrase-set", args[0], self.window.selected, self.data["name"], *args[1:]]
+
+    def toggle_test(self, check):
+        if self.filling or self.window.updating:
+            return
+        self.window.run(self.command("test", "on" if check.get_active() else "off"))
+
+    def edit_phrase(self, text):
+        """Adds a phrase, or changes one (text): the new one is added, then
+        the old one removed, which weakens and may be refused."""
+        old = next((p for p in self.data["phrases"] if p["text"] == text), None) if text else None
+        if text and old is None:
+            return
+        dialog = PhraseDialog(self.window, old)
+        answer = dialog.run()
+        new = dialog.get_text()
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK or not new or (old and new == old["text"]):
+            return
+        if old is None:
+            self.add_entries([new])
+            return
+        self.window.run(self.command("add", new), then=lambda _o: self.window.run(
+            self.command("remove", text)))
+
+    def save_numbers(self, _button):
+        current = {a["action"]: a for a in self.data["actions"]}
+        changes = [(name, spin.get_value_as_int()) for name, (_l, spin) in self.spins.items()
+                   if name in current and spin.get_value_as_int() != current[name].get("distinct", 1)]
+
+        def run(rest):
+            if rest:
+                (name, value), rest = rest[0], rest[1:]
+                self.window.run(self.command("threshold", name, str(value)), then=lambda _o: run(rest))
+        run(changes)
+
+    def rename(self, _button):
+        name = self.window.ask_text("Rename phrase set", initial=self.data["name"])
+        if name and name != self.data["name"]:
+            self.window.run(self.command("rename", name))
+
+    def delete(self, _button):
+        if self.window.confirm(f"Delete the phrase set {self.data['name']}?",
+                               "Its phrases go with it. Deleting one with phrases weakens the block.",
+                               "Delete", destructive=True):
+            self.window.run(self.command("delete"))
 
 
 class StatTile(Gtk.Box):
@@ -1574,6 +1852,17 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return answer == Gtk.ResponseType.OK
 
+    def confirm_lock(self, locks):
+        """R-LOCK-12: the one confirmation for every lock. locks are lines
+        "what is locked: kind, how long", as the CLI shows them. Returns True
+        only when the user confirms; the caller then passes --yes."""
+        if not locks:
+            return True
+        return self.confirm(
+            "Set this lock?" if len(locks) == 1 else "Set these locks?",
+            "\n".join("• " + line for line in locks)
+            + "\n\nWhile a lock is on, this can't be weakened.", "Lock")
+
     def ask_text(self, title, detail="", password=False, initial=""):
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text=title, secondary_text=detail or None,
@@ -1736,6 +2025,11 @@ class Window(Gtk.ApplicationWindow):
 
     def change_global_nepsis(self, _button):
         args = self.ask_nepsis("Bypass prevention", self.state.get("nepsis"), True)
+        if args and "--for" in args:
+            hours = args[args.index("--for") + 1].rstrip("h")
+            if not self.confirm_lock([f"bypass prevention: timer lock, {hours} hours"]):
+                return
+            args.append("--yes")
         if args:
             self.run(["bypass", "set", *args], then=self.queued_note)
 
@@ -2158,7 +2452,10 @@ class Window(Gtk.ApplicationWindow):
         for kind, title, button_label, detail in (
                 ("blacklist", "Blacklists", "New blacklist…", ""),
                 ("exceptions", "Exceptions", "New exception list…",
-                 "A page an exception list matches is spared from every blacklist of this block.")):
+                 "A page an exception list matches is spared from every blacklist of this block."),
+                ("phrases", "Phrase sets", "New phrase set…",
+                 "Phrases are words that count only together, such as [eat, nice] [hello, grandpa]. "
+                 "The block's exceptions spare pages from its phrase sets too.")):
             head = Gtk.Box(spacing=6)
             head.pack_start(heading(title, "medium"), False, False, 0)
             new = Gtk.Button(label=button_label)
@@ -2474,7 +2771,7 @@ class Window(Gtk.ApplicationWindow):
             return
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
         self.status_label.set_text(block_summary(block))
-        self.update_lists(block.get("lists", []))
+        self.update_lists(block.get("lists", []), block.get("phrase_sets", []))
         self.apps.set_items(block["apps"], owner=block["name"])
         self.titles.set_items(block.get("titles", []), owner=block["name"])
         self.schedules.set_items(block["schedules"])
@@ -2542,9 +2839,11 @@ class Window(Gtk.ApplicationWindow):
         self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
                                                          if block["active"] else None))
 
-    def update_lists(self, lists):
-        """Shows the selected block's lists, keeping the cards of lists that
-        are still there, so a refresh doesn't disturb what is being typed."""
+    def update_lists(self, lists, phrase_sets=()):
+        """Shows the selected block's lists and phrase sets, keeping the cards
+        of those still there, so a refresh doesn't disturb what is being
+        typed. Phrase sets are keyed by minus their ID, as in the rules."""
+        lists = list(lists) + [dict(p, id=-p["id"], kind="phrases") for p in phrase_sets]
         ids = [entry["id"] for entry in lists]
         for list_id in list(self.list_cards):
             if list_id not in ids:
@@ -2553,7 +2852,7 @@ class Window(Gtk.ApplicationWindow):
         for entry in lists:
             card = self.list_cards.get(entry["id"])
             if card is None:
-                card = ListCard(self, entry)
+                card = (PhraseSetCard if entry["kind"] == "phrases" else ListCard)(self, entry)
                 self.list_cards[entry["id"]] = card
                 self.list_boxes[entry["kind"]].pack_start(card, False, False, 0)
                 card.show_all()
@@ -2561,6 +2860,9 @@ class Window(Gtk.ApplicationWindow):
 
     def create_list(self, _button, kind):
         if not self.selected:
+            return
+        if kind == "phrases":
+            self.create_phrase_set()
             return
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
@@ -2595,6 +2897,27 @@ class Window(Gtk.ApplicationWindow):
         if kind == "exceptions":
             args.append("--exceptions")
         self.run(args)
+
+    def create_phrase_set(self):
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL, text="New phrase set",
+            secondary_text="A name, and where its phrases are looked for.")
+        entry = Gtk.Entry(activates_default=True)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        area = dialog.get_message_area()
+        area.pack_start(entry, False, False, 0)
+        checks = {}
+        for name, title in LIST_PLACES:
+            checks[name] = Gtk.CheckButton(label=title, active=name == "text")
+            area.pack_start(checks[name], False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        name = entry.get_text().strip()
+        places = [place for place, check in checks.items() if check.get_active()]
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and name:
+            self.run(["phrase-set", "create", self.selected, name] + ["--" + p for p in places])
 
     # Block actions -------------------------------------------------------
     def create_block(self, _button):
@@ -2685,8 +3008,22 @@ class Window(Gtk.ApplicationWindow):
         lock_minutes, delay_minutes, secret, use_typing, use_restart = values
 
         args = ["start", block["name"]]
+        target = f"block '{block['name']}'"
+        relock_note = f", re-lock {relock_minutes} minutes after unlocking" if relock_minutes else ""
+        locks = []
         if lock_minutes:
-            args += ["--for", f"{lock_minutes}m", "--yes"]  # confirmed below
+            args += ["--for", f"{lock_minutes}m"]
+            locks.append(f"{target}: timer lock, {lock_minutes} minutes "
+                         "(it can't be stopped until then, not even with the typing challenge; "
+                         "time the computer is off doesn't count)")
+        if use_typing:
+            locks.append(f"{target}: text lock{relock_note}")
+        if secret:
+            locks.append(f"{target}: password lock{relock_note}")
+        if use_restart:
+            locks.append(f"{target}: restart lock, until the computer restarts")
+        if delay_minutes:
+            locks.append(f"{target}: delay lock, unlocking takes {delay_minutes} minutes")
         if use_typing:
             args += lock_args
         if use_restart:
@@ -2697,11 +3034,10 @@ class Window(Gtk.ApplicationWindow):
             args.append("--password-stdin")
         if relock_minutes and (use_typing or secret):
             args += ["--relock", f"{relock_minutes}m"]
-        if lock_minutes and not self.confirm(
-                f"Time-lock {block['name']} for {lock_minutes} minutes?",
-                "It can't be stopped until the time has passed, not even with the typing "
-                "challenge. Time the computer is off doesn't count.", "Lock"):
+        if not self.confirm_lock(locks):
             return
+        if locks:
+            args.append("--yes")
         self.run(args, secret + "\n" if secret else None)
 
     def stop_block(self, _button):
@@ -2712,7 +3048,11 @@ class Window(Gtk.ApplicationWindow):
         if not self.selected:
             return
         if self.schedule_lock.get_active():
-            self.run(["schedule", "lock", self.selected, "on", "--lead", f"{self.schedule_lead.get_value_as_int()}m"])
+            lead = self.schedule_lead.get_value_as_int()
+            if not self.confirm_lock([f"block '{self.selected}': schedule lock, while each window is open"
+                                      + (f" and {lead} minutes before it" if lead else "")]):
+                return
+            self.run(["schedule", "lock", self.selected, "on", "--lead", f"{lead}m", "--yes"])
         elif self.blocks.get(self.selected, {}).get("schedule_lock"):
             self.run(["schedule", "lock", self.selected, "off"])
 
@@ -2888,8 +3228,11 @@ class Window(Gtk.ApplicationWindow):
         if "Would:" not in output:
             self.message(output or "The file adds nothing new.", Gtk.MessageType.INFO)
             return
-        if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import"):
-            self.run(["project", "import", path],
+        locks = [line.split("Would: set a lock: ", 1)[1] for line in output.splitlines()
+                 if "Would: set a lock: " in line]
+        if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import") \
+                and self.confirm_lock(locks):
+            self.run(["project", "import", path] + (["--yes"] if locks else []),
                      then=lambda result: self.message(result, Gtk.MessageType.INFO))
 
     # Clusters ------------------------------------------------------------
@@ -2976,7 +3319,9 @@ class Window(Gtk.ApplicationWindow):
                 f"<b>Recording</b> into {GLib.markup_escape_text(target)}: {recording.get('sites', 0)} sites so far.")
         else:
             self.record_label.set_text("Not recording.")
-        self.record_start.set_sensitive(not recording and bool(self.cluster_name()))
+        shown = next((c for c in self.state.get("clusters") or [] if c["name"] == self.cluster_name()), {})
+        # R-PHRASE-10: phrases take no part in recording.
+        self.record_start.set_sensitive(not recording and bool(self.cluster_name()) and not shown.get("phrases"))
         self.record_stop.set_sensitive(bool(recording))
         self.record_discard.set_sensitive(bool(recording))
 
@@ -2988,6 +3333,10 @@ class Window(Gtk.ApplicationWindow):
                 check.set_active(bool(cluster) and key in cluster["where"])
                 check.set_sensitive(bool(cluster))
             self.cluster_entries.set_items(cluster["entries"] if cluster else [], self.cluster_name())
+            # A phrase cluster takes one phrase per line, as typed.
+            phrases = bool(cluster and cluster.get("phrases"))
+            self.cluster_entries.split = (lambda text: [text.strip()] if text.strip() else []) if phrases else split_entries
+            self.cluster_entries.entry.set_placeholder_text("[eat, nice] [hello, grandpa]" if phrases else "reddit.com  *casino*")
         finally:
             self.updating = was
 
@@ -2997,10 +3346,22 @@ class Window(Gtk.ApplicationWindow):
         self.run(["cluster", "scope", self.cluster_name(), place, "on" if check.get_active() else "off"])
 
     def new_cluster(self, _button):
-        name = self.ask_text("New cluster", "A name, such as study or shopping.")
-        if name:
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL, text="New cluster",
+            secondary_text="A name, such as study or shopping.")
+        entry = Gtk.Entry(activates_default=True)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        phrases = Gtk.CheckButton(label="Holds phrases (copied into blocks as a phrase set)")
+        dialog.get_message_area().pack_start(entry, False, False, 0)
+        dialog.get_message_area().pack_start(phrases, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        name, as_phrases = entry.get_text().strip(), phrases.get_active()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and name:
             self.cluster_wanted = name
-            self.run(["cluster", "create", name])
+            self.run(["cluster", "create", name] + (["--phrases"] if as_phrases else []))
 
     def rename_cluster(self, _button):
         old = self.cluster_name()
@@ -3019,10 +3380,14 @@ class Window(Gtk.ApplicationWindow):
         name = self.cluster_name()
         if not name or not self.blocks:
             return
+        cluster = next((c for c in self.state.get("clusters") or [] if c["name"] == name), {})
+        phrases = cluster.get("phrases", False)
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text=f"Copy {name} into a block",
-            secondary_text="It becomes a new list of the block, named after the cluster. As a blacklist it "
-                           "makes the block stricter; as exceptions it weakens it, which a locked block refuses.",
+            secondary_text=("It becomes a new phrase set of the block, named after the cluster, which "
+                            "makes the block stricter." if phrases else
+                            "It becomes a new list of the block, named after the cluster. As a blacklist it "
+                            "makes the block stricter; as exceptions it weakens it, which a locked block refuses."),
             message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
         combo = Gtk.ComboBoxText()
         for block in self.blocks:
@@ -3031,7 +3396,8 @@ class Window(Gtk.ApplicationWindow):
         exceptions = Gtk.CheckButton(label="As an exception list")
         area = dialog.get_message_area()
         area.pack_start(combo, False, False, 0)
-        area.pack_start(exceptions, False, False, 0)
+        if not phrases:  # there are no phrase exceptions
+            area.pack_start(exceptions, False, False, 0)
         dialog.show_all()
         answer = dialog.run()
         block, as_exceptions = combo.get_active_text(), exceptions.get_active()
@@ -3154,10 +3520,16 @@ class Window(Gtk.ApplicationWindow):
         mode = self.freeze_mode.get_active_id()
         lock = self.freeze_lock.get_active()
         lead = self.freeze_lead.get_value_as_int()
-        if self.confirm(f"Freeze {values[0]} {values[1]}-{values[2]}?",
-                        f"The computer will be frozen then ({self.freeze_mode.get_active_text().lower()})"
-                        + (f", and the schedule can't be removed from {lead} minutes before it starts."
-                           if lock else "."), "Schedule"):
+        if lock:
+            confirmed = self.confirm_lock([
+                f"freeze schedule {values[0]} {values[1]}-{values[2]} "
+                f"({self.freeze_mode.get_active_text().lower()}): schedule lock, while each window is open"
+                + (f" and {lead} minutes before it" if lead else "")])
+        else:
+            confirmed = self.confirm(f"Freeze {values[0]} {values[1]}-{values[2]}?",
+                                     f"The computer will be frozen then "
+                                     f"({self.freeze_mode.get_active_text().lower()}).", "Schedule")
+        if confirmed:
             self.run(["freeze", "schedule", "add", "--days", values[0], "--from", values[1],
                       "--to", values[2], "--mode", mode, "--yes"] + (["--lock-lead", f"{lead}m"] if lock else []))
 
@@ -3574,7 +3946,11 @@ class Window(Gtk.ApplicationWindow):
             return
         args = ["hotkey", "add", values[0], values[1]]
         if len(values) == 3:
-            args += ["--for", values[2]]
+            # R-LOCK-12: a hotkey's lock is confirmed once, when it is added.
+            if not self.confirm_lock([f"block '{values[1]}': timer lock, set each time {values[0]} "
+                                      f"is pressed, {values[2]} from the press"]):
+                return
+            args += ["--for", values[2], "--yes"]
         self.run(args)
 
     def set_settings_password(self, _button):
@@ -3736,12 +4112,19 @@ class Window(Gtk.ApplicationWindow):
         if len(args) == base:
             self.message("Choose at least one lock.", Gtk.MessageType.INFO)
             return
-        if lock_minutes and not self.confirm(
-                f"Lock {title} for {lock_minutes} minutes?",
-                "It can't be turned off until the time has passed, not even with the typing "
-                "challenge. Time the computer is off doesn't count.", "Lock"):
+        locks = []
+        if lock_minutes:
+            locks.append(f"{title}: timer lock, {lock_minutes} minutes (it can't be turned off until "
+                         "then, not even with the typing challenge; time the computer is off doesn't count)")
+        if use_typing:
+            locks.append(f"{title}: text lock")
+        if secret:
+            locks.append(f"{title}: password lock")
+        if use_restart:
+            locks.append(f"{title}: restart lock, until the computer restarts")
+        if not self.confirm_lock(locks):
             return
-        self.run(args, secret + "\n" if secret else None)
+        self.run(args + ["--yes"], secret + "\n" if secret else None)
 
     def unlock_setting(self, _button, name, title):
         if name == "strict":

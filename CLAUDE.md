@@ -141,6 +141,23 @@ build and is **used for real**. On it:
   picks the strongest page action, closes the tab and browser itself, and
   POSTs `/hit` (`enforce/hits.go`, extension header required) so the daemon
   logs the event and runs logout/shutdown/monk.
+- **Phrase sets** (`internal/db/phrases.go`, `internal/cli/phrases.go`,
+  `kc9k phrase-set …`, R-PHRASE-1 to 10): named sets of phrases in a block
+  (scope, actions with a threshold of different phrases, test mode). A
+  phrase is JSON (`db.Phrase`: word sets, necessary or optional, length),
+  typed as `[a, b] [c]? :N` (`ParsePhrase`, `String`); `Check` refuses
+  one-ended bridges per term (mirrored by `kc9kPhraseCheck`). They reach the
+  extension as `lists` rules with negative IDs (`phraseRules`), matched by
+  `kc9kPhraseMatcher`; `HasPhrases` makes a block non-empty. Names are
+  unique regardless of case. `gui-state` gives each block `phrase_sets`;
+  the GUI shows them as `PhraseSetCard` (a `ListCard` keyed by minus the
+  set's ID) with `PhraseDialog`. `ci/gui_phrase_smoke.py` is the GUI smoke
+  test for them (builds its own binary and scratch database). In files
+  (`cli/phraseexport.go`: block export, project) phrases are written as
+  typed and parsed again on import; `db.AddPhraseSet` writes a whole set.
+  A phrase cluster is a cluster with `phrases` set: its entries are typed
+  phrases, `cluster copy` makes a phrase set, `cluster save` takes a phrase
+  set when the block has no list of that name; recording refuses it.
 - **Clusters** (`internal/db/clusters.go`, `internal/cli/clusters.go`,
   `kc9k cluster …`): website lists outside any block (name, where, entries;
   no kind, no actions, never enforced, always editable). `cluster copy`
@@ -286,6 +303,13 @@ build and is **used for real**. On it:
   `KC9K_DB` overrides the path (tests only; the unit never sets it).
   `db.go` core + `features.go` (schedules, time locks, schema upgrades) +
   `weblists.go` (website lists) + `pending.go` (queued loosening edits).
+- **Lock confirmation** (`internal/cli/confirm.go`, R-LOCK-12): every path
+  that sets, adds to or extends a lock builds `lockToSet` items (target, kind,
+  length) and calls `confirmLocks` before writing anything: a terminal is
+  asked for "yes", anything else is refused without `--yes` (`addYesFlag`).
+  Tests: `confirm_test.go` (`lockCases`, one per lock kind and target).
+  The GUI's lock dialogs all go through `confirm_lock` and then pass `--yes`.
+  A hotkey's lock is confirmed at `hotkey add`; `hotkey run` passes `yes`.
 - **Lock** (`internal/lock/`): raw-mode, paste-resistant typing challenge (random
   characters: 60% letters, 35% digits, 5% symbols) that gates a char-locked
   block's deactivation.
@@ -302,7 +326,8 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 Android companion app: see `android/CLAUDE.md` (it runs this extension in IronFox and serves it `/rules` itself; `rules.safesearch` comes only from there, `kc9kSafeSearch` in `match.js`).
 
 Full usage and examples in `README.md`. Summary:
-`cluster list | show | create [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
+`cluster list | show | create [--phrases] [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
+`phrase-set show | create [--url --title --text] | add | remove | scope | action | threshold | test | rename | delete | export | import`,
 `list show | create [--exceptions --url --title --text] | rename | delete | add | remove | scope | action |
 threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
 `bypass` (old name `nepsis`) `[set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,

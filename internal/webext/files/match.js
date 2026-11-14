@@ -545,6 +545,13 @@ function kc9kCompileLists(lists) {
       url: kc9kFilter({ match: list.url || [] }),
       title: kc9kKeywordMatchers(list.title),
       text: kc9kKeywordMatchers(list.text),
+      // A phrase set: its phrases, matched where its scope says.
+      phrases: (list.phrases || []).map((phrase) => ({
+        name: kc9kPhraseText(phrase),
+        url: kc9kPhraseMatcher(phrase, "url"),
+        page: kc9kPhraseMatcher(phrase),
+      })),
+      phraseScope: list.phrase_scope || [],
       actions: list.actions || [],
       except: {
         url: kc9kFilter({ match: except.url || [] }),
@@ -558,6 +565,7 @@ function kc9kCompileLists(lists) {
 // kc9kReadsPage reports whether any list needs the page's title or text.
 function kc9kReadsPage(compiled) {
   return compiled.some((list) => list.title.length > 0 || list.text.length > 0 ||
+    (list.phrases.length > 0 && (list.phraseScope.includes("title") || list.phraseScope.includes("text"))) ||
     list.except.title.length > 0 || list.except.text.length > 0);
 }
 
@@ -589,6 +597,15 @@ function kc9kListMatches(compiled, page) {
       (hasText && except.text.some((matcher) => matcher.test(page.text)))) {
       continue;
     }
+    if (list.phrases.length > 0) {
+      // A phrase set: an action needs its number of different phrases.
+      const n = kc9kPhrasesFound(list, page).length;
+      const acts = list.actions.filter((action) => n > 0 && n >= (action.distinct || 1));
+      if (acts.length > 0) {
+        out.push({ list, actions: acts });
+      }
+      continue;
+    }
     const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
     const found = hasText && list.text.length > 0 ? kc9kTextHits(list.text, page.text) : { distinct: 0, total: 0 };
@@ -599,6 +616,24 @@ function kc9kListMatches(compiled, page) {
     }
   }
   return out;
+}
+
+// kc9kPhraseText writes a phrase as it is typed: [a, b] [c]? :N.
+function kc9kPhraseText(phrase) {
+  const sets = phrase.sets || [];
+  const necessary = sets.filter((set, i) => i < 2 || set.necessary).length;
+  const text = sets.map((set, i) => "[" + (set.terms || []).join(", ") + "]" + (i >= 2 && !set.necessary ? "?" : "")).join(" ");
+  return phrase.length && phrase.length !== necessary ? text + " :" + phrase.length : text;
+}
+
+// kc9kPhrasesFound returns the names of a phrase set's phrases that match
+// the page where the set looks (only the parts of the page known so far).
+function kc9kPhrasesFound(list, page) {
+  const scope = list.phraseScope;
+  return list.phrases.filter((p) =>
+    (scope.includes("url") && p.url.test(page.url)) ||
+    (scope.includes("title") && typeof page.title === "string" && p.page.test(page.title)) ||
+    (scope.includes("text") && typeof page.text === "string" && p.page.test(page.text))).map((p) => p.name);
 }
 
 // kc9kTestReport describes, for each list in keyword test mode, what it
@@ -623,6 +658,10 @@ function kc9kTestReport(compiled, page) {
     const inTitle = list.titleRaw.filter((entry, i) => list.title[i].test(title));
     const entries = [];
     let total = 0;
+    for (const name of list.phrases.length > 0 ? kc9kPhrasesFound(list, { url: page.url, title, text }) : []) {
+      entries.push({ entry: name, count: 1 });
+      total++;
+    }
     list.textRaw.forEach((entry, i) => {
       const n = list.text[i].count(text);
       if (n > 0) {
@@ -774,4 +813,185 @@ function kc9kSafeSearch(rawUrl, form) {
     return null;
   }
   return { redirect: url.protocol + "//" + safeHost + (url.port ? ":" + url.port : "") + url.pathname + url.search };
+}
+
+// Phrases (SPEC R-PHRASE-1 to 9). A phrase is word sets, each a list of
+// terms and necessary or optional; a match takes one term from each
+// necessary set, plus terms from optional sets until it has `length` terms,
+// one term per set at most. The terms may come in any order, directly after
+// each other with only blank space between them; punctuation breaks a match,
+// and so does the end of a sentence (. ! ? or a line break: a break between
+// parts of a page). An apostrophe inside a word is part of it, and a hyphen
+// between letters is blank space. A bridge, "big-" … "-gorilla", lets up to
+// 20 words of the same sentence (commas allowed) come between a "big-" and
+// a "-gorilla" of another set, in that order; "-strong-" is a middle link.
+// Terms are words or several words, and * matches inside a word.
+const KC9K_BRIDGE_WORDS = 20;
+
+// kc9kPhraseTokens splits a text into sentences of words, each word with
+// the gap before it: "space" (only blank space), "comma" or "punct".
+function kc9kPhraseTokens(text) {
+  const sentences = [];
+  let words = [];
+  let gap = "space";
+  const value = String(text).toLowerCase()
+    .replace(/(\p{L})-(?=\p{L})/gu, "$1 "); // long-cat is long cat
+  const re = /([\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*)|(\s+)|([.!?]+)|(,)|([^\s\p{L}\p{N}])/gu;
+  let m;
+  const end = () => {
+    if (words.length > 0) {
+      sentences.push(words);
+    }
+    words = [];
+    gap = "space";
+  };
+  while ((m = re.exec(value)) !== null) {
+    if (m[1] !== undefined) {
+      words.push({ word: m[1].replace(/’/g, "'"), gap });
+      gap = "space";
+    } else if (m[2] !== undefined) {
+      if (/[\n\r]/.test(m[2])) {
+        end();
+      }
+    } else if (m[3] !== undefined) {
+      end();
+    } else if (m[4] !== undefined) {
+      gap = gap === "punct" ? "punct" : "comma";
+    } else {
+      gap = "punct";
+    }
+  }
+  end();
+  return sentences;
+}
+
+// kc9kPhraseTerm parses one term: its words (with * patterns) and bridges.
+function kc9kPhraseTerm(raw) {
+  let value = String(raw).trim().toLowerCase();
+  const into = value.startsWith("-");
+  const out = value.endsWith("-") && value.length > 1;
+  value = value.replace(/^-/, "").replace(/-$/, "").trim();
+  const words = value.split(/\s+/).filter(Boolean).map((w) => {
+    const parts = w.split("*");
+    return parts.length === 1 ? { exact: w } : { parts };
+  });
+  return { words, into, out };
+}
+
+function kc9kPhraseWordMatches(pattern, word) {
+  return pattern.exact !== undefined ? pattern.exact === word : kc9kGlobWord(word, pattern.parts);
+}
+
+// kc9kPhraseMatcher compiles a phrase { sets: [{ terms: [...], necessary }],
+// length } into { test(text) } for text (scope "url": the address,
+// decoded, with its separators as blank space).
+function kc9kPhraseMatcher(phrase, scope) {
+  const sets = (phrase.sets || []).map((set, i) => ({
+    terms: (set.terms || []).map(kc9kPhraseTerm).filter((t) => t.words.length > 0),
+    necessary: i < 2 || Boolean(set.necessary),
+  }));
+  const necessary = sets.filter((s) => s.necessary).length;
+  const length = Math.min(Math.max(phrase.length || necessary, necessary), sets.length);
+  const prepare = (input) => {
+    if (scope !== "url") {
+      return input;
+    }
+    let text = String(input);
+    try {
+      text = decodeURIComponent(text.replace(/\+/g, " "));
+    } catch (error) {
+      // keep it as it is
+    }
+    return text.replace(/^[a-z]+:\/\//i, "").replace(/[-_/.?=&+#:,]/g, " ");
+  };
+  const test = (input) => {
+    for (const words of kc9kPhraseTokens(prepare(input))) {
+      // Every place a term occurs: [{ start, end, set, into, out }].
+      const at = words.map(() => []);
+      sets.forEach((set, s) => {
+        for (const term of set.terms) {
+          for (let i = 0; i + term.words.length <= words.length; i++) {
+            let ok = true;
+            for (let k = 0; k < term.words.length && ok; k++) {
+              ok = kc9kPhraseWordMatches(term.words[k], words[i + k].word) &&
+                (k === 0 || words[i + k].gap === "space");
+            }
+            if (ok) {
+              at[i].push({ start: i, end: i + term.words.length - 1, set: s, into: term.into, out: term.out });
+            }
+          }
+        }
+      });
+      // Chains of term places, each set used once.
+      const extend = (last, used, count, covered) => {
+        if (covered === necessary && count >= length && !last.out) {
+          return true;
+        }
+        if (count >= sets.length) {
+          return false;
+        }
+        const next = [];
+        if (last.out) {
+          // Over a bridge: up to 20 words, commas allowed, to a "-term".
+          for (let j = last.end + 1; j < words.length && j <= last.end + 1 + KC9K_BRIDGE_WORDS; j++) {
+            if (j > last.end + 1 && words[j - 1].gap === "punct") {
+              break;
+            }
+            if (words[j].gap === "punct") {
+              break;
+            }
+            next.push(...at[j].filter((p) => p.into));
+          }
+        } else if (last.end + 1 < words.length && words[last.end + 1].gap === "space") {
+          next.push(...at[last.end + 1].filter((p) => !p.into));
+        }
+        for (const p of next) {
+          if (used & (1 << p.set)) {
+            continue;
+          }
+          if (extend(p, used | (1 << p.set), count + 1, covered + (sets[p.set].necessary ? 1 : 0))) {
+            return true;
+          }
+        }
+        return false;
+      };
+      for (const places of at) {
+        for (const p of places) {
+          if (!p.into && extend(p, 1 << p.set, 1, sets[p.set].necessary ? 1 : 0)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  };
+  return { test };
+}
+
+// kc9kPhraseCheck says why a phrase can't be used, or "" (R-PHRASE-1, 8).
+function kc9kPhraseCheck(phrase) {
+  const sets = phrase.sets || [];
+  if (sets.length < 2) {
+    return "a phrase needs at least two word sets";
+  }
+  // Which word sets hold a bridge's start (big-) and end (-gorilla).
+  const terms = sets.map((set) => (set.terms || []).map(kc9kPhraseTerm));
+  const outs = terms.map((ts) => ts.some((t) => t.out));
+  const ins = terms.map((ts) => ts.some((t) => t.into));
+  const elsewhere = (has, ...skip) => has.some((h, i) => h && !skip.includes(i));
+  for (let i = 0; i < sets.length; i++) {
+    for (const term of terms[i]) {
+      if (term.into && term.out) {
+        if (sets.length < 3) {
+          return "a middle link (-term-) needs at least three word sets";
+        }
+        if (!outs.some((o, a) => o && a !== i && elsewhere(ins, i, a))) {
+          return "a middle link needs a term ending in - and one starting with -, each in another set";
+        }
+      } else if ((term.into && !elsewhere(outs, i)) || (term.out && !elsewhere(ins, i))) {
+        return "a bridge needs both ends: a term ending in - and one starting with - in another set";
+      }
+    }
+  }
+  return "";
 }

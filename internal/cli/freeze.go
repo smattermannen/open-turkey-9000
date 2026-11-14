@@ -92,40 +92,57 @@ type guiList struct {
 	Test    bool            `json:"test"`
 }
 
+// guiPhraseSet is one phrase set for the interface; each phrase comes with
+// its typed form.
+type guiPhraseSet struct {
+	ID      int             `json:"id"`
+	Name    string          `json:"name"`
+	Where   []string        `json:"where"`
+	Actions []db.ListAction `json:"actions"`
+	Test    bool            `json:"test"`
+	Phrases []guiPhrase     `json:"phrases"`
+}
+
+type guiPhrase struct {
+	db.Phrase
+	Text string `json:"text"`
+}
+
 type guiBlock struct {
-	Name          string    `json:"name"`
-	Lists         []guiList `json:"lists"`
-	Apps          []string  `json:"apps"`
-	Titles        []string  `json:"titles"`
-	Nepsis        db.Nepsis `json:"nepsis"`
-	NepsisCount   int       `json:"nepsis_count"`
-	Schedules     []string  `json:"schedules"`
-	Windows       []guiWin  `json:"schedule_windows"`
-	Active        bool      `json:"active"`
-	Held          bool      `json:"held"`
-	CharLocked    bool      `json:"char_locked"`
-	PomodoroOn    int64     `json:"pomodoro_on"`
-	PomodoroOff   int64     `json:"pomodoro_off"`
-	PomodoroLong  int64     `json:"pomodoro_long"`
-	PomodoroEvery int64     `json:"pomodoro_every"`
-	OnBreak       bool      `json:"on_break"`
-	Password      bool      `json:"password_locked"`
-	Restart       bool      `json:"restart_locked"`
-	Delay         int64     `json:"delay_seconds"`
-	StopSeconds   int64     `json:"stop_seconds"`
-	DelayLeft     int64     `json:"delay_left"` // the delay lock unlocks in this many seconds, once asked
-	Scheduled     bool      `json:"scheduled"`
-	LockSeconds   int64     `json:"lock_seconds"`
-	QuotaLimit    int64     `json:"quota_limit"`
-	QuotaUsed     int64     `json:"quota_used"`
-	QuotaOpen     bool      `json:"quota_open"`
-	QuotaNext     int64     `json:"quota_next"`
-	KeywordTest   bool      `json:"keyword_test"`
-	Places        []string  `json:"places"`
-	LoosenDelay   int64     `json:"loosen_delay"`
-	ScheduleLock  bool      `json:"schedule_lock"`
-	ScheduleLead  int       `json:"schedule_lead"` // minutes
-	Social        []string  `json:"social"`
+	Name          string         `json:"name"`
+	Lists         []guiList      `json:"lists"`
+	PhraseSets    []guiPhraseSet `json:"phrase_sets"`
+	Apps          []string       `json:"apps"`
+	Titles        []string       `json:"titles"`
+	Nepsis        db.Nepsis      `json:"nepsis"`
+	NepsisCount   int            `json:"nepsis_count"`
+	Schedules     []string       `json:"schedules"`
+	Windows       []guiWin       `json:"schedule_windows"`
+	Active        bool           `json:"active"`
+	Held          bool           `json:"held"`
+	CharLocked    bool           `json:"char_locked"`
+	PomodoroOn    int64          `json:"pomodoro_on"`
+	PomodoroOff   int64          `json:"pomodoro_off"`
+	PomodoroLong  int64          `json:"pomodoro_long"`
+	PomodoroEvery int64          `json:"pomodoro_every"`
+	OnBreak       bool           `json:"on_break"`
+	Password      bool           `json:"password_locked"`
+	Restart       bool           `json:"restart_locked"`
+	Delay         int64          `json:"delay_seconds"`
+	StopSeconds   int64          `json:"stop_seconds"`
+	DelayLeft     int64          `json:"delay_left"` // the delay lock unlocks in this many seconds, once asked
+	Scheduled     bool           `json:"scheduled"`
+	LockSeconds   int64          `json:"lock_seconds"`
+	QuotaLimit    int64          `json:"quota_limit"`
+	QuotaUsed     int64          `json:"quota_used"`
+	QuotaOpen     bool           `json:"quota_open"`
+	QuotaNext     int64          `json:"quota_next"`
+	KeywordTest   bool           `json:"keyword_test"`
+	Places        []string       `json:"places"`
+	LoosenDelay   int64          `json:"loosen_delay"`
+	ScheduleLock  bool           `json:"schedule_lock"`
+	ScheduleLead  int            `json:"schedule_lead"` // minutes
+	Social        []string       `json:"social"`
 	// Breaks: the allowance (seconds per BreakPer of blocking), what is
 	// earned, the relock time, and how long the block is lifted for now.
 	BreakAllowance int64 `json:"break_allowance"`
@@ -159,6 +176,7 @@ type guiCluster struct {
 	Name    string   `json:"name"`
 	Where   []string `json:"where"`
 	Entries []string `json:"entries"`
+	Phrases bool     `json:"phrases"`
 }
 
 // guiRecording is the link recording in progress.
@@ -329,7 +347,7 @@ var guiStateCmd = &cobra.Command{
 			if entries == nil {
 				entries = []string{}
 			}
-			state.Clusters = append(state.Clusters, guiCluster{Name: full.Name, Where: full.Where.List(), Entries: entries})
+			state.Clusters = append(state.Clusters, guiCluster{Name: full.Name, Where: full.Where.List(), Entries: entries, Phrases: full.Phrases})
 		}
 		if rec, err := database.GetRecording(); err != nil {
 			return err
@@ -383,6 +401,19 @@ var guiStateCmd = &cobra.Command{
 				if slices.Contains(testing, l.ID) {
 					g.KeywordTest = true
 				}
+			}
+			sets, err := database.PhraseSets(detail.Name)
+			if err != nil {
+				return err
+			}
+			g.PhraseSets = []guiPhraseSet{}
+			for _, s := range sets {
+				gs := guiPhraseSet{ID: s.ID, Name: s.Name, Where: append([]string{}, s.Where.List()...),
+					Actions: append([]db.ListAction{}, s.Actions...), Test: s.Test, Phrases: []guiPhrase{}}
+				for _, p := range s.Phrases {
+					gs.Phrases = append(gs.Phrases, guiPhrase{Phrase: p, Text: p.String()})
+				}
+				g.PhraseSets = append(g.PhraseSets, gs)
 			}
 			if detail.Active && detail.LockedUntil > trusted {
 				g.LockSeconds = detail.LockedUntil - trusted

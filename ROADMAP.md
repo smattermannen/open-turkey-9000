@@ -110,8 +110,22 @@ Last checked against the code: 2026-11-13.
 - [ ] **Phrases** (R-PHRASE-1 to 10): today's word combinations sit inside
       title and text lists, need every box, take several words from one box
       (`:N`), and have no length, bridges, URL scope or phrase sets. Rebuild
-      them as phrase sets, after the page reading rework. Existing
-      combinations are turned into phrases. (L)
+      them as phrase sets. Done: the matcher (`kc9kPhraseMatcher`,
+      `kc9kPhraseCheck` in `match.js`: word sets, necessary/optional,
+      length, one term per set, adjacency, sentence breaks, hyphens and
+      apostrophes, bridges and middle links, url scope), tested on SPEC's
+      examples in `ci/match_test.js`. Also done: phrase sets in the
+      database (`db/phrases.go`), `kc9k phrase-set` (tested in
+      `cli/phrases_test.go`: R-PHRASE-1, 8, 9, locks), the rules feed and
+      the extension, and the GUI (a phrase set card per set on the
+      Websites tab, `PhraseDialog`; `ci/gui_phrase_smoke.py`), block and
+      project files, `.txt` export/import, and phrase clusters
+      (`cluster create --phrases`, `save`, `copy`). Left: categories
+      (waiting for the owner: how one is imported, and which phrase-set
+      categories ship), and turning existing combinations into phrases. (L)
+- [ ] **List names differ only in case** (§3.2): `list create b words`
+      succeeds beside `Words`, while lists are looked up without regard to
+      case, so one of them can't be reached. Phrase sets refuse this. (S)
 
 ### 0.2 Not yet confirmed in real use
 
@@ -166,7 +180,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Window title entry | Built | X11 only; never in browsers (R-TITLE-1) |
 | Rendered term | Built | |
 | Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
-| Phrase set | Not built | |
+| Phrase set | Built | `kc9k phrase-set`, rules feed, extension, GUI, block/project files, `.txt` |
 
 ### §3.2 Grouping
 
@@ -177,7 +191,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Cluster | Built | |
 | Category | Partial | 14 shipped lists, offered only when creating a block (`--template`) |
 | Address, term and search lists | Partial | address and term lists; search lists: Not built |
-| Phrase sets in clusters and categories | Not built | |
+| Phrase sets in clusters and categories | Partial | clusters built (`cluster create --phrases`); categories: Not built |
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |
 | Social preset, allowed playlist | Built | see 0.2 |
@@ -198,7 +212,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Timer lock (`--for`, `--until`) | Built | follows trusted time; over 24 h asks to confirm (`--yes`); only a schedule ends a block it started |
+| Timer lock (`--for`, `--until`) | Built | follows trusted time; confirmed when set (R-LOCK-12); only a schedule ends a block it started |
 | Text lock | Built | random characters, random words (`--lock-words`) or custom text (`--lock-text`), 1–5000 |
 | Range lock | Not built | |
 | Delay lock | Built | `start --delay`, 1 min to 40 days, counted from `unlock` |
@@ -236,7 +250,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Built | list actions wait 60 s after the notice; scheduled freezes are announced at 5 min and 1 min |
 | Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |
-| Monk mode | Built | system-owned block `monk-mode` (R-MONK-1) |
+| Confirmation when any lock is set (R-LOCK-12) | Partial | CLI: every lock on blocks, schedule locks, strict, browser options, bypass prevention, freeze schedules and project import asks (`confirmLocks`, `cli/confirm.go`; `--yes` for scripts). GUI: one dialog, `confirm_lock`, in every lock dialog (start, schedule lock, setting locks, bypass prevention, freeze schedules, project import; a dry run lists the file's locks). Hotkeys: their lock is confirmed once at `hotkey add`; the per-hotkey "Run without confirmation" option and the dialog at each press: Not built. Monk mode started by `kc9k monk`: left to the monk mode rewrite. The "I know this will not ask for confirmation" tick on monk in bypass prevention steps and list/phrase set actions: Not built |
+| Monk mode | Gap | built as the system-owned block `monk-mode`; SPEC now says it is a fixed mode, not a block (R-MONK-1), and also cuts the whole internet connection three ways (R-MONK-2): Not built |
 | Consequences | Built | `enforce/consequence.go` |
 | Strict mode | Partial | a voluntary switch with its own setting lock (`kc9k strict on --for …`, `strict unlock`). Exempt folders: Not built |
 | Recovery of a forgotten password (§3.11) | Partial | root can remove it while nothing is locked |
@@ -255,7 +270,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Threshold, hit count (rendered terms) | Built | per action; both must be met (R-LIST-6) |
 | Strongest action across blocks | Unchecked | close tab, image, redirect, block page is built within a page |
 | Matching details (R-LIST-4, R-LIST-5) | Unchecked | case is ignored; accents, look-alike letters, hidden text, frames: Unchecked |
-| Threshold (phrase sets) | Not built | |
+| Threshold (phrase sets) | Built | per action, different phrases (R-PHRASE-9); no hit count, no rate |
 | Rate | Not built | |
 | Ad trigger | Not built | section 2.2 |
 

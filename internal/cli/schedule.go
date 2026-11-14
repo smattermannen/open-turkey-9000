@@ -235,6 +235,11 @@ A longer lead time is always allowed; a shorter one, or off, weakens the block.`
 		if err := ensureEditable(database, name, strengthens); err != nil {
 			return err
 		}
+		if want >= 0 && (!on || want > lead) {
+			if err := confirmLocks(cmd, lockToSet{"block '" + name + "'", "schedule lock", leadLength(want)}); err != nil {
+				return err
+			}
+		}
 		if err := database.SetScheduleLock(name, want); err != nil {
 			return err
 		}
@@ -255,6 +260,7 @@ func init() {
 
 	addNowFlag(scheduleAddCmd, scheduleRemoveCmd)
 	scheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h; at most 7 days)")
+	addYesFlag(scheduleLockCmd)
 	scheduleCmd.AddCommand(scheduleLockCmd)
 
 	scheduleCmd.AddCommand(scheduleAddCmd)

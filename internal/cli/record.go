@@ -118,6 +118,9 @@ var recordStartCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
+			if c.Phrases {
+				return fmt.Errorf("cluster '%s' holds phrases, which take no part in recording (R-PHRASE-10)", cluster)
+			}
 			if !c.Where.URL {
 				return fmt.Errorf("cluster '%s' doesn't look at addresses; recorded sites wouldn't fit it", cluster)
 			}

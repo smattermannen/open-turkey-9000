@@ -330,6 +330,11 @@ const maxImportSize = 4 << 20
 // The CLI runs as root through sudo, so a plain read could reach files the user
 // may not open. Without SUDO_UID the process really is the user or root.
 func readAsCaller(path string) ([]byte, error) {
+	return readAsCallerUpTo(path, maxImportSize)
+}
+
+// readAsCallerUpTo is readAsCaller for files of up to limit bytes.
+func readAsCallerUpTo(path string, limit int64) ([]byte, error) {
 	uidStr, gidStr := os.Getenv("SUDO_UID"), os.Getenv("SUDO_GID")
 	if uidStr == "" || gidStr == "" || os.Geteuid() != 0 {
 		f, err := os.Open(path)
@@ -337,7 +342,7 @@ func readAsCaller(path string) ([]byte, error) {
 			return nil, err
 		}
 		defer f.Close()
-		return readLimited(f)
+		return readLimited(f, limit)
 	}
 	uid, err := strconv.ParseUint(uidStr, 10, 32)
 	if err != nil {
@@ -356,7 +361,7 @@ func readAsCaller(path string) ([]byte, error) {
 	if err := c.Start(); err != nil {
 		return nil, fmt.Errorf("cannot read file as user %d: %w", uid, err)
 	}
-	data, readErr := readLimited(out)
+	data, readErr := readLimited(out, limit)
 	_ = c.Process.Kill() // stops cat if the file was too large
 	waitErr := c.Wait()
 	if readErr != nil {
@@ -369,13 +374,13 @@ func readAsCaller(path string) ([]byte, error) {
 }
 
 // readLimited reads at most maxImportSize bytes, failing if there are more.
-func readLimited(r io.Reader) ([]byte, error) {
-	data, err := io.ReadAll(io.LimitReader(r, maxImportSize+1))
+func readLimited(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > maxImportSize {
-		return nil, fmt.Errorf("the file is larger than %d MiB", maxImportSize>>20)
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("the file is larger than %d MiB", limit>>20)
 	}
 	return data, nil
 }

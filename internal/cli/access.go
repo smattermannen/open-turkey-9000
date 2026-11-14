@@ -82,6 +82,7 @@ var commandAreas = map[string][]string{
 	"stats off":    {areaStats, areaSettings},
 	"stats clear":  {areaStats, areaSettings},
 	"browser":      {areaSettings},
+	"circadian":    {areaSettings},
 	"hotkey":       {areaSettings},
 	"option":       {areaSettings},
 	"password":     {areaSettings},

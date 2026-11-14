@@ -649,7 +649,7 @@ async function poll() {
       checkForUpdate(rules.extension_version);
       await browser.storage.local.set({
         rules,
-        page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0, social: rules.social || [] },
+        page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0, social: rules.social || [], dark: rules.dark || null },
       });
       await closeNewlyBlockedTabs();
       daemonUp = true;

@@ -80,8 +80,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   the owner** (rename the later one `name-2`? leave them?). (S)
 - [ ] **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
   `project import` refuses monk steps/actions without `--no-confirm-ok`
-  (`projectMonk`); both in `confirm_test.go`. Left: `block import` (single
-  block file) doesn't check for monk steps/actions the same way; the hotkey
+  (`projectMonk`); both in `confirm_test.go`. `block import` the same. Left: the hotkey
   press dialog is tested only with a stub (`blocker.ConfirmDesktop` is never
   run for real; needs a live check). (S)
 

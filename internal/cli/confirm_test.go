@@ -320,3 +320,23 @@ func TestRLOCK12_ProjectImportMonkNeedsAcknowledgement(t *testing.T) {
 		}
 	}
 }
+
+// R-LOCK-12: a single block file with a monk action is refused without
+// --no-confirm-ok, like a project file.
+func TestRLOCK12_BlockImportMonkNeedsAcknowledgement(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	file := filepath.Join(t.TempDir(), "b.json")
+	body := `{"name":"m","apps":[],"lists":[{"name":"Blocked","kind":"blacklist","type":"address","where":["url"],"actions":[{"action":"monk","distinct":1,"hits":1,"minutes":10}],"entries":["example.com"]}]}`
+	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := runCLI(t, "block", "import", file)
+	if err == nil || !strings.Contains(err.Error(), "--no-confirm-ok") {
+		t.Fatalf("err = %v; want refused for the acknowledgement", err)
+	}
+	if _, err := d.GetBlock("m"); err == nil {
+		t.Error("a block was imported anyway")
+	}
+	mustRun(t, "block", "import", file, "--no-confirm-ok")
+}

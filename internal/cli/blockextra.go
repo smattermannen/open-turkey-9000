@@ -266,6 +266,12 @@ var blockImportCmd = &cobra.Command{
 			}
 		}
 
+		if what := projectMonk(projectExport{Blocks: []projectBlock{{blockExport: in}}}); what != "" {
+			if err := requireMonkAck(cmd, what); err != nil {
+				return err
+			}
+		}
+
 		// Validate before writing anything.
 		lists, err := toLists(exported)
 		if err != nil {
@@ -331,6 +337,7 @@ func init() {
 	addNowFlag(blockActionCmd)
 	blockCmd.AddCommand(blockActionCmd)
 	blockCmd.AddCommand(blockExportCmd)
+	addMonkAckFlag(blockImportCmd)
 	blockCmd.AddCommand(blockImportCmd)
 }
 

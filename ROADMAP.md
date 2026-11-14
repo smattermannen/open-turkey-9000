@@ -34,7 +34,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   strict mode, global ladder); active vs enabled for schedules and places
   (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
   scheduled blocks on once); allowance sessions lift their block (it stays
-  on). Not built: hardware/internet clock check; choosing the order in the GUI (fixed order). (L)
+  on). Not built: hardware/internet clock check (see §5); choosing the order in the GUI (fixed order). (L)
 - [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
   silently creates nothing (`create_phrase_set`). Two editors (typed box and
   pop-up `PhraseDialog`, too tall); want only boxes in the card, unlimited
@@ -188,4 +188,9 @@ Only items not simply Built.
 
 ## 5. Proposed, not agreed
 
-None.
+- DECIDED OVERNIGHT: how to check the clock against hardware and internet
+  time (§4.10) → not built yet; trusted time stays CLOCK_BOOTTIME with
+  powered-off time not counted, because that is the strictest choice: a
+  hardware-clock count would only end timer locks sooner and the hardware
+  clock can be set in firmware without a firmware password, and an internet
+  time query is a new outside query (principle 6) the owner should agree to.

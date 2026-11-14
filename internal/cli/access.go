@@ -470,11 +470,14 @@ func (s *guiState) hideLocked() {
 	if !open(areaBlocks) {
 		s.Clusters, s.Recording, s.Places = nil, nil, nil
 	}
+	if !open(areaDashboard) {
+		s.MonkSeconds = 0
+	}
 	if !open(areaDashboard, areaDevice) {
 		s.FreezeSeconds, s.FreezeMode, s.Strict, s.NoEscape, s.FreezeSched = 0, "", false, false, nil
 	}
 	if !open(areaDashboard, areaBlocks, areaSettings) {
-		s.Nepsis, s.NepsisCount, s.NepsisLock, s.MonkBlock = db.Nepsis{}, 0, guiSettingLock{}, ""
+		s.Nepsis, s.NepsisCount, s.NepsisLock = db.Nepsis{}, 0, guiSettingLock{}
 	}
 	if !open(areaSettings) {
 		s.Browser, s.BrowserLocks, s.Hotkeys = nil, nil, nil

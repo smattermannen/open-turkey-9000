@@ -64,9 +64,6 @@ shortened or removed this way.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockName := args[0]
-		if blockName == enforce.MonkBlock {
-			return fmt.Errorf("monk mode starts for a set time: kc9k monk --for 45m")
-		}
 
 		// A lock may need the settings password (the user's choice), asked
 		// before any lock password.
@@ -491,6 +488,10 @@ var statusCmd = &cobra.Command{
 		}
 		defer database.Close()
 
+		// Monk mode is no block (R-MONK-1), so it has its own line.
+		if line := monkStatus(database); line != "Monk mode is off." {
+			fmt.Println(line)
+		}
 		blocks, err := database.ListBlocks()
 		if err != nil {
 			return err

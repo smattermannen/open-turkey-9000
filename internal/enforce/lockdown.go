@@ -70,13 +70,18 @@ func settingLocked(d *db.DB, trusted int64, skip string) (bool, error) {
 	return false, nil
 }
 
-// BlocksLocked reports whether any block is locked or a freeze is running.
+// BlocksLocked reports whether any block is locked, or a freeze or monk
+// mode is running.
 func BlocksLocked(d *db.DB, now time.Time, trusted int64) (bool, error) {
 	until, err := d.FreezeUntil()
 	if err != nil {
 		return false, err
 	}
 	if now.Unix() < until {
+		return true, nil
+	}
+	// Monk mode can't be ended early, so it holds what locks hold.
+	if MonkOn(d, trusted) {
 		return true, nil
 	}
 	bootID, err := db.BootID()

@@ -1,19 +1,40 @@
-# Handoff: overnight session 2026-11-13 → 14
+# Handoff: branch `monk` (R-MONK-1, R-MONK-2), stopped mid-work 2026-11-14
 
-Overnight session 2026-11-13 → 14 (owner asleep, asked for commits + pushes along the way). Last pushed commit: a45f205. All Go and matcher tests passed; devmaster build installed on the laptop.
+Work in `~/kc9k-monk` on the second computer (test machine). Not merged into main.
+`CGO_ENABLED=0 go build ./...` passes (also `-tags devmaster`). **`go test` does not compile yet** (see 1).
 
-**Done** (details in ROADMAP.md §0.1 and git log):
-- Strict mode's own lock; `kc9k no-weakening`; `kc9k password locks on|off`; `kc9k dns`; `kc9k tamper clock` (real clock by default, old installs migrated to on); tamper ignores upgrades/self-reported crashes.
-- Lock model: unlock only lifts locks (block stays on); delay lock counts from unlock (`delay_until`); re-lock (`start --relock`); schedule lock with user lead (`kc9k schedule lock B on --lead D`) replaces built-in 2 h freeze and 24 h queue (old scheduled blocks migrated to 2 h lead); freeze schedules have `--lock-lead`; timer lock >24 h needs `--yes`; text lock words/custom (`--lock-words`, `--lock-text`). Schedule lock counts in AnyLock/BlocksLocked. A block stopped inside its window stays off until the window ends.
-- Speed: kc9kIndex (URL lookup by domain), kc9kWordIndex (one pass for terms), content.js reads only added text in idle time, firewall = nftables table `inet kc9k` with sets (iptables fallback), parallel cached DNS.
-- Lists are address or term (CheckWhere); mixed lists split once into `<name>` + `<name> terms` (the owner's `test` block was split). Test mode per list. `file://*` default exception (also fixed file://* sparing all sites). Project backup/share. Monk block system-owned. R-WARN-1/2 notices. Words sweep (`bypass`, `allowance`, `break reward`, `break text`, `list scope`).
+## Done (committed)
+- `internal/db/monk.go`: monk mode is `monk.until` (trusted time) + `monk.net` (saved network state).
+  `ExtendMonk` (only grows), `EndMonkIfOver`, `SaveMonkNetIfNone` (first state wins), `ForgetMonkNetIfOff`,
+  `migrateMonkMode` (removes the `monk-mode` block once, a running one keeps its end). Tests: `monk_test.go` (pass).
+- `internal/blocker/firewall.go`: `ApplyFirewallCut`, `IsFirewallCut` (nft `inet kc9k` input/output/forward, iptables fallback). Tests pass.
+- `internal/blocker/netcut.go`: `WifiRadio`, `SetWifiRadio` (nmcli), `EthernetLinks` (/sys/class/net), `SetLink`. Test passes.
+- `internal/enforce/monk.go`: `StartMonk`, `enforceMonk` (called in `Tick`), `cutNetwork`, `restoreNetwork`, `monkBlock`
+  (in-memory `*.*` + `file://*`, list id `MonkListID`), `withMonk`, `MonkEnd`/`MonkOn`. Device effects are replaceable vars.
+- Wired in: `Tick`/`apply` (firewall stays cut, re-resolve 45 s after restore), `BuildRules` (+ `rules.Ends["Monk mode"]`),
+  `findActiveList` (monk hits are global events), `ExtensionRequiredNow`, `keepWifiOn` (off during monk),
+  `BlocksLocked` (monk counts as a lock), uninstall refused, `master` ends it.
+- CLI: every `enforce.MonkBlock` special case and `refuseMonkEdit` removed; `kc9k monk` without `--for` shows the state;
+  `kc9k status` has a monk line; gui-state has `monk_seconds` instead of `monk_block`.
 
-**Half-done: phrase sets.** Matcher (`kc9kPhraseMatcher`, `kc9kPhraseCheck` in match.js, tested in ci/match_test.js), DB (`internal/db/phrases.go`, `ParsePhrase` notation `[a, b] [c]? :N`), rules feed (negative list IDs, `phraseRules`, `findActiveList`), extension integration — done. `internal/cli/phrases.go` (`kc9k phrase-set …`) was committed but is UNTESTED, and `"phrase-set": {areaBlocks}` is NOT yet in `commandAreas` in internal/cli/access.go. Next: add that, write CLI tests, then GUI, export/import, clusters/categories, migrate word combinations → phrases, update README/ROADMAP.
+## Left, in order
+1. Fix tests that still use `MonkBlock`: `internal/enforce/consequence_test.go` (`TestStartMonk`) and
+   `internal/cli/settings_test.go` (`TestMonkBlockIsSystemOwned`). Replace with `TestR_MONK_1_*` / `TestR_MONK_2_*`.
+   **Add a `TestMain` in `internal/enforce` that replaces the network vars in monk.go with fakes first**:
+   enforce tests don't set `KC9K_DB`, so `StartMonk` would cut the real network.
+   Planned cases: no block exists after `StartMonk`; rules carry `*.*`; started by `Run` and by a ladder step;
+   three cuts + state saved once; put back when switched on; restore at the end, after a restart, after a crash
+   (`until` 0 with a saved state); Wi-Fi that was off stays off; `monkDeviceless` never cuts.
+2. GUI (`gui/kc9k-gui.py`): lines 883-888, 1062, 1731, 2529-2533 still use `monk_block` / mention the block.
+   Show `monk_seconds` on the Dashboard; fix the texts.
+3. `ci/actions_test.py` lines 261-279: check `kc9k monk` output instead of `block info monk-mode`.
+4. `ci/monk_live_test.sh` and the live test (take `/tmp/kc9k-live.lock`, install, `systemd-run --on-active=20s`), then the
+   reboot test (ask the owner first). Nothing was installed or run live; the lock was never taken.
+5. ROADMAP rows (lines ~40, 138, 245), README.md, CLAUDE.md (Consequences paragraph: monk is no block) are **not updated yet**.
+6. `git fetch origin && git merge origin/main`, build, test, merge into main, push.
 
-**Not started:** active vs enabled separation (§3.3), layered locks in user order (R-LOCK-6/7), search lists, re-lock on setting locks, hardware/internet clock check.
-
-**Browser tests:** browser_test 20/20, actions_test 15/15; extras_test's "another site inside a proxy address is not" fails only because the owner's locked `test` block blocks example.com.
-
-**Open questions for the owner:** should a backup include running locks, passwords, hotkeys, statistics? How to check the clock against hardware/internet time?
-
-**How to apply:** read this first next session, then `git fetch` and ROADMAP.md. 
+## Open questions for the owner
+- Pages blocked by monk mode are logged as global `page` events (no block). OK, or should they not count for bypass detection?
+- No NetworkManager: the Wi-Fi radio is left alone (only Ethernet + firewall). Add an `rfkill` fallback?
+- `kc9k master` (devmaster builds) ends monk mode, as it lifted the old block. Keep?
+- Commits here are authored `Claude <noreply@anthropic.com>` via `-c` flags (no git identity on this machine).

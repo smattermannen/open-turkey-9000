@@ -1,6 +1,6 @@
 // nepsis.go — monk mode and bypass prevention.
 //
-//	kc9k monk --for 1h                       # monk mode: the monk-mode block, time-locked
+//	kc9k monk --for 1h                       # monk mode: no websites, no internet, for an hour
 //	kc9k bypass                              # show bypass prevention
 //	kc9k bypass set --step "3 in 10m: close-tab, logout 1m" \
 //	                --step "3 in 10m: close-browser, monk 5m" \
@@ -34,15 +34,27 @@ import (
 )
 
 var monkCmd = &cobra.Command{
-	Use:   "monk --for DURATION",
-	Short: "Monk mode: block every website for a while, locked",
-	Long: `Starts the block 'monk-mode' with a timer lock that ends it. It is made the
-first time with every website blocked (*.* in its Blocked list); add
-exceptions, apps or anything else to it like any block. On a monk mode that
-is already on, a longer time extends it.`,
+	Use:   "monk [--for DURATION]",
+	Short: "Monk mode: no websites and no internet for a while",
+	Long: `For the time given, monk mode blocks every website (local files stay
+readable) and cuts the internet connection of the whole computer, so no
+program reaches the network: the Wi-Fi radio is switched off, every Ethernet
+interface is brought down and the firewall drops everything except this
+computer's own local traffic. Whatever is switched back on is put back.
+
+Monk mode is a mode, not a block: it has no settings and nothing can be
+added to it. It ends only when its time does, and can't be switched off
+early; a longer time extends a monk mode that is on. When it ends the
+connection is restored to what it was, also after a restart.
+
+Without arguments, shows whether monk mode is on.`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		length, _ := cmd.Flags().GetString("for")
+		if length == "" {
+			fmt.Println(monkStatus(database))
+			return nil
+		}
 		d, err := time.ParseDuration(length)
 		if err != nil || d < time.Minute {
 			return fmt.Errorf("give --for, at least 1m (e.g. 45m, 2h)")
@@ -56,13 +68,24 @@ is already on, a longer time extends it.`,
 		if err := enforce.ApplyFromDB(database); err != nil {
 			return err
 		}
-		b, err := database.GetBlock(enforce.MonkBlock)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Monk mode is on until %s.\n", time.Unix(b.LockedUntil, 0).Format("2006-01-02 15:04"))
+		fmt.Println(monkStatus(database))
 		return nil
 	}),
+}
+
+// monkStatus says whether monk mode is on, and until when by the clock.
+func monkStatus(database *db.DB) string {
+	now := time.Now()
+	trusted, err := database.TrustedNow(now)
+	if err != nil {
+		return "Monk mode: " + err.Error()
+	}
+	until := enforce.MonkEnd(database, trusted)
+	if until == 0 {
+		return "Monk mode is off."
+	}
+	return fmt.Sprintf("Monk mode is on until %s: every website is blocked and the internet connection is cut.",
+		now.Add(time.Duration(until-trusted)*time.Second).Format("2006-01-02 15:04"))
 }
 
 // describeNepsis renders a bypass prevention, one line per step.

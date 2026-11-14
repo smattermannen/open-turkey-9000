@@ -90,7 +90,7 @@ func ExtensionRequiredNow(d *db.DB) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return ExtensionRequired(d, withoutBreaks(d, active, trusted)), nil
+	return ExtensionRequired(d, withMonk(d, withoutBreaks(d, active, trusted), trusted)), nil
 }
 
 // LastExtensionCheckIn returns when the extension last checked in, if ever.
@@ -317,10 +317,13 @@ func BuildRules(d *db.DB) (Rules, error) {
 	rules.Details = OptionOn(d, OptionPageDetails)
 	rules.Ends = blockEnds(d, active, now, trusted)
 	rules.Soon = soonRules(d, active, now, trusted)
+	if until := MonkEnd(d, trusted); until > 0 {
+		rules.Ends[MonkName] = now.Unix() + until - trusted
+	}
 	rules.Blocks = addableBlocks(d)
 	testing := d.TestLists()
 	rules.Social = []string{}
-	for _, b := range withoutBreaks(d, active, trusted) {
+	for _, b := range withMonk(d, withoutBreaks(d, active, trusted), trusted) {
 		for _, preset := range b.Social {
 			if !slices.Contains(rules.Social, preset) {
 				rules.Social = append(rules.Social, preset)
@@ -329,7 +332,11 @@ func BuildRules(d *db.DB) (Rules, error) {
 		except := RuleExcept{URL: urlEntries(b.Lists.ExceptionEntries(db.PlaceURL)),
 			Title: append([]string{}, b.Lists.ExceptionEntries(db.PlaceTitle)...),
 			Text:  append([]string{}, b.Lists.ExceptionEntries(db.PlaceText)...)}
-		for _, rule := range append(listRules(b), phraseRules(d, b.BlockName, except)...) {
+		blockRules := listRules(b)
+		if b.BlockName != MonkName || len(b.Lists) == 0 || b.Lists[0].ID != MonkListID {
+			blockRules = append(blockRules, phraseRules(d, b.BlockName, except)...)
+		}
+		for _, rule := range blockRules {
 			// Test mode is for tuning what a list finds in pages: lists that
 			// read the title or text are shown, not run.
 			if len(rule.Phrases) == 0 {

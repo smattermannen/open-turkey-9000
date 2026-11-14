@@ -155,3 +155,29 @@ func migrateMonkMode(conn *sql.DB) error {
 	}
 	return tx.Commit()
 }
+
+// EndMonkIfOver switches monk mode off if its time is over at the trusted
+// time, and reports whether it did. One statement: a monk mode extended in
+// the same moment stays on.
+func (d *DB) EndMonkIfOver(trusted int64) (bool, error) {
+	res, err := d.conn.Exec(`UPDATE settings SET value = '' WHERE key = ? AND value != ''
+		AND CAST(value AS INTEGER) <= ?`, SettingMonkUntil, trusted)
+	if err != nil {
+		return false, fmt.Errorf("failed to end monk mode: %w", err)
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// ForgetMonkNetIfOff forgets the saved network state unless monk mode is on
+// (again), and reports whether it did: a monk mode that started while the
+// network was being restored still needs the state.
+func (d *DB) ForgetMonkNetIfOff() (bool, error) {
+	res, err := d.conn.Exec(`UPDATE settings SET value = '' WHERE key = ? AND NOT EXISTS
+		(SELECT 1 FROM settings WHERE key = ? AND CAST(value AS INTEGER) > 0)`, SettingMonkNet, SettingMonkUntil)
+	if err != nil {
+		return false, fmt.Errorf("failed to forget the network state: %w", err)
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}

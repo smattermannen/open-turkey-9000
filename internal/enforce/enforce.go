@@ -177,7 +177,11 @@ var deferKills bool
 // Apply forces every layer to match the active blocks. Used by the CLI right
 // after the desired state changes (start, stop, unlock, edit), where the domain
 // set may have changed and we want the effect immediately.
-func Apply(active []db.ActiveBlockDetail) error {
+func Apply(active []db.ActiveBlockDetail) error { return apply(active, false) }
+
+// apply is Apply; with cut (monk mode) the firewall keeps dropping
+// everything except loopback.
+func apply(active []db.ActiveBlockDetail, cut bool) error {
 	// A database used through KC9K_DB is a test's: it must never drive the
 	// real hosts file, firewall or browser policies.
 	if os.Getenv("KC9K_DB") != "" {
@@ -193,7 +197,7 @@ func Apply(active []db.ActiveBlockDetail) error {
 	}
 
 	note(blocker.ApplyHosts(hosts))        // empty list => removes our section
-	note(blocker.ApplyFirewall(hosts))     // empty list => removes the chain
+	note(blocker.ApplyFirewallCut(hosts, cut)) // empty list and no cut => removes the chain
 	note(blocker.ApplyBrowserPolicies(bp)) // empty policy => removes files
 	if len(apps) > 0 && !deferKills {
 		blocker.KillBlocked(apps)
@@ -224,14 +228,17 @@ func ApplyFromDB(d *db.DB) error {
 	if err != nil {
 		return err
 	}
-	if trusted, err := d.TrustedNow(time.Now()); err == nil {
+	trusted, err := d.TrustedNow(time.Now())
+	if err == nil {
 		active = withoutBreaks(d, active, trusted)
+	} else {
+		trusted = 0
 	}
 	// With polite closing on, the daemon's next cycle asks the apps to
 	// close instead of this killing them outright.
 	deferKills = OptionOn(d, OptionPoliteClose)
 	defer func() { deferKills = false }()
-	return Apply(active)
+	return apply(withMonk(d, active, trusted), MonkOn(d, trusted))
 }
 
 // Tick runs one daemon cycle: apply due queued edits, reconcile schedules,
@@ -275,8 +282,16 @@ func Tick(d *db.DB, now time.Time) error {
 	if trusted != 0 {
 		earnBreaks(d, active, trusted)
 	}
-	hosts, _, bp := Inputs(active)
-	enforceExtension(d, now, active)
+	// Monk mode: its cuts are held or undone here, and what it blocks is
+	// enforced beside the blocks. It is no block: apps, events and bypass
+	// detection below go by the blocks alone.
+	monk := enforceMonk(d, trusted)
+	enforced := active
+	if monk {
+		enforced = append(append([]db.ActiveBlockDetail{}, active...), monkBlock())
+	}
+	hosts, _, bp := Inputs(enforced)
+	enforceExtension(d, now, enforced)
 	enforceTitles(d, active, now)
 
 	// Site layers, re-applied only on drift (so an idle system does no writes).
@@ -289,22 +304,35 @@ func Tick(d *db.DB, now time.Time) error {
 		}
 		// The firewall holds resolved IPs, so also reapply when the domain set
 		// changed (otherwise a stopped block's rules would linger).
+	} else if blocker.HostsSectionPresent() {
+		if err := blocker.RemoveHosts(); err != nil {
+			log.Printf("daemon: error removing /etc/hosts section: %v", err)
+		}
+	}
+	switch {
+	case monk:
+		// enforceMonk holds the firewall, which drops everything. Whatever
+		// comes after starts afresh: the addresses in it weren't looked up.
+		firewallDomains = firewallCutKey
+	case len(hosts) > 0:
+		// The firewall holds resolved IPs, so also reapply when the domain set
+		// changed (otherwise a stopped block's rules would linger).
 		key := strings.Join(hosts, ",")
-		if !blocker.IsFirewallApplied() || key != firewallDomains {
+		refresh := !firewallRefresh.IsZero() && now.After(firewallRefresh)
+		if !blocker.IsFirewallApplied() || key != firewallDomains || refresh {
 			log.Println("daemon: firewall drifted or domains changed, reapplying")
 			if err := blocker.ApplyFirewall(hosts); err != nil {
 				log.Printf("daemon: error applying firewall: %v", err)
 			} else {
 				firewallDomains = key
+				if refresh {
+					firewallRefresh = time.Time{}
+				}
 			}
 		}
-	} else {
+	default:
 		firewallDomains = ""
-		if blocker.HostsSectionPresent() {
-			if err := blocker.RemoveHosts(); err != nil {
-				log.Printf("daemon: error removing /etc/hosts section: %v", err)
-			}
-		}
+		firewallRefresh = time.Time{}
 		if blocker.IsFirewallApplied() {
 			if err := blocker.RemoveFirewall(); err != nil {
 				log.Printf("daemon: error removing firewall: %v", err)
@@ -539,6 +567,10 @@ func ScheduleFrozen(d *db.DB, blockName string, now time.Time, lead time.Duratio
 
 // firewallDomains is the domain set the daemon last applied to the firewall.
 var firewallDomains string
+
+// firewallCutKey stands in firewallDomains while monk mode cuts the
+// connection; no domain set equals it.
+const firewallCutKey = "\x00cut"
 
 func dedup(in []string) []string {
 	set := make(map[string]struct{}, len(in))

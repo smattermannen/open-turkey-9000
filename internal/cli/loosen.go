@@ -25,13 +25,10 @@ import (
 const LoosenDelay = db.DefaultLoosenDelay * time.Second
 
 // gateEdit decides whether an edit to a block may go ahead right now, and
-// reports true if so. Edits that strengthen the block always may (except on
-// monk mode while it is on); edits that weaken it may unless it is locked.
+// reports true if so. Edits that strengthen the block always may; edits
+// that weaken it may unless it is locked.
 // e is what the edit would have been queued as, kept for the callers.
 func gateEdit(cmd *cobra.Command, database *db.DB, name string, strengthens bool, e db.Edit) (bool, error) {
-	if err := refuseMonkEdit(database, name); err != nil {
-		return false, err
-	}
 	if strengthens {
 		return true, nil
 	}

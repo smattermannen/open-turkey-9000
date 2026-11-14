@@ -143,6 +143,10 @@ func keepWifiOn(d *db.DB) {
 	if err != nil || len(ruled) == 0 {
 		return
 	}
+	// Monk mode switches the radio off (R-MONK-2) and puts it back itself.
+	if until, err := d.MonkUntil(); err != nil || until > 0 {
+		return
+	}
 	out, err := exec.Command("nmcli", "radio", "wifi").Output()
 	if err == nil && strings.TrimSpace(string(out)) == "disabled" {
 		log.Println("places: Wi-Fi was switched off; switching it on (a block depends on where the computer is)")

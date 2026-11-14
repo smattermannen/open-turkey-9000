@@ -198,7 +198,7 @@ type guiState struct {
 	PasswordLocks bool                      `json:"password_for_locks"`
 	DNS           string                    `json:"dns"`
 	TamperClock   bool                      `json:"tamper_clock"`
-	MonkBlock     string                    `json:"monk_block"`
+	MonkSeconds   int64                     `json:"monk_seconds"` // left of monk mode; 0 when it is off
 	// Access says per area "none", "open" or "locked"; AccessUnused lists
 	// the given passwords (by position) that opened nothing: wrong, or
 	// changed since.
@@ -284,7 +284,11 @@ var guiStateCmd = &cobra.Command{
 			}
 			state.BrowserLocks[name] = g
 		}
-		state.MonkBlock = enforce.MonkBlock
+		if trusted, err := database.TrustedNow(now); err == nil {
+			if until := enforce.MonkEnd(database, trusted); until > 0 {
+				state.MonkSeconds = until - trusted
+			}
+		}
 		if state.Nepsis, err = database.GlobalNepsis(); err != nil {
 			return err
 		}

@@ -357,9 +357,6 @@ passwords, hotkeys and statistics are never in it.`,
 			return err
 		}
 		for _, b := range blocks {
-			if b.Name == enforce.MonkBlock {
-				continue // made by itself where it is needed
-			}
 			pb, err := exportBlock(database, b.Name, out.Images)
 			if err != nil {
 				return err

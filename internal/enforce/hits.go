@@ -136,6 +136,14 @@ func findActiveList(d *db.DB, listID int) (string, db.WebList, bool) {
 		log.Printf("hit: %v", err)
 		return "", db.WebList{}, false
 	}
+	if listID == MonkListID {
+		// Monk mode's own list. It belongs to no block, so the page counts
+		// for the whole computer only.
+		if !MonkOn(d, trusted) {
+			return "", db.WebList{}, false
+		}
+		return "", monkBlock().Lists[0], true
+	}
 	if listID < 0 {
 		// A phrase set (see phraseRules), with its actions.
 		s, block, err := d.PhraseSetByID(-listID)
@@ -203,7 +211,11 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 			kind = db.EventWorkaround
 		}
 		logEvent(d, kind, block, hit.URL)
-		closeTab = checkScopes(d, time.Now(), []string{"", block})
+		scopes := []string{""}
+		if block != "" {
+			scopes = append(scopes, block)
+		}
+		closeTab = checkScopes(d, time.Now(), scopes)
 		for _, a := range device {
 			c := Consequence{Kind: map[string]string{db.ActionLogout: db.ConsequenceLogout,
 				db.ActionShutdown: db.ConsequenceShutdown, db.ActionMonk: db.ConsequenceMonk}[a.Name], Minutes: a.Minutes}

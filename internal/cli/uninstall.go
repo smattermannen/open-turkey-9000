@@ -62,6 +62,11 @@ var prepareUninstallCmd = &cobra.Command{
 		} else if until > time.Now().Unix() {
 			return fmt.Errorf("cannot uninstall during Frozen Chicken")
 		}
+		if trusted, err := database.TrustedNow(time.Now()); err != nil {
+			return err
+		} else if enforce.MonkOn(database, trusted) {
+			return fmt.Errorf("cannot uninstall during monk mode")
+		}
 		freezeSchedules, err := database.ListFreezeSchedules()
 		if err != nil {
 			return err

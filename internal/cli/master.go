@@ -73,6 +73,10 @@ var masterCmd = &cobra.Command{
 		if err := database.SetFreeze(0, "lock"); err != nil {
 			return err
 		}
+		// Monk mode too; the daemon's next cycle restores the network.
+		if err := database.SetMonkUntil(0); err != nil {
+			return err
+		}
 		if err := database.SetSetting(SettingSettingsPassword, ""); err != nil {
 			return err
 		}

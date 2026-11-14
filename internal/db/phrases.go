@@ -466,3 +466,65 @@ func (d *DB) RemovePhrase(id int, p Phrase) (bool, error) {
 	n, _ := res.RowsAffected()
 	return n > 0, nil
 }
+
+// AddPhraseSet adds a whole phrase set to a block (from an import or a
+// cluster), with its scope, actions, test mode and phrases, in one go.
+func (d *DB) AddPhraseSet(block string, s PhraseSet) error {
+	if err := CheckListName(s.Name); err != nil {
+		return err
+	}
+	if !s.Where.Any() {
+		return fmt.Errorf("a phrase set looks at the address, the title or the text")
+	}
+	blockID, err := d.getBlockID(block)
+	if err != nil {
+		return err
+	}
+	if d.phraseSetNameTaken(blockID, 0, s.Name) {
+		return fmt.Errorf("the block already has a phrase set named '%s'", s.Name)
+	}
+	actions := s.Actions
+	if len(actions) == 0 {
+		actions = []ListAction{{Name: ActionBlock, Distinct: 1, Hits: 1}}
+	}
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec("INSERT INTO phrase_sets (block_id, name, in_url, in_title, in_text, test) VALUES (?, ?, ?, ?, ?, ?)",
+		blockID, s.Name, s.Where.URL, s.Where.Title, s.Where.Text, s.Test)
+	if err != nil {
+		return fmt.Errorf("failed to create the phrase set: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	for _, a := range actions {
+		n := a.Distinct
+		if n < 1 || n > MaxThreshold {
+			n = 1
+		}
+		if _, err := tx.Exec("INSERT INTO phrase_set_actions (set_id, action, threshold, param, minutes) VALUES (?, ?, ?, ?, ?)",
+			id, a.Name, n, a.Param, a.Minutes); err != nil {
+			return err
+		}
+	}
+	seen := map[string]bool{}
+	for _, p := range s.Phrases {
+		p = p.Normalize()
+		if err := p.Check(); err != nil {
+			return fmt.Errorf("%s: %w", p, err)
+		}
+		raw, err := json.Marshal(p)
+		if err != nil {
+			return err
+		}
+		if seen[string(raw)] {
+			continue
+		}
+		seen[string(raw)] = true
+		if _, err := tx.Exec("INSERT INTO phrases (set_id, spec) VALUES (?, ?)", id, string(raw)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}

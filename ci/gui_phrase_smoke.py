@@ -82,5 +82,14 @@ card.add_entries(["[-gorilla] [x]"]); pump(lambda: win.get_sensitive()); time.sl
 for _ in range(50): GLib.MainContext.default().iteration(False)
 check(len(json.loads(cli("gui-state").stdout)["blocks"][0]["phrase_sets"][0]["phrases"]) == 3, "one-ended bridge not stored")
 print("messages:", msgs[-1:] if msgs else "(none captured)")
+# A phrase cluster: phrases typed whole, no recording into it.
+r = cli("cluster", "create", "Cats", "--phrases"); assert r.returncode == 0, r.stderr
+settle(); win.update_clusters()
+win.cluster_combo.set_active(win.clusters_shown.index("Cats")); win.update_clusters()
+win.cluster_entries.entry.set_text("[long cat, neko] [running, sitting]")
+win.cluster_entries._add(None); settle(); win.update_clusters()
+c = [c for c in json.loads(cli("gui-state").stdout)["clusters"] if c["name"] == "Cats"][0]
+check(c["phrases"] and c["entries"] == ["[long cat, neko] [running, sitting]"], "phrase typed into a cluster: %s" % c["entries"])
+check(not win.record_start.get_sensitive(), "no recording into a phrase cluster")
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

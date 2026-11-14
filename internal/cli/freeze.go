@@ -176,6 +176,7 @@ type guiCluster struct {
 	Name    string   `json:"name"`
 	Where   []string `json:"where"`
 	Entries []string `json:"entries"`
+	Phrases bool     `json:"phrases"`
 }
 
 // guiRecording is the link recording in progress.
@@ -346,7 +347,7 @@ var guiStateCmd = &cobra.Command{
 			if entries == nil {
 				entries = []string{}
 			}
-			state.Clusters = append(state.Clusters, guiCluster{Name: full.Name, Where: full.Where.List(), Entries: entries})
+			state.Clusters = append(state.Clusters, guiCluster{Name: full.Name, Where: full.Where.List(), Entries: entries, Phrases: full.Phrases})
 		}
 		if rec, err := database.GetRecording(); err != nil {
 			return err

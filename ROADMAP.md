@@ -118,9 +118,11 @@ Last checked against the code: 2026-11-13.
       database (`db/phrases.go`), `kc9k phrase-set` (tested in
       `cli/phrases_test.go`: R-PHRASE-1, 8, 9, locks), the rules feed and
       the extension, and the GUI (a phrase set card per set on the
-      Websites tab, `PhraseDialog`; `ci/gui_phrase_smoke.py`). Left:
-      export/import, clusters and categories, and turning existing
-      combinations into phrases. (L)
+      Websites tab, `PhraseDialog`; `ci/gui_phrase_smoke.py`), block and
+      project files, `.txt` export/import, and phrase clusters
+      (`cluster create --phrases`, `save`, `copy`). Left: categories
+      (waiting for the owner: how one is imported, and which phrase-set
+      categories ship), and turning existing combinations into phrases. (L)
 - [ ] **List names differ only in case** (§3.2): `list create b words`
       succeeds beside `Words`, while lists are looked up without regard to
       case, so one of them can't be reached. Phrase sets refuse this. (S)
@@ -178,7 +180,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Window title entry | Built | X11 only; never in browsers (R-TITLE-1) |
 | Rendered term | Built | |
 | Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
-| Phrase set | Partial | `kc9k phrase-set`, rules feed, extension and GUI; export/import: Not built |
+| Phrase set | Built | `kc9k phrase-set`, rules feed, extension, GUI, block/project files, `.txt` |
 
 ### §3.2 Grouping
 
@@ -189,7 +191,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Cluster | Built | |
 | Category | Partial | 14 shipped lists, offered only when creating a block (`--template`) |
 | Address, term and search lists | Partial | address and term lists; search lists: Not built |
-| Phrase sets in clusters and categories | Not built | |
+| Phrase sets in clusters and categories | Partial | clusters built (`cluster create --phrases`); categories: Not built |
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |
 | Social preset, allowed playlist | Built | see 0.2 |

@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -282,5 +285,122 @@ func TestPhraseSetSettle(t *testing.T) {
 	mustRun(t, "phrase-set", "remove", "b", "P", "[eat] [grandpa]")
 	if on, _ := d.IsBlockActive("b"); on {
 		t.Error("a block with nothing left to enforce stayed on")
+	}
+}
+
+// R-PHRASE-10: phrase sets go through block and project files, .txt files
+// and clusters, and take no part in recording.
+func TestRPhrase10(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "phrase-set", "create", "b", "Grandpa", "--url", "--text")
+	mustRun(t, "phrase-set", "add", "b", "Grandpa", "[eat, nice] [hello, grandpa]", "[big-] [-gorilla] [x]? :3")
+	mustRun(t, "phrase-set", "action", "b", "Grandpa", "greyscale", "on")
+	mustRun(t, "phrase-set", "threshold", "b", "Grandpa", "block", "2")
+	mustRun(t, "phrase-set", "test", "b", "Grandpa", "on")
+	want := phraseSet(t, d, "b", "Grandpa")
+	same := func(what string, got db.PhraseSet) {
+		t.Helper()
+		got.ID = want.ID
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s:\n got %+v\nwant %+v", what, got, want)
+		}
+	}
+	dir := t.TempDir()
+
+	// Block export and import.
+	file := filepath.Join(dir, "b.json")
+	out := strings.Replace(capture(t, "block", "export", "b"), `"name": "b"`, `"name": "copy"`, 1)
+	if !strings.Contains(out, `"[eat, nice] [hello, grandpa]"`) {
+		t.Errorf("phrases aren't written as typed: %s", out)
+	}
+	if err := os.WriteFile(file, []byte(out), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "import", file)
+	same("block import", phraseSet(t, d, "copy", "Grandpa"))
+	// A file with a one-ended bridge is refused before anything is written.
+	bad := strings.Replace(strings.Replace(out, `"name": "copy"`, `"name": "bad"`, 1), "[big-] [-gorilla]", "[big] [-gorilla]", 1)
+	if err := os.WriteFile(file, []byte(bad), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(t, "block", "import", file); err == nil {
+		t.Error("a block file with a one-ended bridge was imported")
+	}
+	if _, err := d.GetBlock("bad"); err == nil {
+		t.Error("a refused import left a block behind")
+	}
+
+	// Project export and import, into an empty setup.
+	mustRun(t, "cluster", "create", "Cats", "--phrases", "--title")
+	mustRun(t, "cluster", "add", "Cats", "[long cat, neko] [running,sitting]")
+	project := filepath.Join(dir, "project.json")
+	if err := os.WriteFile(project, []byte(capture(t, "project", "export")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KC9K_DB", filepath.Join(dir, "fresh.db"))
+	fresh, err := openDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Close()
+	capture(t, "project", "import", project)
+	same("project import", phraseSet(t, fresh, "b", "Grandpa"))
+	if c, err := fresh.GetCluster("Cats"); err != nil || !c.Phrases || c.Where != (db.Where{Title: true}) ||
+		strings.Join(c.Entries, "|") != "[long cat, neko] [running, sitting]" {
+		t.Errorf("phrase cluster after project import: %+v, %v", c, err)
+	}
+
+	// .txt: one phrase per line, read back into another set.
+	txt := filepath.Join(dir, "phrases.txt")
+	if err := os.WriteFile(txt, []byte(capture(t, "phrase-set", "export", "b", "Grandpa")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "phrase-set", "create", "b", "Again")
+	mustRun(t, "phrase-set", "import", "b", "Again", txt)
+	if got := phraseSet(t, fresh, "b", "Again").Phrases; !reflect.DeepEqual(got, want.Phrases) {
+		t.Errorf(".txt round trip: %+v", got)
+	}
+
+	// Clusters: save a phrase set, copy it as a new set or into one.
+	mustRun(t, "cluster", "save", "b", "Grandpa", "Saved")
+	if c, _ := fresh.GetCluster("Saved"); !c.Phrases || c.Where != want.Where || len(c.Entries) != 2 {
+		t.Errorf("saved cluster: %+v", c)
+	}
+	mustRun(t, "cluster", "copy", "Cats", "b")
+	if s := phraseSet(t, fresh, "b", "Cats"); s.Where != (db.Where{Title: true}) || len(s.Phrases) != 1 || len(s.Actions) != 1 || s.Actions[0].Name != db.ActionBlock {
+		t.Errorf("copied set: %+v", s)
+	}
+	mustRun(t, "cluster", "copy", "Cats", "b", "--into", "Again")
+	if n := len(phraseSet(t, fresh, "b", "Again").Phrases); n != 3 {
+		t.Errorf("copy --into: %d phrases, want 3", n)
+	}
+	if err := runCLI(t, "cluster", "copy", "Cats", "b", "--as", "X", "--exceptions"); err == nil {
+		t.Error("a phrase cluster was copied as exceptions (there are no phrase exceptions)")
+	}
+	if err := runCLI(t, "cluster", "add", "Cats", "reddit.com"); err == nil {
+		t.Error("a phrase cluster took an address")
+	}
+	if err := runCLI(t, "cluster", "save", "b", "Blocked", "Cats"); err == nil {
+		t.Error("a list was saved into a phrase cluster")
+	}
+	ctxt := filepath.Join(dir, "cats.txt")
+	if err := os.WriteFile(ctxt, []byte(capture(t, "cluster", "export", "Cats")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "cluster", "import", "Cats2", ctxt)
+	if c, _ := fresh.GetCluster("Cats2"); !c.Phrases || c.Where != (db.Where{Title: true}) || len(c.Entries) != 1 {
+		t.Errorf("cluster .txt round trip: %+v", c)
+	}
+
+	// No recording into phrase sets or phrase clusters.
+	mustRun(t, "cluster", "scope", "Cats", "url", "on")
+	if err := runCLI(t, "record", "start", "--cluster", "Cats"); err == nil {
+		mustRun(t, "record", "stop", "--discard")
+		t.Error("recording into a phrase cluster started")
+	}
+	if err := runCLI(t, "record", "start", "b", "Grandpa"); err == nil {
+		mustRun(t, "record", "stop", "--discard")
+		t.Error("recording into a phrase set started")
 	}
 }

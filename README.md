@@ -289,8 +289,12 @@ kc9k phrase-set action focus Grandpa greyscale on     # same actions and flags a
 kc9k phrase-set threshold focus Grandpa block 2       # how many different phrases (default 1)
 kc9k phrase-set scope focus Grandpa url on            # or title/text, on/off
 kc9k phrase-set test focus Grandpa on                 # report in the page instead of acting
+kc9k phrase-set export focus Grandpa > grandpa.txt   # one phrase per line
+kc9k phrase-set import focus Other grandpa.txt
 kc9k phrase-set remove|rename|delete …
 ```
+
+Phrase sets travel with `kc9k block export` / `import` and the project file, and can be kept as [clusters](#clusters).
 
 | Phrase | Counts in | Not in |
 |---|---|---|
@@ -376,6 +380,16 @@ kc9k cluster scope academia title on
 kc9k cluster remove academia jstor.org
 kc9k cluster rename academia school
 kc9k cluster delete school
+```
+
+A **phrase cluster** holds phrases instead of entries, and becomes a phrase set when copied (there are no phrase exceptions, and phrases take no part in recording):
+
+```bash
+kc9k cluster create Grandpa --phrases               # looks at the text; or --url / --title
+kc9k cluster add Grandpa "[eat, nice] [hello, grandpa]"
+kc9k cluster copy Grandpa focus                     # a new phrase set 'Grandpa' in block 'focus'
+kc9k cluster copy Grandpa focus --into Words        # add the phrases to a phrase set the block has
+kc9k cluster save focus Words grandpa-phrases       # a block's phrase set saved as a phrase cluster
 ```
 
 A copy is a copy: later changes to the cluster don't reach the block, and deleting the cluster leaves the copied lists alone. Editing a cluster is always allowed. Copying into a block follows the block's rules: into a blacklist strengthens it (always allowed), into an exception list weakens it (refused while the block is locked). A new blacklist made from a cluster blocks what it matches; choose other actions with `kc9k list action`. An exported cluster is a plain entry file, so `kc9k list import` reads it too.

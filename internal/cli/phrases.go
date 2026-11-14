@@ -10,6 +10,8 @@
 //	kc9k phrase-set test <block> <set> on|off
 //	kc9k phrase-set rename <block> <set> <new name>
 //	kc9k phrase-set delete <block> <set>
+//	kc9k phrase-set export <block> <set>          (one phrase per line)
+//	kc9k phrase-set import <block> <set> <file>
 //
 // Strengthening is always allowed (adding a phrase, ticking a place or an
 // action, a lower threshold, test mode off); everything else weakens the
@@ -123,36 +125,71 @@ var phraseSetAddCmd = &cobra.Command{
 	Short: "Add phrases (always allowed: it makes the block stricter)",
 	Args:  cobra.MinimumNArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		return phraseAdd(database, args[0], args[1], args[2:])
+	}),
+}
+
+// phraseAdd adds typed phrases to a set: all are checked before any is
+// added. Adding is always allowed (it makes the block stricter).
+func phraseAdd(database *db.DB, block, set string, texts []string) error {
+	s, err := phraseSetArgs(database, block, set)
+	if err != nil {
+		return err
+	}
+	var phrases []db.Phrase
+	for _, text := range texts {
+		p, err := db.ParsePhrase(text)
+		if err != nil {
+			return fmt.Errorf("%q: %w", text, err)
+		}
+		phrases = append(phrases, p)
+	}
+	if err := ensureEditable(database, block, true); err != nil {
+		return err
+	}
+	added := 0
+	for _, p := range phrases {
+		ok, err := database.AddPhrase(s.ID, p)
+		if err != nil {
+			return err
+		}
+		if ok {
+			added++
+		}
+	}
+	if err := reapplyIfActive(database, block); err != nil {
+		return err
+	}
+	fmt.Printf("%d phrases added to '%s' of '%s'.\n", added, s.Name, block)
+	return nil
+}
+
+var phraseSetExportCmd = &cobra.Command{
+	Use:   "export <block> <set>",
+	Short: "Print a phrase set's phrases, one per line (redirect to a .txt file to save them)",
+	Args:  cobra.ExactArgs(2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		s, err := phraseSetArgs(database, args[0], args[1])
 		if err != nil {
 			return err
 		}
-		var phrases []db.Phrase
-		for _, text := range args[2:] {
-			p, err := db.ParsePhrase(text)
-			if err != nil {
-				return fmt.Errorf("%q: %w", text, err)
-			}
-			phrases = append(phrases, p)
+		for _, p := range s.Phrases {
+			fmt.Println(p)
 		}
-		if err := ensureEditable(database, args[0], true); err != nil {
-			return err
-		}
-		added := 0
-		for _, p := range phrases {
-			ok, err := database.AddPhrase(s.ID, p)
-			if err != nil {
-				return err
-			}
-			if ok {
-				added++
-			}
-		}
-		if err := reapplyIfActive(database, args[0]); err != nil {
-			return err
-		}
-		fmt.Printf("%d phrases added to '%s' of '%s'.\n", added, s.Name, args[0])
 		return nil
+	}),
+}
+
+var phraseSetImportCmd = &cobra.Command{
+	Use:   "import <block> <set> <file>",
+	Short: "Add phrases from a text file with one phrase per line",
+	Args:  cobra.ExactArgs(3),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		texts, err := readEntryFile(args[2])
+		if err != nil {
+			return err
+		}
+		return phraseAdd(database, args[0], args[1], texts)
 	}),
 }
 
@@ -358,6 +395,7 @@ func init() {
 	phraseSetActionCmd.Flags().String("image", "", "For image: the picture to show instead")
 	phraseSetActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
 	phraseSetCmd.AddCommand(phraseSetShowCmd, phraseSetCreateCmd, phraseSetAddCmd, phraseSetRemoveCmd, phraseSetScopeCmd,
-		phraseSetActionCmd, phraseSetThresholdCmd, phraseSetTestCmd, phraseSetRenameCmd, phraseSetDeleteCmd)
+		phraseSetActionCmd, phraseSetThresholdCmd, phraseSetTestCmd, phraseSetRenameCmd, phraseSetDeleteCmd,
+		phraseSetExportCmd, phraseSetImportCmd)
 	rootCmd.AddCommand(phraseSetCmd)
 }

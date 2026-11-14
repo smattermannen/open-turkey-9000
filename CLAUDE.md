@@ -152,7 +152,12 @@ build and is **used for real**. On it:
   unique regardless of case. `gui-state` gives each block `phrase_sets`;
   the GUI shows them as `PhraseSetCard` (a `ListCard` keyed by minus the
   set's ID) with `PhraseDialog`. `ci/gui_phrase_smoke.py` is the GUI smoke
-  test for them (builds its own binary and scratch database).
+  test for them (builds its own binary and scratch database). In files
+  (`cli/phraseexport.go`: block export, project) phrases are written as
+  typed and parsed again on import; `db.AddPhraseSet` writes a whole set.
+  A phrase cluster is a cluster with `phrases` set: its entries are typed
+  phrases, `cluster copy` makes a phrase set, `cluster save` takes a phrase
+  set when the block has no list of that name; recording refuses it.
 - **Clusters** (`internal/db/clusters.go`, `internal/cli/clusters.go`,
   `kc9k cluster …`): website lists outside any block (name, where, entries;
   no kind, no actions, never enforced, always editable). `cluster copy`
@@ -314,8 +319,8 @@ in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
 Android companion app: see `android/CLAUDE.md` (it runs this extension in IronFox and serves it `/rules` itself; `rules.safesearch` comes only from there, `kc9kSafeSearch` in `match.js`).
 
 Full usage and examples in `README.md`. Summary:
-`cluster list | show | create [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
-`phrase-set show | create [--url --title --text] | add | remove | scope | action | threshold | test | rename | delete`,
+`cluster list | show | create [--phrases] [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
+`phrase-set show | create [--url --title --text] | add | remove | scope | action | threshold | test | rename | delete | export | import`,
 `list show | create [--exceptions --url --title --text] | rename | delete | add | remove | scope | action |
 threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
 `bypass` (old name `nepsis`) `[set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,

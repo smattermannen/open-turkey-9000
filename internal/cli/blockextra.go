@@ -35,11 +35,13 @@ type listExport struct {
 // Patterns, Exceptions, Keywords and Thresholds are read from exports made
 // before website lists, and turned into lists as the database did.
 type blockExport struct {
-	Name   string       `json:"name"`
-	Lists  []listExport `json:"lists,omitempty"`
-	Apps   []string     `json:"apps"`
-	Titles []string     `json:"titles,omitempty"`
-	Nepsis *db.Nepsis   `json:"nepsis,omitempty"`
+	Name  string       `json:"name"`
+	Lists []listExport `json:"lists,omitempty"`
+	// PhraseSets: R-PHRASE-10.
+	PhraseSets []phraseSetExport `json:"phrase_sets,omitempty"`
+	Apps       []string          `json:"apps"`
+	Titles     []string          `json:"titles,omitempty"`
+	Nepsis     *db.Nepsis        `json:"nepsis,omitempty"`
 
 	Mode       string         `json:"mode,omitempty"`
 	Actions    []string       `json:"actions,omitempty"`
@@ -220,6 +222,9 @@ var blockExportCmd = &cobra.Command{
 			out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Where: l.Where.List(),
 				Actions: l.Actions, Entries: l.Entries})
 		}
+		if out.PhraseSets, err = exportPhraseSets(database, detail.Name); err != nil {
+			return err
+		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
 			return err
@@ -257,6 +262,10 @@ var blockImportCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("in import: %w", err)
 		}
+		phraseSets, err := toPhraseSets(in.PhraseSets)
+		if err != nil {
+			return fmt.Errorf("in import: %w", err)
+		}
 		for _, app := range in.Apps {
 			if err := blocker.ValidAppEntry(app); err != nil {
 				return fmt.Errorf("in import: %w", err)
@@ -283,6 +292,9 @@ var blockImportCmd = &cobra.Command{
 		if err := database.SetLists(in.Name, lists); err != nil {
 			return err
 		}
+		if err := addPhraseSets(database, in.Name, phraseSets); err != nil {
+			return err
+		}
 		if len(in.Apps) > 0 {
 			if err := database.AddApps(in.Name, in.Apps); err != nil {
 				return err
@@ -298,7 +310,7 @@ var blockImportCmd = &cobra.Command{
 				return err
 			}
 		}
-		fmt.Printf("Imported block '%s' (%d lists, %d apps).\n", in.Name, len(lists), len(in.Apps))
+		fmt.Printf("Imported block '%s' (%d lists, %d phrase sets, %d apps).\n", in.Name, len(lists), len(phraseSets), len(in.Apps))
 		return nil
 	},
 }

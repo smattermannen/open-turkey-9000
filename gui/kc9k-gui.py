@@ -3283,7 +3283,9 @@ class Window(Gtk.ApplicationWindow):
                 f"<b>Recording</b> into {GLib.markup_escape_text(target)}: {recording.get('sites', 0)} sites so far.")
         else:
             self.record_label.set_text("Not recording.")
-        self.record_start.set_sensitive(not recording and bool(self.cluster_name()))
+        shown = next((c for c in self.state.get("clusters") or [] if c["name"] == self.cluster_name()), {})
+        # R-PHRASE-10: phrases take no part in recording.
+        self.record_start.set_sensitive(not recording and bool(self.cluster_name()) and not shown.get("phrases"))
         self.record_stop.set_sensitive(bool(recording))
         self.record_discard.set_sensitive(bool(recording))
 
@@ -3295,6 +3297,10 @@ class Window(Gtk.ApplicationWindow):
                 check.set_active(bool(cluster) and key in cluster["where"])
                 check.set_sensitive(bool(cluster))
             self.cluster_entries.set_items(cluster["entries"] if cluster else [], self.cluster_name())
+            # A phrase cluster takes one phrase per line, as typed.
+            phrases = bool(cluster and cluster.get("phrases"))
+            self.cluster_entries.split = (lambda text: [text.strip()] if text.strip() else []) if phrases else split_entries
+            self.cluster_entries.entry.set_placeholder_text("[eat, nice] [hello, grandpa]" if phrases else "reddit.com  *casino*")
         finally:
             self.updating = was
 
@@ -3304,10 +3310,22 @@ class Window(Gtk.ApplicationWindow):
         self.run(["cluster", "scope", self.cluster_name(), place, "on" if check.get_active() else "off"])
 
     def new_cluster(self, _button):
-        name = self.ask_text("New cluster", "A name, such as study or shopping.")
-        if name:
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL, text="New cluster",
+            secondary_text="A name, such as study or shopping.")
+        entry = Gtk.Entry(activates_default=True)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        phrases = Gtk.CheckButton(label="Holds phrases (copied into blocks as a phrase set)")
+        dialog.get_message_area().pack_start(entry, False, False, 0)
+        dialog.get_message_area().pack_start(phrases, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        name, as_phrases = entry.get_text().strip(), phrases.get_active()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and name:
             self.cluster_wanted = name
-            self.run(["cluster", "create", name])
+            self.run(["cluster", "create", name] + (["--phrases"] if as_phrases else []))
 
     def rename_cluster(self, _button):
         old = self.cluster_name()
@@ -3326,10 +3344,14 @@ class Window(Gtk.ApplicationWindow):
         name = self.cluster_name()
         if not name or not self.blocks:
             return
+        cluster = next((c for c in self.state.get("clusters") or [] if c["name"] == name), {})
+        phrases = cluster.get("phrases", False)
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text=f"Copy {name} into a block",
-            secondary_text="It becomes a new list of the block, named after the cluster. As a blacklist it "
-                           "makes the block stricter; as exceptions it weakens it, which a locked block refuses.",
+            secondary_text=("It becomes a new phrase set of the block, named after the cluster, which "
+                            "makes the block stricter." if phrases else
+                            "It becomes a new list of the block, named after the cluster. As a blacklist it "
+                            "makes the block stricter; as exceptions it weakens it, which a locked block refuses."),
             message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
         combo = Gtk.ComboBoxText()
         for block in self.blocks:
@@ -3338,7 +3360,8 @@ class Window(Gtk.ApplicationWindow):
         exceptions = Gtk.CheckButton(label="As an exception list")
         area = dialog.get_message_area()
         area.pack_start(combo, False, False, 0)
-        area.pack_start(exceptions, False, False, 0)
+        if not phrases:  # there are no phrase exceptions
+            area.pack_start(exceptions, False, False, 0)
         dialog.show_all()
         answer = dialog.run()
         block, as_exceptions = combo.get_active_text(), exceptions.get_active()

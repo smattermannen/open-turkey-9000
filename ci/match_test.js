@@ -160,7 +160,9 @@ const failed0 = [];
     failed0.push("a phrase in a decoded address");
   }
   if (kc9kPhraseCheck(P([["-gorilla"], ["x"]])) === "" || kc9kPhraseCheck(P([["a-"], ["-b"]])) !== "" ||
-    kc9kPhraseCheck(P([["-a-"], ["b"]])) === "" || kc9kPhraseCheck(P([["a"]])) === "") {
+    kc9kPhraseCheck(P([["-a-"], ["b"]])) === "" || kc9kPhraseCheck(P([["a"]])) === "" ||
+    kc9kPhraseCheck(P([["big-", "-gorilla"], ["cat"]])) === "" || kc9kPhraseCheck(P([["-m-"], ["a"], ["b"]])) === "" ||
+    kc9kPhraseCheck(P([["a-"], ["-m-"], ["-b"]])) !== "") {
     failed0.push("kc9kPhraseCheck");
   }
 }

@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -89,8 +90,10 @@ func (p Phrase) Check() error {
 	if len(p.Sets) > MaxWordSets {
 		return fmt.Errorf("a phrase has at most %d word sets", MaxWordSets)
 	}
-	into, out, middle := 0, 0, false
-	for _, s := range p.Sets {
+	// Which word sets hold a bridge's start (big-) and end (-gorilla); a
+	// middle link (-strong-) is both.
+	outs, ins := make([]bool, len(p.Sets)), make([]bool, len(p.Sets))
+	for i, s := range p.Sets {
 		if len(s.Terms) == 0 {
 			return fmt.Errorf("a word set is empty")
 		}
@@ -98,26 +101,53 @@ func (p Phrase) Check() error {
 			if len(t) > 100 {
 				return fmt.Errorf("the term %q is too long", t[:20]+"…")
 			}
-			in, o := strings.HasPrefix(t, "-"), strings.HasSuffix(t, "-") && len(t) > 1
-			if in {
-				into++
-			}
-			if o {
-				out++
-			}
-			middle = middle || (in && o)
+			in, out := BridgeEnds(t)
+			ins[i] = ins[i] || in
+			outs[i] = outs[i] || out
 		}
 	}
-	if (into > 0) != (out > 0) {
-		return fmt.Errorf("a bridge needs both ends: a term ending in - (big-) and one starting with - (-gorilla) in another word set")
+	// elsewhere reports whether a word set other than those skipped has it.
+	elsewhere := func(has []bool, skip ...int) bool {
+		for i, h := range has {
+			if h && !slices.Contains(skip, i) {
+				return true
+			}
+		}
+		return false
 	}
-	if middle && len(p.Sets) < 3 {
-		return fmt.Errorf("a middle link (-strong-) needs at least three word sets")
+	for i, s := range p.Sets {
+		for _, t := range s.Terms {
+			switch in, out := BridgeEnds(t); {
+			case in && out:
+				if len(p.Sets) < 3 {
+					return fmt.Errorf("a middle link (%s) needs at least three word sets", t)
+				}
+				ok := false
+				for a := range p.Sets {
+					if outs[a] && a != i && elsewhere(ins, i, a) {
+						ok = true
+					}
+				}
+				if !ok {
+					return fmt.Errorf("the middle link %s needs a term ending in - (big-) and one starting with - (-gorilla), each in another word set", t)
+				}
+			case in && !elsewhere(outs, i):
+				return fmt.Errorf("a bridge needs both ends: %s needs a term ending in - (big-) in another word set", t)
+			case out && !elsewhere(ins, i):
+				return fmt.Errorf("a bridge needs both ends: %s needs a term starting with - (-gorilla) in another word set", t)
+			}
+		}
 	}
 	if p.Length != 0 && (p.Length < p.Necessary() || p.Length > len(p.Sets)) {
 		return fmt.Errorf("the phrase length is from %d (its necessary word sets) to %d (all its word sets)", p.Necessary(), len(p.Sets))
 	}
 	return nil
+}
+
+// BridgeEnds reports whether a term ends a bridge (-gorilla) or starts one
+// (big-); a middle link (-strong-) does both (R-PHRASE-7).
+func BridgeEnds(term string) (in, out bool) {
+	return strings.HasPrefix(term, "-"), strings.HasSuffix(term, "-") && len(term) > 1
 }
 
 // String writes a phrase as it is typed: [a, b] [c] [d]? with :N for a
@@ -297,6 +327,15 @@ func (d *DB) FindPhraseSet(block, name string) (PhraseSet, error) {
 	return PhraseSet{}, fmt.Errorf("block '%s' has no phrase set '%s'", block, name)
 }
 
+// phraseSetNameTaken reports whether another set of the block has the name,
+// in any case: sets are found by name without regard to case.
+func (d *DB) phraseSetNameTaken(blockID, except int, name string) bool {
+	var n int
+	err := d.conn.QueryRow("SELECT COUNT(*) FROM phrase_sets WHERE block_id = ? AND id != ? AND lower(name) = lower(?)",
+		blockID, except, name).Scan(&n)
+	return err == nil && n > 0
+}
+
 // CreatePhraseSet adds a phrase set that blocks what it matches.
 func (d *DB) CreatePhraseSet(block, name string, where Where) (int, error) {
 	if err := CheckListName(name); err != nil {
@@ -308,6 +347,9 @@ func (d *DB) CreatePhraseSet(block, name string, where Where) (int, error) {
 	blockID, err := d.getBlockID(block)
 	if err != nil {
 		return 0, err
+	}
+	if d.phraseSetNameTaken(blockID, 0, name) {
+		return 0, fmt.Errorf("the block already has a phrase set named '%s'", name)
 	}
 	res, err := d.conn.Exec("INSERT INTO phrase_sets (block_id, name, in_url, in_title, in_text) VALUES (?, ?, ?, ?, ?)",
 		blockID, name, where.URL, where.Title, where.Text)
@@ -334,6 +376,13 @@ func (d *DB) DeletePhraseSet(id int) error {
 func (d *DB) RenamePhraseSet(id int, name string) error {
 	if err := CheckListName(name); err != nil {
 		return err
+	}
+	var blockID int
+	if err := d.conn.QueryRow("SELECT block_id FROM phrase_sets WHERE id = ?", id).Scan(&blockID); err != nil {
+		return fmt.Errorf("there is no phrase set %d", id)
+	}
+	if d.phraseSetNameTaken(blockID, id, name) {
+		return fmt.Errorf("the block already has a phrase set named '%s'", name)
 	}
 	if _, err := d.conn.Exec("UPDATE phrase_sets SET name = ? WHERE id = ?", name, id); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {

@@ -279,6 +279,28 @@ A block has **blacklists** and **exception lists**, each with a name. Each list 
 
 A combination counts where a run of words, with only spaces between them (no commas or other words) and each a word of some box, holds what every box needs, in any order. Each word follows the rules above (whole words, `*` inside words; phrases such as `car(very cheap)`), and a word that fits two boxes counts for one of them. A combination is one entry: it counts once toward a threshold, and once per run toward hits. In the shell, quote it, since brackets mean something there; it is stored with one space between boxes and `, ` between words, so it is found again however it was typed. In the interface, **Word combination…** under a title or text list has one box per bracket, each with its minimal count; double-click a combination to change it.
 
+**Phrase sets** are the new form of word combinations: a named set of phrases in a block, with a scope (url, title, text) and its own actions, like a blacklist. A phrase is two or more **word sets** in brackets, and a match takes one term from each, directly after each other in any order, in one sentence:
+
+```bash
+kc9k phrase-set create focus Grandpa                  # looks at the text unless --url/--title/--text
+kc9k phrase-set add focus Grandpa "[eat, nice] [hello, grandpa]" "[big-, strong] [-gorilla, cat]"
+kc9k phrase-set show focus Grandpa
+kc9k phrase-set action focus Grandpa greyscale on     # same actions and flags as lists
+kc9k phrase-set threshold focus Grandpa block 2       # how many different phrases (default 1)
+kc9k phrase-set scope focus Grandpa url on            # or title/text, on/off
+kc9k phrase-set test focus Grandpa on                 # report in the page instead of acting
+kc9k phrase-set remove|rename|delete …
+```
+
+| Phrase | Counts in | Not in |
+|---|---|---|
+| `[eat, nice] [hello, grandpa]` | "Let's eat grandpa" | "Let's eat, grandpa!" |
+| `[long cat, neko] [running, sitting]` | "long cat running", "long-cat sitting" | "long cat neko" (one term per word set) |
+| `[big-, strong] [-gorilla, cat]` | "big and long gorilla", "big gorilla", "strong cat" | "gorilla big", "big. gorilla" |
+| `[red] [car] [big, small]? :3` | "big red car" | "red car" (`:3`: three terms needed) |
+
+Terms follow the rules above (whole words, `*` inside a word); punctuation between terms, and a break between parts of the page (heading, paragraph, list item, button), end a match. A hyphen between letters is a space; an apostrophe belongs to its word. A `?` after a word set (third or later) makes it optional, and `:N` is the **phrase length**, how many terms a match needs (default: the necessary word sets). A **bridge** `big-` … `-gorilla` lets up to 20 words of the same sentence (commas allowed) stand between those two terms, in that order; `-strong-` is a middle link and needs three word sets. A bridge needs both ends in different word sets, or the phrase is refused. In the address, it is decoded first and `-_/.?=&+#:,` count as spaces. The block's exception lists spare pages from its phrase sets too. Phrase sets have a threshold per action and no hit count. Adding phrases, ticking a scope or an action, a lower threshold and test mode off are always allowed; the rest is refused while the block is locked.
+
 Each blacklist chooses its **actions**, in any combination:
 
 | Action | What happens |

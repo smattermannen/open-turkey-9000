@@ -27,13 +27,6 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   refused only while locked. Not built: hardware/internet clock check; re-lock
   on setting locks; active vs enabled (the daemon still activates blocks by
   schedule); layered order (R-LOCK-6/7). (L)
-- [ ] **Lists without types** (§3.2): Partial. Done: mixed lists (entry is
-  a site/URL entry or rendered term by its shape, `blocker.IsAddressEntry`;
-  patterns like `*casino*` stay address patterns for url), clusters
-  untyped, upgrade joining split `<name>` + `<name> terms` pairs when
-  identical (`migrateJoinLists`), `--terms` a no-op alias, old typed
-  block/project/cluster files still import. Left: GUI create dialog still
-  asks the type. (S)
 - [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
   silently creates nothing (`create_phrase_set`). Two editors (typed box and
   pop-up `PhraseDialog`, too tall); want only boxes in the card, unlimited
@@ -91,6 +84,10 @@ Script-tested, never by a person. Script what can be into `ci/`.
 - [ ] Chrome on the laptop: extension pinned, unremovable, incognito/guest off, block works, popup. Then rerun `browser_test.py`, `extras_test.py` in LibreWolf.
 - [ ] Monk mode live (`ci/monk_live_test.sh` unwritten), incl. reboot mid-way.
 - [ ] GUI design pass: pages since 2026-11-10 never seen on a real screen.
+- [ ] Lists without types (§3.2): after the upgrade the split `Blocked` /
+  `Blocked terms` pairs of `H` and `test` are one `Blocked` each; check
+  pages are blocked as before. New list dialog with scope boxes on a real
+  screen.
 - [ ] Remove laptop leftovers (`quotatest`, `hej`, `Papers` list in `test`). `extras_test` fails one case only because the locked `test` block lists example.com.
 
 ## 1. `SPEC.md` coverage
@@ -101,7 +98,6 @@ Only items not simply Built.
 |---|---|---|
 | §3.1 File URL entries | Partial | `file://*` default exception built; file URLs in blacklists block nothing |
 | §3.1 Folder entry | Partial | programs closed; windows showing it not |
-| §3.2 Lists with scope, no types | Partial | 0.1: GUI create dialog |
 | §3.2 Template | Not built | |
 | §3.2 Affected users | Not built | |
 | §3.2 Test mode for phrase sets | Unchecked | lists built |

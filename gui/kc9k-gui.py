@@ -158,10 +158,11 @@ def describe_nepsis(nepsis, count=None):
     return text
 
 # Where a list looks.
+# A list's scope boxes (SPEC §3.2).
 LIST_PLACES = (
-    ("url", "Address"),
-    ("title", "Page title"),
-    ("text", "Page text"),
+    ("url", "URL"),
+    ("title", "Title"),
+    ("text", "Text"),
 )
 
 
@@ -774,18 +775,16 @@ class ListCard(Gtk.Frame):
             top.pack_end(button, False, False, 0)
         box.pack_start(top, False, False, 0)
 
-        # §3.2: an address list looks only at the address; a term list at
-        # the address (read as words, R-PHRASE-6), title and/or text.
+        # §3.2: no list types; the scope boxes say where each entry is
+        # matched (sites and URL entries against the URL, words anywhere).
         self.place_checks = {}
         places = Gtk.Box(spacing=12)
-        address_list = data.get("type", "address" if data["where"] == ["url"] else "term") == "address"
-        places.pack_start(Gtk.Label(label="Address list" if address_list else "Term list, looking at:"), False, False, 0)
-        if not address_list:
-            for name, title in LIST_PLACES:
-                check = Gtk.CheckButton(label=title)
-                check.connect("toggled", self.toggle_place, name)
-                self.place_checks[name] = check
-                places.pack_start(check, False, False, 0)
+        places.pack_start(Gtk.Label(label="Looks at:"), False, False, 0)
+        for name, title in LIST_PLACES:
+            check = Gtk.CheckButton(label=title)
+            check.connect("toggled", self.toggle_place, name)
+            self.place_checks[name] = check
+            places.pack_start(check, False, False, 0)
         box.pack_start(places, False, False, 0)
 
         self.action_checks, self.spins = {}, {}
@@ -3647,42 +3646,54 @@ class Window(Gtk.ApplicationWindow):
         if kind == "phrases":
             self.create_phrase_set()
             return
+        dialog, entry, checks = self.list_dialog(kind)
+        dialog.show_all()
+        answer = dialog.run()
+        args = self.list_create_args(kind, entry, checks)
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and args:
+            self.run(args)
+
+    def list_dialog(self, kind):
+        """The New list dialog: a name and the three scope boxes (§3.2).
+        Returns the dialog, the name entry and the boxes by place."""
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
             buttons=Gtk.ButtonsType.OK_CANCEL,
             text="New exception list" if kind == "exceptions" else "New blacklist",
-            secondary_text="A name, and its type: an address list holds sites and addresses; a term "
-                           "list holds words, looked for in the address, the page title, the page text, or several.")
+            secondary_text="A name, and where it looks. Sites (reddit.com), URL entries and patterns "
+                           "(*casino*) match the URL; words (long cat) match words in the URL, title "
+                           "or text. One list can hold both.")
         entry = Gtk.Entry(activates_default=True)
         dialog.set_default_response(Gtk.ResponseType.OK)
         area = dialog.get_message_area()
         area.pack_start(entry, False, False, 0)
-        address = Gtk.RadioButton(label="Address list")
-        term = Gtk.RadioButton(label="Term list, looking at:", group=address)
-        area.pack_start(address, False, False, 0)
-        area.pack_start(term, False, False, 0)
         checks = {}
+        boxes = Gtk.Box(spacing=12)
         for name, title in LIST_PLACES:
-            checks[name] = Gtk.CheckButton(label=title + (" (its words)" if name == "url" else ""),
-                                           active=name == "text", margin_start=24)
-            area.pack_start(checks[name], False, False, 0)
+            checks[name] = Gtk.CheckButton(label=title, active=name == "url")
+            boxes.pack_start(checks[name], False, False, 0)
+        area.pack_start(boxes, False, False, 0)
+        ok = dialog.get_widget_for_response(Gtk.ResponseType.OK)
+        def sync(*_):
+            ok.set_sensitive(bool(entry.get_text().strip()) and any(c.get_active() for c in checks.values()))
+        entry.connect("changed", sync)
         for check in checks.values():
-            check.set_sensitive(False)
-        term.connect("toggled", lambda button: [c.set_sensitive(button.get_active()) for c in checks.values()])
-        dialog.show_all()
-        answer = dialog.run()
+            check.connect("toggled", sync)
+        sync()
+        return dialog, entry, checks
+
+    def list_create_args(self, kind, entry, checks):
+        """The kc9k command the New list dialog runs, or None without a
+        name or a scope box."""
         name = entry.get_text().strip()
-        places = (["url"] if address.get_active()
-                  else [place for place, check in checks.items() if check.get_active()])
-        dialog.destroy()
-        if answer != Gtk.ResponseType.OK or not name:
-            return
+        places = [place for place, check in checks.items() if check.get_active()]
+        if not self.selected or not name or not places:
+            return None
         args = ["list", "create", self.selected, name] + ["--" + place for place in places]
-        if not address.get_active():
-            args.append("--terms")
         if kind == "exceptions":
             args.append("--exceptions")
-        self.run(args)
+        return args
 
     def create_phrase_set(self):
         dialog = Gtk.MessageDialog(

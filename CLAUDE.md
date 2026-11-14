@@ -145,7 +145,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   (`db/listjoin.go`, every open) joins split pairs `<name>` (url) +
   `<name> terms` when identical (entries, actions, no test mode, no
   queued edit/recording); clusters too. `--terms` is a no-op alias; old
-  `type` fields in block/project files are ignored. Everything goes to the extension as `lists` rules
+  `type` fields in block/project files are ignored. GUI create dialog:
+  name plus scope boxes (`list_dialog`, `ci/gui_lists_smoke.py`).
+  Everything goes to the extension as `lists` rules
   (`enforce.BuildRules`; `kc9kListActions` in `match.js`: plain words
   whole, `*` inside words; a list waits if its exceptions need unread page
   parts). Per action: threshold (distinct entries) and hit count.
@@ -153,9 +155,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `add-exception`, `add-keyword`, `threshold`, `action`) use default lists
   Blocked / Exceptions / Page words (`migrateWebLists`). Old combinations
   `(a, b) (c):2`: `migrateCombinations` (`db/combinations.go`, every open
-  and after imports) turns blacklist/term-cluster ones into phrase sets;
-  `refuseCombinations` refuses new typed ones; leftovers (one box, or in
-  exception lists) use `kc9kCombination`. Case-insensitive lookup.
+  and after imports) turns blacklist/cluster ones (rendered terms only)
+  into phrase sets; `refuseCombinations` refuses new typed ones; leftovers
+  (one box, or in exception lists) use `kc9kCombination`.
+  Case-insensitive lookup.
 - **Actions** (`db/actions.go`, Param/Minutes): block, greyscale,
   no-images, mute (`applyMute`), no-video, dark, declutter (to remove),
   redirect, image (`db.ImagesDir`, served `/image/`), close-tab;

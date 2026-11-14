@@ -149,7 +149,10 @@ build and is **used for real**. On it:
   one-ended bridges per term (mirrored by `kc9kPhraseCheck`). They reach the
   extension as `lists` rules with negative IDs (`phraseRules`), matched by
   `kc9kPhraseMatcher`; `HasPhrases` makes a block non-empty. Names are
-  unique regardless of case.
+  unique regardless of case. `gui-state` gives each block `phrase_sets`;
+  the GUI shows them as `PhraseSetCard` (a `ListCard` keyed by minus the
+  set's ID) with `PhraseDialog`. `ci/gui_phrase_smoke.py` is the GUI smoke
+  test for them (builds its own binary and scratch database).
 - **Clusters** (`internal/db/clusters.go`, `internal/cli/clusters.go`,
   `kc9k cluster …`): website lists outside any block (name, where, entries;
   no kind, no actions, never enforced, always editable). `cluster copy`

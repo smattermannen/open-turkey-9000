@@ -58,7 +58,7 @@ class SettingsActivity : Activity() {
         fun text(s: String) = root.addView(TextView(this).apply { text = s; setPadding(0, 24, 0, 8) })
 
         text(buildString {
-            append(if (owner.isOwner) "Device Owner: yes\n" else "Device Owner: NO (see README)\n")
+            append(if (owner.isOwner) "Device Owner: yes\n" else "Device Owner: NO (adb shell dpm set-device-owner)\n")
             append("State: " + when {
                 store.lifted -> "LIFTED: nothing is enforced (Resume protection below)"
                 !store.homeSet -> "no home set, so never in Nokia mode"

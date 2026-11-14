@@ -1,467 +1,193 @@
 # KC9K Roadmap
 
-Where the code stands against `SPEC.md`, and what comes next. This is the
-**only** file that holds status. `SPEC.md` says what KC9K should be;
-`README.md` says how to use what is built.
+Code status against `SPEC.md`. The only status file.
 
-**Rules for this file**
+Rules: every item cites a § or rule ID (unagreed work goes in §5 first).
+Update in the same commit as the code. A wrong status is fixed, not built
+on; write "Unchecked" rather than guess. Order: §0 first, top to bottom,
+then §2.
 
-1. Every item points to the part of `SPEC.md` it serves (§ or rule ID). Work
-   that serves nothing in `SPEC.md` is raised with the owner before it is
-   built, and listed under [Proposed](#5-proposed-not-agreed) meanwhile.
-2. Update this file in the same commit as the code it describes.
-3. A status is a claim about the code. If you find one wrong, fix it; don't
-   build on it. Write "Unchecked" rather than guess.
-4. Order of work: section 0 before anything else (principle 1), top to
-   bottom, then section 2.
-
-Status: **Built**, **Partial**, **Differs** (built, but not as `SPEC.md`
-says), **Not built**, **Unchecked** (nobody has compared it with the code).
-Sizes: S under a day, M a few days, L a week or more.
-
-Last checked against the code: 2026-11-14.
-
----
+Status: Built, Partial, Differs (built unlike SPEC), Not built, Unchecked.
+Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
 
 ## 0. Fix what exists
 
-### 0.1 Code that contradicts `SPEC.md`
+### 0.1 Code contradicting `SPEC.md`
 
-- [ ] **The lock model** (§3.3, §3.4, R-LOCK-1 to 11). Today:
-      - done for blocks: the **schedule lock** (`kc9k schedule lock B on
-        --lead D`) replaces the built-in schedule/place protection, the 2 h
-        edit freeze and the 24 h allow-window queue; upgrading gives blocks
-        that had schedules or place rules a schedule lock with a 2 h lead.
-        Frozen Chicken schedules have their own lock with a lead time too
-        (`--lock-lead`, `freeze schedule lock`); older ones keep 2 h;
-      - done: `unlock` lifts text and password locks and leaves the block
-        on; the delay lock counts down from `unlock` and is then lifted
-        (`delay_until`); a timer lock ending lifts only the lock (only a
-        schedule or monk mode's own end switches a block off);
-      - done: trusted time is the real clock unless the tamper setting
-        `kc9k tamper clock` is on (then clock changes are ignored while a
-        timer lock runs, and powered-off time isn't counted; installs from
-        before have it on). Not built: checking against the hardware clock
-        and internet time (§4.10), which would let powered-off time count
-        with protection on;
-      - done: `kc9k break text` (alias `relock`), and **re-lock** for the
-        text and password locks of blocks (`start --relock D`, GUI start
-        dialog). Not built: re-lock on setting locks;
-      - done: uninstalling is refused only while something is locked
-        (R-LOCK-9);
-      - not built: blocks are still switched on and off by their schedule
-        (the daemon activates them); §3.3 wants active (the user's switch)
-        apart from enabled (what the schedule says), and layered locks in
-        the user's order (R-LOCK-6, R-LOCK-7). (L)
-- [ ] **Lists without types** (§3.2, decision 2026-11-14): **Differs.**
-      The code has address and term lists (`web_lists.type`,
-      `list create --terms`, the GUI asks "Address list / Term list" when
-      a list is created; upgrading split mixed lists into `<name>` and
-      `<name> terms`). SPEC now wants one kind of list with scope boxes
-      URL, title, text: with URL ticked, sites and URL entries match the
-      address (and feed hosts, firewall, policy) and rendered terms match
-      as words in it (`kc9kUrlWords`, already built for term lists). Needs:
-      lists that hold both, an upgrade that joins the split lists back
-      where nothing was lost, the create dialog with three boxes, `--terms`
-      kept as an alias. (M)
-- [ ] **Phrase sets in the GUI** (§4.3, decision 2026-11-14): **Differs.**
-      - "New phrase set" with no name makes nothing, silently (`create_phrase_set`
-        drops an empty name). A set without a name must get one.
-      - Two phrase editors: a typed text box under the list, and
-        `PhraseDialog` (the boxes), a pop-up that doesn't fit the screen
-        with many word sets. SPEC wants only the boxes, in the card, with
-        any number of word sets: today 9 at most (`MAX_WORD_SETS` in the
-        GUI, `db.MaxWordSets`, and a bit mask of word sets in
-        `kc9kPhraseMatcher` that stops at 31).
-      - A new phrase set looks only at the page text unless title is
-        ticked, so phrases seem to miss tab titles. Matching itself
-        ignores case and reads the title (checked 2026-11-14). (S)
-- [ ] **Embedded videos keep playing** (§3.9): `no-video` decided from a
-      page's title or text reaches only the top frame (`keywordLooks` in
-      `content.js`); an embedded player is a frame of its own and plays on,
-      and hiding its `iframe` doesn't stop the sound. The background script
-      must tell the tab's frames, and frames that load later must ask. (S)
-- [ ] **Declutter** (decision 2026-11-14): **Differs.** Still an action
-      (`db.ActionDeclutter`, `content.js`, GUI, README). Remove it, with an
-      upgrade that drops stored declutter actions and imports that skip
-      it. (S)
-- [ ] **The extension can be switched off on Android** (§3.13): in
-      IronFox's add-ons manager. `ExtensionGuard` notices, but only after
-      15 s without a check-in and 60 s of grace, and pauses IronFox for 2
-      minutes, so about a minute of free browsing every few minutes, for
-      ever. IronFox can't force an extension on, so each switch-off must
-      cost more: a short grace once the extension has checked in before,
-      and each pause twice the last (up to an hour) until it runs unbroken
-      for a while. (S)
-- [ ] **Settings groups** (§4.10, decision 2026-11-14): **Differs.** The
-      GUI's Settings page doesn't group them as SPEC does. Wanted: one
-      **Tamper protection** group (former protection settings and `kc9k
-      tamper clock`), with an OK/Cancel window when one is turned on
-      (Not built), apart from **Browser settings**. (S)
-- [ ] **Block unsupported browsers** (§4.10, decision 2026-11-14):
-      **Differs.** Built is `force-librewolf` (a browser setting; every
-      browser but LibreWolf is closed). Wanted: a tamper protection setting
-      that allows LibreWolf, Chrome and Chromium, each only with the
-      extension running; the old setting's state and lock carried over.
-      Also Not built: the **Browsers** list in Settings (installed or not,
-      extension or not) with one-click "Install extension". (M)
-- [ ] **Project** (§3.13): *backup* (with places and place rules) and
-      *share* (`--share`, without them) are built, with a preview on import
-      and new names for taken block names. Left: a backup is
-      everything (§3.13), so running locks, passwords, hotkeys and
-      statistics must go in too (owner, 2026-11-14). (S)
-- [ ] **Words** (§3.14): done in commands, messages and GUI labels: time
-      lock, char lock, held, loosen, bypass detection, browser option;
-      `kc9k bypass` (alias `nepsis`), `--text-lock`, `list scope` /
-      `cluster scope` (alias `where`), `break text` (alias `relock`).
-      Also done: `kc9k allowance` (alias `quota`), `break reward` (alias
-      `allowance`) and their messages. Left: option (behaviour setting),
-      active for enforcing, and `README.md` prose. (S)
-- [ ] **Page reading is slow on big pages** (principle 9). In every frame,
-      `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
-      makes the browser lay out the page) every 1.5 s while the page changes,
-      so a feed that keeps loading is read again and again. Then
-      `match.js` runs one regular expression per term over all of it. Must
-      be reworked before phrase sets are built:
-      - done: the page is read whole once per address, then only the
-        visible text of what is added (`readPageText` in `content.js`), with
-        a whole re-read at most every 30 s for text changed in place;
-      - done: one pass over the words, each looked up in tables of all
-        one-word terms (`kc9kWordIndex`: exact, prefix, suffix, and globs by
-        their first or last part): 1,000 terms on 40,000 words went from
-        1.6 s to 37 ms. Terms of several words, with symbols, and
-        combinations still use one regular expression each;
-      - done: scans run in idle time (`requestIdleCallback`), within 0.5 s
-        of new text; reading stops once the page is taken away or every
-        list has done all it can. Left: splitting one big first read into
-        pieces under 16 ms;
-      - a speed test in `ci/` with a large page and many rules, run on every
-        change to the matcher. (M)
-
-- [ ] **Gigantic URL lists are slow** (principle 9). Four places grow with
-      the size of a list:
-      - **Extension:** done. `kc9kIndex` looks sites up by host suffix and
-        files path entries under their domain; only wildcard entries are
-        tried one by one. `ci/match_test.js` checks it against the regular
-        expressions and times 100,000 entries.
-      - **Firewall:** done. With `nft` (Mint has it), the addresses live in
-        sets of our own table `inet kc9k`, loaded in one atomic `nft -f`
-        and looked up in one step per packet; a drop there is final, so no
-        rule has to come first. The iptables chain stays as the fallback.
-      - **DNS when starting a block:** lookups now run 16 at a time and are
-        cached for 30 minutes (`resolveAll`); the firewall is still filled
-        in before `start` returns instead of afterwards.
-      - **`/etc/hosts`:** one line per domain; how fast Mint's resolver
-        reads a huge hosts file: Unchecked.
-      A speed test in `ci/` with 100,000 entries. (M)
-- [ ] **Phrases** (R-PHRASE-1 to 10): built; left to confirm in real use
-      (section 0.2). Done: the matcher (`kc9kPhraseMatcher`,
-      `kc9kPhraseCheck` in `match.js`: word sets, necessary/optional,
-      length, one term per set, adjacency, sentence breaks, hyphens and
-      apostrophes, bridges and middle links, url scope), tested on SPEC's
-      examples in `ci/match_test.js`. Also done: phrase sets in the
-      database (`db/phrases.go`), `kc9k phrase-set` (tested in
-      `cli/phrases_test.go`: R-PHRASE-1, 8, 9, locks), the rules feed and
-      the extension, and the GUI (a phrase set card per set on the
-      Websites tab, `PhraseDialog`; `ci/gui_phrase_smoke.py`), block and
-      project files, `.txt` export/import, and phrase clusters
-      (`cluster create --phrases`, `save`, `copy`). Existing combinations
-      became phrases (`db/combinations.go`, `migrateCombinations`): each
-      box a word set, `:N` dropped, thresholds 1 (the owner's decision,
-      2026-11-14). Categories are dropped (the owner's decision, same day):
-      the 14 shipped lists and `block create --template` are gone. (L)
-- [ ] **List names differ only in case** (§3.2): `list create b words`
-      succeeds beside `Words`, while lists are looked up without regard to
-      case, so one of them can't be reached. Phrase sets refuse this. (S)
+- [ ] **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
+  (`kc9k schedule lock B on --lead D`) replaces built-in schedule/place
+  protection, 2 h edit freeze and 24 h allow-window queue (upgrade gives
+  scheduled/placed blocks a 2 h-lead schedule lock); freeze schedules have
+  `--lock-lead` (old ones 2 h); `unlock` lifts text/password locks, leaves
+  the block on; delay lock counts from `unlock` (`delay_until`); timer lock
+  end lifts only the lock; trusted time = real clock unless `kc9k tamper
+  clock` (then clock changes ignored during timer locks, powered-off time
+  not counted; old installs have it on); `break text` (alias `relock`);
+  re-lock for block text/password locks (`start --relock D`); uninstall
+  refused only while locked. Not built: hardware/internet clock check; re-lock
+  on setting locks; active vs enabled (the daemon still activates blocks by
+  schedule); layered order (R-LOCK-6/7). (L)
+- [ ] **Lists without types** (§3.2): Differs. Code has address/term lists
+  (`web_lists.type`, `list create --terms`, GUI asks the type; upgrade split
+  mixed lists into `<name>` and `<name> terms`). Needs: mixed lists, an
+  upgrade rejoining split lists where lossless, a create dialog with three
+  scope boxes, `--terms` as alias. URL-word matching (`kc9kUrlWords`) exists. (M)
+- [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
+  silently creates nothing (`create_phrase_set`). Two editors (typed box and
+  pop-up `PhraseDialog`, too tall); want only boxes in the card, unlimited
+  word sets (today 9: `MAX_WORD_SETS`, `db.MaxWordSets`; bit mask in
+  `kc9kPhraseMatcher` caps at 31). New sets default to text only, so titles
+  seem missed. (S)
+- [ ] **Embedded videos keep playing** (§3.9): `no-video` from title/text
+  reaches only the top frame (`keywordLooks`, `content.js`); hiding the
+  iframe doesn't stop sound. Background must tell all frames; late frames
+  must ask. (S)
+- [ ] **Declutter**: still present (`db.ActionDeclutter`, `content.js`, GUI).
+  Remove; upgrade drops stored ones; imports skip it. (S)
+- [ ] **Android extension can be switched off** (§3.13) in IronFox's add-ons
+  manager: ~1 free minute every few minutes (15 s stale + 60 s grace, 2 min
+  pause). Want: short grace once checked in before; each pause doubles (to
+  1 h) until it runs unbroken a while. (S)
+- [ ] **Settings groups** (§4.10): GUI doesn't group as SPEC; want a Tamper
+  protection group (incl. `tamper clock`) with OK/Cancel window, apart from
+  Browser settings. (S)
+- [ ] **Block unsupported browsers** (§4.10): built is `force-librewolf`.
+  Want a tamper protection setting allowing LibreWolf/Chrome/Chromium with
+  the extension, carrying over state and lock. Also the Browsers list with
+  one-click install. (M)
+- [ ] **Project** (§3.13): backup/share (`--share`), preview, renaming
+  built. Left: backup must include running locks, passwords, hotkeys,
+  statistics. (S)
+- [ ] **Words** (§3.14): done in commands/messages/GUI incl. `bypass`,
+  `--text-lock`, `list scope`, `break text`, `allowance`, `break reward`.
+  Left: "option" → behaviour setting; "active" used for enforcing. (S)
+- [ ] **Page reading slow on big pages** (principle 9). Done: whole read once
+  per address, then only added visible text (`readPageText`), full re-read
+  ≤ every 30 s; one-word terms via `kc9kWordIndex` (1,000 terms × 40,000
+  words: 1.6 s → 37 ms; multi-word/symbol terms and combinations still one
+  regex each); scans in `requestIdleCallback` within 0.5 s, stop when done.
+  Left: split the first read into < 16 ms pieces; speed test in `ci/`. (M)
+- [ ] **Gigantic URL lists** (principle 9). Extension: done (`kc9kIndex`,
+  timed at 100,000 in `ci/match_test.js`). Firewall: done (nft sets,
+  iptables fallback). DNS on start: 16 parallel, 30 min cache
+  (`resolveAll`), but still filled before `start` returns. `/etc/hosts`
+  size cost: Unchecked. Left: 100,000-entry speed test in `ci/`. (M)
+- [ ] **List names differing only in case** are allowed but lookup ignores
+  case, so one is unreachable. Phrase sets refuse it. (S)
+- [ ] **R-LOCK-12 gaps**: `kc9k monk` (manual) not confirmed; `project
+  import` can bring monk steps/actions without `--no-confirm-ok`; hotkey
+  press dialog tested only with a stub. (S)
 
 ### 0.2 Not yet confirmed in real use
 
-Built and tested by scripts, never tried by a person. Each becomes a
-checklist entry with the exact commands; what can be scripted goes into `ci/`.
+Script-tested, never by a person. Script what can be into `ci/`.
 
-- [ ] A notification before the end of an allowance session.
-- [ ] Scheduled Frozen Chicken in logout and shutdown modes.
-- [ ] Strict mode holes: `unshare -Urm` (check
-      `sysctl kernel.apparmor_restrict_unprivileged_userns`), `--user`
-      Flatpak apps are killed, Electron apps aren't taken for browsers,
-      another user account and the guest session are blocked too.
-- [ ] Shutdown mode and the `kc9k.nofreeze` GRUB escape; measure the fast
-      relock.
-- [ ] Rendered terms on real sites over a few days (false hits, slow pages); a
-      hotkey pressed on the real keyboard.
-- [ ] A page that changes address without loading (YouTube) caught by a url
-      list; the Websites tab on a real screen (hidden lists, search box).
-- [ ] One-off logout and shutdown from a list; the Dashboard's Monk mode
-      button; a locked global ladder refusing `nepsis off`.
-- [ ] A hotkey pressed under GNOME.
-- [ ] Use counting with someone at the computer: the focused tab and a
-      blocked app in front count, idle time doesn't; another browser is
-      closed during a website session.
+- [ ] Notification before an allowance session ends.
+- [ ] Scheduled Frozen Chicken in logout/shutdown modes.
+- [ ] Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
+- [ ] Shutdown mode and `kc9k.nofreeze`; measure fast relock.
+- [ ] Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
+- [ ] Address change without load (YouTube) caught by a URL list; Websites tab on a real screen.
+- [ ] One-off logout/shutdown from a list; Dashboard monk button; locked global ladder refusing `bypass off`.
+- [ ] Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
 - [ ] Mute and dark on real sites; polite close with a real app.
-- [ ] Social presets beyond YouTube Shorts (the selectors in
-      `webext/files/social.js` were written from memory).
-- [ ] A playlist's videos playing; a block following the user between
-      places; a text break (`break relock`) coming back.
-- [ ] Google Chrome on the laptop: the extension pinned within seconds,
-      can't be removed or disabled, incognito and guest greyed out, a block
-      works, toolbar button and popup. Then `ci/browser_test.py` and
-      `ci/extras_test.py` again in LibreWolf (`background.js` changed).
-- [ ] The GUI's design pass: no page added since 2026-11-10 has been looked
-      at on a real screen.
-- [ ] Remove the leftovers on the test laptop (`quotatest`, `hej`, the
-      `Papers` list in `test`).
-
----
+- [ ] Social presets beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
+- [ ] Chrome on the laptop: extension pinned, unremovable, incognito/guest off, block works, popup. Then rerun `browser_test.py`, `extras_test.py` in LibreWolf.
+- [ ] Monk mode live (`ci/monk_live_test.sh` unwritten), incl. reboot mid-way.
+- [ ] GUI design pass: pages since 2026-11-10 never seen on a real screen.
+- [ ] Remove laptop leftovers (`quotatest`, `hej`, `Papers` list in `test`). `extras_test` fails one case only because the locked `test` block lists example.com.
 
 ## 1. `SPEC.md` coverage
 
-### §3.1 Targets
+Only items not simply Built.
 
 | Item | Status | Notes |
 |---|---|---|
-| Site, URL entry, wildcard | Built | website lists |
-| File URL, `file://*` default | Partial | every new block has the exception `file://*` (R-LIST-3); file URL entries in blacklists don't block anything yet |
-| App (name, path, script, fingerprint, Flatpak, desktop unit) | Built | `blocker/scripts.go`, `blocker/process.go` |
-| Folder entry | Partial | programs inside it are closed; windows showing it are not |
-| Window title entry | Built | X11 only; never in browsers (R-TITLE-1) |
-| Rendered term | Built | |
-| Phrase (formerly word combination) | Built | phrase sets; old combinations moved into them once (one-box ones and those in exception lists stay) |
-| Phrase set | Built | `kc9k phrase-set`, rules feed, extension, GUI, block/project files, `.txt` |
+| §3.1 File URL entries | Partial | `file://*` default exception built; file URLs in blacklists block nothing |
+| §3.1 Folder entry | Partial | programs closed; windows showing it not |
+| §3.2 Lists with scope, no types | Differs | 0.1 |
+| §3.2 Template | Not built | |
+| §3.2 Affected users | Not built | |
+| §3.2 Test mode for phrase sets | Unchecked | lists built |
+| §3.3 Enabled/disabled/lifted words | Partial | |
+| §3.3 Continuous/scheduled types | Not built | schedules start/stop blocks |
+| §3.3 Duplicate starts inactive | Unchecked | |
+| §3.3 `kc9k toggle` | Not built | |
+| §3.4 Range lock | Not built | |
+| §3.4 Re-lock on setting locks | Not built | |
+| §3.4 Layered sequential locks | Partial | `unlock` checks all at once in fixed order (`cli/control.go`) |
+| §3.4 R-LOCK-9 | Partial | extension/other protection: Unchecked |
+| §3.6 Break per block window | Not built | |
+| §3.6 R-SCHED-3 rhythm | Unchecked | |
+| §3.6 Allowance | Partial | daily only; no rolling/window/week/month, no refill |
+| §3.6 Reward | Partial | capped at one; no accumulate/expire |
+| §3.6 Delay break, session limit, autostart | Not built | |
+| §3.7 Use | Partial | statistics ignore background-tab sound |
+| §3.7 Strict use counting | Not built | |
+| §3.8 Scheduled freeze lock kinds beyond lead | Not built | |
+| §3.8 Allowed apps only | Not built | |
+| §3.8 R-LOCK-12 | Partial | see 0.1 |
+| §3.8 Strict mode exempt folders | Not built | |
+| §3.8 Forgotten password recovery | Partial | root removes it while nothing locked |
+| §3.8 R-DESKTOP-1 | Unchecked | |
+| §3.8 Factory reset protection | Not built | 2.6 |
+| §3.9 Declutter | Differs | 0.1 |
+| §3.9 No downloads | Not built | 2.3 |
+| §3.9 Strongest action across blocks | Unchecked | built within a page |
+| §3.9 R-LIST-4/5 | Partial | accents not folded (`match.js` only lowercases); look-alikes not built; hidden text, frames Unchecked |
+| §3.9 Rate | Not built | |
+| §3.9 Ad trigger | Not built | 2.2 |
+| §3.11 Block password | Not built | |
+| §3.10 R-WEAK-4 beyond strict/browser/ladder/password | Unchecked | |
+| §3.10 R-EVENT-1 | Unchecked | |
+| §3.12 Word recording, specificity, cut | Not built | |
+| §4.10 SafeSearch | Partial | Google only; 2.4 |
+| §4.10 Tamper settings | Partial | clock only; grace fixed 60 s; rest Not built |
+| §4.10 Browsers list | Not built | |
+| §4.11 `.deb` | Not built | |
+| §4.1 Windows still to come today | Unchecked | |
+| §4.3 Draft Save/Cancel | Not built | changes apply at once |
+| §4.3 Ctrl+F, multi-select, double-click edit | Unchecked | |
+| §4.3 Import "From KC9K" | Unchecked | file import/export built |
+| §4.5 Grid drag-move, copy to days, similar windows | Not built | |
+| §4.9 Statistics per user, times blocked, top N, filter, private windows | Not built | |
+| §4.10 Preferences | Partial | theme built; clock, first day, slider, login: Unchecked; tray Not built |
+| §4.10 Notifications choice | Not built | fixed 5 min |
 
-### §3.2 Grouping
+## 2. Next features (after §0)
 
-| Item | Status | Notes |
-|---|---|---|
-| Block, list, scope, blacklist, exception list | Built | |
-| Allowlist block | Built | `block create --allowlist` |
-| Cluster | Built | |
-| Lists with scope boxes, no types | Differs | see 0.1 |
-| Phrase sets in clusters | Built | `cluster create --phrases`, `cluster save`, `cluster copy` |
-| Template (a block definition) | Not built | |
-| Affected users | Not built | |
-| Social preset, allowed playlist | Built | see 0.2 |
-| Test mode | Built | per list (`kc9k list test B L on`, a box on each list); phrase sets: with them |
-
-### §3.3 Block states
-
-| Item | Status | Notes |
-|---|---|---|
-| Active / inactive (`start` / `stop`) | Built | the code calls these active and inactive too, but also uses "active" for enforcing |
-| Enabled / disabled, lifted | Partial | enforcing is tracked; the words aren't used |
-| Continuous / scheduled types | Not built | schedules start and stop blocks |
-| Locked | Built | only locks hold a block (the schedule lock included) |
-| Rename, duplicate | Built | that a duplicate starts disabled: Unchecked |
-| `kc9k toggle` | Not built | |
-
-### §3.4 Locks
-
-| Item | Status | Notes |
-|---|---|---|
-| Timer lock (`--for`, `--until`) | Built | follows trusted time; confirmed when set (R-LOCK-12); only a schedule ends a block it started |
-| Text lock | Built | random characters, random words (`--lock-words`) or custom text (`--lock-text`), 1–5000 |
-| Range lock | Not built | |
-| Delay lock | Built | `start --delay`, 1 min to 40 days, counted from `unlock` |
-| Schedule lock | Built | `kc9k schedule lock B on --lead D`, Schedule tab |
-| Re-lock | Partial | text and password locks of blocks (`start --relock`); setting locks: Not built |
-| Restart lock | Built | |
-| Password lock | Built | |
-| Layered sequential locks | Partial | locks stack, but `unlock` checks them all at once in a fixed order (`cli/control.go`) |
-| Trusted time | Built | the real clock; with `kc9k tamper clock` on, clock changes are ignored while a timer lock runs |
-| While any block or setting is locked (R-LOCK-9) | Partial | uninstalling is refused only then; tamper protection can't be turned off; the extension and other protection settings: Unchecked |
-
-### §3.6–3.7 Time, breaks and use
-
-| Item | Status | Notes |
-|---|---|---|
-| Block window, allow window | Built | 5-minute steps, no overlap (R-SCHED-2) in `schedule add`; project import takes windows as they are |
-| Break per block window | Not built | |
-| Pomodoro, long rest | Built | the R-SCHED-3 rhythm: Unchecked |
-| Allowance | Partial | daily only (`kc9k quota`); no rolling, window, week or month periods, no refill time |
-| Reward | Partial | `kc9k break allowance`, earned only while in use (R-BREAK-2); capped at one reward instead of adding up and expiring per window/day/week/month |
-| Text break | Built | `kc9k break text` (alias `relock`) |
-| Delay break | Not built | |
-| Session limit | Not built | |
-| Pause | Built | |
-| Autostart | Not built | |
-| Place, place rule | Built | Wi-Fi only |
-| Use | Partial | 3 minutes without input everywhere; statistics leave out sound in background tabs |
-| Strict use counting | Not built | |
-
-### §3.8 Device-level
-
-| Item | Status | Notes |
-|---|---|---|
-| Frozen Chicken: lock screen, logout, shutdown, scheduled | Built | a running freeze can't be ended; a scheduled freeze has a lock with a lead time (other lock kinds on it: Not built) |
-| Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Built | list actions wait 60 s after the notice; scheduled freezes are announced at 5 min and 1 min |
-| Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
-| Allowed apps only | Not built | |
-| Confirmation when any lock is set (R-LOCK-12) | Partial | CLI: every lock on blocks, schedule locks, strict, browser options, bypass prevention, freeze schedules and project import asks (`confirmLocks`, `cli/confirm.go`; `--yes` for scripts). GUI: one dialog, `confirm_lock`, in every lock dialog (start, schedule lock, setting locks, bypass prevention, freeze schedules, project import; a dry run lists the file's locks). Hotkeys: confirmed at `hotkey add`, and at each press by a desktop dialog (zenity) unless `--no-confirm` ("Run without confirmation"). Automatic monk mode (bypass prevention step, list or phrase set `monk` action) needs `--no-confirm-ok` / the GUI tick when set up; project import of such steps or actions: Unchecked. Monk mode started by `kc9k monk`: not confirmed yet |
-| Monk mode (R-MONK-1, R-MONK-2) | Built, live test pending | a mode with its own end time, no block; migrates the old block; three cuts held every cycle and restored (unit tests with fake devices). **Not yet tested live** on a real machine (`ci/monk_live_test.sh` is not written), nor a reboot in the middle. `kc9k monk` is not yet confirmed (R-LOCK-12) |
-| Consequences | Built | `enforce/consequence.go` |
-| Strict mode | Partial | a voluntary switch with its own setting lock (`kc9k strict on --for …`, `strict unlock`). Exempt folders: Not built |
-| Recovery of a forgotten password (§3.11) | Partial | root can remove it while nothing is locked |
-| Wayland warning (R-DESKTOP-1) | Unchecked | |
-| No-escape | Built | |
-| Factory reset protection | Not built | section 2.6 |
-
-### §3.9 Actions
-
-| Item | Status | Notes |
-|---|---|---|
-| Block page, close tab, redirect, image | Built | |
-| Look actions | Built | see 0.2; declutter still there, see 0.1 |
-| Close browser, logout, shutdown, monk | Built | |
-| No downloads | Not built | section 2.3 |
-| Threshold, hit count (rendered terms) | Built | per action; both must be met (R-LIST-6) |
-| Strongest action across blocks | Unchecked | close tab, image, redirect, block page is built within a page |
-| Matching details (R-LIST-4, R-LIST-5) | Partial | case is ignored; accents are not folded (`match.js` only lowercases: é ≠ e); look-alike letters: Not built; hidden text, frames: Unchecked |
-| Threshold (phrase sets) | Built | per action, different phrases (R-PHRASE-9); no hit count, no rate |
-| Rate | Not built | |
-| Ad trigger | Not built | section 2.2 |
-
-### §3.10–3.13 Bypass prevention, passwords, recording, the program
-
-| Item | Status | Notes |
-|---|---|---|
-| Bypass prevention: events, detectors, ladder, steps, quiet time | Built | as `kc9k nepsis`; see 0.1 for the name |
-| Workaround detection | Built | proxies, mirrors, front-ends, fetch tools |
-| Settings password | Built | needed to set a lock only with `kc9k password locks on` |
-| Access passwords, setting locks | Built | |
-| Block password (§3.11) | Not built | hides a block's contents; guards viewing only (decision 2026-11-14) |
-| No weakening during active locks (R-WEAK-4) | Built | `kc9k no-weakening`: strict mode, browser settings, global bypass prevention, settings password. Other settings (stats, options, no-escape uses its own rule): Unchecked |
-| Event counting (R-EVENT-1) | Unchecked | |
-| Link recording | Built | |
-| Word recording, specificity, cut | Not built | |
-| Four layers, daemon | Built | `internal/blocker/` |
-| Extension in LibreWolf | Built | mandatory, `extguard.go` |
-| Extension in Google Chrome / Chromium | Built | 2026-11-12; see 0.2 |
-| Browser settings | Built | |
-| SafeSearch | Partial | Google only; section 2.4 |
-| Behaviour settings | Built | called options |
-| DNS server setting | Built | `kc9k dns`, Settings > DNS |
-| Tamper settings (§4.10) | Partial | `kc9k tamper clock` (block time and date changes); the hardware clock and internet time checks: Not built |
-| Hotkeys | Built | Cinnamon tried; GNOME see 0.2 |
-| Project export / import | Partial | backup and share; see 0.1 |
-| `.deb` package | Not built | |
-| Circadian rhythm | Built | `kc9k circadian`, the Circadian Rhythm page; see 2.1 for what was and wasn't tried on real hardware |
-
-### §4 Functions (interface)
-
-| Item | Status | Notes |
-|---|---|---|
-| 4.1 Overview | Partial | Dashboard; "windows still to come today": Unchecked |
-| 4.3 Block editor: draft with Save / Cancel | Not built | every change applies at once |
-| 4.3 Block editor: Ctrl+F, multi-select, double-click to edit | Unchecked | search boxes exist |
-| 4.3 Import from KC9K / file, export | Partial | file import and export built; "From KC9K" Unchecked |
-| 4.5 Schedule grid | Partial | drag to add, click to remove, presets; drag to move, copy to days, similar windows together: Not built |
-| 4.9 Statistics | Partial | time per site and app, presets of days, on/off/clear, JSON; per user, times blocked, top 5/10, filter by block, private windows: Not built |
-| 4.10 Preferences | Partial | theme light / dark / system; 24-hour clock, first day, darkness slider, open at login: Unchecked; tray: Not built |
-| 4.10 Notifications | Partial | fixed 5 minutes ahead; choosing which and when: Not built |
-| 4.10 Tamper protection | Partial | close browsers without the extension (grace fixed at 60 s) and `kc9k tamper clock` are built; one group with the OK/Cancel window, block unsupported browsers and the others: Not built |
-| 4.10 Browsers (installed, one-click install) | Not built | see 0.1 |
-| 4.10 Dark pages (part of circadian rhythm) | Built | `kc9k circadian dark-pages`, exempt sites; `ci/circadian_test.py` |
-
----
-
-## 2. Next features
-
-After section 0. Each item's details are in `SPEC.md`; here only the steps.
-
-### 2.1 Circadian rhythm (L) — §4.10
-
-- [x] Automation clips for backlight, software brightness and colour
-      temperature (`internal/circadian/`), with presets.
-- [x] The engine (`enforce/circadian.go`, its own goroutine in the daemon):
-      `/sys/class/backlight`, external screens through DDC/CI (`ddcutil`),
-      gamma ramps over RandR, wallpaper and dark mode through gsettings
-      (Cinnamon, GNOME, MATE). It never overrides the user: a manual change
-      pauses the clip until its next point or `kc9k circadian resume`.
-- [x] `kc9k circadian …` and the Circadian Rhythm page (clip editors,
-      wallpapers, dark mode, dark pages, warnings).
-- [x] Dark pages in the extension (`rules.dark`), with exempt sites.
-- [ ] Not tried on real hardware: a laptop's built-in backlight (unit tests
-      through replaceable vars only; the test machine is a desktop), GNOME
-      and MATE, more than one screen. Wayland has no gamma ramps to set:
-      software brightness and colour temperature do nothing there (the page
-      says so).
-- [ ] Dark pages that follow the *system's* setting rely on the browser's
-      `prefers-color-scheme`, which LibreWolf's fingerprinting protection
-      reports as light. With dark mode set by KC9K (always dark, or light
-      between two times) the daemon decides and it works everywhere.
-- [ ] Circadian settings are not part of `kc9k project export` yet (S).
-
-### 2.2 Ads as a trigger (M) — §3.9
-
-- [ ] A fourth scope: the ad networks a page loads (the extension already
-      sees third-party requests through `webRequest`).
-- [ ] A shipped list of ad networks per industry (gambling, adult, …).
-
-### 2.3 No downloads (S) — §3.9
-
-- [ ] The extension cancels downloads from matching pages (`downloads`
-      permission).
-
-### 2.4 SafeSearch beyond Google (S) — §4.10
-
-- [ ] Bing, DuckDuckGo and YouTube Restricted Mode, each lockable.
-
-### 2.5 Layered sequential locks (M) — §3.4, R-LOCK-6, R-LOCK-7
-
-- [ ] Store the user's order of locks; `unlock` lifts only the first
-      remaining one (R-LOCK-6, R-LOCK-7).
-- [ ] A timer lock with a date waits for the date; one with a duration
-      counts from when the lock before it was unlocked.
-- [ ] The same for browser settings and setting locks (the global ladder
-      included).
-- [ ] `kc9k status` and the interface show the order and which lock is next.
-
-### 2.6 Factory reset protection (M) — §3.8
-
-- [ ] Firmware lock where `/sys/class/firmware-attributes/` allows it
-      (admin password given to someone the user trusts, never random; no
-      USB or network boot; fixed boot order); a guide elsewhere.
-- [ ] Installer media guard: block OS image sites, close USB writing tools
-      (mintstick, balenaEtcher, Ventoy, Popsicle, Startup Disk Creator,
-      GNOME Disks restoring an image).
-- [ ] Root login on TTYs and `su` during a lock: a PAM guard line (refuse
-      root) in `login`, `su` and `su-l`, installed and removed with strict
-      mode's lockdown (`ApplyLockdown`/`RemoveLockdown`), so `kc9k master`
-      lifts it too. Hiding recovery entries and locking `init=`/`single`
-      editing are done (the boot lock). Test on generated config, not a
-      boot.
-- [ ] A guided setup when turning on strict mode or no-escape: on a
-      terminal, a checklist (GRUB present, UEFI or BIOS, other systems
-      found, firmware password, USB boot still works) before typing yes.
-
-### 2.7 Hardening and polish
-
-- [ ] **Rules server secret.** Any local program can send the
-      `X-KC9K-Extension` header to `127.0.0.1:47613`. Give the extension a
-      secret by policy and require it. (M)
-- [ ] **Audit the sudo rule.** Anything running as the user can run `kc9k`
-      as root: check every command for hostile arguments (symlinks, `..`,
-      files written under `/etc`). Keep `env_reset` (never `sudo -E`). (M)
-- [ ] **The typing challenge in its own GTK window** instead of a
-      terminal. (M)
-
-### 2.8 The rest of section 1
-
-Everything marked Not built or Partial above.
-
----
+- **2.1 Circadian rhythm** (§4.10): built. Untried on real hardware: laptop
+  backlight, GNOME/MATE, multiple screens. Wayland: no gamma ramps.
+  System-following dark pages rely on `prefers-color-scheme`, which
+  LibreWolf reports as light. Not in `project export` yet (S).
+- **2.2 Ad trigger** (M): fourth scope from third-party requests
+  (`webRequest`); shipped ad-network list per industry.
+- **2.3 No downloads** (S): extension cancels downloads (`downloads` permission).
+- **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted, each lockable.
+- **2.5 Layered sequential locks** (M): stored order; `unlock` lifts only
+  the first; dated timer waits for date, duration counts from previous
+  unlock; same for settings; status shows order and next.
+- **2.6 Factory reset protection** (M): firmware lock via
+  `/sys/class/firmware-attributes/` (password given to a trusted person,
+  no USB/network boot, fixed order); installer media guard (block OS image
+  sites, close mintstick, balenaEtcher, Ventoy, Popsicle, Startup Disk
+  Creator, GNOME Disks restore); PAM root guard in `login`, `su`, `su-l`
+  via `ApplyLockdown`/`RemoveLockdown` (test on generated config); guided
+  setup checklist for strict/no-escape.
+- **2.7 Hardening** (M each): rules server secret by policy; audit sudo
+  rule arguments (keep `env_reset`); GTK window for the typing challenge.
+- **2.8** Everything else Not built/Partial in §1.
 
 ## 3. Before release
 
-- [ ] Build without `TAGS=devmaster` (no master password).
-- [ ] Remove `ci/vm.sh`.
-- [ ] On the test laptop, remove `/etc/sudoers.d/99-claude-test`.
-- [ ] A pass over `README.md`; a tagged release.
+- [ ] Build without `TAGS=devmaster`.
+- [ ] Remove `ci/vm.sh`; on the laptop remove `/etc/sudoers.d/99-claude-test`.
+- [ ] Tagged release.
 
 ## 4. After publishing
 
-- **Windows support (L)** — §1.4. A port behind a platform layer: everything
-  in `internal/blocker/` is Linux-specific.
+- Windows (L): platform layer; `internal/blocker/` is Linux-only.
 
 ## 5. Proposed, not agreed
 
-Nothing at the moment.
+None.

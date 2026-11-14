@@ -1,386 +1,270 @@
 # Killer Chicken 9000 (KC9K)
 
-A command-line (CLI) productivity blocker for Linux, backed by a `systemd` service.
+Linux productivity blocker: CLI + systemd daemon + browser extension + GTK GUI.
 
 ## Documents
 
-There are four, and each fact lives in exactly one of them:
-
-| File | Holds | Who changes it |
+| File | Holds | Changes |
 |---|---|---|
-| `SPEC.md` | What KC9K should be: vision, principles, glossary, functions, rules, decisions | Only with the owner's agreement |
-| `ROADMAP.md` | Where the code stands against `SPEC.md`, and what comes next. The only file with status | Agents, in the same commit as the code |
-| `README.md` | How to use what is built | Agents, in the same commit as the code |
-| `CLAUDE.md` | How the code is laid out, how to build and test | Agents |
+| `SPEC.md` | What KC9K should be: principles, glossary, rules, decisions | Only with the owner |
+| `ROADMAP.md` | Status against `SPEC.md`; next work. Only status file | Same commit as the code |
+| `CLAUDE.md` | Code layout, build, test | Agents |
+| `android/CLAUDE.md` | Android app | Agents |
 
-**Read `SPEC.md` and `ROADMAP.md` first.** Use the glossary's words exactly.
-Where code or docs disagree with `SPEC.md`, `SPEC.md` is what was meant:
-note the gap in `ROADMAP.md`. If `SPEC.md` itself seems wrong or silent,
-ask the owner; don't decide alone and don't invent features. **Fix current
-functionality before adding new features** (`ROADMAP.md` section 0). Don't
-create other planning or status files.
+Read `SPEC.md` and `ROADMAP.md` first; use glossary words exactly. Code vs
+`SPEC.md`: `SPEC.md` wins; log the gap in `ROADMAP.md`. If `SPEC.md` seems
+wrong or silent, ask the owner. Fix before adding (`ROADMAP.md` §0). No
+other planning/status files. No user-facing docs.
 
-Blocking is organized into **blocks** (named groups) of **sites** (domains) and
-**apps** (process names). When a block is activated, a systemd daemon
-continuously ensures the blocking layers stay applied.
-
-## Build
+## Build and test
 
 ```bash
 export PATH="/usr/local/go/bin:$PATH"
 make build            # CGO_ENABLED=0 go build -o kc9k ./cmd/kc9k
-sudo ./install.sh     # compiles + installs binary, wrapper, sudoers, systemd and DB
+sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 ```
 
-Built without CGo because the SQLite driver is `modernc.org/sqlite` (pure Go). To
-check that everything compiles: `CGO_ENABLED=0 go build ./...`. Run tests
-as an ordinary user, never with `sudo`: as root `KC9K_DB` is ignored, so the
-`internal/cli` tests would write to the real database (they refuse to run).
+- No CGo (`modernc.org/sqlite`). Check: `CGO_ENABLED=0 go build ./...`.
+- Run tests as a normal user, never `sudo`: as root `KC9K_DB` is ignored and
+  `internal/cli` tests would hit the real DB (they refuse).
+- Install: `/usr/local/bin/kc9k-bin` (binary), `kc9k` wrapper (`exec sudo`),
+  `/etc/sudoers.d/kc9k`, `kc9k.service`, `/var/lib/kc9k/kc9k.db`; LibreWolf
+  via `extrepo` (skip: `KC9K_NO_LIBREWOLF=1`; retry: `kc9k browser
+  install-librewolf`). Independent of the source dir.
+- `make uninstall` runs hidden `prepare-uninstall`: refused while locked;
+  else removes all layers, SafeSearch/search engine policies, unsigned-
+  extension permission, no-escape boot lock; leaves a policy telling
+  browsers to remove the extension. LibreWolf stays.
+- `TAGS=devmaster`: `kc9k master-set` / `kc9k master` (stdin) lift every
+  lock, freeze, strict mode, no-escape. With root-owned
+  `/var/lib/kc9k/allow-remote-control`, remote-controlled browsers aren't
+  closed and the devtools policy is dropped (Marionette needs it).
+- `./try-challenge.sh [len]` (`cmd/try-challenge/`): unlock challenge alone.
+- Root Chrome test: `go test -tags roottest -run Chrome ./internal/enforce`.
 
-### The test laptop
+### Test laptop (owner's, Mint 22.3, `TAGS=devmaster`, used for real)
 
-The owner's laptop (Mint 22.3, dual boot with Windows) runs a `TAGS=devmaster`
-build and is **used for real**. On it:
-
-- Tests add and remove blocks, restart the daemon (a tamper event) and get
-  pages blocked, which all count for the owner's bypass prevention ladder.
-  `ci/extras_test.py` once tripped it and started monk mode; it now paces
-  itself when a global ladder is on. Don't leave test blocks with schedules
-  behind: a schedule holds its block before each window.
+- Tests add/remove blocks, restart the daemon (tamper) and trip blocks: all
+  count on the owner's bypass ladder. `ci/extras_test.py` paces itself when
+  a global ladder is on. Never leave test blocks with schedules (schedule
+  locks hold them before windows).
 - Browser tests: `GECKOWEBDRIVER=~/.local/share/kc9k-browsertest
   ~/.local/share/kc9k-browsertest/venv/bin/python ci/<name>.py`
-  (`browser_test.py`, `extras_test.py`, `actions_test.py`, `quota_test.py`).
-  There is no Node: `cjs ci/match_test_cjs.js` runs the matcher tests.
-- GUI smoke tests: build a binary, point a wrapper at it with `KC9K_DB` set to
-  a scratch file, load `gui/kc9k-gui.py` as a module with `CLI` replaced, give
-  the app another application ID, and never `show()` the window. A database
-  opened through `KC9K_DB` never applies layers.
-- The browser policy stops many blocked pages before the extension sees a
-  request, so the extension then learns of them from the tab (every 3 s).
-  Anything needing the request itself needs a fallback (`trail` in
-  `background.js`).
+  (`browser_test`, `extras_test`, `actions_test`, `quota_test`). No Node
+  there: `cjs ci/match_test_cjs.js`.
+- GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
+  `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
+  never `show()`. `KC9K_DB` never applies layers. Examples:
+  `ci/gui_phrase_smoke.py`, `ci/gui_circadian_smoke.py` (`xvfb-run -a`).
+- Browser policy stops many pages before the extension sees the request; it
+  then learns from the tab every 3 s. Request-dependent features need a
+  fallback (`trail` in `background.js`).
+- LibreWolf's policy file is rewritten only by the daemon (Firefox's at once
+  by the CLI): wait ~12 s before starting a browser after a change.
 
 ## Architecture
 
-- **Entrypoint** (`cmd/kc9k/main.go`): lean, just delegates to `cli.Execute()`.
-- **CLI** (`internal/cli/`): Cobra commands. `block.go` (block CRUD),
-  `control.go` (`start`/`stop`/`unlock`/`status`).
-- **Blocking layers** (`internal/blocker/`): `/etc/hosts` (atomic writes),
-  iptables + ip6tables firewall (real-IP resolution via a small built-in DNS
-  client that bypasses `/etc/hosts` and asks the network's own server, then
-  Quad9, or the user's choice: `kc9k dns`, `SetDNSChoice`, loopback answers
-  dropped; expanded DoH blocklist), browser policies
-  for Firefox/Chrome/Chromium/Brave/Edge/Opera/Vivaldi (blocklist, allowlist,
-  wildcard patterns, DoH disabled), and exact-name process killing (plus Flatpak app IDs, matched via the
-  `app-flatpak-<ID>-<n>.scope` cgroup or `/.flatpak-info`, and desktop app units
-  `app-[<launcher>-]<ID>-<n>.scope`/`@….service` whose ID is or ends in `.<name>`); every
-  descendant of a matched process is killed too, except under shells/session processes. Domain
-  validation (`validate.go`) guards against `/etc/hosts` injection.
-  The firewall is an nftables table `inet kc9k` (sets of addresses, base
-  chains on output and forward, loaded atomically with `nft -f`); without
-  nft, an iptables chain whose jump comes first in OUTPUT and FORWARD and
-  which the drift check re-tops. The extension guard (`extguard.go`) knows
-  browsers by name, or by engine (`browserdetect.go`: libxul.so or Chromium's
-  icudtl.dat/V8 snapshot mapped by a user-owned executable, minus Electron).
-  Strict mode also closes docker/lxd/incus/libvirt sockets (`sockets.go`).
-  Window titles: `titles.go` asks matching windows to close, then kills the
-  program after `TitleCloseGrace`, via a cgo-free X11 client (`x11.go`:
-  Xauthority cookie, _NET_CLIENT_LIST or QueryTree, _NET_WM_NAME/_PID,
-  _NET_CLOSE_WINDOW then a sync). The client trusts nothing a user can
-  plant: it reads only the user's own regular Xauthority file, sends the
-  cookie only to a root- or user-owned socket, caps replies and gives each
-  connection one 3 s budget; a window's PID is believed only for the
-  session user's own processes. It runs beside the daemon cycle
-  (`enforceTitles`), never inside it. Browsers are left to the extension
-  (tab titles).
-- **Enforce** (`internal/enforce/`): turns the active blocks into layer inputs
-  (everything, allowlists included, unioned across active blocks); `Apply`
-  (CLI, on state change) and `Tick` (daemon, per cycle: due queued edits +
-  schedule reconciliation + drift-only reapply). Single source of truth so CLI
-  and daemon agree.
-- **Schedule** (`internal/schedule/`): pure time logic for recurring windows
-  (block windows, or `--allow` windows that keep a block on except while open);
-  `EditFreeze` (2 h) is no longer used as a built-in protection; freeze
-  schedules have their own lock lead time (`db.FreezeSchedule.LockLead`).
-- **Locks and weakening** (`internal/cli/`): `blockHold` decides whether a
-  block is locked (text, timer, password, restart, delay, or its schedule
-  lock: `db/schedulelock.go`, `kc9k schedule lock`, on in its windows and
-  places and for its own lead time); `ensureEditable` refuses only edits that
-  would weaken a locked block, and `start` on an active block can only
-  strengthen its locks. `gateEdit` (`loosen.go`) no longer queues anything;
-  the daemon still applies edits older versions queued. `unlock` lifts text
-  and password locks and starts the delay lock's countdown (`delay_until`);
-  the block stays on.
-- **Daemon** (`internal/daemon/`): systemd service, calls `enforce.Tick` every 5s; also samples the foreground app for statistics every 5s and relocks the screen every 0.5s during a lock freeze.
-- **GUI** (`gui/kc9k-gui.py`): GTK 3 Python, English; Dashboard, Blocks, Device Blocks, Statistics, Settings. Reads `kc9k gui-state` and `kc9k stats --json`; every change runs a `kc9k` command.
-- **Website lists** (`internal/db/weblists.go`, `internal/cli/weblists.go`,
-  `kc9k list …`): each block has named blacklists and exception lists. Each
-  list has a type (`web_lists.type`, `WebList.IsAddress`): an address list
-  (url only) or a term list (any of url, title, text; `db.CheckScope`;
-  untyped lists that mixed url and page were split by `migrateListTypes`,
-  then `fillListTypes` typed everything, clusters too). A term list's url
-  terms reach the extension as `url_terms` and are matched in the address
-  read as words (`kc9kUrlWords`, R-PHRASE-6); only address lists feed hosts,
-  firewall and policy. Each blacklist ticks its
-  actions (block / greyscale / no-images, `actions.go`) with, per action, two
-  counts for page text: distinct entries (threshold) and total hits. An exception list spares pages
-  from its own block's blacklists only. Only url blacklists with `block` feed
-  hosts, firewall and browser policy (`enforce.Inputs`), and not at all for a
-  block with title/text exceptions; everything goes to the extension as
-  `lists` rules (`enforce.BuildRules`, `kc9kListActions` in `match.js`: plain
-  words are whole words, `*` matches inside words; a list whose exceptions
-  look at a part of the page not read yet waits). Word combinations such
-  as `(car, lambo*) (big, small, nice):2` are the old form of phrases:
-  `migrateCombinations` (`db/combinations.go`, at every open and after
-  imports) moves those of blacklists and term clusters into phrase sets and
-  phrase clusters (`CombinationPhrases`: each box a word set, `:N`
-  dropped); `refuseCombinations` refuses typed ones. Those left (one box,
-  or in exception lists) are still matched by `kc9kCombination`. What strengthens is free;
-  the rest is gated/queueable (`EditList*` edits name lists by id). Old
-  commands (`block add`, `add-exception`, `add-keyword`, `threshold`,
-  `action`) are shortcuts to the default lists Blocked / Exceptions / Page
-  words; `migrateWebLists` turned pre-list blocks (sites, patterns,
-  exceptions, page keywords, allowlist mode) into those lists once.
-  More actions (`db/actions.go`, with Param/Minutes): redirect, image
-  (stored in `db.ImagesDir`, served at `/image/`), close-tab, and device
-  actions close-browser/logout/shutdown/monk. The extension (`kc9kOutcome`)
-  picks the strongest page action, closes the tab and browser itself, and
-  POSTs `/hit` (`enforce/hits.go`, extension header required) so the daemon
-  logs the event and runs logout/shutdown/monk.
-- **Phrase sets** (`internal/db/phrases.go`, `internal/cli/phrases.go`,
-  `kc9k phrase-set …`, R-PHRASE-1 to 10): named sets of phrases in a block
-  (scope, actions with a threshold of different phrases, test mode). A
-  phrase is JSON (`db.Phrase`: word sets, necessary or optional, length),
-  typed as `[a, b] [c]? :N` (`ParsePhrase`, `String`); `Check` refuses
-  one-ended bridges per term (mirrored by `kc9kPhraseCheck`). They reach the
-  extension as `lists` rules with negative IDs (`phraseRules`), matched by
-  `kc9kPhraseMatcher`; `HasPhrases` makes a block non-empty. Names are
-  unique regardless of case. `gui-state` gives each block `phrase_sets`;
-  the GUI shows them as `PhraseSetCard` (a `ListCard` keyed by minus the
-  set's ID) with `PhraseDialog`. `ci/gui_phrase_smoke.py` is the GUI smoke
-  test for them (builds its own binary and scratch database). In files
-  (`cli/phraseexport.go`: block export, project) phrases are written as
-  typed and parsed again on import; `db.AddPhraseSet` writes a whole set.
-  A phrase cluster is a cluster with `phrases` set: its entries are typed
-  phrases, `cluster copy` makes a phrase set, `cluster save` takes a phrase
-  set when the block has no list of that name; recording refuses it.
-- **Clusters** (`internal/db/clusters.go`, `internal/cli/clusters.go`,
-  `kc9k cluster …`): website lists outside any block (name, where, entries;
-  no kind, no actions, never enforced, always editable). `cluster copy`
-  copies one into a block as a new list (blacklist, or `--exceptions`) or
-  `--into` an existing list, through `listAdd`, so the block's gating
-  applies; `cluster save` makes one from a block's list.
+- `cmd/kc9k/main.go` → `cli.Execute()`. Cobra commands in `internal/cli/`
+  (`block.go`, `control.go`: start/stop/unlock/status). `kc9k --help` lists them.
+- **Layers** (`internal/blocker/`):
+  - `/etc/hosts` (atomic; `validate.go` blocks injection).
+  - Firewall: nft table `inet kc9k` (address sets, output+forward chains,
+    `nft -f`); fallback iptables/ip6tables chain jumped first in OUTPUT and
+    FORWARD, re-topped on drift. Real IPs from a built-in DNS client
+    bypassing hosts: network server, then Quad9, or `kc9k dns` choice
+    (`SetDNSChoice`); loopback answers dropped. DoH resolvers blocked.
+    `resolveAll`: 16 parallel, 30 min cache.
+  - Browser policies (Firefox, Chrome, Chromium, Brave, Edge, Opera,
+    Vivaldi): blocklist, allowlist, wildcards, DoH off.
+  - Process kill: exact name, Flatpak ID (`app-flatpak-<ID>-<n>.scope` or
+    `/.flatpak-info`), desktop units `app-[<launcher>-]<ID>-<n>.scope`/`@….service`
+    with ID equal to or ending in `.<name>`; descendants too, except under
+    shells/session processes. `scripts.go`: Python by script
+    (`pythonScript`, `essentialProcess`), copies by hash (`HashEntry`
+    `sha256:<hex>:<size>:<path>`, hidden by `visibleApps`; system programs
+    never match), `KillNaming` (fetch tools given a blocked domain).
+  - `extguard.go`: extension mandatory while `enforce.ExtensionRequired` and
+    a supported browser is installed; closes browsers whose extension hasn't
+    fetched `/rules` with `X-KC9K-Extension` within 60 s (traced via
+    `/proc/net/tcp`), at once if remote-controlled (`remotecontrol.go`) or
+    started before the last protecting settings change
+    (`noteSettingsChange`). Browsers known by name or engine
+    (`browserdetect.go`: libxul.so or icudtl.dat/V8 snapshot mapped by a
+    user-owned exe, minus Electron). LibreWolf: `block-devtools` policy;
+    five prefs locked in librewolf.cfg, user overrides replaced by a cleaned
+    copy (`librewolfprefs.go`).
+  - `sockets.go`: strict mode closes docker/lxd/incus/libvirt sockets.
+    Strict lockdown: `/etc/sudoers.d/zz-kc9k-lockdown`,
+    `/etc/polkit-1/rules.d/00-kc9k-lockdown.rules`; no exec from `/home`,
+    `/tmp`, `/var/tmp`, `/dev/shm`. Boot param `kc9k.nofreeze` skips freeze
+    and lockdown for that boot.
+  - `titles.go`/`x11.go`: asks matching windows to close, kills after
+    `TitleCloseGrace`; cgo-free X11 client (user's own Xauthority only,
+    cookie only to root/user-owned socket, capped replies, 3 s budget, PID
+    trusted only for the session user). Runs beside the cycle
+    (`enforceTitles`). Browsers left to the extension.
+  - `polite.go`: `polite-close` asks windows to close, kills a cycle later.
+  - `hotkeys.go`: Cinnamon/GNOME dconf keybindings `kc9k<id>` →
+    `kc9k hotkey run <id>` (starts in-process with preset `--for`; settings password asked at `hotkey add`).
+- **Enforce** (`internal/enforce/`): active blocks → layer inputs (unioned).
+  `Apply` (CLI, on change) and `Tick` (daemon: due queued edits, schedule
+  reconciliation, drift reapply). Single source of truth.
+- **Daemon** (`internal/daemon/`): `Tick` every 5 s; foreground-app
+  sampling every 5 s; screen relock every 0.5 s during a lock freeze.
+- **Schedule** (`internal/schedule/`): windows and `--allow` windows. Wall
+  clock: DST-skipped windows shrink/vanish, repeated hour covered twice;
+  durations count real hours. Freeze schedules: `db.FreezeSchedule.LockLead`;
+  daemon `reconcileFreezeSchedules`.
+- **Locks** (`internal/cli/`): `blockHold` decides lock state (text, timer,
+  password, restart, delay, schedule lock `db/schedulelock.go`).
+  `ensureEditable` refuses only weakening of locked blocks; `start` on an
+  active block only strengthens. `gateEdit` (`loosen.go`) no longer queues;
+  daemon still applies old queued edits (`pending.go`). `unlock` lifts
+  text/password locks and starts delay countdown (`delay_until`).
+- **Lock confirmation** (`cli/confirm.go`, R-LOCK-12): every lock path builds
+  `lockToSet` items and calls `confirmLocks` before writing; terminal asks
+  "yes", otherwise needs `--yes` (`addYesFlag`). Tests `confirm_test.go`
+  (`lockCases`). GUI: `confirm_lock` then `--yes`. Hotkeys: confirmed at
+  `hotkey add`, and at each press via `blocker.ConfirmDesktop` (zenity as
+  session user; none = no) unless `no_confirm`. Automatic monk mode needs
+  `--no-confirm-ok` (`requireMonkAck`).
+- **Text lock** (`internal/lock/`): raw-mode, paste-resistant; 60% letters,
+  35% digits, 5% symbols; 98% accuracy; default 300 chars;
+  `--lock-words`, `--lock-text`.
+- **Website lists** (`db/weblists.go`, `cli/weblists.go`, `kc9k list`): per
+  block, blacklists and exception lists, each typed (`web_lists.type`,
+  `WebList.IsAddress`; to be removed, ROADMAP 0.1) with scope
+  (`db.CheckScope`). `migrateListTypes` splits only untyped rows;
+  `fillListTypes` types everything. Term-list url terms → `url_terms`,
+  matched as words (`kc9kUrlWords`). Only address blacklists with `block`
+  feed hosts/firewall/policy (`enforce.Inputs`), and not for blocks with
+  title/text exceptions. Everything goes to the extension as `lists` rules
+  (`enforce.BuildRules`; `kc9kListActions` in `match.js`: plain words
+  whole, `*` inside words; a list waits if its exceptions need unread page
+  parts). Per action: threshold (distinct entries) and hit count.
+  Strengthening free; else gated (`EditList*` by id). Shortcuts (`block add`,
+  `add-exception`, `add-keyword`, `threshold`, `action`) use default lists
+  Blocked / Exceptions / Page words (`migrateWebLists`). Old combinations
+  `(a, b) (c):2`: `migrateCombinations` (`db/combinations.go`, every open
+  and after imports) turns blacklist/term-cluster ones into phrase sets;
+  `refuseCombinations` refuses new typed ones; leftovers (one box, or in
+  exception lists) use `kc9kCombination`. Case-insensitive lookup.
+- **Actions** (`db/actions.go`, Param/Minutes): block, greyscale,
+  no-images, mute (`applyMute`), no-video, dark, declutter (to remove),
+  redirect, image (`db.ImagesDir`, served `/image/`), close-tab;
+  device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
+  picks the strongest, closes tab/browser itself, POSTs `/hit`
+  (`enforce/hits.go`, header required) so the daemon logs and runs
+  logout/shutdown/monk.
+- **Phrase sets** (`db/phrases.go`, `cli/phrases.go`, `kc9k phrase-set`):
+  `db.Phrase` JSON, typed `[a, b] [c]? :N` (`ParsePhrase`, `String`);
+  `Check` refuses one-ended bridges (mirrored `kc9kPhraseCheck`). Rules
+  with negative IDs (`phraseRules`), matched by `kc9kPhraseMatcher`.
+  `HasPhrases` makes a block non-empty. Names unique case-insensitively.
+  GUI: `PhraseSetCard` (a `ListCard` keyed by −id), `PhraseDialog`. Files:
+  `cli/phraseexport.go`; `db.AddPhraseSet`. Phrase clusters (`phrases`
+  set): `cluster copy` → phrase set, `cluster save` from one; no recording.
+- **Clusters** (`db/clusters.go`, `cli/clusters.go`): lists outside blocks,
+  never enforced. `cluster copy` goes through `listAdd` (gating applies).
 - **Link recording** (`db/recording.go`, `enforce/recording.go`,
-  `cli/record.go`, `kc9k record [start <block> <list> | start --cluster C |
-  stop [--discard]]`): while on, `rules.recording` makes the extension POST
-  each opened page/frame address to `/visit` (extension header required);
-  the daemon only buffers sites. `record stop` adds them through
-  `listAdd`/`clusterAdd`, so gating happens there, in the CLI.
-- **Monk mode** (`internal/enforce/monk.go`, `db/monk.go`,
-  `blocker/netcut.go`, `ApplyFirewallCut`): settings `monk.until` (trusted
-  time) and `monk.net` (`db.MonkNet`: Wi-Fi radio and each Ethernet
-  interface's state, saved once before the first cut, `SaveMonkNetIfNone`).
-  `monkBlock()` is built in memory (`*.*`, `file://*`, list id `MonkListID`)
-  and added by `withMonk` to what is enforced (rules, hosts, policy), never
-  stored, so no command reaches it. `Tick` calls `enforceMonk`: while on it
-  holds the three cuts (nmcli radio, `ip link set down` on every real
-  Ethernet device from /sys/class/net, nft `inet kc9k` or iptables drop all but
-  loopback), at the end or with a saved state and no end time it restores.
-  Devices go through vars (`wifiRadio`, `setLink`, `cutFirewall`...);
-  `enforce`'s `TestMain` fakes them. With `KC9K_DB` set nothing is cut
-  (`monkDeviceless`). `migrateMonkMode` removes the old `monk-mode` block once.
-  `gui-state` has `monk_seconds`.
-- **Consequences** (`internal/enforce/consequence.go`): one engine for list
-  device actions, bypass prevention and monk mode: close browsers, lock
-  screen/logout/shutdown (for a while through Frozen Chicken, only
-  extended; once at most every 10 min), monk mode (`StartMonk`, `enforce/monk.go`: a mode, no block;
-  see Monk mode).
-  Device effects go through replaceable vars so tests never touch the machine.
-- **Quota by use** (`internal/quota/`, `enforce/quota.go`): a session spends
-  only time in use (`Spend`; `Step` never spends): the daemon's foreground
-  sampler adds the block's apps, and the extension reports, from
-  `rules.quota` (lists of blocks in a session), seconds a site was in the
-  focused tab or played media (`/usage` `quota`). Without LibreWolf a session
-  with websites spends wall time; while one is open the extension is required.
+  `cli/record.go`): `rules.recording` → extension POSTs `/visit`; daemon
+  buffers; `record stop` adds via `listAdd`/`clusterAdd`.
+- **Monk mode** (`enforce/monk.go`, `db/monk.go`, `blocker/netcut.go`,
+  `ApplyFirewallCut`): settings `monk.until` (trusted time), `monk.net`
+  (`db.MonkNet`, saved once, `SaveMonkNetIfNone`). `monkBlock()` built in
+  memory (`*.*`, `file://*`, `MonkListID`), added by `withMonk`, never
+  stored. `enforceMonk` in `Tick` holds the three cuts (nmcli radio, `ip
+  link set down` on real Ethernet from /sys/class/net, nft/iptables drop
+  all but loopback), restores at end. Device vars (`wifiRadio`, `setLink`,
+  `cutFirewall`) faked in `TestMain`; `KC9K_DB` cuts nothing
+  (`monkDeviceless`). `migrateMonkMode` removed the old block.
+- **Consequences** (`enforce/consequence.go`): close browsers, lock
+  screen/logout/shutdown (via Frozen Chicken, only extended; ≤ once per 10
+  min), monk. Device effects via replaceable vars.
+- **Allowance** (`internal/quota/`, `enforce/quota.go`): `Spend` only on
+  use; daemon sampler adds apps; extension reports focused/playing seconds
+  from `rules.quota` (`/usage`). Without LibreWolf, website sessions spend
+  wall time. `quota.Cycle` long break; `PomodoroWorking` keeps sessions
+  closed in work periods.
 - **Events and bypass prevention** (`db/events.go`, `db/nepsis.go`,
-  `enforce/nepsis.go`, `cli/nepsis.go`): what KC9K stops is logged (pages
-  via `/hit`, app kills per block, title closes, browsers closed, refused
-  loosening via `refused()` in the CLI (logged only, never counted), tamper: daemon restart, clock jump),
-  kept a day. Bypass detection (`db.Nepsis`: detectors, a ladder of steps,
-  quiet time; global setting lockable as setting lock `nepsis`; per block,
-  gated) climbs a step when a step's Count events of its detectors fall
-  within its window (state per scope in setting `nepsis.ladder[.<block>]`);
-  `/hit` judges at once and answers `close_tab`. `search` is a kind of `page` (the extension sends the page's origin as `from`; `fromSearch` in `hits.go`); an event blamed on several blocks (`RecordEventFor`: closed browsers, tamper) has a row per block, `extra` on all but the first so it counts once globally. Old one-step settings are
-  read as a ladder (`normalize`).
-- **Hotkeys** (`internal/db/hotkeys.go`, `internal/cli/hotkeys.go`,
-  `internal/blocker/hotkeys.go`): Cinnamon and GNOME custom keybindings in dconf named
-  `kc9k<id>`, running `kc9k hotkey run <id>` (starts the block in-process with
-  the preset `--for`; the settings password is asked at `hotkey add`).
-- **Browser setting locks** (`internal/db/settinglocks.go`, `internal/cli/browser.go`):
-  each browser option locks on its own (time, typing challenge, password,
-  restart), independently of blocks; `enforce.AnyLock` counts them (strict
-  mode, no-escape) and trusted time freezes for their time locks. Only
-  `force-librewolf` is also held by block locks (`GuardsBlocks`).
-- **Extension guard** (`internal/blocker/extguard.go`): the extension is
-  mandatory. While `enforce.ExtensionRequired` (an active block with
-  websites, or web-only/force-search on) and LibreWolf or Chrome is installed
-  (`blocker.ExtensionBrowserInstalled`), the
-  daemon closes browsers whose extension hasn't fetched `/rules` with the
-  `X-KC9K-Extension` header within 60 s (connection traced via
-  `/proc/net/tcp` to the PID), and at once those started for remote control
-  (`remotecontrol.go`), or started before KC9K last changed the settings
-  protecting the extension (`noteSettingsChange`). The last check-in is kept
-  for `kc9k status`. LibreWolf hardening: `block-devtools` (default on,
-  DisableDeveloperTools policy); five prefs locked at the end of
-  librewolf.cfg, with the user's overrides file replaced by a cleaned copy
-  (`librewolfprefs.go`).
-- **Google Chrome** (`webext/chrome.go`, `blocker/chromesetup.go`): the same
-  extension for Chrome and Chromium. `PackChrome` swaps in a Manifest V3
-  manifest built from Firefox's and a service worker (`chrome-worker.js`,
-  `importScripts` of the background scripts), and signs a CRX3 with a key
-  made per computer (`webext.ChromeKeyPath`). The daemon serves
-  `/chrome/update.xml` and the `.crx`; `kc9k-setup.json` force-installs it
-  (`ExtensionSettings`), turns incognito, guest and developer mode off.
-  `compat.js` aliases `browser` to `chrome`; `onMessage` answers through
-  `sendResponse`; a keepalive holds the service worker; `rules.extension_version`
-  makes Chrome's copy ask for an update. Root test: `go test -tags roottest
-  -run Chrome ./internal/enforce` (Chrome for Testing reads
-  `/etc/opt/chrome_for_testing/policies`).
-- **Settings password** (`internal/cli/settingspassword.go`): when set,
-  `requireSettingsPassword` guards every loosening (it sits in `gateEdit` and
-  `ensureEditable`), stop/unlock, browser settings off, strict off,
-  no-escape and prepare-uninstall; `requireLockPassword` asks for it before
-  a lock is set only with `password locks on` (R-WEAK-1). Passwords come one
-  per line from `stdinLines` (settings password first). The GUI retries a
-  refused command once after asking for it.
-- **No weakening during active locks** (`internal/cli/noweakening.go`,
-  R-WEAK-4): `refuseSettingWeakening` sits in every setting's weakening path
-  (strict off, browser settings off, global bypass prevention, settings
-  password). Strict mode has its own setting lock (`enforce.StrictLockName`),
-  counted by `AnySettingLocked` but not starting the lockdown itself.
-- **Access passwords** (`internal/cli/access.go`, `kc9k access [set|remove
-  <area…>|--all]`): optional passwords per area (`app`, `dashboard`,
-  `blocks`, `device`, `stats`, `settings`; setting `access.password.<area>`,
-  areas set together share a hash). `accessGate` (root `PersistentPreRunE`)
-  maps each command to its areas (`commandAreas`) and needs the app password
-  plus one open area; `daemon`, `hotkey run`, `gui-state` are exempt.
-  Passwords come as the first stdin lines, counted by the hidden
-  `--access-lines N` (before the settings password), or are asked on a
-  terminal. `gui-state` reports `access`/`access_unused` and empties what
-  locked pages own (`hideLocked`); the GUI covers locked pages (`guarded`).
-- **Options** (`enforce/options.go`, `kc9k option [<name> on|off]`):
-  behaviour switches, never held: `polite-close` (`blocker/polite.go`: a
-  blocked app's windows are asked to close, killed a cycle later; `Apply`
-  leaves kills to the daemon then) and `block-page-details`.
-- **Circadian rhythm** (§4.10; `internal/circadian/` pure logic,
-  `enforce/circadian.go` engine, `cli/circadian.go`, `CircadianPage` and
-  `ClipEditor` in the GUI): never locked, never gated. Settings are JSON in
-  the settings table: `circadian` (`circadian.Config`: three clips of
-  `Point{Minute, Value, Tension}`, wallpapers, dark mode, dark pages),
-  `circadian.paused`, `.preview`, `.applied`, `.resume`, `.status`.
-  `RunCircadian` steps every 5 s in its own goroutine (`daemon.go`), never
-  inside `Tick`; external screens (`ddcutil`) and the night light check
-  every 30 s. It never overrides the user: a level that isn't what KC9K
-  last wrote pauses its clip until the next point (`PauseBacklight`,
-  `PauseExternal`, `PauseGamma`; software brightness and kelvin are one
-  gamma ramp). Plain ramps count as "apply", someone else's as a pause,
-  except right after start. Wallpaper and dark mode are given once per
-  change of key (`WallpaperKey`, `DarkKey`). `kc9k circadian preview`
-  drives the hardware itself (`PreviewCircadian`) and the engine adopts
-  what it wrote. Hardware is behind the `circadian*` vars
-  (`fakeCircadian` in tests); with `KC9K_DB` set nothing is applied
-  (`circadianDry`). Wallpapers live in `<db dir>/wallpapers` (0644).
-  `rules.dark` (`CircadianDarkRule`) feeds `darkPage` in content.js.
-  The clip curve (`circadian.Shape`) is mirrored by `clip_shape` in the
-  GUI; `ci/gui_circadian_smoke.py` is the GUI smoke test and
-  `ci/circadian_test.py` the dark pages test in LibreWolf (run the first under
-  `xvfb-run -a`).
-- **Pauses** (`db/pauses.go`, `enforce/soon.go`): `block_pauses` lifts an
-  active block until a trusted time; `pausedFor` (Pomodoro break or pause)
-  is what `withoutBreaks` checks. `rules.soon` (quota left, break left,
-  schedule start within 2 h) feeds the toolbar badge and popup
-  (`timeLeftFor`, `popup.js`); `/add` adds the tab's site to a block's
-  Blocked list (refused with an access password on blocks).
-- **Breaks** (`db/breaks.go`, `cli/breaks.go`, `kc9k break [allowance B D
-  --per D | relock B D | start B [D] | end B]`): an allowance earns pause
-  time while the block is enforced (`earnBreaks` in `Tick`); `relock` makes
-  `unlock` set a pause instead of deactivating (a second unlock during it
-  ends the block). Looser settings go through `ensureEditable`. Pomodoro
-  has an optional long break (`quota.Cycle`); `PomodoroWorking` keeps a
-  quota session closed during a work period.
-- **Project** (`cli/project.go`, `kc9k project export | import <file>
-  [--dry-run]`): everything except locks, passwords, hotkeys and
-  statistics in one versioned JSON; import validates all first, then only
-  adds (existing blocks/clusters untouched, options only strengthened).
-- **Look actions** (`db/actions.go`): besides greyscale and no-images,
-  `mute` (background `applyMute`), `no-video`, `declutter` and `dark`
-  (content.js `render`, CSS only; dark skips pages that are dark already).
-- **Social media settings** (`db/social.go`, `cli/social.go`, `kc9k social
-  [block] [<site:what> on|off | playlist <id|url> on|off]`): presets per
-  block in `block_social`, on `BlockDetail.Social`; `rules.social` goes to
-  `webext/files/social.js` (`KC9K_SOCIAL`: hosts, redirects, hide CSS).
-  A playlist is the preset `youtube:playlist=<id>` plus two exceptions
-  (`youtube.com/playlist?list=<id>`, `youtube.com/watch`); the extension
-  blocks video pages without an allowed `list=` and checks the playlist
-  panel (`checkPlaylistVideo`).
-- **Places** (`db/places.go`, `enforce/places.go`, `cli/places.go`, `kc9k
-  place [add N | remove N | rule <block> <place> on|off]`): a place is a
-  set of BSSIDs from `nmcli` (`ScanWifi`, replaceable in tests); `AtPlace`
-  needs two in range, and an empty scan counts as there. `PlaceBlocks`
-  feeds `reconcileSchedulesAt` and `ScheduleActiveNow`, so a place rule
-  behaves like an open schedule window; `keepWifiOn` re-enables the radio.
-- **Keyword test mode** (`db/testmode.go`, `kc9k list test <block> on|off`):
-  title/text lists of the block go out with `test: true`; the extension
-  shows `kc9kTestReport` in a panel and skips them in `kc9kListMatches`.
-- **App matching beyond names** (`blocker/scripts.go`): Python programs by
-  script (`pythonScript`, `matchesScript`; `essentialProcess` spares only
-  system scripts), copies by contents (`HashEntry`: add-app stores
-  `sha256:<hex>:<size>:<path>` beside a path, hidden by `visibleApps`;
-  system programs never match), and `KillNaming` (fetch tools given a
-  blocked domain, per block in `Tick`, logged as workaround).
-- **Workarounds**: `kc9kUnwrap` reads any full address carried in a query or
-  path; `checkMirror` (content.js) reports canonical addresses and known
-  front-ends; `/hit` with `via` logs `EventWorkaround` (a detector).
-- **DB** (`internal/db/`): SQLite at `/var/lib/kc9k/kc9k.db` (WAL; every
-  pooled connection gets busy_timeout and foreign_keys via `_pragma`);
-  `KC9K_DB` overrides the path (tests only; the unit never sets it).
-  `db.go` core + `features.go` (schedules, time locks, schema upgrades) +
-  `weblists.go` (website lists) + `pending.go` (queued loosening edits).
-- **Lock confirmation** (`internal/cli/confirm.go`, R-LOCK-12): every path
-  that sets, adds to or extends a lock builds `lockToSet` items (target, kind,
-  length) and calls `confirmLocks` before writing anything: a terminal is
-  asked for "yes", anything else is refused without `--yes` (`addYesFlag`).
-  Tests: `confirm_test.go` (`lockCases`, one per lock kind and target).
-  The GUI's lock dialogs all go through `confirm_lock` and then pass `--yes`.
-  A hotkey's lock is confirmed at `hotkey add` and, unless it has `no_confirm`, at each press (`blocker.ConfirmDesktop`, zenity as the session user; no zenity or answer means no). Automatic monk mode needs `--no-confirm-ok` (`requireMonkAck`).
-- **Lock** (`internal/lock/`): raw-mode, paste-resistant typing challenge (random
-  characters: 60% letters, 35% digits, 5% symbols) that gates a char-locked
-  block's deactivation.
-
-## System installation
-
-`make install` copies everything outside the source directory: the real binary to
-`/usr/local/bin/kc9k-bin`, the `kc9k` wrapper (does `exec sudo`), a rule
-in `/etc/sudoers.d/kc9k`, the `kc9k.service` unit and the DB in
-`/var/lib/kc9k/`. The installed program doesn't depend on the project folder.
-
-## Commands
-
-Android companion app: see `android/CLAUDE.md` (it runs this extension in IronFox and serves it `/rules` itself; `rules.safesearch` comes only from there, `kc9kSafeSearch` in `match.js`).
-
-Full usage and examples in `README.md`. Summary:
-`cluster list | show | create [--phrases] [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
-`phrase-set show | create [--url --title --text] | add | remove | scope | action | threshold | test | rename | delete | export | import`,
-`list show | create [--exceptions --terms --url --title --text] | rename | delete | add | remove | scope | action |
-threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
-`bypass` (old name `nepsis`) `[set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,
-`block create [--allowlist] | add | add-exception | add-app | add-title | remove-title |
-remove-app | action | export | import | export-list | import-list | list |
-info | remove`, `start [--lock | --text-lock] [--lock-chars N] [--lock-words | --lock-text T] [--for D | --until HH:MM]`,
-`strict on|off|unlock [lock flags]`, `no-weakening on|off`, `password locks on|off`, `dns [network|quad9|IPs]`,
-`stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `circadian [show --json | on|off | lane L [on|off] [--points P] | point add|remove | preset [N] | preview L V [--end] | resume [L] | wallpaper add|time|remove | dark … | dark-pages on|off | exempt add|remove | nightlight off]`, `break …`, `social …`, `place …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
-`prepare-uninstall` (run by `make uninstall`).
-
-`./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the
-unlock challenge on its own for practice/testing; it touches no blocks.
+  `enforce/nepsis.go`, `cli/nepsis.go`): events kept a day; refused
+  weakening logged via `refused()`, never counted. `db.Nepsis`: detectors,
+  ladder, quiet time; global lockable as setting lock `nepsis`; per block
+  gated; state in `nepsis.ladder[.<block>]`; old one-step settings read as
+  ladders (`normalize`). `/hit` judges at once, answers `close_tab`.
+  `search` = `page` from a search origin (`fromSearch`). Multi-block events
+  (`RecordEventFor`) get a row per block, `extra` on all but the first.
+- **Workarounds**: `kc9kUnwrap` reads addresses in query/path; `checkMirror`
+  (content.js) reports canonical addresses/front-ends; `/hit` with `via`
+  logs `EventWorkaround`.
+- **Browser setting locks** (`db/settinglocks.go`, `cli/browser.go`): per
+  option (time, challenge, password, restart); `enforce.AnyLock` counts
+  them. Only `force-librewolf` is also held by block locks (`GuardsBlocks`).
+- **Chrome** (`webext/chrome.go`, `blocker/chromesetup.go`): `PackChrome`
+  builds MV3 manifest + service worker (`chrome-worker.js`), signs CRX3 with
+  a per-computer key (`webext.ChromeKeyPath`); daemon serves
+  `/chrome/update.xml` and `.crx`; `kc9k-setup.json` force-installs, disables
+  incognito/guest/dev mode. `compat.js` aliases `browser`; keepalive;
+  `rules.extension_version` triggers updates. Chrome for Testing reads
+  `/etc/opt/chrome_for_testing/policies`.
+- **Settings password** (`cli/settingspassword.go`):
+  `requireSettingsPassword` in `gateEdit`, `ensureEditable`, stop/unlock,
+  settings off, strict off, no-escape, prepare-uninstall;
+  `requireLockPassword` only with `password locks on`. Passwords one per
+  line via `stdinLines` (settings password first). GUI retries once after
+  asking.
+- **No weakening** (`cli/noweakening.go`, R-WEAK-4):
+  `refuseSettingWeakening` in every setting's weakening path. Strict mode's
+  lock `enforce.StrictLockName` counts in `AnySettingLocked` but doesn't
+  start lockdown.
+- **Access passwords** (`cli/access.go`): per area, setting
+  `access.password.<area>` (shared hash when set together). `accessGate`
+  (root `PersistentPreRunE`, `commandAreas`) needs the app password plus one
+  area; `daemon`, `hotkey run`, `gui-state` exempt. Passwords first on
+  stdin, counted by hidden `--access-lines N`. `gui-state` reports
+  `access`/`access_unused`, `hideLocked` empties locked pages.
+- **Options** (`enforce/options.go`): `polite-close`, `block-page-details`;
+  never held.
+- **Circadian** (`internal/circadian/`, `enforce/circadian.go`,
+  `cli/circadian.go`; GUI `CircadianPage`, `ClipEditor`): JSON settings
+  `circadian` (`circadian.Config`: three clips of `Point{Minute, Value,
+  Tension}`, wallpapers, dark mode, dark pages), `.paused`, `.preview`,
+  `.applied`, `.resume`, `.status`. `RunCircadian` goroutine every 5 s,
+  never in `Tick`; `ddcutil` and night light every 30 s. Foreign levels
+  pause a clip (`PauseBacklight`, `PauseExternal`, `PauseGamma`; brightness
+  and kelvin share one gamma ramp), except right after start. Wallpaper and
+  dark mode applied once per key change (`WallpaperKey`, `DarkKey`).
+  `PreviewCircadian` drives hardware; engine adopts it. Hardware vars
+  `circadian*` (`fakeCircadian`); `KC9K_DB` → `circadianDry`. Wallpapers in
+  `<db dir>/wallpapers` (0644). `rules.dark` (`CircadianDarkRule`) →
+  `darkPage`. `circadian.Shape` mirrored by GUI `clip_shape`.
+  `ci/circadian_test.py` tests dark pages.
+- **Pauses and breaks** (`db/pauses.go`, `enforce/soon.go`, `db/breaks.go`,
+  `cli/breaks.go`): `block_pauses` until trusted time; `pausedFor` checked
+  by `withoutBreaks`. `rules.soon` feeds toolbar badge/popup (`timeLeftFor`,
+  `popup.js`); `/add` adds the tab's site to Blocked (refused with a blocks
+  access password). Reward (`break allowance`) earned in `earnBreaks`;
+  `break text`/`relock` makes `unlock` pause instead (second unlock ends).
+- **Project** (`cli/project.go`): versioned JSON; import validates all, then
+  only adds (existing untouched, options only strengthened).
+- **Social** (`db/social.go`, `cli/social.go`): `block_social`,
+  `BlockDetail.Social`; `rules.social` → `webext/files/social.js`
+  (`KC9K_SOCIAL`). Playlist = preset `youtube:playlist=<id>` plus
+  exceptions `youtube.com/playlist?list=<id>`, `youtube.com/watch`;
+  `checkPlaylistVideo`.
+- **Places** (`db/places.go`, `enforce/places.go`, `cli/places.go`): BSSIDs
+  from `nmcli` (`ScanWifi`); `AtPlace` needs two in range; empty scan =
+  there. `PlaceBlocks` feeds `reconcileSchedulesAt`, `ScheduleActiveNow`;
+  `keepWifiOn`.
+- **Test mode** (`db/testmode.go`): lists go out `test: true`; extension
+  shows `kc9kTestReport`, skips them in `kc9kListMatches`.
+- **Statistics**: foreground app time (daemon) and site time (extension);
+  not counted when locked or after 2 min idle; kept a year.
+- **GUI** (`gui/kc9k-gui.py`, GTK 3): reads `kc9k gui-state`,
+  `kc9k stats --json`; every change runs a `kc9k` command.
+- **DB** (`internal/db/`): SQLite `/var/lib/kc9k/kc9k.db`, WAL, busy_timeout
+  and foreign_keys per connection via `_pragma`. `KC9K_DB` overrides (tests
+  only). `db.go`, `features.go` (schedules, time locks, upgrades),
+  `weblists.go`, `pending.go`.
+- **Android**: `android/CLAUDE.md`. Its `RulesServer` serves `/rules`;
+  `rules.safesearch` comes only from there (`kc9kSafeSearch` in `match.js`).

@@ -297,7 +297,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Hotkeys | Built | Cinnamon tried; GNOME see 0.2 |
 | Project export / import | Partial | backup and share; see 0.1 |
 | `.deb` package | Not built | |
-| Circadian rhythm | Not built | section 2.1 |
+| Circadian rhythm | Built | `kc9k circadian`, the Circadian Rhythm page; see 2.1 for what was and wasn't tried on real hardware |
 
 ### §4 Functions (interface)
 
@@ -312,7 +312,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | 4.10 Preferences | Partial | theme light / dark / system; 24-hour clock, first day, darkness slider, open at login: Unchecked; tray: Not built |
 | 4.10 Notifications | Partial | fixed 5 minutes ahead; choosing which and when: Not built |
 | 4.10 Protection settings | Partial | close browsers without the extension (grace fixed at 60 s) is built; the others: Not built |
-| 4.10 Dark pages (part of circadian rhythm) | Not built | the `dark` action exists per list |
+| 4.10 Dark pages (part of circadian rhythm) | Built | `kc9k circadian dark-pages`, exempt sites; `ci/circadian_test.py` |
 
 ---
 
@@ -322,13 +322,26 @@ After section 0. Each item's details are in `SPEC.md`; here only the steps.
 
 ### 2.1 Circadian rhythm (L) — §4.10
 
-- [ ] Time of day model (morning, afternoon, evening, night, user-set
-      times), reusing `internal/schedule/`.
-- [ ] Blue light filter (Cinnamon's night light), screen brightness
-      (`/sys/class/backlight`; something else for external screens),
-      wallpaper (`org.cinnamon.desktop.background`), GTK colour scheme,
-      the `dark` action on every page during chosen hours.
-- [ ] Each lockable like a browser setting.
+- [x] Automation clips for backlight, software brightness and colour
+      temperature (`internal/circadian/`), with presets.
+- [x] The engine (`enforce/circadian.go`, its own goroutine in the daemon):
+      `/sys/class/backlight`, external screens through DDC/CI (`ddcutil`),
+      gamma ramps over RandR, wallpaper and dark mode through gsettings
+      (Cinnamon, GNOME, MATE). It never overrides the user: a manual change
+      pauses the clip until its next point or `kc9k circadian resume`.
+- [x] `kc9k circadian …` and the Circadian Rhythm page (clip editors,
+      wallpapers, dark mode, dark pages, warnings).
+- [x] Dark pages in the extension (`rules.dark`), with exempt sites.
+- [ ] Not tried on real hardware: a laptop's built-in backlight (unit tests
+      through replaceable vars only; the test machine is a desktop), GNOME
+      and MATE, more than one screen. Wayland has no gamma ramps to set:
+      software brightness and colour temperature do nothing there (the page
+      says so).
+- [ ] Dark pages that follow the *system's* setting rely on the browser's
+      `prefers-color-scheme`, which LibreWolf's fingerprinting protection
+      reports as light. With dark mode set by KC9K (always dark, or light
+      between two times) the daemon decides and it works everywhere.
+- [ ] Circadian settings are not part of `kc9k project export` yet (S).
 
 ### 2.2 Ads as a trigger (M) — §3.9
 

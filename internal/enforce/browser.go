@@ -184,6 +184,8 @@ type Rules struct {
 	// ExtensionVersion is the extension's current version: Chrome's asks
 	// for an update at once when it is older.
 	ExtensionVersion string `json:"extension_version"`
+	// Dark: the circadian rhythm's dark pages (§4.10), nil when off.
+	Dark *DarkRule `json:"dark,omitempty"`
 }
 
 // ListRule is one blacklist: the entries it looks for in a page's address,
@@ -327,6 +329,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 	}
 	now := time.Now()
 	rules.Details = OptionOn(d, OptionPageDetails)
+	rules.Dark = CircadianDarkRule(d, now)
 	rules.Ends = blockEnds(d, active, now, trusted)
 	rules.Soon = soonRules(d, active, now, trusted)
 	rules.Blocks = addableBlocks(d)

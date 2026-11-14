@@ -17,3 +17,16 @@ Overnight session 2026-11-13 → 14 (owner asleep, asked for commits + pushes al
 **Open questions for the owner:** should a backup include running locks, passwords, hotkeys, statistics? How to check the clock against hardware/internet time?
 
 **How to apply:** read this first next session, then `git fetch` and ROADMAP.md. 
+
+---
+
+# Handoff: locks session (branch lock-confirm), 2026-11-14
+
+R-LOCK-12 is merged into main and pushed: `confirmLocks` (`internal/cli/confirm.go`) on every lock path, `--yes` for scripts, GUI `confirm_lock`, tests `TestRLOCK12_*` in `internal/cli/confirm_test.go`, GUI smoke test (scratchpad, not in repo: copy its pattern from `ci/gui_phrase_smoke.py`). Hotkey locks are confirmed at `hotkey add` today; `hotkey run` passes `yes`.
+
+**The owner's decisions (logged in SPEC.md §6), not built yet:**
+1. Hotkeys: a per-hotkey option "Run without confirmation" (`hotkey add … --no-confirm`, a GUI tick; new column in the hotkeys table). Off (default): `hotkey run` shows a Lock/Cancel desktop dialog before starting the block with its lock (it runs as root through sudo: show the dialog as the session user, like `blocker.NotifyDesktop` reaches the session; python3 GTK is there since the GUI needs it); on: confirm only at `hotkey add`, as now. Existing hotkeys: treat as off.
+2. Monk mode started automatically asks nothing when it starts, so setting up a bypass prevention step with `monk` (`bypass set`, GUI `ask_nepsis`) and a list's or phrase set's `monk` action (`list action … monk on`, `phrase-set action … monk`, GUI action ticks) must need an acknowledgement: a flag (e.g. `--no-confirm-ok`) and a GUI tick "I know this will not ask for confirmation". Refused without it. Tests `TestRLOCK12_*` for each.
+3. `kc9k monk` itself (manual start) should ask through `confirmLocks`: coordinate with the monk session (branch monk), which is rewriting monk mode.
+
+**Open question:** hotkeys added before R-LOCK-12 never had their lock confirmed; with option 1 they default to asking at each press, which settles it.

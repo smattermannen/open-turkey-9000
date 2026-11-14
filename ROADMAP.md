@@ -312,7 +312,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | 4.10 Preferences | Partial | theme light / dark / system; 24-hour clock, first day, darkness slider, open at login: Unchecked; tray: Not built |
 | 4.10 Notifications | Partial | fixed 5 minutes ahead; choosing which and when: Not built |
 | 4.10 Protection settings | Partial | close browsers without the extension (grace fixed at 60 s) is built; the others: Not built |
-| 4.10 Dark pages (part of circadian rhythm) | Built | `kc9k circadian dark-pages`, exempt sites; unit tests only, not tried in a browser |
+| 4.10 Dark pages (part of circadian rhythm) | Built | `kc9k circadian dark-pages`, exempt sites; `ci/circadian_test.py` |
 
 ---
 

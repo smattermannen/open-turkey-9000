@@ -272,7 +272,8 @@ build and is **used for real**. On it:
   (`circadianDry`). Wallpapers live in `<db dir>/wallpapers` (0644).
   `rules.dark` (`CircadianDarkRule`) feeds `darkPage` in content.js.
   The clip curve (`circadian.Shape`) is mirrored by `clip_shape` in the
-  GUI; `ci/gui_circadian_smoke.py` is the GUI smoke test (run it under
+  GUI; `ci/gui_circadian_smoke.py` is the GUI smoke test and
+  `ci/circadian_test.py` the dark pages test in LibreWolf (run the first under
   `xvfb-run -a`).
 - **Pauses** (`db/pauses.go`, `enforce/soon.go`): `block_pauses` lifts an
   active block until a trusted time; `pausedFor` (Pomodoro break or pause)

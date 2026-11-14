@@ -492,6 +492,14 @@ func storeWallpaper(path string) (string, error) {
 	return name, nil
 }
 
+// wallpaperTimes says when a wallpaper shows: two equal times are the whole day.
+func wallpaperTimes(from, to int) string {
+	if from == to {
+		return "all day"
+	}
+	return "from " + circadian.Clock(from) + " to " + circadian.Clock(to)
+}
+
 func clockPair(from, to string) (int, int, error) {
 	f, err := circadian.ParseClock(from)
 	if err != nil {
@@ -523,7 +531,7 @@ var circadianWallpaperAddCmd = &cobra.Command{
 		}); err != nil {
 			return err
 		}
-		fmt.Printf("%s is the wallpaper from %s to %s.\n", filepath.Base(args[0]), circadian.Clock(from), circadian.Clock(to))
+		fmt.Printf("%s is the wallpaper %s.\n", filepath.Base(args[0]), wallpaperTimes(from, to))
 		return nil
 	}),
 }
@@ -552,7 +560,7 @@ var circadianWallpaperTimeCmd = &cobra.Command{
 				return err
 			}
 			c.Wallpapers[i].From, c.Wallpapers[i].To = from, to
-			fmt.Printf("%s is the wallpaper from %s to %s.\n", c.Wallpapers[i].Name, circadian.Clock(from), circadian.Clock(to))
+			fmt.Printf("%s is the wallpaper %s.\n", c.Wallpapers[i].Name, wallpaperTimes(from, to))
 			return nil
 		})
 	}),

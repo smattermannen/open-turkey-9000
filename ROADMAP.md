@@ -136,7 +136,7 @@ Only items not simply Built.
 | §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (`tamper unsupported-browsers`, own lock carried over from `force-librewolf`, `tamper unlock unsupported-browsers`; old command hidden alias). No group lock: clock has no lock flags. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, `file://`, installer, inactive tabs, embedded content, task managers: no command |
 | §4.10 Extension install dialog | Not built | |
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
-| §4.10 Browsers list | Partial | `kc9k browsers` (installed, per-browser check-in, `browsers install`); GUI not built |
+| §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Not built | |
 | §4.1 Windows still to come today | Unchecked | |
 | §4.3 Draft Save/Cancel | Not built | changes apply at once |

@@ -82,20 +82,29 @@ var dohServersIPv6 = []string{
 // IPv4 rules.
 //
 // With no valid domains, the firewall is removed entirely.
-func ApplyFirewall(domains []string) error {
+func ApplyFirewall(domains []string) error { return ApplyFirewallCut(domains, false) }
+
+// ApplyFirewallCut is ApplyFirewall, and with cut also drops everything
+// that isn't loopback (monk mode, R-MONK-2): no program reaches the network,
+// while the daemon and the extension still talk on this computer.
+func ApplyFirewallCut(domains []string, cut bool) error {
 	valid := ValidDomains(domains)
-	if len(valid) == 0 {
+	if len(valid) == 0 && !cut {
 		return RemoveFirewall()
 	}
 
 	// Resolve every domain up front (bypassing /etc/hosts) into v4/v6 sets.
-	ipv4, ipv6 := resolveAll(valid)
+	// Not with the connection cut: no server answers, and all is dropped.
+	var ipv4, ipv6 []string
+	if !cut {
+		ipv4, ipv6 = resolveAll(valid)
+	}
 
 	// nftables first: one set answers for any number of addresses, and a
 	// drop in our own table is final whatever other tables accept. The
 	// iptables chain below is the fallback where nft is missing.
 	if nftAvailable() {
-		if err := applyNft(ipv4, ipv6); err == nil {
+		if err := applyNft(ipv4, ipv6, cut); err == nil {
 			removeFamily("iptables")
 			if ip6tablesAvailable() {
 				removeFamily("ip6tables")
@@ -104,7 +113,7 @@ func ApplyFirewall(domains []string) error {
 		}
 	}
 
-	if err := applyFamily("iptables", ipv4, dohServersIPv4); err != nil {
+	if err := applyFamily("iptables", ipv4, dohServersIPv4, cut); err != nil {
 		return err
 	}
 
@@ -112,7 +121,7 @@ func ApplyFirewall(domains []string) error {
 	if ip6tablesAvailable() {
 		// An error here shouldn't undo the working IPv4 rules; the daemon logs
 		// the returned error but keeps enforcing.
-		if err := applyFamily("ip6tables", ipv6, dohServersIPv6); err != nil {
+		if err := applyFamily("ip6tables", ipv6, dohServersIPv6, cut); err != nil {
 			return fmt.Errorf("IPv6 firewall (best-effort) failed: %w", err)
 		}
 	}
@@ -123,11 +132,11 @@ func ApplyFirewall(domains []string) error {
 // applyFamily builds the KC9K chain for one address family (iptables or
 // ip6tables): create/flush the chain, ensure the OUTPUT jump, drop each IP, and
 // drop the DoH resolvers on port 443.
-func applyFamily(cmd string, ips, dohServers []string) error {
+func applyFamily(cmd string, ips, dohServers []string, cut bool) error {
 	// The whole chain in one iptables-restore run: one process for any
 	// number of addresses, and the chain is never half full. The rule by
 	// rule way below stays as a fallback.
-	if err := restoreFamily(cmd, ips, dohServers); err == nil {
+	if err := restoreFamily(cmd, ips, dohServers, cut); err == nil {
 		for _, hook := range hookChains {
 			if err := ensureFirstJump(cmd, hook); err != nil {
 				return err
@@ -152,6 +161,15 @@ func applyFamily(cmd string, ips, dohServers []string) error {
 		}
 	}
 
+	// Monk mode: loopback passes, nothing else does.
+	if cut {
+		for _, rule := range cutRules {
+			if err := runFW(cmd, append([]string{"-A", chainName}, rule...)...); err != nil {
+				return fmt.Errorf("failed to cut the connection (%s): %w", cmd, err)
+			}
+		}
+	}
+
 	// Drop the resolved IPs of blocked domains.
 	for _, ip := range ips {
 		if err := runFW(cmd, "-A", chainName, "-d", ip, "-j", "DROP"); err != nil {
@@ -169,12 +187,22 @@ func applyFamily(cmd string, ips, dohServers []string) error {
 	return nil
 }
 
+// cutRules are the rules that cut the connection in the iptables chain
+// (monk mode): loopback passes, everything else is dropped. The chain is
+// jumped to from OUTPUT and FORWARD.
+var cutRules = [][]string{{"-o", "lo", "-j", "ACCEPT"}, {"-j", "DROP"}}
+
 // restoreRules is the iptables-restore input that fills our chain: declared
 // (created if missing, emptied if not; nothing else is touched with
 // --noflush), then a DROP per address and for each DoH resolver on 443.
-func restoreRules(ips, dohServers []string) string {
+func restoreRules(ips, dohServers []string, cut bool) string {
 	var b strings.Builder
 	b.WriteString("*filter\n:" + chainName + " - [0:0]\n")
+	if cut {
+		for _, rule := range cutRules {
+			fmt.Fprintf(&b, "-A %s %s\n", chainName, strings.Join(rule, " "))
+		}
+	}
 	for _, ip := range ips {
 		fmt.Fprintf(&b, "-A %s -d %s -j DROP\n", chainName, ip)
 	}
@@ -187,13 +215,13 @@ func restoreRules(ips, dohServers []string) string {
 
 // restoreFamily loads our chain with cmd-restore (iptables-restore or
 // ip6tables-restore).
-func restoreFamily(cmd string, ips, dohServers []string) error {
+func restoreFamily(cmd string, ips, dohServers []string, cut bool) error {
 	path, err := exec.LookPath(cmd + "-restore")
 	if err != nil {
 		return err
 	}
 	c := exec.Command(path, "--noflush")
-	c.Stdin = strings.NewReader(restoreRules(ips, dohServers))
+	c.Stdin = strings.NewReader(restoreRules(ips, dohServers, cut))
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
 	if err := c.Run(); err != nil {
@@ -306,6 +334,70 @@ func IsFirewallApplied() bool {
 	return true
 }
 
+// IsFirewallCut reports whether the firewall drops everything except
+// loopback right now (see ApplyFirewallCut).
+func IsFirewallCut() bool {
+	if nftAvailable() {
+		cut := true
+		for _, hook := range nftCutHooks {
+			out, err := exec.Command("nft", "list", "chain", "inet", nftTable, hook).Output()
+			if err != nil || !nftChainCuts(string(out)) {
+				cut = false
+				break
+			}
+		}
+		if cut {
+			return true
+		}
+	}
+	families := []string{"iptables"}
+	if ip6tablesAvailable() {
+		families = append(families, "ip6tables")
+	}
+	for _, cmd := range families {
+		out, err := runFWOutput(cmd, "-S", chainName)
+		if err != nil || !iptablesChainCuts(out) {
+			return false
+		}
+		for _, hook := range hookChains {
+			if !jumpIsFirst(cmd, hook) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// iptablesChainCuts reads "iptables -S KC9K": the chain cuts the connection
+// when its first two rules are cutRules.
+func iptablesChainCuts(listing string) bool {
+	var rules []string
+	for _, line := range strings.Split(listing, "\n") {
+		if line = strings.TrimSpace(line); strings.HasPrefix(line, "-A "+chainName+" ") {
+			rules = append(rules, strings.TrimPrefix(line, "-A "+chainName+" "))
+		}
+	}
+	return len(rules) >= 2 && rules[0] == strings.Join(cutRules[0], " ") && rules[1] == strings.Join(cutRules[1], " ")
+}
+
+// nftChainCuts reads "nft list chain": the chain cuts the connection when
+// its first rule after any loopback accept is a bare drop.
+func nftChainCuts(listing string) bool {
+	inChain := false
+	for _, line := range strings.Split(listing, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "type filter hook"):
+			inChain = true
+		case !inChain || line == "":
+		case strings.HasSuffix(line, `ifname "lo" accept`):
+		default:
+			return line == "drop"
+		}
+	}
+	return false
+}
+
 // ip6tablesAvailable reports whether the ip6tables binary is present.
 func ip6tablesAvailable() bool {
 	_, err := exec.LookPath("ip6tables")
@@ -353,6 +445,9 @@ func runFWOutput(cmd string, args ...string) (string, error) {
 // "first".
 const nftTable = "kc9k"
 
+// nftCutHooks are the chains that cut the connection in monk mode.
+var nftCutHooks = []string{"input", "output", "forward"}
+
 // nftAvailable reports whether the nft program is there.
 func nftAvailable() bool {
 	_, err := exec.LookPath("nft")
@@ -362,7 +457,7 @@ func nftAvailable() bool {
 // nftRules is the nft script that replaces our table in one transaction:
 // the blocked addresses and the DoH resolvers in sets, looked up in one step
 // per packet.
-func nftRules(ipv4, ipv6 []string) string {
+func nftRules(ipv4, ipv6 []string, cut bool) string {
 	var b strings.Builder
 	// Adding first makes the delete succeed when the table isn't there yet.
 	fmt.Fprintf(&b, "add table inet %s\ndelete table inet %s\n", nftTable, nftTable)
@@ -378,8 +473,21 @@ func nftRules(ipv4, ipv6 []string) string {
 	set("blocked6", "ipv6_addr", ipv6)
 	set("doh4", "ipv4_addr", dohServersIPv4)
 	set("doh6", "ipv6_addr", dohServersIPv6)
+	// Monk mode: nothing comes in either, except on loopback.
+	if cut {
+		b.WriteString("\tchain input {\n\t\ttype filter hook input priority filter - 10; policy accept;\n")
+		b.WriteString("\t\tiifname \"lo\" accept\n\t\tdrop\n\t}\n")
+	}
 	for _, hook := range []string{"output", "forward"} {
 		fmt.Fprintf(&b, "\tchain %s {\n\t\ttype filter hook %s priority filter - 10; policy accept;\n", hook, hook)
+		// Monk mode: loopback passes (the daemon and the extension), and
+		// nothing else leaves or crosses this computer.
+		if cut {
+			if hook == "output" {
+				b.WriteString("\t\toifname \"lo\" accept\n")
+			}
+			b.WriteString("\t\tdrop\n")
+		}
 		b.WriteString("\t\tip daddr @blocked4 drop\n\t\tip6 daddr @blocked6 drop\n")
 		b.WriteString("\t\tip daddr @doh4 tcp dport 443 drop\n\t\tip6 daddr @doh6 tcp dport 443 drop\n\t}\n")
 	}
@@ -388,9 +496,9 @@ func nftRules(ipv4, ipv6 []string) string {
 }
 
 // applyNft loads our table, all of it at once (nft -f is atomic).
-func applyNft(ipv4, ipv6 []string) error {
+func applyNft(ipv4, ipv6 []string, cut bool) error {
 	c := exec.Command("nft", "-f", "-")
-	c.Stdin = strings.NewReader(nftRules(ipv4, ipv6))
+	c.Stdin = strings.NewReader(nftRules(ipv4, ipv6, cut))
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
 	if err := c.Run(); err != nil {

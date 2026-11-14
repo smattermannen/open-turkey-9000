@@ -98,9 +98,12 @@ func (d *DB) TrustedNow(wall time.Time) (int64, error) {
 	lockActive := false
 	if prevPtr != nil && protect == "on" {
 		var n int
-		// Setting locks count too, or moving the clock forward would end them.
+		// Setting locks and monk mode count too, or moving the clock forward
+		// would end them.
 		if err := d.conn.QueryRow(`SELECT (SELECT COUNT(*) FROM active_blocks WHERE locked_until > ?) +
-			(SELECT COUNT(*) FROM setting_locks WHERE locked_until > ?)`, prev.Trusted, prev.Trusted).Scan(&n); err != nil {
+			(SELECT COUNT(*) FROM setting_locks WHERE locked_until > ?) +
+			(SELECT COUNT(*) FROM settings WHERE key = ? AND CAST(value AS INTEGER) > ?)`,
+			prev.Trusted, prev.Trusted, SettingMonkUntil, prev.Trusted).Scan(&n); err != nil {
 			return 0, fmt.Errorf("failed to check time locks: %w", err)
 		}
 		lockActive = n > 0

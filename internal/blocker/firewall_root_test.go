@@ -48,7 +48,7 @@ func TestFirewallNftables(t *testing.T) {
 // FORWARD, and the drift check must notice another program's rule above it.
 func TestFirewallJumpsStayFirst(t *testing.T) {
 	defer RemoveFirewall()
-	if err := applyFamily("iptables", []string{"192.0.2.1"}, dohServersIPv4); err != nil {
+	if err := applyFamily("iptables", []string{"192.0.2.1"}, dohServersIPv4, false); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	for _, hook := range hookChains {
@@ -63,7 +63,7 @@ func TestFirewallJumpsStayFirst(t *testing.T) {
 	if jumpIsFirst("iptables", "FORWARD") {
 		t.Fatal("an ACCEPT above our jump went unnoticed")
 	}
-	if err := applyFamily("iptables", []string{"192.0.2.1"}, dohServersIPv4); err != nil {
+	if err := applyFamily("iptables", []string{"192.0.2.1"}, dohServersIPv4, false); err != nil {
 		t.Fatalf("reapply: %v", err)
 	}
 	if !jumpIsFirst("iptables", "FORWARD") {

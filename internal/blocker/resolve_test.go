@@ -195,7 +195,7 @@ func TestResolveAllParallelCachedDeduped(t *testing.T) {
 }
 
 func TestRestoreRules(t *testing.T) {
-	got := restoreRules([]string{"192.0.2.1"}, []string{"9.9.9.9"})
+	got := restoreRules([]string{"192.0.2.1"}, []string{"9.9.9.9"}, false)
 	want := "*filter\n:KC9K - [0:0]\n-A KC9K -d 192.0.2.1 -j DROP\n-A KC9K -d 9.9.9.9 -p tcp --dport 443 -j DROP\nCOMMIT\n"
 	if got != want {
 		t.Errorf("restoreRules =\n%s\nwant\n%s", got, want)
@@ -203,7 +203,7 @@ func TestRestoreRules(t *testing.T) {
 }
 
 func TestNftRules(t *testing.T) {
-	got := nftRules([]string{"192.0.2.1", "192.0.2.2"}, nil)
+	got := nftRules([]string{"192.0.2.1", "192.0.2.2"}, nil, false)
 	for _, want := range []string{
 		"add table inet kc9k\ndelete table inet kc9k\ntable inet kc9k {",
 		"set blocked4 {\n\t\ttype ipv4_addr\n\t\tflags interval\n\t\tauto-merge\n\t\telements = { 192.0.2.1, 192.0.2.2 }\n\t}",
@@ -215,5 +215,48 @@ func TestNftRules(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("nftRules lacks %q:\n%s", want, got)
 		}
+	}
+}
+
+// R-MONK-2: with the connection cut, the firewall lets loopback through and
+// drops everything else, before any other rule.
+func TestR_MONK_2_FirewallCutRules(t *testing.T) {
+	nft := nftRules(nil, nil, true)
+	for _, want := range []string{
+		"chain input {\n\t\ttype filter hook input priority filter - 10; policy accept;\n\t\tiifname \"lo\" accept\n\t\tdrop\n\t}",
+		"chain output {\n\t\ttype filter hook output priority filter - 10; policy accept;\n\t\toifname \"lo\" accept\n\t\tdrop\n",
+		"chain forward {\n\t\ttype filter hook forward priority filter - 10; policy accept;\n\t\tdrop\n",
+	} {
+		if !strings.Contains(nft, want) {
+			t.Errorf("nftRules with cut lacks %q:\n%s", want, nft)
+		}
+	}
+	if open := nftRules(nil, nil, false); strings.Contains(open, "chain input") || strings.Contains(open, "\t\tdrop\n") {
+		t.Errorf("nftRules without cut drops everything:\n%s", open)
+	}
+	got := restoreRules([]string{"192.0.2.1"}, nil, true)
+	want := "*filter\n:KC9K - [0:0]\n-A KC9K -o lo -j ACCEPT\n-A KC9K -j DROP\n-A KC9K -d 192.0.2.1 -j DROP\nCOMMIT\n"
+	if got != want {
+		t.Errorf("restoreRules with cut =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// R-MONK-2: the drift check reads the cut back from what nft and iptables
+// print.
+func TestR_MONK_2_FirewallCutIsRead(t *testing.T) {
+	cut := "table inet kc9k {\n\tchain output {\n\t\ttype filter hook output priority filter - 10; policy accept;\n\t\toifname \"lo\" accept\n\t\tdrop\n\t\tip daddr @blocked4 drop\n\t}\n}\n"
+	in := "table inet kc9k {\n\tchain input {\n\t\ttype filter hook input priority filter - 10; policy accept;\n\t\tiifname \"lo\" accept\n\t\tdrop\n\t}\n}\n"
+	fwd := "table inet kc9k {\n\tchain forward {\n\t\ttype filter hook forward priority filter - 10; policy accept;\n\t\tdrop\n\t}\n}\n"
+	open := "table inet kc9k {\n\tchain output {\n\t\ttype filter hook output priority filter - 10; policy accept;\n\t\tip daddr @blocked4 drop\n\t}\n}\n"
+	for listing, want := range map[string]bool{cut: true, in: true, fwd: true, open: false, "": false} {
+		if got := nftChainCuts(listing); got != want {
+			t.Errorf("nftChainCuts = %v, want %v:\n%s", got, want, listing)
+		}
+	}
+	if !iptablesChainCuts("-N KC9K\n-A KC9K -o lo -j ACCEPT\n-A KC9K -j DROP\n-A KC9K -d 192.0.2.1/32 -j DROP\n") {
+		t.Error("iptablesChainCuts missed the cut")
+	}
+	if iptablesChainCuts("-N KC9K\n-A KC9K -d 192.0.2.1/32 -j DROP\n") {
+		t.Error("iptablesChainCuts saw a cut in an ordinary chain")
 	}
 }

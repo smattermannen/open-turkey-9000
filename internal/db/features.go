@@ -58,7 +58,10 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateWebLists(conn); err != nil {
 		return err
 	}
-	return migrateListTypes(conn)
+	if err := migrateListTypes(conn); err != nil {
+		return err
+	}
+	return migrateMonkMode(conn)
 }
 
 // addColumnIfMissing runs "ALTER TABLE ... ADD COLUMN" only when the column

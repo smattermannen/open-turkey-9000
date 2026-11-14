@@ -42,7 +42,7 @@ does one on impulse, with options the user chooses for how hard.
 
 **It does more than block.** Cold Turkey Blocker has two actions: block a
 page in the browser, or close an app. KC9K can also take the images out of a
-page, turn it grey, mute it, stop its videos, darken it, declutter it, close
+page, turn it grey, mute it, stop its videos, darken it, close
 the tab or the browser, log out, shut down the computer, or start monk mode.
 It enforces SafeSearch, and kills addictive social media feeds with one
 switch.
@@ -174,10 +174,10 @@ Command and code names are in `backticks`.
 | **Whole internet** | The target `*.*`: every website. Local files (`file://`), this computer (localhost) and the local network always stay reachable. | — |
 | **App** | A program, matched by name, path, script, file fingerprint (`sha256:…`), Flatpak ID or desktop unit. Everything it started is closed with it. | A window. |
 | **Folder entry** | A directory: every program run from inside it is a blocked app, and windows showing it are closed. | — |
-| **Window title entry** | A word or several words matched against the titles of app windows. Never applies to browsers: a tab's title is judged by term lists and phrase sets. | A rendered term. |
-| **Rendered term** | A word or several words (one **term**), matched on its own in a term list. | A phrase. |
+| **Window title entry** | A word or several words matched against the titles of app windows. Never applies to browsers: a tab's title is judged by lists and phrase sets. | A rendered term. |
+| **Rendered term** | A word or several words (one **term**), matched on its own in a list's title or text, or as words in its address. | A phrase. |
 | **Phrase** | Terms from two or more **word sets** that occur together (formerly *word combination*). R-PHRASE-1 to 10. Example: `[eat, nice] [hello, grandpa]` matches "Let's eat grandpa", not "Let's eat, grandpa!". | A rendered term. |
-| **Term** | One entry in a word set or term list: a word or several words (`long cat`). | — |
+| **Term** | One entry in a word set, or a rendered term in a list: a word or several words (`long cat`). | — |
 | **Word set** | The terms one place in a phrase may be filled with. *Necessary* (a match needs a term from it) or *optional*. | — |
 | **Phrase length** | How many terms a match of a phrase needs. At least the number of necessary word sets (the default), at most the number of word sets. | — |
 | **Bridge** | A term written with a dash, `big-` or `-gorilla`: between a `big-` and a `-gorilla` of another word set, up to 20 words of the same sentence may be skipped, or none. A term with both, `-strong-`, is a middle link. | A wildcard. |
@@ -187,12 +187,10 @@ Command and code names are in `backticks`.
 | Term | Meaning | Not |
 |---|---|---|
 | **Block** | A named group of lists, phrase sets, apps, folders, window title entries, schedule, breaks, autostart, affected users and locks. | — |
-| **List** | A named set of entries inside one block. It has a **type** (address, term or search) and a **kind** (blacklist or exception list). | A cluster. |
-| **Address list** | List type: sites and URL entries, matched against a page's address. | — |
-| **Term list** | List type: rendered terms, matched where its scope says. | — |
-| **Search list** | List type: search entries, matched against searches on any search engine and in a site's own search. | — |
+| **List** | A named set of entries inside one block. It has a **kind** (blacklist or exception list) and a **scope**. There are no list types: sites, URL entries and rendered terms can stand in the same list, and KC9K works out how to apply each. | A cluster. |
+| **Search list** | Planned: search entries, matched against searches on any search engine and in a site's own search. Whether this becomes a scope box on ordinary lists is open (§7). | — |
 | **Entry** | One item in a list: a site, a URL entry, a rendered term or a search entry. | — |
-| **Scope** | Where a term list or phrase set looks: *url*, *title* (the tab's), *text* (one or several). | — |
+| **Scope** | Where a list or phrase set looks, ticked in boxes: *URL*, *title* (the tab's), *text* (one or several). With URL ticked, a site or URL entry is matched against the page's address (and also feeds the layers), a rendered term as words in the address (`*cars*` included). | — |
 | **Phrase set** | A named set of phrases inside one block, with a scope and its own actions, like a blacklist. A block can have any number. | A list. |
 | **Blacklist** | List kind: matches get the list's actions. *CT: Websites tab.* | — |
 | **Exception list** | List kind: matches are spared from the blacklists and phrase sets **of the same block only**. There are no phrase exceptions. *CT: Website Exceptions.* | An allowlist block. |
@@ -201,7 +199,7 @@ Command and code names are in `backticks`.
 | **Template** | A ready-made block definition to create a block from. | A cluster. |
 | **Affected users** | The local user accounts a block applies to (default: all). For shared computers; only an administrator sets them. | — |
 | **Social preset** | A switch that keeps a site but takes a part of it away (YouTube without Shorts, Instagram messages only, …). Also: an allowed YouTube playlist. | A list. |
-| **Test mode** | A term list or phrase set reports what it would match instead of acting. Set per list and per phrase set. | — |
+| **Test mode** | A list or phrase set reports what it would match instead of acting. Set per list and per phrase set. | — |
 
 ### 3.3 Block states
 
@@ -243,7 +241,7 @@ unless it has re-lock. A lock never changes what is blocked.
 | **Trusted time** | The real date and time, as protected against changes by the tamper settings the user turned on (§4.10). All locks use it. | — |
 
 While any block or setting is locked: uninstalling is refused, the browser
-extension is required, and protection settings (§4.10) can't be turned off.
+extension is required, and tamper protection settings (§4.10) can't be turned off.
 
 ### 3.5 Weakening
 
@@ -299,12 +297,12 @@ extension is required, and protection settings (§4.10) can't be turned off.
 | **Action** | What a blacklist, phrase set, app or window title entry does on a match: a page action or a consequence, wherever it makes sense. |
 | **Block page** | Replaces a blocked page, with a motivational message. |
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
-| **Look actions** | Greyscale, no images, no video, mute, declutter, dark: they change a page, they don't block it. They add up. |
+| **Look actions** | Greyscale, no images, no video, mute, dark: they change a page, they don't block it. They add up. |
 | **No downloads** | Action: downloads started from matching pages are cancelled. |
 | **Strongest action** | When several actions apply, from any blocks: a consequence first, then close tab, image, redirect, block page. Look actions apply only when none of these does. |
-| **Threshold** | Set per action. For a term list: how many different rendered terms must match. For a phrase set: how many different phrases must match (default 1). |
-| **Hit count** | Set per action, for term lists only: how many matches in total, repeats included. |
-| **Rate** | Set per action, for term lists only: matches ÷ words on the page, as a percentage. Counted only on pages of at least 200 words. |
+| **Threshold** | Set per action. For a list: how many different rendered terms must match in the page text. For a phrase set: how many different phrases must match (default 1). |
+| **Hit count** | Set per action, for lists only (page text): how many matches in total, repeats included. |
+| **Rate** | Set per action, for lists only (page text): matches ÷ words on the page, as a percentage. Counted only on pages of at least 200 words. |
 | **Ad trigger** | A planned fourth scope beside url, title and text: the ad networks a page loads, named by industry (gambling, adult, …). |
 | **Page score** | *After publishing:* a score for what a page delivers, from its words, ads and layout; lists act on a score above a threshold. |
 
@@ -327,6 +325,7 @@ extension is required, and protection settings (§4.10) can't be turned off.
 |---|---|---|
 | **Settings password** | Optional. When set, it is needed to weaken anything. The user can also choose to require it for setting a lock, so nobody else can lock them out. | A password lock. |
 | **Access password** | Optional, needed to *view* parts of the app (per area: app, dashboard, blocks, device, stats, settings). | A password lock. |
+| **Block password** | Optional, one per block ("Set password for this block"): the block's contents (its lists, phrase sets and apps) stay hidden until it is typed, for example a list of unsuitable terms a parent keeps. What else it guards is open (§7). | A password lock. |
 | **Setting lock** | A lock on one setting or browser setting instead of a block. | A block's lock. |
 
 A forgotten settings password or password lock can be removed from recovery
@@ -336,7 +335,7 @@ mode, unless no-escape is on.
 
 | Term | Meaning |
 |---|---|
-| **Link recording** | Collects the sites you visit into an address list or cluster. |
+| **Link recording** | Collects the sites you visit into a list or cluster. |
 | **Word recording** | Collects the rendered, visible words of pages you visit, with counts. |
 | **Specificity** | How much more common a word is on recorded pages than in normal browsing; recorded words are ranked by it. |
 | **Cut** | Dropping the lowest-ranked X % of recorded words before saving. |
@@ -348,7 +347,8 @@ mode, unless no-escape is on.
 | **Daemon** | The systemd service that re-applies everything every few seconds. |
 | **Layer** | One of the four ways a block is enforced: `/etc/hosts`, firewall, browser policy, closing apps. The extension works on top of them. |
 | **Extension** | The bundled browser extension. Required while any block is locked or uses websites; browsers without it are closed. |
-| **Setting** | Anything the user configures outside blocks. Kinds: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `force-librewolf`, `block-devtools`, `no-private`), **protection setting** (§4.10), **behaviour setting** (never locked, not touched by *no weakening during active locks*: `polite-close`, `block-page-details`), **preference** (the interface only). |
+| **Supported browser** | LibreWolf, Google Chrome or Chromium, with the extension running. KC9K shows which are installed and whether each has the extension, and installs it with one click. |
+| **Setting** | Anything the user configures outside blocks. Kinds: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `block-devtools`, `no-private`), **tamper protection setting** (§4.10), **behaviour setting** (never locked, not touched by *no weakening during active locks*: `polite-close`, `block-page-details`), **preference** (the interface only). |
 | **Hotkey** | A desktop key that switches a block on, optionally setting a lock. |
 | **Project** | The whole setup in one file. *Backup*: everything. *Share*: without places and user names. Import shows a preview, only adds, and gives a block that exists already a new name. |
 | **Circadian rhythm** | Settings that follow the time of day: the screen's brightness and colour temperature (each an **automation clip**: a 24-hour curve of points), wallpaper, dark mode in apps and pages. Never locked, and it never overrides the user. |
@@ -366,7 +366,7 @@ mode, unless no-escape is on.
 | allowance (for earned break time) | reward | |
 | session break | session limit | |
 | option (for `polite-close` …), browser option | behaviour setting, browser setting | |
-| nepsis, bypass detection | bypass prevention | the command is `kc9k bypass`; *Nepsis* may become the app's name (§7) |
+| nepsis, bypass detection | bypass prevention | the command is `kc9k bypass`; *Nepsis* will be the app's name at launch (§6) |
 | rule (for a block or list) | block, list, entry | "rule" is only for rule IDs, place rules and the extension's `rules` feed |
 | blocklist | blacklist | |
 | word combination, page word, keyword | phrase, rendered term | |
@@ -406,18 +406,21 @@ import.
   clusters; several at once) or *From file* (`.txt`, one entry per line).
   Also *Whole internet* and *All searches containing…*.
 - **Export** a list or phrase set to `.txt`.
-- **Lists**: create (address, term or search; blacklist or exception list),
-  rename, delete, scope, actions, threshold, hit count, rate, test mode.
+- **Lists**: create (blacklist or exception list; scope boxes URL, title,
+  text), rename, delete, scope, actions, threshold, hit count, rate, test mode.
+  A block password (optional) hides the block's contents until typed.
 - **Phrase sets**: create, rename, delete, scope, actions, threshold, test
-  mode. In each, "+ Create new phrase"; in each phrase, its word sets, each
-  ticked necessary or optional, and the phrase length.
+  mode. A new set left without a name gets one. Phrases are listed in the
+  set's card, with the phrase editor in the card itself (not a pop-up): any
+  number of word sets, each ticked necessary or optional, and the phrase
+  length; double-clicking a phrase loads it into the editor.
 - **Apps**: add program, add folder, add window title entry; their actions.
 - **Social presets** and allowed playlists.
 - **Bypass prevention**: the block's own ladder.
 
 ### 4.4 Clusters and recording
 Clusters: create, edit, copy into a block, save from a block. Link recording
-into an address list or cluster; word recording into a term list or
+into a list or cluster; word recording into a list or
 cluster, ranked, with a cut before saving.
 
 ### 4.5 Schedules
@@ -452,11 +455,15 @@ only on the computer.
   allowance runs out, app blocked; advance warnings in minutes, comma-separated
   (`2,5`).
 - **No weakening during active locks** (R-WEAK-4).
-- **Protection settings** (can't be turned off while any block or setting is
-  locked):
-  - close private windows and Tor; close guest profiles; block unsupported
-    browsers; close browsers if the extension is stopped; grace period for a
-    missing extension (default 60 s); allow `file://` blocking;
+- **Tamper protection** (one group, each optional; once on, a setting can't
+  be turned off while any block or setting is locked, and its own lock must
+  be unlocked too. Turning one on shows a small window saying so, with OK and
+  Cancel; nothing changes on Cancel):
+  - close private windows and Tor; close guest profiles; close browsers if
+    the extension is stopped; grace period for a missing extension (default
+    60 s); allow `file://` blocking;
+  - *block unsupported browsers:* every browser except the supported
+    browsers (§3.13) with the extension running is closed;
   - *block the installer:* while anything is locked, KC9K can't be
     reinstalled, downgraded or removed, through its own installer or the
     package manager;
@@ -465,14 +472,17 @@ only on the computer.
   - *block embedded content:* a blocked site shown inside another page is
     blocked too;
   - *block task managers:* while anything is locked, programs that can end
-    other programs (System Monitor, htop) are closed.
-- **Tamper protection** (each optional): block time and date changes; check
-  the clock against the hardware clock and internet time.
-- **Browser settings** (§3.13), each lockable on its own. SafeSearch on Google,
-  Bing, DuckDuckGo and YouTube (Restricted Mode). *force-search:* Google is
-  the only search engine; others are blocked and the browser's search box
-  uses Google. *web-only:* Google shows web results only, without images,
-  shopping or AI answers.
+    other programs (System Monitor, htop) are closed;
+  - *clock:* block time and date changes; check the clock against the
+    hardware clock and internet time.
+- **Browsers**: the supported browsers found on the computer, whether each
+  has the extension, and a one-click "Install extension" for each.
+- **Browser settings** (a group of its own, §3.13), each lockable on its own.
+  SafeSearch on Google, Bing, DuckDuckGo and YouTube (Restricted Mode).
+  *force-search:* Google is the only search engine; others are blocked and
+  the browser's search box uses Google. *web-only:* Google shows web results
+  only, without images, shopping or AI answers. Also block developer tools
+  and no private windows.
 - **DNS**: which server KC9K asks for blocked sites' real addresses (needed
   only for the firewall layer). By default the network's own DNS server, the
   one the computer already uses, so nobody new learns which sites are
@@ -538,7 +548,7 @@ old names keep working for a while.
 - **R-LOCK-6** Layered locks are unlocked one at a time, in the user's order: a lock can be unlocked only once the one before it is. A timer lock with a date needs that date to have come; one with a duration counts from when the lock before it was unlocked.
 - **R-LOCK-7** The order of layered locks can't change while the block is locked; a new lock goes last.
 - **R-LOCK-8** A restart lock is unlocked by a boot later than the lock's start.
-- **R-LOCK-9** While any block or setting is locked: uninstalling is refused, the extension is required, protection settings can't be turned off.
+- **R-LOCK-9** While any block or setting is locked: uninstalling is refused, the extension is required, tamper protection settings can't be turned off.
 - **R-LOCK-10** No lock, delay or lead time applies unless the user set it.
 - **R-LOCK-11** A lock never starts by itself, except through re-lock.
 - **R-LOCK-12** Every lock, of every kind and on everything it can protect (block, browser setting, setting, scheduled freeze, monk mode), asks the user to confirm when it is set, always: the confirmation shows what is locked, the kind and, where it has one, how long. Nothing is locked until the user confirms. This holds for the GUI and the CLI alike, and for a lock set by a hotkey or a preset.
@@ -667,8 +677,35 @@ Made with the owner. Newest last.
   (the 14 lists behind `block create --template` go too). Users build
   their own and keep them as clusters.
 
+- 2026-11-14: Settings come in separate groups: **tamper protection** (the
+  former protection and tamper settings together) and **browser settings**
+  (SafeSearch, force-search, web-only, …). Turning on a tamper protection
+  setting shows an OK/Cancel window: it can't be turned off while any block
+  or setting is locked. "Allow only LibreWolf" (`force-librewolf`) becomes
+  *block unsupported browsers*: LibreWolf, Chrome and Chromium, each only
+  with the extension; KC9K shows which browsers are installed and installs
+  the extension in one click.
+- 2026-11-14: Lists have no types (replaces "lists by type" of 2026-11-13).
+  Every list has scope boxes, URL, title and text; how KC9K applies each
+  entry is its own business, as long as it works.
+- 2026-11-14: Declutter is removed: it broke pages.
+- 2026-11-14: A block can have an optional block password ("Set password
+  for this block") that hides its contents, so a parent can keep a list of
+  unsuitable terms out of sight.
+- 2026-11-14: The phrase editor sits in the phrase set's card, not in a
+  pop-up, with any number of word sets.
+- 2026-11-14: The app will be called **Nepsis** (Nepsis Blocker where it must
+  stand out), from launch. Until then the names stay as they are (KC9K,
+  `kc9k`, Frozen Chicken).
+
 ## 7. Open decisions
 
 Not yet settled by the owner. Don't resolve them alone.
 
-1. **The app's name.** Killer Chicken 9000 (KC9K), or Nepsis.
+1. **Block password: what it guards.** Only viewing the block's contents,
+   or also editing it and switching it off (which would overlap with a
+   password lock)?
+2. **Search lists.** A fourth scope box, "Searches", on ordinary lists, or
+   a separate thing, or left for later?
+3. **Names at launch.** Whether Frozen Chicken and other chicken names change
+   with the rename to Nepsis.

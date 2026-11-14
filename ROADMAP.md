@@ -19,7 +19,7 @@ Status: **Built**, **Partial**, **Differs** (built, but not as `SPEC.md`
 says), **Not built**, **Unchecked** (nobody has compared it with the code).
 Sizes: S under a day, M a few days, L a week or more.
 
-Last checked against the code: 2026-11-13.
+Last checked against the code: 2026-11-14.
 
 ---
 
@@ -53,12 +53,58 @@ Last checked against the code: 2026-11-13.
         (the daemon activates them); §3.3 wants active (the user's switch)
         apart from enabled (what the schedule says), and layered locks in
         the user's order (R-LOCK-6, R-LOCK-7). (L)
-- [ ] **Lists by type** (§3.2): address and term lists are built (a list
-      can't look at the address and the page both; upgrading split mixed
-      lists and clusters losslessly into `<name>` and `<name> terms`).
-      Done: a term list's url scope (R-PHRASE-6: `type` column on lists
-      and clusters, `list create --terms`, `url_terms` in the rules,
-      `kc9kUrlWords` in `match.js`). Left: search lists (a new type). (M)
+- [ ] **Lists without types** (§3.2, decision 2026-11-14): **Differs.**
+      The code has address and term lists (`web_lists.type`,
+      `list create --terms`, the GUI asks "Address list / Term list" when
+      a list is created; upgrading split mixed lists into `<name>` and
+      `<name> terms`). SPEC now wants one kind of list with scope boxes
+      URL, title, text: with URL ticked, sites and URL entries match the
+      address (and feed hosts, firewall, policy) and rendered terms match
+      as words in it (`kc9kUrlWords`, already built for term lists). Needs:
+      lists that hold both, an upgrade that joins the split lists back
+      where nothing was lost, the create dialog with three boxes, `--terms`
+      kept as an alias. Search lists: open decision (SPEC §7). (M)
+- [ ] **Phrase sets in the GUI** (§4.3, decision 2026-11-14): **Differs.**
+      - "New phrase set" with no name makes nothing, silently (`create_phrase_set`
+        drops an empty name). A set without a name must get one.
+      - Two phrase editors: a typed text box under the list, and
+        `PhraseDialog` (the boxes), a pop-up that doesn't fit the screen
+        with many word sets. SPEC wants only the boxes, in the card, with
+        any number of word sets: today 9 at most (`MAX_WORD_SETS` in the
+        GUI, `db.MaxWordSets`, and a bit mask of word sets in
+        `kc9kPhraseMatcher` that stops at 31).
+      - A new phrase set looks only at the page text unless title is
+        ticked, so phrases seem to miss tab titles. Matching itself
+        ignores case and reads the title (checked 2026-11-14). (S)
+- [ ] **Embedded videos keep playing** (§3.9): `no-video` decided from a
+      page's title or text reaches only the top frame (`keywordLooks` in
+      `content.js`); an embedded player is a frame of its own and plays on,
+      and hiding its `iframe` doesn't stop the sound. The background script
+      must tell the tab's frames, and frames that load later must ask. (S)
+- [ ] **Declutter** (decision 2026-11-14): **Differs.** Still an action
+      (`db.ActionDeclutter`, `content.js`, GUI, README). Remove it, with an
+      upgrade that drops stored declutter actions and imports that skip
+      it. (S)
+- [ ] **The extension can be switched off on Android** (§3.13): in
+      IronFox's add-ons manager. `ExtensionGuard` notices, but only after
+      15 s without a check-in and 60 s of grace, and pauses IronFox for 2
+      minutes, so about a minute of free browsing every few minutes, for
+      ever. IronFox can't force an extension on, so each switch-off must
+      cost more: a short grace once the extension has checked in before,
+      and each pause twice the last (up to an hour) until it runs unbroken
+      for a while. (S)
+- [ ] **Settings groups** (§4.10, decision 2026-11-14): **Differs.** The
+      GUI's Settings page doesn't group them as SPEC does. Wanted: one
+      **Tamper protection** group (former protection settings and `kc9k
+      tamper clock`), with an OK/Cancel window when one is turned on
+      (Not built), apart from **Browser settings**. (S)
+- [ ] **Block unsupported browsers** (§4.10, decision 2026-11-14):
+      **Differs.** Built is `force-librewolf` (a browser setting; every
+      browser but LibreWolf is closed). Wanted: a tamper protection setting
+      that allows LibreWolf, Chrome and Chromium, each only with the
+      extension running; the old setting's state and lock carried over.
+      Also Not built: the **Browsers** list in Settings (installed or not,
+      extension or not) with one-click "Install extension". (M)
 - [ ] **Project** (§3.13): *backup* (with places and place rules) and
       *share* (`--share`, without them) are built, with a preview on import
       and new names for taken block names. A backup still leaves out
@@ -151,7 +197,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 - [ ] Use counting with someone at the computer: the focused tab and a
       blocked app in front count, idle time doesn't; another browser is
       closed during a website session.
-- [ ] Mute, declutter and dark on real sites; polite close with a real app.
+- [ ] Mute and dark on real sites; polite close with a real app.
 - [ ] Social presets beyond YouTube Shorts (the selectors in
       `webext/files/social.js` were written from memory).
 - [ ] A playlist's videos playing; a block following the user between
@@ -190,7 +236,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Block, list, scope, blacklist, exception list | Built | |
 | Allowlist block | Built | `block create --allowlist` |
 | Cluster | Built | |
-| Address, term and search lists | Partial | address and term lists; search lists: Not built |
+| Lists with scope boxes, no types | Differs | see 0.1; search lists: Not built, open decision |
 | Phrase sets in clusters | Built | `cluster create --phrases`, `cluster save`, `cluster copy` |
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |
@@ -264,12 +310,12 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Item | Status | Notes |
 |---|---|---|
 | Block page, close tab, redirect, image | Built | |
-| Look actions | Built | see 0.2 |
+| Look actions | Built | see 0.2; declutter still there, see 0.1 |
 | Close browser, logout, shutdown, monk | Built | |
 | No downloads | Not built | section 2.3 |
 | Threshold, hit count (rendered terms) | Built | per action; both must be met (R-LIST-6) |
 | Strongest action across blocks | Unchecked | close tab, image, redirect, block page is built within a page |
-| Matching details (R-LIST-4, R-LIST-5) | Unchecked | case is ignored; accents, look-alike letters, hidden text, frames: Unchecked |
+| Matching details (R-LIST-4, R-LIST-5) | Partial | case is ignored; accents are not folded (`match.js` only lowercases: é ≠ e); look-alike letters: Not built; hidden text, frames: Unchecked |
 | Threshold (phrase sets) | Built | per action, different phrases (R-PHRASE-9); no hit count, no rate |
 | Rate | Not built | |
 | Ad trigger | Not built | section 2.2 |
@@ -282,6 +328,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Workaround detection | Built | proxies, mirrors, front-ends, fetch tools |
 | Settings password | Built | needed to set a lock only with `kc9k password locks on` |
 | Access passwords, setting locks | Built | |
+| Block password (§3.11) | Not built | hides a block's contents; what else it guards: open decision |
 | No weakening during active locks (R-WEAK-4) | Built | `kc9k no-weakening`: strict mode, browser settings, global bypass prevention, settings password. Other settings (stats, options, no-escape uses its own rule): Unchecked |
 | Event counting (R-EVENT-1) | Unchecked | |
 | Link recording | Built | |
@@ -311,7 +358,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | 4.9 Statistics | Partial | time per site and app, presets of days, on/off/clear, JSON; per user, times blocked, top 5/10, filter by block, private windows: Not built |
 | 4.10 Preferences | Partial | theme light / dark / system; 24-hour clock, first day, darkness slider, open at login: Unchecked; tray: Not built |
 | 4.10 Notifications | Partial | fixed 5 minutes ahead; choosing which and when: Not built |
-| 4.10 Protection settings | Partial | close browsers without the extension (grace fixed at 60 s) is built; the others: Not built |
+| 4.10 Tamper protection | Partial | close browsers without the extension (grace fixed at 60 s) and `kc9k tamper clock` are built; one group with the OK/Cancel window, block unsupported browsers and the others: Not built |
+| 4.10 Browsers (installed, one-click install) | Not built | see 0.1 |
 | 4.10 Dark pages (part of circadian rhythm) | Built | `kc9k circadian dark-pages`, exempt sites; `ci/circadian_test.py` |
 
 ---
@@ -393,7 +441,10 @@ owner.
 
 - [ ] Build without `TAGS=devmaster` (no master password).
 - [ ] Remove `ci/vm.sh`.
-- [ ] Rename the GitHub repository after the app's name (`SPEC.md` §7: KC9K or Nepsis).
+- [ ] Rename to **Nepsis** (decision 2026-11-14): the program, command,
+      package, interface, docs and the GitHub repository. Until launch the
+      names stay. Whether Frozen Chicken and other names change: open
+      decision (`SPEC.md` §7).
 - [ ] On the test laptop, remove `/etc/sudoers.d/99-claude-test`.
 - [ ] A pass over `README.md`; a tagged release.
 

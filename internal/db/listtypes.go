@@ -22,6 +22,15 @@ import (
 )
 
 func migrateListTypes(conn *sql.DB) error {
+	// Nothing left without a type: don't write on every start. A
+	// transaction that reads and then writes fails at once with "database
+	// is locked" when another command wrote in between, so two commands
+	// starting together (the interface reads the state every 5 s) collided.
+	var pending bool
+	if err := conn.QueryRow(`SELECT EXISTS(SELECT 1 FROM web_lists WHERE type = '')
+		OR EXISTS(SELECT 1 FROM clusters WHERE type = '')`).Scan(&pending); err == nil && !pending {
+		return nil
+	}
 	tx, err := conn.Begin()
 	if err != nil {
 		return err

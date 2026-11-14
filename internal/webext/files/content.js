@@ -71,6 +71,23 @@ function topUrl() {
   }
 }
 
+// The circadian rhythm's dark pages: on now (or following the system's dark
+// mode), except on exempt sites.
+let darkPages = null;
+function darkPage(url) {
+  if (!darkPages || !(darkPages.on ||
+      (darkPages.follow_system && matchMedia("(prefers-color-scheme: dark)").matches))) {
+    return false;
+  }
+  let host = "";
+  try {
+    host = new URL(url).hostname.replace(/^www\./, "");
+  } catch (error) {
+    return false;
+  }
+  return !(darkPages.exempt || []).some((site) => host === site || host.endsWith("." + site));
+}
+
 function render() {
   if (!lists) {
     return;
@@ -86,7 +103,7 @@ function render() {
   noVideo = on("no-video");
   let css = "";
   const filters = [];
-  if (on("dark") && pageIsLight()) {
+  if ((on("dark") || darkPage(url)) && pageIsLight()) {
     // Turn the page over, then turn pictures and videos back.
     filters.push("invert(1) hue-rotate(180deg)");
     css += "img, picture, video, canvas, iframe, svg image, [style*=\"background-image\"] " +
@@ -210,6 +227,7 @@ setInterval(enforceSocial, 1000);
 
 function load(page) {
   social = (page && page.social) || [];
+  darkPages = (page && page.dark) || null;
   lists = kc9kCompileLists(page && page.lists);
   quotaOpen = Boolean(page && page.quota);
   textChanged = true;

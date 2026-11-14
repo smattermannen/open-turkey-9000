@@ -659,6 +659,35 @@ kc9k option block-page-details off
 - `polite-close` (on): a blocked app with a window is asked to close, as if you pressed its close button, so it can offer to save; it is killed about five seconds later if it is still open. An app without a window is killed at once, and so is one started again within a minute of being asked. Off: every blocked app is killed at once.
 - `block-page-details` (on): the block page names the block and the list that stopped the page, and when the block ends if it has an end. It is only what the block page says: redirects, pictures, closed tabs and every other action work exactly as before.
 
+## Circadian rhythm
+
+The screen, the wallpaper and dark mode follow the time of day. Nothing of it can be locked, and it never overrides you: change a level by hand (brightness keys, the monitor's buttons, another night light) and that clip pauses until its next point, or until `kc9k circadian resume`.
+
+```bash
+kc9k circadian                       # shows everything (show --json for programs)
+kc9k circadian on                    # or off
+kc9k circadian preset                # lists the ready-made clips
+kc9k circadian preset natural        # replaces the three clips' points
+kc9k circadian lane kelvin on        # clips: backlight, software, kelvin
+kc9k circadian lane kelvin --points "07:00=6500 19:00=6500~-0.4 22:00=2700"
+kc9k circadian point add backlight 23:00 30 --tension 0.3
+kc9k circadian point remove backlight 23:00
+kc9k circadian resume                # or: resume backlight
+kc9k circadian wallpaper add ~/Pictures/dawn.jpg 06:00 12:00
+kc9k circadian wallpaper time 1 05:30 11:00
+kc9k circadian wallpaper remove 1
+kc9k circadian dark light-between 07:00 20:00   # or: system, light, dark
+kc9k circadian dark-pages on
+kc9k circadian exempt add docs.example.com      # or: exempt remove …
+kc9k circadian nightlight off        # the desktop's own night light
+```
+
+- **Automation clips.** Each clip is a curve over 24 hours that repeats every day: `backlight` (the screen's real brightness in percent: a laptop's backlight, and external screens through DDC/CI when `ddcutil` is installed), `software` (brightness drawn by the graphics card, 10 to 100 %; works on every screen) and `kelvin` (colour temperature, 1000 to 10000; 6500 is neutral, lower is warmer). A point is `HH:MM=VALUE`, or `HH:MM=VALUE~TENSION`: the tension, from -1 to 1, bends the curve from that point to the next (above 0 bulges it up). Software brightness and colour temperature need an X11 session.
+- **Wallpapers.** A picture (PNG, JPEG or WebP, up to 32 MB) is the wallpaper between its two times; a time may run past midnight. Where times overlap, the one that started last shows. KC9K sets a wallpaper once, when its time starts: one you pick yourself stays until the next one starts.
+- **Dark mode** is the desktop's own: `system` leaves it alone, `light` and `dark` keep it one way, `light-between` makes it light between two times and dark otherwise. Like wallpapers, it is set when it should change, not held.
+- **Dark pages** show light web pages dark while dark mode is on (pages that are dark already stay as they are), except on exempt sites. With `dark system`, pages follow what the browser says the system prefers; LibreWolf always says light, so choose `dark` or `light-between` there.
+- The desktop's own night light changes the same colours as the clips: turn it off (`nightlight off`), or leave the `kelvin` and `software` clips off.
+
 ## The whole setup in one file
 
 ```bash
@@ -726,7 +755,7 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 
 ## Graphical interface
 
-`make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). Everything goes through the same command-line rules, so the interface can't do anything a lock forbids. It has five sections:
+`make install` adds **Killer Chicken 9000** to the application menu (or run `kc9k-gui`). It needs GTK 3 for Python, which Linux Mint includes (`python3-gi`). Everything goes through the same command-line rules, so the interface can't do anything a lock forbids. Its sections:
 
 - **Dashboard**: active blocks and their locks, the state of Frozen Chicken, strict mode and no-escape, today's most used websites and apps, and a Monk mode… button.
 - **Blocks**: website lists (blacklists and exceptions, each with its own boxes for where it looks and what it does, and import/export), apps, folders and window titles (with import/export), schedules, quota, Pomodoro and bypass prevention per block; starting a block with optional locks (time, text lock of random characters, words or your own text, until restart, delay, password). The typing challenge opens in a terminal. The Schedule tab shows the week as a calendar: drag down a day to add a window, click a window to remove it (filled windows turn the block on, outlined ones are allow windows).
@@ -734,6 +763,7 @@ App time needs an X11 session (Cinnamon's default). Website time is sent every 3
 - **Clusters**: website lists outside blocks, with a search box: create, edit, import and export them, copy one into a block, and record the sites you open into one.
 - **Device Blocks**: whole-computer locks: Frozen Chicken, strict mode and no-escape.
 - **Statistics**: time per day and the most used websites or apps, for today or the last 7, 30 or 90 days.
+- **Circadian Rhythm**: the three automation clips as curves you edit with the mouse (right-click adds a point, or removes the one under the pointer; drag a point to move it, with Shift to the minute; drag the curve to bend it; double-click a point to type exact values; while you drag a point the screen shows its value), presets, wallpapers with their times, dark mode and dark pages, and a Resume button when a clip is paused.
 - **Settings**: the theme (light, dark or the system's, saved in `~/.config/kc9k/gui.json`), browser options, statistics, the settings password, bypass prevention for the whole computer, and hotkeys.
 
 ## Frozen Chicken

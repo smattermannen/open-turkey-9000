@@ -81,6 +81,12 @@ func Run() error {
 		}
 	}()
 
+	// The circadian rhythm (§4.10) keeps its own pace beside the cycle.
+	go func() {
+		defer reportCrash(database)
+		enforce.RunCircadian(database)
+	}()
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 

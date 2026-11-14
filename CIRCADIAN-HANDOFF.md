@@ -116,3 +116,42 @@ don't touch that checkout. Fetch `origin/main` and merge before pushing.
    Optionally include circadian settings in `kc9k project export`.
 6. **Push:** fetch and merge `origin/main`, run `CGO_ENABLED=0 go build
    ./...` and `go test ./...` as an ordinary user, then push `circadian`.
+
+## `kc9k circadian show --json` (the GUI is built against this)
+
+```json
+{
+  "on": true,
+  "minute": 872.5,
+  "lanes": [
+    {"name": "backlight", "title": "Backlight", "unit": "%", "min": 1, "max": 100,
+     "neutral": 100, "detail": "…", "on": true,
+     "points": [{"minute": 390, "value": 50, "tension": 0.5}],
+     "value": 87.5, "has_value": true,
+     "paused_until": 0, "available": true}
+  ],
+  "presets": [{"name": "natural", "title": "Natural day", "detail": "…",
+               "lanes": {"backlight": [{"minute": 390, "value": 50, "tension": 0.5}]}}],
+  "wallpapers": [{"index": 1, "image": "<sha256>.jpg", "name": "morning.jpg",
+                  "path": "/var/lib/kc9k/wallpapers/<sha256>.jpg",
+                  "from": "06:00", "to": "12:00", "active": true}],
+  "dark": {"mode": "system|light|dark|scheduled", "light_from": "07:00",
+           "light_to": "20:00", "now": "system|light|dark"},
+  "dark_pages": true,
+  "dark_exempt": ["example.com"],
+  "hardware": {"daemon": true, "backlights": ["intel_backlight"], "external": ["DELL U2720Q"],
+               "ddcutil": true, "gamma": "ours|identity|other|unknown", "night_light": false}
+}
+```
+
+- `minute`: the time of day now, in minutes. `lanes` come in display order
+  (backlight, software, kelvin). `value` is the clip's value now
+  (`has_value` false for a clip without points).
+- `paused_until`: unix seconds until which the clip is paused after a manual
+  change, 0 when it isn't. Software brightness and colour temperature share
+  one pause (one gamma ramp); the backlight clip is paused when the built-in
+  backlight or an external screen is.
+- `available`: there is hardware for the clip (a backlight or a DDC/CI
+  screen; an X session for the other two).
+- `hardware.daemon` is false until the daemon has reported once; the other
+  hardware fields are then unknown.

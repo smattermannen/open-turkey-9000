@@ -151,6 +151,9 @@ func listAdd(cmd *cobra.Command, database *db.DB, block, list string, entries []
 	if err != nil {
 		return err
 	}
+	if err := refuseCombinations(l.IsAddress(), entries); err != nil {
+		return err
+	}
 	entries, err = prepareEntries(l.Type, l.Where, entries)
 	if err != nil {
 		return err
@@ -195,6 +198,29 @@ func listRemove(cmd *cobra.Command, database *db.DB, block, list string, entries
 		return err
 	}
 	return settle(database, block)
+}
+
+// refuseCombinations refuses word combinations typed as entries of a term
+// list or cluster: they are phrases now, in phrase sets (old files are
+// still read, and moved). An address may have brackets.
+func refuseCombinations(address bool, entries []string) error {
+	if address {
+		return nil
+	}
+	for _, e := range entries {
+		if boxes, ok := db.ParseCombination(e); ok {
+			hint := ""
+			if phrases, err := db.CombinationPhrases(boxes); err == nil && len(phrases) > 0 {
+				var texts []string
+				for _, p := range phrases {
+					texts = append(texts, fmt.Sprintf("%q", p.String()))
+				}
+				hint = ", as " + strings.Join(texts, " ")
+			}
+			return fmt.Errorf("%q is a word combination; these are phrases now: add it to a phrase set with 'kc9k phrase-set add'%s", e, hint)
+		}
+	}
+	return nil
 }
 
 func containsString(list []string, s string) bool {

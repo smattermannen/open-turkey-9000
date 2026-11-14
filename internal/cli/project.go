@@ -749,6 +749,9 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 		}
 		if !dry {
+			if err := database.MigrateCombinations(); err != nil {
+				return err
+			}
 			if err := enforce.ApplyFromDB(database); err != nil {
 				return err
 			}

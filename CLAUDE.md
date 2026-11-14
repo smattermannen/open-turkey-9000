@@ -129,12 +129,13 @@ build and is **used for real**. On it:
   block with title/text exceptions; everything goes to the extension as
   `lists` rules (`enforce.BuildRules`, `kc9kListActions` in `match.js`: plain
   words are whole words, `*` matches inside words; a list whose exceptions
-  look at a part of the page not read yet waits; word combinations such as
-  `(car, lambo*) (big, small, nice):2` count runs of directly following words
-  that give each box its minimum of different words: `kc9kCombination` /
-  `kc9kKeywordMatcher`, mirrored by `pageCombination` in `cli/keywords.go`,
-  which stores them normalized, and `parse_combination` plus
-  `CombinationDialog` in the GUI). What strengthens is free;
+  look at a part of the page not read yet waits). Word combinations such
+  as `(car, lambo*) (big, small, nice):2` are the old form of phrases:
+  `migrateCombinations` (`db/combinations.go`, at every open and after
+  imports) moves those of blacklists and term clusters into phrase sets and
+  phrase clusters (`CombinationPhrases`: a box needing N words becomes one
+  phrase per choice of N); `refuseCombinations` refuses typed ones. Those
+  left in exception lists are still matched by `kc9kCombination`. What strengthens is free;
   the rest is gated/queueable (`EditList*` edits name lists by id). Old
   commands (`block add`, `add-exception`, `add-keyword`, `threshold`,
   `action`) are shortcuts to the default lists Blocked / Exceptions / Page

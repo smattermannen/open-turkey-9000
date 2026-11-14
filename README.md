@@ -268,16 +268,7 @@ A block has **blacklists** and **exception lists**, each with a name. Each list 
 - **title**: the page title, as shown on its tab.
 - **text**: the page's text. Term entries (title, text, or the address of a term list) are words or phrases: a plain word counts only on its own (`porn` doesn't count in "pornhub", `18+` not in "1118+"), and `*` matches inside words (`*porn*` counts in "pornhub", `porn*` in "pornstar"). Case is ignored.
 
-**Word combinations** catch words only together. A combination is boxes of words side by side, as many as you like: each box is a list in brackets, or one bare word, and `:N` after a box asks for N *different* words of it (1 if left out):
-
-| Entry | Counts in | Not in |
-|---|---|---|
-| `car(cheap)` | "cheap car", "car cheap" | "cheap reliable car" |
-| `cars(red, big, blue, beautiful)` | "red beautiful cars", "big cars" | "red toyota", "cars, big and red" |
-| `(car, lambo*, ferrari)(red, big, beautiful)` | "a beautiful Lamborghini", "ferrari red" | "a red toyota" |
-| `(car, lambo, sheep) (big, small, nice):2 (sport, hello, *niece*)` | "a nice big sport car", "small sheep nice nieces" | "a big sport car", "big big sport car" |
-
-A combination counts where a run of words, with only spaces between them (no commas or other words) and each a word of some box, holds what every box needs, in any order. Each word follows the rules above (whole words, `*` inside words; phrases such as `car(very cheap)`), and a word that fits two boxes counts for one of them. A combination is one entry: it counts once toward a threshold, and once per run toward hits. In the shell, quote it, since brackets mean something there; it is stored with one space between boxes and `, ` between words, so it is found again however it was typed. In the interface, **Word combination…** under a title or text list has one box per bracket, each with its minimal count; double-click a combination to change it.
+**Word combinations** such as `(car, lambo*) (big, small, nice):2` are now phrases. When upgrading, each blacklist's combinations move into a new phrase set `<list> phrases` with the list's scope, test mode and actions (each at threshold 1), and a term cluster's into a phrase cluster `<cluster> phrases`; a box needing several words becomes one phrase per choice of them (`[car, lambo*] [big] [small]`, `[car, lambo*] [big] [nice]`, `[car, lambo*] [small] [nice]`). A combination that could never match is dropped. Combinations in exception lists stay as they are, since there are no phrase exceptions. Old block, project and cluster files are moved the same way when imported; typing a combination into a list is refused, with the phrases to add instead.
 
 **Phrase sets** are the new form of word combinations: a named set of phrases in a block, with a scope (url, title, text) and its own actions, like a blacklist. A phrase is two or more **word sets** in brackets, and a match takes one term from each, directly after each other in any order, in one sentence:
 

@@ -286,19 +286,17 @@ func TestWordCombinations(t *testing.T) {
 		t.Errorf("a %d-character combination was refused: %v", len(long), err)
 	}
 
-	d := testDB(t)
+	// Combinations are phrases now: typing one is refused, with the
+	// phrases it would be.
+	testDB(t)
 	mustRun(t, "block", "create", "b")
-	mustRun(t, "block", "add-keyword", "b", "(car,lambo*)(big, small, nice):2", "nsfw")
-	if got := list(t, d, "b", db.DefaultWordsList).Entries; !reflect.DeepEqual(got, []string{"(car, lambo*) (big, small, nice):2", "nsfw"}) {
-		t.Errorf("Page words = %q", got)
+	err := runCLI(t, "block", "add-keyword", "b", "(car,lambo*)(big, small, nice):2", "nsfw")
+	if err == nil || !strings.Contains(err.Error(), `"[car, lambo*] [big] [small]" "[car, lambo*] [big] [nice]" "[car, lambo*] [small] [nice]"`) {
+		t.Errorf("a typed combination: %v", err)
 	}
-	if err := runCLI(t, "block", "add-keyword", "b", "cars(red, big"); err == nil {
-		t.Error("an unclosed combination was accepted")
-	}
-	// Removing finds a combination however it is spaced.
-	mustRun(t, "block", "remove-keyword", "b", "(car, lambo*)(big,small,nice):2")
-	if got := list(t, d, "b", db.DefaultWordsList).Entries; !reflect.DeepEqual(got, []string{"nsfw"}) {
-		t.Errorf("after removing: %q", got)
+	mustRun(t, "cluster", "create", "words", "--text")
+	if err := runCLI(t, "cluster", "add", "words", "cars(red, big)"); err == nil {
+		t.Error("a cluster took a typed combination")
 	}
 	// An address with brackets is still an address.
 	mustRun(t, "list", "add", "b", "Blocked", "en.wikipedia.org/wiki/Mercury_(planet)")

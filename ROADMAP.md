@@ -123,7 +123,11 @@ Last checked against the code: 2026-11-13.
       project files, `.txt` export/import, and phrase clusters
       (`cluster create --phrases`, `save`, `copy`). Left: categories
       (waiting for the owner: how one is imported, and which phrase-set
-      categories ship), and turning existing combinations into phrases. (L)
+      categories ship). Turning existing combinations into phrases is
+      built (`db/combinations.go`, `migrateCombinations`) on the branch
+      `phrase-migration`, not merged: the owner hasn't yet agreed how
+      `:N`, thresholds of mixed lists and combinations in exception lists
+      map. (L)
 - [ ] **List names differ only in case** (§3.2): `list create b words`
       succeeds beside `Words`, while lists are looked up without regard to
       case, so one of them can't be reached. Phrase sets refuse this. (S)

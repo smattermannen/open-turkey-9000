@@ -72,7 +72,7 @@ func clusterAdd(database *db.DB, c db.Cluster, entries []string) (int, error) {
 	var err error
 	if c.Phrases {
 		entries, err = typedPhrases(entries)
-	} else {
+	} else if err = refuseCombinations(c.Type == db.ListAddress, entries); err == nil {
 		entries, err = prepareEntries(c.Type, c.Where, entries)
 	}
 	if err != nil {

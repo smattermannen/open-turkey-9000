@@ -319,6 +319,9 @@ var blockImportCmd = &cobra.Command{
 				return err
 			}
 		}
+		if err := database.MigrateCombinations(); err != nil {
+			return err
+		}
 		fmt.Printf("Imported block '%s' (%d lists, %d phrase sets, %d apps).\n", in.Name, len(lists), len(phraseSets), len(in.Apps))
 		return nil
 	},

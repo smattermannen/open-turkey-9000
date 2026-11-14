@@ -60,9 +60,10 @@ func TestDelayLockEndsOnlyTheLock(t *testing.T) {
 	}
 }
 
-// R-LOCK-1: a block without a schedule lock that is switched off during its
-// window stays off until the window ends, then its schedule works again.
-func TestStoppedInWindowStaysOff(t *testing.T) {
+// R-SCHED-1, §3.3: the schedule never switches a block on or off; it only
+// lifts an active block outside its windows. An inactive block never
+// enforces, and a block switched off in its window stays off.
+func TestScheduleOnlyLifts(t *testing.T) {
 	d := testDB(t)
 	if err := d.CreateBlock("b"); err != nil {
 		t.Fatal(err)
@@ -72,28 +73,40 @@ func TestStoppedInWindowStaysOff(t *testing.T) {
 	if err := d.AddSchedule("b", schedule.Window{Days: 1 << uint(time.Monday), Start: 9 * 60, End: 11 * 60}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.SetSetting(StoppedInWindowKey("b"), "1"); err != nil {
-		t.Fatal(err)
-	}
 	if err := reconcileSchedulesAt(d, monday, monday.Unix()); err != nil {
 		t.Fatal(err)
 	}
 	if active, _ := d.IsBlockActive("b"); active {
-		t.Fatal("the schedule switched a block on that was switched off in its window")
+		t.Fatal("the schedule switched a block on")
+	}
+	if scheduleLifted(d, monday)["b"] {
+		t.Error("lifted inside its window")
+	}
+	if !scheduleLifted(d, monday.Add(2*time.Hour))["b"] {
+		t.Error("enabled outside its window")
+	}
+	if err := d.ActivateBlock("b", false, 0, 0, false); err != nil {
+		t.Fatal(err)
 	}
 	after := monday.Add(2 * time.Hour)
 	if err := reconcileSchedulesAt(d, after, after.Unix()); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := d.GetSetting(StoppedInWindowKey("b")); v != "" {
-		t.Error("the mark stayed after the window")
+	if active, _ := d.IsBlockActive("b"); !active {
+		t.Error("the schedule switched an active block off")
 	}
-	next := monday.AddDate(0, 0, 7)
-	if err := reconcileSchedulesAt(d, next, next.Unix()); err != nil {
+	// Allow windows lift a continuous block only inside them.
+	if err := d.CreateBlock("c"); err != nil {
 		t.Fatal(err)
 	}
-	if active, _ := d.IsBlockActive("b"); !active {
-		t.Error("the next window didn't switch the block on")
+	if err := d.AddSchedule("c", schedule.Window{Days: 1 << uint(time.Monday), Start: 12 * 60, End: 13 * 60, Allow: true}); err != nil {
+		t.Fatal(err)
+	}
+	if scheduleLifted(d, monday)["c"] || !scheduleLifted(d, monday.Add(150*time.Minute))["c"] {
+		t.Error("allow window lifting wrong")
+	}
+	if scheduleLifted(d, monday)["none"] {
+		t.Error("a block without windows lifted")
 	}
 }
 
@@ -130,52 +143,28 @@ func TestScheduleLockIsALock(t *testing.T) {
 	}
 }
 
-// R-LOCK-3: a scheduled block with a password (or any other) lock outlives
-// its window; the daemon stops it only once nothing holds it. Layered locks
-// move on in the daemon too (R-LOCK-6).
-func TestScheduleEndKeepsAnyLock(t *testing.T) {
+// R-LOCK-6 in the daemon: once the password before it is unlocked, the
+// timer lock behind it starts counting (finishDelayedStops moves layers).
+func TestDaemonMovesLayers(t *testing.T) {
 	d := testDB(t)
 	if err := d.CreateBlock("b"); err != nil {
 		t.Fatal(err)
 	}
 	mustAdd(t, d, "b", db.DefaultBlockedList, "reddit.com")
-	monday := time.Date(2026, 11, 9, 10, 0, 0, 0, time.Local)
-	if err := d.AddSchedule("b", schedule.Window{Days: 1 << uint(time.Monday), Start: 9 * 60, End: 11 * 60}); err != nil {
+	if err := d.ActivateBlock("b", false, 0, 0, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := reconcileSchedulesAt(d, monday, monday.Unix()); err != nil {
+	if err := d.SetLockExtras("b", db.LockExtras{Order: "password,timer", TimerAfter: 600}); err != nil {
 		t.Fatal(err)
 	}
-	hash, _ := db.HashPassword("pw")
-	if err := d.SetLockExtras("b", db.LockExtras{PasswordHash: hash, Order: "password,timer", TimerAfter: 600}); err != nil {
-		t.Fatal(err)
-	}
-	after := monday.Add(2 * time.Hour)
-	if err := reconcileSchedulesAt(d, after, after.Unix()); err != nil {
-		t.Fatal(err)
-	}
-	if active, _ := d.IsBlockActive("b"); !active {
-		t.Fatal("a password-locked block was stopped at its window's end")
-	}
-	// The password is unlocked: the daemon starts the timer behind it.
-	e, _ := d.GetLockExtras("b")
-	e.PasswordHash = ""
-	_ = d.SetLockExtras("b", e)
-	finishDelayedStops(d, after.Unix())
-	if b, _ := d.GetBlock("b"); b.LockedUntil != after.Unix()+600 {
+	finishDelayedStops(d, 5000)
+	if b, _ := d.GetBlock("b"); b.LockedUntil != 5600 {
 		t.Fatalf("timer after the password: until %d", b.LockedUntil)
 	}
-	if err := reconcileSchedulesAt(d, after, after.Unix()); err != nil {
-		t.Fatal(err)
-	}
-	if active, _ := d.IsBlockActive("b"); !active {
-		t.Fatal("stopped during the timer lock")
-	}
-	later := after.Add(11 * time.Minute)
-	if err := reconcileSchedulesAt(d, later, later.Unix()); err != nil {
-		t.Fatal(err)
-	}
-	if active, _ := d.IsBlockActive("b"); active {
-		t.Error("still on once nothing holds it")
+	boot, _ := db.BootID()
+	detail, _ := d.GetBlock("b")
+	e, _ := d.GetLockExtras("b")
+	if !BlockLocked(detail, e, 5000, boot) || BlockLocked(detail, e, 5601, boot) {
+		t.Error("timer lock not holding exactly its time")
 	}
 }

@@ -214,7 +214,6 @@ shortened or removed this way.`,
 		if err := database.ActivateBlock(blockName, useLock, chars, lockedUntil, false); err != nil {
 			return err
 		}
-		_ = database.SetSetting(enforce.StoppedInWindowKey(blockName), "")
 		if hasExtras {
 			if err := database.SetLockExtras(blockName, extras); err != nil {
 				return err
@@ -226,6 +225,14 @@ shortened or removed this way.`,
 		}
 
 		msg := fmt.Sprintf("Block '%s' activated successfully", blockName)
+		if enforce.HasScheduleOrPlace(database, blockName) {
+			// §3.3: active, enabled only as its windows and places say.
+			if enforce.LiftedBySchedule(database, blockName, now) {
+				msg += " [lifted now: enabled only in its windows or at its places]"
+			} else {
+				msg += " [enabled now by its schedule]"
+			}
+		}
 		if useLock {
 			msg += " [text lock: " + lock.DescribeStyle(style, chars) + "]"
 		}
@@ -439,14 +446,7 @@ var stopCmd = &cobra.Command{
 		if err := database.DeactivateBlock(blockName); err != nil {
 			return err
 		}
-		// Switched off inside its window: the daemon leaves it off until
-		// the window ends (§3.3: the user's switch, R-LOCK-1).
-		if within, err := enforce.ScheduleActiveNow(database, blockName, time.Now()); err == nil && within {
-			if err := database.SetSetting(enforce.StoppedInWindowKey(blockName), "1"); err != nil {
-				return err
-			}
-			fmt.Printf("Its schedule leaves it off until the current window ends.\n")
-		}
+		// Inactive: never enforces, whatever its schedule (R-SCHED-1).
 		if err := enforce.ApplyFromDB(database); err != nil {
 			return err
 		}
@@ -651,8 +651,8 @@ var statusCmd = &cobra.Command{
 				tags += fmt.Sprintf(" [schedule lock, %s lead, %s]", time.Duration(hold.scheduleLead)*time.Minute, state)
 			}
 			if detail.Active {
-				if detail.Scheduled {
-					tags += " [switched on by its schedule]"
+				if enforce.LiftedBySchedule(database, detail.Name, time.Now()) {
+					tags += " [lifted by its schedule]"
 				}
 				if hold.charLocked {
 					tags += " [text lock: " + lock.DescribeStyle(hold.extras.Style, detail.LockChars) + "]"

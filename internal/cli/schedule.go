@@ -102,7 +102,11 @@ var scheduleAddCmd = &cobra.Command{
 		}
 		fmt.Printf("Schedule %d added to '%s': %s\n", len(schedules)+1, name, w)
 		if allow && len(schedules) == 0 {
-			fmt.Printf("'%s' will now be on at all times except during its allow windows.\n", name)
+			fmt.Printf("'%s' is now enabled at all times except during its allow windows, while it is on.\n", name)
+		}
+		if active, _ := database.IsBlockActive(name); !active {
+			// §3.3: a schedule never switches a block on (R-SCHED-1).
+			fmt.Printf("'%s' is off: switch it on with 'kc9k start %s'; it then enforces only as its schedule says.\n", name, name)
 		}
 		return nil
 	},
@@ -183,7 +187,7 @@ var scheduleLockCmd = &cobra.Command{
 	Long: `A schedule lock (§3.4) keeps a block from being weakened, switched off or
 deleted during its block windows, while a place rule has it on, and for the
 lead time you choose before each window. For a block with allow windows it is
-on outside them. Without it, a schedule only switches the block on and off.
+on outside them. Without it, a schedule only lifts the block outside its windows.
 
   kc9k schedule lock work on --lead 2h
   kc9k schedule lock work            # shows it

@@ -16,7 +16,6 @@ package enforce
 import (
 	"log"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -235,7 +234,7 @@ func ApplyFromDB(d *db.DB) error {
 	}
 	trusted, err := d.TrustedNow(time.Now())
 	if err == nil {
-		active = withoutBreaks(d, active, trusted)
+		active = enabledBlocks(d, active, trusted)
 	} else {
 		trusted = 0
 	}
@@ -283,7 +282,7 @@ func Tick(d *db.DB, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	active = withoutBreaks(d, active, trusted)
+	active = enabledBlocks(d, active, trusted)
 	if trusted != 0 {
 		earnBreaks(d, active, trusted)
 	}
@@ -448,92 +447,12 @@ func reconcileSchedules(d *db.DB, now time.Time) error {
 
 // reconcileSchedulesAt takes trusted time separately; see db.TrustedNow.
 func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
-	all, err := d.AllSchedules()
-	if err != nil {
-		return err
-	}
-	active, err := d.GetActiveBlocks()
-	if err != nil {
-		return err
-	}
-
-	// Group windows by block; scheduled blocks with no schedules left get an
-	// empty list, which schedule.Enforced treats as "off".
-	windows := map[string][]schedule.Window{}
-	for _, s := range all {
-		windows[s.BlockName] = append(windows[s.BlockName], s.Window())
-	}
-	for _, b := range active {
-		if _, ok := windows[b.BlockName]; !ok && b.Scheduled {
-			windows[b.BlockName] = nil
-		}
-	}
-
-	// A quota keeps its block on outside its sessions (reconcileQuotas), as
-	// a scheduled block: leave turning those off to the quota.
-	quotas, err := d.QuotaBlocks()
-	if err != nil {
-		return err
-	}
-
-	// A place rule turns its block on while the computer is there, like a
-	// schedule window that is open.
-	atPlace, err := PlaceBlocks(d, now)
-	if err != nil {
-		return err
-	}
-	ruled, err := PlaceRuled(d)
-	if err != nil {
-		return err
-	}
-	for name := range ruled {
-		if _, ok := windows[name]; !ok {
-			windows[name] = nil
-		}
-	}
+	// Schedules and place rules no longer switch blocks on or off (R-SCHED-1,
+	// §3.3): enabledBlocks lifts active blocks outside their windows. Places
+	// still need Wi-Fi on to be seen.
 	keepWifiOn(d)
-
-	for name, ws := range windows {
-		within := schedule.Enforced(ws, now) || atPlace[name]
-
-		detail, err := d.GetBlock(name)
-		if err != nil {
-			log.Printf("daemon: schedule: %v", err)
-			continue
-		}
-
-		// A block switched off by hand while its window was open (it had no
-		// schedule lock) stays off until that window or place ends.
-		stopped, _ := d.GetSetting(StoppedInWindowKey(name))
-		if stopped != "" && !within {
-			_ = d.SetSetting(StoppedInWindowKey(name), "")
-			stopped = ""
-		}
-		switch {
-		case within && !detail.Active && stopped != "":
-		case within && !detail.Active:
-			// Activate as a scheduled block (its schedule lock, if it has
-			// one, keeps it from being stopped).
-			if err := d.ActivateBlock(name, false, 0, 0, true); err != nil {
-				log.Printf("daemon: schedule: failed to activate %s: %v", name, err)
-			} else {
-				log.Printf("daemon: schedule: activated %s", name)
-			}
-		case !within && detail.Active && detail.Scheduled && !blockLockedNow(d, detail, trusted) &&
-			!slices.Contains(quotas, name):
-			if err := d.DeactivateBlock(name); err != nil {
-				log.Printf("daemon: schedule: failed to deactivate %s: %v", name, err)
-			} else {
-				log.Printf("daemon: schedule: deactivated %s", name)
-			}
-		}
-	}
 	return nil
 }
-
-// StoppedInWindowKey is the setting that says a block was switched off by
-// hand while its schedule window (or place) was open.
-func StoppedInWindowKey(block string) string { return "schedule.stopped." + block }
 
 // blockLockedNow reports whether any lock of an active block holds it
 // (R-LOCK-3): every kind and layer, not only text and timer locks. On a

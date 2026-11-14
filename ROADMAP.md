@@ -31,9 +31,11 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   duration timer and restart behind others count from their unlocking, new
   locks last; the daemon moves layers on; old blocks: timer, restart,
   password, text, delay), and on setting locks (browser settings, tamper,
-  strict mode, global ladder). Not built: hardware/internet clock check;
-  active vs enabled (the daemon still activates blocks by schedule); choosing
-  the order in the GUI (fixed order). (L)
+  strict mode, global ladder); active vs enabled for schedules and places
+  (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
+  scheduled blocks on once). Not built: hardware/internet clock check;
+  allowance sessions still switch their block off and on (should lift it);
+  choosing the order in the GUI (fixed order). (L)
 - [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
   silently creates nothing (`create_phrase_set`). Two editors (typed box and
   pop-up `PhraseDialog`, too tall); want only boxes in the card, unlimited
@@ -90,6 +92,9 @@ Script-tested, never by a person. Script what can be into `ci/`.
   `Blocked terms` pairs of `H` and `test` are one `Blocked` each; check
   pages are blocked as before. New list dialog with scope boxes on a real
   screen.
+- [ ] Active vs enabled on the laptop: after the upgrade, blocks with
+  windows are on (`status`: "lifted by its schedule" outside windows) and
+  enforce only in their windows; GUI shows "lifted by its schedule now".
 - [ ] Remove laptop leftovers (`quotatest`, `hej`, `Papers` list in `test`). `extras_test` fails one case only because the locked `test` block lists example.com.
 
 ## 1. `SPEC.md` coverage
@@ -104,7 +109,7 @@ Only items not simply Built.
 | §3.2 Affected users | Not built | |
 | §3.2 Test mode for phrase sets | Unchecked | lists built |
 | §3.3 Enabled/disabled/lifted words | Partial | |
-| §3.3 Continuous/scheduled types | Not built | schedules start/stop blocks |
+| §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules lift, never switch; allowance still switches |
 | §3.3 Duplicate starts inactive | Unchecked | |
 | §3.3 `kc9k toggle` | Not built | |
 | §3.4 Range lock | Not built | |

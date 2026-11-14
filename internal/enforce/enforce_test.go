@@ -10,10 +10,17 @@ import (
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
-// TestReconcileSchedules checks the daemon's scheduling core (no layers, so no
-// root needed): a block auto-activates inside its window and the daemon
-// deactivates it when the window closes — but never touches a manually
-// activated block.
+// enabledAt reports whether a block enforces at t: active and not lifted by
+// its windows or places (§3.3).
+func enabledAt(d *db.DB, name string, t time.Time) bool {
+	b, err := d.GetBlock(name)
+	return err == nil && b.Active && !scheduleLifted(d, t)[name]
+}
+
+// TestReconcileSchedules checks the daemon's scheduling core (R-SCHED-1, no
+// layers, so no root needed): an inactive block never enforces; an active
+// one is enabled inside its window and lifted outside it; the daemon never
+// switches it on or off.
 func TestReconcileSchedules(t *testing.T) {
 	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
@@ -35,38 +42,30 @@ func TestReconcileSchedules(t *testing.T) {
 	inWindow := time.Date(2024, 1, 1, 10, 0, 0, 0, time.Local)  // Mon 10:00
 	outWindow := time.Date(2024, 1, 1, 18, 0, 0, 0, time.Local) // Mon 18:00
 
-	// Inside the window → auto-activated as scheduled.
 	if err := reconcileSchedules(d, inWindow); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := d.GetBlock("s"); !b.Active || !b.Scheduled {
-		t.Fatalf("expected scheduled activation; got active=%v scheduled=%v", b.Active, b.Scheduled)
+	if enabledAt(d, "s", inWindow) {
+		t.Fatal("an inactive block enforces in its window")
 	}
-
-	// Outside the window → auto-deactivated.
-	if err := reconcileSchedules(d, outWindow); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := d.GetBlock("s"); b.Active {
-		t.Fatal("expected scheduled block to deactivate outside its window")
-	}
-
-	// A MANUAL activation must not be auto-deactivated outside a window.
 	if err := d.ActivateBlock("s", false, 0, 0, false); err != nil {
 		t.Fatal(err)
+	}
+	if !enabledAt(d, "s", inWindow) || enabledAt(d, "s", outWindow) {
+		t.Fatal("active block: want enabled in its window, lifted outside it")
 	}
 	if err := reconcileSchedules(d, outWindow); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := d.GetBlock("s"); !b.Active {
-		t.Fatal("manual activation must survive schedule reconciliation")
+		t.Fatal("the schedule switched the block off")
 	}
 }
 
-// TestReconcileKeepsLockedScheduledBlock checks that a schedule-activated
-// block that was then locked isn't deactivated when its window closes: a time
-// lock holds it until it expires, a char lock until it is unlocked.
-func TestReconcileKeepsLockedScheduledBlock(t *testing.T) {
+// TestLockNeverChangesWhatIsBlocked: a locked block outside its window stays
+// on (it can't be switched off) but is lifted: a lock never changes what is
+// blocked (§3.4).
+func TestLockNeverChangesWhatIsBlocked(t *testing.T) {
 	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -80,38 +79,14 @@ func TestReconcileKeepsLockedScheduledBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	day := func(h int) time.Time { return time.Date(2024, 1, 1, h, 0, 0, 0, time.Local) }
-
-	if err := reconcileSchedules(d, day(10)); err != nil {
+	if err := d.ActivateBlock("s", true, 300, day(19).Unix(), false); err != nil {
 		t.Fatal(err)
 	}
-	// Time-locked until 19:00 while in the window.
-	if err := d.StrengthenLocks("s", false, 0, day(19).Unix()); err != nil {
+	if err := reconcileSchedules(d, day(18)); err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range []struct {
-		h    int
-		want bool
-	}{{18, true}, {20, false}} {
-		if err := reconcileSchedules(d, day(c.h)); err != nil {
-			t.Fatal(err)
-		}
-		if b, _ := d.GetBlock("s"); b.Active != c.want {
-			t.Errorf("time lock: at %02d:00 active = %v; want %v", c.h, b.Active, c.want)
-		}
-	}
-
-	// Char-locked while in the window: stays on after it closes.
-	if err := reconcileSchedules(d, day(10).AddDate(0, 0, 1)); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.StrengthenLocks("s", true, 300, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := reconcileSchedules(d, day(20).AddDate(0, 0, 1)); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := d.GetBlock("s"); !b.Active || !b.Scheduled {
-		t.Errorf("char-locked scheduled block should stay active; got active=%v scheduled=%v", b.Active, b.Scheduled)
+	if b, _ := d.GetBlock("s"); !b.Active || enabledAt(d, "s", day(18)) || !enabledAt(d, "s", day(10)) {
+		t.Errorf("locked block at 18:00: active %v, enabled %v; want on and lifted", b.Active, enabledAt(d, "s", day(18)))
 	}
 }
 
@@ -167,8 +142,8 @@ func TestApplyDueEdits(t *testing.T) {
 	}
 }
 
-// TestReconcileDropsUnscheduledBlock checks that a block its schedule switched
-// on is switched off once its schedules are all removed.
+// TestReconcileDropsUnscheduledBlock: once its windows are all removed a
+// block is continuous: enabled whenever active.
 func TestReconcileDropsUnscheduledBlock(t *testing.T) {
 	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
@@ -185,26 +160,23 @@ func TestReconcileDropsUnscheduledBlock(t *testing.T) {
 	if err := d.AddSchedule("games", schedule.Window{Days: schedule.Friday, Start: 18 * 60, End: 24 * 60, Allow: true}); err != nil {
 		t.Fatal(err)
 	}
-	monday := time.Date(2024, 1, 1, 12, 0, 0, 0, time.Local)
-	if err := reconcileSchedules(d, monday); err != nil {
+	if err := d.ActivateBlock("games", false, 0, 0, false); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := d.GetBlock("games"); !b.Active {
-		t.Fatal("expected the allow-window block to be on on Monday")
+	friday := time.Date(2024, 1, 5, 20, 0, 0, 0, time.Local)
+	if enabledAt(d, "games", friday) {
+		t.Fatal("enabled in its allow window")
 	}
 	if err := d.RemoveSchedule("games", 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := reconcileSchedules(d, monday); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := d.GetBlock("games"); b.Active {
-		t.Fatal("a scheduled block with no schedules left should be switched off")
+	if !enabledAt(d, "games", friday) {
+		t.Fatal("a block with no windows left should be enabled whenever active")
 	}
 }
 
-// TestReconcileAllowSchedule checks allow windows: the block is on outside
-// them and off inside them.
+// TestReconcileAllowSchedule checks allow windows: the active block is
+// enabled outside them and lifted inside them.
 func TestReconcileAllowSchedule(t *testing.T) {
 	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
@@ -217,6 +189,9 @@ func TestReconcileAllowSchedule(t *testing.T) {
 	}
 	// Allowed Friday and Saturday 18:00–24:00.
 	if err := d.AddSchedule("games", schedule.Window{Days: schedule.Friday | schedule.Saturday, Start: 18 * 60, End: 24 * 60, Allow: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ActivateBlock("games", false, 0, 0, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -236,9 +211,8 @@ func TestReconcileAllowSchedule(t *testing.T) {
 		if err := reconcileSchedules(d, st.t); err != nil {
 			t.Fatal(err)
 		}
-		b, _ := d.GetBlock("games")
-		if b.Active != st.want {
-			t.Errorf("%s: active = %v; want %v", st.t.Format("Mon 15:04"), b.Active, st.want)
+		if got := enabledAt(d, "games", st.t); got != st.want {
+			t.Errorf("%s: enabled = %v; want %v", st.t.Format("Mon 15:04"), got, st.want)
 		}
 		if on, _ := ScheduleActiveNow(d, "games", st.t); on != st.want {
 			t.Errorf("%s: ScheduleActiveNow = %v; want %v", st.t.Format("Mon 15:04"), on, st.want)

@@ -133,7 +133,8 @@ type guiBlock struct {
 	DelayLeft     int64          `json:"delay_left"`            // the delay lock unlocks in this many seconds, once asked
 	LockOrder     []string       `json:"lock_order,omitempty"`  // locks on, in unlock order (R-LOCK-6)
 	TimerAfter    int64          `json:"timer_after,omitempty"` // a timer lock's seconds, counted once the locks before it are unlocked
-	Scheduled     bool           `json:"scheduled"`
+	Scheduled     bool           `json:"scheduled"`             // has windows or a place rule (§3.3)
+	Lifted        bool           `json:"lifted"`                // active, but its windows or places lift it now
 	LockSeconds   int64          `json:"lock_seconds"`
 	QuotaLimit    int64          `json:"quota_limit"`
 	QuotaUsed     int64          `json:"quota_used"`
@@ -392,6 +393,7 @@ var guiStateCmd = &cobra.Command{
 		for _, p := range places {
 			state.Places = append(state.Places, guiPlace{Name: p.Name, Networks: len(p.Networks)})
 		}
+		lifted := enforce.ScheduleLifted(database, now)
 		for _, b := range blocks {
 			detail, err := database.GetBlock(b.Name)
 			if err != nil {
@@ -410,7 +412,8 @@ var guiStateCmd = &cobra.Command{
 				Titles:    append([]string{}, detail.Titles...),
 				Schedules: []string{},
 				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && hold.charLocked,
-				Scheduled: detail.Scheduled,
+				Scheduled: len(schedules) > 0 || enforce.HasScheduleOrPlace(database, b.Name),
+				Lifted:    detail.Active && lifted[b.Name],
 			}
 			for _, l := range detail.Lists {
 				actions := l.Actions

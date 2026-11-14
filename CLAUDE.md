@@ -117,8 +117,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   sampling every 5 s; screen relock every 0.5 s during a lock freeze.
 - **Schedule** (`internal/schedule/`): windows and `--allow` windows. Wall
   clock: DST-skipped windows shrink/vanish, repeated hour covered twice;
-  durations count real hours. Freeze schedules: `db.FreezeSchedule.LockLead`;
-  daemon `reconcileFreezeSchedules`.
+  durations count real hours. Active vs enabled (§3.3): `enforce.enabledBlocks`
+  drops active blocks lifted by breaks/pauses and by `scheduleLifted`
+  (windows, place rules); the daemon never switches blocks by schedule
+  (allowance sessions still do, `reconcileQuotas`). Freeze schedules:
+  `db.FreezeSchedule.LockLead`; daemon `reconcileFreezeSchedules`.
 - **Locks** (`internal/cli/`): `blockHold` decides lock state (text, timer,
   password, restart, delay, schedule lock `db/schedulelock.go`). Layered
   (R-LOCK-6/7, `db/layers.go`, `cli/layers.go`): `LockExtras.Order` from
@@ -310,9 +313,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   overnight = two windows; overlap refused; a block's windows all block or
   all `--allow`. Numbered per block 1..n, renumbered on removal. Schedule
   lock lead: longer always, shorter/off weakens. Old queued edits:
-  `kc9k pending`, `pending cancel N`. A lock set on a schedule-started block
-  outlives the window (timer: until expiry, daemon then stops it; text:
-  until `unlock`).
+  `kc9k pending`, `pending cancel N`. Only the user switches blocks on/off;
+  windows and place rules only lift an active block (a lock keeps it on, not
+  enabled). The 2026-11-15 upgrade switched on every inactive block with
+  windows or place rules once (`migrateScheduledSwitchOn`).
 - **Starting on an active block** only strengthens: longer `--lock-chars`,
   later `--for/--until`; shorter/earlier refused. A challenge longer than the
   terminal is paged (Enter per page), accuracy over all.

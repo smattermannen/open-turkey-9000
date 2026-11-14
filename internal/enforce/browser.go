@@ -119,7 +119,7 @@ func ExtensionRequiredNow(d *db.DB) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return ExtensionRequired(d, withMonk(d, withoutBreaks(d, active, trusted), trusted)), nil
+	return ExtensionRequired(d, withMonk(d, enabledBlocks(d, active, trusted), trusted)), nil
 }
 
 // LastExtensionCheckIn returns when the extension last checked in, if ever.
@@ -388,7 +388,7 @@ func BuildRules(d *db.DB) (Rules, error) {
 	rules.Blocks = addableBlocks(d)
 	testing := d.TestLists()
 	rules.Social = []string{}
-	for _, b := range withMonk(d, withoutBreaks(d, active, trusted), trusted) {
+	for _, b := range withMonk(d, enabledBlocks(d, active, trusted), trusted) {
 		for _, preset := range b.Social {
 			if !slices.Contains(rules.Social, preset) {
 				rules.Social = append(rules.Social, preset)

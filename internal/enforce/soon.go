@@ -117,15 +117,12 @@ func soonRules(d *db.DB, active []db.ActiveBlockDetail, now time.Time, trusted i
 
 // blockEnds returns when each active block ends, for those that have an end:
 // a stop that was asked for and is waiting out its delay, or the close of
-// the schedule window that turned the block on.
+// the schedule window it is enabled in.
 func blockEnds(d *db.DB, active []db.ActiveBlockDetail, now time.Time, trusted int64) map[string]int64 {
 	out := map[string]int64{}
 	for _, b := range active {
 		if extras, err := d.GetLockExtras(b.BlockName); err == nil && extras.StopAt > trusted {
 			out[b.BlockName] = now.Unix() + extras.StopAt - trusted
-			continue
-		}
-		if !b.Scheduled || b.Locked || b.LockedUntil > trusted {
 			continue
 		}
 		schedules, err := d.ListSchedules(b.BlockName)

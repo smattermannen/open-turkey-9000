@@ -150,7 +150,7 @@ func findActiveList(d *db.DB, listID int) (string, db.WebList, bool) {
 		if err != nil {
 			return "", db.WebList{}, false
 		}
-		for _, b := range withoutBreaks(d, active, trusted) {
+		for _, b := range enabledBlocks(d, active, trusted) {
 			if b.BlockName == block && len(s.Phrases) > 0 {
 				return block, db.WebList{ID: listID, Name: s.Name, Kind: db.ListBlacklist, Where: s.Where,
 					Actions: s.Actions, Entries: []string{"phrases"}}, true
@@ -158,7 +158,7 @@ func findActiveList(d *db.DB, listID int) (string, db.WebList, bool) {
 		}
 		return "", db.WebList{}, false
 	}
-	for _, b := range withoutBreaks(d, active, trusted) {
+	for _, b := range enabledBlocks(d, active, trusted) {
 		for _, l := range b.Lists.Blacklists() {
 			if l.ID == listID && l.Enforces() {
 				return b.BlockName, l, true

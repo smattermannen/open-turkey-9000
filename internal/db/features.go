@@ -87,6 +87,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateRemovedActions(conn); err != nil {
 		return err
 	}
+	if err := migrateScheduledSwitchOn(conn); err != nil {
+		return err
+	}
 	return migrateMonkMode(conn)
 }
 

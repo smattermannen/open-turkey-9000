@@ -405,8 +405,8 @@ var blockInfoCmd = &cobra.Command{
 		// Status line: inactive, or active with any holds.
 		if block.Active {
 			status := "Active"
-			if block.Scheduled {
-				status += " (scheduled)"
+			if enforce.HasScheduleOrPlace(database, block.Name) {
+				status += " (scheduled: enabled only in its windows or at its places)"
 			}
 			if block.Locked {
 				status += fmt.Sprintf(" [Locked - %d characters]", block.LockChars)
@@ -521,14 +521,11 @@ var blockRemoveCmd = &cobra.Command{
 		if !proceed {
 			return
 		}
-		// A block switched on by its allow-window schedule can get here (after
-		// the typing challenge) while active; switch it off first. Any other
-		// active block must still be stopped by hand first.
-		if detail.Active && detail.Scheduled {
-			if err := database.DeactivateBlock(name); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
+		// An active block must be switched off first (R-LOCK-3; only the
+		// user switches blocks on and off, §3.3).
+		if detail.Active {
+			fmt.Fprintf(os.Stderr, "Error: block '%s' is on. Switch it off first ('kc9k stop %s')\n", name, name)
+			os.Exit(1)
 		}
 		if err := database.RemoveBlock(name); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

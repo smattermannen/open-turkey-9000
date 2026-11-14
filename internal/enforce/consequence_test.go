@@ -445,15 +445,16 @@ func TestScheduleLeavesQuotaBlockOn(t *testing.T) {
 	if b, _ := d.GetBlock("games"); !b.Active {
 		t.Fatal("the schedule check turned a quota block off")
 	}
-	// Without the quota, a scheduled block with no schedules goes off.
+	// Without the quota the schedule still never switches it off
+	// (R-SCHED-1: only the user does).
 	if err := d.DeleteQuota("games"); err != nil {
 		t.Fatal(err)
 	}
 	if err := reconcileSchedules(d, now); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := d.GetBlock("games"); b.Active {
-		t.Fatal("a scheduled block without schedules or a quota stayed on")
+	if b, _ := d.GetBlock("games"); !b.Active {
+		t.Fatal("the schedule check switched a block off")
 	}
 }
 

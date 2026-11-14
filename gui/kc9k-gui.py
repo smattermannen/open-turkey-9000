@@ -443,6 +443,8 @@ def block_summary(block):
         parts.append("on a break")
     if block["scheduled"]:
         parts.append("scheduled")
+    if block.get("lifted"):
+        parts.append("lifted by its schedule now")
     if block["quota_limit"]:
         parts.append(f"allowance {block['quota_used'] // 60} of {block['quota_limit'] // 60} min")
     if block["quota_open"]:

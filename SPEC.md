@@ -164,11 +164,10 @@ Command and code names are in `backticks`.
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Target** | Anything a block acts on: site, URL entry, search entry, app, folder, window title entry, rendered term, phrase. | — |
+| **Target** | Anything a block acts on: site, URL entry, app, folder, window title entry, rendered term, phrase. | — |
 | **Site** | A domain with all its subdomains (`reddit.com`, written without `www.`), or a wildcard domain (`*.xxx`). | A URL entry. |
 | **URL entry** | A domain plus path or query (`reddit.com/r/funny`, `youtube.com/@channel`). | A site. |
 | **Wildcard** | In sites and URL entries, `*` is any text (`google.com/*q=*unicorn*`). In rendered terms and phrases, a plain word matches whole words and `*` matches inside a word (`*gorilla` matches "silverbackgorilla", `porn*` matches "pornstar"). | A bridge. |
-| **Search entry** | A word in a search list: searches containing it are blocked. | A rendered term. |
 | **Whole internet** | The target `*.*`: every website. Local files (`file://`), this computer (localhost) and the local network always stay reachable. | — |
 | **App** | A program, matched by name, path, script, file fingerprint (`sha256:…`), Flatpak ID or desktop unit. Everything it started is closed with it. | A window. |
 | **Folder entry** | A directory: every program run from inside it is a blocked app, and windows showing it are closed. | — |
@@ -186,8 +185,7 @@ Command and code names are in `backticks`.
 |---|---|---|
 | **Block** | A named group of lists, phrase sets, apps, folders, window title entries, schedule, breaks, autostart, affected users and locks. | — |
 | **List** | A named set of entries inside one block. It has a **kind** (blacklist or exception list) and a **scope**. There are no list types: sites, URL entries and rendered terms can stand in the same list, and KC9K works out how to apply each. | A cluster. |
-| **Search list** | Planned: search entries, matched against searches on any search engine and in a site's own search. Whether this becomes a scope box on ordinary lists is open (§7). | — |
-| **Entry** | One item in a list: a site, a URL entry, a rendered term or a search entry. | — |
+| **Entry** | One item in a list: a site, a URL entry, or a rendered term. | — |
 | **Scope** | Where a list or phrase set looks, ticked in boxes: *URL*, *title* (the tab's), *text* (one or several). With URL ticked, a site or URL entry is matched against the page's address (and also feeds the layers), a rendered term as words in the address (`*cars*` included). | — |
 | **Phrase set** | A named set of phrases inside one block, with a scope and its own actions, like a blacklist. A block can have any number. | A list. |
 | **Blacklist** | List kind: matches get the list's actions. *CT: Websites tab.* | — |
@@ -322,7 +320,7 @@ extension is required, and tamper protection settings (§4.10) can't be turned o
 |---|---|---|
 | **Settings password** | Optional. When set, it is needed to weaken anything. The user can also choose to require it for setting a lock, so nobody else can lock them out. | A password lock. |
 | **Access password** | Optional, needed to *view* parts of the app (per area: app, dashboard, blocks, device, stats, settings). | A password lock. |
-| **Block password** | Optional, one per block ("Set password for this block"): the block's contents (its lists, phrase sets and apps) stay hidden until it is typed, for example a list of unsuitable terms a parent keeps. What else it guards is open (§7). | A password lock. |
+| **Block password** | Optional, one per block ("Set password for this block"): the block's contents (its lists, phrase sets and apps) stay hidden until it is typed, for example a list of unsuitable terms a parent keeps. It guards viewing only: the block's locks stay as they are and are not tied to this password. | A password lock. |
 | **Setting lock** | A lock on one setting or browser setting instead of a block. | A block's lock. |
 
 A forgotten settings password or password lock can be removed from recovery
@@ -703,18 +701,13 @@ Made with the owner. Newest last.
   unsuitable terms out of sight.
 - 2026-11-14: The phrase editor sits in the phrase set's card, not in a
   pop-up, with any number of word sets.
-- 2026-11-14: The app will be called **Nepsis** (Nepsis Blocker where it must
-  stand out), from launch. Until then the names stay as they are (KC9K,
-  `kc9k`, Frozen Chicken).
+- 2026-11-14: The block password guards viewing only. Locks keep their own
+  rules.
+- 2026-11-14: There are no search lists. A term in the URL scope already
+  catches searches, since the address is read as words (R-PHRASE-6) and
+  holds the query on any engine and in a site's own search; the text scope
+  catches the results page. A separate "Searches" scope would add nothing.
 
 ## 7. Open decisions
 
-Not yet settled by the owner. Don't resolve them alone.
-
-1. **Block password: what it guards.** Only viewing the block's contents,
-   or also editing it and switching it off (which would overlap with a
-   password lock)?
-2. **Search lists.** A fourth scope box, "Searches", on ordinary lists, or
-   a separate thing, or left for later?
-3. **Names at launch.** Whether Frozen Chicken and other chicken names change
-   with the rename to Nepsis.
+None at the moment.

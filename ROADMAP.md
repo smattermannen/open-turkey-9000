@@ -63,7 +63,7 @@ Last checked against the code: 2026-11-14.
       as words in it (`kc9kUrlWords`, already built for term lists). Needs:
       lists that hold both, an upgrade that joins the split lists back
       where nothing was lost, the create dialog with three boxes, `--terms`
-      kept as an alias. Search lists: open decision (SPEC §7). (M)
+      kept as an alias. (M)
 - [ ] **Phrase sets in the GUI** (§4.3, decision 2026-11-14): **Differs.**
       - "New phrase set" with no name makes nothing, silently (`create_phrase_set`
         drops an empty name). A set without a name must get one.
@@ -220,7 +220,6 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Item | Status | Notes |
 |---|---|---|
 | Site, URL entry, wildcard | Built | website lists |
-| Search list, search entry | Not built | the `search` detector exists, not the list |
 | File URL, `file://*` default | Partial | every new block has the exception `file://*` (R-LIST-3); file URL entries in blacklists don't block anything yet |
 | App (name, path, script, fingerprint, Flatpak, desktop unit) | Built | `blocker/scripts.go`, `blocker/process.go` |
 | Folder entry | Partial | programs inside it are closed; windows showing it are not |
@@ -236,7 +235,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Block, list, scope, blacklist, exception list | Built | |
 | Allowlist block | Built | `block create --allowlist` |
 | Cluster | Built | |
-| Lists with scope boxes, no types | Differs | see 0.1; search lists: Not built, open decision |
+| Lists with scope boxes, no types | Differs | see 0.1 |
 | Phrase sets in clusters | Built | `cluster create --phrases`, `cluster save`, `cluster copy` |
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |
@@ -328,7 +327,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Workaround detection | Built | proxies, mirrors, front-ends, fetch tools |
 | Settings password | Built | needed to set a lock only with `kc9k password locks on` |
 | Access passwords, setting locks | Built | |
-| Block password (§3.11) | Not built | hides a block's contents; what else it guards: open decision |
+| Block password (§3.11) | Not built | hides a block's contents; guards viewing only (decision 2026-11-14) |
 | No weakening during active locks (R-WEAK-4) | Built | `kc9k no-weakening`: strict mode, browser settings, global bypass prevention, settings password. Other settings (stats, options, no-escape uses its own rule): Unchecked |
 | Event counting (R-EVENT-1) | Unchecked | |
 | Link recording | Built | |
@@ -455,10 +454,6 @@ Everything marked Not built or Partial above.
 
 - [ ] Build without `TAGS=devmaster` (no master password).
 - [ ] Remove `ci/vm.sh`.
-- [ ] Rename to **Nepsis** (decision 2026-11-14): the program, command,
-      package, interface, docs and the GitHub repository. Until launch the
-      names stay. Whether Frozen Chicken and other names change: open
-      decision (`SPEC.md` §7).
 - [ ] On the test laptop, remove `/etc/sudoers.d/99-claude-test`.
 - [ ] A pass over `README.md`; a tagged release.
 

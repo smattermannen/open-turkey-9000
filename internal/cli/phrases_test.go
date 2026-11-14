@@ -404,3 +404,88 @@ func TestRPhrase10(t *testing.T) {
 		t.Error("recording into a phrase set started")
 	}
 }
+
+// R-PHRASE-6: a term list may look at the url; its terms go to the
+// extension as url_terms (read in the decoded address) and never to the
+// hosts file, the firewall or the browser policy.
+func TestRPhrase6(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "list", "create", "b", "Url words", "--url", "--terms")
+	mustRun(t, "list", "add", "b", "Url words", "porn", "long cat", "*casino*")
+	if err := runCLI(t, "list", "add", "b", "Url words", "***"); err == nil {
+		t.Error("an entry of only wildcards was accepted")
+	}
+	l := list(t, d, "b", "Url words")
+	if l.Type != db.ListTerm || l.Where != (db.Where{URL: true}) || len(l.Entries) != 3 {
+		t.Fatalf("Url words = %+v", l)
+	}
+	// An address list doesn't take a lone word; a term list does.
+	if err := runCLI(t, "list", "add", "b", "Blocked", "porn"); err == nil {
+		t.Error("an address list took a lone word")
+	}
+	mustRun(t, "list", "create", "b", "Lectures", "--exceptions", "--url", "--title")
+	mustRun(t, "list", "add", "b", "Lectures", "lecture")
+	mustRun(t, "list", "add", "b", "Blocked", "reddit.com")
+	mustRun(t, "start", "b")
+	defer mustRun(t, "stop", "b")
+	rules, err := enforce.BuildRules(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rule *enforce.ListRule
+	for i := range rules.Lists {
+		if rules.Lists[i].ID == l.ID {
+			rule = &rules.Lists[i]
+		}
+	}
+	if rule == nil || len(rule.URL) != 0 || strings.Join(rule.URLTerms, "|") != "porn|long cat|*casino*" ||
+		strings.Join(rule.Except.URLTerms, "|") != "lecture" || strings.Join(rule.Except.Title, "|") != "lecture" {
+		t.Errorf("rule = %+v", rule)
+	}
+	active, err := d.GetActiveBlocks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A term exception spares pages by their words, which hosts and the
+	// firewall can't see: the block's addresses stay with the extension.
+	hosts, _, policy := enforce.Inputs(active)
+	if len(hosts) != 0 || len(policy.BlockDomains)+len(policy.BlockPatterns) != 0 {
+		t.Errorf("hosts %q, policy %+v; want nothing outside the extension", hosts, policy)
+	}
+	mustRun(t, "stop", "b")
+	mustRun(t, "list", "delete", "b", "Lectures")
+	mustRun(t, "start", "b")
+	active, _ = d.GetActiveBlocks()
+	hosts, _, policy = enforce.Inputs(active)
+	if strings.Join(hosts, "|") != "reddit.com" || strings.Contains(strings.Join(policy.BlockPatterns, "|"), "casino") {
+		t.Errorf("hosts %q, patterns %q; want reddit.com only", hosts, policy.BlockPatterns)
+	}
+
+	// Clusters keep the type through save, copy and a .txt file.
+	mustRun(t, "cluster", "save", "b", "Url words", "words")
+	if c, _ := d.GetCluster("words"); c.Type != db.ListTerm || c.Where != (db.Where{URL: true}) {
+		t.Errorf("saved cluster = %+v", c)
+	}
+	mustRun(t, "cluster", "copy", "words", "b", "--as", "Again")
+	if l := list(t, d, "b", "Again"); l.Type != db.ListTerm || l.Where != (db.Where{URL: true}) || len(l.Entries) != 3 {
+		t.Errorf("copied list = %+v", l)
+	}
+	file := filepath.Join(t.TempDir(), "words.txt")
+	if err := os.WriteFile(file, []byte(capture(t, "cluster", "export", "words")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "cluster", "import", "words2", file)
+	if c, _ := d.GetCluster("words2"); c.Type != db.ListTerm || c.Where != (db.Where{URL: true}) || len(c.Entries) != 3 {
+		t.Errorf("imported cluster = %+v", c)
+	}
+	// And block files.
+	out := strings.Replace(capture(t, "block", "export", "b"), `"name": "b"`, `"name": "copy"`, 1)
+	if err := os.WriteFile(file, []byte(out), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "import", file)
+	if l := list(t, d, "copy", "Url words"); l.Type != db.ListTerm || l.Where != (db.Where{URL: true}) {
+		t.Errorf("imported list = %+v", l)
+	}
+}

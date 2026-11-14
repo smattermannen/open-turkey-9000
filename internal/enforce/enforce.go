@@ -48,10 +48,10 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 		if pageExceptions(b.Lists) {
 			continue
 		}
-		except := urlEntries(b.Lists.ExceptionEntries(db.PlaceURL))
+		except := urlEntries(b.Lists.ExceptionAddresses())
 		used := false
 		for _, l := range b.Lists.Blacklists() {
-			if !l.Enforces() || !l.Where.URL || !l.HasAction(db.ActionBlock) {
+			if !l.Enforces() || !l.IsAddress() || !l.HasAction(db.ActionBlock) {
 				continue
 			}
 			used = true
@@ -79,7 +79,7 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 
 // pageExceptions reports whether a block has exceptions by title or text.
 func pageExceptions(lists db.Lists) bool {
-	return len(lists.ExceptionEntries(db.PlaceTitle))+len(lists.ExceptionEntries(db.PlaceText)) > 0
+	return len(lists.ExceptionTerms(db.PlaceURL))+len(lists.ExceptionTerms(db.PlaceTitle))+len(lists.ExceptionTerms(db.PlaceText)) > 0
 }
 
 // titleGuard closes apps whose window titles contain blocked keywords.

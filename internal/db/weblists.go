@@ -24,6 +24,41 @@ const (
 	ListExceptions = "exceptions"
 )
 
+// List types (§3.2): an address list holds sites and URL entries matched
+// against the address; a term list holds rendered terms, matched where its
+// scope says (url, title, text).
+const (
+	ListAddress = "address"
+	ListTerm    = "term"
+)
+
+// DefaultType is the type places suggest when none is given: the address
+// alone makes an address list, anything else a term list.
+func DefaultType(w Where) string {
+	if w.URL && !w.Title && !w.Text {
+		return ListAddress
+	}
+	return ListTerm
+}
+
+// CheckScope refuses places a list of the type can't look at: an address
+// list looks only at the address; a term list anywhere, but somewhere.
+func CheckScope(typ string, w Where) error {
+	switch typ {
+	case ListAddress:
+		if !w.URL || w.Title || w.Text {
+			return fmt.Errorf("an address list looks only at the address; for words in the title or text make a term list")
+		}
+		return nil
+	case ListTerm:
+		if !w.Any() {
+			return fmt.Errorf("a term list looks at the url, the title or the text")
+		}
+		return nil
+	}
+	return fmt.Errorf("invalid list type %q", typ)
+}
+
 // Where a list looks.
 const (
 	PlaceURL   = "url"
@@ -52,6 +87,7 @@ const webListsSchema = `CREATE TABLE IF NOT EXISTS web_lists (
     in_url   BOOLEAN NOT NULL DEFAULT 1,
     in_title BOOLEAN NOT NULL DEFAULT 0,
     in_text  BOOLEAN NOT NULL DEFAULT 0,
+    type     TEXT NOT NULL DEFAULT '',
     UNIQUE (block_id, name),
     FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
 );
@@ -133,21 +169,10 @@ func (w Where) Type() string {
 	return TypeTerm
 }
 
-// CheckWhere refuses a list that would look at the address and at the page
-// too: a list is an address list or a term list (§3.2).
-func CheckWhere(w Where) error {
-	if !w.Any() {
-		return fmt.Errorf("a list looks at the address (an address list), or at the title and/or text (a term list)")
-	}
-	if w.URL && (w.Title || w.Text) {
-		return fmt.Errorf("a list is an address list (url) or a term list (title, text), not both: make a second list for the other")
-	}
-	return nil
-}
-
-// SplitMixed turns each list that looks at the address and at the page into
-// an address list and a term list with the same entries and actions, which
-// match exactly what the one list did. The term list is named "<name> terms".
+// SplitMixed turns each untyped list (from before types) that looks at the
+// address and at the page into an address list and a term list with the
+// same entries and actions, which match exactly what the one list did. The
+// term list is named "<name> terms". Typed lists are kept as they are.
 func SplitMixed(lists Lists) Lists {
 	var out Lists
 	taken := map[string]bool{}
@@ -155,13 +180,13 @@ func SplitMixed(lists Lists) Lists {
 		taken[strings.ToLower(l.Name)] = true
 	}
 	for _, l := range lists {
-		if !(l.Where.URL && (l.Where.Title || l.Where.Text)) {
+		if l.Type != "" || !(l.Where.URL && (l.Where.Title || l.Where.Text)) {
 			out = append(out, l)
 			continue
 		}
 		address, terms := l, l
-		address.Where = Where{URL: true}
-		terms.Where = Where{Title: l.Where.Title, Text: l.Where.Text}
+		address.Where, address.Type = Where{URL: true}, ListAddress
+		terms.Where, terms.Type = Where{Title: l.Where.Title, Text: l.Where.Text}, ListTerm
 		terms.Name = freeListName(l.Name+" terms", taken)
 		terms.ID = 0
 		out = append(out, address, terms)
@@ -215,10 +240,16 @@ type ListAction struct {
 type WebList struct {
 	ID      int
 	Kind    string
+	Type    string // ListAddress or ListTerm
 	Name    string
 	Where   Where
 	Entries []string
 	Actions []ListAction // blacklists only, in ActionNames order
+}
+
+// IsAddress reports whether the list is an address list.
+func (l WebList) IsAddress() bool {
+	return l.Type == ListAddress || (l.Type == "" && DefaultType(l.Where) == ListAddress)
 }
 
 // IsExceptions reports whether the list is an exception list.
@@ -300,12 +331,23 @@ func (ls Lists) Enforces() bool {
 	return false
 }
 
-// ExceptionEntries returns the entries of the exception lists that look at
-// the place.
-func (ls Lists) ExceptionEntries(place string) []string {
+// ExceptionAddresses returns the entries of the address exception lists.
+func (ls Lists) ExceptionAddresses() []string {
 	var out []string
 	for _, l := range ls {
-		if l.IsExceptions() && l.Where.Has(place) {
+		if l.IsExceptions() && l.IsAddress() {
+			out = append(out, l.Entries...)
+		}
+	}
+	return out
+}
+
+// ExceptionTerms returns the entries of the term exception lists that look
+// at the place (url: terms in the decoded address, R-PHRASE-6).
+func (ls Lists) ExceptionTerms(place string) []string {
+	var out []string
+	for _, l := range ls {
+		if l.IsExceptions() && !l.IsAddress() && l.Where.Has(place) {
 			out = append(out, l.Entries...)
 		}
 	}
@@ -331,7 +373,7 @@ type querier interface {
 }
 
 func getBlockLists(q querier, blockID int) (Lists, error) {
-	rows, err := q.Query(`SELECT id, kind, name, in_url, in_title, in_text FROM web_lists
+	rows, err := q.Query(`SELECT id, kind, type, name, in_url, in_title, in_text FROM web_lists
 		WHERE block_id = ? ORDER BY CASE kind WHEN 'blacklist' THEN 0 ELSE 1 END, id`, blockID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch website lists: %w", err)
@@ -339,7 +381,7 @@ func getBlockLists(q querier, blockID int) (Lists, error) {
 	var lists Lists
 	for rows.Next() {
 		var l WebList
-		if err := rows.Scan(&l.ID, &l.Kind, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text); err != nil {
+		if err := rows.Scan(&l.ID, &l.Kind, &l.Type, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("failed to read a website list: %w", err)
 		}
@@ -426,8 +468,8 @@ func (d *DB) ListID(blockName, listName string) (int, error) {
 // GetList returns one list by id.
 func (d *DB) GetList(listID int) (WebList, error) {
 	var l WebList
-	err := d.conn.QueryRow("SELECT id, kind, name, in_url, in_title, in_text FROM web_lists WHERE id = ?", listID).
-		Scan(&l.ID, &l.Kind, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text)
+	err := d.conn.QueryRow("SELECT id, kind, type, name, in_url, in_title, in_text FROM web_lists WHERE id = ?", listID).
+		Scan(&l.ID, &l.Kind, &l.Type, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text)
 	if err == sql.ErrNoRows {
 		return l, fmt.Errorf("the list no longer exists")
 	}
@@ -443,18 +485,21 @@ func (d *DB) GetList(listID int) (WebList, error) {
 	return l, err
 }
 
-func createList(q querier, blockID int, kind, name string, where Where) (int, error) {
+func createList(q querier, blockID int, kind, typ, name string, where Where) (int, error) {
 	if kind != ListBlacklist && kind != ListExceptions {
 		return 0, fmt.Errorf("invalid list kind %q", kind)
 	}
 	if err := CheckListName(name); err != nil {
 		return 0, err
 	}
-	if err := CheckWhere(where); err != nil {
+	if typ == "" {
+		typ = DefaultType(where)
+	}
+	if err := CheckScope(typ, where); err != nil {
 		return 0, err
 	}
-	res, err := q.Exec("INSERT INTO web_lists (block_id, kind, name, in_url, in_title, in_text) VALUES (?, ?, ?, ?, ?, ?)",
-		blockID, kind, name, where.URL, where.Title, where.Text)
+	res, err := q.Exec("INSERT INTO web_lists (block_id, kind, type, name, in_url, in_title, in_text) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		blockID, kind, typ, name, where.URL, where.Title, where.Text)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return 0, fmt.Errorf("the block already has a list named '%s'", name)
@@ -473,13 +518,19 @@ func createList(q querier, blockID int, kind, name string, where Where) (int, er
 	return int(id), nil
 }
 
-// CreateList adds a list to a block. A new blacklist blocks what it matches.
+// CreateList adds a list to a block, of the type its places suggest (see
+// DefaultType). A new blacklist blocks what it matches.
 func (d *DB) CreateList(blockName, kind, name string, where Where) (int, error) {
+	return d.CreateTypedList(blockName, kind, DefaultType(where), name, where)
+}
+
+// CreateTypedList adds an address or term list to a block.
+func (d *DB) CreateTypedList(blockName, kind, typ, name string, where Where) (int, error) {
 	blockID, err := d.getBlockID(blockName)
 	if err != nil {
 		return 0, err
 	}
-	return createList(d.conn, blockID, kind, name, where)
+	return createList(d.conn, blockID, kind, typ, name, where)
 }
 
 // RenameList renames a list. Queued edits name lists by id, so they follow.
@@ -504,9 +555,16 @@ func (d *DB) DeleteList(listID int) error {
 	return nil
 }
 
-// SetListWhere sets where a list looks.
+// SetListWhere sets where a list looks, within what its type allows.
 func (d *DB) SetListWhere(listID int, where Where) error {
-	if err := CheckWhere(where); err != nil {
+	var typ string
+	if err := d.conn.QueryRow("SELECT type FROM web_lists WHERE id = ?", listID).Scan(&typ); err != nil {
+		return fmt.Errorf("failed to read the list: %w", err)
+	}
+	if typ == "" {
+		typ = DefaultType(where)
+	}
+	if err := CheckScope(typ, where); err != nil {
 		return err
 	}
 	_, err := d.conn.Exec("UPDATE web_lists SET in_url = ?, in_title = ?, in_text = ? WHERE id = ?",
@@ -634,7 +692,7 @@ func (d *DB) copyLists(from Lists, toBlock string) error {
 		return err
 	}
 	for _, l := range SplitMixed(from) {
-		id, err := createList(d.conn, blockID, l.Kind, l.Name, l.Where)
+		id, err := createList(d.conn, blockID, l.Kind, l.Type, l.Name, l.Where)
 		if err != nil {
 			return err
 		}
@@ -663,10 +721,10 @@ func (d *DB) SetLists(blockName string, lists Lists) error {
 
 // createDefaultLists gives a new block an empty blacklist and exception list.
 func createDefaultLists(q querier, blockID int) error {
-	if _, err := createList(q, blockID, ListBlacklist, DefaultBlockedList, Where{URL: true}); err != nil {
+	if _, err := createList(q, blockID, ListBlacklist, "", DefaultBlockedList, Where{URL: true}); err != nil {
 		return err
 	}
-	id, err := createList(q, blockID, ListExceptions, DefaultExceptionsList, Where{URL: true})
+	id, err := createList(q, blockID, ListExceptions, "", DefaultExceptionsList, Where{URL: true})
 	if err != nil {
 		return err
 	}
@@ -809,7 +867,7 @@ func migrateBlockLists(conn *sql.DB, blockID int) error {
 		return nil
 	}
 
-	id, err := createList(tx, blockID, ListBlacklist, DefaultBlockedList, Where{URL: true})
+	id, err := createList(tx, blockID, ListBlacklist, "", DefaultBlockedList, Where{URL: true})
 	if err != nil {
 		return err
 	}
@@ -819,14 +877,14 @@ func migrateBlockLists(conn *sql.DB, blockID int) error {
 	if err := setActions(id, false); err != nil {
 		return err
 	}
-	if id, err = createList(tx, blockID, ListExceptions, DefaultExceptionsList, Where{URL: true}); err != nil {
+	if id, err = createList(tx, blockID, ListExceptions, "", DefaultExceptionsList, Where{URL: true}); err != nil {
 		return err
 	}
 	if err := addListEntries(tx, id, allowed); err != nil {
 		return err
 	}
 	if len(keywords) > 0 {
-		if id, err = createList(tx, blockID, ListBlacklist, DefaultWordsList, Where{Text: true}); err != nil {
+		if id, err = createList(tx, blockID, ListBlacklist, "", DefaultWordsList, Where{Text: true}); err != nil {
 			return err
 		}
 		if err := addListEntries(tx, id, keywords); err != nil {

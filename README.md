@@ -83,10 +83,9 @@ For a Flatpak app, block it by its app ID (see `flatpak list --app`). This is mo
 kc9k block add-app social-media com.discordapp.Discord
 ```
 
-Seed from a built-in template (`social-media`, `video`, `streaming`, `news`, `forums`, `games`, `gambling`, `shopping`, `music`, `messaging`, `dating`, `ai-chat`, `sports`, `finance`), or block every website except the ones you add as exceptions:
+KC9K ships no ready-made lists: you build your own, and keep them as [clusters](#clusters) to reuse. To block every website except the ones you add as exceptions:
 
 ```bash
-kc9k block create focus --template social-media
 kc9k block create work  --allowlist          # *.* in Blocked
 kc9k block add-exception work docs.python.org
 ```

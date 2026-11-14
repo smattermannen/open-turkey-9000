@@ -199,8 +199,7 @@ Command and code names are in `backticks`.
 | **Exception list** | List kind: matches are spared from the blacklists and phrase sets **of the same block only**. There are no phrase exceptions. *CT: Website Exceptions.* | An allowlist block. |
 | **Allowlist block** | A block whose blacklist is `*.*`, so that only its exceptions are reachable. | — |
 | **Cluster** | A list or phrase set belonging to no block: never enforced, always freely editable, copied into blocks. | A list. |
-| **Category** | A read-only list or phrase set shipped with KC9K (Social, News, Adult, …). Importing one into a block copies it. *CT: Website categories.* | A cluster, a template. |
-| **Template** | A ready-made block definition to create a block from. | A category. |
+| **Template** | A ready-made block definition to create a block from. | A cluster. |
 | **Affected users** | The local user accounts a block applies to (default: all). For shared computers; only an administrator sets them. | — |
 | **Social preset** | A switch that keeps a site but takes a part of it away (YouTube without Shorts, Instagram messages only, …). Also: an allowed YouTube playlist. | A list. |
 | **Test mode** | A term list or phrase set reports what it would match instead of acting. Set per list and per phrase set. | — |
@@ -404,7 +403,7 @@ import.
 - **Find entry**: Ctrl+F.
 - **Save changes / Cancel**: one draft per block; nothing is applied until
   Save. On a locked block, Save refuses the weakening changes and says which.
-- **Import**: *From KC9K* (categories, lists and phrase sets of other blocks,
+- **Import**: *From KC9K* (lists and phrase sets of other blocks,
   clusters; several at once) or *From file* (`.txt`, one entry per line).
   Also *Whole internet* and *All searches containing…*.
 - **Export** a list or phrase set to `.txt`.
@@ -547,7 +546,7 @@ old names keep working for a while.
 
 **Lists and phrases**
 - **R-LIST-1** Exceptions spare pages only from their own block's blacklists and phrase sets.
-- **R-LIST-2** Clusters and categories are never enforced.
+- **R-LIST-2** Clusters are never enforced.
 - **R-LIST-3** Every new block has the exception `file://*`.
 - **R-LIST-4** Text means rendered, visible text: hidden or collapsed text doesn't count; text further down the page does. Each frame is judged on its own text.
 - **R-LIST-5** Upper and lower case and accents are ignored (é = e); look-alike letters from other alphabets count as their Latin letters. Languages without spaces between words are out of scope.
@@ -561,7 +560,7 @@ old names keep working for a while.
 - **R-PHRASE-7** A bridge skips up to 20 words, or none, between two terms of different word sets: `[big-, strong] [-gorilla, cat]` matches "big and long gorilla" and "big gorilla". The skipped part may hold commas but stays in one sentence (no `.` `!` `?`), and the order is fixed: `big-` before `-gorilla`.
 - **R-PHRASE-8** A bridge needs both ends: `-gorilla` matches only after a `term-` of another word set, so `[-gorilla, cat] [jumping, river]` doesn't match "jumping gigantic gorilla". A phrase with a one-ended bridge is refused when entered. A middle link (`-strong-`) needs at least three word sets.
 - **R-PHRASE-9** Each action of a phrase set has a threshold: how many different phrases of the set must match (default 1). Phrase sets have no hit count and no rate.
-- **R-PHRASE-10** Phrase sets can be exported, imported, kept as clusters and shipped as categories; they take no part in recording.
+- **R-PHRASE-10** Phrase sets can be exported, imported and kept as clusters; they take no part in recording.
 - **R-TITLE-1** Window title entries never apply to browsers.
 
 **Bypass prevention**
@@ -647,6 +646,13 @@ Made with the owner. Newest last.
   prevention step, a list's or phrase set's `monk` action) asks nothing when
   it starts: setting up such a step or action needs ticking "I know this will
   not ask for confirmation".
+
+- 2026-11-14: Word combinations become phrases once: each box a word set,
+  its `:N` (several words from one box) dropped; a phrase set's threshold of
+  different phrases does that job. The new phrase sets start at threshold 1.
+- 2026-11-14: No categories: KC9K ships no ready-made lists or phrase sets
+  (the 14 lists behind `block create --template` go too). Users build
+  their own and keep them as clusters.
 
 ## 7. Open decisions
 

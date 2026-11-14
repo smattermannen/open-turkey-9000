@@ -337,7 +337,7 @@ Full usage and examples in `README.md`. Summary:
 `list show | create [--exceptions --terms --url --title --text] | rename | delete | add | remove | scope | action |
 threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
 `bypass` (old name `nepsis`) `[set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,
-`block create [--allowlist] [--template T] | add | add-exception | add-app | add-title | remove-title |
+`block create [--allowlist] | add | add-exception | add-app | add-title | remove-title |
 remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock | --text-lock] [--lock-chars N] [--lock-words | --lock-text T] [--for D | --until HH:MM]`,
 `strict on|off|unlock [lock flags]`, `no-weakening on|off`, `password locks on|off`, `dns [network|quad9|IPs]`,

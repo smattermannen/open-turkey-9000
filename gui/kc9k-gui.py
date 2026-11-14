@@ -29,13 +29,6 @@ STATS_REFRESH_SECONDS = 30
 # Pointer events for the charts' hover.
 POINTER_EVENTS = Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK
 
-# Ready-made site lists for a new block (internal/cli/templates.go).
-TEMPLATES = (
-    ("social-media", "Social media"), ("video", "Video"), ("streaming", "Streaming services"),
-    ("news", "News"), ("forums", "Forums"), ("games", "Games"), ("gambling", "Gambling"),
-    ("shopping", "Shopping"), ("music", "Music"), ("messaging", "Messaging"), ("dating", "Dating"),
-    ("ai-chat", "AI chat"), ("sports", "Sports"), ("finance", "Finance and trading"),
-)
 # Schedules added with one click: days, from, to.
 SCHEDULE_PRESETS = (
     ("Work hours", "weekdays", "09:00", "17:00"),
@@ -2809,29 +2802,11 @@ class Window(Gtk.ApplicationWindow):
 
     # Block actions -------------------------------------------------------
     def create_block(self, _button):
-        dialog = Gtk.MessageDialog(
-            transient_for=self, modal=True, text="New block",
-            secondary_text="A short name, such as social-media. Starting from a ready-made list fills "
-                           "its Blocked list with well-known sites of that kind; add and remove as you like.",
-            message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
-        entry = Gtk.Entry(activates_default=True, placeholder_text="Name")
-        combo = Gtk.ComboBoxText()
-        combo.append("", "Start empty")
-        for key, label in TEMPLATES:
-            combo.append(key, f"Start from: {label}")
-        combo.set_active_id("")
-        dialog.set_default_response(Gtk.ResponseType.OK)
-        area = dialog.get_message_area()
-        area.pack_start(entry, False, False, 0)
-        area.pack_start(combo, False, False, 0)
-        dialog.show_all()
-        answer = dialog.run()
-        name, template = entry.get_text().strip(), combo.get_active_id()
-        dialog.destroy()
-        if answer == Gtk.ResponseType.OK and name:
+        name = self.ask_text("New block", "A short name, such as social-media.")
+        if name:
             self.selected = name
             self.stack.set_visible_child_name("blocks")
-            self.run(["block", "create", name] + (["--template", template] if template else []))
+            self.run(["block", "create", name])
 
     def rename_block(self, _button):
         name = self.ask_text("Rename block", initial=self.selected or "")

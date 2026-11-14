@@ -144,7 +144,6 @@ var blockCmd = &cobra.Command{
 // Usage:
 //
 //	kc9k block create social-media
-//	kc9k block create focus --template social-media
 //	kc9k block create work --allowlist
 var blockCreateCmd = &cobra.Command{
 	Use:   "create [name]",
@@ -153,29 +152,14 @@ var blockCreateCmd = &cobra.Command{
 ("Exceptions") that look at addresses. See 'kc9k list' for more lists.
 
   --allowlist         Block every website (*.* in Blocked) except what you add
-                      to Exceptions.
-  --template NAME     Seed Blocked from a built-in list (social-media, news,
-                      video, shopping).`,
+                      to Exceptions.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		allowlist, _ := cmd.Flags().GetBool("allowlist")
-		template, _ := cmd.Flags().GetString("template")
-
-		// Resolve template seeds (validated) before touching the database, so a
-		// bad template name fails cleanly with nothing created.
 		var seeds []string
-		if template != "" {
-			raw, err := templateDomains(template)
-			if err != nil {
-				return err
-			}
-			if seeds, err = prepareEntries(db.ListAddress, db.Where{URL: true}, raw); err != nil {
-				return err
-			}
-		}
 		if allowlist {
-			seeds = append([]string{"*.*"}, seeds...)
+			seeds = []string{"*.*"}
 		}
 
 		database, err := openDB()
@@ -199,9 +183,6 @@ var blockCreateCmd = &cobra.Command{
 		fmt.Printf("Block '%s' created successfully.\n", name)
 		if allowlist {
 			fmt.Printf("It blocks every website; add the ones to allow with 'kc9k block add-exception %s <sites>'.\n", name)
-		}
-		if template != "" {
-			fmt.Printf("Seeded %d sites from template '%s'.\n", len(seeds), template)
 		}
 		return nil
 	},
@@ -612,7 +593,6 @@ func init() {
 
 	// Flags for "block create".
 	blockCreateCmd.Flags().Bool("allowlist", false, "Block every website except what you add to its Exceptions list")
-	blockCreateCmd.Flags().String("template", "", "Seed the block from a built-in list: "+availableTemplates())
 
 	// Add every subcommand as a child of "block".
 	addNowFlag(blockRemoveAppCmd, blockRemoveCmd)

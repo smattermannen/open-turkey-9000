@@ -70,7 +70,7 @@ Last checked against the code: 2026-11-13.
       `cluster scope` (alias `where`), `break text` (alias `relock`).
       Also done: `kc9k allowance` (alias `quota`), `break reward` (alias
       `allowance`) and their messages. Left: option (behaviour setting),
-      template (category), active for enforcing, and `README.md` prose. (S)
+      active for enforcing, and `README.md` prose. (S)
 - [ ] **Page reading is slow on big pages** (principle 9). In every frame,
       `content.js` reads the whole page (`body.innerText`, up to 2 MB, which
       makes the browser lay out the page) every 1.5 s while the page changes,
@@ -108,10 +108,8 @@ Last checked against the code: 2026-11-13.
       - **`/etc/hosts`:** one line per domain; how fast Mint's resolver
         reads a huge hosts file: Unchecked.
       A speed test in `ci/` with 100,000 entries. (M)
-- [ ] **Phrases** (R-PHRASE-1 to 10): today's word combinations sit inside
-      title and text lists, need every box, take several words from one box
-      (`:N`), and have no length, bridges, URL scope or phrase sets. Rebuild
-      them as phrase sets. Done: the matcher (`kc9kPhraseMatcher`,
+- [ ] **Phrases** (R-PHRASE-1 to 10): built; left to confirm in real use
+      (section 0.2). Done: the matcher (`kc9kPhraseMatcher`,
       `kc9kPhraseCheck` in `match.js`: word sets, necessary/optional,
       length, one term per set, adjacency, sentence breaks, hyphens and
       apostrophes, bridges and middle links, url scope), tested on SPEC's
@@ -121,11 +119,11 @@ Last checked against the code: 2026-11-13.
       the extension, and the GUI (a phrase set card per set on the
       Websites tab, `PhraseDialog`; `ci/gui_phrase_smoke.py`), block and
       project files, `.txt` export/import, and phrase clusters
-      (`cluster create --phrases`, `save`, `copy`). Left: categories
-      (waiting for the owner: how one is imported, and which phrase-set
-      categories ship). Existing combinations become phrases
-      (`db/combinations.go`, `migrateCombinations`): each box a word set,
-      `:N` dropped, thresholds 1 (the owner's decision, 2026-11-14). (L)
+      (`cluster create --phrases`, `save`, `copy`). Existing combinations
+      became phrases (`db/combinations.go`, `migrateCombinations`): each
+      box a word set, `:N` dropped, thresholds 1 (the owner's decision,
+      2026-11-14). Categories are dropped (the owner's decision, same day):
+      the 14 shipped lists and `block create --template` are gone. (L)
 - [ ] **List names differ only in case** (§3.2): `list create b words`
       succeeds beside `Words`, while lists are looked up without regard to
       case, so one of them can't be reached. Phrase sets refuse this. (S)
@@ -192,9 +190,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Block, list, scope, blacklist, exception list | Built | |
 | Allowlist block | Built | `block create --allowlist` |
 | Cluster | Built | |
-| Category | Partial | 14 shipped lists, offered only when creating a block (`--template`) |
 | Address, term and search lists | Partial | address and term lists; search lists: Not built |
-| Phrase sets in clusters and categories | Partial | clusters built (`cluster create --phrases`); categories: Not built |
+| Phrase sets in clusters | Built | `cluster create --phrases`, `cluster save`, `cluster copy` |
 | Template (a block definition) | Not built | |
 | Affected users | Not built | |
 | Social preset, allowed playlist | Built | see 0.2 |

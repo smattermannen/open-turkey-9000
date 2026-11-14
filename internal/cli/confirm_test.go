@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 )
@@ -211,5 +212,40 @@ func TestRLOCK12_ProjectImportConfirmation(t *testing.T) {
 	}
 	if s, _ := d.ListFreezeSchedules(); len(s) != 1 || s[0].LockLead != 60 {
 		t.Errorf("imported freeze schedules = %+v", s)
+	}
+}
+
+// R-LOCK-12: a hotkey's lock is confirmed when the hotkey is added (the
+// owner's choice: a pressed hotkey has no terminal); pressing it then sets
+// the lock without asking.
+func TestRLOCK12_HotkeyConfirmedWhenAdded(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	old := syncDesktopHotkeys
+	syncDesktopHotkeys = func([]blocker.DesktopHotkey) error { return nil }
+	t.Cleanup(func() { syncDesktopHotkeys = old })
+	blockWithSite(t)
+
+	err := runCLI(t, "hotkey", "add", "ctrl+alt+s", "b", "--for", "1h")
+	if err == nil || !strings.Contains(err.Error(), "--yes") {
+		t.Fatalf("hotkey add with a lock, unconfirmed: %v", err)
+	}
+	if keys, _ := d.Hotkeys(); len(keys) != 0 {
+		t.Fatalf("the hotkey was added without confirmation: %+v", keys)
+	}
+	mustRun(t, "hotkey", "add", "ctrl+alt+k", "b") // no lock, no question
+	mustRun(t, "hotkey", "add", "ctrl+alt+s", "b", "--for", "1h", "--yes")
+	keys, _ := d.Hotkeys()
+	if len(keys) != 2 {
+		t.Fatalf("hotkeys = %+v", keys)
+	}
+	locked := keys[0]
+	if locked.LockFor == "" {
+		locked = keys[1]
+	}
+	mustRun(t, "hotkey", "run", fmt.Sprint(locked.ID))
+	b, _ := d.GetBlock("b")
+	if !b.Active || b.LockedUntil == 0 {
+		t.Errorf("pressing the hotkey: active = %v, locked until %d", b.Active, b.LockedUntil)
 	}
 }

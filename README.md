@@ -545,7 +545,7 @@ kc9k hotkey list
 kc9k hotkey remove 1
 ```
 
-Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password when you add it, not each time you press it. The interface has them under Settings.
+Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password, and asks you to confirm the lock, when you add it (`--yes` for scripts), not each time you press it. The interface has them under Settings.
 
 ## How apps are recognised
 

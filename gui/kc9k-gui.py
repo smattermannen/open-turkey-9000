@@ -3616,7 +3616,11 @@ class Window(Gtk.ApplicationWindow):
             return
         args = ["hotkey", "add", values[0], values[1]]
         if len(values) == 3:
-            args += ["--for", values[2]]
+            # R-LOCK-12: a hotkey's lock is confirmed once, when it is added.
+            if not self.confirm_lock([f"block '{values[1]}': timer lock, set each time {values[0]} "
+                                      f"is pressed, {values[2]} from the press"]):
+                return
+            args += ["--for", values[2], "--yes"]
         self.run(args)
 
     def set_settings_password(self, _button):

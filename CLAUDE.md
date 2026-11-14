@@ -252,6 +252,28 @@ build and is **used for real**. On it:
   behaviour switches, never held: `polite-close` (`blocker/polite.go`: a
   blocked app's windows are asked to close, killed a cycle later; `Apply`
   leaves kills to the daemon then) and `block-page-details`.
+- **Circadian rhythm** (§4.10; `internal/circadian/` pure logic,
+  `enforce/circadian.go` engine, `cli/circadian.go`, `CircadianPage` and
+  `ClipEditor` in the GUI): never locked, never gated. Settings are JSON in
+  the settings table: `circadian` (`circadian.Config`: three clips of
+  `Point{Minute, Value, Tension}`, wallpapers, dark mode, dark pages),
+  `circadian.paused`, `.preview`, `.applied`, `.resume`, `.status`.
+  `RunCircadian` steps every 5 s in its own goroutine (`daemon.go`), never
+  inside `Tick`; external screens (`ddcutil`) and the night light check
+  every 30 s. It never overrides the user: a level that isn't what KC9K
+  last wrote pauses its clip until the next point (`PauseBacklight`,
+  `PauseExternal`, `PauseGamma`; software brightness and kelvin are one
+  gamma ramp). Plain ramps count as "apply", someone else's as a pause,
+  except right after start. Wallpaper and dark mode are given once per
+  change of key (`WallpaperKey`, `DarkKey`). `kc9k circadian preview`
+  drives the hardware itself (`PreviewCircadian`) and the engine adopts
+  what it wrote. Hardware is behind the `circadian*` vars
+  (`fakeCircadian` in tests); with `KC9K_DB` set nothing is applied
+  (`circadianDry`). Wallpapers live in `<db dir>/wallpapers` (0644).
+  `rules.dark` (`CircadianDarkRule`) feeds `darkPage` in content.js.
+  The clip curve (`circadian.Shape`) is mirrored by `clip_shape` in the
+  GUI; `ci/gui_circadian_smoke.py` is the GUI smoke test (run it under
+  `xvfb-run -a`).
 - **Pauses** (`db/pauses.go`, `enforce/soon.go`): `block_pauses` lifts an
   active block until a trusted time; `pausedFor` (Pomodoro break or pause)
   is what `withoutBreaks` checks. `rules.soon` (quota left, break left,
@@ -336,7 +358,7 @@ remove-app | action | export | import | export-list | import-list | list |
 info | remove`, `start [--lock | --text-lock] [--lock-chars N] [--lock-words | --lock-text T] [--for D | --until HH:MM]`,
 `strict on|off|unlock [lock flags]`, `no-weakening on|off`, `password locks on|off`, `dns [network|quad9|IPs]`,
 `stop`, `unlock`, `status`, `schedule add [--allow]|list|remove`,
-`pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `break …`, `social …`, `place …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
+`pending [cancel N | delay <block> [D]]` (loosening edits take `--now`; the delay is per block, `db.LoosenDelay`), `block add-keyword | remove-keyword | threshold`, `hotkey add [--for D] | list | remove`, `password set|remove`, `access [set|remove <area…>|--all]`, `option [<name> on|off]`, `circadian [show --json | on|off | lane L [on|off] [--points P] | point add|remove | preset [N] | preview L V [--end] | resume [L] | wallpaper add|time|remove | dark … | dark-pages on|off | exempt add|remove | nightlight off]`, `break …`, `social …`, `place …`, `project export|import`, `pomodoro set B W R [--long D --every N]`, `list test <block> [on|off]`, `freeze [--for D --mode M --yes] | freeze schedule add|list|remove` (the daemon's `reconcileFreezeSchedules` starts/extends scheduled freezes), `browser [<option> on|off [lock flags] | unlock <option>]`, `stats [on|off|clear] [--days N] [--json]`, and the hidden
 `prepare-uninstall` (run by `make uninstall`).
 
 `./try-challenge.sh [length]` (source: `cmd/try-challenge/`) builds and runs the

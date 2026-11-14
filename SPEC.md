@@ -71,9 +71,8 @@ mode loophole hunt against a system like this.
 at the press of a key. Sometimes opening an app is too big a hurdle until it
 is too late. A key that is always there breaks the spell when it is needed.
 
-**The circadian rhythm.** KC9K follows the time of day, and the user can lock
-it: dark mode in the browser and in apps, a blue light filter, screen
-brightness, and wallpapers. A bright and positive wallpaper in the morning, a
+**The circadian rhythm.** KC9K follows the time of day: dark mode in the
+browser and in apps, a blue light filter, screen brightness, and wallpapers. A bright and positive wallpaper in the morning, a
 soothing warm one in the late afternoon, a starlit one at night: these are
 cues for the body clock. It also means KC9K isn't "just a blocking app" when
 friends ask.
@@ -353,7 +352,7 @@ mode, unless no-escape is on.
 | **Setting** | Anything the user configures outside blocks. Kinds: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `force-librewolf`, `block-devtools`, `no-private`), **protection setting** (§4.10), **behaviour setting** (never locked, not touched by *no weakening during active locks*: `polite-close`, `block-page-details`), **preference** (the interface only). |
 | **Hotkey** | A desktop key that switches a block on, optionally setting a lock. |
 | **Project** | The whole setup in one file. *Backup*: everything. *Share*: without places and user names. Import shows a preview, only adds, and gives a block that exists already a new name. |
-| **Circadian rhythm** | Settings that follow the time of day: blue light filter, brightness, wallpaper, dark mode in apps and pages. Lockable. |
+| **Circadian rhythm** | Settings that follow the time of day: the screen's brightness and colour temperature (each an **automation clip**: a 24-hour curve of points), wallpaper, dark mode in apps and pages. Never locked, and it never overrides the user. |
 
 ### 3.14 Words to avoid
 
@@ -480,9 +479,23 @@ only on the computer.
   one the computer already uses, so nobody new learns which sites are
   blocked; Quad9 when that one can't answer.
 - **Use counting**: strict use counting.
-- **Circadian rhythm**: per time of day (morning, afternoon, evening, night,
-  at times the user sets): blue light filter, screen brightness, wallpaper,
-  dark mode for apps, dark pages (with exempt sites). Lockable.
+- **Circadian rhythm** (owner's decisions, 2026-11-14):
+  - *Automation clips*, one set for every day: a 24-hour curve each for the
+    backlight (the screen's real brightness, %), software brightness (%)
+    and colour temperature (the blue light filter, in kelvin). The user
+    adds, moves and removes points and bends the curve between two points;
+    ready-made presets to start from.
+  - *Wallpapers*: the user picks a picture and the times between which it
+    shows. There are no fixed periods (morning, afternoon, …).
+  - *Dark mode* is the system's dark mode, on or off, like a phone's: left
+    to the system, always light, always dark, or light between two times.
+  - *Dark pages* follow dark mode, with exempt sites.
+  - *Not lockable.* Nothing of the circadian rhythm can be locked, and no
+    lock holds it.
+  - *It never overrides the user.* KC9K never puts a level back. When the
+    user changes a level by hand, that clip pauses until its next point, or
+    until the user resumes it. A wallpaper or dark mode the user picks by
+    hand stays until the next change the settings call for.
 - **Device protection**: strict mode, no-escape, factory reset protection,
   with a guided setup.
 - **Passwords**: settings password, access passwords.

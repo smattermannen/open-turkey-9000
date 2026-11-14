@@ -53,10 +53,12 @@ func fakeCircadian(t *testing.T) *fakeScreen {
 	t.Helper()
 	f := &fakeScreen{backlight: 500, external: 50, red: plain256(), blue: plain256(), users: 1}
 	dry, backlights, external, ddc := circadianDry, circadianBacklights, circadianExternal, circadianDDC
+	known := circadianExternalKnown
 	readGamma, setGamma := circadianReadGamma, circadianSetGamma
 	setWallpaper, setDark, nightLight := circadianSetWallpaper, circadianSetDark, circadianNightLight
 	t.Cleanup(func() {
 		circadianDry, circadianBacklights, circadianExternal, circadianDDC = dry, backlights, external, ddc
+		circadianExternalKnown = known
 		circadianReadGamma, circadianSetGamma = readGamma, setGamma
 		circadianSetWallpaper, circadianSetDark, circadianNightLight = setWallpaper, setDark, nightLight
 	})
@@ -67,10 +69,11 @@ func fakeCircadian(t *testing.T) *fakeScreen {
 			Set: func(v int) error { f.backlight = v; return nil }}}
 	}
 	circadianExternal = func() []circadianLevel {
-		return []circadianLevel{{Name: "monitor", Max: 100,
+		return []circadianLevel{{Name: "monitor", ID: "1", Max: 100,
 			Get: func() (int, error) { return f.external, nil },
 			Set: func(v int) error { f.external = v; return nil }}}
 	}
+	circadianExternalKnown = func(*db.DB) []circadianLevel { return circadianExternal() }
 	circadianDDC = func() bool { return true }
 	circadianReadGamma = func(want blocker.RampFunc) blocker.GammaReading {
 		if f.noX {
@@ -448,37 +451,47 @@ func TestCircadianPreview(t *testing.T) {
 	if err := PreviewCircadian(d, circadian.LaneBacklight, 20, false, at(9, 0, 1)); err != nil {
 		t.Fatal(err)
 	}
-	if f.backlight != 200 {
-		t.Fatalf("preview wrote %d", f.backlight)
+	if f.backlight != 200 || f.external != 20 {
+		t.Fatalf("preview wrote %d and %d", f.backlight, f.external)
 	}
-	e.Step(at(9, 0, 5))
-	if f.backlight != 200 || len(CircadianPauses(d, at(9, 0, 5))) != 0 {
-		t.Fatalf("during the preview: %d, pauses %v", f.backlight, CircadianPauses(d, at(9, 0, 5)))
-	}
-	if err := PreviewCircadian(d, circadian.LaneKelvin, 2000, false, at(9, 0, 6)); err != nil {
+	// While the backlight is previewed, another clip is previewed too:
+	// neither note hides the other.
+	if err := PreviewCircadian(d, circadian.LaneKelvin, 2000, false, at(9, 0, 2)); err != nil {
 		t.Fatal(err)
 	}
 	_, _, amber := circadian.Ramp(256, 2000, 1)
 	if !near(f.blue, amber) {
 		t.Fatal("the colour preview wasn't shown")
 	}
+	e.Step(at(9, 0, 5))
+	if f.backlight != 200 || !near(f.blue, amber) || len(CircadianPauses(d, at(9, 0, 5))) != 0 {
+		t.Fatalf("during the previews: %d, pauses %v", f.backlight, CircadianPauses(d, at(9, 0, 5)))
+	}
 	if err := PreviewCircadian(d, circadian.LaneKelvin, 0, true, at(9, 0, 7)); err != nil {
 		t.Fatal(err)
 	}
 	e.Step(at(9, 0, 10))
-	if near(f.blue, amber) || len(CircadianPauses(d, at(9, 0, 10))) != 0 {
-		t.Errorf("after the preview: pauses %v", CircadianPauses(d, at(9, 0, 10)))
+	if near(f.blue, amber) || f.backlight != 200 {
+		t.Errorf("after the colour preview: backlight %d", f.backlight)
 	}
-	if f.backlight != 500 {
-		t.Errorf("backlight %d after the preview, want the clip's 500", f.backlight)
+	// The backlight preview runs out by itself; a slow cycle later both
+	// the panel and the monitor follow the clip again, unpaused.
+	e.Step(at(9, 0, 40))
+	if f.backlight != 501 || f.external != 50 || len(CircadianPauses(d, at(9, 0, 40))) != 0 {
+		t.Errorf("after the previews: %d and %d, pauses %v", f.backlight, f.external, CircadianPauses(d, at(9, 0, 40)))
+	}
+	// An old note left in the settings means nothing to a new daemon.
+	NewCircadian(d).Step(at(9, 5, 0))
+	if len(CircadianPauses(d, at(9, 5, 0))) != 0 {
+		t.Errorf("a restarted daemon paused: %v", CircadianPauses(d, at(9, 5, 0)))
 	}
 	// Out of range, off and paused clips aren't previewed.
-	if PreviewCircadian(d, circadian.LaneKelvin, 99, false, at(9, 0, 11)) == nil {
+	if PreviewCircadian(d, circadian.LaneKelvin, 99, false, at(9, 5, 1)) == nil {
 		t.Error("99 K accepted")
 	}
 	f.backlight = 900
-	e.Step(at(9, 0, 15))
-	if PreviewCircadian(d, circadian.LaneBacklight, 30, false, at(9, 0, 16)) == nil || f.backlight != 900 {
+	e.Step(at(9, 5, 5))
+	if PreviewCircadian(d, circadian.LaneBacklight, 30, false, at(9, 5, 6)) == nil || f.backlight != 900 {
 		t.Error("a paused clip was previewed")
 	}
 }

@@ -32,7 +32,7 @@ import (
 const (
 	settingCircadian        = "circadian"         // circadian.Config
 	settingCircadianPaused  = "circadian.paused"  // pause key -> unix seconds it ends
-	settingCircadianPreview = "circadian.preview" // CircadianPreview
+	settingCircadianPreview = "circadian.preview" // + "." + clip: CircadianPreview
 	settingCircadianApplied = "circadian.applied" // circadianApplied
 	settingCircadianResume  = "circadian.resume"  // set by `circadian resume`, cleared by the engine
 	settingCircadianStatus  = "circadian.status"  // CircadianStatus, written only when it changes
@@ -65,6 +65,7 @@ const PreviewHold = 10 * time.Second
 // an external screen.
 type circadianLevel struct {
 	Name string
+	ID   string // an external screen's ddcutil display number
 	Max  int
 	Get  func() (int, error)
 	Set  func(int) error
@@ -84,12 +85,22 @@ var (
 	circadianExternal = func() []circadianLevel {
 		var out []circadianLevel
 		for _, s := range blocker.ExternalScreens() {
-			out = append(out, circadianLevel{Name: s.Name, Max: 100,
-				Get: func() (int, error) {
-					percent, err := s.Brightness()
-					return int(math.Round(percent)), err
-				},
-				Set: func(level int) error { return s.SetBrightness(float64(level)) }})
+			out = append(out, externalLevel(s))
+		}
+		return out
+	}
+	// circadianExternalKnown is the external screens the engine last found
+	// (its status), without looking for them again: looking takes seconds,
+	// and a preview can't wait.
+	circadianExternalKnown = func(d *db.DB) []circadianLevel {
+		var out []circadianLevel
+		status, _ := ReadCircadianStatus(d)
+		for i, display := range status.Displays {
+			s := blocker.ExternalScreen{Display: display, Name: "Display " + display}
+			if i < len(status.External) {
+				s.Name = status.External[i]
+			}
+			out = append(out, externalLevel(s))
 		}
 		return out
 	}
@@ -100,6 +111,15 @@ var (
 	circadianSetDark      = blocker.SetDarkMode
 	circadianNightLight   = blocker.NightLightOn
 )
+
+func externalLevel(s blocker.ExternalScreen) circadianLevel {
+	return circadianLevel{Name: s.Name, ID: s.Display, Max: 100,
+		Get: func() (int, error) {
+			percent, err := s.Brightness()
+			return int(math.Round(percent)), err
+		},
+		Set: func(level int) error { return s.SetBrightness(float64(level)) }}
+}
 
 // CircadianConfig reads the circadian rhythm's settings.
 func CircadianConfig(d *db.DB) circadian.Config {
@@ -223,6 +243,7 @@ type circadianApplied struct {
 type CircadianStatus struct {
 	Backlights []string `json:"backlights"`
 	External   []string `json:"external"`
+	Displays   []string `json:"displays"` // ddcutil's numbers of External
 	DDCUtil    bool     `json:"ddcutil"`
 	Gamma      string   `json:"gamma"`
 	NightLight bool     `json:"night_light"`
@@ -258,12 +279,12 @@ func gammaTarget(c circadian.Config, minute float64) (kelvin, brightness float64
 	return
 }
 
-// withPreview puts a previewed value in place of its clip's.
-func withPreview(p *CircadianPreview, kelvin, brightness float64) (float64, float64) {
-	if p != nil && p.Lane == circadian.LaneKelvin {
+// withPreviews puts previewed values in place of their clips'.
+func withPreviews(previews map[string]CircadianPreview, kelvin, brightness float64) (float64, float64) {
+	if p, ok := previews[circadian.LaneKelvin]; ok {
 		kelvin = p.Value
 	}
-	if p != nil && p.Lane == circadian.LaneSoftware {
+	if p, ok := previews[circadian.LaneSoftware]; ok {
 		brightness = p.Value / 100
 	}
 	return kelvin, brightness
@@ -302,16 +323,19 @@ type Circadian struct {
 	gammaKelvin     float64
 	gammaBrightness float64
 
+	previewSeen map[string]CircadianPreview // clip -> the preview already taken over
+
 	slowAt     time.Time // the last look at external screens and the night light
 	desktopAt  time.Time // the last wallpaper or dark mode that reached nobody
 	external   []string
+	displays   []string
 	nightLight bool
 	status     string
 }
 
 // NewCircadian makes an engine for d.
 func NewCircadian(d *db.DB) *Circadian {
-	return &Circadian{d: d, last: map[string]int{}, pausedBy: map[string]string{}}
+	return &Circadian{d: d, last: map[string]int{}, pausedBy: map[string]string{}, previewSeen: map[string]CircadianPreview{}}
 }
 
 // RunCircadian steps the engine every CircadianInterval, forever. It returns
@@ -341,13 +365,23 @@ func (e *Circadian) forget(pauseKey string) {
 	}
 }
 
-// previewNow reads the preview, if one is running at now.
-func previewNow(d *db.DB, now time.Time) (*CircadianPreview, bool) {
-	var p CircadianPreview
-	if !readJSONSetting(d, settingCircadianPreview, &p) || p.Lane == "" {
-		return nil, false
+// previews reads the previews noted: those running at now, and those that
+// ended in the last half minute (what they wrote is still on the screen).
+func previews(d *db.DB, now time.Time) (running, ended map[string]CircadianPreview) {
+	running, ended = map[string]CircadianPreview{}, map[string]CircadianPreview{}
+	for _, info := range circadian.Lanes {
+		var p CircadianPreview
+		if !readJSONSetting(d, settingCircadianPreview+"."+info.Name, &p) || p.Lane != info.Name {
+			continue
+		}
+		switch {
+		case p.Until > now.Unix():
+			running[info.Name] = p
+		case now.Unix()-p.Until < 30:
+			ended[info.Name] = p
+		}
 	}
-	return &p, p.Until > now.Unix()
+	return
 }
 
 // Step brings everything to what the settings say for now.
@@ -381,20 +415,29 @@ func (e *Circadian) Step(now time.Time) {
 		_ = e.d.SetSetting(settingCircadianResume, "")
 	}
 
-	// A preview: the command drives the hardware; what it wrote is ours.
-	preview, running := previewNow(e.d, now)
-	if preview != nil {
-		e.adoptPreview(cfg, preview, minute)
-		if !running {
-			_ = e.d.SetSetting(settingCircadianPreview, "")
-			preview = nil
+	// Previews: the command drives the hardware; what it wrote is ours.
+	// The notes are never cleared here (a new preview could be lost that
+	// way); one that ended is taken over once.
+	running, ended := previews(e.d, now)
+	for lane, p := range ended {
+		if e.previewSeen[lane] != p {
+			e.adoptPreview(cfg, ended, lane, minute)
 		}
+		e.previewSeen[lane] = p
+	}
+	for lane, p := range running {
+		e.adoptPreview(cfg, running, lane, minute)
+		e.previewSeen[lane] = p
+	}
+	gammaPreviewed := false
+	for lane := range running {
+		gammaPreviewed = gammaPreviewed || lane != circadian.LaneBacklight
 	}
 
 	pause := func(key string, lanes ...string) bool {
 		// A preview that began while this step was reading the hardware
 		// explains the change.
-		if p, on := previewNow(e.d, time.Now()); p != nil && on {
+		if now, _ := previews(e.d, time.Now()); len(now) > 0 {
 			return false
 		}
 		pauses[key] = nextPoint(cfg, now, lanes...).Unix()
@@ -409,17 +452,18 @@ func (e *Circadian) Step(now time.Time) {
 	slow := e.slowAt.IsZero() || now.Sub(e.slowAt) >= circadianSlowInterval
 	lane := cfg.Lanes[circadian.LaneBacklight]
 	backlightOn := cfg.On && lane != nil && lane.On
-	previewed := preview != nil && preview.Lane == circadian.LaneBacklight
+	_, previewed := running[circadian.LaneBacklight]
 
 	backlights := circadianBacklights()
 	e.levels(PauseBacklight, backlights, backlightOn, previewed, lane, minute, pauses, pause, resume)
 	if slow {
 		e.slowAt = now
-		e.external = nil
+		e.external, e.displays = nil, nil
 		if backlightOn {
 			screens := circadianExternal()
 			for _, s := range screens {
 				e.external = append(e.external, s.Name)
+				e.displays = append(e.displays, s.ID)
 			}
 			e.levels(PauseExternal, screens, true, previewed, lane, minute, pauses, pause, resume)
 		} else {
@@ -431,7 +475,7 @@ func (e *Circadian) Step(now time.Time) {
 	applied := circadianApplied{}
 	readJSONSetting(e.d, settingCircadianApplied, &applied)
 	before := applied
-	reading := e.gamma(cfg, preview, minute, now, pauses, pause, resume, &applied)
+	reading := e.gamma(cfg, gammaPreviewed, minute, now, pauses, pause, resume, &applied)
 	e.desktop(cfg, minute, now, &applied)
 	if applied != before {
 		writeJSONSetting(e.d, settingCircadianApplied, applied)
@@ -441,7 +485,8 @@ func (e *Circadian) Step(now time.Time) {
 	}
 
 	status := CircadianStatus{Backlights: []string{}, External: append([]string{}, e.external...),
-		DDCUtil: circadianDDC(), Gamma: reading.String(), NightLight: e.nightLight}
+		Displays: append([]string{}, e.displays...),
+		DDCUtil:  circadianDDC(), Gamma: reading.String(), NightLight: e.nightLight}
 	for _, b := range backlights {
 		status.Backlights = append(status.Backlights, b.Name)
 	}
@@ -452,22 +497,23 @@ func (e *Circadian) Step(now time.Time) {
 	}
 }
 
-// adoptPreview notes what a preview wrote as the engine's own, so it isn't
-// taken for a change by hand once the preview ends.
-func (e *Circadian) adoptPreview(cfg circadian.Config, p *CircadianPreview, minute float64) {
-	if p.Lane == circadian.LaneBacklight {
+// adoptPreview notes what the preview of lane wrote as the engine's own, so
+// it isn't taken for a change by hand once the preview ends.
+func (e *Circadian) adoptPreview(cfg circadian.Config, all map[string]CircadianPreview, lane string, minute float64) {
+	if lane == circadian.LaneBacklight {
+		value := all[lane].Value
 		for _, b := range circadianBacklights() {
-			e.last[PauseBacklight+"/"+b.Name] = blocker.PercentToRaw(p.Value, b.Max)
+			e.last[PauseBacklight+"/"+b.Name] = blocker.PercentToRaw(value, b.Max)
 		}
 		for id := range e.last {
 			if strings.HasPrefix(id, PauseExternal+"/") {
-				e.last[id] = blocker.PercentToRaw(p.Value, 100)
+				e.last[id] = blocker.PercentToRaw(value, 100)
 			}
 		}
 		return
 	}
 	kelvin, brightness, _ := gammaTarget(cfg, minute)
-	e.gammaKelvin, e.gammaBrightness = withPreview(p, kelvin, brightness)
+	e.gammaKelvin, e.gammaBrightness = withPreviews(all, kelvin, brightness)
 	e.gammaSet = true
 }
 
@@ -529,10 +575,10 @@ func abs(v int) int {
 
 // gamma drives the gamma ramps: software brightness and colour temperature
 // as one ramp.
-func (e *Circadian) gamma(cfg circadian.Config, preview *CircadianPreview, minute float64, now time.Time,
+func (e *Circadian) gamma(cfg circadian.Config, previewed bool, minute float64, now time.Time,
 	pauses map[string]int64, pause func(string, ...string) bool, resume func(string), applied *circadianApplied) blocker.GammaReading {
 	kelvin, brightness, on := gammaTarget(cfg, minute)
-	if preview != nil && preview.Lane != circadian.LaneBacklight {
+	if previewed {
 		return circadianReadGamma(rampFor(e.gammaKelvin, e.gammaBrightness))
 	}
 	if !on {
@@ -677,11 +723,12 @@ func PreviewCircadian(d *db.DB, lane string, value float64, end bool, now time.T
 	if !ok {
 		return fmt.Errorf("unknown clip %q", lane)
 	}
+	key := settingCircadianPreview + "." + lane
 	if end {
 		var p CircadianPreview
-		if readJSONSetting(d, settingCircadianPreview, &p) && p.Lane != "" {
+		if readJSONSetting(d, key, &p) && p.Until > now.Unix() {
 			p.Until = now.Unix()
-			writeJSONSetting(d, settingCircadianPreview, p)
+			writeJSONSetting(d, key, p)
 		}
 		return nil
 	}
@@ -697,20 +744,22 @@ func PreviewCircadian(d *db.DB, lane string, value float64, end bool, now time.T
 	}
 	p := CircadianPreview{Lane: lane, Value: value, Until: now.Add(PreviewHold).Unix()}
 	// The note goes first, so the engine never sees the new level without it.
-	writeJSONSetting(d, settingCircadianPreview, p)
+	writeJSONSetting(d, key, p)
 	if circadianDry() {
 		return nil
 	}
 	if lane == circadian.LaneBacklight {
-		for _, b := range circadianBacklights() {
-			if err := b.Set(blocker.PercentToRaw(value, b.Max)); err != nil {
-				return err
+		var firstErr error
+		for _, b := range append(circadianBacklights(), circadianExternalKnown(d)...) {
+			if err := b.Set(blocker.PercentToRaw(value, b.Max)); err != nil && firstErr == nil {
+				firstErr = err
 			}
 		}
-		return nil
+		return firstErr
 	}
+	running, _ := previews(d, now)
 	kelvin, brightness, _ := gammaTarget(cfg, circadian.MinuteOfDay(now))
-	kelvin, brightness = withPreview(&p, kelvin, brightness)
+	kelvin, brightness = withPreviews(running, kelvin, brightness)
 	_, err := circadianSetGamma(rampFor(kelvin, brightness))
 	return err
 }

@@ -9,6 +9,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -33,6 +34,8 @@ independently of any block, when it is turned on:
   --lock-chars N    Challenge length in characters (default 300, 10 to 5000).
   --password-stdin  Password ('kc9k browser unlock <setting>') to turn it off.
   --restart         Stays on until the computer restarts.
+  --relock D        With a text or password lock: unlocking lifts them for D
+                    only, the setting stays on; turning it off meanwhile ends it.
 
 Locks can be added to a setting that is already on, and only made stronger: a
 timer lock can only be extended and a challenge only lengthened. unlock runs the
@@ -174,11 +177,19 @@ func (s settingLockState) describe() string {
 	if s.lock.RestartLocked(s.bootID) {
 		parts = append(parts, "until restart")
 	}
-	if s.lock.LockChars > 0 {
-		parts = append(parts, fmt.Sprintf("typing challenge (%d chars)", s.lock.LockChars))
+	if s.lock.TextOrPasswordLocked(s.trusted) {
+		if s.lock.LockChars > 0 {
+			parts = append(parts, fmt.Sprintf("typing challenge (%d chars)", s.lock.LockChars))
+		}
+		if s.lock.PasswordHash != "" {
+			parts = append(parts, "password")
+		}
+		if s.lock.Relock > 0 {
+			parts = append(parts, "re-lock "+(time.Duration(s.lock.Relock)*time.Second).String())
+		}
 	}
-	if s.lock.PasswordHash != "" {
-		parts = append(parts, "password")
+	if s.lock.PendingRelock(s.trusted) {
+		parts = append(parts, "unlocked: on again at "+time.Unix(s.lock.LiftedUntil, 0).Format("2006-01-02 15:04"))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -210,8 +221,8 @@ func listBrowserSettings(database *db.DB) error {
 }
 
 func lockFlagsGiven(cmd *cobra.Command) bool {
-	for _, f := range []string{"for", "until", "lock", "lock-chars", "password-stdin", "restart", "text-lock", "lock-words", "lock-text"} {
-		if cmd.Flags().Changed(f) {
+	for _, f := range []string{"for", "until", "lock", "lock-chars", "password-stdin", "restart", "text-lock", "lock-words", "lock-text", "relock"} {
+		if cmd.Flags().Lookup(f) != nil && cmd.Flags().Changed(f) {
 			return true
 		}
 	}
@@ -276,7 +287,33 @@ func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.
 		}
 		want.RestartBoot = boot
 	}
+	if want.Relock, err = relockRequested(cmd); err != nil {
+		return want, err
+	}
 	return want, nil
+}
+
+// relockRequested reads --relock: seconds, or 0 when not given.
+func relockRequested(cmd *cobra.Command) (int64, error) {
+	if cmd.Flags().Lookup("relock") == nil {
+		return 0, nil
+	}
+	spec, _ := cmd.Flags().GetString("relock")
+	if spec == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(spec)
+	if err != nil || d < time.Minute || d > 30*24*time.Hour {
+		return 0, fmt.Errorf("invalid --relock %q (1m to 720h)", spec)
+	}
+	return int64(d / time.Second), nil
+}
+
+// addRelockFlag adds --relock to commands that lock a setting.
+func addRelockFlag(cmds ...*cobra.Command) {
+	for _, c := range cmds {
+		c.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m), unless it is turned off meanwhile")
+	}
 }
 
 // strengthenSettingLock merges the requested locks into the current ones. It
@@ -293,6 +330,13 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 		next.RestartBoot = ""
 	}
 	var changes []string
+	if !next.PendingRelock(cur.trusted) {
+		next.LiftedUntil = 0
+	} else if want.LockChars > 0 || want.PasswordHash != "" {
+		// Unlocked with re-lock: a new text or password lock replaces the
+		// lifted ones and holds at once.
+		next.LockChars, next.Style, next.PasswordHash, next.Relock, next.LiftedUntil = 0, "", "", 0, 0
+	}
 	if want.LockedUntil != 0 {
 		if want.LockedUntil <= next.LockedUntil {
 			return next, nil, fmt.Errorf("%s is already locked until %s; a timer lock can only be extended", name, time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
@@ -325,6 +369,18 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 		next.RestartBoot = want.RestartBoot
 		changes = append(changes, "until restart")
 	}
+	if want.Relock > 0 {
+		switch {
+		case next.LockChars == 0 && next.PasswordHash == "":
+			return next, nil, fmt.Errorf("--relock goes with a text or password lock")
+		case next.Relock == 0 || want.Relock < next.Relock:
+			// Sooner is stronger: the locks are lifted for less time.
+			next.Relock = want.Relock
+			changes = append(changes, "re-lock "+(time.Duration(next.Relock)*time.Second).String()+" after unlocking")
+		case want.Relock > next.Relock:
+			return next, nil, fmt.Errorf("%s re-locks %s after unlocking; that can't be made longer while locked", name, time.Duration(next.Relock)*time.Second)
+		}
+	}
 	return next, changes, nil
 }
 
@@ -354,6 +410,9 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 	}
 	if next.RestartBoot != old.RestartBoot {
 		locks = append(locks, lockToSet{target, "restart lock", "until the computer restarts"})
+	}
+	if next.Relock != old.Relock {
+		locks = append(locks, lockToSet{target, "re-lock", (time.Duration(next.Relock) * time.Second).String() + " after unlocking"})
 	}
 	return locks
 }
@@ -447,7 +506,7 @@ func browserSettingOff(database *db.DB, name string) error {
 	if err := s.refuseWhileHeld(name); err != nil {
 		return err
 	}
-	if s.lock.LockChars > 0 || s.lock.PasswordHash != "" {
+	if s.lock.TextOrPasswordLocked(s.trusted) {
 		return fmt.Errorf("%s is locked. Use '%s' first", name, settingCommand(name, "unlock"))
 	}
 	if err := refuseForBlocks(database, name, s.trusted); err != nil {
@@ -456,7 +515,7 @@ func browserSettingOff(database *db.DB, name string) error {
 	if err := refuseSettingWeakening(database, name); err != nil {
 		return err
 	}
-	if err := database.ClearSettingLock(name); err != nil { // locks that ran out
+	if err := database.ClearSettingLock(name); err != nil { // locks that ran out, or lifted by re-lock
 		return err
 	}
 	return database.SetSetting(enforce.SettingKey(name), "off")
@@ -469,40 +528,15 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 	if !enforce.IsLockableSetting(name) {
 		return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))
 	}
-	if err := requireSettingsPassword(database); err != nil {
-		return err
-	}
-	s, err := loadSettingLock(database, name)
+	s, relocked, err := unlockSetting(database, name, name,
+		fmt.Sprintf("%s is not locked. Use '%s'", name, settingCommand(name, "off")))
 	if err != nil {
 		return err
 	}
-	if err := s.refuseWhileHeld(name); err != nil {
-		return err
-	}
-	if s.lock.LockChars == 0 && s.lock.PasswordHash == "" {
-		return fmt.Errorf("%s is not locked. Use '%s'", name, settingCommand(name, "off"))
-	}
-	if s.lock.PasswordHash != "" {
-		password, err := readPasswordStdin("Setting password")
-		if err != nil {
-			return err
-		}
-		if !db.CheckPassword(s.lock.PasswordHash, password) {
-			return fmt.Errorf("wrong password; %s stays locked", name)
-		}
-	}
-	if s.lock.LockChars > 0 {
-		success, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
-		if err != nil {
-			return fmt.Errorf("failed to run the typing challenge: %w", err)
-		}
-		if !success {
-			fmt.Printf("Unlock failed. %s stays on and locked.\n", name)
-			os.Exit(1)
-		}
-	}
-	if err := database.ClearSettingLock(name); err != nil {
-		return err
+	if relocked {
+		fmt.Printf("%s is unlocked for %s and stays on; then its locks are on again (re-lock). '%s' turns it off meanwhile.\n",
+			name, time.Duration(s.lock.Relock)*time.Second, settingCommand(name, "off"))
+		return nil
 	}
 	if err := refuseForBlocks(database, name, s.trusted); err != nil {
 		fmt.Printf("%s is unlocked but stays on: %v\n", name, err)
@@ -519,6 +553,52 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 	return nil
 }
 
+// unlockSetting lifts a setting's text and password locks (setting lock
+// name, shown as label): it asks for the settings password, refuses while
+// a timer or restart lock holds, asks for the lock password and runs the
+// challenge. Without re-lock the locks are removed; with re-lock they are
+// lifted for that long (relocked true), then on again (§3.4).
+func unlockSetting(database *db.DB, name, label, notLocked string) (settingLockState, bool, error) {
+	if err := requireSettingsPassword(database); err != nil {
+		return settingLockState{}, false, err
+	}
+	s, err := loadSettingLock(database, name)
+	if err != nil {
+		return s, false, err
+	}
+	if err := s.refuseWhileHeld(label); err != nil {
+		return s, false, refused(database, "", err)
+	}
+	if !s.lock.TextOrPasswordLocked(s.trusted) {
+		return s, false, errors.New(notLocked)
+	}
+	if s.lock.PasswordHash != "" {
+		password, err := readPasswordStdin("Setting password")
+		if err != nil {
+			return s, false, err
+		}
+		if !db.CheckPassword(s.lock.PasswordHash, password) {
+			return s, false, refused(database, "", fmt.Errorf("wrong password; %s stays locked", label))
+		}
+	}
+	if s.lock.LockChars > 0 {
+		ok, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
+		if err != nil {
+			return s, false, fmt.Errorf("failed to run the typing challenge: %w", err)
+		}
+		if !ok {
+			_ = refused(database, "", fmt.Errorf("failed the unlock challenge"))
+			fmt.Printf("Unlock failed. %s stays locked.\n", label)
+			os.Exit(1)
+		}
+	}
+	if s.lock.Relock > 0 {
+		s.lock.LiftedUntil = s.trusted + s.lock.Relock
+		return s, true, database.SetSettingLock(s.lock)
+	}
+	return s, false, database.ClearSettingLock(name)
+}
+
 func init() {
 	browserCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 2h, 90m)")
 	browserCmd.Flags().String("until", "", "Timer lock: can't be turned off until this clock time (HH:MM)")
@@ -527,6 +607,7 @@ func init() {
 	browserCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	browserCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(browserCmd)
+	addRelockFlag(browserCmd)
 	addYesFlag(browserCmd)
 	rootCmd.AddCommand(browserCmd)
 }

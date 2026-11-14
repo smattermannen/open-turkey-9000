@@ -47,6 +47,7 @@ unsupported-browsers can also be locked when turned on, like a browser setting:
   --lock-chars N    Challenge length in characters (default 300).
   --password-stdin  Password lock.
   --restart         Stays on until the computer restarts.
+  --relock D        With a text or password lock: unlocking lifts them for D only.
 
 Locks can only be made stronger. unlock runs the challenge and asks for the
 password, then turns it off if nothing else is locked.`,
@@ -150,6 +151,7 @@ func init() {
 	tamperCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	tamperCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(tamperCmd)
+	addRelockFlag(tamperCmd)
 	addYesFlag(tamperCmd)
 	rootCmd.AddCommand(tamperCmd)
 }

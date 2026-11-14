@@ -349,7 +349,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Locks**: flags `--for`, `--until`, `--lock` (`--text-lock`),
   `--password-stdin`, `--restart`, `--delay`, `--relock D` (text/password
   only; re-locks unless stopped meanwhile). Browser setting locks: same kinds
-  minus delay; added later only stronger; password can't be replaced;
+  minus delay (re-lock too: `SettingLock.LiftedUntil`, `unlockSetting`; also
+  strict mode, global ladder, tamper); added later only stronger; password can't be replaced;
   `kc9k browser unlock O` unlocks and turns off. While a browser setting is
   locked, strict mode and no-escape hold and uninstall is refused.
   `block-devtools` also can't go off while a block is locked or a freeze

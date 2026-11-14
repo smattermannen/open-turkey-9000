@@ -159,12 +159,18 @@ type guiSettingLock struct {
 	Password     bool  `json:"password_locked"`
 	Restart      bool  `json:"restart_locked"`
 	GuardsBlocks bool  `json:"guards_blocks"`
+	Relock       int64 `json:"relock,omitempty"`    // re-lock seconds after unlocking
+	RelockIn     int64 `json:"relock_in,omitempty"` // unlocked: seconds until the locks are on again
 }
 
 // gui is the setting lock as the interface shows it.
 func (s settingLockState) gui() guiSettingLock {
-	g := guiSettingLock{CharLocked: s.lock.LockChars > 0, Password: s.lock.PasswordHash != "",
-		Restart: s.lock.RestartLocked(s.bootID)}
+	held := s.lock.TextOrPasswordLocked(s.trusted)
+	g := guiSettingLock{CharLocked: held && s.lock.LockChars > 0, Password: held && s.lock.PasswordHash != "",
+		Restart: s.lock.RestartLocked(s.bootID), Relock: s.lock.Relock}
+	if s.lock.PendingRelock(s.trusted) {
+		g.RelockIn = s.lock.LiftedUntil - s.trusted
+	}
 	if s.lock.TimeLocked(s.trusted) {
 		g.Seconds = s.lock.LockedUntil - s.trusted
 	}
@@ -298,13 +304,8 @@ var guiStateCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			g := guiSettingLock{
-				CharLocked: s.lock.LockChars > 0, Password: s.lock.PasswordHash != "",
-				Restart: s.lock.RestartLocked(s.bootID), GuardsBlocks: enforce.GuardsBlocks(name),
-			}
-			if s.lock.TimeLocked(s.trusted) {
-				g.Seconds = s.lock.LockedUntil - s.trusted
-			}
+			g := s.gui()
+			g.GuardsBlocks = enforce.GuardsBlocks(name)
 			state.BrowserLocks[name] = g
 		}
 		if trusted, err := database.TrustedNow(now); err == nil {

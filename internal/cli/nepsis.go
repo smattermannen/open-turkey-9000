@@ -20,7 +20,6 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -262,14 +261,19 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 		if err := s.refuseWhileHeld("bypass prevention"); err != nil {
 			return refused(database, "", err)
 		}
-		if s.lock.LockChars > 0 || s.lock.PasswordHash != "" {
+		if s.lock.TextOrPasswordLocked(s.trusted) {
 			return refused(database, "", fmt.Errorf("bypass prevention is locked. Use 'kc9k bypass unlock' first"))
 		}
 		if err := refuseSettingWeakening(database, "bypass prevention"); err != nil {
 			return err
 		}
-		if err := database.ClearSettingLock(db.NepsisLockName); err != nil { // locks that ran out
-			return err
+		// Locks that ran out go. Lifted text/password locks with re-lock go
+		// only when bypass prevention is turned off (§3.4: re-lock unless
+		// switched off meanwhile).
+		if !s.lock.PendingRelock(s.trusted) || !n.On() {
+			if err := database.ClearSettingLock(db.NepsisLockName); err != nil {
+				return err
+			}
 		}
 	}
 	if lockFlagsGiven(cmd) {
@@ -418,41 +422,14 @@ var nepsisUnlockCmd = &cobra.Command{
 	Short: "Remove the challenge or password lock on the global bypass prevention",
 	Args:  cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		if err := requireSettingsPassword(database); err != nil {
-			return err
-		}
-		s, err := loadSettingLock(database, db.NepsisLockName)
+		s, relocked, err := unlockSetting(database, db.NepsisLockName, "bypass prevention", "bypass prevention is not locked")
 		if err != nil {
 			return err
 		}
-		if err := s.refuseWhileHeld("bypass prevention"); err != nil {
-			return refused(database, "", err)
-		}
-		if s.lock.LockChars == 0 && s.lock.PasswordHash == "" {
-			return fmt.Errorf("bypass prevention is not locked")
-		}
-		if s.lock.PasswordHash != "" {
-			password, err := readPasswordStdin("Setting password")
-			if err != nil {
-				return err
-			}
-			if !db.CheckPassword(s.lock.PasswordHash, password) {
-				return refused(database, "", fmt.Errorf("wrong password; bypass prevention stays locked"))
-			}
-		}
-		if s.lock.LockChars > 0 {
-			ok, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
-			if err != nil {
-				return fmt.Errorf("failed to run the typing challenge: %w", err)
-			}
-			if !ok {
-				_ = refused(database, "", fmt.Errorf("failed the unlock challenge"))
-				fmt.Println("Unlock failed. Bypass prevention stays locked.")
-				os.Exit(1)
-			}
-		}
-		if err := database.ClearSettingLock(db.NepsisLockName); err != nil {
-			return err
+		if relocked {
+			fmt.Printf("Bypass prevention is unlocked for %s; then its locks are on again (re-lock). 'kc9k bypass off' ends that meanwhile.\n",
+				time.Duration(s.lock.Relock)*time.Second)
+			return nil
 		}
 		fmt.Println("Bypass prevention is unlocked; it stays on until you change it.")
 		return nil
@@ -479,6 +456,7 @@ func init() {
 	nepsisSetCmd.Flags().Bool("password-stdin", false, "Global only. Password lock, read from standard input")
 	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be weakened until the computer restarts")
 	addTextLockFlags(nepsisSetCmd)
+	addRelockFlag(nepsisSetCmd)
 	addYesFlag(nepsisSetCmd)
 	addMonkAckFlag(nepsisSetCmd)
 	addNowFlag(nepsisSetCmd, nepsisOffCmd)

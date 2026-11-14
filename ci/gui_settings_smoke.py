@@ -136,6 +136,20 @@ check(not win.stats_switch.get_active(), "switch follows")
 win.stats_switch.set_active(True); settle()
 check(state()["stats"] is True, "statistics on again")
 
+# §3.4 re-lock on a setting lock: shown while locked, and after unlocking
+# the line says when the locks are on again; the switch can turn it off.
+r = subprocess.run([W, "browser", "web-only", "on", "--password-stdin", "--relock", "30m", "--yes"],
+                   input="pw\n", capture_output=True, text=True)
+check(r.returncode == 0, "web-only locked with re-lock: " + r.stderr)
+settle()
+status, _unlock = win.setting_locks["web-only"]
+check("re-lock 30 min" in status.get_text() or "re-lock 30m" in status.get_text(), "re-lock shown: " + status.get_text())
+r = subprocess.run([W, "browser", "unlock", "web-only"], input="pw\n", capture_output=True, text=True)
+check(r.returncode == 0, "unlocked: " + r.stderr)
+settle()
+check("locks on again in" in status.get_text(), "lifted lock shown: " + status.get_text())
+check(win.browser_switches["web-only"].get_sensitive(), "lifted: switch usable")
+
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
 

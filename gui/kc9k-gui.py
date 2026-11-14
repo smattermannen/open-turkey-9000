@@ -189,6 +189,8 @@ def describe_setting_lock(info):
         parts.append("text lock")
     if info.get("password_locked"):
         parts.append("password")
+    if info.get("relock") and (info.get("char_locked") or info.get("password_locked")):
+        parts.append(f"re-lock {fmt_seconds(info['relock'])} after unlocking")
     return parts
 
 
@@ -4850,8 +4852,13 @@ class Window(Gtk.ApplicationWindow):
         for name, (label, unlock) in self.setting_locks.items():
             info = self.setting_lock_info(name)
             parts = describe_setting_lock(info)
-            label.set_text("Locked: " + ", ".join(parts) if parts else "")
-            label.set_visible(bool(parts))
+            text = "Locked: " + ", ".join(parts) if parts else ""
+            if info.get("relock_in"):
+                # Unlocked with re-lock: on again by itself unless turned off.
+                text = (text + "; " if text else "") + \
+                    f"unlocked, locks on again in {fmt_seconds(info['relock_in'])}"
+            label.set_text(text)
+            label.set_visible(bool(text))
             unlock.set_visible(info.get("char_locked", False) or info.get("password_locked", False))
             unlock.set_sensitive(not info.get("lock_seconds") and not info.get("restart_locked"))
             # A locked setting is on and stays on, so its switch can't be used.
@@ -4973,6 +4980,7 @@ class Window(Gtk.ApplicationWindow):
         typing = Gtk.CheckButton(label="Text lock: type a text to turn it off")
         chars = challenge_length(typing)
         restart = Gtk.CheckButton(label="Stay on until the computer restarts")
+        relock = Gtk.SpinButton.new_with_range(0, 43200, 5)
         rows = (
             ("Timer lock (minutes)", minutes, "Can't be turned off at all until the time has passed."),
             ("Password", password, "Needed to turn it off. Give it to someone else to keep."),
@@ -4984,11 +4992,16 @@ class Window(Gtk.ApplicationWindow):
         grid.attach(typing, 0, 4, 2, 1)
         attach_challenge_length(grid, chars, 5)
         grid.attach(restart, 0, 7, 2, 1)
+        grid.attach(Gtk.Label(label="Re-lock (minutes)", xalign=0), 0, 8, 1, 1)
+        grid.attach(relock, 1, 8, 1, 1)
+        grid.attach(dim("With a text or password lock: unlocking lifts them only this long, "
+                        "then they are on again unless it was turned off. 0 = no re-lock."), 1, 9, 1, 1)
         box.pack_start(grid, False, False, 0)
         dialog.show_all()
         answer = dialog.run()
         lock_minutes, secret = minutes.get_value_as_int(), password.get_text()
         use_typing, use_restart = typing.get_active(), restart.get_active()
+        relock_minutes = relock.get_value_as_int()
         lock_args = challenge_args(chars)
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
@@ -5006,14 +5019,18 @@ class Window(Gtk.ApplicationWindow):
         if len(args) == base:
             self.message("Choose at least one lock.", Gtk.MessageType.INFO)
             return
+        relock_note = ""
+        if relock_minutes and (use_typing or secret):
+            args += ["--relock", f"{relock_minutes}m"]
+            relock_note = f", re-lock {relock_minutes} minutes after unlocking"
         locks = []
         if lock_minutes:
             locks.append(f"{title}: timer lock, {lock_minutes} minutes (it can't be turned off until "
                          "then, not even with the typing challenge; time the computer is off doesn't count)")
         if use_typing:
-            locks.append(f"{title}: text lock")
+            locks.append(f"{title}: text lock{relock_note}")
         if secret:
-            locks.append(f"{title}: password lock")
+            locks.append(f"{title}: password lock{relock_note}")
         if use_restart:
             locks.append(f"{title}: restart lock, until the computer restarts")
         if not self.confirm_lock(locks):

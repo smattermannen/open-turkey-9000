@@ -112,7 +112,7 @@ func strictOff(database *db.DB) error {
 	if err := s.refuseWhileHeld("strict mode"); err != nil {
 		return refused(database, "", err)
 	}
-	if s.lock.LockChars > 0 || s.lock.PasswordHash != "" {
+	if s.lock.TextOrPasswordLocked(s.trusted) {
 		return refused(database, "", fmt.Errorf("strict mode is locked. Use 'kc9k strict unlock' first"))
 	}
 	if err := refuseSettingWeakening(database, "strict mode"); err != nil {
@@ -131,41 +131,15 @@ func strictOff(database *db.DB) error {
 // strictUnlock lifts strict mode's text or password lock. Strict mode stays
 // on: the lock is only lifted (§3.4).
 func strictUnlock(database *db.DB) error {
-	if err := requireSettingsPassword(database); err != nil {
-		return err
-	}
-	s, err := loadSettingLock(database, enforce.StrictLockName)
+	s, relocked, err := unlockSetting(database, enforce.StrictLockName, "strict mode",
+		"strict mode is not locked by a text or password lock")
 	if err != nil {
 		return err
 	}
-	if err := s.refuseWhileHeld("strict mode"); err != nil {
-		return refused(database, "", err)
-	}
-	if s.lock.LockChars == 0 && s.lock.PasswordHash == "" {
-		return fmt.Errorf("strict mode is not locked by a text or password lock")
-	}
-	if s.lock.PasswordHash != "" {
-		password, err := readPasswordStdin("Setting password")
-		if err != nil {
-			return err
-		}
-		if !db.CheckPassword(s.lock.PasswordHash, password) {
-			return refused(database, "", fmt.Errorf("wrong password; strict mode stays locked"))
-		}
-	}
-	if s.lock.LockChars > 0 {
-		ok, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
-		if err != nil {
-			return fmt.Errorf("failed to run the typing challenge: %w", err)
-		}
-		if !ok {
-			_ = refused(database, "", fmt.Errorf("failed the unlock challenge"))
-			fmt.Println("Unlock failed. Strict mode stays locked.")
-			os.Exit(1)
-		}
-	}
-	if err := database.ClearSettingLock(enforce.StrictLockName); err != nil {
-		return err
+	if relocked {
+		fmt.Printf("Strict mode is unlocked for %s; then its locks are on again (re-lock). 'kc9k strict off' turns it off meanwhile.\n",
+			time.Duration(s.lock.Relock)*time.Second)
+		return nil
 	}
 	fmt.Println("Strict mode is unlocked; it stays on until you turn it off.")
 	return nil
@@ -298,5 +272,6 @@ func init() {
 	strictCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	strictCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(strictCmd)
+	addRelockFlag(strictCmd)
 	rootCmd.AddCommand(strictCmd, noEscapeCmd)
 }

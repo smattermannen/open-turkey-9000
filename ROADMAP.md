@@ -24,8 +24,10 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   clock` (then clock changes ignored during timer locks, powered-off time
   not counted; old installs have it on); `break text` (alias `relock`);
   re-lock for block text/password locks (`start --relock D`); uninstall
-  refused only while locked. Not built: hardware/internet clock check; re-lock
-  on setting locks; active vs enabled (the daemon still activates blocks by
+  refused only while locked; re-lock on setting locks (browser settings,
+  tamper, strict mode, global ladder: `--relock D`; unlock lifts, setting
+  stays on; off meanwhile ends it). Not built: hardware/internet clock check;
+  active vs enabled (the daemon still activates blocks by
   schedule); layered order (R-LOCK-6/7). (L)
 - [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
   silently creates nothing (`create_phrase_set`). Two editors (typed box and
@@ -101,7 +103,6 @@ Only items not simply Built.
 | §3.3 Duplicate starts inactive | Unchecked | |
 | §3.3 `kc9k toggle` | Not built | |
 | §3.4 Range lock | Not built | |
-| §3.4 Re-lock on setting locks | Not built | |
 | §3.4 Layered sequential locks | Partial | `unlock` checks all at once in fixed order (`cli/control.go`) |
 | §3.4 R-LOCK-9 | Partial | extension/other protection: Unchecked |
 | §3.6 Break per block window | Not built | |

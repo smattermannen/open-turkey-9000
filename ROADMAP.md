@@ -48,10 +48,6 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   manager: ~1 free minute every few minutes (15 s stale + 60 s grace, 2 min
   pause). Want: short grace once checked in before; each pause doubles (to
   1 h) until it runs unbroken a while. (S)
-- [ ] **Device protection access area** (§4.10, §3.11): the GUI shows strict
-  mode and no-escape in Settings (Settings access password), but `strict` and
-  `no-escape` are in command area `device`, so with both passwords set the
-  GUI asks for the Device one too. Owner to pick the area. (S)
 - [ ] **Block unsupported browsers** (§4.10): built is `force-librewolf`.
   Want a tamper protection setting allowing LibreWolf/Chrome/Chromium with
   the extension, carrying over state and lock. Also the Browsers list with

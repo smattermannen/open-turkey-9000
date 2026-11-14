@@ -123,11 +123,9 @@ Last checked against the code: 2026-11-13.
       project files, `.txt` export/import, and phrase clusters
       (`cluster create --phrases`, `save`, `copy`). Left: categories
       (waiting for the owner: how one is imported, and which phrase-set
-      categories ship). Turning existing combinations into phrases is
-      built (`db/combinations.go`, `migrateCombinations`) on the branch
-      `phrase-migration`, not merged: the owner hasn't yet agreed how
-      `:N`, thresholds of mixed lists and combinations in exception lists
-      map. (L)
+      categories ship). Existing combinations become phrases
+      (`db/combinations.go`, `migrateCombinations`): each box a word set,
+      `:N` dropped, thresholds 1 (the owner's decision, 2026-11-14). (L)
 - [ ] **List names differ only in case** (§3.2): `list create b words`
       succeeds beside `Words`, while lists are looked up without regard to
       case, so one of them can't be reached. Phrase sets refuse this. (S)
@@ -184,7 +182,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Folder entry | Partial | programs inside it are closed; windows showing it are not |
 | Window title entry | Built | X11 only; never in browsers (R-TITLE-1) |
 | Rendered term | Built | |
-| Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
+| Phrase (formerly word combination) | Built | phrase sets; old combinations moved into them once (one-box ones and those in exception lists stay) |
 | Phrase set | Built | `kc9k phrase-set`, rules feed, extension, GUI, block/project files, `.txt` |
 
 ### §3.2 Grouping

@@ -13,17 +13,15 @@ func phraseTexts(ps []Phrase) string {
 	return strings.Join(out, " | ")
 }
 
-// Word combinations become phrases: a box needing one word is a word set;
-// a box needing N different words is N one-term word sets, for every choice
-// of N of its words (R-PHRASE-3).
+// Word combinations become phrases: each box a word set; a box's :N is
+// dropped (the owner's decision, 2026-11-14); one box isn't a phrase.
 func TestCombinationPhrases(t *testing.T) {
 	cases := map[string]string{
 		"cars(red, big)":                     "[cars] [red, big]",
-		"(Car, lambo*) (big, small, nice):2": "[car, lambo*] [big] [small] | [car, lambo*] [big] [nice] | [car, lambo*] [small] [nice]",
+		"(Car, lambo*) (big, small, nice):2": "[car, lambo*] [big, small, nice]",
 		"(very cheap) (watch, rolex)":        "[very cheap] [watch, rolex]",
-		"(a, b):2":                           "[a] [b]",
-		"(a, b) (c):2":                       "", // never matched anything
-		"(x, y):2 (p, q):2":                  "[x] [y] [p] [q]",
+		"(a, b) (c):2":                       "[a, b] [c]",
+		"(a, b):2":                           "",
 	}
 	for combo, want := range cases {
 		boxes, ok := ParseCombination(combo)
@@ -39,15 +37,12 @@ func TestCombinationPhrases(t *testing.T) {
 	if _, err := CombinationPhrases(boxes); err == nil {
 		t.Error("a word ending in - was turned into a bridge")
 	}
-	boxes, _ = ParseCombination("(a, b, c, d, e, f, g, h, i):4 (j, k, l, m, n, o, p, q, r):4")
-	if _, err := CombinationPhrases(boxes); err == nil {
-		t.Error("a combination of thousands of phrases was moved")
-	}
 }
 
 // The one-time move: a blacklist's combinations go into a new phrase set
 // with its scope, test mode and actions (threshold 1); a term cluster's
-// into a phrase cluster; exception lists and plain terms stay.
+// into a phrase cluster; exception lists, one-box combinations and plain
+// terms stay.
 func TestCombinationMigration(t *testing.T) {
 	d, path := openTest(t)
 	if err := d.CreateBlock("b"); err != nil {
@@ -65,7 +60,7 @@ func TestCombinationMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, _ := d.GetCluster("combos")
-	if err := d.AddListEntries(words, []string{"nsfw", "(car, lambo*) (big, small, nice):2", "cars(red, big)", "(a) (b):2"}); err != nil {
+	if err := d.AddListEntries(words, []string{"nsfw", "(car, lambo*) (big, small, nice):2", "cars(red, big)", "(a, b):2"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetListAction(words, ActionGreyscale, true); err != nil {
@@ -99,8 +94,8 @@ func TestCombinationMigration(t *testing.T) {
 	defer d.Close()
 	b, _ := d.GetBlock("b")
 	l, _ := b.Lists.Find("Words")
-	if strings.Join(l.Entries, "|") != "nsfw" {
-		t.Errorf("Words = %q; want only the plain term", l.Entries)
+	if strings.Join(l.Entries, "|") != "nsfw|(a, b):2" {
+		t.Errorf("Words = %q; want the plain term and the one-box combination", l.Entries)
 	}
 	if l, _ := b.Lists.Find("Spare"); len(l.Entries) != 1 {
 		t.Errorf("an exception list's combination moved: %q", l.Entries)
@@ -116,7 +111,7 @@ func TestCombinationMigration(t *testing.T) {
 		block.Distinct != 1 || grey.Distinct != 1 {
 		t.Errorf("phrase set = %+v", s)
 	}
-	if got := phraseTexts(s.Phrases); got != "[car, lambo*] [big] [small] | [car, lambo*] [big] [nice] | [car, lambo*] [small] [nice] | [cars] [red, big]" {
+	if got := phraseTexts(s.Phrases); got != "[car, lambo*] [big, small, nice] | [cars] [red, big]" {
 		t.Errorf("phrases = %q", got)
 	}
 	if c, _ := d.GetCluster("combos"); strings.Join(c.Entries, "|") != "plain" {

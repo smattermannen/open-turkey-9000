@@ -133,9 +133,9 @@ build and is **used for real**. On it:
   as `(car, lambo*) (big, small, nice):2` are the old form of phrases:
   `migrateCombinations` (`db/combinations.go`, at every open and after
   imports) moves those of blacklists and term clusters into phrase sets and
-  phrase clusters (`CombinationPhrases`: a box needing N words becomes one
-  phrase per choice of N); `refuseCombinations` refuses typed ones. Those
-  left in exception lists are still matched by `kc9kCombination`. What strengthens is free;
+  phrase clusters (`CombinationPhrases`: each box a word set, `:N`
+  dropped); `refuseCombinations` refuses typed ones. Those left (one box,
+  or in exception lists) are still matched by `kc9kCombination`. What strengthens is free;
   the rest is gated/queueable (`EditList*` edits name lists by id). Old
   commands (`block add`, `add-exception`, `add-keyword`, `threshold`,
   `action`) are shortcuts to the default lists Blocked / Exceptions / Page

@@ -7,16 +7,15 @@
 // needs (":2"; 1 if left out), or one bare word: cars(red, big),
 // (car, lambo*) (big, small, nice):2.
 //
-// Each combination becomes phrases: a box needing one word becomes a word
-// set; a box needing N different words becomes N one-term word sets, once
-// for every choice of N of its words (R-PHRASE-3: a word set gives one
-// term), so (car) (big, small, nice):2 becomes [car] [big] [small],
-// [car] [big] [nice] and [car] [small] [nice]. The phrases of a blacklist
-// go to a new phrase set "<list> phrases" with the list's scope, test mode
-// and actions, each at threshold 1; a term cluster's go to a new phrase
-// cluster. A combination that could never match (a box needing more words
-// than it has) is dropped. Combinations in exception lists stay where they
-// are: there are no phrase exceptions.
+// Each combination becomes one phrase: each box a word set. A box's ":N"
+// (how many of its words a match needed) is dropped, as the owner decided
+// (SPEC §6, 2026-11-14): a phrase set's threshold of different phrases
+// does that job now. The phrase matches wherever the combination did, and
+// more. The phrases of a blacklist go to a new phrase set "<list> phrases"
+// with the list's scope, test mode and actions, each at threshold 1; a term
+// cluster's go to a new phrase cluster. A combination of one box (such as
+// "(a, b):2") isn't a phrase and stays where it is, and so do combinations
+// in exception lists: there are no phrase exceptions.
 package db
 
 import (
@@ -33,9 +32,6 @@ import (
 // MaxComboBoxes bounds the boxes of a combination, and the words one box
 // may need.
 const MaxComboBoxes = 9
-
-// maxCombinationPhrases bounds how many phrases one combination becomes.
-const maxCombinationPhrases = 200
 
 // ComboBox is one box of a word combination.
 type ComboBox struct {
@@ -102,25 +98,14 @@ func ParseCombination(k string) ([]ComboBox, bool) {
 	return boxes, needed >= 2 && len(boxes) <= MaxComboBoxes
 }
 
-// choose returns every choice of n of the items, in order.
-func choose(items []string, n int) [][]string {
-	if n == 0 {
-		return [][]string{{}}
-	}
-	var out [][]string
-	for i := 0; i+n <= len(items); i++ {
-		for _, rest := range choose(items[i+1:], n-1) {
-			out = append(out, append([]string{items[i]}, rest...))
-		}
-	}
-	return out
-}
-
-// CombinationPhrases turns a word combination's boxes into phrases (see the
-// top of this file). No phrases and no error: it could never match.
+// CombinationPhrases turns a word combination's boxes into phrases (see
+// the top of this file). No phrases and no error: it isn't a phrase (one
+// box).
 func CombinationPhrases(boxes []ComboBox) ([]Phrase, error) {
-	// For each box, the ways it can fill word sets.
-	var options [][][]WordSet
+	if len(boxes) < 2 {
+		return nil, nil
+	}
+	var p Phrase
 	for _, b := range boxes {
 		var terms []string
 		for _, t := range b.Terms {
@@ -132,43 +117,13 @@ func CombinationPhrases(boxes []ComboBox) ([]Phrase, error) {
 				terms = append(terms, t)
 			}
 		}
-		if b.Min == 1 {
-			options = append(options, [][]WordSet{{{Terms: terms, Necessary: true}}})
-			continue
-		}
-		var ways [][]WordSet
-		for _, pick := range choose(terms, b.Min) {
-			var sets []WordSet
-			for _, t := range pick {
-				sets = append(sets, WordSet{Terms: []string{t}, Necessary: true})
-			}
-			ways = append(ways, sets)
-		}
-		if len(ways) == 0 {
-			return nil, nil // the box needs more words than it has
-		}
-		options = append(options, ways)
+		p.Sets = append(p.Sets, WordSet{Terms: terms, Necessary: true})
 	}
-	phrases := []Phrase{{}}
-	for _, ways := range options {
-		var next []Phrase
-		for _, p := range phrases {
-			for _, w := range ways {
-				next = append(next, Phrase{Sets: append(slices.Clone(p.Sets), w...)})
-			}
-		}
-		if len(next) > maxCombinationPhrases {
-			return nil, fmt.Errorf("it would become more than %d phrases", maxCombinationPhrases)
-		}
-		phrases = next
+	p = p.Normalize()
+	if err := p.Check(); err != nil {
+		return nil, err
 	}
-	for i := range phrases {
-		phrases[i] = phrases[i].Normalize()
-		if err := phrases[i].Check(); err != nil {
-			return nil, err
-		}
-	}
-	return phrases, nil
+	return []Phrase{p}, nil
 }
 
 // freeName returns name, or name with a number, that taken (lower case)
@@ -220,6 +175,9 @@ func migrateCombinations(conn *sql.DB) error {
 			if e.phrase, err = CombinationPhrases(boxes); err != nil {
 				log.Printf("word combination %q stays as it is: %v", e.text, err)
 				continue
+			}
+			if len(e.phrase) == 0 {
+				continue // one box: not a phrase
 			}
 			if _, seen := out[owner]; !seen {
 				order = append(order, owner)

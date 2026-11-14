@@ -291,7 +291,7 @@ func TestWordCombinations(t *testing.T) {
 	testDB(t)
 	mustRun(t, "block", "create", "b")
 	err := runCLI(t, "block", "add-keyword", "b", "(car,lambo*)(big, small, nice):2", "nsfw")
-	if err == nil || !strings.Contains(err.Error(), `"[car, lambo*] [big] [small]" "[car, lambo*] [big] [nice]" "[car, lambo*] [small] [nice]"`) {
+	if err == nil || !strings.Contains(err.Error(), `as "[car, lambo*] [big, small, nice]"`) {
 		t.Errorf("a typed combination: %v", err)
 	}
 	mustRun(t, "cluster", "create", "words", "--text")

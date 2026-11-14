@@ -68,11 +68,11 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   iptables fallback). DNS on start: 16 parallel, 30 min cache
   (`resolveAll`), but still filled before `start` returns. `/etc/hosts`
   size cost: Unchecked. Left: 100,000-entry speed test in `ci/`. (M)
-- [ ] **List names differing only in case** are allowed but lookup ignores
-  case, so one is unreachable. Phrase sets refuse it. (S)
-- [ ] **R-LOCK-12 gaps**: `kc9k monk` (manual) not confirmed; `project
-  import` can bring monk steps/actions without `--no-confirm-ok`; hotkey
-  press dialog tested only with a stub. (S)
+- [ ] **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
+  `project import` refuses monk steps/actions without `--no-confirm-ok`
+  (`projectMonk`); both in `confirm_test.go`. `block import` the same. Left: the hotkey
+  press dialog is tested only with a stub (`blocker.ConfirmDesktop` is never
+  run for real; needs a live check). (S)
 
 ### 0.2 Not yet confirmed in real use
 

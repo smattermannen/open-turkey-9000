@@ -126,7 +126,7 @@ func mustTrusted(t *testing.T, d *db.DB) int64 {
 func TestR_MONK_1_NoBlock(t *testing.T) {
 	d := testDB(t)
 	notTerminal(t)
-	mustRun(t, "monk", "--for", "30m")
+	mustRun(t, "monk", "--for", "30m", "--yes")
 	if until, err := d.MonkUntil(); err != nil || until == 0 {
 		t.Fatalf("monk mode not on: %d, %v", until, err)
 	}

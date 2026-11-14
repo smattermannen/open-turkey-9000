@@ -241,7 +241,8 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Built | list actions wait 60 s after the notice; scheduled freezes are announced at 5 min and 1 min |
 | Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |
-| Monk mode | Built | system-owned block `monk-mode` (R-MONK-1) |
+| Confirmation when any lock is set (R-LOCK-12) | Gap | only timer locks over 24 h ask today; every lock kind, on every target, must ask |
+| Monk mode | Gap | built as the system-owned block `monk-mode`; SPEC now says it is a mode, not a block (R-MONK-1, R-MONK-2) |
 | Consequences | Built | `enforce/consequence.go` |
 | Strict mode | Partial | a voluntary switch with its own setting lock (`kc9k strict on --for …`, `strict unlock`). Exempt folders: Not built |
 | Recovery of a forgotten password (§3.11) | Partial | root can remove it while nothing is locked |

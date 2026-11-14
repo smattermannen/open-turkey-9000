@@ -233,7 +233,7 @@ unless it has re-lock. A lock never changes what is blocked.
 
 | Term | Meaning | CT |
 |---|---|---|
-| **Timer lock** | On until a date and time (`--until`), or for a duration (`--for`). It can always be extended. Over 24 h, the user is asked to confirm; there is no upper limit. | Timer |
+| **Timer lock** | On until a date and time (`--until`), or for a duration (`--for`). It can always be extended. There is no upper limit. | Timer |
 | **Text lock** | Unlocked by typing a challenge: random characters, random words or custom text, 1–5000 characters, paste refused. | Random and custom text |
 | **Range lock** | On between set times on set days (or, inverted, outside them). | Time range |
 | **Delay lock** | Asking to unlock starts a countdown (1 min to 40 days); the lock is unlocked when it ends. | Delay |
@@ -287,7 +287,7 @@ extension is required, and protection settings (§4.10) can't be turned off.
 | **Frozen Chicken** | The device block: in its freeze mode, for a time (at most 24 h), on demand or by schedule. A running freeze can't be ended. A scheduled freeze can have locks like a block. *CT: Frozen Turkey / Device Blocks.* | A schedule lock. |
 | **Freeze mode** | What Frozen Chicken does: *lock screen*, *logout*, *shutdown*, or *allowed apps only*. | — |
 | **Allowed apps only** | Freeze mode: the computer stays usable, but only the programs on the freeze's app list may run; every other user program is closed. | An allowlist block. |
-| **Monk mode** | A system-owned whole-internet block, switched on for a set time with a timer lock of that time, and off when it ends. Started by `kc9k monk`, a list action or a ladder step. Exceptions and apps can be added only while it is off; it can't be deleted. | An ordinary block. |
+| **Monk mode** | A **mode**, not a block: the whole internet is blocked for a set time, and it ends when the time does. Started by `kc9k monk`, a list action or a ladder step. It is locked for its whole time: it can't be edited, switched off early or deleted, and nothing can be added to it while it runs. Its exceptions and apps are settings of the mode, changed only while it is off. | A block, ordinary or system-owned. |
 | **Consequence** | Something KC9K does to the device: close tab, close browser, lock screen, logout, shutdown, monk mode. Announced 60 s ahead, except from bypass prevention (R-WARN-1, R-WARN-2). | A page action. |
 | **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a block is locked: no `sudo` or `pkexec`; nothing runs from `/home` or `/tmp` except from folders the user exempted (adding one is a weakening); no containers or VMs. It can have its own setting lock. | — |
 | **No-escape** | Closes the boot-time exits: hides recovery entries and kernel options, and puts a password nobody knows on GRUB. | Strict mode. |
@@ -529,6 +529,7 @@ old names keep working for a while.
 - **R-LOCK-9** While any block or setting is locked: uninstalling is refused, the extension is required, protection settings can't be turned off.
 - **R-LOCK-10** No lock, delay or lead time applies unless the user set it.
 - **R-LOCK-11** A lock never starts by itself, except through re-lock.
+- **R-LOCK-12** Every lock, of every kind and on everything it can protect (block, browser setting, setting, scheduled freeze, monk mode), asks the user to confirm when it is set, always: the confirmation shows what is locked, the kind and, where it has one, how long. Nothing is locked until the user confirms. This holds for the GUI and the CLI alike, and for a lock set by a hotkey or a preset.
 
 **Weakening**
 - **R-WEAK-1** Strengthening never needs a lock unlocked. Setting a lock needs the settings password only if the user chose that.
@@ -567,7 +568,8 @@ old names keep working for a while.
 - **R-EVENT-1** At most one event per tab and blocked site per minute. Tabs restored when the browser starts, preloaded pages and embedded frames don't count.
 
 **Monk mode**
-- **R-MONK-1** The monk-mode block is system-owned, can't be deleted, and the `monk` action is not offered inside it.
+- **R-MONK-1** Monk mode is a mode, not a block: it is not in the list of blocks, can't be edited, renamed, removed or switched off while it runs, and the `monk` action is not offered in it. It ends only when its time ends.
+- **R-MONK-2** Because it is not a block, nothing a user can do to blocks (edit, delete, unlock) reaches monk mode.
 
 **Device**
 - **R-FREEZE-1** In *allowed apps only* mode, only programs on the freeze's app list (and system processes) may run.
@@ -628,6 +630,9 @@ Made with the owner. Newest last.
   then Quad9. `kc9k nepsis` is renamed `kc9k bypass`.
 - 2026-11-13: Definitions of the protection settings, `force-search` and
   `web-only` (§4.10).
+- 2026-11-14: Monk mode is a mode, not a block. As a block it could be edited
+  or deleted while unlocked, which would defeat it. All locks ask for
+  confirmation when set, always (R-LOCK-12), not only timer locks over 24 h.
 
 ## 7. Open decisions
 

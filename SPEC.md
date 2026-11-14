@@ -288,7 +288,7 @@ extension is required, and protection settings (§4.10) can't be turned off.
 | **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a block is locked: no `sudo` or `pkexec`; nothing runs from `/home` or `/tmp` except from folders the user exempted (adding one is a weakening); no containers or VMs. It can have its own setting lock. | — |
 | **No-escape** | Closes the boot-time exits: hides recovery entries and kernel options, and puts a password nobody knows on GRUB. | Strict mode. |
 | **Factory reset** | Wiping or reinstalling the operating system, or booting another one, to get past KC9K. Software can't forbid it. | — |
-| **Factory reset protection** | Settings that make a factory reset slow and deliberate: firmware lock, boot order guard, installer media guard, other systems in GRUB behind the password. | — |
+| **Factory reset protection** | Settings that make a factory reset slow and deliberate: firmware lock, installer media guard. Without a firmware password the firmware's own boot menu can't be closed, so the rest is friction. | — |
 
 ### 3.9 Actions
 
@@ -661,6 +661,11 @@ Made with the owner. Newest last.
   its `:N` (several words from one box) dropped; a phrase set's threshold of
   different phrases does that job. The new phrase sets start at threshold 1.
 - 2026-11-14: The page score is scrapped.
+- 2026-11-14: The root login and `su` guard (PAM) applies only while strict
+  mode's lockdown is on, not whenever no-escape is on. No boot order guard
+  and no "other systems in GRUB behind the password": without a firmware
+  password the firmware boot menu can't be closed, so they would be friction
+  only.
 - 2026-11-14: The extension's rules server is protected by a secret given to
   the extension by policy, so other local programs can't read the lists, post
   statistics or fake a check-in. Every command the sudo rule allows is

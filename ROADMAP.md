@@ -373,14 +373,18 @@ After section 0. Each item's details are in `SPEC.md`; here only the steps.
 - [ ] Firmware lock where `/sys/class/firmware-attributes/` allows it
       (admin password given to someone the user trusts, never random; no
       USB or network boot; fixed boot order); a guide elsewhere.
-- [ ] Boot order guard: put back the EFI boot order, clear `BootNext`.
 - [ ] Installer media guard: block OS image sites, close USB writing tools
       (mintstick, balenaEtcher, Ventoy, Popsicle, Startup Disk Creator,
       GNOME Disks restoring an image).
-- [ ] Other systems in GRUB behind the password.
-- [ ] Root paths: hide recovery entries, lock `init=`/`single` editing, lock
-      root login on TTYs and `su` during a lock. Needs a disposable machine.
-- [ ] A guided setup when turning on strict mode or no-escape.
+- [ ] Root login on TTYs and `su` during a lock: a PAM guard line (refuse
+      root) in `login`, `su` and `su-l`, installed and removed with strict
+      mode's lockdown (`ApplyLockdown`/`RemoveLockdown`), so `kc9k master`
+      lifts it too. Hiding recovery entries and locking `init=`/`single`
+      editing are done (the boot lock). Test on generated config, not a
+      boot.
+- [ ] A guided setup when turning on strict mode or no-escape: on a
+      terminal, a checklist (GRUB present, UEFI or BIOS, other systems
+      found, firmware password, USB boot still works) before typing yes.
 
 ### 2.7 Hardening and polish
 

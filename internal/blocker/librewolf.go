@@ -1,7 +1,6 @@
 package blocker
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -25,27 +24,4 @@ func LibreWolfVersion() string {
 
 // InstallLibreWolf installs LibreWolf from its official repository, enabled
 // through extrepo (Debian, Ubuntu and Linux Mint).
-func InstallLibreWolf() error {
-	env := append(os.Environ(), "DEBIAN_FRONTEND=noninteractive")
-	steps := [][]string{
-		{"apt-get", "install", "-y", "extrepo"},
-		{"extrepo", "enable", "librewolf"},
-		{"apt-get", "update"},
-		{"apt-get", "install", "-y", "librewolf"},
-	}
-	for _, step := range steps {
-		cmd := exec.Command(step[0], step[1:]...)
-		cmd.Env = env
-		if out, err := cmd.CombinedOutput(); err != nil {
-			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-			if len(lines) > 5 {
-				lines = lines[len(lines)-5:]
-			}
-			return fmt.Errorf("%s failed: %w\n%s", strings.Join(step, " "), err, strings.Join(lines, "\n"))
-		}
-	}
-	if LibreWolfVersion() == "" {
-		return fmt.Errorf("the installation finished but %s is missing", LibreWolfBinary)
-	}
-	return nil
-}
+func InstallLibreWolf() error { return InstallBrowser("librewolf") }

@@ -64,8 +64,22 @@ check("Strict mode" not in device and "No-escape" not in device, "Device Blocks 
 check("Recording" in titles("stats"), "statistics recording on the Statistics page")
 check([n for n, *_ in gui.BROWSER_OPTIONS] == ["safesearch", "force-search", "web-only", "block-devtools", "no-private"],
       "browser settings in §4.10 order")
-check("force-librewolf" not in win.browser_switches, "force-librewolf not among browser settings")
-check("force-librewolf" in win.setting_locks and "strict" in win.setting_locks, "lock lines for force-librewolf and strict mode")
+check("force-librewolf" not in win.browser_switches and "unsupported-browsers" not in win.browser_switches,
+      "block unsupported browsers not among browser settings")
+check("unsupported-browsers" in win.setting_locks and "strict" in win.setting_locks,
+      "lock lines for block unsupported browsers and strict mode")
+
+# Browsers list (§4.10): every supported browser, installed or not, Install
+# shown only where missing. Never clicked: it would install for real.
+ids = [b["id"] for b in win.state["browsers"]]
+check(ids == ["librewolf", "chrome", "chromium"], "supported browsers listed: " + ", ".join(ids))
+for b in win.state["browsers"]:
+    status, install = win.browser_rows[b["id"]]
+    check(status.get_text().startswith("Installed" if b["installed"] else "Not installed"),
+          f"{b['name']} status: {status.get_text()}")
+    check(install.get_visible() == (not b["installed"]), f"{b['name']} Install button only when missing")
+check(gui.browser_status({"installed": True, "checkin_seconds": 5}) == "Installed. Extension working.", "fresh check-in")
+check("not seen" in gui.browser_status({"installed": True, "checkin_seconds": -1}), "never checked in")
 check(win.tamper_summary.get_text() == "All off.", "tamper summary all off: " + win.tamper_summary.get_text())
 
 # The tamper protection window: Cancel changes nothing, OK applies.
@@ -78,16 +92,18 @@ def answer(response, tick=None):
         return response
     Gtk.Dialog.run = fake
 answer(Gtk.ResponseType.CANCEL, {"clock": True}); win.tamper_dialog(); settle()
-check(cli("tamper").stdout.strip() == "clock off", "Cancel leaves the clock off")
+def clock():
+    return cli("tamper").stdout.splitlines()[0]
+check(clock() == "clock off", "Cancel leaves the clock off")
 answer(Gtk.ResponseType.OK, {"clock": True}); win.tamper_dialog(); settle()
-check(cli("tamper").stdout.strip() == "clock on", "OK turns the clock on")
+check(clock() == "clock on", "OK turns the clock on")
 check(win.tamper_summary.get_text().startswith("On: Clock"), "summary shows it: " + win.tamper_summary.get_text())
-lw = bool(win.state.get("librewolf"))
+supported = any(b["installed"] for b in win.state["browsers"])
 answer(Gtk.ResponseType.CANCEL); win.tamper_dialog()
-check(win.tamper_checks["force-librewolf"].get_sensitive() == lw,
-      f"block unsupported browsers usable only with LibreWolf (installed: {lw})")
+check(win.tamper_checks["unsupported-browsers"].get_sensitive() == supported,
+      f"block unsupported browsers usable only with a supported browser (installed: {supported})")
 answer(Gtk.ResponseType.OK, {"clock": False}); win.tamper_dialog(); settle()
-check(cli("tamper").stdout.strip() == "clock off", "OK turns the clock off while nothing is locked")
+check(clock() == "clock off", "OK turns the clock off while nothing is locked")
 check(not msgs, "no error so far: " + "; ".join(msgs))
 
 # Locked: turning it off is refused by the command and the message shown.
@@ -98,8 +114,19 @@ status, _unlock = win.setting_locks["safesearch"]
 check(status.get_text().startswith("Locked: for"), "browser setting lock shown: " + status.get_text())
 check(not win.browser_switches["safesearch"].get_sensitive(), "locked browser setting can't be switched")
 answer(Gtk.ResponseType.OK, {"clock": False}); win.tamper_dialog(); settle()
-check(cli("tamper").stdout.strip() == "clock on", "clock stays on while something is locked")
+check(clock() == "clock on", "clock stays on while something is locked")
 check(any("locked" in m for m in msgs), "refusal shown: " + "; ".join(msgs))
+# Block unsupported browsers: OK turns it on (the scratch database applies
+# nothing); its lock line shows a lock; it can't be turned off while locked.
+if supported:
+    answer(Gtk.ResponseType.OK, {"unsupported-browsers": True}); win.tamper_dialog(); settle()
+    check(cli("tamper").stdout.splitlines()[1].startswith("unsupported-browsers on"), "OK turns block unsupported browsers on")
+    r = cli("tamper", "unsupported-browsers", "on", "--for", "1h", "--yes"); check(r.returncode == 0, "locked: " + r.stderr)
+    settle()
+    status, _unlock = win.setting_locks["unsupported-browsers"]
+    check(status.get_text().startswith("Locked: for"), "its lock shown: " + status.get_text())
+    answer(Gtk.ResponseType.CANCEL); win.tamper_dialog()
+    check(not win.tamper_checks["unsupported-browsers"].get_sensitive(), "locked: can't be unticked")
 Gtk.Dialog.run = real_run
 
 # Statistics recording from the Statistics page.

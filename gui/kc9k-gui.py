@@ -64,16 +64,27 @@ BROWSER_OPTIONS = (
 
 # Tamper protection settings (SPEC §4.10) that have a command: key, title,
 # detail, command prefix ("on"/"off" is appended). Block unsupported browsers
-# is built as the browser setting force-librewolf (decision 2026-11-14).
+# replaced the browser setting force-librewolf (decision 2026-11-14) and has
+# its own lock.
 TAMPER_SETTINGS = (
     ("clock", "Clock: ignore time and date changes",
      "While a timer lock runs, changing the date or time doesn't move it, and time the "
      "computer is off isn't counted.", ("tamper", "clock")),
-    ("force-librewolf", "Block unsupported browsers",
-     "Built so far as \"allow only LibreWolf\": every other browser, Chrome included, is "
-     "closed at once, even when no block is on. Needs LibreWolf installed.",
-     ("browser", "force-librewolf")),
+    ("unsupported-browsers", "Block unsupported browsers",
+     "Only LibreWolf, Google Chrome and Chromium running the Killer Chicken extension stay "
+     "open, even when no block is on. Every other browser, Firefox included (it can't run the "
+     "extension), is closed at once; a supported browser without the extension a minute "
+     "after it starts. Needs a supported browser installed.",
+     ("tamper", "unsupported-browsers")),
 )
+
+# Install notes for the supported browsers (SPEC §3.13), by ID.
+BROWSER_INSTALL_NOTES = {
+    "librewolf": "It is installed from LibreWolf's official repository through extrepo.",
+    "chromium": "It is installed from Linux Mint's own repository.",
+    "chrome": "Google's repository and its signing key are added, and Chrome is installed from it; "
+              "it then updates with the rest of the system.",
+}
 
 # What a blacklist does to the pages it matches; any combination.
 SITE_ACTIONS = (
@@ -82,7 +93,6 @@ SITE_ACTIONS = (
     ("no-images", "Block images"),
     ("mute", "Mute sound"),
     ("no-video", "Stop and hide video"),
-    ("declutter", "Declutter (experimental)"),
     ("dark", "Dark page"),
     ("redirect", "Open another page"),
     ("image", "Show a picture"),
@@ -180,6 +190,20 @@ def describe_setting_lock(info):
     if info.get("password_locked"):
         parts.append("password")
     return parts
+
+
+def browser_status(browser):
+    """A supported browser's line in the Browsers list (gui-state 'browsers')."""
+    if not browser.get("installed"):
+        return "Not installed."
+    seconds = browser.get("checkin_seconds", -1)
+    if seconds < 0:
+        return "Installed. Extension not seen yet: open it once."
+    if seconds < 120:
+        return "Installed. Extension working."
+    if seconds < 2 * 86400:
+        return f"Installed. Extension last seen {fmt_seconds(seconds)} ago."
+    return f"Installed. Extension last seen {seconds // 86400} days ago."
 
 
 def fmt_seconds(seconds):
@@ -4530,23 +4554,23 @@ class Window(Gtk.ApplicationWindow):
             dim("Closes the ways around your blocks from inside the computer. Once on, a tamper "
                 "protection setting can't be turned off while anything is locked."),
             self.tamper_summary, tamper_change]
-        # force-librewolf keeps its own lock until the group has one.
-        tamper_rows.append(self.setting_lock_line("force-librewolf", "Block unsupported browsers"))
+        # Block unsupported browsers keeps its own lock until the group has one.
+        tamper_rows.append(self.setting_lock_line("unsupported-browsers", "Block unsupported browsers"))
         box.pack_start(section("Tamper protection", *tamper_rows), False, False, 0)
 
-        self.librewolf_status = Gtk.Label(xalign=0, wrap=True)
-        self.librewolf_install = Gtk.Button(label="Install LibreWolf", halign=Gtk.Align.START)
-        self.librewolf_install.get_style_context().add_class("suggested-action")
-        self.librewolf_install.connect("clicked", self.install_librewolf)
+        # Browsers (§4.10): supported browsers found, extension status,
+        # one-click install. Rows are made once the state names them.
+        self.browser_rows = {}
+        self.browser_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.extension_status = dim("")
         box.pack_start(section(
             "Browsers",
-            dim("The Killer Chicken extension runs in LibreWolf (a privacy-focused Firefox) and in "
-                "Google Chrome, which install it themselves; Firefox and other browsers can't run "
-                "it. The extension is always on: it enforces wildcards, page titles and text, "
-                "greyscale, images and web-only, and while a block has websites, browsers without "
-                "it are closed."),
-            self.librewolf_status, self.librewolf_install, self.extension_status), False, False, 0)
+            dim("The Killer Chicken extension runs in the supported browsers: LibreWolf (a "
+                "privacy-focused Firefox), Google Chrome and Chromium, which install it themselves. "
+                "Firefox and other browsers can't run it. The extension is always on: it enforces "
+                "wildcards, page titles and text, greyscale, images and web-only, and while a block "
+                "has websites, browsers without it are closed."),
+            self.browser_list, self.extension_status), False, False, 0)
 
         rows = [self.setting_row(name, title, detail) for name, title, detail in BROWSER_OPTIONS]
         box.pack_start(section(
@@ -4717,18 +4741,18 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(dim("Once on, a tamper protection setting can't be turned off while any "
                            "block or setting is locked. Turning one off asks for the settings "
                            "password."), False, False, 0)
-        has_librewolf = bool(self.state.get("librewolf"))
+        has_supported = any(b.get("installed") for b in self.state.get("browsers") or [])
         checks = {}
         for key, title, detail, _command in TAMPER_SETTINGS:
             check = Gtk.CheckButton(label=title)
             check.set_active(current[key])
             note = detail
-            if key == "force-librewolf" and self.setting_locked("force-librewolf"):
+            if key == "unsupported-browsers" and self.setting_locked(key):
                 check.set_sensitive(False)
                 note += " It has its own lock now."
-            elif key == "force-librewolf" and not current[key] and not has_librewolf:
+            elif key == "unsupported-browsers" and not current[key] and not has_supported:
                 check.set_sensitive(False)
-                note += " Install LibreWolf first (Browsers, below)."
+                note += " Install a supported browser first (Browsers, below)."
             checks[key] = check
             item = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             item.pack_start(check, False, False, 0)
@@ -4759,12 +4783,28 @@ class Window(Gtk.ApplicationWindow):
 
     def tamper_state(self):
         return {"clock": bool(self.state.get("tamper_clock", False)),
-                "force-librewolf": bool(self.state["browser"].get("force-librewolf", False))}
+                "unsupported-browsers": bool(self.state.get("unsupported_browsers", False))}
+
+    def setting_lock_info(self, name):
+        """A lockable setting's lock from the state: strict mode, block
+        unsupported browsers or a browser setting."""
+        if name == "strict":
+            return self.state.get("strict_lock") or {}
+        if name == "unsupported-browsers":
+            return self.state.get("unsupported_browsers_lock") or {}
+        return (self.state.get("browser_locks") or {}).get(name) or {}
+
+    @staticmethod
+    def setting_command(name, verb):
+        """The command that turns a lockable setting on, or unlocks it."""
+        if name == "strict":
+            return ["strict", verb]
+        if name == "unsupported-browsers":
+            return ["tamper", "unlock", name] if verb == "unlock" else ["tamper", name, verb]
+        return ["browser", "unlock", name] if verb == "unlock" else ["browser", name, verb]
 
     def setting_locked(self, name):
-        info = (self.state.get("strict_lock") if name == "strict"
-                else (self.state.get("browser_locks") or {}).get(name)) or {}
-        return bool(describe_setting_lock(info))
+        return bool(describe_setting_lock(self.setting_lock_info(name)))
 
     def add_hotkey(self, values):
         if len(values) not in (2, 3):
@@ -4808,8 +4848,7 @@ class Window(Gtk.ApplicationWindow):
         for name, switch in self.browser_switches.items():
             set_switch(switch, self.state["browser"].get(name, False))
         for name, (label, unlock) in self.setting_locks.items():
-            info = (self.state.get("strict_lock") if name == "strict"
-                    else self.state.get("browser_locks", {}).get(name)) or {}
+            info = self.setting_lock_info(name)
             parts = describe_setting_lock(info)
             label.set_text("Locked: " + ", ".join(parts) if parts else "")
             label.set_visible(bool(parts))
@@ -4825,23 +4864,7 @@ class Window(Gtk.ApplicationWindow):
         on = [title for key, title, _detail, _command in TAMPER_SETTINGS if tamper[key]]
         self.tamper_summary.set_markup(
             "<b>On:</b> " + GLib.markup_escape_text("; ".join(on)) if on else "<b>All off.</b>")
-        version = self.state.get("librewolf", "")
-        chrome = self.state.get("chrome", False)
-        chrome_line = " Google Chrome is installed and runs the extension too." if chrome else ""
-        if version:
-            self.librewolf_status.set_markup(
-                f"<b>LibreWolf installed</b> (version {GLib.markup_escape_text(version)})." + chrome_line)
-        elif chrome:
-            self.librewolf_status.set_markup(
-                "<b>LibreWolf not installed.</b> Google Chrome is installed and runs the extension.")
-        else:
-            self.librewolf_status.set_markup(
-                "<b>LibreWolf not installed.</b> Until it or Google Chrome is, the extension can't run, "
-                "so wildcards, keywords, greyscale, images and web-only aren't enforced in the browser.")
-        self.librewolf_install.set_visible(not version)
-        # Without a browser for it the line above already says the extension can't run.
-        self.extension_status.set_text("Extension: " + self.state.get("extension_status", ""))
-        self.extension_status.set_visible(bool(version) or chrome)
+        self.update_browsers()
         for name, switch in self.option_switches.items():
             set_switch(switch, (self.state.get("options") or {}).get(name, False))
         has_password = self.state.get("settings_password", False)
@@ -4865,13 +4888,45 @@ class Window(Gtk.ApplicationWindow):
             f"{h['keys']}  starts {h['block']}" + (f", locked for {h['lock_for']}" if h["lock_for"] else "")
             for h in hotkeys])
 
-    def install_librewolf(self, _button):
-        if self.confirm("Install LibreWolf?",
-                        "It is installed from LibreWolf's official repository through extrepo. "
-                        "This needs an internet connection and can take a few minutes.",
+    def update_browsers(self):
+        """The Browsers list: each supported browser, installed or not, its
+        extension's last check-in, and Install."""
+        browsers = self.state.get("browsers") or []
+        for b in browsers:
+            if b["id"] not in self.browser_rows:
+                row = Gtk.Box(spacing=12)
+                name = Gtk.Label(xalign=0)
+                name.set_markup(f"<b>{GLib.markup_escape_text(b['name'])}</b>")
+                name.set_size_request(140, -1)
+                status = dim("")
+                install = Gtk.Button(label="Install", valign=Gtk.Align.CENTER)
+                install.set_no_show_all(True)
+                install.connect("clicked", self.install_browser, b["id"], b["name"])
+                row.pack_start(name, False, False, 0)
+                row.pack_start(status, True, True, 0)
+                row.pack_end(install, False, False, 0)
+                self.browser_list.pack_start(row, False, False, 0)
+                row.show_all()
+                self.browser_rows[b["id"]] = (status, install)
+            status, install = self.browser_rows[b["id"]]
+            status.set_text(browser_status(b))
+            install.set_visible(not b.get("installed"))
+        any_installed = any(b.get("installed") for b in browsers)
+        if any_installed:
+            self.extension_status.set_text("Extension: " + self.state.get("extension_status", ""))
+        else:
+            self.extension_status.set_text(
+                "No supported browser is installed, so the extension can't run: wildcards, keywords, "
+                "greyscale, images and web-only aren't enforced in the browser, and no browser is "
+                "closed. Install one above.")
+
+    def install_browser(self, _button, browser_id, name):
+        if self.confirm(f"Install {name}?",
+                        BROWSER_INSTALL_NOTES.get(browser_id, "") +
+                        " This needs an internet connection and can take a few minutes.",
                         "Install"):
-            self.librewolf_status.set_text("Installing LibreWolf, this can take a few minutes…")
-            self.run(["browser", "install-librewolf"], timeout=900,
+            self.browser_rows[browser_id][0].set_text("Installing, this can take a few minutes…")
+            self.run(["browsers", "install", browser_id], timeout=900,
                      then=lambda output: self.message(output, Gtk.MessageType.INFO))
 
     def setting_row(self, name, title, detail):
@@ -4886,7 +4941,7 @@ class Window(Gtk.ApplicationWindow):
 
     def setting_lock_line(self, name, title):
         """A setting lock's state with Lock… and Unlock… (browser settings,
-        force-librewolf, strict mode)."""
+        block unsupported browsers, strict mode)."""
         line = Gtk.Box(spacing=8)
         status = dim("", wrap=False)
         status.set_no_show_all(True)
@@ -4938,7 +4993,7 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
             return
-        args = ["strict", "on"] if name == "strict" else ["browser", name, "on"]
+        args = self.setting_command(name, "on")
         base = len(args)
         if lock_minutes:
             args += ["--for", f"{lock_minutes}m"]
@@ -4966,10 +5021,7 @@ class Window(Gtk.ApplicationWindow):
         self.run(args + ["--yes"], secret + "\n" if secret else None)
 
     def unlock_setting(self, _button, name, title):
-        if name == "strict":
-            info, unlock = self.state.get("strict_lock") or {}, ["strict", "unlock"]
-        else:
-            info, unlock = self.state.get("browser_locks", {}).get(name, {}), ["browser", "unlock", name]
+        info, unlock = self.setting_lock_info(name), self.setting_command(name, "unlock")
         if info.get("password_locked") and not info.get("char_locked"):
             password = self.ask_text(f"Unlock {title}", "Enter the setting's password.", password=True)
             if password:

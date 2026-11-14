@@ -90,7 +90,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
     started before the last protecting settings change
     (`noteSettingsChange`). Browsers known by name or engine
     (`browserdetect.go`: libxul.so or icudtl.dat/V8 snapshot mapped by a
-    user-owned exe, minus Electron). LibreWolf: `block-devtools` policy;
+    user-owned exe, minus Electron). Decision in `closeReason`. With block
+    unsupported browsers on, runs always and closes at once every browser
+    whose exe isn't a root-owned package file of `SupportedBrowsers`
+    (`supported.go`: LibreWolf, Chrome, Chromium; `InstallBrowser`, fakes
+    `statFile`/`runInstall`). LibreWolf: `block-devtools` policy;
     five prefs locked in librewolf.cfg, user overrides replaced by a cleaned
     copy (`librewolfprefs.go`).
   - `sockets.go`: strict mode closes docker/lxd/incus/libvirt sockets.
@@ -160,14 +164,15 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   (one box, or in exception lists) use `kc9kCombination`.
   Case-insensitive lookup.
 - **Actions** (`db/actions.go`, Param/Minutes): block, greyscale,
-  no-images, mute (`applyMute`), no-video, dark, declutter (to remove),
-  redirect, image (`db.ImagesDir`, served `/image/`), close-tab;
-  device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
+  no-images, mute (`applyMute`), no-video, dark, redirect, image
+  (`db.ImagesDir`, served `/image/`), close-tab; device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
   picks the strongest, closes tab/browser itself, POSTs `/hit`
   (`enforce/hits.go`, header required) so the daemon logs and runs
   logout/shutdown/monk. `no-video`/`no-images` reach every frame:
   background `tellFrames` pushes `tab-looks`, new frames ask for it; mute
-  is tab-wide (`applyMute`).
+  is tab-wide (`applyMute`). Removed actions (declutter):
+  `migrateRemovedActions` drops them on open (emptied → block), imports
+  skip them (`db.IsRemovedAction`).
 - **Phrase sets** (`db/phrases.go`, `cli/phrases.go`, `kc9k phrase-set`):
   `db.Phrase` JSON, typed `[a, b] [c]? :N` (`ParsePhrase`, `String`);
   `Check` refuses one-ended bridges (mirrored `kc9kPhraseCheck`). Rules
@@ -211,7 +216,12 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   logs `EventWorkaround`.
 - **Browser setting locks** (`db/settinglocks.go`, `cli/browser.go`): per
   option (time, challenge, password, restart); `enforce.AnyLock` counts
-  them. Only `force-librewolf` is also held by block locks (`GuardsBlocks`).
+  them. The same code serves the tamper setting block unsupported browsers
+  (`db.UnsupportedBrowsers`, stored `tamper.unsupported-browsers`,
+  `enforce.IsLockableSetting`/`SettingKey`, `cli/tamper.go`), formerly the
+  browser setting `force-librewolf` (`migrateForceLibreWolf` moves state
+  and lock row; hidden alias in `kc9k browser`; old project files read).
+  `GuardsBlocks`: it and `block-devtools`.
 - **Chrome** (`webext/chrome.go`, `blocker/chromesetup.go`): `PackChrome`
   builds MV3 manifest + service worker (`chrome-worker.js`), signs CRX3 with
   a per-computer key (`webext.ChromeKeyPath`); daemon serves
@@ -342,12 +352,20 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   minus delay; added later only stronger; password can't be replaced;
   `kc9k browser unlock O` unlocks and turns off. While a browser setting is
   locked, strict mode and no-escape hold and uninstall is refused.
-  `force-librewolf` and `block-devtools` also can't go off while a block is
-  locked or a freeze runs.
+  `block-devtools` also can't go off while a block is locked or a freeze
+  runs. Block unsupported browsers (`kc9k tamper unsupported-browsers on
+  [lock flags]`, `tamper unlock unsupported-browsers`; old `browser
+  force-librewolf` hidden): own lock as a browser setting's; off refused
+  while anything is locked; on refused with no supported browser installed.
 - **Extension guard**: required while an active block has a non-empty
   blacklist, or web-only/force-search is on; app-only blocks leave browsers
-  alone. Nothing closed without LibreWolf or Chrome installed (`status`
-  says so). Firefox needs signed extensions; Brave/Edge/Opera/Vivaldi not set
+  alone. With block unsupported browsers on, always: other browsers
+  (Firefox too) close at once, supported ones after 60 s without a check-in.
+  Nothing closed without LibreWolf, Chrome or Chromium installed (`status`
+  says so). `kc9k browsers` lists them with per-browser check-in
+  (`extension.last_checkin.<id>`); `browsers install librewolf|chromium|chrome`
+  (extrepo; Mint's chromium .deb; Google's repo with key in
+  `/etc/apt/keyrings/google-chrome.asc`, amd64 only). Firefox needs signed extensions; Brave/Edge/Opera/Vivaldi not set
   up. Installed engine-based apps (Thunderbird, Spotify, Steam, Electron)
   aren't browsers. Chrome flags `--disable-extensions[-except]`,
   `--remote-debugging-pipe` and Firefox `--marionette`/remote-debugging

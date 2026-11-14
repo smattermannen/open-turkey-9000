@@ -609,7 +609,7 @@ var statusCmd = &cobra.Command{
 // 'kc9k status' and the interface.
 func extensionStatus(database *db.DB) string {
 	if !blocker.ExtensionBrowserInstalled() {
-		return "neither LibreWolf nor Google Chrome is installed, so wildcards, keywords, greyscale, images and web-only aren't enforced in the browser. Run 'kc9k browser install-librewolf'."
+		return "no supported browser (LibreWolf, Google Chrome, Chromium) is installed, so wildcards, keywords, greyscale, images and web-only aren't enforced in the browser, and no browser is closed. Install one: 'kc9k browsers install librewolf'."
 	}
 	required, err := enforce.ExtensionRequiredNow(database)
 	if err != nil {
@@ -619,10 +619,13 @@ func extensionStatus(database *db.DB) string {
 	if required {
 		status = "needed now: browsers without it are closed after 60 seconds"
 	}
+	if enforce.UnsupportedBrowsersOn(database) {
+		status = "always needed (block unsupported browsers is on): other browsers are closed at once, supported ones without it after 60 seconds"
+	}
 	if last, ok := enforce.LastExtensionCheckIn(database); ok {
 		return fmt.Sprintf("%s; last checked in %s ago", status, fmtAgo(time.Since(last)))
 	}
-	return status + "; no check-in yet (open LibreWolf)"
+	return status + "; no check-in yet (open a supported browser)"
 }
 
 // fmtAgo formats an elapsed time roughly: "12 s", "5 min", "3 h", "2 days".

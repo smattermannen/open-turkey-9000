@@ -34,8 +34,8 @@ var (
 	installDirs       = []string{"/usr/lib/librewolf", "/usr/share/librewolf", "/usr/lib/firefox", "/usr/lib/firefox-esr"}
 )
 
-// ForcedBrowserKillList names other browsers, closed when LibreWolf is forced.
-var ForcedBrowserKillList = []string{
+// otherBrowserNames names browsers besides LibreWolf, for BrowserNames.
+var otherBrowserNames = []string{
 	"firefox", "firefox-bin", "firefox-esr", "chrome", "google-chrome", "chromium", "chromium-browser",
 	"brave", "brave-browser", "opera", "vivaldi-bin", "msedge", "microsoft-edge", "epiphany",
 	"falkon", "konqueror", "midori", "qutebrowser", "palemoon", "waterfox", "floorp", "zen", "tor", "torbrowser",
@@ -246,5 +246,5 @@ func SyncLibreWolfSigning(on bool) error {
 
 // BrowserNames names every browser, LibreWolf included, for closing them all.
 func BrowserNames() []string {
-	return append([]string{"librewolf"}, ForcedBrowserKillList...)
+	return append([]string{"librewolf"}, otherBrowserNames...)
 }

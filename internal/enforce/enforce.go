@@ -372,7 +372,6 @@ func Tick(d *db.DB, now time.Time) error {
 			logEvent(d, db.EventWorkaround, b.BlockName, strings.Join(tools, ", "))
 		}
 	}
-	killApps(d, forcedKills(d), db.EventBrowser, websiteBlocks(active)...)
 	enforceNepsis(d, now, active)
 	return nil
 }

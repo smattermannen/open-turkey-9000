@@ -28,7 +28,7 @@ const rulesPort = 47613
 // own sites (see db.Actions). Neither is the extension: it is always
 // installed, and browsers without it are closed while it is needed (see
 // ExtensionRequired).
-var BrowserSettings = []string{"web-only", "safesearch", "force-search", "force-librewolf", "block-devtools", "no-private"}
+var BrowserSettings = []string{"web-only", "safesearch", "force-search", "block-devtools", "no-private"}
 
 // defaultOn are options that are on until turned off. LibreWolf's developer
 // tools can switch the extension off from its own pages or about:debugging,
@@ -43,13 +43,42 @@ var RetiredBrowserSettings = []string{"extension", "require-extension"}
 // in the daemon; the rules server feeds it.
 var extensionGuard = blocker.NewExtensionGuard(rulesPort)
 
-// GuardsBlocks reports whether a setting helps enforce blocks: without forcing
-// LibreWolf, another browser can be used while no website block is on, and
-// without blocking developer tools the extension can be switched off. These
-// also can't be turned off while a block is locked. The others only answer
-// to their own locks (see db.SettingLock).
+// GuardsBlocks reports whether a setting helps enforce blocks: without
+// blocking unsupported browsers, another browser can be used while no
+// website block is on, and without blocking developer tools the extension
+// can be switched off. These also can't be turned off while a block is
+// locked. The others only answer to their own locks (see db.SettingLock).
 func GuardsBlocks(name string) bool {
-	return name == "force-librewolf" || name == "block-devtools"
+	return name == db.UnsupportedBrowsers || name == "block-devtools"
+}
+
+// UnsupportedBrowsersOn reports whether the tamper protection setting block
+// unsupported browsers (§4.10) is on.
+func UnsupportedBrowsersOn(d *db.DB) bool {
+	v, err := d.GetSetting(db.SettingUnsupportedBrowsers)
+	return err == nil && v == "on"
+}
+
+// IsLockableSetting reports whether name is an on/off setting with its own
+// setting lock: a browser setting, or block unsupported browsers.
+func IsLockableSetting(name string) bool {
+	return IsBrowserSetting(name) || name == db.UnsupportedBrowsers
+}
+
+// SettingKey is where an on/off setting with its own lock is stored.
+func SettingKey(name string) string {
+	if name == db.UnsupportedBrowsers {
+		return db.SettingUnsupportedBrowsers
+	}
+	return "browser." + name
+}
+
+// SettingOn reports whether a lockable setting (see IsLockableSetting) is on.
+func SettingOn(d *db.DB, name string) bool {
+	if name == db.UnsupportedBrowsers {
+		return UnsupportedBrowsersOn(d)
+	}
+	return BrowserOn(d, name)
 }
 
 // SettingExtensionCheckIn holds when the extension last checked in (unix
@@ -95,7 +124,17 @@ func ExtensionRequiredNow(d *db.DB) (bool, error) {
 
 // LastExtensionCheckIn returns when the extension last checked in, if ever.
 func LastExtensionCheckIn(d *db.DB) (time.Time, bool) {
-	value, err := d.GetSetting(SettingExtensionCheckIn)
+	return lastCheckIn(d, SettingExtensionCheckIn)
+}
+
+// LastBrowserCheckIn returns when the extension in a supported browser
+// (blocker.SupportedBrowsers ID) last checked in, if ever.
+func LastBrowserCheckIn(d *db.DB, id string) (time.Time, bool) {
+	return lastCheckIn(d, SettingExtensionCheckIn+"."+id)
+}
+
+func lastCheckIn(d *db.DB, key string) (time.Time, bool) {
+	value, err := d.GetSetting(key)
 	if err != nil || value == "" {
 		return time.Time{}, false
 	}
@@ -107,24 +146,32 @@ func LastExtensionCheckIn(d *db.DB) (time.Time, bool) {
 }
 
 // checkInRecorder passes check-ins to the guard and notes the latest one
-// from a real browser in the database, at most every checkInRecordEvery, so
-// 'kc9k status' and the interface can show the extension is working.
+// from a real browser in the database, overall and per supported browser,
+// each at most every checkInRecordEvery, so 'kc9k status' and the interface
+// can show the extension is working, and in which browsers.
 func checkInRecorder(d *db.DB) func(remoteAddr string) {
 	var mu sync.Mutex
-	var last time.Time
+	last := map[string]time.Time{}
+	record := func(key string, now time.Time) {
+		if now.Sub(last[key]) < checkInRecordEvery {
+			return
+		}
+		last[key] = now
+		if err := d.SetSetting(key, strconv.FormatInt(now.Unix(), 10)); err != nil {
+			log.Printf("rules: %v", err)
+		}
+	}
 	return func(remoteAddr string) {
-		if !extensionGuard.CheckIn(remoteAddr) {
+		found, id := extensionGuard.CheckIn(remoteAddr)
+		if !found {
 			return
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		now := time.Now()
-		if now.Sub(last) < checkInRecordEvery {
-			return
-		}
-		last = now
-		if err := d.SetSetting(SettingExtensionCheckIn, strconv.FormatInt(now.Unix(), 10)); err != nil {
-			log.Printf("rules: %v", err)
+		record(SettingExtensionCheckIn, now)
+		if id != "" {
+			record(SettingExtensionCheckIn+"."+id, now)
 		}
 	}
 }
@@ -601,27 +648,19 @@ func enforceBrowser(d *db.DB) {
 }
 
 // enforceExtension closes browsers without a working extension while it is
-// required (see ExtensionRequired), as long as a browser that runs it
-// (LibreWolf, Google Chrome or Chromium) is there to use instead: without
-// one, every browser would be closed.
+// required (see ExtensionRequired), and with block unsupported browsers on
+// also every browser that isn't a supported browser running it, at any time.
+// Only as long as a supported browser (LibreWolf, Google Chrome or Chromium)
+// is there to use instead: without one, every browser would be closed.
 func enforceExtension(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
-	if !ExtensionRequired(d, active) || !blocker.ExtensionBrowserInstalled() {
+	unsupported := UnsupportedBrowsersOn(d)
+	if !unsupported && !ExtensionRequired(d, active) {
 		return
 	}
-	if extensionGuard.Enforce(now, protectionChanged(d)) > 0 {
+	if !blocker.ExtensionBrowserInstalled() {
+		return // 'kc9k status' says so
+	}
+	if extensionGuard.Enforce(now, protectionChanged(d), unsupported) > 0 {
 		logEventFor(d, db.EventBrowser, websiteBlocks(active), "")
 	}
-}
-
-func forcedKills(d *db.DB) []string {
-	if !BrowserOn(d, "force-librewolf") {
-		return nil
-	}
-	// Never leave the computer without any browser: if LibreWolf is gone, the
-	// others stay open until it is installed again.
-	if blocker.LibreWolfVersion() == "" {
-		log.Printf("browser: force-librewolf is on but LibreWolf isn't installed; not closing other browsers")
-		return nil
-	}
-	return blocker.ForcedBrowserKillList
 }

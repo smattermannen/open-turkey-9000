@@ -52,3 +52,41 @@ func TestSocketInodeFindsOwnConnection(t *testing.T) {
 	}
 	t.Errorf("inode %s is not one of this process's sockets", inode)
 }
+
+// closeReason decides which browsers the guard closes.
+func TestCloseReason(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	old := ExtensionGrace + time.Minute
+	cases := []struct {
+		name        string
+		p           guardedProcess
+		changed     time.Time
+		unsupported bool
+		closed      bool
+	}{
+		{"new browser, grace", guardedProcess{supported: true, age: 10 * time.Second, ageKnown: true}, time.Time{}, false, false},
+		{"old, never checked in", guardedProcess{supported: true, age: old, ageKnown: true}, time.Time{}, false, true},
+		{"old, checked in", guardedProcess{supported: true, age: old, ageKnown: true, seen: true, lastSeen: now.Add(-5 * time.Second)}, time.Time{}, false, false},
+		{"old, check-in stale", guardedProcess{supported: true, age: old, ageKnown: true, seen: true, lastSeen: now.Add(-2 * ExtensionGrace)}, time.Time{}, false, true},
+		{"remote control", guardedProcess{supported: true, remote: true, age: time.Second, ageKnown: true}, time.Time{}, false, true},
+		{"started before a protecting change", guardedProcess{supported: true, age: 10 * time.Minute, ageKnown: true, seen: true, lastSeen: now},
+			now.Add(-2 * time.Minute), false, true},
+		{"started after a protecting change", guardedProcess{supported: true, age: time.Minute, ageKnown: true, seen: true, lastSeen: now},
+			now.Add(-2 * time.Minute), false, false},
+		// Block unsupported browsers: others close at once, even fresh or
+		// (impossibly) checked in; supported ones keep their grace.
+		{"unsupported, fresh, setting off", guardedProcess{age: time.Second, ageKnown: true}, time.Time{}, false, false},
+		{"unsupported, fresh, setting on", guardedProcess{age: time.Second, ageKnown: true}, time.Time{}, true, true},
+		{"unsupported, checked in, setting on", guardedProcess{age: old, ageKnown: true, seen: true, lastSeen: now}, time.Time{}, true, true},
+		{"unsupported, age unknown, setting on", guardedProcess{}, time.Time{}, true, true},
+		{"supported, fresh, setting on", guardedProcess{supported: true, age: time.Second, ageKnown: true}, time.Time{}, true, false},
+		{"supported, checked in, setting on", guardedProcess{supported: true, age: old, ageKnown: true, seen: true, lastSeen: now}, time.Time{}, true, false},
+		{"supported, no extension, setting on", guardedProcess{supported: true, age: old, ageKnown: true}, time.Time{}, true, true},
+	}
+	for _, c := range cases {
+		reason := closeReason(c.p, now, c.changed, c.unsupported)
+		if (reason != "") != c.closed {
+			t.Errorf("%s: reason %q; want closed = %v", c.name, reason, c.closed)
+		}
+	}
+}

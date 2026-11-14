@@ -33,16 +33,10 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   word sets (today 9: `MAX_WORD_SETS`, `db.MaxWordSets`; bit mask in
   `kc9kPhraseMatcher` caps at 31). New sets default to text only, so titles
   seem missed. (S)
-- [ ] **Declutter**: still present (`db.ActionDeclutter`, `content.js`, GUI).
-  Remove; upgrade drops stored ones; imports skip it. (S)
 - [ ] **Android extension can be switched off** (§3.13) in IronFox's add-ons
   manager: ~1 free minute every few minutes (15 s stale + 60 s grace, 2 min
   pause). Want: short grace once checked in before; each pause doubles (to
   1 h) until it runs unbroken a while. (S)
-- [ ] **Block unsupported browsers** (§4.10): built is `force-librewolf`.
-  Want a tamper protection setting allowing LibreWolf/Chrome/Chromium with
-  the extension, carrying over state and lock. Also the Browsers list with
-  one-click install. (M)
 - [ ] **Project** (§3.13): backup/share (`--share`), preview, renaming
   built. Left: backup must include running locks, passwords, hotkeys,
   statistics. (S)
@@ -82,6 +76,7 @@ Script-tested, never by a person. Script what can be into `ci/`.
 - [ ] No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
 - [ ] Social presets beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
 - [ ] Chrome on the laptop: extension pinned, unremovable, incognito/guest off, block works, popup. Then rerun `browser_test.py`, `extras_test.py` in LibreWolf.
+- [ ] Block unsupported browsers (`kc9k tamper unsupported-browsers`): upgrade from `force-librewolf` keeps state and lock; Firefox and a portable LibreWolf close at once; LibreWolf/Chrome with the extension stay; Browsers list check-ins. `kc9k browsers install chromium|chrome` never run (Mint's chromium .deb assumed at `/usr/lib/chromium/chromium`, reading `/etc/chromium/policies`).
 - [ ] Monk mode live (`ci/monk_live_test.sh` unwritten), incl. reboot mid-way.
 - [ ] GUI design pass: pages since 2026-11-10 never seen on a real screen.
 - [ ] Lists without types (§3.2): after the upgrade the split `Blocked` /
@@ -123,7 +118,6 @@ Only items not simply Built.
 | §3.8 Forgotten password recovery | Partial | root removes it while nothing locked |
 | §3.8 R-DESKTOP-1 | Unchecked | |
 | §3.8 Factory reset protection | Not built | 2.6 |
-| §3.9 Declutter | Differs | 0.1 |
 | §3.9 No downloads | Not built | 2.3 |
 | §3.9 Strongest action across blocks | Unchecked | built within a page |
 | §3.9 R-LIST-4/5 | Partial | accents not folded (`match.js` only lowercases); look-alikes not built; hidden text, frames Unchecked |
@@ -134,10 +128,10 @@ Only items not simply Built.
 | §3.10 R-EVENT-1 | Unchecked | |
 | §3.12 Word recording, specificity, cut | Not built | |
 | §4.10 SafeSearch | Partial | Google only; 2.4 |
-| §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (still `browser force-librewolf`, own lock). No group lock: `tamper` has no lock flags or `tamper unlock`. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, `file://`, installer, inactive tabs, embedded content, task managers: no command |
+| §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (`tamper unsupported-browsers`, own lock carried over from `force-librewolf`, `tamper unlock unsupported-browsers`; old command hidden alias). No group lock: clock has no lock flags. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, `file://`, installer, inactive tabs, embedded content, task managers: no command |
 | §4.10 Extension install dialog | Not built | |
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
-| §4.10 Browsers list | Not built | |
+| §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Not built | |
 | §4.1 Windows still to come today | Unchecked | |
 | §4.3 Draft Save/Cancel | Not built | changes apply at once |

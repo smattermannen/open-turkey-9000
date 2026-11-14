@@ -39,8 +39,8 @@ timer lock can only be extended and a challenge only lengthened. unlock runs the
 challenge and asks for the password, then turns the setting off; time and
 restart locks can't be unlocked, only waited out.
 
-force-librewolf and block-devtools also can't be turned off while a block is
-locked or Frozen Chicken runs, since blocks rely on them. block-devtools is on
+block-devtools also can't be turned off while a block is locked or Frozen
+Chicken runs, since blocks rely on it. block-devtools is on
 until you turn it off: LibreWolf's developer tools can switch the extension
 off, so turn it off only to develop websites. Browsers read it when they start.
 no-private turns off private windows in LibreWolf (and Firefox), from the
@@ -50,9 +50,9 @@ its locks, and the installed LibreWolf version.
 
 The Killer Chicken extension isn't an option: it is always installed, and
 while a block has websites (or web-only or force-search is on), browsers
-without it are closed. That needs LibreWolf, the one browser that runs it;
-'kc9k browser install-librewolf' installs it from its official repository
-(via extrepo), as installing KC9K does.`,
+without it are closed. It runs in the supported browsers, LibreWolf, Google
+Chrome and Chromium; 'kc9k browsers' lists them and installs them. To close
+every other browser at any time, turn on 'kc9k tamper unsupported-browsers'.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 1 && args[0] == "install-librewolf" {
 			return nil
@@ -72,13 +72,17 @@ without it are closed. That needs LibreWolf, the one browser that runs it;
 			return unlockBrowserSetting(database, args[1])
 		}
 		name, value := args[0], args[1]
+		if name == forceLibreWolfAlias {
+			// Old name of block unsupported browsers (decision 2026-11-14).
+			name = db.UnsupportedBrowsers
+		}
 		if name == "extension" || name == "require-extension" {
 			return fmt.Errorf("the extension is always on: while a block has websites, browsers without it are closed (see 'kc9k status')")
 		}
 		if name == "images" || name == "greyscale" {
 			return fmt.Errorf("%s is now chosen per block: 'kc9k block action <block> %s on'", name, map[string]string{"images": db.ActionNoImages, "greyscale": db.ActionGreyscale}[name])
 		}
-		if !enforce.IsBrowserSetting(name) {
+		if !enforce.IsLockableSetting(name) {
 			return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))
 		}
 		switch value {
@@ -109,17 +113,35 @@ without it are closed. That needs LibreWolf, the one browser that runs it;
 	}),
 }
 
-func installLibreWolf() error {
-	if version := blocker.LibreWolfVersion(); version != "" {
-		fmt.Printf("LibreWolf %s is already installed.\n", version)
-		return nil
+func installLibreWolf() error { return installBrowser("librewolf") }
+
+// extensionBrowserInstalled is blocker.ExtensionBrowserInstalled, replaced
+// in tests.
+var extensionBrowserInstalled = blocker.ExtensionBrowserInstalled
+
+// forceLibreWolfAlias is the hidden old name of block unsupported browsers
+// in 'kc9k browser', kept for scripts and habits.
+const forceLibreWolfAlias = "force-librewolf"
+
+// settingCommand is the command that turns a lockable setting off or
+// unlocks it.
+func settingCommand(name, verb string) string {
+	group := "browser"
+	if name == db.UnsupportedBrowsers {
+		group = "tamper"
 	}
-	fmt.Println("Installing LibreWolf, this can take a few minutes…")
-	if err := blocker.InstallLibreWolf(); err != nil {
-		return err
+	if verb == "unlock" {
+		return "kc9k " + group + " unlock " + name
 	}
-	fmt.Printf("LibreWolf %s installed. The extension is added the next time it starts.\n", blocker.LibreWolfVersion())
-	return nil
+	return "kc9k " + group + " " + name + " off"
+}
+
+// settingTarget names a lockable setting in messages and lock confirmations.
+func settingTarget(name string) string {
+	if name == db.UnsupportedBrowsers {
+		return "tamper protection 'block unsupported browsers'"
+	}
+	return "browser setting '" + name + "'"
 }
 
 // settingLockState is a setting's lock with the context to judge it.
@@ -337,11 +359,11 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 }
 
 func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
-	if name == "force-librewolf" && blocker.LibreWolfVersion() == "" {
-		return fmt.Errorf("LibreWolf isn't installed, so every browser would be closed; run 'kc9k browser install-librewolf' first")
+	if name == db.UnsupportedBrowsers && !extensionBrowserInstalled() {
+		return fmt.Errorf("no supported browser is installed, so every browser would be closed; install one first ('kc9k browsers install librewolf|chrome|chromium')")
 	}
 	if !lockFlagsGiven(cmd) {
-		return database.SetSetting("browser."+name, "on")
+		return database.SetSetting(enforce.SettingKey(name), "on")
 	}
 	if err := requireLockPassword(database); err != nil {
 		return err
@@ -361,10 +383,10 @@ func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
 	if len(changes) == 0 {
 		return fmt.Errorf("%s already has those locks", name)
 	}
-	if err := confirmLocks(cmd, settingLocks("browser setting '"+name+"'", cur, next)...); err != nil {
+	if err := confirmLocks(cmd, settingLocks(settingTarget(name), cur, next)...); err != nil {
 		return err
 	}
-	if err := database.SetSetting("browser."+name, "on"); err != nil {
+	if err := database.SetSetting(enforce.SettingKey(name), "on"); err != nil {
 		return err
 	}
 	if err := database.SetSettingLock(next); err != nil {
@@ -387,8 +409,20 @@ func (s settingLockState) refuseWhileHeld(name string) error {
 }
 
 // refuseForBlocks refuses turning off a setting that blocks rely on while a
-// block is locked or Frozen Chicken runs.
+// block is locked or Frozen Chicken runs, and a tamper protection setting
+// while anything is locked (§4.10). Call it after the setting's own lock is
+// gone, or that lock counts too.
 func refuseForBlocks(database *db.DB, name string, trusted int64) error {
+	if name == db.UnsupportedBrowsers {
+		locked, err := enforce.AnyLock(database, time.Now(), trusted)
+		if err != nil {
+			return err
+		}
+		if locked {
+			return refused(database, "", fmt.Errorf("block unsupported browsers can't be turned off while a block or setting is locked or Frozen Chicken runs"))
+		}
+		return nil
+	}
 	if !enforce.GuardsBlocks(name) {
 		return nil
 	}
@@ -414,7 +448,7 @@ func browserSettingOff(database *db.DB, name string) error {
 		return err
 	}
 	if s.lock.LockChars > 0 || s.lock.PasswordHash != "" {
-		return fmt.Errorf("%s is locked. Use 'kc9k browser unlock %s' first", name, name)
+		return fmt.Errorf("%s is locked. Use '%s' first", name, settingCommand(name, "unlock"))
 	}
 	if err := refuseForBlocks(database, name, s.trusted); err != nil {
 		return err
@@ -425,11 +459,14 @@ func browserSettingOff(database *db.DB, name string) error {
 	if err := database.ClearSettingLock(name); err != nil { // locks that ran out
 		return err
 	}
-	return database.SetSetting("browser."+name, "off")
+	return database.SetSetting(enforce.SettingKey(name), "off")
 }
 
 func unlockBrowserSetting(database *db.DB, name string) error {
-	if !enforce.IsBrowserSetting(name) {
+	if name == forceLibreWolfAlias {
+		name = db.UnsupportedBrowsers
+	}
+	if !enforce.IsLockableSetting(name) {
 		return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))
 	}
 	if err := requireSettingsPassword(database); err != nil {
@@ -443,7 +480,7 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 		return err
 	}
 	if s.lock.LockChars == 0 && s.lock.PasswordHash == "" {
-		return fmt.Errorf("%s is not locked. Use 'kc9k browser %s off'", name, name)
+		return fmt.Errorf("%s is not locked. Use '%s'", name, settingCommand(name, "off"))
 	}
 	if s.lock.PasswordHash != "" {
 		password, err := readPasswordStdin("Setting password")
@@ -475,7 +512,7 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 		fmt.Printf("%s is unlocked but stays on: %v\n", name, err)
 		return nil
 	}
-	if err := database.SetSetting("browser."+name, "off"); err != nil {
+	if err := database.SetSetting(enforce.SettingKey(name), "off"); err != nil {
 		return err
 	}
 	fmt.Printf("%s unlocked and turned off.\n", name)

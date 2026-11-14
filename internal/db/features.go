@@ -59,6 +59,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateTamperClock(conn); err != nil {
 		return err
 	}
+	if err := migrateForceLibreWolf(conn); err != nil {
+		return err
+	}
 	if err := migrateWebLists(conn); err != nil {
 		return err
 	}
@@ -71,6 +74,9 @@ func upgradeSchema(conn *sql.DB) error {
 		return err
 	}
 	if err := migrateListCaseNames(conn); err != nil {
+		return err
+	}
+	if err := migrateRemovedActions(conn); err != nil {
 		return err
 	}
 	return migrateMonkMode(conn)

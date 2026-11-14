@@ -47,7 +47,7 @@ func TestGuardClosesRemoteControlledBrowser(t *testing.T) {
 	normal := startChrome(t)
 	remote := startChrome(t, "--remote-debugging-port=9333")
 
-	g.Enforce(time.Now(), time.Time{})
+	g.Enforce(time.Now(), time.Time{}, false)
 	done := make(chan struct{})
 	go func() { _, _ = remote.Process.Wait(); close(done) }()
 	select {
@@ -73,12 +73,12 @@ func TestGuardRestartsBrowsersOlderThanSettings(t *testing.T) {
 	after := startChrome(t)
 
 	// Within the grace period nothing happens yet.
-	g.Enforce(changed.Add(ExtensionGrace/2), changed)
+	g.Enforce(changed.Add(ExtensionGrace/2), changed, false)
 	if !alive(before) || !alive(after) {
 		t.Fatal("a browser was closed inside the grace period after the change")
 	}
 
-	g.Enforce(changed.Add(2*ExtensionGrace), changed)
+	g.Enforce(changed.Add(2*ExtensionGrace), changed, false)
 	done := make(chan struct{})
 	go func() { _, _ = before.Process.Wait(); close(done) }()
 	select {

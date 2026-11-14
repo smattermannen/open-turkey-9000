@@ -1,11 +1,15 @@
 // tamper.go — tamper protection settings (§4.10).
 //
-//	kc9k tamper                 # shows them
-//	kc9k tamper clock on|off    # block time and date changes
+//	kc9k tamper                                       # shows them
+//	kc9k tamper clock on|off                          # block time and date changes
+//	kc9k tamper unsupported-browsers on [lock flags]  # block unsupported browsers
+//	kc9k tamper unlock unsupported-browsers
 //
 // They are protection settings: turning one on is always allowed; turning
 // one off needs the settings password and is refused while any block or
-// setting is locked (R-LOCK-9).
+// setting is locked (R-LOCK-9). Block unsupported browsers also has its own
+// setting lock, carried over from the browser setting force-librewolf it
+// replaced (decision 2026-11-14).
 package cli
 
 import (
@@ -14,41 +18,83 @@ import (
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/lock"
 	"github.com/spf13/cobra"
 )
 
 var tamperCmd = &cobra.Command{
-	Use:   "tamper [clock] [on|off]",
-	Short: "Tamper protection: ignore clock changes while a timer lock runs",
-	Long: `Timer locks are measured in trusted time, which is the real clock unless
-you turn tamper protection on:
+	Use:   "tamper [clock|unsupported-browsers [on|off] | unlock unsupported-browsers]",
+	Short: "Tamper protection: clock changes, unsupported browsers",
+	Long: `Tamper protection settings:
 
-  clock   while a timer lock runs, changing the date or time doesn't move it
-          (time the computer is switched off isn't counted then either)
+  clock                 while a timer lock runs, changing the date or time
+                        doesn't move it (time the computer is switched off
+                        isn't counted then either)
+  unsupported-browsers  block unsupported browsers: every browser but the
+                        supported ones (LibreWolf, Google Chrome, Chromium)
+                        running the Killer Chicken extension is closed, at
+                        any time; see 'kc9k browsers'. Can't be turned on
+                        while no supported browser is installed, and nothing
+                        is closed while none is.
 
-Turning it off is refused while any block or setting is locked.`,
+Turning one off is refused while any block or setting is locked.
+
+unsupported-browsers can also be locked when turned on, like a browser setting:
+
+  --for DURATION    Timer lock: can't be turned off for this long.
+  --until HH:MM     Timer lock until a clock time today (or tomorrow).
+  --lock            Text lock ('kc9k tamper unlock unsupported-browsers').
+  --lock-chars N    Challenge length in characters (default 300).
+  --password-stdin  Password lock.
+  --restart         Stays on until the computer restarts.
+
+Locks can only be made stronger. unlock runs the challenge and asks for the
+password, then turns it off if nothing else is locked.`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if len(args) == 0 {
-			v, err := database.GetSetting(db.SettingTamperClock)
-			if err != nil {
-				return err
+			fmt.Printf("clock %s\n", onOff(tamperClockOn(database)))
+			return printUnsupportedBrowsers(database)
+		}
+		if args[0] == "unlock" {
+			if len(args) != 2 || (args[1] != db.UnsupportedBrowsers && args[1] != forceLibreWolfAlias) {
+				return fmt.Errorf("use 'kc9k tamper unlock %s'", db.UnsupportedBrowsers)
 			}
-			if v != "on" {
-				v = "off"
+			return unlockBrowserSetting(database, db.UnsupportedBrowsers)
+		}
+		if args[0] == db.UnsupportedBrowsers {
+			if len(args) == 1 {
+				return printUnsupportedBrowsers(database)
 			}
-			fmt.Printf("clock %s\n", v)
-			return nil
+			switch args[1] {
+			case "on":
+				if err := browserSettingOn(cmd, database, db.UnsupportedBrowsers); err != nil {
+					return err
+				}
+				if !lockFlagsGiven(cmd) {
+					fmt.Println("Block unsupported browsers is on.")
+				}
+				return nil
+			case "off":
+				if lockFlagsGiven(cmd) {
+					return fmt.Errorf("lock options only go with 'on'")
+				}
+				if err := browserSettingOff(database, db.UnsupportedBrowsers); err != nil {
+					return err
+				}
+				fmt.Println("Block unsupported browsers is off.")
+				return nil
+			}
+			return fmt.Errorf("use 'on' or 'off'")
 		}
 		if args[0] != "clock" {
-			return fmt.Errorf("unknown tamper protection %q (use clock)", args[0])
+			return fmt.Errorf("unknown tamper protection %q (use clock or %s)", args[0], db.UnsupportedBrowsers)
+		}
+		if lockFlagsGiven(cmd) {
+			return fmt.Errorf("the clock setting has no lock of its own")
 		}
 		if len(args) == 1 {
-			v, err := database.GetSetting(db.SettingTamperClock)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("clock %s\n", map[bool]string{true: "on", false: "off"}[v == "on"])
+			fmt.Printf("clock %s\n", onOff(tamperClockOn(database)))
 			return nil
 		}
 		switch args[1] {
@@ -78,6 +124,32 @@ Turning it off is refused while any block or setting is locked.`,
 	}),
 }
 
+func tamperClockOn(database *db.DB) bool {
+	v, err := database.GetSetting(db.SettingTamperClock)
+	return err == nil && v == "on"
+}
+
+func printUnsupportedBrowsers(database *db.DB) error {
+	state := onOff(enforce.UnsupportedBrowsersOn(database))
+	s, err := loadSettingLock(database, db.UnsupportedBrowsers)
+	if err != nil {
+		return err
+	}
+	if text := s.describe(); text != "" {
+		state += "  (" + text + ")"
+	}
+	fmt.Printf("%s %s\n", db.UnsupportedBrowsers, state)
+	return nil
+}
+
 func init() {
+	tamperCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 2h, 90m)")
+	tamperCmd.Flags().String("until", "", "Timer lock: can't be turned off until this clock time (HH:MM)")
+	tamperCmd.Flags().Bool("lock", false, "Text lock ('kc9k tamper unlock unsupported-browsers')")
+	tamperCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
+	tamperCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
+	tamperCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
+	addTextLockFlags(tamperCmd)
+	addYesFlag(tamperCmd)
 	rootCmd.AddCommand(tamperCmd)
 }

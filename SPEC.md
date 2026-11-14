@@ -569,7 +569,7 @@ old names keep working for a while.
 
 **Monk mode**
 - **R-MONK-1** Monk mode is a mode, not a block: it is not in the list of blocks and has no settings. It blocks `*.*` with the default exception `file://*` only, takes no exceptions, apps or other entries, and the `monk` action is not offered in it.
-- **R-MONK-2** While monk mode runs, the computer's internet connection is cut, not only the browser's: no program reaches the network. KC9K's own local traffic (the daemon and the extension on this computer) keeps working. It can't be ended early, and nothing a user can do to blocks reaches it.
+- **R-MONK-2** While monk mode runs, the computer's internet connection is cut, not only the browser's: no program reaches the network. It is cut three ways at once, so one failing doesn't open it: (1) the Wi-Fi radio is switched off, (2) every wired (Ethernet) interface is brought down, (3) the firewall drops all traffic except loopback. KC9K's own local traffic (the daemon and the extension on this computer) keeps working. Monk mode keeps all three held for its whole time, putting back anything the user switches on. When it ends, or after a restart or crash once its time is over, the connection is restored to what it was before.
 
 **Device**
 - **R-FREEZE-1** In *allowed apps only* mode, only programs on the freeze's app list (and system processes) may run.
@@ -634,8 +634,9 @@ Made with the owner. Newest last.
   or deleted while unlocked, which would defeat it. All locks ask for
   confirmation when set, always (R-LOCK-12), not only timer locks over 24 h.
 - 2026-11-14: Monk mode is fully preconfigured (`*.*`, exception `file://*`
-  only, nothing editable) and also cuts the internet connection, so another
-  program can't be used to get around it.
+  only, nothing editable) and also cuts the internet connection (Wi-Fi off,
+  Ethernet down, firewall drop-all), so another program can't be used to get
+  around it.
 
 ## 7. Open decisions
 

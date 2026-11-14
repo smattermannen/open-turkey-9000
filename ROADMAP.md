@@ -242,7 +242,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |
 | Confirmation when any lock is set (R-LOCK-12) | Gap | only timer locks over 24 h ask today; every lock kind, on every target, must ask |
-| Monk mode | Gap | built as the system-owned block `monk-mode`; SPEC now says it is a fixed mode, not a block (R-MONK-1), and also cuts the whole internet connection (R-MONK-2): Not built |
+| Monk mode | Gap | built as the system-owned block `monk-mode`; SPEC now says it is a fixed mode, not a block (R-MONK-1), and also cuts the whole internet connection three ways (R-MONK-2): Not built |
 | Consequences | Built | `enforce/consequence.go` |
 | Strict mode | Partial | a voluntary switch with its own setting lock (`kc9k strict on --for …`, `strict unlock`). Exempt folders: Not built |
 | Recovery of a forgotten password (§3.11) | Partial | root can remove it while nothing is locked |

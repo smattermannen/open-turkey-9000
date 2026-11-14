@@ -48,9 +48,10 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   manager: ~1 free minute every few minutes (15 s stale + 60 s grace, 2 min
   pause). Want: short grace once checked in before; each pause doubles (to
   1 h) until it runs unbroken a while. (S)
-- [ ] **Settings groups** (§4.10): GUI doesn't group as SPEC; want a Tamper
-  protection group (incl. `tamper clock`) with OK/Cancel window, apart from
-  Browser settings. (S)
+- [ ] **Device protection access area** (§4.10, §3.11): the GUI shows strict
+  mode and no-escape in Settings (Settings access password), but `strict` and
+  `no-escape` are in command area `device`, so with both passwords set the
+  GUI asks for the Device one too. Owner to pick the area. (S)
 - [ ] **Block unsupported browsers** (§4.10): built is `force-librewolf`.
   Want a tamper protection setting allowing LibreWolf/Chrome/Chromium with
   the extension, carrying over state and lock. Also the Browsers list with
@@ -142,7 +143,9 @@ Only items not simply Built.
 | §3.10 R-EVENT-1 | Unchecked | |
 | §3.12 Word recording, specificity, cut | Not built | |
 | §4.10 SafeSearch | Partial | Google only; 2.4 |
-| §4.10 Tamper settings | Partial | clock only; grace fixed 60 s; rest Not built |
+| §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (still `browser force-librewolf`, own lock). No group lock: `tamper` has no lock flags or `tamper unlock`. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, `file://`, installer, inactive tabs, embedded content, task managers: no command |
+| §4.10 Extension install dialog | Not built | |
+| §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
 | §4.10 Browsers list | Not built | |
 | §4.11 `.deb` | Not built | |
 | §4.1 Windows still to come today | Unchecked | |

@@ -48,22 +48,31 @@ OPTIONS = (
      "work as before."),
 )
 
-LIBREWOLF_OPTIONS = (
-    ("force-librewolf", "Allow only LibreWolf",
-     "Closes every other browser at once, even when no block is on."),
-)
-
+# Browser settings (SPEC §4.10), in the order SPEC lists them.
 BROWSER_OPTIONS = (
+    ("safesearch", "Force Google SafeSearch", ""),
+    ("force-search", "Force Google as the search engine", ""),
+    ("web-only", "Web results only",
+     "No image, shopping or AI results in Google."),
     ("block-devtools", "Block developer tools",
      "In LibreWolf they can switch the extension off. Turn this off only to develop websites; "
      "it applies when LibreWolf restarts. Chrome never lets them reach the extension."),
     ("no-private", "Disable private windows",
      "No private browsing in LibreWolf; it applies when LibreWolf restarts. Chrome's incognito "
      "windows are always off: the extension can't run in them."),
-    ("force-search", "Force Google as the search engine", ""),
-    ("safesearch", "Force Google SafeSearch", ""),
-    ("web-only", "Web results only",
-     "No image, shopping or AI results in Google."),
+)
+
+# Tamper protection settings (SPEC §4.10) that have a command: key, title,
+# detail, command prefix ("on"/"off" is appended). Block unsupported browsers
+# is built as the browser setting force-librewolf (decision 2026-11-14).
+TAMPER_SETTINGS = (
+    ("clock", "Clock: ignore time and date changes",
+     "While a timer lock runs, changing the date or time doesn't move it, and time the "
+     "computer is off isn't counted.", ("tamper", "clock")),
+    ("force-librewolf", "Block unsupported browsers",
+     "Built so far as \"allow only LibreWolf\": every other browser, Chrome included, is "
+     "closed at once, even when no block is on. Needs LibreWolf installed.",
+     ("browser", "force-librewolf")),
 )
 
 # What a blacklist does to the pages it matches; any combination.
@@ -2883,6 +2892,7 @@ class Window(Gtk.ApplicationWindow):
                                  ("blocks", self.update_block_list),
                                  ("clusters", self.update_clusters),
                                  ("device", self.update_device),
+                                 ("stats", self.update_stats_setting),
                                  ("settings", self.update_settings)):
                 if not self.locked(area):
                     update()
@@ -3147,7 +3157,7 @@ class Window(Gtk.ApplicationWindow):
         self.dash_top_empty.set_visible(not top)
         self.dash_top_empty.set_text(
             "Nothing recorded today yet." if self.stats_on
-            else "Statistics are off. Turn them on in Settings.")
+            else "Statistics are off. Turn them on in Statistics.")
 
     # Blocks --------------------------------------------------------------
     def build_blocks(self):
@@ -4228,38 +4238,6 @@ class Window(Gtk.ApplicationWindow):
                 "keeps counting while the computer is off."),
             row, self.freeze_status, self.freeze_schedules, freeze_lock_row), False, False, 0)
 
-        self.strict_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-        self.strict_switch.connect("state-set", self.toggle_strict)
-        strict_line = Gtk.Box(spacing=8)
-        self.strict_lock_status = dim("", wrap=False)
-        self.strict_lock_status.set_no_show_all(True)
-        strict_lock = Gtk.Button(label="Lock…")
-        strict_lock.connect("clicked", self.lock_setting, "strict", "Strict mode")
-        self.strict_unlock = Gtk.Button(label="Unlock…")
-        self.strict_unlock.set_no_show_all(True)
-        self.strict_unlock.connect("clicked", self.unlock_setting, "strict", "Strict mode")
-        strict_line.pack_start(self.strict_lock_status, False, False, 0)
-        strict_line.pack_end(self.strict_unlock, False, False, 0)
-        strict_line.pack_end(strict_lock, False, False, 0)
-        box.pack_start(section(
-            "Strict mode",
-            self.switch_row(self.strict_switch, "Take away sudo and pkexec during locks",
-                            "While a block or setting is locked or Frozen Chicken runs, no user "
-                            "can get administrator rights, so the blocks can't be undone from a "
-                            "terminal. Rights return when the lock ends. Strict mode itself can "
-                            "be turned off at any time unless you lock it."),
-            strict_line), False, False, 0)
-
-        self.no_escape_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-        self.no_escape_switch.connect("state-set", self.toggle_no_escape)
-        box.pack_start(section(
-            "No-escape",
-            self.switch_row(self.no_escape_switch, "Close the ways out through the boot menu",
-                            "Sets a random boot menu password that nobody knows and hides the "
-                            "recovery entries, so the emergency exit (kc9k.nofreeze) stops "
-                            "working. Normal boot entries, Windows included, still start. The "
-                            "only way past a lock is then booting a USB stick or reinstalling. "
-                            "It can't be turned off during a lock.")), False, False, 0)
         return scroll
 
     def switch_row(self, switch, title, detail):
@@ -4302,15 +4280,6 @@ class Window(Gtk.ApplicationWindow):
             f"<b>On</b> for {fmt_seconds(frozen)} more, {modes.get(self.state['freeze_mode'], '')}. "
             "Starting again can only extend it." if frozen else "Off.")
         self.freeze_button.set_label("Extend…" if frozen else "Start Frozen Chicken…")
-        set_switch(self.strict_switch, self.state["strict"])
-        set_switch(self.no_escape_switch, self.state["no_escape"])
-        info = self.state.get("strict_lock") or {}
-        parts = describe_setting_lock(info)
-        self.strict_lock_status.set_text("Locked: " + ", ".join(parts) if parts else "")
-        self.strict_lock_status.set_visible(bool(parts))
-        self.strict_unlock.set_visible(info.get("char_locked", False) or info.get("password_locked", False))
-        self.strict_unlock.set_sensitive(not info.get("lock_seconds") and not info.get("restart_locked"))
-        self.strict_switch.set_sensitive(not parts)
 
     def freeze(self, _button):
         minutes = self.freeze_minutes.get_value_as_int()
@@ -4341,12 +4310,6 @@ class Window(Gtk.ApplicationWindow):
                 self.message("Enter one or more server addresses, separated by commas.")
                 return
         self.run(["dns", choice])
-
-    def toggle_tamper_clock(self, _switch, wanted):
-        if self.updating:
-            return False
-        self.run(["tamper", "clock", "on" if wanted else "off"])
-        return True
 
     def toggle_no_weakening(self, _switch, wanted):
         if self.updating:
@@ -4411,7 +4374,7 @@ class Window(Gtk.ApplicationWindow):
 
         self.stats_off = Gtk.InfoBar(message_type=Gtk.MessageType.INFO)
         self.stats_off.get_content_area().add(
-            Gtk.Label(label="Statistics are off, so nothing new is recorded. Turn them on in Settings.", xalign=0))
+            Gtk.Label(label="Statistics are off, so nothing new is recorded. Turn them on under Recording, below.", xalign=0))
         self.stats_off.set_no_show_all(True)
         box.pack_start(self.stats_off, False, False, 0)
 
@@ -4440,7 +4403,21 @@ class Window(Gtk.ApplicationWindow):
             "App time counts the app in the focused window; website time counts the active "
             "tab in the browser. Time behind a locked screen or after two "
             "minutes without input isn't counted. Everything stays on this computer."), False, False, 0)
+
+        self.stats_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.stats_switch.connect("state-set", self.toggle_stats)
+        clear = Gtk.Button(label="Delete all statistics…", halign=Gtk.Align.START)
+        clear.get_style_context().add_class("destructive-action")
+        clear.connect("clicked", self.clear_stats)
+        box.pack_start(section(
+            "Recording",
+            self.switch_row(self.stats_switch, "Record time spent on websites and apps",
+                            "Stored only on this computer and kept for a year."),
+            clear), False, False, 0)
         return scroll
+
+    def update_stats_setting(self):
+        set_switch(self.stats_switch, self.state["stats"])
 
     def refresh_stats(self):
         days = int(self.stats_period.get_active_id() or 7) if hasattr(self, "stats_period") else 7
@@ -4508,6 +4485,7 @@ class Window(Gtk.ApplicationWindow):
         save_prefs(app.prefs)
 
     def build_settings(self):
+        """Groups in the order of SPEC §4.10."""
         scroll, box = page_box()
         box.pack_start(heading("Settings", "x-large"), False, False, 0)
 
@@ -4519,18 +4497,37 @@ class Window(Gtk.ApplicationWindow):
         row = Gtk.Box(spacing=16)
         row.pack_start(Gtk.Label(label="Theme", xalign=0), True, True, 0)
         row.pack_end(theme, False, False, 0)
-        box.pack_start(section("Appearance", row), False, False, 0)
+        box.pack_start(section("Preferences", row), False, False, 0)
 
+        self.no_weakening_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.no_weakening_switch.connect("state-set", self.toggle_no_weakening)
+        box.pack_start(section(
+            "No weakening during active locks",
+            self.switch_row(self.no_weakening_switch, "Keep every setting while anything is locked",
+                            "While any block or setting is locked, no setting can be weakened: "
+                            "strict mode, browser settings, bypass prevention, the settings "
+                            "password. Blocks without a lock stay free to edit. It can't be "
+                            "turned off while anything is locked.")), False, False, 0)
+
+        # Tamper protection: one group, changed in its own window (OK/Cancel).
         self.browser_switches = {}
+        self.setting_locks = {}
+        self.tamper_summary = Gtk.Label(xalign=0, wrap=True)
+        tamper_change = Gtk.Button(label="Change…", halign=Gtk.Align.START)
+        tamper_change.connect("clicked", self.tamper_dialog)
+        tamper_rows = [
+            dim("Closes the ways around your blocks from inside the computer. Once on, a tamper "
+                "protection setting can't be turned off while anything is locked."),
+            self.tamper_summary, tamper_change]
+        # force-librewolf keeps its own lock until the group has one.
+        tamper_rows.append(self.setting_lock_line("force-librewolf", "Block unsupported browsers"))
+        box.pack_start(section("Tamper protection", *tamper_rows), False, False, 0)
+
         self.librewolf_status = Gtk.Label(xalign=0, wrap=True)
         self.librewolf_install = Gtk.Button(label="Install LibreWolf", halign=Gtk.Align.START)
         self.librewolf_install.get_style_context().add_class("suggested-action")
         self.librewolf_install.connect("clicked", self.install_librewolf)
         self.extension_status = dim("")
-        librewolf_rows = [self.librewolf_status, self.librewolf_install, self.extension_status]
-        self.setting_locks = {}
-        for name, title, detail in LIBREWOLF_OPTIONS:
-            librewolf_rows.append(self.setting_row(name, title, detail))
         box.pack_start(section(
             "Browsers",
             dim("The Killer Chicken extension runs in LibreWolf (a privacy-focused Firefox) and in "
@@ -4538,54 +4535,15 @@ class Window(Gtk.ApplicationWindow):
                 "it. The extension is always on: it enforces wildcards, page titles and text, "
                 "greyscale, images and web-only, and while a block has websites, browsers without "
                 "it are closed."),
-            *librewolf_rows), False, False, 0)
+            self.librewolf_status, self.librewolf_install, self.extension_status), False, False, 0)
 
         rows = [self.setting_row(name, title, detail) for name, title, detail in BROWSER_OPTIONS]
         box.pack_start(section(
-            "Browser settings", dim("Each option can be locked on its own with Lock…, independently "
-                                   "of your blocks. A locked option can't be turned off until its "
-                                   "lock ends or is unlocked. \"Allow only LibreWolf\" and blocking "
-                                   "developer tools also can't be turned off while a block is "
-                                   "locked."), *rows),
+            "Browser settings", dim("Each browser setting can be locked on its own with Lock…, "
+                                    "independently of your blocks. A locked setting can't be turned "
+                                    "off until its lock ends or is unlocked. Blocking developer "
+                                    "tools also can't be turned off while a block is locked."), *rows),
             False, False, 0)
-
-        self.option_switches = {}
-        option_rows = []
-        for name, title, detail in OPTIONS:
-            switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-            switch.connect("state-set", self.toggle_option, name)
-            self.option_switches[name] = switch
-            option_rows.append(self.switch_row(switch, title, detail))
-        box.pack_start(section("Behaviour", *option_rows), False, False, 0)
-
-        self.stats_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-        self.stats_switch.connect("state-set", self.toggle_stats)
-        clear = Gtk.Button(label="Delete all statistics…", halign=Gtk.Align.START)
-        clear.get_style_context().add_class("destructive-action")
-        clear.connect("clicked", self.clear_stats)
-        box.pack_start(section(
-            "Statistics",
-            self.switch_row(self.stats_switch, "Record time spent on websites and apps",
-                            "Stored only on this computer and kept for a year."),
-            clear), False, False, 0)
-
-        self.password_status = Gtk.Label(xalign=0, wrap=True)
-        password_row = Gtk.Box(spacing=6)
-        self.password_set_button = Gtk.Button(label="Set password…")
-        self.password_set_button.connect("clicked", self.set_settings_password)
-        self.password_remove_button = Gtk.Button(label="Remove password…")
-        self.password_remove_button.connect("clicked", self.remove_settings_password)
-        password_row.pack_start(self.password_set_button, False, False, 0)
-        password_row.pack_start(self.password_remove_button, False, False, 0)
-        self.password_locks = Gtk.CheckButton(label="Also needed to set a lock, so nobody else can lock me out")
-        self.password_locks.connect("toggled", self.toggle_password_locks)
-        box.pack_start(section(
-            "Settings password",
-            dim("Guards Killer Chicken 9000 against anything running as you, and lets someone "
-                "else decide when your blocks may be weakened: weakening, stopping, unlocking, "
-                "turning browser settings off, strict mode, no-escape and uninstalling all ask "
-                "for it. Starting a block and adding sites don't."),
-            self.password_status, password_row, self.password_locks), False, False, 0)
 
         dns_row = Gtk.Box(spacing=6)
         self.dns_choice = Gtk.ComboBoxText()
@@ -4606,39 +4564,43 @@ class Window(Gtk.ApplicationWindow):
                 "uses, so nobody new learns which sites are blocked."),
             dns_row), False, False, 0)
 
-        self.tamper_clock_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-        self.tamper_clock_switch.connect("state-set", self.toggle_tamper_clock)
+        circadian = Gtk.Button(label="Open Circadian Rhythm", halign=Gtk.Align.START)
+        circadian.connect("clicked", lambda _b: self.stack.set_visible_child_name("circadian"))
         box.pack_start(section(
-            "Tamper protection",
-            self.switch_row(self.tamper_clock_switch, "Ignore clock changes during timer locks",
-                            "Timer locks follow the real clock. With this on, changing the date or "
-                            "time doesn't shorten a running timer lock (time the computer is off "
-                            "isn't counted then either). It can't be turned off while anything is "
-                            "locked.")), False, False, 0)
+            "Circadian rhythm",
+            dim("Brightness, colour temperature, wallpapers and dark mode by time of day. They "
+                "have their own page."),
+            circadian), False, False, 0)
 
-        self.no_weakening_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-        self.no_weakening_switch.connect("state-set", self.toggle_no_weakening)
+        self.strict_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.strict_switch.connect("state-set", self.toggle_strict)
+        self.no_escape_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.no_escape_switch.connect("state-set", self.toggle_no_escape)
         box.pack_start(section(
-            "No weakening during active locks",
-            self.switch_row(self.no_weakening_switch, "Keep every setting while anything is locked",
-                            "While any block or setting is locked, no setting can be weakened: "
-                            "strict mode, browser settings, bypass prevention, the settings "
-                            "password. Blocks without a lock stay free to edit. It can't be "
-                            "turned off while anything is locked.")), False, False, 0)
+            "Device protection",
+            self.switch_row(self.strict_switch, "Strict mode: take away sudo and pkexec during locks",
+                            "While a block or setting is locked or Frozen Chicken runs, no user "
+                            "can get administrator rights, so the blocks can't be undone from a "
+                            "terminal. Rights return when the lock ends. Strict mode itself can "
+                            "be turned off at any time unless you lock it."),
+            self.setting_lock_line("strict", "Strict mode"),
+            self.switch_row(self.no_escape_switch, "No-escape: close the ways out through the boot menu",
+                            "Sets a random boot menu password that nobody knows and hides the "
+                            "recovery entries, so the emergency exit (kc9k.nofreeze) stops "
+                            "working. Normal boot entries, Windows included, still start. The "
+                            "only way past a lock is then booting a USB stick or reinstalling. "
+                            "It can't be turned off during a lock.")), False, False, 0)
 
-        project_row = Gtk.Box(spacing=6)
-        for label, handler in (("Back up…", self.export_project), ("Share…", self.share_project),
-                               ("Import…", self.import_project)):
-            button = Gtk.Button(label=label)
-            button.connect("clicked", handler)
-            project_row.pack_start(button, False, False, 0)
-        box.pack_start(section(
-            "Whole setup",
-            dim("Save every block, cluster and setting to one file. A backup also holds your "
-                "places (the Wi-Fi networks they are known by); a file to share leaves them out. "
-                "Running locks, passwords, hotkeys and statistics are never in it. Importing shows "
-                "what it adds first, only adds, and gives a block whose name is taken a new name."),
-            project_row), False, False, 0)
+        self.password_status = Gtk.Label(xalign=0, wrap=True)
+        password_row = Gtk.Box(spacing=6)
+        self.password_set_button = Gtk.Button(label="Set password…")
+        self.password_set_button.connect("clicked", self.set_settings_password)
+        self.password_remove_button = Gtk.Button(label="Remove password…")
+        self.password_remove_button.connect("clicked", self.remove_settings_password)
+        password_row.pack_start(self.password_set_button, False, False, 0)
+        password_row.pack_start(self.password_remove_button, False, False, 0)
+        self.password_locks = Gtk.CheckButton(label="Also needed to set a lock, so nobody else can lock me out")
+        self.password_locks.connect("toggled", self.toggle_password_locks)
 
         self.access_status = Gtk.Label(xalign=0, wrap=True)
         access_row = Gtk.Box(spacing=6)
@@ -4662,7 +4624,14 @@ class Window(Gtk.ApplicationWindow):
         idle_row.pack_start(idle, False, False, 0)
         idle_row.pack_start(Gtk.Label(label="minutes without using this window (0: never)"), False, False, 0)
         box.pack_start(section(
-            "Access passwords",
+            "Passwords",
+            Gtk.Label(label="Settings password", xalign=0, margin_top=6),
+            dim("Guards Killer Chicken 9000 against anything running as you, and lets someone "
+                "else decide when your blocks may be weakened: weakening, stopping, unlocking, "
+                "turning browser settings off, strict mode, no-escape and uninstalling all ask "
+                "for it. Starting a block and adding sites don't."),
+            self.password_status, password_row, self.password_locks,
+            Gtk.Label(label="Access passwords", xalign=0, margin_top=6),
             dim("Optional passwords to open Killer Chicken 9000 and each of its pages: "
                 "Dashboard, Blocks, Device Blocks, Statistics and Settings. Use the same one "
                 "for several, or a different one for each. A locked page shows nothing until "
@@ -4696,7 +4665,95 @@ class Window(Gtk.ApplicationWindow):
                       "you add the hotkey. Pressing it asks you to confirm the lock, unless you chose "
                       "Run without confirmation when adding it.")
         box.pack_start(self.hotkeys, False, False, 0)
+
+        project_row = Gtk.Box(spacing=6)
+        for label, handler in (("Back up…", self.export_project), ("Share…", self.share_project),
+                               ("Import…", self.import_project)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", handler)
+            project_row.pack_start(button, False, False, 0)
+        box.pack_start(section(
+            "Project",
+            dim("Save every block, cluster and setting to one file. A backup also holds your "
+                "places (the Wi-Fi networks they are known by); a file to share leaves them out. "
+                "Running locks, passwords, hotkeys and statistics are never in it. Importing shows "
+                "what it adds first, only adds, and gives a block whose name is taken a new name."),
+            project_row), False, False, 0)
+
+        self.option_switches = {}
+        option_rows = []
+        for name, title, detail in OPTIONS:
+            switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+            switch.connect("state-set", self.toggle_option, name)
+            self.option_switches[name] = switch
+            option_rows.append(self.switch_row(switch, title, detail))
+        box.pack_start(section("Behaviour settings", *option_rows), False, False, 0)
         return scroll
+
+    def tamper_dialog(self, _button=None):
+        """The tamper protection group in its own window: nothing changes until
+        OK, and turning one on is confirmed by OK (SPEC §4.10)."""
+        current = self.tamper_state()
+        dialog = Gtk.Dialog(title="Tamper protection", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("OK", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        dialog.set_default_response(Gtk.ResponseType.CANCEL)
+        box = dialog.get_content_area()
+        box.set_spacing(12)
+        for side in ("start", "end", "top", "bottom"):
+            getattr(box, f"set_margin_{side}")(16)
+        box.pack_start(dim("Once on, a tamper protection setting can't be turned off while any "
+                           "block or setting is locked. Turning one off asks for the settings "
+                           "password."), False, False, 0)
+        has_librewolf = bool(self.state.get("librewolf"))
+        checks = {}
+        for key, title, detail, _command in TAMPER_SETTINGS:
+            check = Gtk.CheckButton(label=title)
+            check.set_active(current[key])
+            note = detail
+            if key == "force-librewolf" and self.setting_locked("force-librewolf"):
+                check.set_sensitive(False)
+                note += " It has its own lock now."
+            elif key == "force-librewolf" and not current[key] and not has_librewolf:
+                check.set_sensitive(False)
+                note += " Install LibreWolf first (Browsers, below)."
+            checks[key] = check
+            item = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            item.pack_start(check, False, False, 0)
+            text = dim(note)
+            text.set_margin_start(26)
+            item.pack_start(text, False, False, 0)
+            box.pack_start(item, False, False, 0)
+        self.tamper_checks = checks  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        wanted = {key: check.get_active() for key, check in checks.items()}
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK:
+            return
+        self.apply_tamper(current, wanted)
+
+    def apply_tamper(self, current, wanted):
+        """Runs one command per changed tamper protection setting, in turn."""
+        commands = [list(command) + ["on" if wanted[key] else "off"]
+                    for key, _title, _detail, command in TAMPER_SETTINGS
+                    if wanted[key] != current[key]]
+
+        def next_command(_output=None):
+            if commands:
+                self.run(commands.pop(0), then=next_command)
+
+        next_command()
+
+    def tamper_state(self):
+        return {"clock": bool(self.state.get("tamper_clock", False)),
+                "force-librewolf": bool(self.state["browser"].get("force-librewolf", False))}
+
+    def setting_locked(self, name):
+        info = (self.state.get("strict_lock") if name == "strict"
+                else (self.state.get("browser_locks") or {}).get(name)) or {}
+        return bool(describe_setting_lock(info))
 
     def add_hotkey(self, values):
         if len(values) not in (2, 3):
@@ -4740,14 +4797,23 @@ class Window(Gtk.ApplicationWindow):
         for name, switch in self.browser_switches.items():
             set_switch(switch, self.state["browser"].get(name, False))
         for name, (label, unlock) in self.setting_locks.items():
-            info = self.state.get("browser_locks", {}).get(name, {})
+            info = (self.state.get("strict_lock") if name == "strict"
+                    else self.state.get("browser_locks", {}).get(name)) or {}
             parts = describe_setting_lock(info)
             label.set_text("Locked: " + ", ".join(parts) if parts else "")
             label.set_visible(bool(parts))
             unlock.set_visible(info.get("char_locked", False) or info.get("password_locked", False))
             unlock.set_sensitive(not info.get("lock_seconds") and not info.get("restart_locked"))
-            # A locked option is on and stays on, so its switch can't be used.
-            self.browser_switches[name].set_sensitive(not parts and name != "force-librewolf")
+            # A locked setting is on and stays on, so its switch can't be used.
+            if name in self.browser_switches:
+                self.browser_switches[name].set_sensitive(not parts)
+        set_switch(self.strict_switch, self.state["strict"])
+        self.strict_switch.set_sensitive(not self.setting_locked("strict"))
+        set_switch(self.no_escape_switch, self.state["no_escape"])
+        tamper = self.tamper_state()
+        on = [title for key, title, _detail, _command in TAMPER_SETTINGS if tamper[key]]
+        self.tamper_summary.set_markup(
+            "<b>On:</b> " + GLib.markup_escape_text("; ".join(on)) if on else "<b>All off.</b>")
         version = self.state.get("librewolf", "")
         chrome = self.state.get("chrome", False)
         chrome_line = " Google Chrome is installed and runs the extension too." if chrome else ""
@@ -4765,11 +4831,6 @@ class Window(Gtk.ApplicationWindow):
         # Without a browser for it the line above already says the extension can't run.
         self.extension_status.set_text("Extension: " + self.state.get("extension_status", ""))
         self.extension_status.set_visible(bool(version) or chrome)
-        # Turning it on needs LibreWolf; turning it off must stay possible.
-        switch = self.browser_switches["force-librewolf"]
-        locked = bool(self.setting_locks["force-librewolf"][0].get_text())
-        switch.set_sensitive(not locked and (bool(version) or switch.get_active()))
-        set_switch(self.stats_switch, self.state["stats"])
         for name, switch in self.option_switches.items():
             set_switch(switch, (self.state.get("options") or {}).get(name, False))
         has_password = self.state.get("settings_password", False)
@@ -4781,7 +4842,6 @@ class Window(Gtk.ApplicationWindow):
         self.password_locks.set_active(self.state.get("password_for_locks", False))
         self.updating = was
         set_switch(self.no_weakening_switch, self.state.get("no_weakening", False))
-        set_switch(self.tamper_clock_switch, self.state.get("tamper_clock", False))
         dns = self.state.get("dns") or "network"
         if dns in ("network", "quad9"):
             self.dns_choice.set_active_id(dns)
@@ -4810,6 +4870,12 @@ class Window(Gtk.ApplicationWindow):
         self.browser_switches[name] = switch
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.pack_start(self.switch_row(switch, title, detail), False, False, 0)
+        box.pack_start(self.setting_lock_line(name, title), False, False, 0)
+        return box
+
+    def setting_lock_line(self, name, title):
+        """A setting lock's state with Lock… and Unlock… (browser settings,
+        force-librewolf, strict mode)."""
         line = Gtk.Box(spacing=8)
         status = dim("", wrap=False)
         status.set_no_show_all(True)
@@ -4821,9 +4887,8 @@ class Window(Gtk.ApplicationWindow):
         line.pack_start(status, False, False, 0)
         line.pack_end(unlock, False, False, 0)
         line.pack_end(lock, False, False, 0)
-        box.pack_start(line, False, False, 0)
         self.setting_locks[name] = (status, unlock)
-        return box
+        return line
 
     def lock_setting(self, _button, name, title):
         dialog = Gtk.Dialog(title=f"Lock: {title}", transient_for=self, modal=True)

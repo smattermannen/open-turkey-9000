@@ -72,12 +72,6 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   iptables fallback). DNS on start: 16 parallel, 30 min cache
   (`resolveAll`), but still filled before `start` returns. `/etc/hosts`
   size cost: Unchecked. Left: 100,000-entry speed test in `ci/`. (M)
-- [ ] **List names differing only in case**: creating or renaming a list
-  to a name that matches another list of the block ignoring case is now
-  refused (`listNameTaken`, as phrase sets). Left: existing installs may
-  already hold such pairs (one is unreachable by name). `SPEC.md` doesn't say
-  how the upgrade treats them, so nothing is migrated; **open question for
-  the owner** (rename the later one `name-2`? leave them?). (S)
 - [ ] **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
   `project import` refuses monk steps/actions without `--no-confirm-ok`
   (`projectMonk`); both in `confirm_test.go`. `block import` the same. Left: the hotkey

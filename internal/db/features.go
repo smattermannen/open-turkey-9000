@@ -76,6 +76,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateListCaseNames(conn); err != nil {
 		return err
 	}
+	if err := migrateRemovedActions(conn); err != nil {
+		return err
+	}
 	return migrateMonkMode(conn)
 }
 

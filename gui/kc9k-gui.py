@@ -93,7 +93,6 @@ SITE_ACTIONS = (
     ("no-images", "Block images"),
     ("mute", "Mute sound"),
     ("no-video", "Stop and hide video"),
-    ("declutter", "Declutter (experimental)"),
     ("dark", "Dark page"),
     ("redirect", "Open another page"),
     ("image", "Show a picture"),

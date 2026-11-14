@@ -38,8 +38,6 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   word sets (today 9: `MAX_WORD_SETS`, `db.MaxWordSets`; bit mask in
   `kc9kPhraseMatcher` caps at 31). New sets default to text only, so titles
   seem missed. (S)
-- [ ] **Declutter**: still present (`db.ActionDeclutter`, `content.js`, GUI).
-  Remove; upgrade drops stored ones; imports skip it. (S)
 - [ ] **Android extension can be switched off** (§3.13) in IronFox's add-ons
   manager: ~1 free minute every few minutes (15 s stale + 60 s grace, 2 min
   pause). Want: short grace once checked in before; each pause doubles (to
@@ -122,7 +120,6 @@ Only items not simply Built.
 | §3.8 Forgotten password recovery | Partial | root removes it while nothing locked |
 | §3.8 R-DESKTOP-1 | Unchecked | |
 | §3.8 Factory reset protection | Not built | 2.6 |
-| §3.9 Declutter | Differs | 0.1 |
 | §3.9 No downloads | Not built | 2.3 |
 | §3.9 Strongest action across blocks | Unchecked | built within a page |
 | §3.9 R-LIST-4/5 | Partial | accents not folded (`match.js` only lowercases); look-alikes not built; hidden text, frames Unchecked |

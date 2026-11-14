@@ -154,14 +154,15 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `refuseCombinations` refuses new typed ones; leftovers (one box, or in
   exception lists) use `kc9kCombination`. Case-insensitive lookup.
 - **Actions** (`db/actions.go`, Param/Minutes): block, greyscale,
-  no-images, mute (`applyMute`), no-video, dark, declutter (to remove),
-  redirect, image (`db.ImagesDir`, served `/image/`), close-tab;
-  device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
+  no-images, mute (`applyMute`), no-video, dark, redirect, image
+  (`db.ImagesDir`, served `/image/`), close-tab; device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
   picks the strongest, closes tab/browser itself, POSTs `/hit`
   (`enforce/hits.go`, header required) so the daemon logs and runs
   logout/shutdown/monk. `no-video`/`no-images` reach every frame:
   background `tellFrames` pushes `tab-looks`, new frames ask for it; mute
-  is tab-wide (`applyMute`).
+  is tab-wide (`applyMute`). Removed actions (declutter):
+  `migrateRemovedActions` drops them on open (emptied → block), imports
+  skip them (`db.IsRemovedAction`).
 - **Phrase sets** (`db/phrases.go`, `cli/phrases.go`, `kc9k phrase-set`):
   `db.Phrase` JSON, typed `[a, b] [c]? :N` (`ParsePhrase`, `String`);
   `Check` refuses one-ended bridges (mirrored `kc9kPhraseCheck`). Rules

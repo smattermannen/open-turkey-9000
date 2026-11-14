@@ -13,7 +13,7 @@ let shownFor = null;
 // page can't shake it off by changing its text.
 let keywordLooks = new Set();
 // The actions that change how a page looks or sounds rather than take it away.
-const LOOKS = ["greyscale", "no-images", "mute", "no-video", "declutter", "dark"];
+const LOOKS = ["greyscale", "no-images", "mute", "no-video", "dark"];
 // Whether the page at lightFor has a light background (dark only acts on those).
 let lightFor = null;
 let light = true;
@@ -127,22 +127,6 @@ function render() {
   if (noVideo) {
     css += "video, audio, object, embed, iframe[src*=\"youtube\"], iframe[src*=\"vimeo\"], " +
       "iframe[src*=\"player\"], iframe[src*=\"embed\"] { display: none !important; }\n";
-  }
-  if (on("declutter")) {
-    // The page without what surrounds its text: side columns, bars,
-    // banners, pop-ups and suggestions.
-    css += "aside, nav, footer, [role=\"complementary\"], [role=\"banner\"], [role=\"navigation\"], " +
-      "[role=\"contentinfo\"], [class*=\"sidebar\" i], [id*=\"sidebar\" i], [class*=\"recommend\" i], " +
-      "[class*=\"related\" i], [id*=\"related\" i], [class*=\"promo\" i], [class*=\"banner\" i], " +
-      "[class*=\"popup\" i], [class*=\"modal\" i], [class*=\"cookie\" i], [id*=\"cookie\" i], " +
-      "[class*=\"newsletter\" i], [class*=\"share\" i], [class*=\"social\" i], [class*=\"comments\" i], " +
-      "[id*=\"comments\" i], [class*=\"trending\" i], [class*=\"advert\" i], [id*=\"advert\" i], " +
-      "ins.adsbygoogle, iframe { display: none !important; }\n" +
-      "* { animation: none !important; transition: none !important; position: static !important; " +
-      "float: none !important; background-image: none !important; box-shadow: none !important; }\n" +
-      "body { max-width: 46em !important; margin: 0 auto !important; padding: 1em !important; " +
-      "font: 18px/1.6 serif !important; }\n" +
-      "img, video { max-width: 100% !important; height: auto !important; }\n";
   }
   css += kc9kSocialCss(social, url);
   let style = document.getElementById(STYLE_ID);

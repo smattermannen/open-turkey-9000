@@ -640,6 +640,13 @@ Made with the owner. Newest last.
 - 2026-11-14: A hotkey's lock is confirmed once, when the hotkey is added
   (R-LOCK-12); pressing the hotkey then sets it without asking, since a
   pressed hotkey has no terminal.
+- 2026-11-14 (replaces the entry above): each hotkey has its own option
+  "Run without confirmation". Off, pressing a hotkey with a lock asks in a
+  desktop dialog before anything is locked; on, its lock is confirmed only
+  when the hotkey is set up. Monk mode started automatically (a bypass
+  prevention step, a list's or phrase set's `monk` action) asks nothing when
+  it starts: setting up such a step or action needs ticking "I know this will
+  not ask for confirmation".
 
 ## 7. Open decisions
 

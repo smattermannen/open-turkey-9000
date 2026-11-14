@@ -291,6 +291,7 @@ build and is **used for real**. On it:
   length) and calls `confirmLocks` before writing anything: a terminal is
   asked for "yes", anything else is refused without `--yes` (`addYesFlag`).
   Tests: `confirm_test.go` (`lockCases`, one per lock kind and target).
+  The GUI's lock dialogs all go through `confirm_lock` and then pass `--yes`.
 - **Lock** (`internal/lock/`): raw-mode, paste-resistant typing challenge (random
   characters: 60% letters, 35% digits, 5% symbols) that gates a char-locked
   block's deactivation.

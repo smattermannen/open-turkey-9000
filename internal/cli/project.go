@@ -539,9 +539,9 @@ With --dry-run, says what would happen and changes nothing.`,
 				return err
 			}
 		}
-		if !dry {
+		{
 			// R-LOCK-12: the locks in the file are confirmed before anything
-			// is written.
+			// is written; a dry run lists them (the interface asks with them).
 			var locks []lockToSet
 			for _, c := range blocks {
 				if l := c.in.ScheduleLock; l != nil {
@@ -553,7 +553,11 @@ With --dry-run, says what would happen and changes nothing.`,
 					locks = append(locks, lockToSet{fmt.Sprintf("imported freeze schedule %s (%s mode)", f.w, f.mode), "schedule lock", leadLength(f.lead)})
 				}
 			}
-			if err := confirmLocks(cmd, locks...); err != nil {
+			if dry {
+				for _, l := range locks {
+					say("set a lock: %s", l)
+				}
+			} else if err := confirmLocks(cmd, locks...); err != nil {
 				return err
 			}
 		}

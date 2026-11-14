@@ -201,7 +201,10 @@ func TestRLOCK12_ProjectImportConfirmation(t *testing.T) {
 	if _, err := d.GetBlock("b"); err == nil {
 		t.Fatal("the block was imported without confirmation")
 	}
-	mustRun(t, "project", "import", file, "--dry-run") // a dry run sets nothing, so asks nothing
+	// A dry run sets nothing, so asks nothing, and lists the locks.
+	if out := capture(t, "project", "import", file, "--dry-run"); !strings.Contains(out, "Would: set a lock: imported block 'b': schedule lock") {
+		t.Errorf("the dry run doesn't list the lock: %s", out)
+	}
 	mustRun(t, "project", "import", file, "--yes")
 	if on, lead, _ := d.ScheduleLock("b"); !on || lead != 30 {
 		t.Errorf("imported schedule lock = %v %d", on, lead)

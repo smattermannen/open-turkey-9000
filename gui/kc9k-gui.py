@@ -1574,6 +1574,17 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return answer == Gtk.ResponseType.OK
 
+    def confirm_lock(self, locks):
+        """R-LOCK-12: the one confirmation for every lock. locks are lines
+        "what is locked: kind, how long", as the CLI shows them. Returns True
+        only when the user confirms; the caller then passes --yes."""
+        if not locks:
+            return True
+        return self.confirm(
+            "Set this lock?" if len(locks) == 1 else "Set these locks?",
+            "\n".join("• " + line for line in locks)
+            + "\n\nWhile a lock is on, this can't be weakened.", "Lock")
+
     def ask_text(self, title, detail="", password=False, initial=""):
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text=title, secondary_text=detail or None,
@@ -1736,6 +1747,11 @@ class Window(Gtk.ApplicationWindow):
 
     def change_global_nepsis(self, _button):
         args = self.ask_nepsis("Bypass prevention", self.state.get("nepsis"), True)
+        if args and "--for" in args:
+            hours = args[args.index("--for") + 1].rstrip("h")
+            if not self.confirm_lock([f"bypass prevention: timer lock, {hours} hours"]):
+                return
+            args.append("--yes")
         if args:
             self.run(["bypass", "set", *args], then=self.queued_note)
 
@@ -2685,8 +2701,22 @@ class Window(Gtk.ApplicationWindow):
         lock_minutes, delay_minutes, secret, use_typing, use_restart = values
 
         args = ["start", block["name"]]
+        target = f"block '{block['name']}'"
+        relock_note = f", re-lock {relock_minutes} minutes after unlocking" if relock_minutes else ""
+        locks = []
         if lock_minutes:
-            args += ["--for", f"{lock_minutes}m", "--yes"]  # confirmed below
+            args += ["--for", f"{lock_minutes}m"]
+            locks.append(f"{target}: timer lock, {lock_minutes} minutes "
+                         "(it can't be stopped until then, not even with the typing challenge; "
+                         "time the computer is off doesn't count)")
+        if use_typing:
+            locks.append(f"{target}: text lock{relock_note}")
+        if secret:
+            locks.append(f"{target}: password lock{relock_note}")
+        if use_restart:
+            locks.append(f"{target}: restart lock, until the computer restarts")
+        if delay_minutes:
+            locks.append(f"{target}: delay lock, unlocking takes {delay_minutes} minutes")
         if use_typing:
             args += lock_args
         if use_restart:
@@ -2697,11 +2727,10 @@ class Window(Gtk.ApplicationWindow):
             args.append("--password-stdin")
         if relock_minutes and (use_typing or secret):
             args += ["--relock", f"{relock_minutes}m"]
-        if lock_minutes and not self.confirm(
-                f"Time-lock {block['name']} for {lock_minutes} minutes?",
-                "It can't be stopped until the time has passed, not even with the typing "
-                "challenge. Time the computer is off doesn't count.", "Lock"):
+        if not self.confirm_lock(locks):
             return
+        if locks:
+            args.append("--yes")
         self.run(args, secret + "\n" if secret else None)
 
     def stop_block(self, _button):
@@ -2712,7 +2741,11 @@ class Window(Gtk.ApplicationWindow):
         if not self.selected:
             return
         if self.schedule_lock.get_active():
-            self.run(["schedule", "lock", self.selected, "on", "--lead", f"{self.schedule_lead.get_value_as_int()}m"])
+            lead = self.schedule_lead.get_value_as_int()
+            if not self.confirm_lock([f"block '{self.selected}': schedule lock, while each window is open"
+                                      + (f" and {lead} minutes before it" if lead else "")]):
+                return
+            self.run(["schedule", "lock", self.selected, "on", "--lead", f"{lead}m", "--yes"])
         elif self.blocks.get(self.selected, {}).get("schedule_lock"):
             self.run(["schedule", "lock", self.selected, "off"])
 
@@ -2888,8 +2921,11 @@ class Window(Gtk.ApplicationWindow):
         if "Would:" not in output:
             self.message(output or "The file adds nothing new.", Gtk.MessageType.INFO)
             return
-        if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import"):
-            self.run(["project", "import", path],
+        locks = [line.split("Would: set a lock: ", 1)[1] for line in output.splitlines()
+                 if "Would: set a lock: " in line]
+        if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import") \
+                and self.confirm_lock(locks):
+            self.run(["project", "import", path] + (["--yes"] if locks else []),
                      then=lambda result: self.message(result, Gtk.MessageType.INFO))
 
     # Clusters ------------------------------------------------------------
@@ -3154,10 +3190,16 @@ class Window(Gtk.ApplicationWindow):
         mode = self.freeze_mode.get_active_id()
         lock = self.freeze_lock.get_active()
         lead = self.freeze_lead.get_value_as_int()
-        if self.confirm(f"Freeze {values[0]} {values[1]}-{values[2]}?",
-                        f"The computer will be frozen then ({self.freeze_mode.get_active_text().lower()})"
-                        + (f", and the schedule can't be removed from {lead} minutes before it starts."
-                           if lock else "."), "Schedule"):
+        if lock:
+            confirmed = self.confirm_lock([
+                f"freeze schedule {values[0]} {values[1]}-{values[2]} "
+                f"({self.freeze_mode.get_active_text().lower()}): schedule lock, while each window is open"
+                + (f" and {lead} minutes before it" if lead else "")])
+        else:
+            confirmed = self.confirm(f"Freeze {values[0]} {values[1]}-{values[2]}?",
+                                     f"The computer will be frozen then "
+                                     f"({self.freeze_mode.get_active_text().lower()}).", "Schedule")
+        if confirmed:
             self.run(["freeze", "schedule", "add", "--days", values[0], "--from", values[1],
                       "--to", values[2], "--mode", mode, "--yes"] + (["--lock-lead", f"{lead}m"] if lock else []))
 
@@ -3736,12 +3778,19 @@ class Window(Gtk.ApplicationWindow):
         if len(args) == base:
             self.message("Choose at least one lock.", Gtk.MessageType.INFO)
             return
-        if lock_minutes and not self.confirm(
-                f"Lock {title} for {lock_minutes} minutes?",
-                "It can't be turned off until the time has passed, not even with the typing "
-                "challenge. Time the computer is off doesn't count.", "Lock"):
+        locks = []
+        if lock_minutes:
+            locks.append(f"{title}: timer lock, {lock_minutes} minutes (it can't be turned off until "
+                         "then, not even with the typing challenge; time the computer is off doesn't count)")
+        if use_typing:
+            locks.append(f"{title}: text lock")
+        if secret:
+            locks.append(f"{title}: password lock")
+        if use_restart:
+            locks.append(f"{title}: restart lock, until the computer restarts")
+        if not self.confirm_lock(locks):
             return
-        self.run(args, secret + "\n" if secret else None)
+        self.run(args + ["--yes"], secret + "\n" if secret else None)
 
     def unlock_setting(self, _button, name, title):
         if name == "strict":

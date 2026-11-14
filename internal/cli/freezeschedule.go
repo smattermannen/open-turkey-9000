@@ -75,7 +75,12 @@ Without it, it can be removed whenever no freeze is running from it.`,
 		if err != nil {
 			return err
 		}
-		if !yes {
+		if lead >= 0 {
+			// R-LOCK-12: the freeze and its lock are confirmed together.
+			if err := confirmLocks(cmd, lockToSet{fmt.Sprintf("freeze schedule %s (%s mode)", w, mode), "schedule lock", leadLength(lead)}); err != nil {
+				return err
+			}
+		} else if !yes {
 			return fmt.Errorf("this freezes the computer %s in %s mode; add --yes to confirm", w, mode)
 		}
 		if err := requireLockPassword(database); err != nil {
@@ -204,6 +209,11 @@ var freezeScheduleLockCmd = &cobra.Command{
 				return refused(database, "", fmt.Errorf("freeze schedule %d is locked now; its lock can be shortened or taken off once it ends", num))
 			}
 		}
+		if want >= 0 && want > s.LockLead {
+			if err := confirmLocks(cmd, lockToSet{fmt.Sprintf("freeze schedule %d (%s, %s mode)", num, s.Window, s.Mode), "schedule lock", leadLength(want)}); err != nil {
+				return err
+			}
+		}
 		if err := database.SetFreezeScheduleLock(s.ID, want); err != nil {
 			return err
 		}
@@ -224,6 +234,7 @@ func init() {
 	freezeScheduleAddCmd.Flags().Bool("yes", false, "Confirm")
 	freezeScheduleAddCmd.Flags().String("lock-lead", "", "Lock the schedule from this long before each window (e.g. 2h; 0m: only while it runs)")
 	freezeScheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h)")
+	addYesFlag(freezeScheduleLockCmd)
 	freezeScheduleCmd.AddCommand(freezeScheduleAddCmd, freezeScheduleListCmd, freezeScheduleRemoveCmd, freezeScheduleLockCmd)
 	freezeCmd.AddCommand(freezeScheduleCmd)
 }

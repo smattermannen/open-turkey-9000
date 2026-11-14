@@ -251,6 +251,9 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 		if err != nil {
 			return err
 		}
+		if err := confirmLocks(cmd, settingLocks("bypass prevention", cur, next)...); err != nil {
+			return err
+		}
 		if err := database.SetSettingLock(next); err != nil {
 			return err
 		}
@@ -435,6 +438,7 @@ func init() {
 	nepsisSetCmd.Flags().Bool("password-stdin", false, "Global only. Password lock, read from standard input")
 	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be weakened until the computer restarts")
 	addTextLockFlags(nepsisSetCmd)
+	addYesFlag(nepsisSetCmd)
 	addNowFlag(nepsisSetCmd, nepsisOffCmd)
 	nepsisCmd.AddCommand(nepsisSetCmd, nepsisOffCmd, nepsisUnlockCmd)
 	rootCmd.AddCommand(monkCmd, nepsisCmd)

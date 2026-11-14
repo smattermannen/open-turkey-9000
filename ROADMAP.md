@@ -203,7 +203,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 
 | Item | Status | Notes |
 |---|---|---|
-| Timer lock (`--for`, `--until`) | Built | follows trusted time; over 24 h asks to confirm (`--yes`); only a schedule ends a block it started |
+| Timer lock (`--for`, `--until`) | Built | follows trusted time; confirmed when set (R-LOCK-12); only a schedule ends a block it started |
 | Text lock | Built | random characters, random words (`--lock-words`) or custom text (`--lock-text`), 1–5000 |
 | Range lock | Not built | |
 | Delay lock | Built | `start --delay`, 1 min to 40 days, counted from `unlock` |
@@ -241,7 +241,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Warning 60 s before logout, shutdown, freeze (R-WARN-1) | Built | list actions wait 60 s after the notice; scheduled freezes are announced at 5 min and 1 min |
 | Bypass prevention notices at every event and step (R-WARN-2) | Built | one notification per new event across ladders (`checkScopes`) |
 | Allowed apps only | Not built | |
-| Confirmation when any lock is set (R-LOCK-12) | Gap | only timer locks over 24 h ask today; every lock kind, on every target, must ask |
+| Confirmation when any lock is set (R-LOCK-12) | Partial | CLI: every lock on blocks, schedule locks, strict, browser options, bypass prevention, freeze schedules and project import asks (`confirmLocks`, `cli/confirm.go`; `--yes` for scripts). GUI dialogs and hotkeys: Not built. Monk mode: left to the monk mode rewrite |
 | Monk mode | Gap | built as the system-owned block `monk-mode`; SPEC now says it is a fixed mode, not a block (R-MONK-1), and also cuts the whole internet connection three ways (R-MONK-2): Not built |
 | Consequences | Built | `enforce/consequence.go` |
 | Strict mode | Partial | a voluntary switch with its own setting lock (`kc9k strict on --for …`, `strict unlock`). Exempt folders: Not built |

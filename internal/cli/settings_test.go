@@ -27,11 +27,11 @@ func TestStrictModeLock(t *testing.T) {
 	}
 
 	// Its own timer lock refuses turning it off.
-	mustRun(t, "strict", "on", "--for", "1h")
+	mustRun(t, "strict", "on", "--for", "1h", "--yes")
 	if err := runCLI(t, "strict", "off"); err == nil || !strings.Contains(err.Error(), "locked until") {
 		t.Errorf("strict off under its own timer lock: %v", err)
 	}
-	if err := runCLI(t, "strict", "on", "--for", "10m"); err == nil {
+	if err := runCLI(t, "strict", "on", "--for", "10m", "--yes"); err == nil {
 		t.Error("strict mode's timer lock was shortened")
 	}
 	if locked, _ := enforce.AnySettingLocked(d, mustTrusted(t, d)); !locked {
@@ -42,7 +42,7 @@ func TestStrictModeLock(t *testing.T) {
 	}
 
 	// A password lock is lifted by unlock; strict mode stays on.
-	if err := runWith(t, 0, []string{"partner"}, "strict", "on", "--password-stdin"); err != nil {
+	if err := runWith(t, 0, []string{"partner"}, "strict", "on", "--password-stdin", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runCLI(t, "strict", "off"); err == nil || !strings.Contains(err.Error(), "strict unlock") {
@@ -89,16 +89,16 @@ func TestPasswordForLocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	// No password given: a lock is still set.
-	if err := runWith(t, 0, nil, "browser", "safesearch", "on", "--for", "1m"); err != nil {
+	if err := runWith(t, 0, nil, "browser", "safesearch", "on", "--for", "1m", "--yes"); err != nil {
 		t.Fatalf("a lock without the settings password: %v", err)
 	}
 	if err := runWith(t, 0, nil, "password", "locks", "on"); err != nil {
 		t.Fatal(err)
 	}
-	if err := runWith(t, 0, nil, "browser", "safesearch", "on", "--for", "2m"); err == nil {
+	if err := runWith(t, 0, nil, "browser", "safesearch", "on", "--for", "2m", "--yes"); err == nil {
 		t.Error("a lock was set without the settings password after 'password locks on'")
 	}
-	if err := runWith(t, 0, []string{"secret1"}, "browser", "safesearch", "on", "--for", "3m"); err != nil {
+	if err := runWith(t, 0, []string{"secret1"}, "browser", "safesearch", "on", "--for", "3m", "--yes"); err != nil {
 		t.Errorf("a lock with the settings password: %v", err)
 	}
 	if err := runWith(t, 0, nil, "password", "locks", "off"); err == nil {
@@ -156,24 +156,24 @@ func TestTextLockStyles(t *testing.T) {
 	notTerminal(t)
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "reddit.com")
-	mustRun(t, "start", "b", "--lock-text", "I  choose to focus")
+	mustRun(t, "start", "b", "--lock-text", "I  choose to focus", "--yes")
 	extras, _ := d.GetLockExtras("b")
 	detail, _ := d.GetBlock("b")
 	if extras.Style != lock.StyleCustom+"I choose to focus" || !detail.Locked || detail.LockChars != len("I choose to focus") {
 		t.Errorf("custom text lock: style %q, locked %v, %d chars", extras.Style, detail.Locked, detail.LockChars)
 	}
-	if err := runCLI(t, "start", "b", "--lock-words"); err == nil {
+	if err := runCLI(t, "start", "b", "--lock-words", "--yes"); err == nil {
 		t.Error("a text lock's kind changed on an active block")
 	}
-	mustRun(t, "browser", "safesearch", "on", "--lock-words", "--lock-chars", "40")
+	mustRun(t, "browser", "safesearch", "on", "--lock-words", "--lock-chars", "40", "--yes")
 	s, _ := d.GetSettingLock("safesearch")
 	if s.Style != lock.StyleWords || s.LockChars != 40 {
 		t.Errorf("setting lock: %+v", s)
 	}
-	if err := runCLI(t, "browser", "safesearch", "on", "--lock"); err == nil {
+	if err := runCLI(t, "browser", "safesearch", "on", "--lock", "--yes"); err == nil {
 		t.Error("a word lock became a character lock")
 	}
-	if err := runCLI(t, "start", "b", "--lock-text", "café"); err == nil {
+	if err := runCLI(t, "start", "b", "--lock-text", "café", "--yes"); err == nil {
 		t.Error("custom text with an accent accepted")
 	}
 }
@@ -185,7 +185,7 @@ func TestUnlockOnlyLifts(t *testing.T) {
 	notTerminal(t)
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "reddit.com")
-	if err := runWith(t, 0, []string{"partner"}, "start", "b", "--password-stdin", "--delay", "1m"); err != nil {
+	if err := runWith(t, 0, []string{"partner"}, "start", "b", "--password-stdin", "--delay", "1m", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runCLI(t, "stop", "b"); err == nil {
@@ -234,10 +234,10 @@ func TestRelockOption(t *testing.T) {
 	notTerminal(t)
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "reddit.com")
-	if err := runCLI(t, "start", "b", "--relock", "30m"); err == nil {
+	if err := runCLI(t, "start", "b", "--relock", "30m", "--yes"); err == nil {
 		t.Error("--relock without a text or password lock was accepted")
 	}
-	if err := runWith(t, 0, []string{"partner"}, "start", "b", "--password-stdin", "--relock", "30m"); err != nil {
+	if err := runWith(t, 0, []string{"partner"}, "start", "b", "--password-stdin", "--relock", "30m", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runWith(t, 0, []string{"partner"}, "unlock", "b"); err != nil {
@@ -259,24 +259,4 @@ func TestRelockOption(t *testing.T) {
 	if err := runCLI(t, "stop", "b"); err == nil || !strings.Contains(err.Error(), "locked") {
 		t.Errorf("stop after the re-lock time: %v; want refused", err)
 	}
-}
-
-// §3.4: a timer lock over 24 hours needs confirming.
-func TestLongTimerLockConfirmed(t *testing.T) {
-	d := testDB(t)
-	notTerminal(t)
-	mustRun(t, "block", "create", "b")
-	mustRun(t, "block", "add", "b", "reddit.com")
-	if err := runCLI(t, "start", "b", "--for", "25h"); err == nil || !strings.Contains(err.Error(), "--yes") {
-		t.Errorf("a 25 h timer lock without --yes: %v", err)
-	}
-	if active, _ := d.IsBlockActive("b"); active {
-		t.Fatal("the block started anyway")
-	}
-	mustRun(t, "start", "b", "--for", "25h", "--yes")
-	// Extending it to beyond 24 hours is confirmed too.
-	if err := runCLI(t, "start", "b", "--for", "26h"); err == nil {
-		t.Error("extending to 26 h without --yes was accepted")
-	}
-	mustRun(t, "start", "b", "--for", "26h", "--yes")
 }

@@ -317,6 +317,43 @@ function applyMute(tab) {
   }
 }
 
+// FRAME_LOOKS are the look actions every frame of a tab must apply itself:
+// a frame from another site can't read the tab's title, text or (often)
+// address, and hiding it from the page around it doesn't stop its sound.
+// Mute needs no help: it silences the whole tab. Greyscale and dark are
+// drawn over the frames by the tab's own page.
+const FRAME_LOOKS = ["no-video", "no-images"];
+// What each tab's frames were last told ("no-video no-images").
+const sentLooks = new Map();
+
+// tabLooks is the tab's current outcome for FRAME_LOOKS: what its title or
+// text earned it (from the top frame's report), plus what its address and
+// title earn it now. The tab's address comes from the browser, so it holds
+// even for a page whose requests the extension never saw.
+function tabLooks(tab) {
+  if (!tab || tab.id === undefined || !tab.url || !/^https?:/i.test(tab.url)) {
+    return [];
+  }
+  const byPage = kc9kListActions(lists, { url: tab.url, title: tab.title || "" });
+  const kept = { "no-video": keywordNoVideo, "no-images": keywordNoImages };
+  return FRAME_LOOKS.filter((name) => byPage[name] || kept[name].has(tab.id));
+}
+
+// tellFrames sends every frame of the tab its looks when they changed.
+// Frames that load later ask for them themselves ("tab-looks").
+function tellFrames(tab) {
+  if (!tab || tab.id === undefined) {
+    return;
+  }
+  const looks = tabLooks(tab);
+  const key = looks.join(" ");
+  if ((sentLooks.get(tab.id) || "") === key) {
+    return;
+  }
+  sentLooks.set(tab.id, key);
+  browser.tabs.sendMessage(tab.id, { type: "tab-looks", looks }).catch(() => {});
+}
+
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url !== undefined) {
     for (const kept of [keywordNoImages, keywordNoVideo, keywordMute]) {
@@ -327,6 +364,9 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
   if (changeInfo.url !== undefined || changeInfo.title !== undefined || changeInfo.mutedInfo !== undefined) {
     applyMute(tab);
+  }
+  if (changeInfo.url !== undefined || changeInfo.title !== undefined) {
+    tellFrames(tab);
   }
   if (changeInfo.url !== undefined) {
     noteTabUrl(tabId, changeInfo.url);
@@ -340,6 +380,7 @@ browser.tabs.onRemoved.addListener((tabId) => {
   keywordNoImages.delete(tabId);
   keywordNoVideo.delete(tabId);
   keywordMute.delete(tabId);
+  sentLooks.delete(tabId);
   mutedHere.delete(tabId);
   cameFrom.delete(tabId);
   trail.delete(tabId);
@@ -407,6 +448,9 @@ function pageHit(message, sender) {
   if (takes("mute")) {
     keywordMute.set(tab.id, message.url);
     applyMute(tab);
+  }
+  if (takes("no-video") || takes("no-images")) {
+    tellFrames(tab);
   }
   const outcome = kc9kOutcome(matches);
   if (kc9kTakesAway(outcome)) {
@@ -560,6 +604,9 @@ function onMessage(message, sender) {
     typeof message.url === "string" && kc9kPlaylists(social).length > 0) {
     browser.tabs.update(sender.tab.id, { url: blockedPage(message.url, "playlist").redirectUrl });
   }
+  if (message && message.type === "tab-looks" && sender && sender.tab) {
+    return Promise.resolve(tabLooks(sender.tab));
+  }
   if (message && message.type === "why") {
     return Promise.resolve(why(sender));
   }
@@ -619,6 +666,7 @@ async function closeNewlyBlockedTabs() {
     } else {
       blockTitledTab(tab);
       applyMute(tab);
+      tellFrames(tab);
     }
   }
 }

@@ -6,6 +6,9 @@ button, and adding a site from it. Run on a disposable machine:
     GECKOWEBDRIVER=<dir with geckodriver> python3 ci/extras_test.py
 """
 import http.server
+import io
+import math
+import wave
 import os
 import subprocess
 import sys
@@ -18,7 +21,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 
 failures = 0
-BLOCKS = ("extras", "extrawords", "extrasoon", "extraadd", "extralooks", "extrasocial", "extraplay")
+BLOCKS = ("extras", "extrawords", "extrasoon", "extraadd", "extralooks", "extrasocial", "extraplay", "extraembed")
 REMOTE_CONTROL_MARKER = "/var/lib/kc9k/allow-remote-control"
 
 
@@ -57,16 +60,42 @@ PAGES = {
     "/go": "<!doctype html><title>Proxy</title><p>a proxy page</p>",
     "/looks": "<!doctype html><title>Looks</title><body style='background:#fff'><aside id='side'>side</aside>"
               "<p>kcninelooksword here</p><video id='v'></video></body>",
+    # A page with an embedded player from another site (localhost against
+    # 127.0.0.1), with and without a word that takes its video away.
+    "/embed": "<!doctype html><title>Embed</title><p>kcnineembedword</p>"
+              "<iframe id='f' src='FRAME/frame'></iframe>",
+    "/embedplain": "<!doctype html><title>Embed plain</title><p>nothing here</p>"
+                   "<iframe id='f' src='FRAME/frame'></iframe>",
+    "/frame": "<!doctype html><title>Player</title><video id='fv' src='/tone.wav' autoplay loop></video>",
 }
+
+
+def tone():
+    """Two seconds of a 440 Hz tone as a WAV file."""
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(b"".join(int(8000 * math.sin(2 * math.pi * 440 * i / 8000)).to_bytes(2, "little", signed=True)
+                               for i in range(16000)))
+    return out.getvalue()
+
+
+FILES = {"/tone.wav": ("audio/wav", tone())}
 
 
 class Pages:
     def __init__(self):
+        frame_base = ""
+
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
-                body = PAGES.get(self.path.split("?")[0], "<!doctype html><title>?</title>").encode()
+                path = self.path.split("?")[0]
+                kind, body = FILES.get(path) or ("text/html", PAGES.get(path, "<!doctype html><title>?</title>")
+                                                 .replace("FRAME", frame_base).encode())
                 self.send_response(200)
-                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Type", kind)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -76,6 +105,7 @@ class Pages:
 
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+        frame_base = f"http://localhost:{self.server.server_address[1]}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
 
@@ -83,6 +113,9 @@ def start():
     options = Options()
     options.binary_location = "/usr/bin/librewolf"
     options.add_argument("-headless")
+    # Let embedded players start on their own, sound and all.
+    options.set_preference("media.autoplay.default", 0)
+    options.set_preference("media.autoplay.blocking_policy", 0)
     service = Service(os.path.join(os.environ["GECKOWEBDRIVER"], "geckodriver"),
                       service_args=["--allow-system-access"])
     browser = webdriver.Firefox(options=options, service=service)
@@ -201,6 +234,68 @@ try:
         check("no-video hides videos",
               driver.execute_script("return getComputedStyle(document.getElementById('v')).display") == "none")
         ot("stop", "extralooks")
+
+        # An embedded video plays on through no-video and mute from a word in
+        # the page around it unless every frame of the tab is told.
+        ot("block", "create", "extraembed")
+        ot("list", "create", "extraembed", "Embed", "--text")
+        ot("list", "add", "extraembed", "Embed", "kcnineembedword")
+        for action in ("no-video", "mute"):
+            ot("list", "action", "extraembed", "Embed", action, "on")
+        ot("list", "action", "extraembed", "Embed", "block", "off")
+        ot("start", "extraembed")
+        time.sleep(6)
+
+        def frame_video(frame_id="f"):
+            """The embedded video's display and whether it is paused, or None."""
+            try:
+                driver.switch_to.frame(driver.find_element("id", frame_id))
+                return driver.execute_script(
+                    "const v = document.getElementById('fv');"
+                    "return v ? [getComputedStyle(v).display, v.paused] : null;")
+            except WebDriverException as error:
+                print("frame:", str(error)[:120])
+                return None
+            finally:
+                driver.switch_to.default_content()
+
+        def tab_muted(part):
+            """Whether the extension sees the tab showing part muted (asked from a second tab)."""
+            main = driver.current_window_handle
+            driver.switch_to.new_window("tab")
+            try:
+                visit(driver, extension + "/popup.html", wait=2)
+                tabs = driver.execute_async_script(
+                    "const done = arguments[arguments.length - 1];"
+                    "const api = typeof browser !== 'undefined' ? browser : window.wrappedJSObject.browser;"
+                    "api.tabs.query({}).then((t) => done(t.map((x) => [x.url, Boolean(x.mutedInfo && x.mutedInfo.muted)])),"
+                    " (e) => done([]));")
+            finally:
+                driver.close()
+                driver.switch_to.window(main)
+            return any(part in url and muted for url, muted in tabs or [])
+
+        visit(driver, pages.base + "/embedplain", wait=6)
+        plain = frame_video()
+        print("embedded video without the word:", plain)
+        check("an embedded video plays on a page without the word",
+              plain is not None and plain[0] != "none" and plain[1] is False)
+        visit(driver, pages.base + "/embed", wait=8)
+        hit = frame_video()
+        print("embedded video with the word:", hit)
+        check("no-video from page text stops a video in a frame from another site",
+              hit is not None and hit[0] == "none" and hit[1] is True)
+        check("mute from page text mutes the whole tab", tab_muted("/embed"))
+        driver.execute_script(
+            "const f = document.createElement('iframe'); f.id = 'late';"
+            "f.src = arguments[0] + '/frame'; document.body.appendChild(f);",
+            pages.base.replace("127.0.0.1", "localhost"))
+        time.sleep(5)
+        late = frame_video("late")
+        print("frame added later:", late)
+        check("a frame added after the match asks and takes no-video",
+              late is not None and late[0] == "none" and late[1] is True)
+        ot("stop", "extraembed")
 
         # Social media settings: Shorts are sent to the front page.
         ot("stop", "extras")  # it stops youtube.com, which the next checks need

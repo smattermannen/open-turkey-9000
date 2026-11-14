@@ -132,13 +132,20 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   35% digits, 5% symbols; 98% accuracy; default 300 chars;
   `--lock-words`, `--lock-text`.
 - **Website lists** (`db/weblists.go`, `cli/weblists.go`, `kc9k list`): per
-  block, blacklists and exception lists, each typed (`web_lists.type`,
-  `WebList.IsAddress`; to be removed, ROADMAP 0.1) with scope
-  (`db.CheckScope`). `migrateListTypes` splits only untyped rows;
-  `fillListTypes` types everything. Term-list url terms → `url_terms`,
-  matched as words (`kc9kUrlWords`). Only address blacklists with `block`
-  feed hosts/firewall/policy (`enforce.Inputs`), and not for blocks with
-  title/text exceptions. Everything goes to the extension as `lists` rules
+  block, blacklists and exception lists with scope (url/title/text), no
+  types (§3.2): an entry is a site/URL entry if `blocker.IsAddressEntry`
+  (domain, path, or pattern with `*`/`/`, e.g. `*hot*girl*`), else a
+  rendered term; validity doesn't depend on scope (`prepareEntries`).
+  With url: `WebList.Addresses` → `url` (and layers), `URLTerms` →
+  `url_terms`, matched as words (`kc9kUrlWords`); title/text get every
+  entry. Only blacklists with url and `block` feed their addresses to
+  hosts/firewall/policy (`enforce.Inputs`), and not for blocks with
+  title/text/url-term exceptions. Old `web_lists.type`/`clusters.type`
+  columns may remain; nothing reads them. `migrateJoinLists`
+  (`db/listjoin.go`, every open) joins split pairs `<name>` (url) +
+  `<name> terms` when identical (entries, actions, no test mode, no
+  queued edit/recording); clusters too. `--terms` is a no-op alias; old
+  `type` fields in block/project files are ignored. Everything goes to the extension as `lists` rules
   (`enforce.BuildRules`; `kc9kListActions` in `match.js`: plain words
   whole, `*` inside words; a list waits if its exceptions need unread page
   parts). Per action: threshold (distinct entries) and hit count.

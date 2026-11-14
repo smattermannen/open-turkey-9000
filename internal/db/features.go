@@ -41,8 +41,6 @@ func upgradeSchema(conn *sql.DB) error {
 		{"active_blocks", "relock", "INTEGER NOT NULL DEFAULT 0"},
 		{"active_blocks", "lifted_until", "INTEGER NOT NULL DEFAULT 0"},
 		{"clusters", "phrases", "BOOLEAN NOT NULL DEFAULT 0"},
-		{"web_lists", "type", "TEXT NOT NULL DEFAULT ''"},
-		{"clusters", "type", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {
@@ -64,7 +62,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateWebLists(conn); err != nil {
 		return err
 	}
-	if err := migrateListTypes(conn); err != nil {
+	// Lists have no types (§3.2): an older database may still have the
+	// column web_lists.type (and clusters.type); nothing reads it.
+	if err := migrateJoinLists(conn); err != nil {
 		return err
 	}
 	if err := migrateCombinations(conn); err != nil {

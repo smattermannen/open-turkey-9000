@@ -50,7 +50,7 @@ func describeCluster(c db.Cluster) string {
 	if c.Phrases {
 		return fmt.Sprintf("%s (phrases) looks at: %s; %d phrases", c.Name, c.Where, len(c.Entries))
 	}
-	return fmt.Sprintf("%s (%s) looks at: %s; %d entries", c.Name, c.Type, c.Where, len(c.Entries))
+	return fmt.Sprintf("%s looks at: %s; %d entries", c.Name, c.Where, len(c.Entries))
 }
 
 // typedPhrases parses phrases and writes them back in their stored form.
@@ -72,8 +72,8 @@ func clusterAdd(database *db.DB, c db.Cluster, entries []string) (int, error) {
 	var err error
 	if c.Phrases {
 		entries, err = typedPhrases(entries)
-	} else if err = refuseCombinations(c.Type == db.ListAddress, entries); err == nil {
-		entries, err = prepareEntries(c.Type, c.Where, entries)
+	} else if err = refuseCombinations(entries); err == nil {
+		entries, err = prepareEntries(c.Where, entries)
 	}
 	if err != nil {
 		return 0, err
@@ -158,7 +158,7 @@ func clusterCopy(cmd *cobra.Command, database *db.DB, cluster, block, into, as s
 		if exceptions {
 			kind = db.ListExceptions
 		}
-		if _, err := database.CreateTypedList(block, kind, c.Type, target, c.Where); err != nil {
+		if _, err := database.CreateList(block, kind, target, c.Where); err != nil {
 			return err
 		}
 		created = true
@@ -261,9 +261,6 @@ looks at the text unless --url, --title or --text say otherwise.`,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		where := whereFlags(cmd)
 		create := database.CreateCluster
-		if terms, _ := cmd.Flags().GetBool("terms"); terms {
-			create = func(name string, where db.Where) error { return database.CreateTypedCluster(name, db.ListTerm, where) }
-		}
 		if phrases, _ := cmd.Flags().GetBool("phrases"); phrases {
 			create = database.CreatePhraseCluster
 			if !cmd.Flags().Changed("url") {
@@ -340,11 +337,8 @@ var clusterRemoveCmd = &cobra.Command{
 				return err
 			}
 		}
-		// Domains are kept normalized, so look them up the same way.
-		for i, e := range entries {
-			if !containsString(c.Entries, e) && c.Type == db.ListAddress {
-				entries[i] = normalizeURLEntry(e)
-			}
+		if !c.Phrases {
+			entries = storedEntries(c.Entries, entries)
 		}
 		for _, e := range entries {
 			if !containsString(c.Entries, e) {
@@ -396,8 +390,6 @@ then one entry per line. 'kc9k cluster import' reads it back, and so does
 		header := clusterHeader
 		if c.Phrases {
 			header = phraseClusterHeader
-		} else if c.Type == db.ListTerm {
-			header = termClusterHeader
 		}
 		fmt.Printf("%s%s\n", header, strings.Join(c.Where.List(), ", "))
 		for _, e := range c.Entries {
@@ -412,7 +404,8 @@ then one entry per line. 'kc9k cluster import' reads it back, and so does
 const clusterHeader = "# kc9k cluster, looks at: "
 
 // phraseClusterHeader starts that line for a phrase cluster, and
-// termClusterHeader for a term cluster (which may look at the url too).
+// termClusterHeader started it for a term cluster while clusters had types
+// (still read).
 const (
 	phraseClusterHeader = "# kc9k phrase cluster, looks at: "
 	termClusterHeader   = "# kc9k term cluster, looks at: "
@@ -425,14 +418,14 @@ func exportedWhere(data string) (db.Where, bool) {
 }
 
 // exportedCluster reads an exported cluster's header line: where it looks,
-// and what it is: "phrases", db.ListTerm, or "" (its places say).
+// and whether it holds "phrases" ("" for entries).
 func exportedCluster(data string) (db.Where, string, bool) {
 	var where db.Where
 	for _, line := range strings.Split(data, "\n") {
 		line = strings.TrimSpace(line)
 		header, what := "", ""
 		for _, h := range []struct{ prefix, what string }{
-			{phraseClusterHeader, "phrases"}, {termClusterHeader, db.ListTerm}, {clusterHeader, ""}} {
+			{phraseClusterHeader, "phrases"}, {termClusterHeader, ""}, {clusterHeader, ""}} {
 			if header == "" && strings.HasPrefix(line, h.prefix) {
 				header, what = h.prefix, h.what
 			}
@@ -473,10 +466,6 @@ making it if there is none by that name. A new cluster looks where --url,
 		}
 		where := whereFlags(cmd)
 		phrases, _ := cmd.Flags().GetBool("phrases")
-		typ := db.DefaultType(where)
-		if terms, _ := cmd.Flags().GetBool("terms"); terms {
-			typ = db.ListTerm
-		}
 		if phrases && !cmd.Flags().Changed("url") {
 			where.URL = false
 		}
@@ -484,10 +473,6 @@ making it if there is none by that name. A new cluster looks where --url,
 			if data, err := readAsCaller(args[1]); err == nil {
 				if w, what, ok := exportedCluster(string(data)); ok {
 					where, phrases = w, phrases || what == "phrases"
-					typ = db.DefaultType(w)
-					if what == db.ListTerm {
-						typ = db.ListTerm
-					}
 				}
 			}
 		}
@@ -497,13 +482,13 @@ making it if there is none by that name. A new cluster looks where --url,
 		if !exists {
 			// Check the entries before making the cluster, so a bad file
 			// leaves nothing behind.
-			create := func(name string, where db.Where) error { return database.CreateTypedCluster(name, typ, where) }
+			create := database.CreateCluster
 			if phrases {
 				create = database.CreatePhraseCluster
 				if _, err := typedPhrases(entries); err != nil {
 					return err
 				}
-			} else if _, err := prepareEntries(typ, where, entries); err != nil {
+			} else if _, err := prepareEntries(where, entries); err != nil {
 				return err
 			}
 			if err := create(args[0], where); err != nil {
@@ -566,7 +551,7 @@ var clusterSaveCmd = &cobra.Command{
 			return err
 		}
 		if !exists {
-			if err := database.CreateTypedCluster(args[2], l.Type, l.Where); err != nil {
+			if err := database.CreateCluster(args[2], l.Where); err != nil {
 				return err
 			}
 		}
@@ -622,8 +607,8 @@ func savePhraseCluster(database *db.DB, block string, s db.PhraseSet, name strin
 func init() {
 	clusterCreateCmd.Flags().Bool("phrases", false, "Make a phrase cluster (copied into blocks as a phrase set)")
 	clusterImportCmd.Flags().Bool("phrases", false, "A new cluster holds phrases")
-	clusterCreateCmd.Flags().Bool("terms", false, "A term cluster, even if it looks only at the address")
-	clusterImportCmd.Flags().Bool("terms", false, "A new cluster is a term cluster, even if it looks only at the address")
+	clusterCreateCmd.Flags().Bool("terms", false, "Old alias; changes nothing (clusters have no types)")
+	clusterImportCmd.Flags().Bool("terms", false, "Old alias; changes nothing (clusters have no types)")
 	addWhereFlags(clusterCreateCmd)
 	addWhereFlags(clusterImportCmd)
 	clusterCopyCmd.Flags().String("into", "", "Add the entries to this list of the block")

@@ -28,9 +28,10 @@ import (
 )
 
 // Inputs derives the layer inputs from the active blocks:
-//   - hostsDomains: the domains of blacklists that look at addresses and
-//     block, for /etc/hosts and the firewall, minus those with an address
-//     exception under them (those layers block whole hosts).
+//   - hostsDomains: the sites of blacklists that look at the url and block,
+//     for /etc/hosts and the firewall, minus those with an address
+//     exception under them (those layers block whole hosts). A list's
+//     rendered terms never reach these layers.
 //   - apps: the union of process names to kill.
 //   - bp: the browser policy: those blacklists' domains and patterns, with
 //     the block's address exceptions.
@@ -51,11 +52,15 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 		except := urlEntries(b.Lists.ExceptionAddresses())
 		used := false
 		for _, l := range b.Lists.Blacklists() {
-			if !l.Enforces() || !l.IsAddress() || !l.HasAction(db.ActionBlock) {
+			// Only a list's sites and URL entries feed the layers; its
+			// rendered terms (in the address, title or text) are the
+			// extension's (§3.2).
+			addresses := l.Addresses()
+			if !l.Enforces() || len(addresses) == 0 || !l.HasAction(db.ActionBlock) {
 				continue
 			}
 			used = true
-			domains, pats := blocker.SplitURLEntries(l.Entries)
+			domains, pats := blocker.SplitURLEntries(addresses)
 			blockDomains = append(blockDomains, domains...)
 			patterns = append(patterns, pats...)
 			for _, site := range domains {

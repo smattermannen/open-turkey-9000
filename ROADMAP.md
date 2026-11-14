@@ -27,11 +27,13 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   refused only while locked. Not built: hardware/internet clock check; re-lock
   on setting locks; active vs enabled (the daemon still activates blocks by
   schedule); layered order (R-LOCK-6/7). (L)
-- [ ] **Lists without types** (§3.2): Differs. Code has address/term lists
-  (`web_lists.type`, `list create --terms`, GUI asks the type; upgrade split
-  mixed lists into `<name>` and `<name> terms`). Needs: mixed lists, an
-  upgrade rejoining split lists where lossless, a create dialog with three
-  scope boxes, `--terms` as alias. URL-word matching (`kc9kUrlWords`) exists. (M)
+- [ ] **Lists without types** (§3.2): Partial. Done: mixed lists (entry is
+  a site/URL entry or rendered term by its shape, `blocker.IsAddressEntry`;
+  patterns like `*casino*` stay address patterns for url), clusters
+  untyped, upgrade joining split `<name>` + `<name> terms` pairs when
+  identical (`migrateJoinLists`), `--terms` a no-op alias, old typed
+  block/project/cluster files still import. Left: GUI create dialog still
+  asks the type. (S)
 - [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
   silently creates nothing (`create_phrase_set`). Two editors (typed box and
   pop-up `PhraseDialog`, too tall); want only boxes in the card, unlimited
@@ -99,7 +101,7 @@ Only items not simply Built.
 |---|---|---|
 | §3.1 File URL entries | Partial | `file://*` default exception built; file URLs in blacklists block nothing |
 | §3.1 Folder entry | Partial | programs closed; windows showing it not |
-| §3.2 Lists with scope, no types | Differs | 0.1 |
+| §3.2 Lists with scope, no types | Partial | 0.1: GUI create dialog |
 | §3.2 Template | Not built | |
 | §3.2 Affected users | Not built | |
 | §3.2 Test mode for phrase sets | Unchecked | lists built |

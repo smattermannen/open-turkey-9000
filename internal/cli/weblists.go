@@ -55,29 +55,27 @@ func findList(database *db.DB, block, list string) (*db.BlockDetail, db.WebList,
 	return detail, l, nil
 }
 
-// prepareEntries checks that each entry works in at least one place the list
-// looks, and normalizes domains for address matching.
-// typ is db.ListAddress (sites and URL entries) or db.ListTerm (rendered
-// terms, wherever the list looks); "" (from before types) takes either.
-func prepareEntries(typ string, where db.Where, entries []string) ([]string, error) {
+// prepareEntries checks each entry and normalizes it. Lists have no types
+// (§3.2): an entry is a site or URL entry (normalized so it reaches
+// /etc/hosts and the firewall and is found again when removed) or else a
+// rendered term, whatever the list looks at, so changing the scope never
+// leaves an entry that doesn't fit.
+func prepareEntries(where db.Where, entries []string) ([]string, error) {
 	if !where.Any() {
 		return nil, fmt.Errorf("the list doesn't look anywhere; tick url, title or text first")
 	}
-	addresses := typ == db.ListAddress || (typ == "" && where.URL)
-	terms := typ == db.ListTerm || (typ == "" && (where.Title || where.Text))
 	out := make([]string, 0, len(entries))
 	for _, raw := range entries {
 		e := strings.TrimSpace(raw)
 		if e == "" {
 			continue
 		}
-		word := terms && checkPageKeywords([]string{e}) == nil
-		if addresses && urlEntry(e) {
+		if urlEntry(e) {
 			e = normalizeURLEntry(e)
-		} else if !word {
-			return nil, fmt.Errorf("invalid entry %q: %s", raw, entryHelp(addresses, terms))
-		} else {
+		} else if checkPageKeywords([]string{e}) == nil {
 			e = normalizeCombination(e)
+		} else {
+			return nil, fmt.Errorf("invalid entry %q: %s", raw, entryHelp)
 		}
 		out = append(out, e)
 	}
@@ -87,13 +85,10 @@ func prepareEntries(typ string, where db.Where, entries []string) ([]string, err
 	return out, nil
 }
 
-// urlEntry reports whether an entry can match addresses. A pattern needs
-// more than wildcards, dots and slashes, except * and *.* (every site).
+// urlEntry reports whether an entry is a site or URL entry rather than a
+// rendered term (blocker.IsAddressEntry).
 func urlEntry(e string) bool {
-	if e != "*" && e != "*.*" && strings.Trim(e, "*./") == "" {
-		return false
-	}
-	return blocker.IsURLEntry(normalizeURLEntry(e))
+	return blocker.IsAddressEntry(normalizeURLEntry(e))
 }
 
 // normalizeURLEntry keeps a lone domain normalized (lower case, no scheme,
@@ -113,16 +108,7 @@ func normalizeURLEntry(e string) string {
 	return e
 }
 
-func entryHelp(addresses, terms bool) string {
-	var parts []string
-	if addresses {
-		parts = append(parts, "an address needs a domain (example.com), a path (example.com/x) or a pattern with * (*.xxx, *casino*)")
-	}
-	if terms {
-		parts = append(parts, fmt.Sprintf("a word or phrase is one line of at most %d characters, not only *; a word combination is written cars(red, big) or (car, lambo*) (big, small, nice):2", maxPageKeyword))
-	}
-	return strings.Join(parts, "; ")
-}
+var entryHelp = fmt.Sprintf("an entry is a site (example.com), a URL entry (example.com/x), a pattern with * (*.xxx, *casino*), or a rendered term: a word or words on one line of at most %d characters, not only *", maxPageKeyword)
 
 // settle re-applies the layers after an edit, and deactivates a block the
 // edit left with nothing to enforce.
@@ -150,10 +136,10 @@ func listAdd(cmd *cobra.Command, database *db.DB, block, list string, entries []
 	if err != nil {
 		return err
 	}
-	if err := refuseCombinations(l.IsAddress(), entries); err != nil {
+	if err := refuseCombinations(entries); err != nil {
 		return err
 	}
-	entries, err = prepareEntries(l.Type, l.Where, entries)
+	entries, err = prepareEntries(l.Where, entries)
 	if err != nil {
 		return err
 	}
@@ -174,18 +160,7 @@ func listRemove(cmd *cobra.Command, database *db.DB, block, list string, entries
 	if err != nil {
 		return err
 	}
-	// Domains and word combinations are kept normalized, so look them up the
-	// same way.
-	for i, e := range entries {
-		if containsString(l.Entries, e) {
-			continue
-		}
-		if l.IsAddress() && containsString(l.Entries, normalizeURLEntry(e)) {
-			entries[i] = normalizeURLEntry(e)
-		} else if !l.IsAddress() {
-			entries[i] = normalizeCombination(e)
-		}
-	}
+	entries = storedEntries(l.Entries, entries)
 	if err := requireAll("entry", block, l.Entries, entries); err != nil {
 		return err
 	}
@@ -199,14 +174,32 @@ func listRemove(cmd *cobra.Command, database *db.DB, block, list string, entries
 	return settle(database, block)
 }
 
-// refuseCombinations refuses word combinations typed as entries of a term
-// list or cluster: they are phrases now, in phrase sets (old files are
-// still read, and moved). An address may have brackets.
-func refuseCombinations(address bool, entries []string) error {
-	if address {
-		return nil
+// storedEntries returns entries as the list or cluster stores them: domains
+// and old word combinations are kept normalized, so look them up the same
+// way.
+func storedEntries(have, entries []string) []string {
+	out := make([]string, len(entries))
+	for i, e := range entries {
+		switch {
+		case containsString(have, e):
+			out[i] = e
+		case containsString(have, normalizeURLEntry(e)):
+			out[i] = normalizeURLEntry(e)
+		default:
+			out[i] = normalizeCombination(e)
+		}
 	}
+	return out
+}
+
+// refuseCombinations refuses word combinations typed as entries of a list
+// or cluster: they are phrases now, in phrase sets (old files are still
+// read, and moved). A site or URL entry may have brackets.
+func refuseCombinations(entries []string) error {
 	for _, e := range entries {
+		if urlEntry(e) {
+			continue
+		}
 		if boxes, ok := db.ParseCombination(e); ok {
 			hint := ""
 			if phrases, err := db.CombinationPhrases(boxes); err == nil && len(phrases) > 0 {
@@ -481,11 +474,7 @@ func describeList(l db.WebList) string {
 	if l.IsExceptions() {
 		kind = "exceptions"
 	}
-	typ := "address"
-	if !l.IsAddress() {
-		typ = "term"
-	}
-	s := fmt.Sprintf("%s (%s %s) looks at: %s", l.Name, typ, kind, l.Where)
+	s := fmt.Sprintf("%s (%s) looks at: %s", l.Name, kind, l.Where)
 	if !l.IsExceptions() {
 		var acts []string
 		for _, a := range l.Actions {
@@ -509,25 +498,21 @@ func describeList(l db.WebList) string {
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Manage a block's website lists (blacklists and exceptions)",
-	Long: `A block has blacklists and exception lists. Each list ticks where it looks:
-the page's address (url), its title (the tab title) and its text.
+	Long: `A block has blacklists and exception lists. Each list ticks where it looks
+(its scope): the page's address (url), its title (the tab title) and its
+text. Lists have no types: sites, URL entries and rendered terms share a
+list, and each entry is matched by the list's scope.
 
-Address entries are domains (reddit.com), paths (reddit.com/r/funny) or
-patterns (*.xxx, *casino*, *.* for every site). Title and text entries are
-words or phrases: a plain word counts only on its own ("porn" misses
-"pornhub"); a * matches inside words ("*porn*" hits "pornhub").
+Sites are domains (reddit.com), URL entries paths (reddit.com/r/funny) or
+patterns (*.xxx, *casino*, *.* for every site). With url ticked they match
+the whole address and also go to /etc/hosts, the firewall and the browser
+policy. Anything else is a rendered term (porn, long cat): with url it
+matches words in the address. With title or text every entry is a rendered
+term: a plain word counts only on its own ("porn" misses "pornhub"); a *
+matches inside words ("*porn*" hits "pornhub").
 
-A word combination is boxes of words side by side, as many as needed, each
-a list in brackets or one bare word; ":N" after a box asks for N different
-words of it (1 if left out):
-
-  cars(red, big)       (red, big) cars       (car, lambo*)(red, big)
-  (car, lambo*, sheep) (big, small, nice):2 (sport, hello, *niece*)
-
-It counts where a run of words, with only spaces between them and each a
-word of some box, holds what every box needs, in any order: car(cheap)
-counts in "cheap car" and "car cheap", not in "cheap reliable car"; the last
-one above counts in "a nice big sport car". Quote it in the shell.
+Words that must occur together are phrases, kept in phrase sets
+('kc9k phrase-set').
 
 A blacklist's actions (block, greyscale, no-images) apply to the pages it
 matches. A match in the address or the title takes every action; in the
@@ -569,12 +554,13 @@ var listShowCmd = &cobra.Command{
 var listCreateCmd = &cobra.Command{
 	Use:   "create [block] [list]",
 	Short: "Add a blacklist (or, with --exceptions, an exception list) to a block",
-	Long: `Adds an empty list. With --url alone (the default) it is an address
-list: sites and addresses. With --title and/or --text it is a term list:
-words, looked for in the page title and/or text; add --url for the address
-too, read as words (R-PHRASE-6). --terms makes a term list that looks only
-at the address. A new blacklist blocks what it matches; choose other
-actions with 'kc9k list action'.`,
+	Long: `Adds an empty list that looks where --url, --title and --text say (any
+mix; --url alone if none). A list holds sites, URL entries and rendered
+terms together; see 'kc9k list --help'. A new blacklist blocks what it
+matches; choose other actions with 'kc9k list action'.
+
+--terms is an old alias kept for scripts: lists have no types any more, so
+it changes nothing.`,
 	Args: cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		exceptions, _ := cmd.Flags().GetBool("exceptions")
@@ -589,14 +575,10 @@ actions with 'kc9k list action'.`,
 		if exceptions {
 			kind = db.ListExceptions
 		}
-		typ := db.DefaultType(where)
-		if terms, _ := cmd.Flags().GetBool("terms"); terms {
-			typ = db.ListTerm
-		}
-		if _, err := database.CreateTypedList(args[0], kind, typ, args[1], where); err != nil {
+		if _, err := database.CreateList(args[0], kind, args[1], where); err != nil {
 			return err
 		}
-		fmt.Printf("%s list '%s' added to block '%s' (looks at: %s).\n", strings.ToUpper(typ[:1])+typ[1:], args[1], args[0], where)
+		fmt.Printf("List '%s' added to block '%s' (%s; looks at: %s).\n", args[1], args[0], kind, where)
 		return nil
 	}),
 }
@@ -779,7 +761,7 @@ func init() {
 	addMonkAckFlag(listActionCmd)
 	listActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
 	listCreateCmd.Flags().Bool("exceptions", false, "Make it an exception list")
-	listCreateCmd.Flags().Bool("terms", false, "Make it a term list, even if it looks only at the address")
+	listCreateCmd.Flags().Bool("terms", false, "Old alias; changes nothing (lists have no types)")
 	listCreateCmd.Flags().Bool("url", false, "Look at the address (the default)")
 	listCreateCmd.Flags().Bool("title", false, "Look at the page title")
 	listCreateCmd.Flags().Bool("text", false, "Look at the page text")

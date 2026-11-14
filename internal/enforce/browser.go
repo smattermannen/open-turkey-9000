@@ -199,8 +199,9 @@ type ListRule struct {
 	URL   []string `json:"url"`
 	Title []string `json:"title"`
 	Text  []string `json:"text"`
-	// URLTerms are a term list's terms looked for in the decoded address,
-	// separators as blank space (R-PHRASE-6); URL holds address entries.
+	// URL holds the list's sites and URL entries; URLTerms its rendered
+	// terms, looked for as words in the decoded address, separators as
+	// blank space (R-PHRASE-6, §3.2).
 	URLTerms []string     `json:"url_terms,omitempty"`
 	Actions  []RuleAction `json:"actions"`
 	Except   RuleExcept   `json:"except"`
@@ -286,10 +287,12 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 		}
 		rule := ListRule{ID: l.ID, Block: b.BlockName, Name: l.Name, URL: []string{}, Title: []string{}, Text: []string{},
 			Actions: []RuleAction{}, Except: except}
-		if l.IsAddress() {
-			rule.URL = urlEntries(l.Entries)
-		} else if l.Where.URL {
-			rule.URLTerms = append([]string{}, l.Entries...)
+		// §3.2: with the url, sites and URL entries match the address and
+		// rendered terms words in it; title and text read every entry as a
+		// rendered term.
+		rule.URL = urlEntries(l.Addresses())
+		if terms := l.URLTerms(); len(terms) > 0 {
+			rule.URLTerms = terms
 		}
 		if l.Where.Title {
 			rule.Title = append(rule.Title, l.Entries...)

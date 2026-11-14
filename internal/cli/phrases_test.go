@@ -405,9 +405,11 @@ func TestRPhrase10(t *testing.T) {
 	}
 }
 
-// R-PHRASE-6: a term list may look at the url; its terms go to the
-// extension as url_terms (read in the decoded address) and never to the
-// hosts file, the firewall or the browser policy.
+// R-PHRASE-6, §3.2: a list looking at the url holds sites, URL entries and
+// rendered terms. Its terms go to the extension as url_terms (read in the
+// decoded address) and never to the hosts file, the firewall or the browser
+// policy; its sites and patterns go to both. --terms is an old alias that
+// changes nothing.
 func TestRPhrase6(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "block", "create", "b")
@@ -417,12 +419,8 @@ func TestRPhrase6(t *testing.T) {
 		t.Error("an entry of only wildcards was accepted")
 	}
 	l := list(t, d, "b", "Url words")
-	if l.Type != db.ListTerm || l.Where != (db.Where{URL: true}) || len(l.Entries) != 3 {
+	if l.Where != (db.Where{URL: true}) || len(l.Entries) != 3 {
 		t.Fatalf("Url words = %+v", l)
-	}
-	// An address list doesn't take a lone word; a term list does.
-	if err := runCLI(t, "list", "add", "b", "Blocked", "porn"); err == nil {
-		t.Error("an address list took a lone word")
 	}
 	mustRun(t, "list", "create", "b", "Lectures", "--exceptions", "--url", "--title")
 	mustRun(t, "list", "add", "b", "Lectures", "lecture")
@@ -439,7 +437,7 @@ func TestRPhrase6(t *testing.T) {
 			rule = &rules.Lists[i]
 		}
 	}
-	if rule == nil || len(rule.URL) != 0 || strings.Join(rule.URLTerms, "|") != "porn|long cat|*casino*" ||
+	if rule == nil || strings.Join(rule.URL, "|") != "*casino*" || strings.Join(rule.URLTerms, "|") != "porn|long cat" ||
 		strings.Join(rule.Except.URLTerms, "|") != "lecture" || strings.Join(rule.Except.Title, "|") != "lecture" {
 		t.Errorf("rule = %+v", rule)
 	}
@@ -458,17 +456,18 @@ func TestRPhrase6(t *testing.T) {
 	mustRun(t, "start", "b")
 	active, _ = d.GetActiveBlocks()
 	hosts, _, policy = enforce.Inputs(active)
-	if strings.Join(hosts, "|") != "reddit.com" || strings.Contains(strings.Join(policy.BlockPatterns, "|"), "casino") {
-		t.Errorf("hosts %q, patterns %q; want reddit.com only", hosts, policy.BlockPatterns)
+	if strings.Join(hosts, "|") != "reddit.com" || strings.Join(policy.BlockPatterns, "|") != "*casino*" ||
+		strings.Contains(strings.Join(policy.BlockDomains, "|"), "porn") {
+		t.Errorf("hosts %q, policy %+v; want reddit.com, and *casino* in the policy", hosts, policy)
 	}
 
-	// Clusters keep the type through save, copy and a .txt file.
+	// Clusters keep the scope and entries through save, copy and a .txt file.
 	mustRun(t, "cluster", "save", "b", "Url words", "words")
-	if c, _ := d.GetCluster("words"); c.Type != db.ListTerm || c.Where != (db.Where{URL: true}) {
+	if c, _ := d.GetCluster("words"); c.Where != (db.Where{URL: true}) || len(c.Entries) != 3 {
 		t.Errorf("saved cluster = %+v", c)
 	}
 	mustRun(t, "cluster", "copy", "words", "b", "--as", "Again")
-	if l := list(t, d, "b", "Again"); l.Type != db.ListTerm || l.Where != (db.Where{URL: true}) || len(l.Entries) != 3 {
+	if l := list(t, d, "b", "Again"); l.Where != (db.Where{URL: true}) || len(l.Entries) != 3 {
 		t.Errorf("copied list = %+v", l)
 	}
 	file := filepath.Join(t.TempDir(), "words.txt")
@@ -476,7 +475,7 @@ func TestRPhrase6(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustRun(t, "cluster", "import", "words2", file)
-	if c, _ := d.GetCluster("words2"); c.Type != db.ListTerm || c.Where != (db.Where{URL: true}) || len(c.Entries) != 3 {
+	if c, _ := d.GetCluster("words2"); c.Where != (db.Where{URL: true}) || len(c.Entries) != 3 {
 		t.Errorf("imported cluster = %+v", c)
 	}
 	// And block files.
@@ -485,7 +484,50 @@ func TestRPhrase6(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustRun(t, "block", "import", file)
-	if l := list(t, d, "copy", "Url words"); l.Type != db.ListTerm || l.Where != (db.Where{URL: true}) {
+	if l := list(t, d, "copy", "Url words"); l.Where != (db.Where{URL: true}) || len(l.Entries) != 3 {
 		t.Errorf("imported list = %+v", l)
+	}
+	if strings.Contains(out, `"type"`) {
+		t.Error("a block export still names a list type")
+	}
+}
+
+// §3.2: files written while lists had types still import: the type is
+// ignored and each list keeps its scope. An old term cluster file too.
+func TestOldTypedFilesImport(t *testing.T) {
+	d := testDB(t)
+	dir := t.TempDir()
+	block := filepath.Join(dir, "old.json")
+	if err := os.WriteFile(block, []byte(`{"name": "old", "apps": [], "lists": [
+		{"name": "Blocked", "kind": "blacklist", "type": "address", "where": ["url"], "actions": [{"action": "block", "distinct": 1, "hits": 1}], "entries": ["reddit.com", "*casino*"]},
+		{"name": "Blocked terms", "kind": "blacklist", "type": "term", "where": ["title", "text"], "actions": [{"action": "block", "distinct": 1, "hits": 1}], "entries": ["reddit.com", "*casino*"]},
+		{"name": "Url words", "kind": "blacklist", "type": "term", "where": ["url"], "actions": [{"action": "block", "distinct": 1, "hits": 1}], "entries": ["porn"]},
+		{"name": "Exceptions", "kind": "exceptions", "type": "address", "where": ["url"], "entries": ["file://*"]}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "import", block)
+	b, err := d.GetBlock("old")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, l := range b.Lists {
+		names = append(names, l.Name+"="+l.Where.String())
+	}
+	if got := strings.Join(names, "|"); got != "Blocked=url|Blocked terms=title, text|Url words=url|Exceptions=url" {
+		t.Errorf("imported lists = %s", got)
+	}
+	if err := os.WriteFile(block, []byte(`{"name": "bad", "apps": [], "lists": [{"name": "X", "kind": "blacklist", "type": "odd", "where": ["url"], "entries": []}]}`), 0o600); err == nil {
+		if runCLI(t, "block", "import", block) == nil {
+			t.Error("an unknown list type was accepted")
+		}
+	}
+	cluster := filepath.Join(dir, "words.txt")
+	if err := os.WriteFile(cluster, []byte("# kc9k term cluster, looks at: url\nporn\nlong cat\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "cluster", "import", "words", cluster)
+	if c, err := d.GetCluster("words"); err != nil || c.Where != (db.Where{URL: true}) || len(c.Entries) != 2 {
+		t.Errorf("old term cluster = %+v, %v", c, err)
 	}
 }

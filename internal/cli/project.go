@@ -87,7 +87,7 @@ type clusterExport struct {
 	Where   []string `json:"where"`
 	Entries []string `json:"entries"`
 	Phrases bool     `json:"phrases,omitempty"` // a phrase cluster (R-PHRASE-10)
-	Type    string   `json:"type,omitempty"`    // address or term; none before types
+	Type    string   `json:"type,omitempty"`    // read only: files from while clusters had types
 }
 
 // placeExport is a place with the networks it is known by (backups only).
@@ -149,7 +149,7 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 		out.Nepsis = &n
 	}
 	for _, l := range detail.Lists {
-		out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Type: l.Type, Where: l.Where.List(), Actions: l.Actions, Entries: l.Entries})
+		out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Where: l.Where.List(), Actions: l.Actions, Entries: l.Entries})
 		for _, a := range l.Actions {
 			if a.Name == db.ActionImage && db.IsImageName(a.Param) && images != nil {
 				if data, err := os.ReadFile(filepath.Join(db.ImagesDir(), a.Param)); err == nil {
@@ -394,7 +394,7 @@ passwords, hotkeys and statistics are never in it.`,
 			if err != nil {
 				return err
 			}
-			out.Clusters = append(out.Clusters, clusterExport{Name: full.Name, Where: full.Where.List(), Entries: full.Entries, Phrases: full.Phrases, Type: full.Type})
+			out.Clusters = append(out.Clusters, clusterExport{Name: full.Name, Where: full.Where.List(), Entries: full.Entries, Phrases: full.Phrases})
 		}
 		for _, name := range enforce.BrowserSettings {
 			out.Browser[name] = enforce.BrowserOn(database, name)
@@ -492,15 +492,8 @@ With --dry-run, says what would happen and changes nothing.`,
 			if !where.Any() {
 				return fmt.Errorf("cluster '%s' looks nowhere", c.Name)
 			}
-			if c.Type == "" && !c.Phrases {
-				c.Type = db.DefaultType(where)
-			}
-			if !c.Phrases {
-				if err := db.CheckScope(c.Type, where); err != nil {
-					return fmt.Errorf("cluster '%s': %w", c.Name, err)
-				}
-			}
-			check := func(entries []string) ([]string, error) { return prepareEntries(c.Type, where, entries) }
+			// An old file's type is ignored (§3.2).
+			check := func(entries []string) ([]string, error) { return prepareEntries(where, entries) }
 			if c.Phrases {
 				check = typedPhrases
 			}
@@ -685,7 +678,7 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 			say("add cluster '%s' (%d entries)", c.c.Name, len(c.c.Entries))
 			if !dry {
-				create := func(name string, where db.Where) error { return database.CreateTypedCluster(name, c.c.Type, where) }
+				create := database.CreateCluster
 				if c.c.Phrases {
 					create = database.CreatePhraseCluster
 				}

@@ -169,10 +169,10 @@ func TestMigrateWebLists(t *testing.T) {
 	}
 	both := []ListAction{{Name: ActionBlock, Distinct: 1, Hits: 1}, {Name: ActionGreyscale, Distinct: 1, Hits: 1}}
 	want := Lists{
-		{Kind: ListBlacklist, Type: ListAddress, Name: DefaultBlockedList, Where: Where{URL: true}, Entries: []string{"reddit.com", "*casino*"}, Actions: both},
-		{Kind: ListBlacklist, Type: ListTerm, Name: DefaultWordsList, Where: Where{Text: true}, Entries: []string{"nsfw"},
+		{Kind: ListBlacklist, Name: DefaultBlockedList, Where: Where{URL: true}, Entries: []string{"reddit.com", "*casino*"}, Actions: both},
+		{Kind: ListBlacklist, Name: DefaultWordsList, Where: Where{Text: true}, Entries: []string{"nsfw"},
 			Actions: []ListAction{{Name: ActionBlock, Distinct: 2, Hits: 1}, {Name: ActionGreyscale, Distinct: 1, Hits: 1}}},
-		{Kind: ListExceptions, Type: ListAddress, Name: DefaultExceptionsList, Where: Where{URL: true}, Entries: []string{"reddit.com/r/golang"}},
+		{Kind: ListExceptions, Name: DefaultExceptionsList, Where: Where{URL: true}, Entries: []string{"reddit.com/r/golang"}},
 	}
 	for i := range old.Lists {
 		old.Lists[i].ID = 0
@@ -333,73 +333,205 @@ func TestTestModeMovesToLists(t *testing.T) {
 	}
 }
 
-// §3.2: a list from before list types that looked at the address and at
-// the page becomes an address list and a term list with the same entries,
-// actions and test mode; a cluster too.
-func TestListTypesMigration(t *testing.T) {
+// §3.2: lists have no types. A pair split by the old type upgrade, "<name>"
+// (url) and "<name> terms" (title/text), is joined back into "<name>" when
+// that changes nothing; any difference keeps both. Opening again changes
+// nothing more. An old database still has the type column.
+func TestJoinSplitLists(t *testing.T) {
 	d, path := openTest(t)
-	if err := d.CreateBlock("b"); err != nil {
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := d.conn.Exec(q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	// The column an older version had, with its values.
+	exec("ALTER TABLE web_lists ADD COLUMN type TEXT NOT NULL DEFAULT ''")
+	exec("ALTER TABLE clusters ADD COLUMN type TEXT NOT NULL DEFAULT ''")
+	entries := []string{"reddit.com", "*hentai*", "porn"}
+	pair := func(block, name string, kind string, termEntries []string, termsWhere Where) (int, int) {
+		t.Helper()
+		if _, err := d.GetBlock(block); err != nil {
+			if err := d.CreateBlock(block); err != nil {
+				t.Fatal(err)
+			}
+		}
+		url, err := d.CreateList(block, kind, name, Where{URL: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		terms, err := d.CreateList(block, kind, name+" terms", termsWhere)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := d.AddListEntries(url, entries); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.AddListEntries(terms, termEntries); err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []int{url, terms} {
+			if kind == ListBlacklist {
+				if err := d.SetListAction(id, ActionGreyscale, true); err != nil {
+					t.Fatal(err)
+				}
+				if err := d.SetListThreshold(id, ActionGreyscale, 3); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		exec("UPDATE web_lists SET type = 'address' WHERE id = ?", url)
+		exec("UPDATE web_lists SET type = 'term' WHERE id = ?", terms)
+		return url, terms
+	}
+	// Joined: same entries in another case and order.
+	same := []string{"PORN", "reddit.com", "*Hentai*"}
+	joinedID, _ := pair("join", "Mine", ListBlacklist, same, Where{Title: true, Text: true})
+	exceptID, _ := pair("join", "Spare", ListExceptions, same, Where{Text: true})
+	// Kept apart: other entries, another threshold, test mode, a queued edit,
+	// another kind, another name.
+	pair("entries", "Mine", ListBlacklist, []string{"reddit.com", "porn"}, Where{Text: true})
+	_, threshold := pair("threshold", "Mine", ListBlacklist, same, Where{Text: true})
+	if err := d.SetListThreshold(threshold, ActionGreyscale, 2); err != nil {
 		t.Fatal(err)
 	}
-	id, err := d.ListID("b", DefaultBlockedList)
-	if err != nil {
+	_, testID := pair("test", "Mine", ListBlacklist, same, Where{Text: true})
+	if err := d.SetTestList(testID, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.AddListEntries(id, []string{"reddit.com", "*hentai*"}); err != nil {
+	_, queued := pair("queued", "Mine", ListBlacklist, same, Where{Text: true})
+	if err := d.QueueEdit("queued", Edit{Action: EditListAdd, List: queued, ListName: "Mine terms", Values: []string{"x"}}, time.Now().Add(time.Hour).Unix()); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.SetListAction(id, ActionGreyscale, true); err != nil {
+	pair("kind", "Mine", ListBlacklist, nil, Where{Text: true})
+	if id, err := d.CreateList("kind", ListExceptions, "Other terms", Where{Text: true}); err != nil {
+		t.Fatal(err)
+	} else if err := d.AddListEntries(id, entries); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.SetTestList(id, true); err != nil {
+	if id, err := d.CreateList("kind", ListBlacklist, "Other", Where{URL: true}); err != nil {
+		t.Fatal(err)
+	} else if err := d.AddListEntries(id, entries); err != nil {
 		t.Fatal(err)
 	}
-	// The old way: the url and the title ticked on one list and one cluster,
-	// without a type.
-	if _, err := d.conn.Exec("UPDATE web_lists SET in_title = 1, type = '' WHERE id = ?", id); err != nil {
+	if _, err := d.CreateList("kind", ListBlacklist, "Third terms 2", Where{Text: true}); err != nil {
 		t.Fatal(err)
 	}
-	// Today's lists that look at the url and the page are left alone: a term
-	// list (R-PHRASE-6) and a phrase cluster.
-	if _, err := d.CreateTypedList("b", ListBlacklist, ListTerm, "Url words", Where{URL: true, Title: true}); err != nil {
+	if _, err := d.CreateList("kind", ListBlacklist, "Third", Where{URL: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreatePhraseCluster("phrases", Where{URL: true, Text: true}); err != nil {
-		t.Fatal(err)
+	for _, c := range []struct {
+		name  string
+		where Where
+		items []string
+	}{{"mix", Where{URL: true}, entries}, {"mix terms", Where{Text: true}, same},
+		{"apart", Where{URL: true}, entries}, {"apart terms", Where{Title: true}, []string{"porn"}}} {
+		if err := d.CreateCluster(c.name, c.where); err != nil {
+			t.Fatal(err)
+		}
+		cl, _ := d.GetCluster(c.name)
+		if _, err := d.AddClusterEntries(cl.ID, c.items); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := d.conn.Exec("INSERT INTO clusters (name, in_url, in_text) VALUES ('mix', 1, 1)"); err != nil {
-		t.Fatal(err)
+
+	type state map[string]Lists
+	read := func() state {
+		t.Helper()
+		out := state{}
+		for _, name := range []string{"join", "entries", "threshold", "test", "queued", "kind"} {
+			b, err := d.GetBlock(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out[name] = b.Lists
+		}
+		return out
 	}
+	names := func(ls Lists) []string {
+		var out []string
+		for _, l := range ls {
+			out = append(out, l.Name)
+		}
+		return out
+	}
+	before := read()
 	d.Close()
-	d, err = OpenDB(path)
-	if err != nil {
+	var err error
+	if d, err = OpenDB(path); err != nil {
+		t.Fatal(err)
+	}
+	after := read()
+
+	joined := after["join"]
+	if got := names(joined); !reflect.DeepEqual(got, []string{DefaultBlockedList, "Mine", DefaultExceptionsList, "Spare"}) {
+		t.Fatalf("joined block lists = %q", got)
+	}
+	mine, _ := joined.Find("Mine")
+	if mine.ID != joinedID || mine.Where != (Where{URL: true, Title: true, Text: true}) ||
+		!reflect.DeepEqual(mine.Entries, entries) {
+		t.Errorf("joined list = %+v", mine)
+	}
+	if a, ok := mine.Action(ActionGreyscale); !ok || a.Distinct != 3 || !mine.HasAction(ActionBlock) {
+		t.Errorf("joined list actions = %+v", mine.Actions)
+	}
+	spare, _ := joined.Find("Spare")
+	if spare.ID != exceptID || spare.Where != (Where{URL: true, Text: true}) {
+		t.Errorf("joined exception list = %+v", spare)
+	}
+	for _, name := range []string{"entries", "threshold", "test", "queued", "kind"} {
+		if !reflect.DeepEqual(after[name], before[name]) {
+			t.Errorf("block %s changed:\n got %+v\nwant %+v", name, after[name], before[name])
+		}
+	}
+	if got := d.TestLists(); !reflect.DeepEqual(got, []int{testID}) {
+		t.Errorf("test lists = %v", got)
+	}
+	if c, err := d.GetCluster("mix"); err != nil || c.Where != (Where{URL: true, Text: true}) || !reflect.DeepEqual(c.Entries, entries) {
+		t.Errorf("joined cluster = %+v, %v", c, err)
+	}
+	if ok, _ := d.ClusterExists("mix terms"); ok {
+		t.Error("the joined cluster's terms half stayed")
+	}
+	for _, name := range []string{"apart", "apart terms"} {
+		if ok, _ := d.ClusterExists(name); !ok {
+			t.Errorf("cluster %s was joined", name)
+		}
+	}
+
+	// Idempotent: opening again changes nothing.
+	d.Close()
+	if d, err = OpenDB(path); err != nil {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	b, _ := d.GetBlock("b")
-	address, ok1 := b.Lists.Find(DefaultBlockedList)
-	terms, ok2 := b.Lists.Find(DefaultBlockedList + " terms")
-	if !ok1 || !ok2 || address.ID != id || address.Where != (Where{URL: true}) || terms.Where != (Where{Title: true}) ||
-		address.Type != ListAddress || terms.Type != ListTerm {
-		t.Fatalf("lists after the split: %+v", b.Lists)
+	if again := read(); !reflect.DeepEqual(again, after) {
+		t.Errorf("a second open changed lists:\n got %+v\nwant %+v", again, after)
 	}
-	if l, ok := b.Lists.Find("Url words"); !ok || l.Type != ListTerm || l.Where != (Where{URL: true, Title: true}) || len(b.Lists) != 4 {
-		t.Errorf("a typed term list was split: %+v", b.Lists)
+}
+
+// §3.2: one list holds sites, URL entries and rendered terms. With the url
+// scope, sites and URL entries match the address and the rest are words in
+// it; with title or text every entry is a rendered term.
+func TestMixedListEntries(t *testing.T) {
+	l := WebList{Kind: ListExceptions, Where: Where{URL: true, Text: true},
+		Entries: []string{"reddit.com", "reddit.com/r/x", "*hot*girl*", "*.xxx", "*.*", "porn", "long cat", "18+", "**"}}
+	if got, want := l.Addresses(), []string{"reddit.com", "reddit.com/r/x", "*hot*girl*", "*.xxx", "*.*"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("addresses = %q; want %q", got, want)
 	}
-	if c, err := d.GetCluster("phrases"); err != nil || c.Where != (Where{URL: true, Text: true}) {
-		t.Errorf("a phrase cluster was split: %+v, %v", c, err)
+	if got, want := l.URLTerms(), []string{"porn", "long cat", "18+", "**"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("url terms = %q; want %q", got, want)
 	}
-	if !reflect.DeepEqual(address.Entries, terms.Entries) || len(terms.Actions) != len(address.Actions) || !terms.HasAction(ActionGreyscale) {
-		t.Errorf("the term list differs: %+v vs %+v", terms, address)
+	ls := Lists{l}
+	if got := ls.ExceptionTerms(PlaceText); !reflect.DeepEqual(got, l.Entries) {
+		t.Errorf("text exceptions = %q", got)
 	}
-	if got := d.TestLists(); len(got) != 2 {
-		t.Errorf("test mode lists = %v; want both halves", got)
+	if got := ls.ExceptionTerms(PlaceTitle); got != nil {
+		t.Errorf("title exceptions = %q", got)
 	}
-	if c, err := d.GetCluster("mix"); err != nil || c.Where != (Where{URL: true}) || c.Type != ListAddress {
-		t.Errorf("cluster = %+v, %v", c, err)
-	}
-	if c, err := d.GetCluster("mix terms"); err != nil || c.Where != (Where{Text: true}) || c.Type != ListTerm {
-		t.Errorf("term cluster = %+v, %v", c, err)
+	l.Where = Where{Text: true}
+	if len(l.Addresses())+len(l.URLTerms()) != 0 {
+		t.Error("a list not looking at the url gave url entries")
 	}
 }
 
@@ -446,7 +578,7 @@ func TestListCaseNamesMigrated(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Plant the old pair behind the rule's back.
-	if _, err := d.conn.Exec("INSERT INTO web_lists (block_id, kind, type, name, in_url) SELECT block_id, kind, type, 'NEWS', 1 FROM web_lists WHERE name = 'News'"); err != nil {
+	if _, err := d.conn.Exec("INSERT INTO web_lists (block_id, kind, name, in_url) SELECT block_id, kind, 'NEWS', 1 FROM web_lists WHERE name = 'News'"); err != nil {
 		t.Fatal(err)
 	}
 	d.Close()

@@ -72,24 +72,23 @@ func list(t *testing.T, d *db.DB, block, name string) db.WebList {
 func TestListEntries(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "block", "create", "b")
-	// Address lists take domains, paths and patterns, and keep domains
-	// normalized; a lone word doesn't match addresses.
-	mustRun(t, "list", "add", "b", "Blocked", "https://Reddit.com", "reddit.com/r/funny", "*casino*")
-	if err := runCLI(t, "list", "add", "b", "Blocked", "nsfw"); err == nil {
-		t.Error("a lone word was accepted in an address list")
-	}
-	if got := list(t, d, "b", "Blocked").Entries; !reflect.DeepEqual(got, []string{"reddit.com", "reddit.com/r/funny", "*casino*"}) {
+	// §3.2: lists have no types. Sites, URL entries, patterns and rendered
+	// terms share a list; domains are kept normalized.
+	mustRun(t, "list", "add", "b", "Blocked", "https://Reddit.com", "reddit.com/r/funny", "*casino*", "nsfw")
+	if got := list(t, d, "b", "Blocked").Entries; !reflect.DeepEqual(got, []string{"reddit.com", "reddit.com/r/funny", "*casino*", "nsfw"}) {
 		t.Errorf("Blocked = %q", got)
 	}
-	// §3.2: a list is an address list or a term list; a term list may look
-	// at the url too (R-PHRASE-6), an address list only at the url.
 	mustRun(t, "list", "create", "b", "Both", "--url", "--text")
-	if l := list(t, d, "b", "Both"); l.Type != db.ListTerm || l.Where != (db.Where{URL: true, Text: true}) {
-		t.Errorf("Both = %+v; want a term list looking at the url and the text", l)
+	if l := list(t, d, "b", "Both"); l.Where != (db.Where{URL: true, Text: true}) {
+		t.Errorf("Both = %+v; want a list looking at the url and the text", l)
 	}
-	if err := runCLI(t, "list", "scope", "b", "Blocked", "title", "on"); err == nil {
-		t.Error("an address list was made to look at the title")
+	// Any scope fits any entry.
+	mustRun(t, "list", "scope", "b", "Blocked", "title", "on")
+	if l := list(t, d, "b", "Blocked"); l.Where != (db.Where{URL: true, Title: true}) {
+		t.Errorf("Blocked = %+v; want url and title", l)
 	}
+	mustRun(t, "list", "remove", "b", "Blocked", "nsfw")
+	mustRun(t, "list", "scope", "b", "Blocked", "title", "off")
 	mustRun(t, "list", "create", "b", "Mixed", "--text")
 	mustRun(t, "list", "add", "b", "Mixed", "nsfw", "18+", "example.com")
 	if err := runCLI(t, "list", "add", "b", "Mixed", "***"); err == nil {
@@ -99,7 +98,7 @@ func TestListEntries(t *testing.T) {
 		t.Errorf("Mixed = %+v", l)
 	}
 	mustRun(t, "list", "scope", "b", "Mixed", "url", "on")
-	if l := list(t, d, "b", "Mixed"); l.Type != db.ListTerm || len(l.Entries) != 3 {
+	if l := list(t, d, "b", "Mixed"); len(l.Entries) != 3 {
 		t.Errorf("Mixed after url on = %+v", l)
 	}
 	// Removing a domain finds it however it is written.

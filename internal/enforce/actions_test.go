@@ -74,7 +74,9 @@ func TestBuildRulesLists(t *testing.T) {
 	}
 	except := RuleExcept{URL: []string{"facebook.com/help"}, Title: []string{}, Text: []string{}}
 	want := []ListRule{
-		{ID: 1, Block: "b", Name: "Blocked", URL: []string{"facebook.com"}, Title: []string{}, Text: []string{},
+		// §3.2: a site and a rendered term share the url list; the term
+		// matches words in the address.
+		{ID: 1, Block: "b", Name: "Blocked", URL: []string{"facebook.com"}, Title: []string{}, Text: []string{}, URLTerms: []string{"nsfw"},
 			Actions: []RuleAction{{Name: "block", Distinct: 1, Hits: 1}}, Except: except},
 		{ID: id, Block: "b", Name: "Words", URL: []string{}, Title: []string{"nsfw", "18+"}, Text: []string{"nsfw", "18+"},
 			Actions: []RuleAction{{Name: "block", Distinct: 2, Hits: 1}, {Name: "greyscale", Distinct: 1, Hits: 1}}, Except: except},
@@ -91,5 +93,37 @@ func TestBuildRulesLists(t *testing.T) {
 	}
 	if !ExtensionRequired(d, active) {
 		t.Error("a block with websites doesn't require the extension")
+	}
+}
+
+// §3.2: one list holds sites, URL entries and rendered terms. Only its sites
+// and URL entries reach /etc/hosts, the firewall and the browser policy; its
+// terms are the extension's, matched as words in the address and in the
+// title/text it looks at. A rendered term among a url exception list's
+// entries leaves its block to the extension, like a title or text exception.
+func TestInputsMixedList(t *testing.T) {
+	mixed := blacklist("Mixed", db.Where{URL: true, Text: true}, "reddit.com", "*casino*", "porn", "long cat")
+	active := []db.ActiveBlockDetail{
+		{BlockName: "mixed", Lists: db.Lists{mixed}},
+		{BlockName: "wordy", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, "x.com"),
+			exceptionList("Exceptions", db.Where{URL: true}, "x.com/help", "lecture")}},
+	}
+	hosts, _, bp := Inputs(active)
+	if !reflect.DeepEqual(hosts, []string{"reddit.com"}) {
+		t.Errorf("hosts = %v; want [reddit.com]", hosts)
+	}
+	if !reflect.DeepEqual(bp.BlockDomains, []string{"reddit.com"}) || !reflect.DeepEqual(bp.BlockPatterns, []string{"*casino*"}) ||
+		len(bp.Exceptions) != 0 {
+		t.Errorf("policy = %+v; want reddit.com and *casino* only", bp)
+	}
+	rules := listRules(active[0])
+	if len(rules) != 1 || !reflect.DeepEqual(rules[0].URL, []string{"reddit.com", "*casino*"}) ||
+		!reflect.DeepEqual(rules[0].URLTerms, []string{"porn", "long cat"}) ||
+		!reflect.DeepEqual(rules[0].Text, mixed.Entries) || len(rules[0].Title) != 0 {
+		t.Errorf("rules = %+v", rules)
+	}
+	except := blockExcept(active[1].Lists)
+	if !reflect.DeepEqual(except.URL, []string{"x.com/help"}) || !reflect.DeepEqual(except.URLTerms, []string{"lecture"}) {
+		t.Errorf("exceptions = %+v", except)
 	}
 }

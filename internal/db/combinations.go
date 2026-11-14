@@ -2,7 +2,7 @@
 // one-time move into phrase sets (R-PHRASE-1 to 10, SPEC §3.14: "word
 // combination" is now "phrase").
 //
-// A word combination was an entry of a term list: boxes of words side by
+// A word combination was a rendered term of a list: boxes of words side by
 // side, each a list in brackets with how many different words of it a match
 // needs (":2"; 1 if left out), or one bare word: cars(red, big),
 // (car, lambo*) (big, small, nice):2.
@@ -27,6 +27,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/smattermannen/kc9k/internal/blocker"
 )
 
 // MaxComboBoxes bounds the boxes of a combination, and the words one box
@@ -168,6 +170,11 @@ func migrateCombinations(conn *sql.DB) error {
 			if err := rows.Scan(&owner, &e.id, &e.text); err != nil {
 				return nil, nil, err
 			}
+			// A site or URL entry may have brackets; only rendered terms
+			// were combinations.
+			if blocker.IsAddressEntry(e.text) {
+				continue
+			}
 			boxes, ok := ParseCombination(e.text)
 			if !ok {
 				continue
@@ -203,7 +210,7 @@ func migrateCombinations(conn *sql.DB) error {
 	}
 
 	lists, order, err := combos(`SELECT l.id, e.id, e.entry FROM web_list_entries e JOIN web_lists l ON l.id = e.list_id
-		WHERE l.kind = 'blacklist' AND l.type = 'term' AND e.entry LIKE '%(%' ORDER BY e.id`)
+		WHERE l.kind = 'blacklist' AND e.entry LIKE '%(%' ORDER BY e.id`)
 	if err != nil {
 		return fmt.Errorf("word combinations: %w", err)
 	}
@@ -263,7 +270,7 @@ func migrateCombinations(conn *sql.DB) error {
 	}
 
 	clusters, order, err := combos(`SELECT c.id, e.id, e.entry FROM cluster_entries e JOIN clusters c ON c.id = e.cluster_id
-		WHERE c.phrases = 0 AND c.type = 'term' AND e.entry LIKE '%(%' ORDER BY e.id`)
+		WHERE c.phrases = 0 AND e.entry LIKE '%(%' ORDER BY e.id`)
 	if err != nil {
 		return fmt.Errorf("word combinations: %w", err)
 	}
@@ -295,7 +302,7 @@ func migrateCombinations(conn *sql.DB) error {
 			}
 		}
 		if len(texts) > 0 {
-			res, err := tx.Exec("INSERT INTO clusters (name, in_url, in_title, in_text, phrases, type) VALUES (?, ?, ?, ?, 1, 'term')",
+			res, err := tx.Exec("INSERT INTO clusters (name, in_url, in_title, in_text, phrases) VALUES (?, ?, ?, ?, 1)",
 				freeName(name+" phrases", taken), where.URL, where.Title, where.Text)
 			if err != nil {
 				return fmt.Errorf("word combinations: %w", err)

@@ -129,3 +129,17 @@ func IsURLEntry(e string) bool {
 	domains, patterns := SplitURLEntries([]string{e})
 	return len(domains)+len(patterns) > 0
 }
+
+// IsAddressEntry reports whether a list entry is a site or URL entry rather
+// than a rendered term (§3.2): a domain (reddit.com), a domain with a path
+// (reddit.com/r/funny), or a pattern with * or / (*.xxx, *casino*, *.* for
+// every site). A pattern needs more than wildcards, dots and slashes, except
+// * and *.*. Anything else (porn, long cat, 18+) is a rendered term. With
+// the url scope a site or URL entry matches the whole address (and feeds the
+// layers) and a rendered term matches words in it (R-PHRASE-6).
+func IsAddressEntry(e string) bool {
+	if e != "*" && e != "*.*" && strings.Trim(e, "*./") == "" {
+		return false
+	}
+	return IsURLEntry(e)
+}

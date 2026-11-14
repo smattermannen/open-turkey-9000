@@ -109,7 +109,7 @@ var recordStartCmd = &cobra.Command{
 				return err
 			}
 			if !exists {
-				if err := database.CreateTypedCluster(cluster, db.ListAddress, db.Where{URL: true}); err != nil {
+				if err := database.CreateCluster(cluster, db.Where{URL: true}); err != nil {
 					return err
 				}
 				fmt.Printf("Cluster '%s' created (looks at: url).\n", cluster)
@@ -121,8 +121,8 @@ var recordStartCmd = &cobra.Command{
 			if c.Phrases {
 				return fmt.Errorf("cluster '%s' holds phrases, which take no part in recording (R-PHRASE-10)", cluster)
 			}
-			if c.Type != db.ListAddress {
-				return fmt.Errorf("cluster '%s' doesn't hold addresses; recorded sites wouldn't fit it", cluster)
+			if !c.Where.URL {
+				return fmt.Errorf("cluster '%s' doesn't look at the url; recorded sites wouldn't match there", cluster)
 			}
 			target.Cluster = cluster
 		} else {
@@ -130,8 +130,8 @@ var recordStartCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			if !l.IsAddress() {
-				return fmt.Errorf("list '%s' isn't an address list; recorded sites wouldn't fit it", l.Name)
+			if !l.Where.URL {
+				return fmt.Errorf("list '%s' doesn't look at the url; recorded sites wouldn't match there", l.Name)
 			}
 			target.Block, target.ListID = args[0], l.ID
 		}

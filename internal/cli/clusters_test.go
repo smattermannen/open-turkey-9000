@@ -18,8 +18,8 @@ func TestClusters(t *testing.T) {
 	}
 	// Entries follow the same rules as a list's, and domains are normalized.
 	mustRun(t, "cluster", "add", "academia", "https://ArXiv.org/", "jstor.org", "scholar.google.com", "arxiv.org")
-	if err := runCLI(t, "cluster", "add", "academia", "homework"); err == nil {
-		t.Error("a lone word was accepted in an address cluster")
+	if err := runCLI(t, "cluster", "add", "academia", "***"); err == nil {
+		t.Error("an entry of only wildcards was accepted")
 	}
 	c, err := d.GetCluster("academia")
 	if err != nil {
@@ -35,10 +35,15 @@ func TestClusters(t *testing.T) {
 	if err := runCLI(t, "cluster", "where", "academia", "url", "off"); err == nil {
 		t.Error("a cluster was left looking nowhere")
 	}
-	// §3.2: an address cluster can't look at titles too.
-	if err := runCLI(t, "cluster", "where", "academia", "title", "on"); err == nil {
-		t.Error("an address cluster was made to look at titles too")
+	// §3.2: clusters have no types: a rendered term joins the sites, and
+	// any scope fits.
+	mustRun(t, "cluster", "add", "academia", "homework")
+	mustRun(t, "cluster", "where", "academia", "title", "on")
+	if c, _ = d.GetCluster("academia"); c.Where != (db.Where{URL: true, Title: true}) || len(c.Entries) != 3 {
+		t.Errorf("mixed cluster = %+v", c)
 	}
+	mustRun(t, "cluster", "where", "academia", "title", "off")
+	mustRun(t, "cluster", "remove", "academia", "homework")
 	mustRun(t, "cluster", "rename", "academia", "school")
 	if c, _ = d.GetCluster("school"); c.Where != (db.Where{URL: true}) || len(c.Entries) != 2 {
 		t.Errorf("after edits: %+v", c)
@@ -130,9 +135,14 @@ func TestClusterExportImport(t *testing.T) {
 	if got, _ = d.GetCluster("again"); len(got.Entries) != 3 {
 		t.Errorf("a second import duplicated entries: %q", got.Entries)
 	}
-	// Words don't fit an address cluster: nothing is made.
+	// Rendered terms fit a cluster looking at the url (§3.2); a bad entry
+	// fits nowhere, and nothing is made.
+	mustRun(t, "cluster", "import", "urlwords", file, "--url")
+	if err := os.WriteFile(file, []byte("anime\n***\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCLI(t, "cluster", "import", "bad", file, "--url"); err == nil {
-		t.Error("words were imported into an address cluster")
+		t.Error("an entry of only wildcards was imported")
 	}
 	if exists, _ := d.ClusterExists("bad"); exists {
 		t.Error("a failed import left a cluster behind")

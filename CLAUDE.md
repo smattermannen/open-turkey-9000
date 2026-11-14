@@ -268,3 +268,185 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `weblists.go`, `pending.go`.
 - **Android**: `android/CLAUDE.md`. Its `RulesServer` serves `/rules`;
   `rules.safesearch` comes only from there (`kc9kSafeSearch` in `match.js`).
+
+## Built behaviour (not fixed by `SPEC.md`; the code is the truth)
+
+- **Blocks**: new block = blacklist `Blocked` + exception list `Exceptions`
+  (`file://*`; spares no website); `Page words` made on first `add-keyword`.
+  `--allowlist` = `*.*` in Blocked. `block action B A on|off` sets all
+  blacklists. A blacklist keeps ≥ 1 scope and ≥ 1 action. Pre-list blocks
+  (sites, patterns, exceptions, keywords, allowlist) were migrated into the
+  three lists; `block import` reads pre-list exports. `add-pattern`,
+  `remove-site`, `remove-entry` are Blocked shortcuts. List/apps/titles
+  files: one entry per line, `#` comments (`block export-list|import-list
+  B apps|titles|blocked|exceptions`). Remove block: inactive and unlocked.
+- **Schedules**: same-day windows in 5-min steps, `--to 24:00` = midnight;
+  overnight = two windows; overlap refused; a block's windows all block or
+  all `--allow`. Numbered per block 1..n, renumbered on removal. Schedule
+  lock lead: longer always, shorter/off weakens. Old queued edits:
+  `kc9k pending`, `pending cancel N`. A lock set on a schedule-started block
+  outlives the window (timer: until expiry, daemon then stops it; text:
+  until `unlock`).
+- **Starting on an active block** only strengthens: longer `--lock-chars`,
+  later `--for/--until`; shorter/earlier refused. A challenge longer than the
+  terminal is paged (Enter per page), accuracy over all.
+- **Strengthening allowed while locked**: add apps/titles/blacklist entries,
+  `list create`, blacklist scope/action on, lower threshold/hits, remove
+  exceptions or exception scopes, delete an exception list, copy a cluster
+  into a blacklist, record into a blacklist. Everything else weakens.
+- **Matching**: plain term = whole word (`porn` ∉ "pornhub", `18+` ∉
+  "1118+"); `*` inside words; case ignored. Address/title match fires every
+  action; text needs threshold (distinct) and hits (total), both default 1;
+  once met the page stays acted on until left. Typed phrase `[a, b] [c]? :N`
+  (`?` optional, third set on; `:N` length). Exceptions by title/text leave
+  that block's sites to the extension only (page flashes before blocking);
+  address exceptions remove their domain from hosts/firewall.
+- **Actions**: strongest page action close-tab > image > redirect > block;
+  redirect to a blocked page shows the block page. Only the top page triggers
+  close-tab/device actions; embedded content gets the block page. Image:
+  PNG/JPEG/GIF/WebP. Action edits: longer time or another picture free; new
+  redirect address weakens. List logout/shutdown/lock-screen notified 60 s
+  ahead; one-off logout/shutdown ≤ every 10 min; `--for` goes through
+  Frozen Chicken (≤ 24 h).
+- **Clusters**: copies are independent. `--exceptions`, `--as N`,
+  `--into L`. Export = plain entry file with a scope header (`list import`
+  reads it).
+- **Recording**: domains without `www.`, pages and frames, private windows
+  and blocked pages included; ≤ 2000 sites; one recording at a time; a
+  refused `stop` keeps the recording.
+- **Places**: re-adding a name adds the BSSIDs now seen; one BSSID needed if
+  the place knows only one. A place-ruled block is held while there; rule
+  and place can't be removed then. No networks seen = at every ruled place,
+  and Wi-Fi is switched back on.
+- **Allowance** (`kc9k allowance set|start|end|remove`, daily): use = block's
+  app focused, or its site (address/title lists, not text) in the focused
+  tab with input < 3 min, or playing (even muted) in any tab. Session with
+  websites closes extension-less browsers. Lowering applies at once; raising
+  or removing at midnight. A lock or window closes a session. Day follows
+  the system clock.
+- **Locks**: flags `--for`, `--until`, `--lock` (`--text-lock`),
+  `--password-stdin`, `--restart`, `--delay`, `--relock D` (text/password
+  only; re-locks unless stopped meanwhile). Browser setting locks: same kinds
+  minus delay; added later only stronger; password can't be replaced;
+  `kc9k browser unlock O` unlocks and turns off. While a browser setting is
+  locked, strict mode and no-escape hold and uninstall is refused.
+  `force-librewolf` and `block-devtools` also can't go off while a block is
+  locked or a freeze runs.
+- **Extension guard**: required while an active block has a non-empty
+  blacklist, or web-only/force-search is on; app-only blocks leave browsers
+  alone. Nothing closed without LibreWolf or Chrome installed (`status`
+  says so). Firefox needs signed extensions; Brave/Edge/Opera/Vivaldi not set
+  up. Installed engine-based apps (Thunderbird, Spotify, Steam, Electron)
+  aren't browsers. Chrome flags `--disable-extensions[-except]`,
+  `--remote-debugging-pipe` and Firefox `--marionette`/remote-debugging
+  close at once. After a protecting change, older browser windows close a
+  minute later. LibreWolf locked prefs: `extensions.webextensions.restrictedDomains`,
+  two `extensions.quarantinedDomains*`, `devtools.chrome.enabled`,
+  `devtools.debugger.remote-enabled`; overrides copy at
+  `/var/lib/kc9k/librewolf/<user>.cfg` keeps only `pref`/`defaultPref`/
+  `lockPref` lines. Translate proxy (`*.translate.goog`) and archives
+  (`web.archive.org`, `archive.ph`) blocked as the site. `web-only` uses
+  Google `udm=14`.
+- **Chrome**: policy `/etc/opt/chrome/policies/managed/kc9k-setup.json`
+  (Chromium `/etc/chromium/…`); key `/var/lib/kc9k/chrome-extension.pem`
+  (root only, ID per computer); pinned; devtools never on the extension;
+  `force-search` sets Google web results as default engine. A restarted
+  service worker may let the first page through the extension (URL policy
+  still blocks plain sites) until the page reports in.
+- **Pomodoro** (`pomodoro set B W R [--long D --every N]`, `off` free;
+  refused while locked): locks stay; work periods close allowance sessions.
+- **Breaks**: reward earned while block on and computer in use (input < 3
+  min, screen unlocked), saved up to one reward. A break lifts a locked
+  block; it returns with locks; edits stay refused. More breaks weaken
+  (refused while locked); fewer always free.
+- **Window titles**: case-insensitive substring; X11 only (Wayland: XWayland
+  apps only); asked to close, killed with descendants a few seconds later.
+- **Apps**: hash match breaks on rebuild; `python3` itself and desktop
+  essentials (`Xorg`, `cinnamon`, `pipewire`…) can't be added; system
+  folders (`/usr/bin/`) refused; only regular-user processes are killed.
+  Fetch tools killed for blocked addresses: `yt-dlp`, `mpv`, `vlc`, `curl`,
+  `wget`, `streamlink`…; never editors/shells.
+- **Monk mode**: `kc9k monk --for D` (no `--for` shows state); longer time
+  extends; reapplies cuts within seconds; Wi-Fi that was off stays off.
+- **Bypass prevention**: `bypass set --step "3 in 10m: warning, close-tab,
+  logout 1m" … --quiet 2h [--block B] [--detect …] [lock flags]`, short
+  form `--count --within --then [--then-for]`. Actions: `warning`,
+  `close-tab`, `close-browser`, `lock-screen D`, `logout [D]`,
+  `shutdown [D]`, `monk D`. Past the last step repeats the last. `page`
+  excludes look-only actions; `search` = page opened from search results
+  (Google, Bing, DDG, Brave, Startpage…, any `/search?q=`); `tamper` =
+  daemon restart within a boot (not upgrade or self-reported crash) or clock
+  moved > 2 min against the boot clock. Global counts all; per block counts
+  while on; both apply. Stricter = more detectors, later fall-back, steps
+  tripping on fewer events over longer windows with ≥ actions, more steps
+  at the end; free. Global lockable (`--for`).
+- **Hotkeys**: `ctrl|alt|shift|super+key`, F1–F24 alone; shown as
+  "KC9K: …" in keyboard settings; notification on press; on an active block
+  only extends the lock. Older hotkeys ask at each press.
+- **Notifications** (`notify-send`): 5 min before a schedule starts, before a
+  scheduled freeze (5 and 1 min, naming the mode), at 5 min allowance left;
+  each once.
+- **Settings password**: needed for weakening, `stop`, `unlock`, schedules,
+  allowances, browser settings off, strict off, no-escape, uninstall. Free:
+  reading, starting, adding entries, actions on, opening a session. GUI
+  remembers it until closed. Lost: root removes it while nothing is locked;
+  devmaster `master` clears it.
+- **Access passwords**: command areas — `block`, `list`, `schedule`,
+  `quota`… → blocks; `freeze`, `strict`, `no-escape` → device; `browser`,
+  `hotkey`, `password`, `access` → settings; `status`, `start`, `stop`,
+  `unlock` → dashboard or blocks. Wrong password: 1 s delay + `access`
+  event. Changing one asks for it (and the settings password). GUI unlock
+  lasts until close, Lock or idle timeout (own settings file). Root can
+  remove all.
+- **Social presets**: YouTube (no Shorts, no home feed → Subscriptions, no
+  recommendations, no comments); Instagram/Facebook/X (messages only, no
+  Reels/Explore); Reddit (no Popular/All, no home feed); TikTok (Following
+  only); LinkedIn (no feed, no news). Disabled parts redirect; leftovers
+  hidden. Playlist: videos need `list=` and must appear in the shown
+  playlist panel.
+- **Toolbar button**: time left (allowance, break, schedule within 2 h); red
+  in the last 5 min; `!` when the daemon is unreachable; popup lists covering
+  blocks and adds the site to Blocked.
+- **Test mode**: `list test B [L] on|off`; corner panel shows found entries,
+  counts, distinct count and per-action threshold state; address-only lists
+  keep working.
+- **Workarounds**: proxied addresses in `?url=`, base64, or after a slash;
+  searches for an address don't count. Front-ends: Invidious, Piped, Nitter,
+  Redlib, ProxiTok….
+- **Options**: `polite-close` (on): windowed apps asked, killed ~5 s later;
+  windowless or restarted within a minute killed at once.
+  `block-page-details` (on): block page names block, list, end time.
+- **Circadian**: `kc9k circadian` (`on|off`, `preset [N]`, `lane L on
+  --points "07:00=6500 19:00=6500~-0.4"`, `point add L HH:MM V --tension
+  T`, `resume [L]`, `wallpaper add F A B | time N A B | remove N`, `dark
+  system|light|dark|light-between A B`, `dark-pages`, `exempt`,
+  `nightlight off`). Ranges: software 10–100 %, kelvin 1000–10000 (6500
+  neutral), tension −1..1 (> 0 bulges up). Wallpaper PNG/JPEG/WebP ≤ 32 MB;
+  spans midnight; overlap → latest start wins. Desktop night light conflicts.
+- **Project**: holds blocks (lists, apps, titles, schedules, schedule lock,
+  social, allowance, Pomodoro, breaks, ladders), clusters, browser and
+  behaviour settings, global ladder, freeze schedules, list images; backup
+  adds places and place rules. Clashing block → `name-2`; existing
+  clusters/places kept; browser settings only on; ladder replaced only by a
+  stricter one. `--dry-run` lists additions and locks.
+- **Frozen Chicken**: `freeze --for D --mode lock|logout|shutdown --yes`;
+  `freeze schedule add --days … --from --to [--mode] [--lock-lead D]`,
+  `list`, `remove N`, `lock N on --lead D`. Back-to-back windows run on; a
+  longer running freeze is never shortened; ≤ 24 h; time counts while off;
+  only extendable; shutdown mode powers off at each boot. Devmaster
+  `master` works from a TTY in lock mode only.
+- **Strict mode** triggers on any lock, a running freeze or an on schedule
+  lock (not allowances or unlocked schedules). Doesn't stop recovery mode,
+  other OSes or a separately set root password. Warns if the user is in
+  group `disk`. `strict unlock` lifts its text/password lock, stays on.
+- **No-escape** (`no-escape on --yes`): disables `kc9k.nofreeze`, hides
+  recovery, random GRUB password. Can't stop USB boot without a firmware
+  password.
+- **Statistics**: app time needs X11; extension posts site time every 30 s.
+- **Layers**: hosts/policy authoritative; IP rules best effort (CDNs).
+  Containers/VMs: firewall only. Snap/Flatpak browsers may ignore policy.
+- **GUI**: menu entry / `kc9k-gui` (`python3-gi`); theme in
+  `~/.config/kc9k/gui.json`. Schedule grid: drag adds, click removes,
+  filled = block window, outlined = allow window, one-click presets.
+  ClipEditor: right-click add/remove point, drag (Shift = minute), drag
+  curve to bend, double-click to type.

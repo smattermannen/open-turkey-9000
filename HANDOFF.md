@@ -12,7 +12,7 @@ Read this, then `git fetch`, SPEC.md and ROADMAP.md.
 
 **Categories dropped** (the owner's decision): the 14 shipped lists and `block create --template` are gone; SPEC updated.
 
-**Browser tests on the laptop:** devmaster build of main (00df45b) installed 2026-11-14. browser_test 20/20, actions_test 15/15, quota_test 2/2, extras_test 21/22: "another site inside a proxy address is not" fails only because the owner's locked `test` block lists example.com. quota_test used to fail on a second run the same day: `quotatest` stays on until midnight, and LibreWolf's policy file is rewritten only by the daemon (Firefox's at once by the CLI), so a browser started right after `quota start` read the old policy; the test now waits 12 s.
+**Browser tests on the laptop:** devmaster build of main (03104ce) installed 2026-11-14. browser_test 20/20, actions_test 15/15, quota_test 2/2, extras_test 21/22: "another site inside a proxy address is not" fails only because the owner's locked `test` block lists example.com. quota_test used to fail on a second run the same day: `quotatest` stays on until midnight, and LibreWolf's policy file is rewritten only by the daemon (Firefox's at once by the CLI), so a browser started right after `quota start` read the old policy; the test now waits 12 s.
 
 **For other sessions:** R-LOCK-12's acknowledgement for a phrase set's `monk` action (`phrase-set action … monk on`) is in the locks session's list below; `internal/cli/phrases.go` is where it goes. List names differing only in case are still allowed (ROADMAP §0.1). `TestBreakAllowance` failed once under load and passed 5/5 alone (timing).
 

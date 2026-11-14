@@ -215,15 +215,19 @@ func TestRLOCK12_ProjectImportConfirmation(t *testing.T) {
 	}
 }
 
-// R-LOCK-12: a hotkey's lock is confirmed when the hotkey is added (the
-// owner's choice: a pressed hotkey has no terminal); pressing it then sets
-// the lock without asking.
-func TestRLOCK12_HotkeyConfirmedWhenAdded(t *testing.T) {
+// R-LOCK-12: a hotkey's lock is confirmed when the hotkey is added. With
+// "Run without confirmation" (--no-confirm) that is the only time; without
+// it, pressing the hotkey asks again in a desktop dialog and a "no" sets
+// nothing.
+func TestRLOCK12_HotkeyConfirmation(t *testing.T) {
 	d := testDB(t)
 	notTerminal(t)
-	old := syncDesktopHotkeys
+	old, oldAsk := syncDesktopHotkeys, confirmOnDesktop
 	syncDesktopHotkeys = func([]blocker.DesktopHotkey) error { return nil }
-	t.Cleanup(func() { syncDesktopHotkeys = old })
+	asked := 0
+	answer := true
+	confirmOnDesktop = func(title, text string) bool { asked++; return answer }
+	t.Cleanup(func() { syncDesktopHotkeys, confirmOnDesktop = old, oldAsk })
 	blockWithSite(t)
 
 	err := runCLI(t, "hotkey", "add", "ctrl+alt+s", "b", "--for", "1h")
@@ -233,19 +237,57 @@ func TestRLOCK12_HotkeyConfirmedWhenAdded(t *testing.T) {
 	if keys, _ := d.Hotkeys(); len(keys) != 0 {
 		t.Fatalf("the hotkey was added without confirmation: %+v", keys)
 	}
-	mustRun(t, "hotkey", "add", "ctrl+alt+k", "b") // no lock, no question
-	mustRun(t, "hotkey", "add", "ctrl+alt+s", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "hotkey", "add", "ctrl+alt+k", "b", "--no-confirm"); err == nil {
+		t.Fatal("--no-confirm without a lock was accepted")
+	}
+	mustRun(t, "hotkey", "add", "ctrl+alt+k", "b")                                         // no lock, no question
+	mustRun(t, "hotkey", "add", "ctrl+alt+s", "b", "--for", "1h", "--yes")                 // asks at each press
+	mustRun(t, "hotkey", "add", "ctrl+alt+n", "b", "--for", "1h", "--yes", "--no-confirm") // never asks again
 	keys, _ := d.Hotkeys()
-	if len(keys) != 2 {
+	if len(keys) != 3 || keys[1].NoConfirm || !keys[2].NoConfirm {
 		t.Fatalf("hotkeys = %+v", keys)
 	}
-	locked := keys[0]
-	if locked.LockFor == "" {
-		locked = keys[1]
+	press := func(id int) { mustRun(t, "hotkey", "run", fmt.Sprint(id)) }
+
+	answer = false
+	if err := runCLI(t, "hotkey", "run", fmt.Sprint(keys[1].ID)); err == nil || asked != 1 {
+		t.Fatalf("a pressed hotkey, answered no: err = %v, asked = %d", err, asked)
 	}
-	mustRun(t, "hotkey", "run", fmt.Sprint(locked.ID))
-	b, _ := d.GetBlock("b")
-	if !b.Active || b.LockedUntil == 0 {
-		t.Errorf("pressing the hotkey: active = %v, locked until %d", b.Active, b.LockedUntil)
+	if b, _ := d.GetBlock("b"); b.Active {
+		t.Fatal("the block started although the press wasn't confirmed")
 	}
+	press(keys[2].ID) // without confirmation: no dialog
+	if asked != 1 {
+		t.Errorf("a hotkey that runs without confirmation asked (%d dialogs)", asked)
+	}
+	if b, _ := d.GetBlock("b"); !b.Active || b.LockedUntil == 0 {
+		t.Errorf("hotkey run without confirmation: active = %v, locked until %d", b.Active, b.LockedUntil)
+	}
+}
+
+// R-LOCK-12: monk mode started by itself (a bypass prevention step, a list's
+// or a phrase set's monk action) asks nothing, so setting it up needs the
+// acknowledgement "I know this will not ask for confirmation".
+func TestRLOCK12_AutomaticMonkNeedsAcknowledgement(t *testing.T) {
+	testDB(t)
+	notTerminal(t)
+	blockWithSite(t)
+	mustRun(t, "phrase-set", "create", "b", "Words")
+	mustRun(t, "phrase-set", "add", "b", "Words", "[eat, nice] [hello, grandpa]")
+	refused := func(args ...string) {
+		t.Helper()
+		err := runCLI(t, args...)
+		if err == nil || !strings.Contains(err.Error(), "--no-confirm-ok") {
+			t.Errorf("%s without the acknowledgement: %v", strings.Join(args, " "), err)
+		}
+	}
+	refused("list", "action", "b", "Blocked", "monk", "on", "--for", "10m")
+	refused("phrase-set", "action", "b", "Words", "monk", "on", "--for", "10m")
+	refused("bypass", "set", "--count", "3", "--within", "5m", "--then", "monk", "--then-for", "1h")
+	refused("bypass", "set", "--block", "b", "--step", "3 in 5m: close-browser, monk 5m")
+	mustRun(t, "list", "action", "b", "Blocked", "monk", "on", "--for", "10m", "--no-confirm-ok")
+	mustRun(t, "phrase-set", "action", "b", "Words", "monk", "on", "--for", "10m", "--no-confirm-ok")
+	mustRun(t, "bypass", "set", "--count", "3", "--within", "5m", "--then", "monk", "--then-for", "1h", "--no-confirm-ok")
+	// Other consequences need no acknowledgement.
+	mustRun(t, "bypass", "set", "--count", "3", "--within", "5m", "--then", "close-tab")
 }

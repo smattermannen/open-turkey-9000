@@ -320,6 +320,11 @@ func listAction(cmd *cobra.Command, database *db.DB, block, list, action string,
 	if on && action == db.ActionMonk && block == enforce.MonkBlock {
 		return fmt.Errorf("monk mode's own block can't start monk mode (R-MONK-1)")
 	}
+	if on && action == db.ActionMonk {
+		if err := requireMonkAck(cmd, "a list's monk action"); err != nil {
+			return err
+		}
+	}
 	current, has := l.Action(action)
 	switch {
 	case on && has && set != nil && (set.param != current.Param || set.minutes != current.Minutes):
@@ -775,6 +780,7 @@ var listImportCmd = &cobra.Command{
 func init() {
 	listActionCmd.Flags().String("url", "", "For redirect: the address to open instead")
 	listActionCmd.Flags().String("image", "", "For image: the picture to show instead")
+	addMonkAckFlag(listActionCmd)
 	listActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
 	listCreateCmd.Flags().Bool("exceptions", false, "Make it an exception list")
 	listCreateCmd.Flags().Bool("terms", false, "Make it a term list, even if it looks only at the address")

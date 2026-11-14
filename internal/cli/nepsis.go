@@ -165,6 +165,15 @@ func readNepsis(cmd *cobra.Command) (db.Nepsis, error) {
 	if len(n.Steps) == 0 {
 		return n, fmt.Errorf("give at least one --step (or --count, --within and --then)")
 	}
+	for _, step := range n.Steps {
+		for _, a := range step.Actions {
+			if a.Kind == db.ConsequenceMonk {
+				if err := requireMonkAck(cmd, "a bypass prevention step"); err != nil {
+					return n, err
+				}
+			}
+		}
+	}
 	n.Detectors, _ = cmd.Flags().GetStringSlice("detect")
 	if quiet, _ := cmd.Flags().GetString("quiet"); quiet != "" {
 		var err error
@@ -439,6 +448,7 @@ func init() {
 	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be weakened until the computer restarts")
 	addTextLockFlags(nepsisSetCmd)
 	addYesFlag(nepsisSetCmd)
+	addMonkAckFlag(nepsisSetCmd)
 	addNowFlag(nepsisSetCmd, nepsisOffCmd)
 	nepsisCmd.AddCommand(nepsisSetCmd, nepsisOffCmd, nepsisUnlockCmd)
 	rootCmd.AddCommand(monkCmd, nepsisCmd)

@@ -48,6 +48,7 @@ var hotkeyAddCmd = &cobra.Command{
 			return err
 		}
 		lockFor, _ := cmd.Flags().GetString("for")
+		noConfirm, _ := cmd.Flags().GetBool("no-confirm")
 		if lockFor != "" {
 			d, err := time.ParseDuration(lockFor)
 			if err != nil || d < time.Minute || d > maxHotkeyLock {
@@ -57,14 +58,21 @@ var hotkeyAddCmd = &cobra.Command{
 			if err := requireLockPassword(database); err != nil {
 				return err
 			}
-			// R-LOCK-12: a hotkey's lock is confirmed once, here; pressing
-			// the hotkey then sets it without asking (the owner's choice).
-			if err := confirmLocks(cmd, lockToSet{"block '" + args[1] + "'", "timer lock, set each time " + accel + " is pressed",
-				d.String() + " from the press"}); err != nil {
+			// R-LOCK-12: the lock is confirmed here. With --no-confirm
+			// ("Run without confirmation") this is the only time; otherwise
+			// pressing the hotkey asks again.
+			kind := "timer lock, set each time " + accel + " is pressed"
+			if noConfirm {
+				kind += ", without asking again"
+			}
+			if err := confirmLocks(cmd, lockToSet{"block '" + args[1] + "'", kind, d.String() + " from the press"}); err != nil {
 				return err
 			}
 		}
-		id, err := database.AddHotkey(db.Hotkey{Keys: accel, Block: args[1], LockFor: lockFor})
+		if noConfirm && lockFor == "" {
+			return fmt.Errorf("--no-confirm goes with --for: it is about the hotkey's lock")
+		}
+		id, err := database.AddHotkey(db.Hotkey{Keys: accel, Block: args[1], LockFor: lockFor, NoConfirm: noConfirm})
 		if err != nil {
 			return err
 		}
@@ -104,7 +112,7 @@ var hotkeyListCmd = &cobra.Command{
 			return nil
 		}
 		for _, h := range keys {
-			fmt.Printf("%d. %s starts '%s'%s\n", h.ID, h.Keys, h.Block, lockText(h.LockFor))
+			fmt.Printf("%d. %s starts '%s'%s\n", h.ID, h.Keys, h.Block, lockText(h.LockFor)+noConfirmText(h))
 		}
 		return nil
 	}),
@@ -139,7 +147,13 @@ var hotkeyRunCmd = &cobra.Command{
 			if err := startCmd.Flags().Set("for", h.LockFor); err != nil {
 				return err
 			}
-			// R-LOCK-12: the lock was confirmed at 'hotkey add'.
+			// R-LOCK-12: without "Run without confirmation" the press asks.
+			if !h.NoConfirm {
+				if !confirmOnDesktop("Lock '"+h.Block+"'?", fmt.Sprintf("Start '%s' with a timer lock of %s. While it is on, it can't be weakened.", h.Block, h.LockFor)) {
+					notify(fmt.Sprintf("'%s' not locked", h.Block), "You didn't confirm; nothing was started.")
+					return errNotConfirmed
+				}
+			}
 			if err := startCmd.Flags().Set("yes", "true"); err != nil {
 				return err
 			}
@@ -153,11 +167,23 @@ var hotkeyRunCmd = &cobra.Command{
 	},
 }
 
+func noConfirmText(h db.Hotkey) string {
+	if h.NoConfirm {
+		return " (runs without confirmation)"
+	}
+	return ""
+}
+
 func lockText(lockFor string) string {
 	if lockFor == "" {
 		return ""
 	}
 	return ", locked for " + lockFor
+}
+
+// confirmOnDesktop asks in a desktop dialog; tests replace it.
+var confirmOnDesktop = func(title, text string) bool {
+	return blocker.ConfirmDesktop(title, text, "Lock")
 }
 
 // syncDesktopHotkeys writes the desktop's shortcuts; tests replace it so
@@ -187,6 +213,7 @@ func syncHotkeys(database *db.DB) error {
 func init() {
 	hotkeyAddCmd.Flags().String("for", "", "Time-lock the block for this long when the hotkey starts it (e.g. 1h, 90m)")
 	addYesFlag(hotkeyAddCmd)
+	hotkeyAddCmd.Flags().Bool("no-confirm", false, "Run without confirmation: pressing the hotkey sets its lock without asking (the lock is confirmed only now)")
 	hotkeyCmd.AddCommand(hotkeyAddCmd, hotkeyRemoveCmd, hotkeyListCmd, hotkeyRunCmd)
 	rootCmd.AddCommand(hotkeyCmd)
 }

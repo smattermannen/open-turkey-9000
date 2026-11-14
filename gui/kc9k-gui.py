@@ -951,6 +951,11 @@ class ListCard(Gtk.Frame):
             minutes = window.ask_minutes(title, detail, minimum, limit, current.get("minutes", initial))
             if minutes is not None:
                 args = ["--for", f"{minutes}m"] if minutes else []
+                if name == "monk":
+                    if window.acknowledge_no_confirmation("This action"):
+                        args.append("--no-confirm-ok")
+                    else:
+                        args = None
         if args is None:
             self.update(self.data)  # untick the box again
             return
@@ -2572,16 +2577,51 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return answer == Gtk.ResponseType.OK
 
-    def confirm_lock(self, locks):
+    def confirm_lock(self, locks, option=None):
         """R-LOCK-12: the one confirmation for every lock. locks are lines
         "what is locked: kind, how long", as the CLI shows them. Returns True
-        only when the user confirms; the caller then passes --yes."""
+        only when the user confirms; the caller then passes --yes. With
+        option (a label), a tick box is shown too; whether it was ticked is
+        left in self.lock_option."""
+        self.lock_option = False
         if not locks:
             return True
-        return self.confirm(
-            "Set this lock?" if len(locks) == 1 else "Set these locks?",
-            "\n".join("• " + line for line in locks)
-            + "\n\nWhile a lock is on, this can't be weakened.", "Lock")
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.WARNING,
+            text="Set this lock?" if len(locks) == 1 else "Set these locks?",
+            secondary_text="\n".join("• " + line for line in locks)
+            + "\n\nWhile a lock is on, this can't be weakened.")
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Lock", Gtk.ResponseType.OK)
+        tick = None
+        if option:
+            tick = Gtk.CheckButton(label=option)
+            dialog.get_message_area().pack_start(tick, False, False, 0)
+            dialog.show_all()
+        answer = dialog.run()
+        self.lock_option = bool(tick and tick.get_active())
+        dialog.destroy()
+        return answer == Gtk.ResponseType.OK
+
+    def acknowledge_no_confirmation(self, what):
+        """R-LOCK-12: monk mode started by itself asks nothing, so setting it
+        up needs the tick "I know this will not ask for confirmation"."""
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.WARNING,
+            text="Monk mode will start without asking",
+            secondary_text=f"{what} starts monk mode by itself, and it will not ask for confirmation "
+                           "when it does.")
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Set it up", Gtk.ResponseType.OK)
+        tick = Gtk.CheckButton(label="I know this will not ask for confirmation")
+        ok.set_sensitive(False)
+        tick.connect("toggled", lambda t: ok.set_sensitive(t.get_active()))
+        dialog.get_message_area().pack_start(tick, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        ticked = tick.get_active()
+        dialog.destroy()
+        return answer == Gtk.ResponseType.OK and ticked
 
     def ask_text(self, title, detail="", password=False, initial=""):
         dialog = Gtk.MessageDialog(
@@ -2745,6 +2785,7 @@ class Window(Gtk.ApplicationWindow):
 
     def change_global_nepsis(self, _button):
         args = self.ask_nepsis("Bypass prevention", self.state.get("nepsis"), True)
+        args = self.acknowledge_monk_steps(args)
         if args and "--for" in args:
             hours = args[args.index("--for") + 1].rstrip("h")
             if not self.confirm_lock([f"bypass prevention: timer lock, {hours} hours"]):
@@ -2753,10 +2794,20 @@ class Window(Gtk.ApplicationWindow):
         if args:
             self.run(["bypass", "set", *args], then=self.queued_note)
 
+    def acknowledge_monk_steps(self, args):
+        """Bypass prevention steps with monk need the acknowledgement."""
+        steps = [a for i, a in enumerate(args or []) if i and args[i - 1] == "--step"]
+        if any(re.search(r"\bmonk\b", step) for step in steps):
+            if not self.acknowledge_no_confirmation("A bypass prevention step"):
+                return None
+            return args + ["--no-confirm-ok"]
+        return args
+
     def change_block_nepsis(self, _button):
         block = self.blocks.get(self.selected)
         if block:
-            args = self.ask_nepsis(f"Bypass prevention for {block['name']}", block.get("nepsis"), False)
+            args = self.acknowledge_monk_steps(
+                self.ask_nepsis(f"Bypass prevention for {block['name']}", block.get("nepsis"), False))
             if args:
                 self.run(["bypass", "set", "--block", block["name"], *args], then=self.queued_note)
 
@@ -4647,7 +4698,8 @@ class Window(Gtk.ApplicationWindow):
             help_text="Keys, a block, and optionally how long to lock it: pressing ctrl+alt+s "
                       "then starts 'study' locked for an hour. Use ctrl, alt, shift or super with "
                       "a key; F1 to F24 also work alone. A lock needs the settings password when "
-                      "you add the hotkey, not when you press it.")
+                      "you add the hotkey. Pressing it asks you to confirm the lock, unless you chose "
+                      "Run without confirmation when adding it.")
         box.pack_start(self.hotkeys, False, False, 0)
         return scroll
 
@@ -4660,9 +4712,13 @@ class Window(Gtk.ApplicationWindow):
         if len(values) == 3:
             # R-LOCK-12: a hotkey's lock is confirmed once, when it is added.
             if not self.confirm_lock([f"block '{values[1]}': timer lock, set each time {values[0]} "
-                                      f"is pressed, {values[2]} from the press"]):
+                                      f"is pressed, {values[2]} from the press"],
+                                     option="Run without confirmation (pressing the hotkey then "
+                                            "locks without asking again)"):
                 return
             args += ["--for", values[2], "--yes"]
+            if self.lock_option:
+                args.append("--no-confirm")
         self.run(args)
 
     def set_settings_password(self, _button):

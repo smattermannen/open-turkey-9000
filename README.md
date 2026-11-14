@@ -527,7 +527,7 @@ While the block is on, any app whose window title contains one of the words (cas
 kc9k monk --for 2h
 ```
 
-Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. The block belongs to monk mode: it can't be removed or renamed, can't start monk mode itself, and is changed only while monk mode is off, so add exceptions (documentation you need), apps or anything else to it beforehand. `kc9k start monk-mode` is refused; use `kc9k monk --for`. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password only if setting a lock does (`kc9k password locks on`).
+Monk mode blocks every website for a while, time-locked: it starts the block **monk-mode**, made the first time with `*.*` in its Blocked list, and ends it when the time is up. The block belongs to monk mode: it can't be removed or renamed, can't start monk mode itself, and is changed only while monk mode is off, so add exceptions (documentation you need), apps or anything else to it beforehand. `kc9k start monk-mode` is refused; use `kc9k monk --for`. On a monk mode that is already on, a longer time extends it. It also starts from the Dashboard (Monk mode…), from a blacklist's `monk` action, and from bypass prevention. Starting it needs the settings password only if setting a lock does (`kc9k password locks on`). Monk mode that starts by itself (a bypass prevention step, or a list's or phrase set's `monk` action) asks nothing when it starts, so setting such a step or action up needs `--no-confirm-ok` (in the interface, the tick "I know this will not ask for confirmation").
 
 ## Bypass prevention
 
@@ -571,7 +571,7 @@ kc9k hotkey list
 kc9k hotkey remove 1
 ```
 
-Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password, and asks you to confirm the lock, when you add it (`--yes` for scripts), not each time you press it. The interface has them under Settings.
+Keys are ctrl, alt, shift or super joined to a key with `+`; F1 to F24 also work alone. Hotkeys are added as Cinnamon and GNOME keyboard shortcuts (they show up in the desktop's keyboard settings as "KC9K: …"); your own shortcuts are left alone. Pressing one shows a notification saying whether the block started. On a block that is already on, it only extends the lock. A hotkey with a lock needs the settings password, and asks you to confirm the lock, when you add it (`--yes` for scripts). Pressing it then asks again in a desktop dialog (Lock / Cancel; nothing is locked if you cancel or don't answer), unless you added it with `--no-confirm` ("Run without confirmation", also a tick in the interface): then the lock is confirmed only when you add the hotkey. Hotkeys from before this ask at each press. The interface has them under Settings.
 
 ## How apps are recognised
 

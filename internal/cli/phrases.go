@@ -271,6 +271,11 @@ var phraseSetActionCmd = &cobra.Command{
 		if on && action == db.ActionMonk && args[0] == enforce.MonkBlock {
 			return fmt.Errorf("monk mode's own block can't start monk mode (R-MONK-1)")
 		}
+		if on && action == db.ActionMonk {
+			if err := requireMonkAck(cmd, "a phrase set's monk action"); err != nil {
+				return err
+			}
+		}
 		if !on && (cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for")) {
 			return fmt.Errorf("--url, --image and --for only go with 'on'")
 		}
@@ -393,6 +398,7 @@ func init() {
 	}
 	phraseSetActionCmd.Flags().String("url", "", "For redirect: the address to open instead")
 	phraseSetActionCmd.Flags().String("image", "", "For image: the picture to show instead")
+	addMonkAckFlag(phraseSetActionCmd)
 	phraseSetActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
 	phraseSetCmd.AddCommand(phraseSetShowCmd, phraseSetCreateCmd, phraseSetAddCmd, phraseSetRemoveCmd, phraseSetScopeCmd,
 		phraseSetActionCmd, phraseSetThresholdCmd, phraseSetTestCmd, phraseSetRenameCmd, phraseSetDeleteCmd,

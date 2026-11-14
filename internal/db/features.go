@@ -55,6 +55,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateFreezeScheduleLocks(conn); err != nil {
 		return err
 	}
+	if err := migrateHotkeys(conn); err != nil {
+		return err
+	}
 	if err := migrateTamperClock(conn); err != nil {
 		return err
 	}

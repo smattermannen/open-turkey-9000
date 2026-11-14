@@ -93,3 +93,22 @@ func leadLength(minutes int) string {
 	}
 	return fmt.Sprintf("while each window is open and %s before it", time.Duration(minutes)*time.Minute)
 }
+
+// requireMonkAck refuses to set up something that starts monk mode by itself
+// (a bypass prevention step, a list's or a phrase set's monk action) unless
+// the user ticked "I know this will not ask for confirmation"
+// (--no-confirm-ok): monk mode started that way asks nothing (R-LOCK-12).
+func requireMonkAck(cmd *cobra.Command, what string) error {
+	if f := cmd.Flags().Lookup("no-confirm-ok"); f != nil && f.Value.String() == "true" {
+		return nil
+	}
+	return fmt.Errorf("%s starts monk mode by itself, and monk mode started that way will not ask for confirmation; add --no-confirm-ok to say you know", what)
+}
+
+// addMonkAckFlag gives commands that can set up an automatic monk mode the
+// --no-confirm-ok flag.
+func addMonkAckFlag(cmds ...*cobra.Command) {
+	for _, c := range cmds {
+		c.Flags().Bool("no-confirm-ok", false, "I know monk mode started by this will not ask for confirmation")
+	}
+}

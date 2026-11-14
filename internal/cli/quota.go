@@ -199,7 +199,8 @@ var quotaStartCmd = &cobra.Command{
 		if err := database.SaveQuota(name, s); err != nil {
 			return err
 		}
-		if err := ensureBlockActive(database, name, false); err != nil {
+		// §3.3: the session lifts the block; it stays on.
+		if err := ensureBlockActive(database, name, true); err != nil {
 			return err
 		}
 		if err := enforce.ApplyFromDB(database); err != nil {

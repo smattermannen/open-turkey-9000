@@ -119,8 +119,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   clock: DST-skipped windows shrink/vanish, repeated hour covered twice;
   durations count real hours. Active vs enabled (§3.3): `enforce.enabledBlocks`
   drops active blocks lifted by breaks/pauses and by `scheduleLifted`
-  (windows, place rules); the daemon never switches blocks by schedule
-  (allowance sessions still do, `reconcileQuotas`). Freeze schedules:
+  (windows, place rules) and open allowance sessions; the daemon never
+  switches blocks off (`reconcileQuotas` keeps allowance blocks on). Freeze schedules:
   `db.FreezeSchedule.LockLead`; daemon `reconcileFreezeSchedules`.
 - **Locks** (`internal/cli/`): `blockHold` decides lock state (text, timer,
   password, restart, delay, schedule lock `db/schedulelock.go`). Layered

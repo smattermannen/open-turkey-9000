@@ -33,9 +33,8 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   password, text, delay), and on setting locks (browser settings, tamper,
   strict mode, global ladder); active vs enabled for schedules and places
   (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
-  scheduled blocks on once). Not built: hardware/internet clock check;
-  allowance sessions still switch their block off and on (should lift it);
-  choosing the order in the GUI (fixed order). (L)
+  scheduled blocks on once); allowance sessions lift their block (it stays
+  on). Not built: hardware/internet clock check; choosing the order in the GUI (fixed order). (L)
 - [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
   silently creates nothing (`create_phrase_set`). Two editors (typed box and
   pop-up `PhraseDialog`, too tall); want only boxes in the card, unlimited
@@ -109,7 +108,7 @@ Only items not simply Built.
 | §3.2 Affected users | Not built | |
 | §3.2 Test mode for phrase sets | Unchecked | lists built |
 | §3.3 Enabled/disabled/lifted words | Partial | |
-| §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules lift, never switch; allowance still switches |
+| §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
 | §3.3 Duplicate starts inactive | Unchecked | |
 | §3.3 `kc9k toggle` | Not built | |
 | §3.4 Range lock | Not built | |

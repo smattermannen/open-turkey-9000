@@ -654,6 +654,9 @@ var statusCmd = &cobra.Command{
 				if enforce.LiftedBySchedule(database, detail.Name, time.Now()) {
 					tags += " [lifted by its schedule]"
 				}
+				if q, _ := database.GetQuota(detail.Name); q != nil && q.Open {
+					tags += " [lifted: allowance session open]"
+				}
 				if hold.charLocked {
 					tags += " [text lock: " + lock.DescribeStyle(hold.extras.Style, detail.LockChars) + "]"
 				}

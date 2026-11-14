@@ -9,11 +9,15 @@ import (
 )
 
 // enabledBlocks returns the active blocks that enforce now (§3.3: enabled):
-// not lifted by a break, pause or Pomodoro rest, nor by their windows or
-// place rules. Only the user switches a block on or off; the schedule only
+// not lifted by a break, pause or Pomodoro rest, an open allowance session,
+// nor by their windows or place rules. Only the user switches a block on or off; the schedule only
 // lifts it (R-SCHED-1).
 func enabledBlocks(d *db.DB, active []db.ActiveBlockDetail, trusted int64) []db.ActiveBlockDetail {
 	lifted := scheduleLifted(d, time.Now())
+	// An open allowance session lifts its block too.
+	for _, b := range openQuotaBlocks(d) {
+		lifted[b.Name] = true
+	}
 	out := make([]db.ActiveBlockDetail, 0, len(active))
 	for _, b := range active {
 		if !lifted[b.BlockName] && pausedFor(d, b.BlockName, trusted) <= 0 {

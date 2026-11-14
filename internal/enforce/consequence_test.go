@@ -517,3 +517,33 @@ func TestListLogoutAnnounced(t *testing.T) {
 		t.Errorf("after the delay: %q", got)
 	}
 }
+
+// §3.3: an open allowance session lifts its block; the block stays on.
+func TestAllowanceSessionLifts(t *testing.T) {
+	d := testDB(t)
+	if err := d.CreateBlock("games"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	s := quota.New(600, now.Unix(), quota.DayOf(now))
+	s.Open = true
+	if err := d.SaveQuota("games", s); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileQuotas(d, now, now.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := d.GetBlock("games"); !b.Active {
+		t.Fatal("an allowance block is off during its session")
+	}
+	active, _ := d.GetActiveBlocks()
+	if got := enabledBlocks(d, active, now.Unix()); len(got) != 0 {
+		t.Errorf("enabled during the session: %+v", got)
+	}
+	saved, _ := d.GetQuota("games")
+	saved.Open = false
+	_ = d.SaveQuota("games", *saved)
+	if got := enabledBlocks(d, active, now.Unix()); len(got) != 1 {
+		t.Errorf("not enabled after the session: %+v", got)
+	}
+}

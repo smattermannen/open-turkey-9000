@@ -140,16 +140,13 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 			continue
 		}
 
-		switch {
-		case s.Open && detail.Active:
-			err = d.DeactivateBlock(name)
-		case !s.Open && !detail.Active:
-			err = d.ActivateBlock(name, false, 0, 0, true)
-		default:
-			err = nil
-		}
-		if err != nil {
-			log.Printf("daemon: allowance: %v", err)
+		// An allowance keeps its block on; an open session only lifts it
+		// (enabledBlocks, §3.3). Blocks older code switched off during a
+		// session are switched on again.
+		if !detail.Active {
+			if err := d.ActivateBlock(name, false, 0, 0, true); err != nil {
+				log.Printf("daemon: allowance: %v", err)
+			}
 		}
 	}
 	return nil

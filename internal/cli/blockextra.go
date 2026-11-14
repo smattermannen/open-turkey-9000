@@ -128,9 +128,6 @@ func toLists(in []listExport) (db.Lists, error) {
 		}
 		if le.Kind == db.ListBlacklist {
 			for _, a := range le.Actions {
-				if db.IsRemovedAction(a.Name) {
-					continue
-				}
 				if !db.IsAction(a.Name) {
 					return nil, fmt.Errorf("list '%s' has an unknown action %q", le.Name, a.Name)
 				}

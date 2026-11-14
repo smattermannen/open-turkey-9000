@@ -14,11 +14,6 @@ class Store(private val context: Context) {
             android.provider.Settings.Global.BOOT_COUNT, 0)
 
     val homeSet get() = p.contains("lat")
-
-    /** The KC9K extension has checked in from IronFox at least once (ExtensionGuard). */
-    var extensionSeen: Boolean
-        get() = p.getBoolean("extensionSeen", false)
-        set(v) { p.edit().putBoolean("extensionSeen", v).commit() }
     var lat: Double
         get() = java.lang.Double.longBitsToDouble(p.getLong("lat", 0))
         set(v) { p.edit().putLong("lat", java.lang.Double.doubleToRawLongBits(v)).commit() }

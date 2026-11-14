@@ -665,6 +665,7 @@ var listActionCmd = &cobra.Command{
   no-images      hide the page's images
   mute           switch the tab's sound off
   no-video       stop and hide videos and players
+  declutter      hide side columns, banners, pop-ups and suggestions (experimental)
   dark           show a light page dark
   redirect       open another address instead (--url https://...)
   image          show a picture instead (--image FILE: PNG, JPEG, GIF or WebP)

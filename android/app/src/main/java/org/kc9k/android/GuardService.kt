@@ -89,7 +89,6 @@ class GuardService : Service() {
         else startForeground(1, n)
         DeviceOwner(this).applyBaseline()
         store = Store(this)
-        guard = ExtensionGuard.State(seenGood = store.extensionSeen)
         enforcer = DeviceOwnerEnforcer(this)
         server = RulesServer(this).also { it.start() }
         foreground = Foreground(this)
@@ -121,15 +120,12 @@ class GuardService : Service() {
         val problem = ExtensionGuard.problem(ExtensionStatus.last, now, minExtension)
         val step = ExtensionGuard.step(guard, now, elapsed, required, access, inFront,
             problem == ExtensionGuard.Problem.NONE)
-        if (step.state.seenGood && !store.extensionSeen) store.extensionSeen = true
-        val newPause = step.state.pausedUntil != guard.pausedUntil
         guard = step.state
-        if (step.pause != paused || (step.pause && newPause)) {
+        if (step.pause != paused) {
             paused = step.pause
-            val minutes = ((guard.pausedUntil - now + 59_999) / 60_000).coerceAtLeast(1)
             notifyPause(if (!paused) null else if (!access)
                 "KC9K needs usage access to see when IronFox is open. Settings > Apps > Special app access > Usage access > KC9K."
-            else problem.text + ". IronFox is paused for $minutes minutes, longer each time; see KC9K.")
+            else problem.text + ". IronFox is paused for ${ExtensionGuard.PAUSE_MS / 60_000} minutes; see KC9K.")
         }
     }
 

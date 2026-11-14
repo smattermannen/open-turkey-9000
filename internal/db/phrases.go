@@ -52,6 +52,9 @@ type Phrase struct {
 	Length int       `json:"length,omitempty"`
 }
 
+// MaxWordSets bounds a phrase.
+const MaxWordSets = 9
+
 // Normalize makes the first two word sets necessary (R-PHRASE-1), trims
 // and lowercases the terms, and drops empty ones.
 func (p Phrase) Normalize() Phrase {
@@ -83,6 +86,9 @@ func (p Phrase) Necessary() int {
 func (p Phrase) Check() error {
 	if len(p.Sets) < 2 {
 		return fmt.Errorf("a phrase needs at least two word sets, such as [eat, nice] [hello, grandpa]")
+	}
+	if len(p.Sets) > MaxWordSets {
+		return fmt.Errorf("a phrase has at most %d word sets", MaxWordSets)
 	}
 	// Which word sets hold a bridge's start (big-) and end (-gorilla); a
 	// middle link (-strong-) is both.

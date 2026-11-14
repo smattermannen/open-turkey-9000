@@ -41,30 +41,22 @@ card = next(iter(cards.values()))
 check(card.get_parent() is win.list_boxes["phrases"], "card sits under Phrase sets")
 check(card.place_checks["title"].get_active() and card.place_checks["text"].get_active() and not card.place_checks["url"].get_active(), "scope boxes")
 check([r[0] for r in card.entries.store] == ["[eat, nice] [hello, grandpa]", "[big-] [-gorilla] [x]? :3"], "phrases listed")
-# The phrase editor in the card (no popup): first two sets forced
-# necessary, length range, text, any number of word sets.
-d = card.editor
-check(not hasattr(gui, "PhraseDialog") and isinstance(d, gui.PhraseEditor), "the phrase editor is in the card")
-check(not card.entries.entry.get_parent(), "no typed phrase box beside the list")
-card.edit_phrase(card.data["phrases"][1]["text"])
-check(d.get_text() == "[big-] [-gorilla] [x]? :3", "editor reads a phrase back: " + d.get_text())
-check(not d.ok.get_sensitive(), "an unchanged phrase can't be saved")
+# The phrase dialog: first two sets forced necessary, length range, text.
+d = gui.PhraseDialog(win, card.data["phrases"][1])
+check(d.get_text() == "[big-] [-gorilla] [x]? :3", "dialog reads a phrase back: " + d.get_text())
 rows = d.rows.get_children()
 check(not rows[0].check.get_sensitive() and rows[2].check.get_sensitive(), "first two sets can't be optional")
 rows[2].check.set_active(True)
 check(d.get_text() == "[big-] [-gorilla] [x]", "all necessary: length is the default: " + d.get_text())
-d.load(None)
-check(d.get_text() == "" and not d.ok.get_sensitive(), "empty editor can't be saved")
-for _ in range(10):
-    d.add_row()
-check(d.add_set.get_sensitive() and len(d.rows.get_children()) == 12, "more than 9 word sets")
-d.load(None)
+d.destroy()
+d = gui.PhraseDialog(win)
+check(d.get_text() == "" and not d.ok.get_sensitive(), "empty dialog can't be saved")
 rows = d.rows.get_children(); rows[0].entry.set_text("red"); rows[1].entry.set_text("car, truck")
 d.add_row(); d.rows.get_children()[2].entry.set_text("big"); d.rows.get_children()[2].check.set_active(False)
 check(d.get_text() == "[red] [car, truck] [big]?", "built phrase: " + d.get_text())
 d.length.set_value(3)
 text = d.get_text(); check(text == "[red] [car, truck] [big]? :3", "with length: " + text)
-d.load(None)
+d.destroy()
 # Through the card: add, threshold, action, scope, test, rename.
 def settle():
     pump(lambda: win.get_sensitive()); win.state = None; win.busy = False; win.refresh(); pump(lambda: win.state is not None)
@@ -108,7 +100,5 @@ check(set(card.place_checks) == {"url", "title", "text"} and card.place_checks["
 card.place_checks["text"].set_active(True); settle()
 out = cli("list", "show", "b").stdout
 check("Url words (term blacklist) looks at: url, text" in out, "term list scope from the card")
-# A new phrase set gets a name when none is typed.
-check(win.free_phrase_set_name() == "Phrases", "free name: " + win.free_phrase_set_name())
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

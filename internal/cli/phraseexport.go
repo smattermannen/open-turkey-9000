@@ -53,9 +53,6 @@ func toPhraseSets(in []phraseSetExport) ([]db.PhraseSet, error) {
 			s.Where.Text = true
 		}
 		for _, a := range e.Actions {
-			if db.IsRemovedAction(a.Name) {
-				continue
-			}
 			if !db.IsAction(a.Name) {
 				return nil, fmt.Errorf("phrase set '%s' has an unknown action %q", e.Name, a.Name)
 			}

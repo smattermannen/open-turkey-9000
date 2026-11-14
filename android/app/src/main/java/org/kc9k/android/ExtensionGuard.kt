@@ -26,20 +26,13 @@ object ExtensionStatus {
 
 /**
  * The extension is mandatory, like on the desktop (internal/blocker/extguard.go): while
- * something needs it, IronFox may be in front for [GRACE_MS] without a good check-in (time
- * to install it); then it is paused (suspended). IronFox can't be told to keep an extension
- * on, so switching it off in the add-ons manager must cost more each time: once the
- * extension has checked in, the grace is [SHORT_GRACE_MS], and each pause is twice the
- * last ([PAUSE_MS] first, at most [MAX_PAUSE_MS]) until it has run [FORGIVE_MS] unbroken.
+ * something needs it, IronFox may be in front for [GRACE_MS] without a good check-in;
+ * then it is paused (suspended) for [PAUSE_MS], and gets [GRACE_MS] again after that.
  * Without usage access KC9K can't tell when IronFox is in front, so IronFox stays paused.
  */
 object ExtensionGuard {
     const val GRACE_MS = 60_000L
-    /** Enough to switch the extension back on after a pause, not to browse. */
-    const val SHORT_GRACE_MS = 20_000L
     const val PAUSE_MS = 2 * 60_000L
-    const val MAX_PAUSE_MS = 60 * 60_000L
-    const val FORGIVE_MS = 60 * 60_000L
     /** The extension polls every 3 s; a check-in older than this is stale. */
     const val FRESH_MS = 15_000L
 
@@ -59,36 +52,21 @@ object ExtensionGuard {
         else -> Problem.NONE
     }
 
-    /**
-     * [unchecked]: time IronFox spent in front since the last good check-in. [strikes]:
-     * pauses since the extension last ran [FORGIVE_MS] unbroken ([goodSince]). [seenGood]:
-     * the extension has checked in before (kept by GuardService across restarts).
-     */
-    data class State(val unchecked: Long = 0, val pausedUntil: Long = 0, val strikes: Int = 0,
-                     val seenGood: Boolean = false, val goodSince: Long = 0)
+    /** [unchecked]: time IronFox spent in front since the last good check-in. */
+    data class State(val unchecked: Long = 0, val pausedUntil: Long = 0)
 
     data class Step(val state: State, val pause: Boolean)
 
-    /** How long the pause after [strikes] earlier ones lasts. */
-    fun pauseFor(strikes: Int): Long =
-        if (strikes >= 5) MAX_PAUSE_MS else minOf(PAUSE_MS shl strikes, MAX_PAUSE_MS)
-
     fun step(s: State, now: Long, elapsed: Long, required: Boolean, usageAccess: Boolean,
              foreground: Boolean, good: Boolean): Step {
-        if (!required) return Step(State(seenGood = s.seenGood), false)
+        if (!required) return Step(State(), false)
         if (!usageAccess) return Step(s, true)
         if (s.pausedUntil > now) return Step(s, true)
-        if (good) {
-            val since = if (s.goodSince == 0L) now else s.goodSince
-            val strikes = if (now - since >= FORGIVE_MS) 0 else s.strikes
-            return Step(State(strikes = strikes, seenGood = true, goodSince = since), false)
-        }
-        val bad = s.copy(pausedUntil = 0, goodSince = 0)
-        if (!foreground) return Step(bad, false)
+        if (good) return Step(State(), false)
+        if (!foreground) return Step(s.copy(pausedUntil = 0), false)
         val unchecked = s.unchecked + elapsed
-        if (unchecked >= if (s.seenGood) SHORT_GRACE_MS else GRACE_MS)
-            return Step(bad.copy(unchecked = 0, pausedUntil = now + pauseFor(s.strikes), strikes = s.strikes + 1), true)
-        return Step(bad.copy(unchecked = unchecked), false)
+        if (unchecked >= GRACE_MS) return Step(State(0, now + PAUSE_MS), true)
+        return Step(State(unchecked, 0), false)
     }
 }
 

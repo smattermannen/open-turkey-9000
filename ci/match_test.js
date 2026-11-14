@@ -326,6 +326,20 @@ check("title", kc9kListActions(sites, { url: "https://example.com/", title: "You
 check("title is a whole word", kc9kListActions(sites, { url: "https://example.com/", title: "myyoutube" }), {});
 check("other site", kc9kListActions(sites, { url: "https://example.com/", title: "News", text: "youtube" }), {});
 
+// R-PHRASE-6: a term list that looks at the url reads the decoded address
+// as words, its separators as blank space; whole words still.
+const urlTerms = kc9kCompileLists([{
+  url: [], url_terms: ["long cat", "porn"], title: [], text: [],
+  actions: [{ action: "block", distinct: 5 }], except: { url: [], title: [], text: [], url_terms: ["lecture"] },
+}]);
+check("R-PHRASE-6 term in the address", kc9kListActions(urlTerms, { url: "https://example.com/videos/long-cat_2?q=x" }).block, true);
+check("R-PHRASE-6 decoded first", kc9kListActions(urlTerms, { url: "https://example.com/search?q=long%20cat" }).block, true);
+check("R-PHRASE-6 plus is a space", kc9kListActions(urlTerms, { url: "https://example.com/search?q=long+cat" }).block, true);
+check("R-PHRASE-6 whole words", kc9kListActions(urlTerms, { url: "https://pornhub.example/" }), {});
+check("R-PHRASE-6 domain words", kc9kListActions(urlTerms, { url: "https://www.porn.example/" }).block, true);
+check("R-PHRASE-6 url term exception", kc9kListActions(urlTerms, { url: "https://example.com/lecture/long-cat" }), {});
+check("R-PHRASE-6 needs no page text", kc9kReadsPage(urlTerms), false);
+
 // Exceptions by title or text wait until the page is read, then spare it.
 const spared = kc9kCompileLists([{
   url: ["youtube.com"], title: [], text: [], actions: [{ action: "block", distinct: 1 }],

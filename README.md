@@ -262,11 +262,11 @@ Uninstalling first runs a guard that **refuses while any block or setting is loc
 
 ## Website lists
 
-A block has **blacklists** and **exception lists**, each with a name. Each list has a type: an **address list** looks at the page's address (url), a **term list** at the page's title, text, or both. One list can't do both: make a second list for the other. (Lists from before types that looked at both became two when upgrading: the address list kept its name, and a term list `<name> terms` got the same entries and actions, so nothing matches differently.)
+A block has **blacklists** and **exception lists**, each with a name. Each list has a type: an **address list** holds sites and addresses, matched against the page's address; a **term list** holds words, looked for where its scope says: the page's title, its text, and its address read as words (the address is decoded first, `%20` is a space, and `-_/.?=&+#:,` count as spaces, so `long cat` is found in `example.com/long-cat_2`). `kc9k list create B L --url` makes an address list, `--title`/`--text` a term list (add `--url` for its address too), and `--terms --url` a term list that reads only the address. `list show` names each list's type. (Lists from before types that looked at the address and the page became two when upgrading: the address list kept its name, and a term list `<name> terms` got the same entries and actions, so nothing matches differently.)
 
 - **url**: the page's address. Entries are domains (`reddit.com`), paths (`reddit.com/r/funny`) and wildcards (`*.xxx`, `*casino*`, and `*.*` for every website).
 - **title**: the page title, as shown on its tab.
-- **text**: the page's text. Title and text entries are words or phrases: a plain word counts only on its own (`porn` doesn't count in "pornhub", `18+` not in "1118+"), and `*` matches inside words (`*porn*` counts in "pornhub", `porn*` in "pornstar"). Case is ignored.
+- **text**: the page's text. Term entries (title, text, or the address of a term list) are words or phrases: a plain word counts only on its own (`porn` doesn't count in "pornhub", `18+` not in "1118+"), and `*` matches inside words (`*porn*` counts in "pornhub", `porn*` in "pornstar"). Case is ignored.
 
 **Word combinations** catch words only together. A combination is boxes of words side by side, as many as you like: each box is a list in brackets, or one bare word, and `:N` after a box asks for N *different* words of it (1 if left out):
 

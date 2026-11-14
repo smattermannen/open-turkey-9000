@@ -86,6 +86,7 @@ type guiList struct {
 	ID      int             `json:"id"`
 	Name    string          `json:"name"`
 	Kind    string          `json:"kind"`
+	Type    string          `json:"type"` // address or term
 	Where   []string        `json:"where"`
 	Actions []db.ListAction `json:"actions"`
 	Entries []string        `json:"entries"`
@@ -177,6 +178,7 @@ type guiCluster struct {
 	Where   []string `json:"where"`
 	Entries []string `json:"entries"`
 	Phrases bool     `json:"phrases"`
+	Type    string   `json:"type"`
 }
 
 // guiRecording is the link recording in progress.
@@ -347,7 +349,7 @@ var guiStateCmd = &cobra.Command{
 			if entries == nil {
 				entries = []string{}
 			}
-			state.Clusters = append(state.Clusters, guiCluster{Name: full.Name, Where: full.Where.List(), Entries: entries, Phrases: full.Phrases})
+			state.Clusters = append(state.Clusters, guiCluster{Name: full.Name, Where: full.Where.List(), Entries: entries, Phrases: full.Phrases, Type: full.Type})
 		}
 		if rec, err := database.GetRecording(); err != nil {
 			return err
@@ -396,7 +398,7 @@ var guiStateCmd = &cobra.Command{
 				if actions == nil {
 					actions = []db.ListAction{}
 				}
-				g.Lists = append(g.Lists, guiList{ID: l.ID, Name: l.Name, Kind: l.Kind, Where: append([]string{}, l.Where.List()...),
+				g.Lists = append(g.Lists, guiList{ID: l.ID, Name: l.Name, Kind: l.Kind, Type: map[bool]string{true: db.ListAddress, false: db.ListTerm}[l.IsAddress()], Where: append([]string{}, l.Where.List()...),
 					Actions: actions, Entries: l.Entries, Test: slices.Contains(testing, l.ID)})
 				if slices.Contains(testing, l.ID) {
 					g.KeywordTest = true

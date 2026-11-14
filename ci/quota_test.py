@@ -87,6 +87,10 @@ try:
     ot("list", "add", "quotatest", "Blocked", "*kc9kquota*")
     ot("quota", "set", "quotatest", "30m")
     ot("quota", "start", "quotatest")
+    # LibreWolf's policy file is the daemon's to rewrite (within a cycle or
+    # two), and LibreWolf reads it only at start: a quotatest left on by an
+    # earlier run today would still be in it.
+    time.sleep(12)
 
     options = Options()
     options.binary_location = "/usr/bin/librewolf"

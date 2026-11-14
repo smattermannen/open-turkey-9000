@@ -170,7 +170,7 @@ var blockCreateCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			if seeds, err = prepareEntries(db.Where{URL: true}, raw); err != nil {
+			if seeds, err = prepareEntries(db.ListAddress, db.Where{URL: true}, raw); err != nil {
 				return err
 			}
 		}

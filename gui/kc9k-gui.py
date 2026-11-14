@@ -856,13 +856,13 @@ class ListCard(Gtk.Frame):
         box.pack_start(top, False, False, 0)
 
         # §3.2: an address list looks only at the address; a term list at
-        # the title and/or text, which it can tick.
+        # the address (read as words, R-PHRASE-6), title and/or text.
         self.place_checks = {}
         places = Gtk.Box(spacing=12)
-        address_list = "url" in data["where"]
+        address_list = data.get("type", "address" if data["where"] == ["url"] else "term") == "address"
         places.pack_start(Gtk.Label(label="Address list" if address_list else "Term list, looking at:"), False, False, 0)
         if not address_list:
-            for name, title in LIST_PLACES[1:]:
+            for name, title in LIST_PLACES:
                 check = Gtk.CheckButton(label=title)
                 check.connect("toggled", self.toggle_place, name)
                 self.place_checks[name] = check
@@ -3718,7 +3718,7 @@ class Window(Gtk.ApplicationWindow):
             buttons=Gtk.ButtonsType.OK_CANCEL,
             text="New exception list" if kind == "exceptions" else "New blacklist",
             secondary_text="A name, and its type: an address list holds sites and addresses; a term "
-                           "list holds words, looked for in the page title, the page text or both.")
+                           "list holds words, looked for in the address, the page title, the page text, or several.")
         entry = Gtk.Entry(activates_default=True)
         dialog.set_default_response(Gtk.ResponseType.OK)
         area = dialog.get_message_area()
@@ -3728,8 +3728,9 @@ class Window(Gtk.ApplicationWindow):
         area.pack_start(address, False, False, 0)
         area.pack_start(term, False, False, 0)
         checks = {}
-        for name, title in LIST_PLACES[1:]:
-            checks[name] = Gtk.CheckButton(label=title, active=name == "text", margin_start=24)
+        for name, title in LIST_PLACES:
+            checks[name] = Gtk.CheckButton(label=title + (" (its words)" if name == "url" else ""),
+                                           active=name == "text", margin_start=24)
             area.pack_start(checks[name], False, False, 0)
         for check in checks.values():
             check.set_sensitive(False)
@@ -3743,6 +3744,8 @@ class Window(Gtk.ApplicationWindow):
         if answer != Gtk.ResponseType.OK or not name:
             return
         args = ["list", "create", self.selected, name] + ["--" + place for place in places]
+        if not address.get_active():
+            args.append("--terms")
         if kind == "exceptions":
             args.append("--exceptions")
         self.run(args)

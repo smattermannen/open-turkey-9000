@@ -168,10 +168,10 @@ func TestMigrateWebLists(t *testing.T) {
 	}
 	both := []ListAction{{Name: ActionBlock, Distinct: 1, Hits: 1}, {Name: ActionGreyscale, Distinct: 1, Hits: 1}}
 	want := Lists{
-		{Kind: ListBlacklist, Name: DefaultBlockedList, Where: Where{URL: true}, Entries: []string{"reddit.com", "*casino*"}, Actions: both},
-		{Kind: ListBlacklist, Name: DefaultWordsList, Where: Where{Text: true}, Entries: []string{"nsfw"},
+		{Kind: ListBlacklist, Type: ListAddress, Name: DefaultBlockedList, Where: Where{URL: true}, Entries: []string{"reddit.com", "*casino*"}, Actions: both},
+		{Kind: ListBlacklist, Type: ListTerm, Name: DefaultWordsList, Where: Where{Text: true}, Entries: []string{"nsfw"},
 			Actions: []ListAction{{Name: ActionBlock, Distinct: 2, Hits: 1}, {Name: ActionGreyscale, Distinct: 1, Hits: 1}}},
-		{Kind: ListExceptions, Name: DefaultExceptionsList, Where: Where{URL: true}, Entries: []string{"reddit.com/r/golang"}},
+		{Kind: ListExceptions, Type: ListAddress, Name: DefaultExceptionsList, Where: Where{URL: true}, Entries: []string{"reddit.com/r/golang"}},
 	}
 	for i := range old.Lists {
 		old.Lists[i].ID = 0
@@ -353,8 +353,17 @@ func TestListTypesMigration(t *testing.T) {
 	if err := d.SetTestList(id, true); err != nil {
 		t.Fatal(err)
 	}
-	// The old way: the url and the title ticked on one list and one cluster.
-	if _, err := d.conn.Exec("UPDATE web_lists SET in_title = 1 WHERE id = ?", id); err != nil {
+	// The old way: the url and the title ticked on one list and one cluster,
+	// without a type.
+	if _, err := d.conn.Exec("UPDATE web_lists SET in_title = 1, type = '' WHERE id = ?", id); err != nil {
+		t.Fatal(err)
+	}
+	// Today's lists that look at the url and the page are left alone: a term
+	// list (R-PHRASE-6) and a phrase cluster.
+	if _, err := d.CreateTypedList("b", ListBlacklist, ListTerm, "Url words", Where{URL: true, Title: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.CreatePhraseCluster("phrases", Where{URL: true, Text: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.conn.Exec("INSERT INTO clusters (name, in_url, in_text) VALUES ('mix', 1, 1)"); err != nil {
@@ -369,8 +378,15 @@ func TestListTypesMigration(t *testing.T) {
 	b, _ := d.GetBlock("b")
 	address, ok1 := b.Lists.Find(DefaultBlockedList)
 	terms, ok2 := b.Lists.Find(DefaultBlockedList + " terms")
-	if !ok1 || !ok2 || address.ID != id || address.Where != (Where{URL: true}) || terms.Where != (Where{Title: true}) {
+	if !ok1 || !ok2 || address.ID != id || address.Where != (Where{URL: true}) || terms.Where != (Where{Title: true}) ||
+		address.Type != ListAddress || terms.Type != ListTerm {
 		t.Fatalf("lists after the split: %+v", b.Lists)
+	}
+	if l, ok := b.Lists.Find("Url words"); !ok || l.Type != ListTerm || l.Where != (Where{URL: true, Title: true}) || len(b.Lists) != 4 {
+		t.Errorf("a typed term list was split: %+v", b.Lists)
+	}
+	if c, err := d.GetCluster("phrases"); err != nil || c.Where != (Where{URL: true, Text: true}) {
+		t.Errorf("a phrase cluster was split: %+v, %v", c, err)
 	}
 	if !reflect.DeepEqual(address.Entries, terms.Entries) || len(terms.Actions) != len(address.Actions) || !terms.HasAction(ActionGreyscale) {
 		t.Errorf("the term list differs: %+v vs %+v", terms, address)
@@ -378,10 +394,10 @@ func TestListTypesMigration(t *testing.T) {
 	if got := d.TestLists(); len(got) != 2 {
 		t.Errorf("test mode lists = %v; want both halves", got)
 	}
-	if c, err := d.GetCluster("mix"); err != nil || c.Where != (Where{URL: true}) {
+	if c, err := d.GetCluster("mix"); err != nil || c.Where != (Where{URL: true}) || c.Type != ListAddress {
 		t.Errorf("cluster = %+v, %v", c, err)
 	}
-	if c, err := d.GetCluster("mix terms"); err != nil || c.Where != (Where{Text: true}) {
+	if c, err := d.GetCluster("mix terms"); err != nil || c.Where != (Where{Text: true}) || c.Type != ListTerm {
 		t.Errorf("term cluster = %+v, %v", c, err)
 	}
 }

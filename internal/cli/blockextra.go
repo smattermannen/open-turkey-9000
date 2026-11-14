@@ -26,6 +26,7 @@ import (
 type listExport struct {
 	Name    string          `json:"name"`
 	Kind    string          `json:"kind"`
+	Type    string          `json:"type,omitempty"` // address or term; files from before types have none
 	Where   []string        `json:"where"`
 	Actions []db.ListAction `json:"actions,omitempty"`
 	Entries []string        `json:"entries"`
@@ -100,7 +101,10 @@ func toLists(in []listExport) (db.Lists, error) {
 		if le.Kind != db.ListBlacklist && le.Kind != db.ListExceptions {
 			return nil, fmt.Errorf("list '%s' has an unknown kind %q", le.Name, le.Kind)
 		}
-		l := db.WebList{Name: le.Name, Kind: le.Kind}
+		if le.Type != "" && le.Type != db.ListAddress && le.Type != db.ListTerm {
+			return nil, fmt.Errorf("list '%s' has an unknown type %q", le.Name, le.Type)
+		}
+		l := db.WebList{Name: le.Name, Kind: le.Kind, Type: le.Type}
 		for _, place := range le.Where {
 			if !db.IsPlace(place) {
 				return nil, fmt.Errorf("list '%s' looks at an unknown place %q", le.Name, place)
@@ -110,8 +114,13 @@ func toLists(in []listExport) (db.Lists, error) {
 		if !l.Where.Any() {
 			l.Where.URL = true
 		}
+		if l.Type != "" {
+			if err := db.CheckScope(l.Type, l.Where); err != nil {
+				return nil, fmt.Errorf("list '%s': %w", le.Name, err)
+			}
+		}
 		if len(le.Entries) > 0 {
-			entries, err := prepareEntries(l.Where, le.Entries)
+			entries, err := prepareEntries(l.Type, l.Where, le.Entries)
 			if err != nil {
 				return nil, fmt.Errorf("list '%s': %w", le.Name, err)
 			}
@@ -219,7 +228,7 @@ var blockExportCmd = &cobra.Command{
 			out.Apps = []string{}
 		}
 		for _, l := range detail.Lists {
-			out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Where: l.Where.List(),
+			out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Type: l.Type, Where: l.Where.List(),
 				Actions: l.Actions, Entries: l.Entries})
 		}
 		if out.PhraseSets, err = exportPhraseSets(database, detail.Name); err != nil {

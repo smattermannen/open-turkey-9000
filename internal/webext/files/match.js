@@ -543,6 +543,8 @@ function kc9kCompileLists(lists) {
       titleRaw: (list.title || []).filter(kc9kUsableKeyword),
       textRaw: (list.text || []).filter(kc9kUsableKeyword),
       url: kc9kFilter({ match: list.url || [] }),
+      urlTermsRaw: (list.url_terms || []).filter(kc9kUsableKeyword),
+      urlTerms: kc9kKeywordMatchers(list.url_terms),
       title: kc9kKeywordMatchers(list.title),
       text: kc9kKeywordMatchers(list.text),
       // A phrase set: its phrases, matched where its scope says.
@@ -555,6 +557,7 @@ function kc9kCompileLists(lists) {
       actions: list.actions || [],
       except: {
         url: kc9kFilter({ match: except.url || [] }),
+        urlTerms: kc9kKeywordMatchers(except.url_terms),
         title: kc9kKeywordMatchers(except.title),
         text: kc9kKeywordMatchers(except.text),
       },
@@ -593,6 +596,7 @@ function kc9kListMatches(compiled, page) {
       continue;
     }
     if ((except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
+      kc9kUrlTermsMatch(except.urlTerms, page.url) ||
       (hasTitle && except.title.some((matcher) => matcher.test(page.title))) ||
       (hasText && except.text.some((matcher) => matcher.test(page.text)))) {
       continue;
@@ -607,6 +611,7 @@ function kc9kListMatches(compiled, page) {
       continue;
     }
     const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
+      kc9kUrlTermsMatch(list.urlTerms, page.url) ||
       (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
     const found = hasText && list.text.length > 0 ? kc9kTextHits(list.text, page.text) : { distinct: 0, total: 0 };
     const actions = list.actions.filter((action) => whole ||
@@ -616,6 +621,16 @@ function kc9kListMatches(compiled, page) {
     }
   }
   return out;
+}
+
+// kc9kUrlTermsMatch reports whether any of a term list's terms is in the
+// address, read as words (R-PHRASE-6).
+function kc9kUrlTermsMatch(matchers, url) {
+  if (!matchers || matchers.length === 0) {
+    return false;
+  }
+  const words = kc9kUrlWords(url);
+  return matchers.some((matcher) => matcher.test(words));
 }
 
 // kc9kPhraseText writes a phrase as it is typed: [a, b] [c]? :N.
@@ -653,8 +668,11 @@ function kc9kTestReport(compiled, page) {
     }
     const except = list.except;
     const spared = (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
+      kc9kUrlTermsMatch(except.urlTerms, page.url) ||
       except.title.some((matcher) => matcher.test(title)) || except.text.some((matcher) => matcher.test(text));
-    const address = list.url.match.length > 0 && kc9kMatches(list.url, page.url);
+    const urlWords = kc9kUrlWords(page.url);
+    const address = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
+      list.urlTerms.some((matcher) => matcher.test(urlWords));
     const inTitle = list.titleRaw.filter((entry, i) => list.title[i].test(title));
     const entries = [];
     let total = 0;
@@ -882,6 +900,18 @@ function kc9kPhraseWordMatches(pattern, word) {
   return pattern.exact !== undefined ? pattern.exact === word : kc9kGlobWord(word, pattern.parts);
 }
 
+// kc9kUrlWords reads an address as words (R-PHRASE-6): decoded first (%20
+// is a space), without its scheme, every separator as blank space.
+function kc9kUrlWords(input) {
+  let text = String(input);
+  try {
+    text = decodeURIComponent(text.replace(/\+/g, " "));
+  } catch (error) {
+    // keep it as it is
+  }
+  return text.replace(/^[a-z]+:\/\//i, "").replace(/[-_/.?=&+#:,]/g, " ");
+}
+
 // kc9kPhraseMatcher compiles a phrase { sets: [{ terms: [...], necessary }],
 // length } into { test(text) } for text (scope "url": the address,
 // decoded, with its separators as blank space).
@@ -892,18 +922,7 @@ function kc9kPhraseMatcher(phrase, scope) {
   }));
   const necessary = sets.filter((s) => s.necessary).length;
   const length = Math.min(Math.max(phrase.length || necessary, necessary), sets.length);
-  const prepare = (input) => {
-    if (scope !== "url") {
-      return input;
-    }
-    let text = String(input);
-    try {
-      text = decodeURIComponent(text.replace(/\+/g, " "));
-    } catch (error) {
-      // keep it as it is
-    }
-    return text.replace(/^[a-z]+:\/\//i, "").replace(/[-_/.?=&+#:,]/g, " ");
-  };
+  const prepare = (input) => (scope === "url" ? kc9kUrlWords(input) : input);
   const test = (input) => {
     for (const words of kc9kPhraseTokens(prepare(input))) {
       // Every place a term occurs: [{ start, end, set, into, out }].

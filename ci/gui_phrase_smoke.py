@@ -91,5 +91,14 @@ win.cluster_entries._add(None); settle(); win.update_clusters()
 c = [c for c in json.loads(cli("gui-state").stdout)["clusters"] if c["name"] == "Cats"][0]
 check(c["phrases"] and c["entries"] == ["[long cat, neko] [running, sitting]"], "phrase typed into a cluster: %s" % c["entries"])
 check(not win.record_start.get_sensitive(), "no recording into a phrase cluster")
+# R-PHRASE-6: a term list's card can tick the address.
+r = cli("list", "create", "b", "Url words", "--url", "--terms"); assert r.returncode == 0, r.stderr
+settle()
+card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) and not isinstance(c, gui.PhraseSetCard)
+            and c.data["name"] == "Url words")
+check(set(card.place_checks) == {"url", "title", "text"} and card.place_checks["url"].get_active(), "term list card ticks url")
+card.place_checks["text"].set_active(True); settle()
+out = cli("list", "show", "b").stdout
+check("Url words (term blacklist) looks at: url, text" in out, "term list scope from the card")
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

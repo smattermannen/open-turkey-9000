@@ -115,8 +115,13 @@ build and is **used for real**. On it:
 - **GUI** (`gui/kc9k-gui.py`): GTK 3 Python, English; Dashboard, Blocks, Device Blocks, Statistics, Settings. Reads `kc9k gui-state` and `kc9k stats --json`; every change runs a `kc9k` command.
 - **Website lists** (`internal/db/weblists.go`, `internal/cli/weblists.go`,
   `kc9k list …`): each block has named blacklists and exception lists. Each
-  list is an address list (url) or a term list (title and/or text;
-  `db.CheckWhere`, mixed lists split once by `migrateListTypes`); each blacklist ticks its
+  list has a type (`web_lists.type`, `WebList.IsAddress`): an address list
+  (url only) or a term list (any of url, title, text; `db.CheckScope`;
+  untyped lists that mixed url and page were split by `migrateListTypes`,
+  then `fillListTypes` typed everything, clusters too). A term list's url
+  terms reach the extension as `url_terms` and are matched in the address
+  read as words (`kc9kUrlWords`, R-PHRASE-6); only address lists feed hosts,
+  firewall and policy. Each blacklist ticks its
   actions (block / greyscale / no-images, `actions.go`) with, per action, two
   counts for page text: distinct entries (threshold) and total hits. An exception list spares pages
   from its own block's blacklists only. Only url blacklists with `block` feed
@@ -351,7 +356,7 @@ Android companion app: see `android/CLAUDE.md` (it runs this extension in IronFo
 Full usage and examples in `README.md`. Summary:
 `cluster list | show | create [--phrases] [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
 `phrase-set show | create [--url --title --text] | add | remove | scope | action | threshold | test | rename | delete | export | import`,
-`list show | create [--exceptions --url --title --text] | rename | delete | add | remove | scope | action |
+`list show | create [--exceptions --terms --url --title --text] | rename | delete | add | remove | scope | action |
 threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
 `bypass` (old name `nepsis`) `[set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,
 `block create [--allowlist] [--template T] | add | add-exception | add-app | add-title | remove-title |

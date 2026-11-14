@@ -18,10 +18,12 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 
@@ -62,6 +64,11 @@ var phraseSetShowCmd = &cobra.Command{
 		}
 		if len(sets) == 0 {
 			fmt.Printf("Block '%s' has no phrase sets.\n", args[0])
+		}
+		if len(args) == 2 {
+			if _, err := database.FindPhraseSet(args[0], args[1]); err != nil {
+				return err
+			}
 		}
 		for _, s := range sets {
 			if len(args) == 2 && !strings.EqualFold(s.Name, args[1]) {
@@ -158,22 +165,28 @@ var phraseSetRemoveCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if err := ensureEditable(database, args[0], false); err != nil {
-			return err
-		}
+		// Every phrase must be there before any is removed.
+		var phrases []db.Phrase
 		for _, text := range args[2:] {
 			p, err := db.ParsePhrase(text)
 			if err != nil {
 				return fmt.Errorf("%q: %w", text, err)
 			}
-			if ok, err := database.RemovePhrase(s.ID, p); err != nil {
-				return err
-			} else if !ok {
+			if !slices.ContainsFunc(s.Phrases, func(q db.Phrase) bool { return q.String() == p.String() }) {
 				return fmt.Errorf("'%s' has no phrase %s", s.Name, p)
+			}
+			phrases = append(phrases, p)
+		}
+		if err := ensureEditable(database, args[0], false); err != nil {
+			return err
+		}
+		for _, p := range phrases {
+			if _, err := database.RemovePhrase(s.ID, p); err != nil {
+				return err
 			}
 		}
 		fmt.Printf("Removed from '%s' of '%s'.\n", s.Name, args[0])
-		return reapplyIfActive(database, args[0])
+		return settle(database, args[0])
 	}),
 }
 
@@ -210,7 +223,7 @@ var phraseSetActionCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		action := args[2]
+		action := strings.ToLower(args[2])
 		if !db.IsAction(action) {
 			return fmt.Errorf("unknown action %q (use %s)", action, strings.Join(db.ActionNames, ", "))
 		}
@@ -218,6 +231,12 @@ var phraseSetActionCmd = &cobra.Command{
 			return fmt.Errorf("use 'on' or 'off'")
 		}
 		on := args[3] == "on"
+		if on && action == db.ActionMonk && args[0] == enforce.MonkBlock {
+			return fmt.Errorf("monk mode's own block can't start monk mode (R-MONK-1)")
+		}
+		if !on && (cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for")) {
+			return fmt.Errorf("--url, --image and --for only go with 'on'")
+		}
 		if !on && len(s.Actions) == 1 && s.Actions[0].Name == action {
 			return fmt.Errorf("a phrase set keeps at least one action")
 		}
@@ -238,7 +257,7 @@ var phraseSetActionCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("'%s' of '%s': %s %s\n", s.Name, args[0], action, args[3])
-		return reapplyIfActive(database, args[0])
+		return settle(database, args[0])
 	}),
 }
 
@@ -327,7 +346,7 @@ var phraseSetDeleteCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("Phrase set '%s' removed from '%s'.\n", s.Name, args[0])
-		return reapplyIfActive(database, args[0])
+		return settle(database, args[0])
 	}),
 }
 

@@ -974,22 +974,24 @@ function kc9kPhraseCheck(phrase) {
   if (sets.length < 2) {
     return "a phrase needs at least two word sets";
   }
-  let into = 0;
-  let out = 0;
-  let middle = false;
-  for (const set of sets) {
-    for (const raw of set.terms || []) {
-      const term = kc9kPhraseTerm(raw);
-      into += term.into ? 1 : 0;
-      out += term.out ? 1 : 0;
-      middle = middle || (term.into && term.out);
+  // Which word sets hold a bridge's start (big-) and end (-gorilla).
+  const terms = sets.map((set) => (set.terms || []).map(kc9kPhraseTerm));
+  const outs = terms.map((ts) => ts.some((t) => t.out));
+  const ins = terms.map((ts) => ts.some((t) => t.into));
+  const elsewhere = (has, ...skip) => has.some((h, i) => h && !skip.includes(i));
+  for (let i = 0; i < sets.length; i++) {
+    for (const term of terms[i]) {
+      if (term.into && term.out) {
+        if (sets.length < 3) {
+          return "a middle link (-term-) needs at least three word sets";
+        }
+        if (!outs.some((o, a) => o && a !== i && elsewhere(ins, i, a))) {
+          return "a middle link needs a term ending in - and one starting with -, each in another set";
+        }
+      } else if ((term.into && !elsewhere(outs, i)) || (term.out && !elsewhere(ins, i))) {
+        return "a bridge needs both ends: a term ending in - and one starting with - in another set";
+      }
     }
-  }
-  if ((into > 0) !== (out > 0)) {
-    return "a bridge needs both ends: a term ending in - and one starting with - in another set";
-  }
-  if (middle && sets.length < 3) {
-    return "a middle link (-term-) needs at least three word sets";
   }
   return "";
 }

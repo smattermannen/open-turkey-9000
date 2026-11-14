@@ -114,9 +114,16 @@ Last checked against the code: 2026-11-13.
       `kc9kPhraseCheck` in `match.js`: word sets, necessary/optional,
       length, one term per set, adjacency, sentence breaks, hyphens and
       apostrophes, bridges and middle links, url scope), tested on SPEC's
-      examples in `ci/match_test.js`. Left: phrase sets in the database,
-      CLI, rules feed and extension, GUI, export/import, clusters and
-      categories, and turning existing combinations into phrases. (L)
+      examples in `ci/match_test.js`. Also done: phrase sets in the
+      database (`db/phrases.go`), `kc9k phrase-set` (tested in
+      `cli/phrases_test.go`: R-PHRASE-1, 8, 9, locks), the rules feed and
+      the extension, and the GUI (a phrase set card per set on the
+      Websites tab, `PhraseDialog`; `ci/gui_phrase_smoke.py`). Left:
+      export/import, clusters and categories, and turning existing
+      combinations into phrases. (L)
+- [ ] **List names differ only in case** (§3.2): `list create b words`
+      succeeds beside `Words`, while lists are looked up without regard to
+      case, so one of them can't be reached. Phrase sets refuse this. (S)
 
 ### 0.2 Not yet confirmed in real use
 
@@ -171,7 +178,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Window title entry | Built | X11 only; never in browsers (R-TITLE-1) |
 | Rendered term | Built | |
 | Phrase (formerly word combination) | Differs | built inside text and title lists: every box necessary, no length, `:N` takes several words from one box, no bridges, no URL |
-| Phrase set | Not built | |
+| Phrase set | Partial | `kc9k phrase-set`, rules feed, extension and GUI; export/import: Not built |
 
 ### §3.2 Grouping
 
@@ -261,7 +268,7 @@ checklist entry with the exact commands; what can be scripted goes into `ci/`.
 | Threshold, hit count (rendered terms) | Built | per action; both must be met (R-LIST-6) |
 | Strongest action across blocks | Unchecked | close tab, image, redirect, block page is built within a page |
 | Matching details (R-LIST-4, R-LIST-5) | Unchecked | case is ignored; accents, look-alike letters, hidden text, frames: Unchecked |
-| Threshold (phrase sets) | Not built | |
+| Threshold (phrase sets) | Built | per action, different phrases (R-PHRASE-9); no hit count, no rate |
 | Rate | Not built | |
 | Ad trigger | Not built | section 2.2 |
 

@@ -141,6 +141,18 @@ build and is **used for real**. On it:
   picks the strongest page action, closes the tab and browser itself, and
   POSTs `/hit` (`enforce/hits.go`, extension header required) so the daemon
   logs the event and runs logout/shutdown/monk.
+- **Phrase sets** (`internal/db/phrases.go`, `internal/cli/phrases.go`,
+  `kc9k phrase-set …`, R-PHRASE-1 to 10): named sets of phrases in a block
+  (scope, actions with a threshold of different phrases, test mode). A
+  phrase is JSON (`db.Phrase`: word sets, necessary or optional, length),
+  typed as `[a, b] [c]? :N` (`ParsePhrase`, `String`); `Check` refuses
+  one-ended bridges per term (mirrored by `kc9kPhraseCheck`). They reach the
+  extension as `lists` rules with negative IDs (`phraseRules`), matched by
+  `kc9kPhraseMatcher`; `HasPhrases` makes a block non-empty. Names are
+  unique regardless of case. `gui-state` gives each block `phrase_sets`;
+  the GUI shows them as `PhraseSetCard` (a `ListCard` keyed by minus the
+  set's ID) with `PhraseDialog`. `ci/gui_phrase_smoke.py` is the GUI smoke
+  test for them (builds its own binary and scratch database).
 - **Clusters** (`internal/db/clusters.go`, `internal/cli/clusters.go`,
   `kc9k cluster …`): website lists outside any block (name, where, entries;
   no kind, no actions, never enforced, always editable). `cluster copy`
@@ -310,6 +322,7 @@ Android companion app: see `android/CLAUDE.md` (it runs this extension in IronFo
 
 Full usage and examples in `README.md`. Summary:
 `cluster list | show | create [--url --title --text] | rename | delete | add | remove | scope | export | import | copy [--into L | --as N] [--exceptions] | save`,
+`phrase-set show | create [--url --title --text] | add | remove | scope | action | threshold | test | rename | delete`,
 `list show | create [--exceptions --url --title --text] | rename | delete | add | remove | scope | action |
 threshold | hits | export | import` (`action … on --url/--image/--for`), `monk --for D`,
 `bypass` (old name `nepsis`) `[set --count N --within D --then C [--then-for D] [--block B] [lock flags] | off | unlock]`,

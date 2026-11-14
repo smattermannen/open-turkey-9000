@@ -107,9 +107,9 @@ Last checked against the code: 2026-11-14.
       extension or not) with one-click "Install extension". (M)
 - [ ] **Project** (§3.13): *backup* (with places and place rules) and
       *share* (`--share`, without them) are built, with a preview on import
-      and new names for taken block names. A backup still leaves out
-      running locks, passwords, hotkeys and statistics: whether "everything"
-      includes those is for the owner to say. (S)
+      and new names for taken block names. Left: a backup is
+      everything (§3.13), so running locks, passwords, hotkeys and
+      statistics must go in too (owner, 2026-11-14). (S)
 - [ ] **Words** (§3.14): done in commands, messages and GUI labels: time
       lock, char lock, held, loosen, bypass detection, browser option;
       `kc9k bypass` (alias `nepsis`), `--text-lock`, `list scope` /
@@ -421,19 +421,33 @@ After section 0. Each item's details are in `SPEC.md`; here only the steps.
 - [ ] Firmware lock where `/sys/class/firmware-attributes/` allows it
       (admin password given to someone the user trusts, never random; no
       USB or network boot; fixed boot order); a guide elsewhere.
-- [ ] Boot order guard: put back the EFI boot order, clear `BootNext`.
 - [ ] Installer media guard: block OS image sites, close USB writing tools
       (mintstick, balenaEtcher, Ventoy, Popsicle, Startup Disk Creator,
       GNOME Disks restoring an image).
-- [ ] Other systems in GRUB behind the password.
-- [ ] Root paths: hide recovery entries, lock `init=`/`single` editing, lock
-      root login on TTYs and `su` during a lock. Needs a disposable machine.
-- [ ] A guided setup when turning on strict mode or no-escape.
+- [ ] Root login on TTYs and `su` during a lock: a PAM guard line (refuse
+      root) in `login`, `su` and `su-l`, installed and removed with strict
+      mode's lockdown (`ApplyLockdown`/`RemoveLockdown`), so `kc9k master`
+      lifts it too. Hiding recovery entries and locking `init=`/`single`
+      editing are done (the boot lock). Test on generated config, not a
+      boot.
+- [ ] A guided setup when turning on strict mode or no-escape: on a
+      terminal, a checklist (GRUB present, UEFI or BIOS, other systems
+      found, firmware password, USB boot still works) before typing yes.
 
-### 2.7 The rest of section 1
+### 2.7 Hardening and polish
 
-Everything marked Not built or Partial above, in an order agreed with the
-owner.
+- [ ] **Rules server secret.** Any local program can send the
+      `X-KC9K-Extension` header to `127.0.0.1:47613`. Give the extension a
+      secret by policy and require it. (M)
+- [ ] **Audit the sudo rule.** Anything running as the user can run `kc9k`
+      as root: check every command for hostile arguments (symlinks, `..`,
+      files written under `/etc`). Keep `env_reset` (never `sudo -E`). (M)
+- [ ] **The typing challenge in its own GTK window** instead of a
+      terminal. (M)
+
+### 2.8 The rest of section 1
+
+Everything marked Not built or Partial above.
 
 ---
 
@@ -450,22 +464,9 @@ owner.
 
 ## 4. After publishing
 
-- **Page score (L)** — §1.4. Needs 2.2 first.
 - **Windows support (L)** — §1.4. A port behind a platform layer: everything
   in `internal/blocker/` is Linux-specific.
 
 ## 5. Proposed, not agreed
 
-Ideas from earlier sessions that nothing in `SPEC.md` asks for yet. Raise
-them with the owner before building; move an item into `SPEC.md` (and out of
-here) once agreed, or delete it.
-
-- **Rules server secret.** Any local program can send the
-  `X-KC9K-Extension` header to `127.0.0.1:47613`: read the lists, post fake
-  statistics, or make the extension guard believe a browser checked in. A
-  secret given to the extension by policy would stop that.
-- **Audit the sudo rule.** Anything running as the user can run `kc9k` as
-  root: check every command for hostile arguments (symlinks, `..`, files
-  written under `/etc`). Keep `env_reset` (never `sudo -E`).
-- **A first-run wizard** when there are no blocks.
-- **The typing challenge in its own GTK window** instead of a terminal.
+Nothing at the moment.

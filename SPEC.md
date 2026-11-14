@@ -97,8 +97,6 @@ circadian rhythm support.
 
 ### 1.4 After publishing
 
-- A **page score**: KC9K weighs what a page delivers (word frequencies, ad
-  networks, page layout) and acts on the score.
 - **Windows support.**
 
 ---
@@ -288,7 +286,7 @@ extension is required, and tamper protection settings (§4.10) can't be turned o
 | **Strict mode** | A setting against tampering, off by default because it makes the computer less usable. While it is on and a block is locked: no `sudo` or `pkexec`; nothing runs from `/home` or `/tmp` except from folders the user exempted (adding one is a weakening); no containers or VMs. It can have its own setting lock. | — |
 | **No-escape** | Closes the boot-time exits: hides recovery entries and kernel options, and puts a password nobody knows on GRUB. | Strict mode. |
 | **Factory reset** | Wiping or reinstalling the operating system, or booting another one, to get past KC9K. Software can't forbid it. | — |
-| **Factory reset protection** | Settings that make a factory reset slow and deliberate: firmware lock, boot order guard, installer media guard, other systems in GRUB behind the password. | — |
+| **Factory reset protection** | Settings that make a factory reset slow and deliberate: firmware lock, installer media guard. Without a firmware password the firmware's own boot menu can't be closed, so the rest is friction. | — |
 
 ### 3.9 Actions
 
@@ -304,7 +302,6 @@ extension is required, and tamper protection settings (§4.10) can't be turned o
 | **Hit count** | Set per action, for lists only (page text): how many matches in total, repeats included. |
 | **Rate** | Set per action, for lists only (page text): matches ÷ words on the page, as a percentage. Counted only on pages of at least 200 words. |
 | **Ad trigger** | A planned fourth scope beside url, title and text: the ad networks a page loads, named by industry (gambling, adult, …). |
-| **Page score** | *After publishing:* a score for what a page delivers, from its words, ads and layout; lists act on a score above a threshold. |
 
 ### 3.10 Bypass prevention
 
@@ -366,7 +363,7 @@ mode, unless no-escape is on.
 | allowance (for earned break time) | reward | |
 | session break | session limit | |
 | option (for `polite-close` …), browser option | behaviour setting, browser setting | |
-| nepsis, bypass detection | bypass prevention | the command is `kc9k bypass`; *Nepsis* will be the app's name at launch (§6) |
+| nepsis, bypass detection | bypass prevention | the command is `kc9k bypass`; *Nepsis* becomes the app's name at publishing |
 | rule (for a block or list) | block, list, entry | "rule" is only for rule IDs, place rules and the extension's `rules` feed |
 | blocklist | blacklist | |
 | word combination, page word, keyword | phrase, rendered term | |
@@ -616,7 +613,7 @@ Made with the owner. Newest last.
   never counted by bypass prevention.
 - 2026-11-10: Places use Wi-Fi only (no GPS). One ladder for all detectors
   (no ladder per detector).
-- 2026-11-12: Windows support and the page score come after publishing.
+- 2026-11-12: Windows support comes after publishing.
 - 2026-11-12: KC9K gets settings to make a factory reset hard, as far as
   software allows.
 - 2026-11-12: "Layered sequential locks" means several locks on one block,
@@ -673,6 +670,18 @@ Made with the owner. Newest last.
 - 2026-11-14: Word combinations become phrases once: each box a word set,
   its `:N` (several words from one box) dropped; a phrase set's threshold of
   different phrases does that job. The new phrase sets start at threshold 1.
+- 2026-11-14: The page score is scrapped.
+- 2026-11-14: The root login and `su` guard (PAM) applies only while strict
+  mode's lockdown is on, not whenever no-escape is on. No boot order guard
+  and no "other systems in GRUB behind the password": without a firmware
+  password the firmware boot menu can't be closed, so they would be friction
+  only.
+- 2026-11-14: The extension's rules server is protected by a secret given to
+  the extension by policy, so other local programs can't read the lists, post
+  statistics or fake a check-in. Every command the sudo rule allows is
+  checked for hostile arguments (symlinks, `..`, files under `/etc`). The
+  typing challenge gets its own GTK window instead of a terminal. No
+  first-run wizard.
 - 2026-11-14: No categories: KC9K ships no ready-made lists or phrase sets
   (the 14 lists behind `block create --template` go too). Users build
   their own and keep them as clusters.

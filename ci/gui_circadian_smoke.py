@@ -18,7 +18,9 @@ os.chmod(W, 0o755)
 def cli(*a):
     return subprocess.run([W, *a], capture_output=True, text=True)
 def show():
-    return json.loads(cli("circadian", "show", "--json").stdout)
+    r = cli("circadian", "show", "--json")
+    assert r.returncode == 0, "show failed: " + r.stderr + r.stdout
+    return json.loads(r.stdout)
 # A small PNG to use as a wallpaper.
 def chunk(kind, data):
     return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))

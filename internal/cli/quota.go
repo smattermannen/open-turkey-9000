@@ -109,6 +109,19 @@ var quotaSetCmd = &cobra.Command{
 			return err
 		}
 		var s quota.State
+		// R-LOCK-1: an allowance lifts its block during sessions, so a new
+		// one, or more time, weakens the block: refused while it is locked
+		// (it used to be taken, and only applied at the next refill). An
+		// allowance alone doesn't refuse it: raising waits for the refill.
+		if existing == nil || limit > existing.Limit || (existing.PendingLimit != quota.NoPending && limit > existing.PendingLimit) {
+			hold, err := blockHold(database, name, now)
+			if err != nil {
+				return err
+			}
+			if hold.lockedBesidesAllowance() {
+				return refused(database, name, fmt.Errorf("block '%s' is locked; a new or longer allowance weakens it (%s)", name, strengtheningEdits))
+			}
+		}
 		if existing == nil {
 			s = quota.New(limit, now.Unix(), "")
 			s.Period, s.Refill, s.MaxSessions = per, refill, maxSessions

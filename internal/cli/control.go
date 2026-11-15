@@ -857,7 +857,14 @@ func (h holdState) until() string {
 
 // held reports whether the block currently can't be freely removed/edited.
 func (h holdState) held() bool {
-	return h.scheduleFrozen || h.quota || h.active && (h.charLocked || h.timeLocked() || h.scheduledNow ||
+	return h.quota || h.lockedBesidesAllowance()
+}
+
+// lockedBesidesAllowance is held() without the allowance itself: a lock or
+// schedule lock, which a new or longer allowance must wait for (R-LOCK-1).
+// The allowance alone only delays raising it to its next refill.
+func (h holdState) lockedBesidesAllowance() bool {
+	return h.scheduleFrozen || h.active && (h.charLocked || h.timeLocked() || h.scheduledNow ||
 		h.passwordHash != "" || h.restartLocked || h.extras.Delay > 0 || len(h.layers) > 0)
 }
 

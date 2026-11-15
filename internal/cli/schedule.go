@@ -24,6 +24,7 @@ package cli
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -90,8 +91,11 @@ var scheduleAddCmd = &cobra.Command{
 			}
 		}
 		// An allow window opens a gap in the block: a weakening, refused
-		// while the block is locked (R-LOCK-1). A block window only adds.
-		if allow {
+		// while the block is locked (R-LOCK-1). A block window adds enabled
+		// time to a scheduled block, but the first one makes a continuous
+		// block (enabled always) a scheduled one, enabled only in that
+		// window: a weakening too.
+		if allow || !scheduledBlock(database, name, schedules) {
 			if err := ensureEditable(database, name, false); err != nil {
 				return err
 			}
@@ -317,4 +321,27 @@ func init() {
 	scheduleCmd.AddCommand(scheduleListCmd)
 	scheduleCmd.AddCommand(scheduleRemoveCmd)
 	rootCmd.AddCommand(scheduleCmd)
+}
+
+// scheduledBlock reports whether a block is scheduled (§3.3): enabled only
+// in its block windows or at its places, so another block window adds
+// enabled time. A block without either is continuous.
+func scheduledBlock(database *db.DB, name string, schedules []db.Schedule) bool {
+	for _, s := range schedules {
+		if !s.Allow {
+			return true
+		}
+	}
+	places, err := database.Places()
+	if err != nil {
+		return false
+	}
+	for _, p := range places {
+		for _, b := range p.Blocks {
+			if strings.EqualFold(b, name) {
+				return true
+			}
+		}
+	}
+	return false
 }

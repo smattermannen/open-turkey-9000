@@ -112,6 +112,17 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     Circadian, list cards. L
   - Strict lockdown polkit now allows the backlight helper and colord.
 
+- [x] **Lock-bypass audit 2026-11-15** (R-LOCK-1, §3.5): every command
+  that could weaken a block tried on a locked block that has something of
+  everything (`TestLockedBlockRefusesEveryWeakening`). Two holes found and
+  closed: `allowance set` on a locked block was taken (a new allowance, or
+  a larger one at the next refill: up to a whole day unblocked); the first
+  `schedule add` on a locked continuous block made it enabled only in that
+  window. Both now refused while locked; another window on a scheduled
+  block and a smaller allowance stay free
+  (`TestLockedScheduleAndAllowanceStrengthening`). The old `block.go`
+  commands called `os.Exit`, so they couldn't be tested in-process: they
+  return errors now (same message).
 - [ ] **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
   (`kc9k schedule lock B on --lead D`) replaces built-in schedule/place
   protection, 2 h edit freeze and 24 h allow-window queue (upgrade gives

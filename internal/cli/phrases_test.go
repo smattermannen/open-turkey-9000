@@ -578,7 +578,7 @@ func TestPhraseChange(t *testing.T) {
 		t.Fatalf("after a length change: %v", got)
 	}
 	for _, bad := range [][]string{
-		{"[not] [there]", "[a] [b]"},                     // no such phrase
+		{"[not] [there]", "[a] [b]"},                    // no such phrase
 		{"[eat] [grandpa] [now]? :3", "[-gorilla] [x]"}, // a one-ended bridge
 		{"[eat] [grandpa] [now]? :3", "eat grandpa"},    // not a phrase
 	} {

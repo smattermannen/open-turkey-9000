@@ -190,29 +190,26 @@ var blockAddAppCmd = &cobra.Command{
 	Short: "Add applications to a block",
 	// Same logic as add-site: needs the block name + at least 1 process.
 	Args: cobra.MinimumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		// The names of the processes to block (e.g. "discord", "telegram").
 		processNames := args[1:]
 		for _, p := range processNames {
 			if err := blocker.ValidAppEntry(p); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return err
 			}
 		}
 
 		database, err := openDB()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer database.Close()
 
 		// Blocked apps are killed in both modes, so adding one only
 		// strengthens the block (ensureEditable lets it through).
 		if err := ensureEditable(database, name, true); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		// A program given by its full path is also remembered by its
@@ -223,23 +220,21 @@ var blockAddAppCmd = &cobra.Command{
 			}
 		}
 		if err := database.AddApps(name, processNames); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		active, err := database.IsBlockActive(name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		if active {
 			if err := enforce.ApplyFromDB(database); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return err
 			}
 		}
 
 		fmt.Printf("Applications added to block '%s' successfully.\n", name)
+		return nil
 	},
 }
 
@@ -254,25 +249,22 @@ var blockRemoveAppCmd = &cobra.Command{
 	Use:   "remove-app [block] [processes...]",
 	Short: "Remove applications from a block",
 	Args:  cobra.MinimumNArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		processNames := args[1:]
 
 		database, err := openDB()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer database.Close()
 
 		detail, err := database.GetBlock(name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		if err := requireAll("app", name, detail.Apps, processNames); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		// A path's contents entry (see add-app) goes with it.
 		for _, p := range args[1:] {
@@ -284,44 +276,39 @@ var blockRemoveAppCmd = &cobra.Command{
 		}
 		proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditRemoveApps, Values: processNames})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		if !proceed {
-			return
+			return nil
 		}
 
 		if err := database.RemoveApps(name, processNames); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		active, err := database.IsBlockActive(name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		if active {
 			detail, err := database.GetBlock(name)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return err
 			}
 
 			if blockEmpty(detail) {
 				if err := database.DeactivateBlock(name); err != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-					os.Exit(1)
+					return err
 				}
 			}
 
 			if err := enforce.ApplyFromDB(database); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return err
 			}
 		}
 
 		fmt.Printf("Applications removed from block '%s' successfully.\n", name)
+		return nil
 	},
 }
 
@@ -337,25 +324,23 @@ var blockRemoveAppCmd = &cobra.Command{
 var blockListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all blocks",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		database, err := openDB()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer database.Close()
 
 		// ListBlocks returns a slice (list) of blocks with counts.
 		blocks, err := database.ListBlocks()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		// If there are no registered blocks, show a friendly message.
 		if len(blocks) == 0 {
 			fmt.Println("No blocks registered.")
-			return
+			return nil
 		}
 
 		// Print the table header.
@@ -371,6 +356,7 @@ var blockListCmd = &cobra.Command{
 			// %s for the creation date.
 			fmt.Printf("%-20s %-8d %-6d %s\n", b.Name, b.EntryCount, b.AppCount, b.CreatedAt)
 		}
+		return nil
 	},
 }
 
@@ -387,25 +373,22 @@ var blockInfoCmd = &cobra.Command{
 	Use:   "info [name]",
 	Short: "Show details of a block",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
 		database, err := openDB()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer database.Close()
 		if err := revealBlock(database, name); err != nil { // §3.11
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		// GetBlock returns a pointer to a BlockDetail with all the information.
 		block, err := database.GetBlock(name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		// Show the block's basic information.
@@ -423,8 +406,7 @@ var blockInfoCmd = &cobra.Command{
 			}
 			trusted, err := database.TrustedNow(time.Now())
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return err
 			}
 			if block.LockedUntil > trusted {
 				status += fmt.Sprintf(" [Timer-locked until %s]", time.Unix(block.LockedUntil, 0).Format("2006-01-02 15:04"))
@@ -490,6 +472,7 @@ var blockInfoCmd = &cobra.Command{
 				fmt.Printf("  [%d] %s (at %s)\n", p.Num, p.Edit, time.Unix(p.ApplyAt, 0).Format("2006-01-02 15:04"))
 			}
 		}
+		return nil
 	},
 }
 
@@ -508,38 +491,33 @@ var blockRemoveCmd = &cobra.Command{
 	Use:   "remove [name]",
 	Short: "Remove a block",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
 		database, err := openDB()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		defer database.Close()
 
 		detail, err := database.GetBlock(name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		proceed, err := gateEdit(cmd, database, name, false, db.Edit{Action: db.EditRemoveBlock})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		if !proceed {
-			return
+			return nil
 		}
 		// An active block must be switched off first (R-LOCK-3; only the
 		// user switches blocks on and off, §3.3).
 		if detail.Active {
-			fmt.Fprintf(os.Stderr, "Error: block '%s' is on. Switch it off first ('kc9k stop %s')\n", name, name)
-			os.Exit(1)
+			return fmt.Errorf("block '%s' is on. Switch it off first ('kc9k stop %s')", name, name)
 		}
 		if err := database.RemoveBlock(name); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		// §4.3: a removed draft, or a removed block's draft, is forgotten.
 		_ = database.SetSetting(settingDraftOf+name, "")
@@ -548,12 +526,12 @@ var blockRemoveCmd = &cobra.Command{
 		}
 		if detail.Active {
 			if err := enforce.ApplyFromDB(database); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				return err
 			}
 		}
 
 		fmt.Printf("Block '%s' removed successfully.\n", name)
+		return nil
 	},
 }
 

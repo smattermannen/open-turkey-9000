@@ -282,6 +282,10 @@ THEME_DIRS = ("/usr/share/themes", os.path.expanduser("~/.themes"),
               os.path.expanduser("~/.local/share/themes"))
 
 
+LOGIN_DESKTOP = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+                             "autostart", "kc9k-gui.desktop")
+
+
 def load_prefs():
     try:
         with open(PREFS_PATH) as f:
@@ -1431,6 +1435,13 @@ class StatTile(Gtk.Box):
 
 
 DAY_NAMES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+# §4.10 preference: the week starts on Monday (0) or Sunday (6).
+FIRST_DAY = 0
+
+
+def column_day(column):
+    """The day (0 = Monday) shown in a schedule grid column."""
+    return (column + FIRST_DAY) % 7
 
 
 class WeekCalendar(Gtk.DrawingArea):
@@ -1474,8 +1485,8 @@ class WeekCalendar(Gtk.DrawingArea):
 
     @staticmethod
     def weekday_bit(column):
-        """Monday is column 0; the day bits start at Sunday."""
-        return 1 << ((column + 1) % 7)
+        """The column's day as a schedule day bit (the bits start at Sunday)."""
+        return 1 << ((column_day(column) + 1) % 7)
 
     def window_at(self, column, minute):
         for index, w in enumerate(self.windows):
@@ -1546,8 +1557,8 @@ class WeekCalendar(Gtk.DrawingArea):
             cr.move_to(x, top)
             cr.line_to(x, top + height)
             cr.stroke()
-        for column, name in enumerate(DAY_NAMES):
-            layout.set_text(name.capitalize(), -1)
+        for column in range(7):
+            layout.set_text(DAY_NAMES[column_day(column)].capitalize(), -1)
             w, _h = layout.get_pixel_size()
             cr.set_source_rgba(*text)
             cr.move_to(left + column * column_width + column_width / 2 - w / 2, 4)
@@ -4238,7 +4249,7 @@ class Window(Gtk.ApplicationWindow):
     def create_window_from_calendar(self, column, start, end):
         if not self.selected:
             return
-        day, frm, to = DAY_NAMES[column], f"{start // 60:02d}:{start % 60:02d}", f"{end // 60:02d}:{end % 60:02d}"
+        day, frm, to = DAY_NAMES[column_day(column)], f"{start // 60:02d}:{start % 60:02d}", f"{end // 60:02d}:{end % 60:02d}"
         if self.confirm(f"Add {day.capitalize()} {frm}-{to} to {self.selected}?",
                         "The block turns on by itself then. To repeat it on other days, type "
                         "them in the list below, e.g. weekdays " + frm + " " + to + ".", "Add"):
@@ -4859,6 +4870,30 @@ class Window(Gtk.ApplicationWindow):
         self.top_empty.set_visible(not top)
 
     # Settings ------------------------------------------------------------
+    def choose_first_day(self, combo):
+        global FIRST_DAY
+        app = self.get_application()
+        app.prefs["first_day"] = combo.get_active_id()
+        FIRST_DAY = 6 if app.prefs["first_day"] == "sunday" else 0
+        save_prefs(app.prefs)
+        if hasattr(self, "calendar"):
+            self.calendar.queue_draw()
+
+    def toggle_open_at_login(self, _switch, wanted):
+        """§4.10: a desktop autostart entry for this window."""
+        try:
+            if wanted:
+                os.makedirs(os.path.dirname(LOGIN_DESKTOP), exist_ok=True)
+                with open(LOGIN_DESKTOP, "w") as f:
+                    f.write("[Desktop Entry]\nType=Application\nName=Killer Chicken 9000\n"
+                            "Exec=kc9k-gui\nIcon=changes-prevent\nTerminal=false\n")
+            elif os.path.exists(LOGIN_DESKTOP):
+                os.remove(LOGIN_DESKTOP)
+        except OSError as error:
+            self.message(f"Can't change opening at login: {error}")
+            return True
+        return False
+
     def choose_theme(self, combo):
         app = self.get_application()
         app.prefs["theme"] = combo.get_active_id()
@@ -4878,7 +4913,19 @@ class Window(Gtk.ApplicationWindow):
         row = Gtk.Box(spacing=16)
         row.pack_start(Gtk.Label(label="Theme", xalign=0), True, True, 0)
         row.pack_end(theme, False, False, 0)
-        box.pack_start(section("Preferences", row), False, False, 0)
+        first_day = Gtk.ComboBoxText(valign=Gtk.Align.CENTER)
+        first_day.append("monday", "Monday")
+        first_day.append("sunday", "Sunday")
+        first_day.set_active_id(self.get_application().prefs.get("first_day", "monday"))
+        first_day.connect("changed", self.choose_first_day)
+        day_row = Gtk.Box(spacing=16)
+        day_row.pack_start(Gtk.Label(label="First day of the week", xalign=0), True, True, 0)
+        day_row.pack_end(first_day, False, False, 0)
+        self.login_switch = Gtk.Switch(valign=Gtk.Align.CENTER, active=os.path.exists(LOGIN_DESKTOP))
+        self.login_switch.connect("state-set", self.toggle_open_at_login)
+        box.pack_start(section("Preferences", row, day_row,
+                               self.switch_row(self.login_switch, "Open at login",
+                                               "Start this window when you sign in.")), False, False, 0)
 
         self.no_weakening_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.no_weakening_switch.connect("state-set", self.toggle_no_weakening)
@@ -5559,6 +5606,8 @@ class App(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
         self.prefs = load_prefs()
+        global FIRST_DAY
+        FIRST_DAY = 6 if self.prefs.get("first_day") == "sunday" else 0
         self.theme = Theme()
         self.theme.apply(self.prefs.get("theme", "system"))
 

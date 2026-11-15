@@ -20,6 +20,7 @@ def cli(*a):
     return subprocess.run([W, *a], capture_output=True, text=True)
 def state():
     return json.loads(cli("gui-state").stdout)
+os.environ["XDG_CONFIG_HOME"] = os.path.join(S, "config")  # never the real ~/.config
 spec = importlib.util.spec_from_file_location("gui", os.path.join(ROOT, "gui", "kc9k-gui.py"))
 gui = importlib.util.module_from_spec(spec); spec.loader.exec_module(gui)
 gui.CLI = W
@@ -163,6 +164,15 @@ win.strict_exempt.on_add([exempt]); settle()
 check(state()["strict_exempt"] == [exempt], "exempt folder added from the list")
 win.strict_exempt.on_remove(exempt, 1); settle()
 check(state()["strict_exempt"] == [], "exempt folder removed")
+
+# §4.10 preferences: open at login writes an autostart entry; first day.
+win.toggle_open_at_login(None, True)
+check(os.path.exists(gui.LOGIN_DESKTOP) and gui.LOGIN_DESKTOP.startswith(S), "open at login entry written (in the test folder)")
+win.toggle_open_at_login(None, False)
+check(not os.path.exists(gui.LOGIN_DESKTOP), "open at login entry removed")
+gui.FIRST_DAY = 6
+check(gui.column_day(0) == 6 and win.calendar.weekday_bit(0) == 1, "Sunday first: column 0 is Sunday")
+gui.FIRST_DAY = 0
 
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")

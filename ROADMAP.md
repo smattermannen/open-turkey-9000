@@ -148,7 +148,7 @@ Only items not simply Built.
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters. "All searches containing…" not built |
 | §4.5 Grid drag-move, copy to days, similar windows | Not built | |
 | §4.9 Statistics per user, times blocked, top N, filter, private windows | Not built | |
-| §4.10 Preferences | Partial | theme built; clock, first day, slider, login: Unchecked; tray Not built |
+| §4.10 Preferences | Partial | theme, first day of the week (schedule grid), open at login built; 24-hour clock choice, darkness slider, tray: Not built |
 | §4.10 Notifications choice | Built | `kc9k notifications`, GUI group; window start/end, timer lock end, Pomodoro, allowance, app closed; advance minutes. Live: Unchecked |
 
 ## 2. Next features (after §0)

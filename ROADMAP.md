@@ -34,8 +34,8 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
   strict mode, global ladder); active vs enabled for schedules and places
   (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
   scheduled blocks on once); allowance sessions lift their block (it stays
-  on); the GUI block start dialog asks the unlock order. Not built:
-  hardware/internet clock check (see §5); order in the setting lock dialogs. (L)
+  on); the GUI block start and setting lock dialogs ask the unlock order. Not built:
+  hardware/internet clock check (see §5). (L)
 - [ ] **Android extension can be switched off** (§3.13): built (5 s grace
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unchecked: unit tests not run (no JDK/Android SDK on the

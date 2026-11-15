@@ -81,7 +81,9 @@ func TestBreakAllowance(t *testing.T) {
 		t.Error("relock was accepted on a locked block")
 	}
 	mustRun(t, "break", "allowance", "b", "5m", "--per", "1h")
-	if k, _ = d.GetBreaks("b"); k.Allowance != 300 || k.Balance() != 300 {
+	// The balance kept what ending early gave back (a slow run takes a
+	// second or so off it), capped by the new allowance.
+	if k, _ = d.GetBreaks("b"); k.Allowance != 300 || k.Balance() < 240 || k.Balance() > 300 {
 		t.Errorf("after lowering: %+v", k)
 	}
 	mustRun(t, "break", "allowance", "b", "off")

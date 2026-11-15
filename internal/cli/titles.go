@@ -10,6 +10,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"strings"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -55,6 +56,9 @@ block stricter, so it is always allowed.`,
 			return err
 		}
 		fmt.Printf("Window titles added to block '%s'.\n", name)
+		if warning := blocker.DesktopWarning(); warning != "" {
+			fmt.Println("Note:", warning) // R-DESKTOP-1
+		}
 		return nil
 	}),
 }

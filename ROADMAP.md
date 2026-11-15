@@ -132,7 +132,6 @@ Only items not simply Built.
 | §3.8 R-LOCK-12 | Partial | see 0.1 |
 | §3.8 Strict mode exempt folders | Not built | |
 | §3.8 Forgotten password recovery | Partial | root removes it while nothing locked |
-| §3.8 R-DESKTOP-1 | Unchecked | |
 | §3.8 Factory reset protection | Not built | 2.6 |
 | §3.9 No downloads | Not built | 2.3 |
 | §3.9 Strongest action across blocks | Unchecked | built within a page |

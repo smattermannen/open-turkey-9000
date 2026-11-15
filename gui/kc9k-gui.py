@@ -3153,6 +3153,10 @@ class Window(Gtk.ApplicationWindow):
         for tile in (self.tile_active, self.tile_sites, self.tile_apps):
             tiles.pack_start(tile, False, False, 0)
         box.pack_start(tiles, False, False, 0)
+        # R-DESKTOP-1: on Wayland or another desktop, titles and app time may not work.
+        self.dash_desktop = dim("", wrap=True)
+        self.dash_desktop.set_no_show_all(True)
+        box.pack_start(self.dash_desktop, False, False, 0)
 
         self.dash_locks = dim("")
         box.pack_start(section("Device", self.dash_locks), False, False, 0)
@@ -3180,6 +3184,9 @@ class Window(Gtk.ApplicationWindow):
         return scroll
 
     def update_dashboard(self):
+        warning = self.state.get("desktop_warning") or ""
+        self.dash_desktop.set_text(warning)
+        self.dash_desktop.set_visible(bool(warning))
         active = [b for b in self.state["blocks"] if b["active"]]
         self.tile_active.set_value(str(len(active)))
         for row in self.dash_blocks.get_children():

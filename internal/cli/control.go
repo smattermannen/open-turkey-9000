@@ -707,6 +707,9 @@ var statusCmd = &cobra.Command{
 		}
 		fmt.Println()
 		fmt.Println("Browser extension:", extensionStatus(database))
+		if warning := blocker.DesktopWarning(); warning != "" {
+			fmt.Println("Desktop:", warning) // R-DESKTOP-1
+		}
 		if set, err := settingsPasswordSet(database); err == nil && set {
 			msg := "Settings password: on (weakening asks for it"
 			if v, _ := database.GetSetting(SettingPasswordForLocks); v == "on" {

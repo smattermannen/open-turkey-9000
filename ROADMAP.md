@@ -195,7 +195,6 @@ Only items not simply Built.
 ## 5. Proposed, not agreed
 
 - DECIDED OVERNIGHT: how to check the clock against hardware and internet
-- DECIDED OVERNIGHT: Where does "normal browsing" for specificity come from? → a word baseline gathered by the extension (per word, pages it showed on; no addresses, no private windows, local), off until the first word recording turns it on; `record baseline off` forgets it, because specificity needs it but gathering everyone's browsing words unasked is more than SPEC asks.
   time (§4.10) → not built yet; trusted time stays CLOCK_BOOTTIME with
   powered-off time not counted, because that is the strictest choice: a
   hardware-clock count would only end timer locks sooner and the hardware
@@ -211,3 +210,9 @@ Only items not simply Built.
   /etc/hosts for every browser, and the extension adds the rest where it
   runs, because requiring it would close Firefox whenever SafeSearch is on,
   a new default behaviour (principle 7).
+- DECIDED OVERNIGHT: where does "normal browsing" for specificity (§3.12)
+  come from? → a word baseline gathered by the extension (per word, the
+  pages it showed on; no addresses, no private windows, local only), off
+  until the first word recording turns it on; `record baseline off`
+  forgets it, because specificity needs it, but gathering browsing words
+  unasked goes beyond what SPEC asks.

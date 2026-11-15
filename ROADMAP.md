@@ -147,7 +147,7 @@ Only items not simply Built.
 | §4.5 Grid drag-move, copy to days, similar windows | Built | drag a window to move it (time; day for one-day windows); click to edit days (copy to days), times, its break, or remove; a window on several days is edited as one; other blocks' windows greyed |
 | §4.9 Statistics: times blocked, top N, search, filter by block | Built | blocked pages counted per site and block (`blocked`, `blocked-block` rows); `stats --top N --search T --block B`; GUI Times blocked view |
 | §4.9 Statistics per user, skip private windows | Not built | |
-| §4.10 Preferences | Partial | theme with darkness slider (dark grey to black), first day of the week (schedule grid), open at login built; 24-hour clock choice, tray: Not built |
+| §4.10 Preferences | Partial | theme with darkness slider (dark grey to black), clock 24-/12-hour (shown times: grid and clip axes, tooltips, pauses; entry fields stay HH:MM), first day of the week (schedule grid), open at login built; tray: Not built |
 | §4.10 Notifications choice | Built | `kc9k notifications`, GUI group; window start/end, timer lock end, Pomodoro, allowance, app closed; advance minutes. Live: Unchecked |
 
 ## 2. Next features (after §0)

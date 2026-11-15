@@ -1592,7 +1592,7 @@ class WeekCalendar(Gtk.DrawingArea):
             cr.line_to(left + 7 * column_width, y)
             cr.stroke()
             if hour % 6 == 0:
-                layout.set_text(f"{hour:02d}:00", -1)
+                layout.set_text(show_hour(hour), -1)
                 w, h = layout.get_pixel_size()
                 cr.set_source_rgba(*muted)
                 cr.move_to(left - 6 - w, y - h / 2)
@@ -1901,8 +1901,33 @@ def kelvin_rgb(kelvin):
 
 
 def clock_text(minute):
+    """HH:MM, as commands and entry fields take it."""
     minute = int(round(minute)) % DAY_MINUTES
     return f"{minute // 60:02d}:{minute % 60:02d}"
+
+
+# §4.10 preference: show times on a 24-hour clock (False: 12-hour, AM/PM).
+CLOCK_24 = True
+
+
+def show_clock(minute, end=False):
+    """A time of day for reading, by the clock preference; end=True shows
+    a window end at midnight as 24:00 (12:00 AM)."""
+    minute = int(round(minute))
+    if not (end and minute >= DAY_MINUTES):
+        minute %= DAY_MINUTES
+    if CLOCK_24:
+        return f"{minute // 60:02d}:{minute % 60:02d}"
+    hour, rest = divmod(minute % DAY_MINUTES, 60)
+    return f"{(hour % 12) or 12}:{rest:02d} {'AM' if hour < 12 else 'PM'}"
+
+
+def show_hour(hour):
+    """An hour label on a time axis, by the clock preference."""
+    if CLOCK_24:
+        return f"{hour:02d}:00"
+    hour %= 24
+    return f"{(hour % 12) or 12} {'AM' if hour < 12 else 'PM'}"
 
 
 def points_text(points):
@@ -2041,7 +2066,7 @@ class ClipEditor(Gtk.DrawingArea):
             cr.move_to(px, y)
             cr.line_to(px, y + h)
             cr.stroke()
-            layout.set_text(f"{hour:02d}:00")
+            layout.set_text(show_hour(hour))
             width, _height = layout.get_pixel_size()
             cr.set_source_rgba(*soft)
             cr.move_to(min(max(px - width / 2, x - 10), x + w - width + 10), y + h + 12)
@@ -2113,13 +2138,13 @@ class ClipEditor(Gtk.DrawingArea):
         index = self.point_at(px, py)
         if index is not None:
             point = self.points[index]
-            tip.set_text(f"{clock_text(point['minute'])}  {self.describe(point['value'])}\n"
+            tip.set_text(f"{show_clock(point['minute'])}  {self.describe(point['value'])}\n"
                          "Drag to move · right-click to remove · double-click to type")
             return True
         if not self.points:
             return False
         minute = (px - x) / w * DAY_MINUTES
-        tip.set_text(f"{clock_text(minute)}  {self.describe(clip_value(self.points, minute))}")
+        tip.set_text(f"{show_clock(minute)}  {self.describe(clip_value(self.points, minute))}")
         return True
 
     def pressed(self, _widget, event):
@@ -2395,7 +2420,7 @@ class CircadianPage(Gtk.ScrolledWindow):
             set_switch(self.lane_switches[name], lane["on"])
             now = (f"now {lane['value']:.0f} {lane['unit']}" if lane["has_value"] else "no points")
             if lane["paused_until"]:
-                until = datetime.datetime.fromtimestamp(lane["paused_until"]).strftime("%H:%M")
+                until = datetime.datetime.fromtimestamp(lane["paused_until"]).strftime("%H:%M" if CLOCK_24 else "%-I:%M %p")
                 now += f" · paused until {until}"
             elif not lane["on"]:
                 now += " · off"
@@ -2452,7 +2477,7 @@ class CircadianPage(Gtk.ScrolledWindow):
         for lane in paused:
             if lane["name"] == "software" and lanes["kelvin"]["paused_until"]:
                 continue  # one pause, said once with the colour temperature
-            until = datetime.datetime.fromtimestamp(lane["paused_until"]).strftime("%H:%M")
+            until = datetime.datetime.fromtimestamp(lane["paused_until"]).strftime("%H:%M" if CLOCK_24 else "%-I:%M %p")
             what = ("Software brightness and colour temperature are"
                     if lane["name"] == "kelvin" else f"{lane['title']} is")
             notes.append((f"{what} paused until {until}, because the level was changed by hand.",
@@ -4405,7 +4430,7 @@ class Window(Gtk.ApplicationWindow):
         if not self.selected:
             return
         day, frm, to = DAY_NAMES[column_day(column)], f"{start // 60:02d}:{start % 60:02d}", f"{end // 60:02d}:{end % 60:02d}"
-        if self.confirm(f"Add {day.capitalize()} {frm}-{to} to {self.selected}?",
+        if self.confirm(f"Add {day.capitalize()} {show_clock(start)}–{show_clock(end, True)} to {self.selected}?",
                         "While the block is on, it is enabled then. To repeat it on other days, type "
                         "them in the list below, e.g. weekdays " + frm + " " + to + ".", "Add"):
             self.run(["schedule", "add", self.selected, "--days", day, "--from", frm, "--to", to])
@@ -5117,6 +5142,15 @@ class Window(Gtk.ApplicationWindow):
         save_prefs(app.prefs)
         app.theme.apply(app.prefs.get("theme", "system"), app.prefs["darkness"])
 
+    def choose_clock(self, combo):
+        global CLOCK_24
+        app = self.get_application()
+        app.prefs["clock_24"] = CLOCK_24 = combo.get_active_id() == "24"
+        save_prefs(app.prefs)
+        self.queue_draw()
+        if hasattr(self, "calendar"):
+            self.calendar.queue_draw()
+
     def choose_first_day(self, combo):
         global FIRST_DAY
         app = self.get_application()
@@ -5176,9 +5210,18 @@ class Window(Gtk.ApplicationWindow):
         day_row = Gtk.Box(spacing=16)
         day_row.pack_start(Gtk.Label(label="First day of the week", xalign=0), True, True, 0)
         day_row.pack_end(first_day, False, False, 0)
+        clock = Gtk.ComboBoxText(valign=Gtk.Align.CENTER)
+        clock.append("24", "24-hour (14:30)")
+        clock.append("12", "12-hour (2:30 PM)")
+        clock.set_active_id("24" if self.get_application().prefs.get("clock_24", True) else "12")
+        clock.connect("changed", self.choose_clock)
+        self.clock_combo = clock  # for tests
+        clock_row = Gtk.Box(spacing=16)
+        clock_row.pack_start(Gtk.Label(label="Clock", xalign=0), True, True, 0)
+        clock_row.pack_end(clock, False, False, 0)
         self.login_switch = Gtk.Switch(valign=Gtk.Align.CENTER, active=os.path.exists(LOGIN_DESKTOP))
         self.login_switch.connect("state-set", self.toggle_open_at_login)
-        box.pack_start(section("Preferences", row, dark_row, day_row,
+        box.pack_start(section("Preferences", row, dark_row, clock_row, day_row,
                                self.switch_row(self.login_switch, "Open at login",
                                                "Start this window when you sign in.")), False, False, 0)
 
@@ -5880,6 +5923,8 @@ class App(Gtk.Application):
         self.prefs = load_prefs()
         global FIRST_DAY
         FIRST_DAY = 6 if self.prefs.get("first_day") == "sunday" else 0
+        global CLOCK_24
+        CLOCK_24 = self.prefs.get("clock_24", True)
         self.theme = Theme()
         self.theme.apply(self.prefs.get("theme", "system"), self.prefs.get("darkness"))
 

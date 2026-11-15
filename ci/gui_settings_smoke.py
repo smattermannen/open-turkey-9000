@@ -203,6 +203,13 @@ win.darkness_scale.set_value(0)
 check(getattr(app.theme, "level", None) == 48, "darkness 0 is dark grey")
 app.theme.apply("system")
 
+# §4.10 clock preference.
+win.clock_combo.set_active_id("12")
+check(app.prefs.get("clock_24") is False and gui.show_clock(14 * 60 + 30) == "2:30 PM"
+      and gui.show_clock(0) == "12:00 AM" and gui.show_hour(12) == "12 PM", "12-hour clock")
+win.clock_combo.set_active_id("24")
+check(gui.show_clock(14 * 60 + 30) == "14:30" and gui.show_clock(1440, True) == "24:00", "24-hour clock")
+
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
 

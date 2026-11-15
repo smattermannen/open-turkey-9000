@@ -160,7 +160,8 @@ Only items not simply Built.
 - **2.1 Circadian rhythm** (§4.10): built. Untried on real hardware: laptop
   backlight, GNOME/MATE, multiple screens. Wayland: no gamma ramps.
   System-following dark pages rely on `prefers-color-scheme`, which
-  LibreWolf reports as light. Not in `project export` yet (S).
+  LibreWolf reports as light. In project files with its wallpapers
+  (`cli/projectcircadian.go`; import only where none is set).
 - **2.2 Ad trigger** (M): fourth scope from third-party requests
   (`webRequest`); shipped ad-network list per industry.
 - **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under

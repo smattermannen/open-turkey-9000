@@ -111,6 +111,8 @@ type projectExport struct {
 	Freezes []windowExport    `json:"frozen_chicken_schedules,omitempty"`
 	Images  map[string]string `json:"images,omitempty"` // name -> base64
 	Backup  *backupExtras     `json:"backup,omitempty"` // backups only
+	// Circadian is the circadian rhythm with its wallpapers (2.1).
+	Circadian *circadianExport `json:"circadian,omitempty"`
 }
 
 func exportWindow(w schedule.Window) windowExport {
@@ -426,6 +428,7 @@ passwords, hotkeys and statistics are never in it.`,
 			}
 			out.Freezes = append(out.Freezes, w)
 		}
+		out.Circadian = exportCircadian(database)
 		if !share {
 			if out.Backup, err = exportBackupExtras(database); err != nil {
 				return err
@@ -788,6 +791,9 @@ With --dry-run, says what would happen and changes nothing.`,
 			if err := importBackupExtras(database, in.Backup, renamed, dry, say); err != nil {
 				return err
 			}
+		}
+		if err := importCircadian(database, in.Circadian, dry, say); err != nil {
+			return err
 		}
 		for _, f := range newFreezes {
 			say("add a scheduled Frozen Chicken: %s (%s)", f.w, f.mode)

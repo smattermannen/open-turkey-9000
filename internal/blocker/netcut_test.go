@@ -25,7 +25,7 @@ func TestR_MONK_2_EthernetLinks(t *testing.T) {
 		}
 	}
 	add("lo", "772", "0x9")
-	add("enp3s0", "1", "0x1003", "device")       // up
+	add("enp3s0", "1", "0x1003", "device")          // up
 	add("enx00e04c680001", "1", "0x1002", "device") // USB adapter, down
 	add("wlp2s0", "1", "0x1003", "device", "wireless", "phy80211")
 	add("docker0", "1", "0x1003")

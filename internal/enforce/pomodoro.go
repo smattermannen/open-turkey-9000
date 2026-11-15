@@ -6,7 +6,6 @@ import (
 	"github.com/smattermannen/kc9k/internal/db"
 )
 
-
 // PomodoroWorking reports whether a block has a Pomodoro cycle that is in a
 // work period now. Its quota session can't be open then: otherwise the
 // quota would be a way out of the work period.

@@ -178,6 +178,13 @@ func activeTitles(active []db.ActiveBlockDetail) []string {
 // Only set while the apply lock is held.
 var deferKills bool
 
+// deferFirewall makes Apply leave filling the firewall to the daemon (see
+// ApplyFromDB): it looks up every blocked site's addresses, which with a
+// huge list takes long, and the daemon keeps the answers (principle 9).
+// Hosts and browser policy, which decide, apply at once; removing the
+// firewall needs no lookups and is done at once too.
+var deferFirewall bool
+
 // Apply forces every layer to match the active blocks. Used by the CLI right
 // after the desired state changes (start, stop, unlock, edit), where the domain
 // set may have changed and we want the effect immediately.
@@ -200,8 +207,10 @@ func apply(active []db.ActiveBlockDetail, cut bool) error {
 		}
 	}
 
-	note(blocker.ApplyHosts(hosts))        // empty list => removes our section
-	note(blocker.ApplyFirewallCut(hosts, cut)) // empty list and no cut => removes the chain
+	note(blocker.ApplyHosts(hosts)) // empty list => removes our section
+	if !deferFirewall || cut || len(hosts) == 0 {
+		note(blocker.ApplyFirewallCut(hosts, cut)) // empty list and no cut => removes the chain
+	}
 	note(blocker.ApplyBrowserPolicies(bp)) // empty policy => removes files
 	if len(apps) > 0 && !deferKills {
 		blocker.KillBlocked(apps)
@@ -241,7 +250,8 @@ func ApplyFromDB(d *db.DB) error {
 	// With polite closing on, the daemon's next cycle asks the apps to
 	// close instead of this killing them outright.
 	deferKills = OptionOn(d, OptionPoliteClose)
-	defer func() { deferKills = false }()
+	deferFirewall = true // the daemon's next cycle fills it, within seconds
+	defer func() { deferKills, deferFirewall = false, false }()
 	return apply(withMonk(d, active, trusted), MonkOn(d, trusted))
 }
 

@@ -48,9 +48,13 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   page (40,000 words) is still one piece (~37 ms). (M)
 - [ ] **Gigantic URL lists** (principle 9). Extension: done (`kc9kIndex`,
   timed at 100,000 in `ci/match_test.js`). Firewall: done (nft sets,
-  iptables fallback). DNS on start: 16 parallel, 30 min cache
-  (`resolveAll`), but still filled before `start` returns. `/etc/hosts`
-  size cost: Unchecked. Left: 100,000-entry speed test in `ci/`. (M)
+  iptables fallback); the CLI no longer fills it (`deferFirewall`), the
+  daemon does within a cycle with its 30 min lookup cache, so `start`
+  doesn't wait for DNS. `/etc/hosts`: measured 15 ms per name lookup at
+  100,000 sites, so capped at `MaxHostsDomains` (20,000, ~3 ms; see §5);
+  drift check one pass (was quadratic). 100,000-site test:
+  `blocker/biglist_test.go`. Left: browser policy with 100,000 entries:
+  Unchecked. (M)
 - [ ] **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
   `project import` refuses monk steps/actions without `--no-confirm-ok`
   (`projectMonk`); both in `confirm_test.go`. `block import` the same. Left: the hotkey
@@ -183,3 +187,8 @@ Only items not simply Built.
   hardware-clock count would only end timer locks sooner and the hardware
   clock can be set in firmware without a firmware password, and an internet
   time query is a new outside query (principle 6) the owner should agree to.
+- DECIDED OVERNIGHT: a huge list in /etc/hosts makes every name lookup on
+  the computer slow (15 ms each at 100,000 sites) → the hosts layer holds
+  at most 20,000 sites, the rest are blocked by the browser policy, the
+  extension and the firewall, because principle 9 says huge lists never
+  slow the computer and those layers already cover every site.

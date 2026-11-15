@@ -229,8 +229,14 @@ def browser_status(browser):
 
 
 def fmt_seconds(seconds):
-    """A remaining time, rounded to minutes: '2 h 5 min', '3 min'."""
-    hours, rest = divmod(int(seconds), 3600)
+    """A remaining time, rounded to minutes: '69 days 10 h', '2 h 5 min',
+    '3 min' (days past a day, so a long timer lock reads as one)."""
+    seconds = int(seconds)
+    if seconds >= 86400:
+        days, rest = divmod(seconds, 86400)
+        hours = rest // 3600
+        return f"{days} day{'s' if days != 1 else ''}" + (f" {hours} h" if hours else "")
+    hours, rest = divmod(seconds, 3600)
     return f"{hours} h {rest // 60} min" if hours else f"{max(rest // 60, 1)} min"
 
 
@@ -265,8 +271,8 @@ def cli_with_access(passwords, args, secret=None, timeout=120):
                    "".join(p + "\n" for p in passwords) + (secret or ""), timeout)
 
 
-AREA_TITLES = {"app": "Killer Chicken 9000", "dashboard": "Dashboard", "blocks": "Blocks",
-               "device": "Device Blocks", "stats": "Statistics", "settings": "Settings"}
+AREA_TITLES = {"app": "Killer Chicken 9000", "dashboard": "Overview", "blocks": "Blocks",
+               "device": "Frozen Chicken", "stats": "Statistics", "settings": "Settings"}
 AREAS = list(AREA_TITLES)
 
 
@@ -382,13 +388,121 @@ def set_switch(switch, value):
     switch.set_state(value)
 
 
-def section(title, *children):
-    """A titled group of widgets."""
+def section(title, *children, help=None, plain=False):
+    """A titled group of widgets: the title, then the widgets on a card
+    (R-GUI-3: grouped, aligned, not a wall). help puts the long explanation
+    behind a ? button; plain leaves the card out (for a list that has its
+    own frame)."""
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-    box.pack_start(heading(title, "medium"), False, False, 0)
+    title_label = heading(title, "medium")
+    if help:
+        row = Gtk.Box(spacing=6)
+        row.pack_start(title_label, False, False, 0)
+        row.pack_start(help_button(help), False, False, 0)
+        box.pack_start(row, False, False, 0)
+        box.kc9k_title = title_label
+    else:
+        box.pack_start(title_label, False, False, 0)
+    inner = box if plain else card()
+    for child in children:
+        inner.pack_start(child, False, False, 0)
+    if not plain:
+        box.pack_start(inner, False, False, 0)
+    return box
+
+
+def card(*children, spacing=10, kind=""):
+    """A rounded, bordered box (R-GUI-3: cards, not boxes in boxes)."""
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=spacing)
+    box.get_style_context().add_class("kc9k-card")
+    if kind:
+        box.get_style_context().add_class(kind)
     for child in children:
         box.pack_start(child, False, False, 0)
     return box
+
+
+def help_button(text):
+    """A small ? that shows a longer explanation in a popover (progressive
+    disclosure: one line on the page, the rest on demand)."""
+    button = Gtk.MenuButton(valign=Gtk.Align.CENTER, tooltip_text="More about this")
+    button.add(Gtk.Label(label="?"))
+    button.get_style_context().add_class("kc9k-help")
+    popover = Gtk.Popover()
+    label = Gtk.Label(label=text, wrap=True, max_width_chars=56, xalign=0, margin=14, selectable=True)
+    popover.add(label)
+    label.show()
+    button.set_popover(popover)
+    button.kc9k_text = text  # for tests
+    return button
+
+
+def pill(text, kind="off"):
+    """A status pill: on, locked, lifted, off or warn."""
+    label = Gtk.Label(label=text)
+    label.get_style_context().add_class("kc9k-pill")
+    label.get_style_context().add_class(kind)
+    return label
+
+
+def page_header(box, title, subtitle="", help=None):
+    """A page's title and its one-line subtitle (R-GUI-3)."""
+    head = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    top = Gtk.Box(spacing=8)
+    label = Gtk.Label(label=title, xalign=0)
+    label.get_style_context().add_class("kc9k-page-title")
+    top.pack_start(label, False, False, 0)
+    if help:
+        top.pack_start(help_button(help), False, False, 0)
+    head.pack_start(top, False, False, 0)
+    if subtitle:
+        sub = Gtk.Label(label=subtitle, xalign=0, wrap=True)
+        sub.get_style_context().add_class("kc9k-page-subtitle")
+        head.pack_start(sub, False, False, 0)
+    box.pack_start(head, False, False, 0)
+    return head
+
+
+def block_pills(block):
+    """A block's state as pills: on/off, enabled/lifted, and each lock with
+    its time (R-GUI-3: lock state shown where the block appears)."""
+    out = []
+    if not block["active"]:
+        out.append(("Off", "off"))
+    elif block.get("enabled"):
+        out.append(("On", "on"))
+    else:
+        out.append(("Lifted now", "lifted"))
+    if block.get("lock_seconds"):
+        out.append((f"Locked {fmt_seconds(block['lock_seconds'])}", "locked"))
+    if block.get("char_locked"):
+        out.append(("Text lock", "locked"))
+    if block.get("password_locked"):
+        out.append(("Password lock", "locked"))
+    if block.get("restart_locked"):
+        out.append(("Until restart", "locked"))
+    if block.get("delay_left"):
+        out.append((f"Unlocks in {fmt_seconds(block['delay_left'])}", "warn"))
+    elif block.get("delay_seconds"):
+        out.append((f"Delay {fmt_seconds(block['delay_seconds'])}", "locked"))
+    if block.get("timer_after"):
+        out.append((f"Then locked {fmt_seconds(block['timer_after'])}", "locked"))
+    if block.get("range_lock"):
+        out.append((f"Range {block['range_lock']}", "locked" if block.get("range_on") else "off"))
+    if block.get("schedule_lock"):
+        out.append(("Schedule lock", "locked"))
+    if block.get("paused_seconds"):
+        out.append((f"Break {fmt_seconds(block['paused_seconds'])}", "lifted"))
+    if block.get("quota_open"):
+        out.append(("Allowance session", "lifted"))
+    return out
+
+
+def pill_row(pills):
+    row = Gtk.Box(spacing=6)
+    for text, kind in pills:
+        row.pack_start(pill(text, kind), False, False, 0)
+    return row
 
 
 def page_box():
@@ -418,9 +532,9 @@ def block_summary(block):
     # §3.3: active (switched on) and enabled (enforcing now) or lifted.
     parts = [("Active, enabled" if block.get("enabled") else "Active, lifted") if block["active"] else "Inactive"]
     if block["lock_seconds"]:
-        parts.append(f"time-locked for {fmt_seconds(block['lock_seconds'])}")
+        parts.append(f"timer lock, {fmt_seconds(block['lock_seconds'])} left")
     if block["char_locked"]:
-        parts.append("typing challenge to stop")
+        parts.append("text lock")
     if block["password_locked"]:
         parts.append("password-locked")
     if block["restart_locked"]:
@@ -774,6 +888,30 @@ def top_align(box):
     for child in box.get_children():
         child.set_valign(Gtk.Align.START)
     return box
+
+
+def flow_row(row):
+    """Turns a row of widgets into one that wraps onto more lines when the
+    window is narrow (R-GUI-3: works at 1024 pixels wide), in place."""
+    flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, column_spacing=6, row_spacing=6,
+                       homogeneous=False, max_children_per_line=40, valign=Gtk.Align.START,
+                       halign=Gtk.Align.START)
+    for child in row.get_children():
+        row.remove(child)
+        flow.add(child)
+    for holder in flow.get_children():
+        holder.set_can_focus(False)
+    parent = row.get_parent()
+    if parent is not None:
+        index = parent.get_children().index(row)
+        expand, fill, padding, pack = parent.query_child_packing(row) if isinstance(parent, Gtk.Box) else (False, False, 0, 0)
+        parent.remove(row)
+        if isinstance(parent, Gtk.Box):
+            parent.pack_start(flow, expand, fill, padding)
+            parent.reorder_child(flow, index)
+        else:
+            parent.add(flow)
+    return flow
 
 
 def guard_button(button, *fields):
@@ -1468,11 +1606,25 @@ class EditableList(Gtk.Box):
             row.pack_start(self.entry, True, True, 0)
             row.pack_start(add, False, False, 0)
         row.pack_start(remove, False, False, 0)
-        for label_text, handler in (("Import…", on_import), ("Export…", on_export)):
-            if handler:
-                button = Gtk.Button(label=label_text)
-                button.connect("clicked", lambda _b, h=handler: h())
-                row.pack_start(button, False, False, 0)
+        # Import and export behind one small menu, so the row fits a narrow
+        # window (R-GUI-3).
+        files = [(text, handler) for text, handler in (("Import…", on_import), ("Export…", on_export)) if handler]
+        self.file_buttons = {}
+        if files:
+            more = Gtk.MenuButton(tooltip_text="Import or export this list")
+            more.add(Gtk.Image.new_from_icon_name("document-open-symbolic", Gtk.IconSize.BUTTON))
+            popover = Gtk.Popover()
+            menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin=6)
+            for label_text, handler in files:
+                button = Gtk.Button(label=label_text, relief=Gtk.ReliefStyle.NONE)
+                button.get_child().set_xalign(0)
+                button.connect("clicked", lambda _b, h=handler: (popover.popdown(), h()))
+                menu.pack_start(button, False, False, 0)
+                self.file_buttons[label_text] = button
+            menu.show_all()
+            popover.add(menu)
+            more.set_popover(popover)
+            row.pack_start(more, False, False, 0)
         self.pack_start(row, False, False, 0)
         self.conceal()
 
@@ -1568,17 +1720,18 @@ class ListCard(Gtk.Frame):
 
     def __init__(self, window, data):
         super().__init__()
+        self.get_style_context().add_class("kc9k-listcard")
         self.window, self.data = window, data
         self.filling = False
         self.is_exceptions = data["kind"] == "exceptions"
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=14)
         self.add(box)
 
         top = Gtk.Box(spacing=6)
         self.title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
         top.pack_start(self.title, True, True, 0)
         for label, handler in (("Delete…", self.delete), ("Rename…", self.rename)):
-            button = Gtk.Button(label=label)
+            button = Gtk.Button(label=label, relief=Gtk.ReliefStyle.NONE)
             button.connect("clicked", handler)
             top.pack_end(button, False, False, 0)
         box.pack_start(top, False, False, 0)
@@ -1985,6 +2138,7 @@ class PhraseSetCard(ListCard):
 
     def __init__(self, window, data):
         Gtk.Frame.__init__(self)
+        self.get_style_context().add_class("kc9k-listcard")
         self.window, self.data = window, data
         self.filling = False
         self.is_exceptions = False
@@ -2189,13 +2343,16 @@ class StatTile(Gtk.Box):
 
     def __init__(self, title):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        self.pack_start(dim(title, wrap=False), False, False, 0)
+        label = Gtk.Label(label=title, xalign=0)
+        label.get_style_context().add_class("kc9k-stat-label")
+        self.pack_start(label, False, False, 0)
         self.value = Gtk.Label(xalign=0)
+        self.value.get_style_context().add_class("kc9k-stat-value")
         self.pack_start(self.value, False, False, 0)
         self.set_value("–")
 
     def set_value(self, text):
-        self.value.set_markup(f"<span size='xx-large' weight='bold'>{GLib.markup_escape_text(text)}</span>")
+        self.value.set_text(text)
 
 
 DAY_NAMES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -3470,9 +3627,23 @@ class Window(Gtk.ApplicationWindow):
         root = Gtk.Box()
         self.add(root)
         self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
-        sidebar = Gtk.StackSidebar(stack=self.stack)
-        sidebar.set_size_request(180, -1)
-        root.pack_start(sidebar, False, False, 0)
+        # The sidebar: each page with its icon (R-GUI-3: recognised at a
+        # glance), the app's name on top.
+        side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        side.get_style_context().add_class("kc9k-sidebar")
+        side.set_size_request(200, -1)
+        brand = Gtk.Box(spacing=8, margin_start=18, margin_top=16, margin_bottom=10)
+        brand.pack_start(Gtk.Image.new_from_icon_name("security-high-symbolic", Gtk.IconSize.LARGE_TOOLBAR),
+                         False, False, 0)
+        brand_name = Gtk.Label(label="Killer Chicken", xalign=0)
+        brand_name.get_style_context().add_class("kc9k-brand")
+        brand.pack_start(brand_name, False, False, 0)
+        side.pack_start(brand, False, False, 0)
+        self.nav = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
+        self.nav.get_style_context().add_class("kc9k-sidebar")
+        self.nav_rows = {}
+        side.pack_start(self.nav, True, True, 0)
+        root.pack_start(side, False, False, 0)
         root.pack_start(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL), False, False, 0)
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -3483,16 +3654,26 @@ class Window(Gtk.ApplicationWindow):
         content.pack_start(self.banner, False, False, 0)
         content.pack_start(self.stack, True, True, 0)
 
-        for name, title, build in (
-                ("dashboard", "Dashboard", self.build_dashboard),
-                ("blocks", "Blocks", self.build_blocks),
-                ("clusters", "Clusters", self.build_clusters),
-                ("device", "Device Blocks", self.build_device),
-                ("stats", "Statistics", self.build_stats),
-                ("circadian", "Circadian Rhythm", self.build_circadian),
-                ("settings", "Settings", self.build_settings)):
+        for name, title, icon, build in (
+                ("dashboard", "Overview", "go-home-symbolic", self.build_dashboard),
+                ("blocks", "Blocks", "action-unavailable-symbolic", self.build_blocks),
+                ("clusters", "Clusters", "view-list-symbolic", self.build_clusters),
+                ("device", "Frozen Chicken", "weather-snow-symbolic", self.build_device),
+                ("stats", "Statistics", "x-office-presentation-symbolic", self.build_stats),
+                ("circadian", "Circadian rhythm", "weather-clear-night-symbolic", self.build_circadian),
+                ("settings", "Settings", "emblem-system-symbolic", self.build_settings)):
             self.stack.add_titled(self.guarded(name, title, build()), name, title)
+            row = Gtk.ListBoxRow()
+            row.page = name
+            line = Gtk.Box(spacing=12)
+            line.pack_start(Gtk.Image.new_from_icon_name(icon, Gtk.IconSize.MENU), False, False, 0)
+            line.pack_start(Gtk.Label(label=title, xalign=0), True, True, 0)
+            row.add(line)
+            self.nav.add(row)
+            self.nav_rows[name] = row
+        self.nav.connect("row-selected", lambda _list, row: row and self.stack.set_visible_child_name(row.page))
         self.stack.connect("notify::visible-child-name", self.page_changed)
+        self.nav.select_row(self.nav_rows["dashboard"])
 
         self.refresh()
         self.refresh_stats()
@@ -3970,6 +4151,9 @@ class Window(Gtk.ApplicationWindow):
         return self.circadian
 
     def page_changed(self, *_args):
+        row = getattr(self, "nav_rows", {}).get(self.stack.get_visible_child_name())
+        if row is not None and self.nav.get_selected_row() is not row:
+            self.nav.select_row(row)
         if hasattr(self, "circadian"):
             self.circadian.refresh()
         if self.stack.get_visible_child_name() in ("stats", "dashboard"):
@@ -4128,34 +4312,57 @@ class Window(Gtk.ApplicationWindow):
 
     # Dashboard -----------------------------------------------------------
     def build_dashboard(self):
+        """§4.1 Overview (R-GUI-3: tasks first): what is on, until when, how
+        locked; starting a block is one click away."""
         scroll, box = page_box()
-        box.pack_start(heading("Dashboard", "x-large"), False, False, 0)
+        page_header(box, "Overview", "What is on now, and how it is locked.")
 
-        tiles = Gtk.Box(spacing=40)
-        self.tile_active = StatTile("Active blocks")
-        self.tile_sites = StatTile("Websites today")
-        self.tile_apps = StatTile("Apps today")
-        for tile in (self.tile_active, self.tile_sites, self.tile_apps):
-            tiles.pack_start(tile, False, False, 0)
-        box.pack_start(tiles, False, False, 0)
+        # The status card: the one line that matters, and the main action.
+        hero = card(kind="kc9k-hero", spacing=6)
+        top = Gtk.Box(spacing=12)
+        texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.dash_headline = Gtk.Label(xalign=0, wrap=True)
+        self.dash_headline.get_style_context().add_class("kc9k-hero-title")
+        self.dash_detail = dim("", wrap=True)
+        texts.pack_start(self.dash_headline, False, False, 0)
+        texts.pack_start(self.dash_detail, False, False, 0)
+        top.pack_start(texts, True, True, 0)
+        self.dash_start = Gtk.MenuButton(label="Start a block", valign=Gtk.Align.CENTER)
+        self.dash_start.get_style_context().add_class("suggested-action")
+        self.dash_start_menu = Gtk.Menu()
+        self.dash_start.set_popup(self.dash_start_menu)
+        top.pack_end(self.dash_start, False, False, 0)
+        hero.pack_start(top, False, False, 0)
+        self.dash_device = Gtk.Box(spacing=6)
+        hero.pack_start(self.dash_device, False, False, 0)
+        box.pack_start(hero, False, False, 0)
         # R-DESKTOP-1: on Wayland or another desktop, titles and app time may not work.
         self.dash_desktop = dim("", wrap=True)
         self.dash_desktop.set_no_show_all(True)
         box.pack_start(self.dash_desktop, False, False, 0)
 
-        self.dash_locks = dim("")
-        box.pack_start(section("Device", self.dash_locks), False, False, 0)
+        tiles = Gtk.Box(spacing=12, homogeneous=True)
+        self.tile_active = StatTile("Blocks on")
+        self.tile_sites = StatTile("Websites today")
+        self.tile_apps = StatTile("Apps today")
+        for tile in (self.tile_active, self.tile_sites, self.tile_apps):
+            tiles.pack_start(card(tile), True, True, 0)
+        box.pack_start(tiles, False, False, 0)
 
         self.dash_blocks = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        self.dash_blocks.get_style_context().add_class("frame")
         self.dash_blocks.connect("row-activated", self.open_block_from_dashboard)
-        box.pack_start(section("Active blocks", self.dash_blocks), False, False, 0)
+        on_now = section("On now", self.dash_blocks)
+        on_now.get_children()[-1].get_style_context().add_class("kc9k-tight")
+        box.pack_start(on_now, False, False, 0)
+
+        self.dash_locks = dim("")
+        box.pack_start(section("Device", self.dash_locks), False, False, 0)
 
         self.dash_top = TopChart()
         self.dash_top_empty = dim("Nothing recorded today yet.")
         box.pack_start(section("Most used today", self.dash_top, self.dash_top_empty), False, False, 0)
 
-        actions = Gtk.Box(spacing=6)
+        actions = Gtk.Box(spacing=8)
         new_block = Gtk.Button(label="New block…")
         new_block.connect("clicked", self.create_block)
         freeze = Gtk.Button(label="Frozen Chicken…")
@@ -4165,44 +4372,106 @@ class Window(Gtk.ApplicationWindow):
         actions.pack_start(new_block, False, False, 0)
         actions.pack_start(monk, False, False, 0)
         actions.pack_start(freeze, False, False, 0)
-        box.pack_start(actions, False, False, 0)
+        box.pack_start(section("Quick actions", actions, plain=True), False, False, 0)
         return scroll
+
+    def start_from_dashboard(self, name):
+        self.selected = name
+        self.start_block(None)
 
     def update_dashboard(self):
         warning = self.state.get("desktop_warning") or ""
         self.dash_desktop.set_text(warning)
         self.dash_desktop.set_visible(bool(warning))
-        active = [b for b in self.state["blocks"] if b["active"]]
+        blocks = self.state["blocks"]
+        active = [b for b in blocks if b["active"]]
+        locked = [b for b in active if b.get("locked") or b.get("lock_seconds") or b.get("char_locked")
+                  or b.get("password_locked") or b.get("restart_locked")]
         self.tile_active.set_value(str(len(active)))
+
+        # The headline: how many are on, how many locked, and the longest lock.
+        if not active:
+            self.dash_headline.set_text("Nothing is on right now")
+            self.dash_detail.set_text("Start a block to keep sites and apps away." if blocks else
+                                      "Make a block first: the sites, words and apps to keep away.")
+        else:
+            self.dash_headline.set_text(f"{len(active)} block{'s' if len(active) != 1 else ''} on"
+                                        + (f" · {len(locked)} locked" if locked else ""))
+            longest = max(active, key=lambda b: b.get("lock_seconds") or 0)
+            if longest.get("lock_seconds"):
+                until = datetime.datetime.now() + datetime.timedelta(seconds=longest["lock_seconds"])
+                self.dash_detail.set_text(f"{longest['name']} is timer-locked until {date_words(until)} "
+                                          f"({fmt_seconds(longest['lock_seconds'])}).")
+            elif locked:
+                self.dash_detail.set_text(f"{', '.join(b['name'] for b in locked)}: locked until unlocked.")
+            else:
+                self.dash_detail.set_text("Nothing is locked: any block can be stopped.")
+        for item in self.dash_start_menu.get_children():
+            self.dash_start_menu.remove(item)
+        off = [b for b in blocks if not b["active"]]
+        for block in off:
+            item = Gtk.MenuItem(label=block["name"])
+            item.connect("activate", lambda _i, n=block["name"]: self.start_from_dashboard(n))
+            self.dash_start_menu.append(item)
+        if off:
+            self.dash_start_menu.append(Gtk.SeparatorMenuItem())
+        new_item = Gtk.MenuItem(label="New block…")
+        new_item.connect("activate", self.create_block)
+        self.dash_start_menu.append(new_item)
+        self.dash_start_menu.show_all()
+        self.dash_start.set_label("Start a block" if off else "New block")
+
+        for child in self.dash_device.get_children():
+            self.dash_device.remove(child)
+        device = []
+        if self.state["freeze_seconds"]:
+            device.append((f"Frozen Chicken {fmt_seconds(self.state['freeze_seconds'])}", "locked"))
+        if self.state.get("monk_seconds"):
+            device.append((f"Monk mode {fmt_seconds(self.state['monk_seconds'])}", "locked"))
+        for text, kind in device:
+            self.dash_device.pack_start(pill(text, kind), False, False, 0)
+        self.dash_device.show_all()
+
         for row in self.dash_blocks.get_children():
             self.dash_blocks.remove(row)
         if not active:
             row = Gtk.ListBoxRow(activatable=False)
-            row.add(dim("No block is on. Start one from Blocks.", wrap=False))
-            row.get_child().set_margin_start(12)
-            row.get_child().set_margin_top(10)
-            row.get_child().set_margin_bottom(10)
+            row.add(dim("No block is on.", wrap=False))
+            row.get_child().set_margin_start(16)
+            row.get_child().set_margin_top(12)
+            row.get_child().set_margin_bottom(12)
             self.dash_blocks.add(row)
         for block in active:
             row = Gtk.ListBoxRow()
             row.block_name = block["name"]
-            inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2,
-                            margin_start=12, margin_end=12, margin_top=8, margin_bottom=8)
+            inner = Gtk.Box(spacing=12, margin_start=16, margin_end=16, margin_top=10, margin_bottom=10)
+            texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
             name = Gtk.Label(xalign=0)
             name.set_markup(f"<b>{GLib.markup_escape_text(block['name'])}</b>")
-            inner.pack_start(name, False, False, 0)
-            inner.pack_start(dim(block_summary(block)), False, False, 0)
+            texts.pack_start(name, False, False, 0)
+            extra = []
+            if block.get("today_windows"):
+                extra.append("today: " + ", ".join(block["today_windows"]))
+            if block["quota_limit"]:
+                extra.append(f"allowance {block['quota_used'] // 60} of {block['quota_limit'] // 60} min")
+            if extra:
+                texts.pack_start(dim(" · ".join(extra)), False, False, 0)
+            inner.pack_start(texts, True, True, 0)
+            pills = pill_row(block_pills(block))
+            pills.set_valign(Gtk.Align.CENTER)
+            inner.pack_end(Gtk.Image.new_from_icon_name("go-next-symbolic", Gtk.IconSize.MENU), False, False, 0)
+            inner.pack_end(pills, False, False, 0)
             row.add(inner)
             self.dash_blocks.add(row)
         self.dash_blocks.show_all()
 
         locks = []
-        if self.state["freeze_seconds"]:
-            locks.append(f"Frozen Chicken ({self.state['freeze_mode']}) for {fmt_seconds(self.state['freeze_seconds'])}")
-        if self.state.get("monk_seconds"):
-            locks.append(f"Monk mode for {fmt_seconds(self.state['monk_seconds'])}")
-        locks.append("strict mode on" if self.state["strict"] else "strict mode off")
+        locks.append("Strict mode on" if self.state["strict"] else "Strict mode off")
         locks.append("no-escape on" if self.state["no_escape"] else "no-escape off")
+        if self.state["freeze_seconds"]:
+            locks.insert(0, f"Frozen Chicken ({self.state['freeze_mode']}) for {fmt_seconds(self.state['freeze_seconds'])}")
+        if self.state.get("monk_seconds"):
+            locks.insert(0, f"Monk mode for {fmt_seconds(self.state['monk_seconds'])}")
         line = " · ".join(locks)
         self.dash_locks.set_text(line[:1].upper() + line[1:])
 
@@ -4250,12 +4519,17 @@ class Window(Gtk.ApplicationWindow):
         self.detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
                               margin_start=20, margin_end=20, margin_top=16, margin_bottom=16)
         # The details scroll, so the window fits small and scaled screens.
-        detail_scroll = Gtk.ScrolledWindow(propagate_natural_width=True)
+        # Never wider than the window (R-GUI-3: nothing cut off at the
+        # right): the content wraps and reflows instead.
+        detail_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
         detail_scroll.add(self.detail)
         paned.pack2(detail_scroll, True, False)
-        self.title_label = Gtk.Label(xalign=0)
+        self.title_label = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        self.title_label.get_style_context().add_class("kc9k-page-title")
+        self.status_pills = Gtk.Box(spacing=6)
         self.status_label = dim("")
         self.detail.pack_start(self.title_label, False, False, 0)
+        self.detail.pack_start(self.status_pills, False, False, 0)
         self.detail.pack_start(self.status_label, False, False, 0)
         # §3.11: a block password hides the contents until typed.
         self.hidden_bar = Gtk.Box(spacing=8, no_show_all=True)
@@ -4306,15 +4580,36 @@ class Window(Gtk.ApplicationWindow):
         self.users_button = Gtk.Button(label="Users: all", no_show_all=True)
         self.users_button.set_tooltip_text("The accounts this block applies to")
         self.users_button.connect("clicked", self.choose_block_users)
-        for button in (self.delete_button, rename, duplicate, as_template, self.users_button):
-            actions.pack_end(button, False, False, 0)
+        # The rest behind ⋯ (R-GUI-3: one primary action; nothing runs off
+        # the edge of the window).
+        more = Gtk.MenuButton(tooltip_text="More: rename, duplicate, template, users, delete")
+        more.add(Gtk.Image.new_from_icon_name("view-more-symbolic", Gtk.IconSize.BUTTON))
+        popover = Gtk.Popover()
+        menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin=8)
+        for button in (rename, duplicate, as_template, self.users_button, self.delete_button):
+            button.set_relief(Gtk.ReliefStyle.NONE)
+            button.get_child().set_xalign(0)
+            button.connect("clicked", lambda _b: popover.popdown())
+            menu.pack_start(button, False, False, 0)
+        self.delete_button.get_style_context().remove_class("destructive-action")
+        self.delete_button.get_child().get_style_context().add_class("error")
+        menu.show_all()
+        self.users_button.set_visible(False)
+        popover.add(menu)
+        more.set_popover(popover)
+        self.more_menu = (more, popover)  # for tests
+        actions.pack_end(more, False, False, 0)
         self.detail.pack_start(actions, False, False, 0)
 
-        tabs = Gtk.Notebook()
+        tabs = Gtk.Notebook(scrollable=True)
+        self.block_tabs = tabs
         self.detail.pack_start(tabs, True, True, 0)
 
         websites = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin=12)
-        websites_help = dim(
+        intro = Gtk.Box(spacing=6)
+        intro_text = dim("Lists of sites and words, each with what it does to the pages it matches.")
+        intro.pack_start(intro_text, False, False, 0)
+        intro.pack_start(help_button(
             "Each list ticks where it looks: the address, the page title (the tab title) or the "
             "page text. Addresses take domains, paths and wildcards (*.xxx, *casino*, *.* for "
             "everything); titles and text take words: a plain word counts only on its own "
@@ -4322,18 +4617,18 @@ class Window(Gtk.ApplicationWindow):
             "count only together are phrases, in phrase sets below. A match in "
             "the address or title takes every action; in the text, each action needs its number "
             "of different words. Unticking or removing weakens the block, so it isn't possible "
-            "while it is locked.")
-        # A wrapped label asks for its whole text on one line; cap it, so the
-        # window still fits small screens.
-        websites_help.set_max_width_chars(70)
-        websites.pack_start(websites_help, False, False, 0)
+            "while it is locked."), False, False, 0)
+        websites.pack_start(intro, False, False, 0)
         self.keyword_test_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.keyword_test_switch.connect("state-set", self.toggle_keyword_test)
-        websites.pack_start(self.switch_row(
+        test_row = self.switch_row(
             self.keyword_test_switch, "Keyword test mode",
+            "Lists that read pages only show what they find. Turning it on weakens the block.")
+        test_row.get_children()[0].get_children()[0].set_tooltip_text(
             "Lists that read a page's title or text do nothing; instead a panel on each page "
             "shows which words were found, how often, and whether each action's thresholds "
-            "are met. For tuning a list. Turning it on weakens the block."), False, False, 0)
+            "are met. For tuning a list.")
+        websites.pack_start(test_row, False, False, 0)
         self.list_cards = {}
         self.list_boxes = {}
         for kind, title, button_label, detail in (
@@ -4375,6 +4670,7 @@ class Window(Gtk.ApplicationWindow):
         for button in (choose_apps, choose_folder, choose_file):
             pick_row.pack_start(button, False, False, 0)
         apps.pack_start(pick_row, False, False, 0)
+        flow_row(pick_row)
         apps.pack_start(self.apps, True, True, 0)
         self.titles = EditableList(
             "Window titles", "YouTube  Twitch",
@@ -4392,8 +4688,13 @@ class Window(Gtk.ApplicationWindow):
         schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
         self.calendar = WeekCalendar(self.create_window_from_calendar, self.edit_window_from_calendar,
                                      self.move_window_from_calendar)
-        schedule.pack_start(dim("Drag down a day to add a window; click one to remove it. Filled: the "
-                                "block is on. Outlined: an allow window."), False, False, 0)
+        sched_intro = Gtk.Box(spacing=6)
+        sched_intro.pack_start(dim("When the block is enabled. Drag down a day to add a window."), False, False, 0)
+        sched_intro.pack_start(help_button(
+            "Drag down a day to add a window; click one to edit or remove it; drag it to move it. "
+            "Filled: the block is enabled. Outlined: an allow window, when it is lifted. Other "
+            "blocks' windows are greyed."), False, False, 0)
+        schedule.pack_start(sched_intro, False, False, 0)
         schedule.pack_start(self.calendar, False, False, 0)
         self.schedules = EditableList(
             "Schedule", "weekdays 09:00 17:00", self.add_schedule, self.remove_schedule,
@@ -4434,22 +4735,28 @@ class Window(Gtk.ApplicationWindow):
         lock_row.pack_start(lock_save, False, False, 0)
         top_align(lock_row)
         schedule.pack_start(lock_row, False, False, 0)
-        schedule.pack_start(dim(
+        lock_row.pack_start(help_button(
             "While the lock is on (during the windows, at the block's places, for the lead time "
             "before each window, and outside allow windows) the block can't be weakened or "
             "switched off. A longer lead time is always allowed; a shorter one or off is refused "
             "while the lock is on."), False, False, 0)
-        tabs.append_page(schedule, Gtk.Label(label="Schedule"))
+        flow_row(lock_row)
+        flow_row(preset_row)
+        schedule_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        schedule_scroll.add(schedule)
+        tabs.append_page(schedule_scroll, Gtk.Label(label="Schedule & places"))
 
-        places = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
-        places_help = dim(
+        # §3.6 places, under the schedule: both say when the block is enabled.
+        places = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        places_head = Gtk.Box(spacing=6)
+        places_head.pack_start(heading("Places", "medium"), False, False, 0)
+        places_head.pack_start(help_button(
             "Turn this block on while the computer is at a place. A place is known by the Wi-Fi "
             "networks in range when you save it (yours and the neighbours'); the computer is "
             "there when two of them are in range again. While there, the block can't be stopped "
             "or weakened. With Wi-Fi switched off the computer counts as being at every place, "
-            "and Wi-Fi is switched back on.")
-        places_help.set_max_width_chars(70)
-        places.pack_start(places_help, False, False, 0)
+            "and Wi-Fi is switched back on."), False, False, 0)
+        places.pack_start(places_head, False, False, 0)
         pick_row = Gtk.Box(spacing=6)
         self.place_combo = Gtk.ComboBoxText()
         pick_row.pack_start(self.place_combo, False, False, 0)
@@ -4470,9 +4777,10 @@ class Window(Gtk.ApplicationWindow):
         places.pack_start(self.place_rules, True, True, 0)
         self.places_label = dim("")
         places.pack_start(self.places_label, False, False, 0)
-        tabs.append_page(places, Gtk.Label(label="Places"))
+        schedule.pack_start(Gtk.Separator(margin_top=8, margin_bottom=4), False, False, 0)
+        schedule.pack_start(places, False, False, 0)
 
-        tabs.append_page(self.build_quota_tab(), Gtk.Label(label="Allowance & Pomodoro"))
+        tabs.append_page(self.build_quota_tab(), Gtk.Label(label="Breaks & allowance"))
 
         nepsis = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=12)
         nepsis.pack_start(dim(
@@ -4651,6 +4959,7 @@ class Window(Gtk.ApplicationWindow):
             relock_row, delay_row), False, False, 0)
         for row in (quota_row, pomodoro_row, long_row, allowance_row, relock_row, delay_row):
             top_align(row)
+            flow_row(row)
         return box
 
     def update_block_list(self):
@@ -4720,7 +5029,9 @@ class Window(Gtk.ApplicationWindow):
         block = self.blocks.get(self.selected)
         self.detail.set_sensitive(block is not None)
         if block is None:
-            self.title_label.set_markup("<big><b>No blocks yet</b></big>")
+            self.title_label.set_text("No blocks yet")
+            for child in self.status_pills.get_children():
+                self.status_pills.remove(child)
             self.status_label.set_text("Create a block, add sites or apps, then start it.")
             for widget in (self.apps, self.titles, self.schedules, self.autostarts):
                 widget.set_items([])
@@ -4729,7 +5040,12 @@ class Window(Gtk.ApplicationWindow):
             self.quota_label.set_text("")
             self.block_nepsis_label.set_text("")
             return
-        self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
+        self.title_label.set_text(block["name"])
+        for child in self.status_pills.get_children():
+            self.status_pills.remove(child)
+        for text, kind in block_pills(block):
+            self.status_pills.pack_start(pill(text, kind), False, False, 0)
+        self.status_pills.show_all()
         self.status_label.set_text(block_summary(block))
         users = block.get("users") or []
         self.users_button.set_label("Users: " + (", ".join(users) if users else "all"))
@@ -5564,23 +5880,36 @@ class Window(Gtk.ApplicationWindow):
     # Clusters ------------------------------------------------------------
     def build_clusters(self):
         scroll, box = page_box()
-        box.pack_start(heading("Clusters", "x-large"), False, False, 0)
-        intro = dim("Website lists kept outside any block: collect sites once, then copy them into "
-                    "the blocks that should have them. A cluster blocks nothing by itself and can "
-                    "always be edited; copying into a block follows that block's rules.")
-        intro.set_max_width_chars(80)
-        box.pack_start(intro, False, False, 0)
-
+        page_header(box, "Clusters", "Lists kept outside any block: collect sites once, copy them into blocks.",
+                    help="Website lists kept outside any block: collect sites once, then copy them into "
+                         "the blocks that should have them. A cluster blocks nothing by itself and can "
+                         "always be edited; copying into a block follows that block's rules.")
         top = Gtk.Box(spacing=6)
         self.cluster_combo = Gtk.ComboBoxText()
         self.cluster_combo.connect("changed", lambda _c: self.updating or self.show_cluster())
         top.pack_start(self.cluster_combo, False, False, 0)
-        for label, handler in (("New…", self.new_cluster), ("Rename…", self.rename_cluster),
-                               ("Delete…", self.delete_cluster), ("Copy into a block…", self.copy_cluster),
-                               ("Import…", self.import_cluster), ("Export…", self.export_cluster)):
-            button = Gtk.Button(label=label)
-            button.connect("clicked", handler)
-            top.pack_start(button, False, False, 0)
+        copy = Gtk.Button(label="Copy into a block…")
+        copy.get_style_context().add_class("suggested-action")
+        copy.connect("clicked", self.copy_cluster)
+        new = Gtk.Button(label="New…")
+        new.connect("clicked", self.new_cluster)
+        top.pack_start(new, False, False, 0)
+        top.pack_start(copy, False, False, 0)
+        # The rest behind ⋯ (R-GUI-3).
+        more = Gtk.MenuButton(tooltip_text="Rename, delete, import, export")
+        more.add(Gtk.Image.new_from_icon_name("view-more-symbolic", Gtk.IconSize.BUTTON))
+        popover = Gtk.Popover()
+        menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin=6)
+        for label, handler in (("Rename…", self.rename_cluster), ("Import…", self.import_cluster),
+                               ("Export…", self.export_cluster), ("Delete…", self.delete_cluster)):
+            button = Gtk.Button(label=label, relief=Gtk.ReliefStyle.NONE)
+            button.get_child().set_xalign(0)
+            button.connect("clicked", lambda _b, h=handler: (popover.popdown(), h(_b)))
+            menu.pack_start(button, False, False, 0)
+        menu.show_all()
+        popover.add(menu)
+        more.set_popover(popover)
+        top.pack_start(more, False, False, 0)
         box.pack_start(top, False, False, 0)
 
         where = Gtk.Box(spacing=12)
@@ -5631,6 +5960,7 @@ class Window(Gtk.ApplicationWindow):
                 "ranked by how much more common they are there than in your normal browsing; "
                 "cut drops the least specific before adding."),
             self.record_label, record_row), False, False, 0)
+        flow_row(record_row)
         return scroll
 
     def cluster_name(self):
@@ -5777,8 +6107,12 @@ class Window(Gtk.ApplicationWindow):
     # Device Blocks -------------------------------------------------------
     def build_device(self):
         scroll, box = page_box()
-        box.pack_start(heading("Device Blocks", "x-large"), False, False, 0)
-        box.pack_start(dim("Locks for the whole computer, not just sites and apps."), False, False, 0)
+        page_header(box, "Frozen Chicken", "Lock the whole computer for a while: the screen, your "
+                    "session, or the power.", help=(
+                        "Keeps the computer unusable until the time is up, even across restarts: the "
+                        "screen is locked again right away, sessions are logged out, or the computer "
+                        "shuts down. It can't be cancelled from the desktop, only extended. The time "
+                        "keeps counting while the computer is off. At most a day at a time."))
 
         self.freeze_status = Gtk.Label(xalign=0)
         row = Gtk.Box(spacing=8)
@@ -5798,13 +6132,13 @@ class Window(Gtk.ApplicationWindow):
         row.pack_start(self.freeze_minutes, False, False, 0)
         row.pack_end(self.freeze_button, False, False, 0)
         self.freeze_schedules = EditableList(
-            "Scheduled", "daily 23:00 24:00", self.add_freeze_schedule, self.remove_freeze_schedule,
+            "", "daily 23:00 24:00", self.add_freeze_schedule, self.remove_freeze_schedule,
             help_text="Freeze at set times in the mode chosen above, for example every night. "
                       "Days, start and end; for overnight add two (23:00 24:00 and 00:00 06:00). "
                       "A locked schedule can't be removed from its lead time before it starts until it ends.")
         # §3.8: the apps an "allowed apps only" freeze lets run.
         self.freeze_apps = EditableList(
-            "Allowed apps (mode: allowed apps only)", "libreoffice  /opt/notes/",
+            "", "libreoffice  /opt/notes/",
             lambda values: self.run(["freeze", "apps", "add", *values]),
             lambda value, _num: self.run(["freeze", "apps", "remove", value]),
             help_text="While an 'allowed apps only' freeze runs, every other program of yours is closed; "
@@ -5819,13 +6153,11 @@ class Window(Gtk.ApplicationWindow):
                                    False, False, 0)
         top_align(freeze_lock_row)
         top_align(row)
-        box.pack_start(section(
-            "Frozen Chicken",
-            dim("Keeps the computer unusable until the time is up, even across restarts: the "
-                "screen is locked again right away, sessions are logged out, or the computer "
-                "shuts down. It can't be cancelled from the desktop, only extended. The time "
-                "keeps counting while the computer is off."),
-            row, self.freeze_status, self.freeze_schedules, freeze_lock_row, self.freeze_apps), False, False, 0)
+        box.pack_start(section("Freeze now", row, self.freeze_status), False, False, 0)
+        flow_row(row)
+        box.pack_start(section("Scheduled freezes", self.freeze_schedules, freeze_lock_row), False, False, 0)
+        flow_row(freeze_lock_row)
+        box.pack_start(section("Allowed apps", self.freeze_apps), False, False, 0)
 
         return scroll
 
@@ -5952,7 +6284,7 @@ class Window(Gtk.ApplicationWindow):
     # Statistics ----------------------------------------------------------
     def build_stats(self):
         scroll, box = page_box()
-        box.pack_start(heading("Statistics", "x-large"), False, False, 0)
+        page_header(box, "Statistics", "Time on sites and apps, and how often pages were blocked. Only on this computer.")
 
         controls = Gtk.Box(spacing=12)
         self.stats_period = Gtk.ComboBoxText()
@@ -6163,7 +6495,7 @@ class Window(Gtk.ApplicationWindow):
     def build_settings(self):
         """Groups in the order of SPEC §4.10."""
         scroll, box = page_box()
-        box.pack_start(heading("Settings", "x-large"), False, False, 0)
+        page_header(box, "Settings", "How Killer Chicken looks, what protects it, and what it may never do.")
 
         theme = Gtk.ComboBoxText(valign=Gtk.Align.CENTER)
         for key, label in THEMES:
@@ -6936,6 +7268,42 @@ label.error, .kc9k-note.error { color: @error_color; opacity: 1; }
 entry.error { border-color: @error_color; }
 button.kc9k-chip { padding: 2px 10px; min-height: 0; border-radius: 999px; font-size: 0.9em; }
 .kc9k-field-label { font-weight: bold; }
+
+/* Pages: a title, a one-line subtitle, then cards. */
+.kc9k-page-title { font-size: 1.7em; font-weight: 800; }
+.kc9k-page-subtitle { opacity: 0.7; }
+.kc9k-section-title { font-weight: bold; font-size: 1.05em; }
+.kc9k-card {
+  background-color: @theme_base_color;
+  border: 1px solid alpha(@theme_fg_color, 0.13);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.kc9k-card.kc9k-tight { padding: 4px 0; }
+.kc9k-card.kc9k-hero { padding: 18px 20px; }
+.kc9k-card.kc9k-clickable:hover { border-color: alpha(@theme_selected_bg_color, 0.7); }
+
+/* Status pills: what is on, what is locked. */
+.kc9k-pill { border-radius: 999px; padding: 2px 10px; font-weight: bold; font-size: 0.85em; }
+.kc9k-pill.on { background-color: alpha(#2ec27e, 0.18); color: #1a7f4f; }
+.kc9k-pill.locked { background-color: alpha(#e01b24, 0.15); color: #c01c28; }
+.kc9k-pill.lifted { background-color: alpha(#3584e4, 0.16); color: #1c63b7; }
+.kc9k-pill.off { background-color: alpha(@theme_fg_color, 0.09); color: alpha(@theme_fg_color, 0.75); }
+.kc9k-pill.warn { background-color: alpha(#e5a50a, 0.2); color: #9c6e03; }
+
+/* Big numbers on the overview. */
+.kc9k-stat-value { font-size: 1.9em; font-weight: 800; }
+.kc9k-stat-label { opacity: 0.7; font-size: 0.9em; }
+.kc9k-hero-title { font-size: 1.35em; font-weight: bold; }
+
+/* The sidebar. */
+.kc9k-sidebar { background-color: alpha(@theme_fg_color, 0.035); }
+.kc9k-sidebar row { padding: 9px 14px; border-radius: 8px; margin: 2px 8px; }
+.kc9k-sidebar row:selected { background-color: alpha(@theme_selected_bg_color, 0.95); }
+.kc9k-brand { font-weight: 800; font-size: 1.05em; }
+frame.kc9k-listcard > border { border-radius: 12px; border: 1px solid alpha(@theme_fg_color, 0.13);
+  background-color: @theme_base_color; }
+button.kc9k-help { padding: 0 6px; min-height: 0; min-width: 0; border-radius: 999px; }
 """
 
 

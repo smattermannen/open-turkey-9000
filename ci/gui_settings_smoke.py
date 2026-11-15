@@ -57,7 +57,7 @@ def titles(page):
     return out
 
 settings = titles("settings")
-want = ["Settings", "Preferences", "No weakening during active locks", "Tamper protection", "Browsers",
+want = ["Preferences", "No weakening during active locks", "Tamper protection", "Browsers",
         "Browser settings", "DNS", "Circadian rhythm", "Device protection", "Passwords",
         "Bypass prevention", "Project", "Behaviour settings"]
 check([t for t in settings if t in want] == want, "Settings groups in §4.10 order: " + ", ".join(settings))

@@ -100,7 +100,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     is blocked or gets its looks (also on blocks with title/text exceptions,
     whose sites are left to the extension). Not built. M
   - [ ] GUI overall unclear, hard to read, not pretty or easy to use (owner,
-    2026-11-15; R-GUI-3). Redesign page by page. L
+    2026-11-15; R-GUI-3). Redesign page by page. Done: a design layer
+    (cards, status pills, page titles with one-line subtitles, ? popovers
+    for long explanations, an icon sidebar); Overview rebuilt (status card
+    with the longest lock and "Start a block", stat cards, block cards with
+    pills); block page header with pills, primary actions, the rest behind
+    ⋯; tabs 8 → 6 (Places under Schedule, "Breaks & allowance"); Clusters
+    and Frozen Chicken regrouped; long rows wrap, so the window fits 1000
+    pixels (was 1213: pages were cut off at the right); lock times in days
+    ("69 days 10 h", not "1666 h 40 min"). Left: Settings, Breaks tab,
+    Circadian, list cards. L
   - Strict lockdown polkit now allows the backlight helper and colord.
 
 - [ ] **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock

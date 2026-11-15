@@ -3,6 +3,7 @@ package enforce
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -62,5 +63,62 @@ func TestWordsReported(t *testing.T) {
 	}
 	if len(words) != 3 || !got["calculus"] || !got["the"] || !got["don't"] || d.BaselinePages() != 1 {
 		t.Errorf("recorded %+v, baseline pages %d", words, d.BaselinePages())
+	}
+}
+
+// newUserBlock makes an active block with one blocked site and app.
+func newUserBlock(t *testing.T, d *db.DB, name, site, app string, users ...string) {
+	t.Helper()
+	if err := d.CreateBlock(name); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := d.GetBlock(name)
+	if err := d.AddListEntries(b.Lists.Blacklists()[0].ID, []string{site}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddApps(name, []string{app}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetBlockUsers(name, users); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ActivateBlock(name, false, 0, 0, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// §3.2: a block for some users stays out of the shared layers and reaches
+// only their extensions.
+func TestAffectedUsers(t *testing.T) {
+	old := regularUsers
+	regularUsers = func() []string { return []string{"anna", "ben"} }
+	defer func() { regularUsers = old }()
+	d := testDB(t)
+	newUserBlock(t, d, "all", "reddit.com", "steam")
+	newUserBlock(t, d, "some", "youtube.com", "minecraft", "anna")
+	newUserBlock(t, d, "every", "tiktok.com", "roblox", "anna", "ben")
+	active, err := d.GetActiveBlocks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hosts, apps, _ := Inputs(active)
+	if !slices.Contains(hosts, "reddit.com") || slices.Contains(hosts, "youtube.com") || slices.Contains(apps, "minecraft") ||
+		!slices.Contains(hosts, "tiktok.com") || !slices.Contains(apps, "roblox") {
+		t.Errorf("shared layers: hosts %v apps %v", hosts, apps)
+	}
+	for _, b := range active {
+		if (blockUIDs(b) == nil) != (b.BlockName != "some") {
+			t.Errorf("blockUIDs(%s) = %v", b.BlockName, blockUIDs(b))
+		}
+	}
+	has := func(user string) bool {
+		rules, err := BuildRulesFor(d, user)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.Contains(rules.Block, "youtube.com")
+	}
+	if !has("anna") || has("ben") || !has("") {
+		t.Errorf("rules per user: anna %v ben %v unknown %v", has("anna"), has("ben"), has(""))
 	}
 }

@@ -379,7 +379,11 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 }
 
 // BuildRules collects the rules for the extension right now.
-func BuildRules(d *db.DB) (Rules, error) {
+func BuildRules(d *db.DB) (Rules, error) { return BuildRulesFor(d, "") }
+
+// BuildRulesFor is BuildRules for the extension of one user (§3.2): blocks
+// for other users only are left out. "" (unknown): every block.
+func BuildRulesFor(d *db.DB, user string) (Rules, error) {
 	rules := Rules{
 		Lists: []ListRule{}, Quota: []ListRule{}, Block: []string{}, Exceptions: []string{},
 		WebOnly:    BrowserOn(d, "web-only"),
@@ -422,6 +426,9 @@ func BuildRules(d *db.DB) (Rules, error) {
 	testing := d.TestLists()
 	rules.Social = []string{}
 	for _, b := range withMonk(d, enabledBlocks(d, active, trusted), trusted) {
+		if !b.AppliesTo(user) {
+			continue
+		}
 		for _, preset := range b.Social {
 			if !slices.Contains(rules.Social, preset) {
 				rules.Social = append(rules.Social, preset)
@@ -583,7 +590,7 @@ func rulesHandler(d *db.DB, checkIn func(remoteAddr string)) http.HandlerFunc {
 		if r.Header.Get(ExtensionHeader) == "1" {
 			checkIn(r.RemoteAddr)
 		}
-		rules, err := BuildRules(d)
+		rules, err := BuildRulesFor(d, clientUser(r.RemoteAddr))
 		if err != nil {
 			log.Printf("rules: %v", err)
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)

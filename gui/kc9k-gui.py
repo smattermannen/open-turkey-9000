@@ -3506,7 +3506,11 @@ class Window(Gtk.ApplicationWindow):
         duplicate.connect("clicked", self.duplicate_block)
         as_template = Gtk.Button(label="Save as template…")
         as_template.connect("clicked", self.save_template)
-        for button in (self.delete_button, rename, duplicate, as_template):
+        # §3.2 affected users.
+        self.users_button = Gtk.Button(label="Users: all", no_show_all=True)
+        self.users_button.set_tooltip_text("The accounts this block applies to")
+        self.users_button.connect("clicked", self.choose_block_users)
+        for button in (self.delete_button, rename, duplicate, as_template, self.users_button):
             actions.pack_end(button, False, False, 0)
         self.detail.pack_start(actions, False, False, 0)
 
@@ -3904,6 +3908,9 @@ class Window(Gtk.ApplicationWindow):
             return
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
         self.status_label.set_text(block_summary(block))
+        users = block.get("users") or []
+        self.users_button.set_label("Users: " + (", ".join(users) if users else "all"))
+        self.users_button.set_visible(len(self.state.get("accounts") or []) > 1 or bool(users))
         self.hidden_bar.set_visible(bool(block.get("hidden")))
         self.update_lists(block.get("lists", []), block.get("phrase_sets", []))
         self.apps.set_items(block["apps"], owner=block["name"])
@@ -4133,6 +4140,36 @@ class Window(Gtk.ApplicationWindow):
         name = self.ask_text("Save as template", "A name for this block's definition.", initial=self.selected)
         if name:
             self.run(["template", "save", self.selected, name])
+
+    def choose_block_users(self, _button, answer=None):
+        """§3.2: tick the accounts the block applies to; all ticked (or
+        none) means every account. answer: the ticked names, for tests."""
+        block = self.blocks.get(self.selected)
+        if not block:
+            return
+        accounts = self.state.get("accounts") or []
+        current = block.get("users") or []
+        if answer is None:
+            dialog = Gtk.MessageDialog(
+                transient_for=self, modal=True, text=f"Who does {block['name']} apply to?",
+                secondary_text="For some accounts only, its websites are blocked in their browsers by the "
+                               "extension and its apps closed in their sessions. Fewer accounts weakens the "
+                               "block, so it isn't possible while it is locked.",
+                message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
+            checks = {}
+            for name in accounts:
+                checks[name] = Gtk.CheckButton(label=name, active=not current or name in current)
+                dialog.get_message_area().pack_start(checks[name], False, False, 0)
+            dialog.show_all()
+            ok = dialog.run() == Gtk.ResponseType.OK
+            answer = [name for name, check in checks.items() if check.get_active()]
+            dialog.destroy()
+            if not ok:
+                return
+        if not answer or set(answer) >= set(accounts):
+            self.run(["block", "users", block["name"], "all"])
+        else:
+            self.run(["block", "users", block["name"], *answer])
 
     def rename_block(self, _button):
         name = self.ask_text("Rename block", initial=self.selected or "")

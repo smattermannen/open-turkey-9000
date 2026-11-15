@@ -286,6 +286,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `popup.js`); `/add` adds the tab's site to Blocked (refused with a blocks
   access password). Reward (`break allowance`) earned in `earnBreaks`;
   `break text`/`relock` makes `unlock` pause instead (second unlock ends).
+- **Affected users** (`db/users.go`, `cli/blockusers.go`, §3.2):
+  `blocks.users`; `enforce.forEveryone` keeps partial blocks out of shared
+  layers, `blockUIDs` → `blocker.KillBlockedFor`, `BuildRulesFor(user)`
+  with `clientUser` (socket uid, `blocker.ClientUser`); `regularUsers` /
+  cli `accounts` faked in tests.
 - **Block password** (`cli/blockpassword.go`, `blocks.view_password`, §3.11):
   `revealBlock` before showing contents; gui-state `--reveal B` (password on
   stdin) else `hidden` with entries emptied; GUI `block_passwords`.

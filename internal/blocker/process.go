@@ -96,17 +96,27 @@ var noDescend = map[string]bool{
 // executable name, Flatpak app ID or desktop app scope) together with all of
 // its descendants. It returns the number of processes killed.
 func KillBlocked(processNames []string) (int, error) {
-	return killBlocked(processNames, false, time.Time{})
+	return killBlocked(processNames, false, time.Time{}, nil)
+}
+
+// KillBlockedFor is KillBlocked (politely: KillBlockedPolitely) for the
+// processes of the users uids only (§3.2); nil: every regular user. An
+// empty, non-nil uids kills nothing.
+func KillBlockedFor(processNames []string, uids []uint64, politely bool, now time.Time) (int, error) {
+	if uids != nil && len(uids) == 0 {
+		return 0, nil
+	}
+	return killBlocked(processNames, politely, now, uids)
 }
 
 // KillBlockedPolitely is KillBlocked, except that a matched app is first
 // asked to close its windows and killed a cycle later (see polite.go). It
 // returns the processes killed plus the apps newly asked.
 func KillBlockedPolitely(processNames []string, now time.Time) (int, error) {
-	return killBlocked(processNames, true, now)
+	return killBlocked(processNames, true, now, nil)
 }
 
-func killBlocked(processNames []string, politely bool, now time.Time) (int, error) {
+func killBlocked(processNames []string, politely bool, now time.Time, uids []uint64) (int, error) {
 	processNames = withoutEssentialApps(processNames)
 	if len(processNames) == 0 {
 		return 0, nil
@@ -154,7 +164,7 @@ func killBlocked(processNames []string, politely bool, now time.Time) (int, erro
 		// Only apps that may be killed at all are asked.
 		var ask []int
 		for _, pid := range fresh {
-			if ownedByUser(pid) {
+			if ownedByAny(pid, uids) {
 				ask = append(ask, pid)
 			}
 		}
@@ -181,7 +191,7 @@ func killBlocked(processNames []string, politely bool, now time.Time) (int, erro
 	for _, pid := range targets {
 		// System programs (root, service accounts) are never killed: see
 		// owners.go.
-		if protected[pid] || !ownedByUser(pid) {
+		if protected[pid] || !ownedByAny(pid, uids) {
 			continue
 		}
 		protected[pid] = true // a root may also be another root's descendant

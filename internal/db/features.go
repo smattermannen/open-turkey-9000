@@ -55,6 +55,7 @@ func upgradeSchema(conn *sql.DB) error {
 		{"active_blocks", "range_to", "INTEGER NOT NULL DEFAULT 0"},
 		{"active_blocks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
 		{"blocks", "view_password", "TEXT NOT NULL DEFAULT ''"},
+		{"blocks", "users", "TEXT NOT NULL DEFAULT ''"}, // §3.2 affected users
 		{"block_breaks", "delay_length", "INTEGER NOT NULL DEFAULT 0"},
 		{"block_breaks", "delay_wait", "INTEGER NOT NULL DEFAULT 0"},
 		{"block_breaks", "delay_at", "INTEGER NOT NULL DEFAULT 0"},

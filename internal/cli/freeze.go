@@ -120,6 +120,7 @@ type guiBlock struct {
 	NepsisCount       int            `json:"nepsis_count"`
 	Schedules         []string       `json:"schedules"`
 	Windows           []guiWin       `json:"schedule_windows"`
+	Users             []string       `json:"users"` // §3.2; empty: every account
 	Active            bool           `json:"active"`
 	Held              bool           `json:"held"`
 	CharLocked        bool           `json:"char_locked"`
@@ -223,15 +224,16 @@ type guiPlace struct {
 }
 
 type guiState struct {
-	FreezeSeconds int64  `json:"freeze_seconds"`
-	FreezeMode    string `json:"freeze_mode"`
-	Strict        bool   `json:"strict"`
-	NoEscape      bool   `json:"no_escape"`
-	Stats         bool   `json:"stats"`
-	StatsPrivate  bool   `json:"stats_skip_private"` // §4.9
-	LibreWolf     string `json:"librewolf"`
-	Chrome        bool   `json:"chrome"` // Google Chrome or Chromium installed
-	Extension     string `json:"extension_status"`
+	FreezeSeconds int64    `json:"freeze_seconds"`
+	FreezeMode    string   `json:"freeze_mode"`
+	Strict        bool     `json:"strict"`
+	NoEscape      bool     `json:"no_escape"`
+	Stats         bool     `json:"stats"`
+	StatsPrivate  bool     `json:"stats_skip_private"` // §4.9
+	Accounts      []string `json:"accounts"`           // §3.2: people accounts of this computer
+	LibreWolf     string   `json:"librewolf"`
+	Chrome        bool     `json:"chrome"` // Google Chrome or Chromium installed
+	Extension     string   `json:"extension_status"`
 	// ExtensionMissing: no supported browser, or the extension is needed
 	// and hasn't checked in lately (§4.10 install dialog).
 	ExtensionMissing bool                      `json:"extension_missing"`
@@ -327,6 +329,9 @@ var guiStateCmd = &cobra.Command{
 		}
 		state.NoEscape = noEscape == "on"
 		state.Stats = enforce.StatsOn(database)
+		if state.Accounts = accounts(); state.Accounts == nil {
+			state.Accounts = []string{}
+		}
 		if v, _ := database.GetSetting(enforce.SettingStatsPrivate); v == "skip" {
 			state.StatsPrivate = true
 		}
@@ -478,6 +483,9 @@ var guiStateCmd = &cobra.Command{
 				for _, a := range rules {
 					g.Autostarts = append(g.Autostarts, a.String())
 				}
+			}
+			if g.Users, _ = database.BlockUsers(b.Name); g.Users == nil {
+				g.Users = []string{}
 			}
 			if hash, _ := database.BlockViewPassword(b.Name); hash != "" {
 				g.HasPassword = true

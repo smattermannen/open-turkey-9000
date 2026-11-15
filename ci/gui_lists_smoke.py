@@ -177,5 +177,10 @@ check(win.blocks["grid"]["schedules"] == ["mon,tue 10:00-11:00"], "window moved 
 # §4.5: other blocks' windows are greyed behind the selected block's.
 win.selected = "b"; win.show_block()
 check(any(w["start"] == 600 for w in win.calendar.others), "other block's window greyed: %s" % win.calendar.others)
+# §3.2 affected users: gui-state lists the accounts; choosing them all is "all".
+check(isinstance(win.state.get("accounts"), list) and win.blocks["b"].get("users") == [], "accounts and users in state")
+win.choose_block_users(None, list(win.state["accounts"]))
+settle()
+check(win.users_button.get_label() == "Users: all", "users button: %s" % win.users_button.get_label())
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

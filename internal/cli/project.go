@@ -78,6 +78,7 @@ type blockExtras struct {
 	// ScheduleLock is the schedule lock's lead time in minutes; nil: none.
 	ScheduleLock  *int            `json:"schedule_lock_minutes,omitempty"`
 	Social        []string        `json:"social,omitempty"`
+	Users         []string        `json:"users,omitempty"`  // §3.2 affected users; none: all
 	Places        []string        `json:"places,omitempty"` // backups only
 	Quota         int64           `json:"quota_seconds,omitempty"`
 	QuotaPer      string          `json:"quota_per,omitempty"`      // "" day, week, month (§3.6)
@@ -199,6 +200,9 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 		w := exportWindow(s.Window())
 		w.Break = s.Break
 		out.Schedules = append(out.Schedules, w)
+	}
+	if out.Users, err = database.BlockUsers(name); err != nil {
+		return out, err
 	}
 	if on, lead, err := database.ScheduleLock(name); err != nil {
 		return out, err
@@ -362,6 +366,16 @@ func createBlock(database *db.DB, c checkedBlock) error {
 		if err := database.SetSocial(in.Name, preset, true); err != nil {
 			return err
 		}
+	}
+	// §3.2: only accounts this computer has; none left means all.
+	var users []string
+	for _, u := range in.Users {
+		if slices.Contains(accounts(), u) {
+			users = append(users, u)
+		}
+	}
+	if err := database.SetBlockUsers(in.Name, users); err != nil {
+		return err
 	}
 	now := time.Now()
 	if in.Quota > 0 {

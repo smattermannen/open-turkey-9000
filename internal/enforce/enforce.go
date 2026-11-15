@@ -16,6 +16,7 @@ package enforce
 import (
 	"log"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,6 +46,12 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 	var blockDomains, hostDomains, patterns, exceptions, appList, files []string
 
 	for _, b := range active {
+		if !forEveryone(b) {
+			// §3.2: a block for some users only stays out of the layers
+			// every account shares; its sites go to those users'
+			// extensions and its apps are closed per user (killApps).
+			continue
+		}
 		appList = append(appList, b.Apps...)
 		if pageExceptions(b.Lists) {
 			continue
@@ -90,6 +97,36 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 		BlockFiles:    files,
 	}
 	return blocker.ValidDomains(hostDomains), dedup(appList), bp
+}
+
+// regularUsers lists the computer's people accounts; replaceable in tests.
+var regularUsers = blocker.RegularUsers
+
+// forEveryone reports whether a block applies to every account (§3.2): no
+// users chosen, or all of them.
+func forEveryone(b db.ActiveBlockDetail) bool {
+	if len(b.Users) == 0 {
+		return true
+	}
+	for _, u := range regularUsers() {
+		if !slices.Contains(b.Users, u) {
+			return false
+		}
+	}
+	return true
+}
+
+// blockUIDs is the users whose processes a block's apps are closed for:
+// nil for everyone.
+func blockUIDs(b db.ActiveBlockDetail) []uint64 {
+	if forEveryone(b) {
+		return nil
+	}
+	uids := blocker.UserIDs(b.Users)
+	if uids == nil {
+		uids = []uint64{}
+	}
+	return uids
 }
 
 // pageExceptions reports whether a block has exceptions by title or text.
@@ -411,7 +448,7 @@ func Tick(d *db.DB, now time.Time) error {
 	// Kill blocked processes, block by block so each kill is logged as an
 	// event of its block.
 	for _, b := range active {
-		killApps(d, b.Apps, db.EventApp, b.BlockName)
+		killAppsFor(d, b.Apps, blockUIDs(b), db.EventApp, b.BlockName)
 	}
 	// Download and streaming tools given a blocked site's address.
 	for _, b := range active {
@@ -428,16 +465,15 @@ func Tick(d *db.DB, now time.Time) error {
 
 // killApps closes apps and logs an event when any were running.
 func killApps(d *db.DB, apps []string, kind string, blocks ...string) {
+	killAppsFor(d, apps, nil, kind, blocks...)
+}
+
+// killAppsFor is killApps for the processes of uids only (nil: everyone).
+func killAppsFor(d *db.DB, apps []string, uids []uint64, kind string, blocks ...string) {
 	if len(apps) == 0 {
 		return
 	}
-	var killed int
-	var err error
-	if kind == db.EventApp && OptionOn(d, OptionPoliteClose) {
-		killed, err = blocker.KillBlockedPolitely(apps, time.Now())
-	} else {
-		killed, err = blocker.KillBlocked(apps)
-	}
+	killed, err := blocker.KillBlockedFor(apps, uids, kind == db.EventApp && OptionOn(d, OptionPoliteClose), time.Now())
 	if err != nil {
 		log.Printf("daemon: error killing blocked processes: %v", err)
 	} else if killed > 0 {

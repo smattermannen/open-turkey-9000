@@ -101,6 +101,8 @@ type ActiveBlockDetail struct {
 	LockChars   int
 	LockedUntil int64
 	Scheduled   bool
+	// Users are the local accounts the block applies to (§3.2); empty: all.
+	Users []string
 }
 
 // --------------------------------------------------------------------------
@@ -610,7 +612,7 @@ func (d *DB) IsBlockActive(name string) (bool, error) {
 func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 	rows, err := d.conn.Query(`
 		SELECT b.id, b.name,
-			ab.locked, ab.lock_chars, ab.locked_until, ab.scheduled
+			ab.locked, ab.lock_chars, ab.locked_until, ab.scheduled, b.users
 		FROM active_blocks ab
 		JOIN blocks b ON b.id = ab.block_id
 	`)
@@ -624,10 +626,12 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 	for rows.Next() {
 		var blockID int
 		var abd ActiveBlockDetail
+		var users string
 
-		if err := rows.Scan(&blockID, &abd.BlockName, &abd.Locked, &abd.LockChars, &abd.LockedUntil, &abd.Scheduled); err != nil {
+		if err := rows.Scan(&blockID, &abd.BlockName, &abd.Locked, &abd.LockChars, &abd.LockedUntil, &abd.Scheduled, &users); err != nil {
 			return nil, fmt.Errorf("failed to read active block: %w", err)
 		}
+		abd.Users = splitUsers(users)
 		activeBlocks = append(activeBlocks, abd)
 		ids = append(ids, blockID)
 	}

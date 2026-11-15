@@ -459,3 +459,32 @@ func TestStatsSkipPrivate(t *testing.T) {
 		t.Error("count didn't bring them back")
 	}
 }
+
+// §3.2 affected users: fewer users weakens, more or all is free.
+func TestBlockUsers(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	old := accounts
+	accounts = func() []string { return []string{"anna", "ben", "cleo"} }
+	defer func() { accounts = old }()
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	if err := runCLI(t, "block", "users", "b", "nobody"); err == nil {
+		t.Error("an unknown account was taken")
+	}
+	mustRun(t, "block", "users", "b", "anna", "ben")
+	if u, _ := d.BlockUsers("b"); len(u) != 2 {
+		t.Fatalf("users = %v", u)
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "block", "users", "b", "anna"); err == nil {
+		t.Error("fewer users while locked")
+	}
+	mustRun(t, "block", "users", "b", "anna", "ben", "cleo") // every account: all
+	if u, _ := d.BlockUsers("b"); len(u) != 0 {
+		t.Errorf("every account kept as a list: %v", u)
+	}
+	if err := runCLI(t, "block", "users", "b", "anna"); err == nil {
+		t.Error("all → some while locked")
+	}
+}

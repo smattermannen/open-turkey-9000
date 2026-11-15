@@ -42,8 +42,9 @@ third-party libraries, no Play Services.
   `RulesServer` on 127.0.0.1:47613 serves `/rules` (`enforce.Rules` format:
   one list `phone/Blocked` + exceptions, `safesearch`, `web_only`) and
   `/kc9k.xpi`. Check-in valid if fresh (15 s), not older than bundled
-  version, private tabs allowed. `ExtensionGuard.step` suspends IronFox 2
-  min after 60 s in front without one; foreground from usage events
+  version, private tabs allowed. `ExtensionGuard.step` suspends IronFox
+  after 60 s in front without one (5 s once it has checked in), for 2 min
+  doubling per pause to 1 h, reset by 10 min unbroken; foreground from usage events
   (`Foreground`); no usage access = paused. SafeSearch: Google, Bing, DDG,
   Brave, Yahoo, SearXNG strict (POST searches too), YouTube Restricted;
   Startpage, Mojeek, Marginalia, Ecosia, Yandex blocked. `SettingLock`s

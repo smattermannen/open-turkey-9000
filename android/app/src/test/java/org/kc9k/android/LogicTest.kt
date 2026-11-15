@@ -152,7 +152,32 @@ class ExtensionGuardTest {
         val s = ExtensionGuard.State(unchecked = 55_000)
         val step = g.step(s, 1, 5_000, true, true, true, good = true)
         assertFalse(step.pause)
-        assertEquals(ExtensionGuard.State(), step.state)
+        assertEquals(ExtensionGuard.State(checkedIn = true, goodSince = 1), step.state)
+    }
+
+    @Test fun shortGraceAndDoublingPauses() {
+        // Checked in once: switching the extension off gives only a few seconds.
+        var s = g.step(ExtensionGuard.State(), 1_000, 5_000, true, true, true, good = true).state
+        var t = 2_000L
+        var step = g.step(s, t, 5_000, true, true, true, false)
+        assertTrue("short grace", step.pause)
+        assertEquals(t + g.PAUSE_MS, step.state.pausedUntil)
+        // Each pause doubles, up to an hour.
+        val lengths = mutableListOf<Long>()
+        s = step.state
+        repeat(7) {
+            t = s.pausedUntil
+            step = g.step(s, t, 5_000, true, true, true, false)
+            lengths += step.state.pausedUntil - t; s = step.state
+        }
+        assertEquals(listOf(4L, 8L, 16L, 32L, 60L, 60L, 60L).map { it * 60_000L }, lengths)
+        // A calm run of ten minutes starts the doubling over.
+        t = s.pausedUntil
+        s = g.step(s, t, 5_000, true, true, true, good = true).state
+        s = g.step(s, t + g.CALM_MS, 5_000, true, true, true, good = true).state
+        assertEquals(0, s.pauses)
+        step = g.step(s, t + g.CALM_MS + 1, 5_000, true, true, true, false)
+        assertEquals(g.PAUSE_MS, step.state.pausedUntil - (t + g.CALM_MS + 1))
     }
 
     @Test fun background() {

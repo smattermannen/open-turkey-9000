@@ -26,13 +26,19 @@ object ExtensionStatus {
 
 /**
  * The extension is mandatory, like on the desktop (internal/blocker/extguard.go): while
- * something needs it, IronFox may be in front for [GRACE_MS] without a good check-in;
- * then it is paused (suspended) for [PAUSE_MS], and gets [GRACE_MS] again after that.
+ * something needs it, IronFox may be in front for [GRACE_MS] without a good check-in
+ * until the extension has checked in once, then only [SHORT_GRACE_MS] (switching it off
+ * in the add-ons manager mustn't buy a free minute each time). Then IronFox is paused
+ * (suspended) for [PAUSE_MS], doubling with each pause up to [MAX_PAUSE_MS]; the
+ * doubling starts over once the extension has run unbroken for [CALM_MS].
  * Without usage access KC9K can't tell when IronFox is in front, so IronFox stays paused.
  */
 object ExtensionGuard {
     const val GRACE_MS = 60_000L
+    const val SHORT_GRACE_MS = 5_000L
     const val PAUSE_MS = 2 * 60_000L
+    const val MAX_PAUSE_MS = 60 * 60_000L
+    const val CALM_MS = 10 * 60_000L
     /** The extension polls every 3 s; a check-in older than this is stale. */
     const val FRESH_MS = 15_000L
 
@@ -52,21 +58,41 @@ object ExtensionGuard {
         else -> Problem.NONE
     }
 
-    /** [unchecked]: time IronFox spent in front since the last good check-in. */
-    data class State(val unchecked: Long = 0, val pausedUntil: Long = 0)
+    /**
+     * [unchecked]: time IronFox spent in front since the last good check-in. [checkedIn]:
+     * the extension has checked in well since it became required. [pauses]: pauses since
+     * it last ran calmly; [goodSince]: start of the current unbroken run (0: none).
+     */
+    data class State(val unchecked: Long = 0, val pausedUntil: Long = 0, val checkedIn: Boolean = false,
+                     val pauses: Int = 0, val goodSince: Long = 0)
 
     data class Step(val state: State, val pause: Boolean)
+
+    /** The pause after [pauses] earlier ones: doubling, at most [MAX_PAUSE_MS]. */
+    fun pauseLength(pauses: Int): Long {
+        var ms = PAUSE_MS
+        repeat(pauses) { ms = minOf(ms * 2, MAX_PAUSE_MS) }
+        return ms
+    }
 
     fun step(s: State, now: Long, elapsed: Long, required: Boolean, usageAccess: Boolean,
              foreground: Boolean, good: Boolean): Step {
         if (!required) return Step(State(), false)
         if (!usageAccess) return Step(s, true)
         if (s.pausedUntil > now) return Step(s, true)
-        if (good) return Step(State(), false)
-        if (!foreground) return Step(s.copy(pausedUntil = 0), false)
+        if (good) {
+            val since = if (s.goodSince == 0L) now else s.goodSince
+            val pauses = if (now - since >= CALM_MS) 0 else s.pauses
+            return Step(State(checkedIn = true, pauses = pauses, goodSince = since), false)
+        }
+        val bad = s.copy(pausedUntil = 0, goodSince = 0)
+        if (!foreground) return Step(bad, false)
         val unchecked = s.unchecked + elapsed
-        if (unchecked >= GRACE_MS) return Step(State(0, now + PAUSE_MS), true)
-        return Step(State(unchecked, 0), false)
+        val grace = if (s.checkedIn) SHORT_GRACE_MS else GRACE_MS
+        if (unchecked >= grace) {
+            return Step(bad.copy(unchecked = 0, pausedUntil = now + pauseLength(s.pauses), pauses = s.pauses + 1), true)
+        }
+        return Step(bad.copy(unchecked = unchecked), false)
     }
 }
 

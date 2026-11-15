@@ -35,10 +35,10 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
   scheduled blocks on once); allowance sessions lift their block (it stays
   on). Not built: hardware/internet clock check (see §5); choosing the order in the GUI (fixed order). (L)
-- [ ] **Android extension can be switched off** (§3.13) in IronFox's add-ons
-  manager: ~1 free minute every few minutes (15 s stale + 60 s grace, 2 min
-  pause). Want: short grace once checked in before; each pause doubles (to
-  1 h) until it runs unbroken a while. (S)
+- [ ] **Android extension can be switched off** (§3.13): built (5 s grace
+  once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
+  `ExtensionGuard`). Unchecked: unit tests not run (no JDK/Android SDK on the
+  laptop overnight): run `./gradlew testDebugUnitTest`. (S)
 - [ ] **Project** (§3.13): backup/share (`--share`), preview, renaming
   built. Left: backup must include running locks, passwords, hotkeys,
   statistics. (S)

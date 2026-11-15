@@ -61,6 +61,104 @@ let readWhole = false;
 let addedNodes = new Set();
 let readingDone = false;
 
+// R-PAGE-1: no flashing. While a list or phrase set could still act on the
+// top page by its title or text (and no address exception spares it), the
+// page is kept invisible until it is judged, so a page that is blocked or
+// given a look never shows without it first. Invisible means opacity 0: its
+// text is still laid out and read (visibility: hidden would hide it from
+// innerText). Judged means the first full read once the page has settled:
+// loaded, or SETTLE_MS after its document is ready, or SETTLE_MS after an
+// address change without loading (its new content comes in by then). A page
+// that is taken away stays hidden until the block page replaces it; nothing
+// stays hidden longer than HIDE_CAP_MS.
+const HIDE_ID = "kc9k-hide";
+const HIDE_CAP_MS = 3000;
+const SETTLE_MS = 500;
+let hidden = false;
+let hideCap = null;
+let settleAt = 0; // when the page may be shown, once judged (0: not yet known)
+let takenAwayFor = null;
+
+function hidePage() {
+  if (window !== window.top || !/^https?:$/.test(location.protocol)) {
+    return;
+  }
+  if (!hidden) {
+    hidden = true;
+    clearTimeout(hideCap);
+    hideCap = setTimeout(showPage, HIDE_CAP_MS);
+  }
+  ensureHidden();
+}
+
+// ensureHidden puts the hiding style back if the page threw it out.
+function ensureHidden() {
+  const root = document.documentElement;
+  if (!hidden || !root || document.getElementById(HIDE_ID)) {
+    return;
+  }
+  const style = document.createElement("style");
+  style.id = HIDE_ID;
+  style.textContent = "html { opacity: 0 !important; pointer-events: none !important; }";
+  root.appendChild(style);
+}
+
+function showPage() {
+  hidden = false;
+  clearTimeout(hideCap);
+  const style = document.getElementById(HIDE_ID);
+  if (style) {
+    style.remove();
+  }
+}
+
+// mayActByText reports whether a list could still act on the page at url by
+// what it shows: one that reads the title or text (or whose exceptions do),
+// not in test mode, and not spared by an address exception.
+function mayActByText(url) {
+  return Boolean(lists) && lists.some((list) => !list.test && kc9kReadsPage([list]) &&
+    !(list.except.url.match.length > 0 && kc9kMatches(list.except.url, url)) &&
+    !kc9kUrlTermsMatch(list.except.urlTerms, url));
+}
+
+// showWhenJudged shows a hidden page once it is judged and settled, or reads
+// it again when it settles.
+function showWhenJudged(url) {
+  if (!hidden || takenAwayFor === url) {
+    return;
+  }
+  const wait = settleAt ? settleAt - Date.now() : SETTLE_MS;
+  if (wait <= 0) {
+    showPage();
+    return;
+  }
+  setTimeout(() => {
+    textChanged = true;
+    queueScan();
+  }, wait + 10);
+}
+
+// The page itself starts hidden until the lists are known (a few ms); load
+// shows it at once when no list reads pages.
+if (window === window.top) {
+  hidePage();
+  if (document.readyState !== "loading") {
+    settleAt = Date.now();
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    if (!settleAt) {
+      settleAt = Date.now() + SETTLE_MS;
+    }
+  });
+  // Loaded isn't settled: scripts often write the text in just after
+  // (ci/flash_test.py "late"), so the page waits SETTLE_MS after its
+  // document is ready either way.
+  window.addEventListener("load", () => {
+    textChanged = true;
+    queueScan();
+  });
+}
+
 // topUrl is the address of the tab, so a frame follows the page around it.
 function topUrl() {
   if (window === window.top) {
@@ -232,6 +330,14 @@ function load(page) {
   lists = kc9kCompileLists(page && page.lists);
   quotaOpen = Boolean(page && page.quota);
   textChanged = true;
+  if (window === window.top) {
+    const url = topUrl();
+    if (!mayActByText(url)) {
+      showPage();
+    } else if (judgedFor !== url) {
+      hidePage();
+    }
+  }
   render();
   scanKeywords();
 }
@@ -254,6 +360,7 @@ function scanKeywords() {
   enterAddress(url);
   const testing = lists.some((list) => list.test);
   if (readingDone && !testing) {
+    showWhenJudged(url);
     return;
   }
   // Lists that only look at addresses need no reading: this still catches a
@@ -278,7 +385,11 @@ function scanKeywords() {
   const matches = kc9kListMatches(lists, page);
   // Nothing more to learn once the page is taken away, or once every list
   // that reads it has reported all its actions.
-  if (kc9kTakesAway(kc9kOutcome(matches)) || lists.every((list) =>
+  const takenAway = kc9kTakesAway(kc9kOutcome(matches));
+  if (takenAway) {
+    takenAwayFor = url; // stays hidden until the block page replaces it
+  }
+  if (takenAway || lists.every((list) =>
     list.test || list.actions.every((a) => reportedHits.has(list.id + " " + a.action) ||
       matches.some((m) => m.list.id === list.id && m.actions.some((x) => x.action === a.action))))) {
     readingDone = true;
@@ -306,6 +417,7 @@ function scanKeywords() {
     judgedFor = url;
     browser.runtime.sendMessage({ type: "page-judged", url }).catch(() => {});
   }
+  showWhenJudged(url);
 }
 
 // enterAddress starts over for a new address of the top page: the one place
@@ -317,6 +429,12 @@ let judgedFor = null;
 function enterAddress(url) {
   if (keywordsFor === url) {
     return;
+  }
+  if (keywordsFor !== null && window === window.top && mayActByText(url)) {
+    // An address changed without loading (a click inside YouTube, Reddit):
+    // hidden until the new content is judged.
+    settleAt = Date.now() + SETTLE_MS;
+    hidePage();
   }
   keywordsFor = url;
   keywordLooks = new Set();
@@ -568,6 +686,14 @@ setInterval(checkMirror, 3000);
 // and typing come first. Only what was added is read again.
 new MutationObserver((records) => {
   textChanged = true;
+  if (window === window.top && lists) {
+    ensureHidden();
+    if (location.href !== keywordsFor && keywordsFor !== null) {
+      // The page moved to another address without loading: hide before the
+      // new content is painted (this runs before the next frame).
+      render();
+    }
+  }
   if (readWhole && !readingDone && addedNodes.size < 5000) {
     for (const record of records) {
       for (const node of record.addedNodes) {
@@ -716,8 +842,11 @@ setInterval(() => {
 // but the background script forgot what it earned: read it again.
 window.addEventListener("pageshow", (event) => {
   if (event.persisted && window === window.top) {
+    // Shown before it was cached, so it isn't hidden again: just re-read.
     keywordsFor = null;
     judgedFor = null;
+    takenAwayFor = null;
+    settleAt = Date.now();
     render();
     scanKeywords();
   }

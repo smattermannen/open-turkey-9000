@@ -96,9 +96,19 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     (`parseUserDuration`), confirmations say "69 days 10 hours 40
     minutes". The monk mode button never passed `--yes`, so the CLI always
     refused it: now confirmed (R-LOCK-12) and run.
-  - [ ] No flashing (R-PAGE-1): a page judged by its text shows before it
-    is blocked or gets its looks (also on blocks with title/text exceptions,
-    whose sites are left to the extension). Not built. M
+  - [ ] No flashing (R-PAGE-1). Built (extension 1.20.0): while a list or
+    phrase set could still act on the top page by its title or text (and no
+    address exception spares it), the page is invisible (opacity 0, so it is
+    still read) until judged: the first full read 500 ms after its document
+    is ready, or after an address change without loading (noticed by the
+    page's own DOM changes, before the next paint); a page taken away stays
+    hidden until the block page; never longer than 3 s; pages no list reads
+    show at once. `ci/flash_test.py` records, at every animation frame,
+    whether the page was painted with the word: the old extension painted a
+    blocked word for 2–16 frames on load and ~2 s after an address change;
+    now none. All browser suites pass in LibreWolf (run in a cloud
+    container, 98 checks). Confirm on the laptop: Chrome, and real sites
+    (a 0.5 s blank on pages while text lists are on). M
   - [ ] GUI overall unclear, hard to read, not pretty or easy to use (owner,
     2026-11-15; R-GUI-3). Redesign page by page. Done: a design layer
     (cards, status pills, page titles with one-line subtitles, ? popovers

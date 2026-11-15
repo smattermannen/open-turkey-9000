@@ -682,7 +682,7 @@ class EditableList(Gtk.Box):
 
     def __init__(self, title, placeholder, on_add, on_remove,
                  on_import=None, on_export=None, help_text="", search=False, hidden=False,
-                 on_activate=None, split=None):
+                 on_activate=None, split=None, entry=True):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
         self.split = split or split_entries
@@ -732,8 +732,9 @@ class EditableList(Gtk.Box):
         add.connect("clicked", self._add)
         remove = Gtk.Button(label="Remove")
         remove.connect("clicked", self._remove)
-        row.pack_start(self.entry, True, True, 0)
-        row.pack_start(add, False, False, 0)
+        if entry:
+            row.pack_start(self.entry, True, True, 0)
+            row.pack_start(add, False, False, 0)
         row.pack_start(remove, False, False, 0)
         for label_text, handler in (("Import…", on_import), ("Export…", on_export)):
             if handler:
@@ -1031,7 +1032,8 @@ class ListCard(Gtk.Frame):
             self.window.run(self.command("delete"), then=self.window.queued_note)
 
 
-MAX_WORD_SETS = 9
+# A sanity bound only: a phrase may have any number of word sets (§4.3).
+MAX_WORD_SETS = 100
 
 
 def phrase_text(sets, length=0):
@@ -1046,20 +1048,16 @@ def phrase_text(sets, length=0):
     return f"{text} :{length}" if length and length != necessary else text
 
 
-class PhraseDialog(Gtk.Dialog):
-    """Builds a phrase (§4.3): its word sets, each ticked necessary or
-    optional, and the phrase length; get_text() gives the typed form."""
+class PhraseEditor(Gtk.Box):
+    """Builds a phrase inside its set's card (§4.3, not a pop-up): its word
+    sets, each ticked necessary or optional, and the phrase length;
+    get_text() gives the typed form. on_change(text) follows every edit."""
 
-    def __init__(self, parent, initial=None):
-        super().__init__(title="Phrase", transient_for=parent, modal=True)
-        self.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        self.ok = self.add_button("Save" if initial else "Add", Gtk.ResponseType.OK)
-        self.set_default_size(600, -1)
-        area = self.get_content_area()
-        area.set_spacing(8)
-        area.set_border_width(12)
-        area.pack_start(heading("Phrase", "medium"), False, False, 0)
-        area.pack_start(dim(
+    def __init__(self, initial=None, on_change=None):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.on_change = on_change
+        self.loading = False
+        self.pack_start(dim(
             "A page counts when it has one term of each necessary word set, directly after "
             "each other in any order, in one sentence (no punctuation between). Separate a "
             "set's terms with commas; * matches inside a word (porn*). A term ending in - "
@@ -1067,26 +1065,35 @@ class PhraseDialog(Gtk.Dialog):
             "20 words may stand between them. The first two word sets are always necessary."),
             False, False, 0)
         self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        area.pack_start(self.rows, False, False, 0)
+        self.pack_start(self.rows, False, False, 0)
         self.add_set = Gtk.Button(label="+ Add word set", halign=Gtk.Align.START)
         self.add_set.connect("clicked", lambda _b: self.add_row())
-        area.pack_start(self.add_set, False, False, 0)
+        self.pack_start(self.add_set, False, False, 0)
         length_row = Gtk.Box(spacing=8)
         length_row.pack_start(Gtk.Label(label="Phrase length (terms a match needs):"), False, False, 0)
         self.length = Gtk.SpinButton.new_with_range(2, MAX_WORD_SETS, 1)
         self.length.connect("value-changed", lambda _s: self.changed())
         length_row.pack_start(self.length, False, False, 0)
-        area.pack_start(length_row, False, False, 0)
+        self.pack_start(length_row, False, False, 0)
         self.preview = dim("", wrap=True)
         self.preview.set_selectable(True)
-        area.pack_start(self.preview, False, False, 0)
+        self.pack_start(self.preview, False, False, 0)
+        self.load(initial)
+
+    def load(self, initial=None):
+        """Shows a phrase (a phrase set's {"sets", "length"}), or two empty
+        word sets."""
+        for row in self.rows.get_children():
+            self.rows.remove(row)
         sets = (initial or {}).get("sets") or [{"terms": []}, {"terms": []}]
+        self.loading = True
         for word_set in sets:
             self.add_row(word_set.get("terms", []), word_set.get("necessary", True))
+        self.loading = False
         self.last_necessary = self.necessary()
+        self.length.set_range(2, max(len(sets), 2))
         self.length.set_value((initial or {}).get("length") or self.last_necessary)
         self.changed()
-        self.show_all()
 
     def add_row(self, terms=(), necessary=True):
         row = Gtk.Box(spacing=8)
@@ -1122,7 +1129,7 @@ class PhraseDialog(Gtk.Dialog):
         return phrase_text(sets, self.length.get_value_as_int())
 
     def changed(self):
-        if not hasattr(self, "length"):
+        if not hasattr(self, "length") or self.loading:
             return
         rows = self.rows.get_children()
         for i, row in enumerate(rows):
@@ -1140,14 +1147,15 @@ class PhraseDialog(Gtk.Dialog):
             self.length.set_value(low)
         self.add_set.set_sensitive(len(rows) < MAX_WORD_SETS)
         text = self.get_text()
-        self.ok.set_sensitive(bool(text))
         self.preview.set_text(f"Phrase: {text}" if text else "Fill in at least two word sets.")
+        if self.on_change:
+            self.on_change(text)
 
 
 class PhraseSetCard(ListCard):
     """One phrase set (§4.3): scope, actions, a threshold of different
-    phrases per action, test mode, and its phrases, each edited in a
-    PhraseDialog. Reuses ListCard's handling of actions and their settings."""
+    phrases per action, test mode, and its phrases, edited in the
+    PhraseEditor inside the card. Reuses ListCard's handling of actions and their settings."""
 
     def __init__(self, window, data):
         Gtk.Frame.__init__(self)
@@ -1221,14 +1229,29 @@ class PhraseSetCard(ListCard):
         box.pack_start(self.threshold_row, False, False, 0)
 
         self.entries = EditableList(
-            "", "[eat, nice] [hello, grandpa]", self.add_entries, self.remove_entry,
+            "", "", self.add_entries, self.remove_entry,
             search=True, hidden=True, on_activate=self.edit_phrase,
-            split=lambda text: [text.strip()] if text.strip() else [])
+            split=lambda text: [text.strip()] if text.strip() else [], entry=False)
         box.pack_start(self.entries, True, True, 0)
-        create = Gtk.Button(label="+ Create new phrase", halign=Gtk.Align.START)
-        create.connect("clicked", lambda _b: self.edit_phrase(None))
-        box.pack_start(create, False, False, 0)
+        box.pack_start(dim("Double-click a phrase to load it into the editor below."), False, False, 0)
+
+        # The phrase editor lives in the card (§4.3), not in a pop-up.
+        self.editing = None  # the phrase loaded for a change, or None for a new one
+        self.editor_title = Gtk.Label(xalign=0)
+        box.pack_start(self.editor_title, False, False, 0)
+        self.editor = PhraseEditor(on_change=self.editor_changed)
+        box.pack_start(self.editor, False, False, 0)
+        buttons = Gtk.Box(spacing=6)
+        self.save_phrase = Gtk.Button(label="Add phrase")
+        self.save_phrase.get_style_context().add_class("suggested-action")
+        self.save_phrase.connect("clicked", lambda _b: self.commit_phrase())
+        clear = Gtk.Button(label="Clear")
+        clear.connect("clicked", lambda _b: self.edit_phrase(None))
+        buttons.pack_start(self.save_phrase, False, False, 0)
+        buttons.pack_start(clear, False, False, 0)
+        box.pack_start(buttons, False, False, 0)
         self.update(data)
+        self.edit_phrase(None)
 
     def update(self, data):
         self.data = data
@@ -1266,22 +1289,31 @@ class PhraseSetCard(ListCard):
         self.window.run(self.command("test", "on" if check.get_active() else "off"))
 
     def edit_phrase(self, text):
-        """Adds a phrase, or changes one (text): the new one is added, then
-        the old one removed, which weakens and may be refused."""
+        """Loads a phrase (text) into the editor to change it, or clears the
+        editor for a new one (None)."""
         old = next((p for p in self.data["phrases"] if p["text"] == text), None) if text else None
         if text and old is None:
             return
-        dialog = PhraseDialog(self.window, old)
-        answer = dialog.run()
-        new = dialog.get_text()
-        dialog.destroy()
-        if answer != Gtk.ResponseType.OK or not new or (old and new == old["text"]):
+        self.editing = old
+        self.editor_title.set_markup("<b>Change phrase</b>" if old else "<b>New phrase</b>")
+        self.save_phrase.set_label("Save changes" if old else "Add phrase")
+        self.editor.load(old)
+
+    def editor_changed(self, text):
+        if hasattr(self, "save_phrase"):
+            self.save_phrase.set_sensitive(bool(text) and not (self.editing and text == self.editing["text"]))
+
+    def commit_phrase(self):
+        """Adds the editor's phrase; a change adds the new one, then removes
+        the old one, which weakens and may be refused (R-WEAK-5)."""
+        new, old = self.editor.get_text(), self.editing
+        if not new or (old and new == old["text"]):
             return
         if old is None:
             self.add_entries([new])
             return
         self.window.run(self.command("add", new), then=lambda _o: self.window.run(
-            self.command("remove", text)))
+            self.command("remove", old["text"])))
 
     def save_numbers(self, _button):
         current = {a["action"]: a for a in self.data["actions"]}
@@ -3747,15 +3779,31 @@ class Window(Gtk.ApplicationWindow):
         area.pack_start(entry, False, False, 0)
         checks = {}
         for name, title in LIST_PLACES:
-            checks[name] = Gtk.CheckButton(label=title, active=name == "text")
+            # Titles too by default: a phrase in a page's title should count.
+            checks[name] = Gtk.CheckButton(label=title, active=name in ("title", "text"))
             area.pack_start(checks[name], False, False, 0)
+        entry.set_placeholder_text("optional")
         dialog.show_all()
         answer = dialog.run()
         name = entry.get_text().strip()
         places = [place for place, check in checks.items() if check.get_active()]
         dialog.destroy()
-        if answer == Gtk.ResponseType.OK and name:
-            self.run(["phrase-set", "create", self.selected, name] + ["--" + p for p in places])
+        if answer != Gtk.ResponseType.OK:
+            return
+        if not name:
+            # §4.3: an unnamed phrase set gets a name.
+            name = self.free_phrase_set_name()
+        self.run(["phrase-set", "create", self.selected, name] + ["--" + p for p in places])
+
+    def free_phrase_set_name(self):
+        """'Phrase set N', the first N no phrase set of the block has
+        (names compare case-insensitively)."""
+        block = self.blocks.get(self.selected) or {}
+        taken = {p["name"].lower() for p in block.get("phrase_sets") or []}
+        n = 1
+        while f"phrase set {n}" in taken:
+            n += 1
+        return f"Phrase set {n}"
 
     # Block actions -------------------------------------------------------
     def create_block(self, _button):

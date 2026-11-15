@@ -52,8 +52,9 @@ type Phrase struct {
 	Length int       `json:"length,omitempty"`
 }
 
-// MaxWordSets bounds a phrase.
-const MaxWordSets = 9
+// MaxWordSets is only a sanity bound: a phrase may have any number of word
+// sets (§4.3).
+const MaxWordSets = 100
 
 // Normalize makes the first two word sets necessary (R-PHRASE-1), trims
 // and lowercases the terms, and drops empty ones.

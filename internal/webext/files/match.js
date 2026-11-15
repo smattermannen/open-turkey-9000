@@ -941,8 +941,10 @@ function kc9kPhraseMatcher(phrase, scope) {
           }
         }
       });
-      // Chains of term places, each set used once.
-      const extend = (last, used, count, covered) => {
+      // Chains of term places, each set used once (an array, not a bit
+      // mask: a phrase may have any number of word sets).
+      const used = new Array(sets.length).fill(false);
+      const extend = (last, count, covered) => {
         if (covered === necessary && count >= length && !last.out) {
           return true;
         }
@@ -965,10 +967,13 @@ function kc9kPhraseMatcher(phrase, scope) {
           next.push(...at[last.end + 1].filter((p) => !p.into));
         }
         for (const p of next) {
-          if (used & (1 << p.set)) {
+          if (used[p.set]) {
             continue;
           }
-          if (extend(p, used | (1 << p.set), count + 1, covered + (sets[p.set].necessary ? 1 : 0))) {
+          used[p.set] = true;
+          const found = extend(p, count + 1, covered + (sets[p.set].necessary ? 1 : 0));
+          used[p.set] = false;
+          if (found) {
             return true;
           }
         }
@@ -976,7 +981,13 @@ function kc9kPhraseMatcher(phrase, scope) {
       };
       for (const places of at) {
         for (const p of places) {
-          if (!p.into && extend(p, 1 << p.set, 1, sets[p.set].necessary ? 1 : 0)) {
+          if (p.into) {
+            continue;
+          }
+          used[p.set] = true;
+          const found = extend(p, 1, sets[p.set].necessary ? 1 : 0);
+          used[p.set] = false;
+          if (found) {
             return true;
           }
         }

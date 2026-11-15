@@ -185,7 +185,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `Check` refuses one-ended bridges (mirrored `kc9kPhraseCheck`). Rules
   with negative IDs (`phraseRules`), matched by `kc9kPhraseMatcher`.
   `HasPhrases` makes a block non-empty. Names unique case-insensitively.
-  GUI: `PhraseSetCard` (a `ListCard` keyed by −id), `PhraseDialog`. Files:
+  GUI: `PhraseSetCard` (a `ListCard` keyed by −id) with the in-card
+  `PhraseEditor` (double-click loads a phrase); word sets bounded only by
+  `db.MaxWordSets` (100). Files:
   `cli/phraseexport.go`; `db.AddPhraseSet`. Phrase clusters (`phrases`
   set): `cluster copy` → phrase set, `cluster save` from one; no recording.
 - **Clusters** (`db/clusters.go`, `cli/clusters.go`): lists outside blocks,

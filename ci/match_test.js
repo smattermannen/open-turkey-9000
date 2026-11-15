@@ -155,6 +155,15 @@ const failed0 = [];
       failed0.push("phrase " + JSON.stringify(phrase.sets) + " on " + JSON.stringify(text) + ": want " + want);
     }
   }
+  // §4.3: any number of word sets (the old bit mask stopped at 31).
+  const manySets = [];
+  for (let i = 0; i < 40; i++) {
+    manySets.push(["w" + i]);
+  }
+  const manyWords = manySets.map((t) => t[0]).join(" ");
+  if (!kc9kPhraseMatcher(P(manySets)).test(manyWords) || kc9kPhraseMatcher(P(manySets)).test(manyWords.replace(" w35 ", " x "))) {
+    failed0.push("a phrase of 40 word sets");
+  }
   const inUrl = kc9kPhraseMatcher(P([["long cat"], ["video"]]), "url");
   if (!inUrl.test("https://example.com/long-cat_video?x=1") || !inUrl.test("https://example.com/long%20cat/video")) {
     failed0.push("a phrase in a decoded address");

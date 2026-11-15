@@ -35,12 +35,6 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
   scheduled blocks on once); allowance sessions lift their block (it stays
   on). Not built: hardware/internet clock check (see §5); choosing the order in the GUI (fixed order). (L)
-- [ ] **Phrase sets in the GUI** (§4.3): Differs. Unnamed "New phrase set"
-  silently creates nothing (`create_phrase_set`). Two editors (typed box and
-  pop-up `PhraseDialog`, too tall); want only boxes in the card, unlimited
-  word sets (today 9: `MAX_WORD_SETS`, `db.MaxWordSets`; bit mask in
-  `kc9kPhraseMatcher` caps at 31). New sets default to text only, so titles
-  seem missed. (S)
 - [ ] **Android extension can be switched off** (§3.13) in IronFox's add-ons
   manager: ~1 free minute every few minutes (15 s stale + 60 s grace, 2 min
   pause). Want: short grace once checked in before; each pause doubles (to

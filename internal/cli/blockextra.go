@@ -217,24 +217,8 @@ var blockExportCmd = &cobra.Command{
 		if err := revealBlock(database, args[0]); err != nil {
 			return err
 		}
-		detail, err := database.GetBlock(args[0])
+		out, err := buildBlockExport(database, args[0])
 		if err != nil {
-			return err
-		}
-		out := blockExport{Name: detail.Name, Apps: detail.Apps, Titles: detail.Titles, Lists: []listExport{}}
-		if n, err := database.BlockNepsis(detail.Name); err != nil {
-			return err
-		} else if n.On() {
-			out.Nepsis = &n
-		}
-		if out.Apps == nil {
-			out.Apps = []string{}
-		}
-		for _, l := range detail.Lists {
-			out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Where: l.Where.List(),
-				Actions: l.Actions, Entries: l.Entries})
-		}
-		if out.PhraseSets, err = exportPhraseSets(database, detail.Name); err != nil {
 			return err
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
@@ -244,6 +228,31 @@ var blockExportCmd = &cobra.Command{
 		fmt.Println(string(data))
 		return nil
 	}),
+}
+
+// buildBlockExport is a block as 'block export' writes it.
+func buildBlockExport(database *db.DB, name string) (blockExport, error) {
+	detail, err := database.GetBlock(name)
+	if err != nil {
+		return blockExport{}, err
+	}
+	out := blockExport{Name: detail.Name, Apps: detail.Apps, Titles: detail.Titles, Lists: []listExport{}}
+	if n, err := database.BlockNepsis(detail.Name); err != nil {
+		return out, err
+	} else if n.On() {
+		out.Nepsis = &n
+	}
+	if out.Apps == nil {
+		out.Apps = []string{}
+	}
+	for _, l := range detail.Lists {
+		out.Lists = append(out.Lists, listExport{Name: l.Name, Kind: l.Kind, Where: l.Where.List(),
+			Actions: l.Actions, Entries: l.Entries})
+	}
+	if out.PhraseSets, err = exportPhraseSets(database, detail.Name); err != nil {
+		return out, err
+	}
+	return out, nil
 }
 
 var blockImportCmd = &cobra.Command{
@@ -259,81 +268,88 @@ var blockImportCmd = &cobra.Command{
 		if err := json.Unmarshal(data, &in); err != nil {
 			return fmt.Errorf("failed to parse %s: %w", args[0], err)
 		}
-		if in.Name == "" {
-			return fmt.Errorf("import file has no block name")
-		}
-		exported := in.Lists
-		if exported == nil {
-			if exported, err = in.legacyLists(); err != nil {
-				return err
-			}
-		}
-
-		if what := projectMonk(projectExport{Blocks: []projectBlock{{blockExport: in}}}); what != "" {
-			if err := requireMonkAck(cmd, what); err != nil {
-				return err
-			}
-		}
-
-		// Validate before writing anything.
-		lists, err := toLists(exported)
-		if err != nil {
-			return fmt.Errorf("in import: %w", err)
-		}
-		phraseSets, err := toPhraseSets(in.PhraseSets)
-		if err != nil {
-			return fmt.Errorf("in import: %w", err)
-		}
-		for _, app := range in.Apps {
-			if err := blocker.ValidAppEntry(app); err != nil {
-				return fmt.Errorf("in import: %w", err)
-			}
-		}
-		if err := checkTitleKeywords(in.Titles); err != nil {
-			return fmt.Errorf("in import: %w", err)
-		}
-		if in.Nepsis != nil && in.Nepsis.On() {
-			if err := in.Nepsis.Check(); err != nil {
-				return fmt.Errorf("in import: bypass prevention: %w", err)
-			}
-		}
-
-		database, err := openDB()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-
-		if err := database.CreateBlock(in.Name); err != nil {
-			return err
-		}
-		if err := database.SetLists(in.Name, lists); err != nil {
-			return err
-		}
-		if err := addPhraseSets(database, in.Name, phraseSets); err != nil {
-			return err
-		}
-		if len(in.Apps) > 0 {
-			if err := database.AddApps(in.Name, in.Apps); err != nil {
-				return err
-			}
-		}
-		if len(in.Titles) > 0 {
-			if err := database.AddTitles(in.Name, in.Titles); err != nil {
-				return err
-			}
-		}
-		if in.Nepsis != nil {
-			if err := database.SetBlockNepsis(in.Name, *in.Nepsis); err != nil {
-				return err
-			}
-		}
-		if err := database.MigrateCombinations(); err != nil {
-			return err
-		}
-		fmt.Printf("Imported block '%s' (%d lists, %d phrase sets, %d apps).\n", in.Name, len(lists), len(phraseSets), len(in.Apps))
-		return nil
+		return importBlockExport(cmd, in)
 	},
+}
+
+// importBlockExport creates a block from a block export (also a template),
+// validating everything before writing anything.
+func importBlockExport(cmd *cobra.Command, in blockExport) error {
+	var err error
+	if in.Name == "" {
+		return fmt.Errorf("import file has no block name")
+	}
+	exported := in.Lists
+	if exported == nil {
+		if exported, err = in.legacyLists(); err != nil {
+			return err
+		}
+	}
+
+	if what := projectMonk(projectExport{Blocks: []projectBlock{{blockExport: in}}}); what != "" {
+		if err := requireMonkAck(cmd, what); err != nil {
+			return err
+		}
+	}
+
+	// Validate before writing anything.
+	lists, err := toLists(exported)
+	if err != nil {
+		return fmt.Errorf("in import: %w", err)
+	}
+	phraseSets, err := toPhraseSets(in.PhraseSets)
+	if err != nil {
+		return fmt.Errorf("in import: %w", err)
+	}
+	for _, app := range in.Apps {
+		if err := blocker.ValidAppEntry(app); err != nil {
+			return fmt.Errorf("in import: %w", err)
+		}
+	}
+	if err := checkTitleKeywords(in.Titles); err != nil {
+		return fmt.Errorf("in import: %w", err)
+	}
+	if in.Nepsis != nil && in.Nepsis.On() {
+		if err := in.Nepsis.Check(); err != nil {
+			return fmt.Errorf("in import: bypass prevention: %w", err)
+		}
+	}
+
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+
+	if err := database.CreateBlock(in.Name); err != nil {
+		return err
+	}
+	if err := database.SetLists(in.Name, lists); err != nil {
+		return err
+	}
+	if err := addPhraseSets(database, in.Name, phraseSets); err != nil {
+		return err
+	}
+	if len(in.Apps) > 0 {
+		if err := database.AddApps(in.Name, in.Apps); err != nil {
+			return err
+		}
+	}
+	if len(in.Titles) > 0 {
+		if err := database.AddTitles(in.Name, in.Titles); err != nil {
+			return err
+		}
+	}
+	if in.Nepsis != nil {
+		if err := database.SetBlockNepsis(in.Name, *in.Nepsis); err != nil {
+			return err
+		}
+	}
+	if err := database.MigrateCombinations(); err != nil {
+		return err
+	}
+	fmt.Printf("Imported block '%s' (%d lists, %d phrase sets, %d apps).\n", in.Name, len(lists), len(phraseSets), len(in.Apps))
+	return nil
 }
 
 func init() {

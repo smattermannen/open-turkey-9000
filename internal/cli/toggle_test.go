@@ -243,3 +243,35 @@ func TestFreezeScheduleLocks(t *testing.T) {
 	}
 	mustRun(t, "freeze", "schedule", "remove", "1")
 }
+
+// §3.2: a template is a saved block definition; blocks made from it start
+// inactive and are independent.
+func TestTemplates(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "work")
+	mustRun(t, "block", "add", "work", "reddit.com")
+	mustRun(t, "block", "add-app", "work", "steam")
+	mustRun(t, "template", "save", "work", "Focus")
+	mustRun(t, "block", "create", "study", "--template", "focus")
+	b, err := d.GetBlock("study")
+	if err != nil || b.Active || len(b.Apps) != 1 {
+		t.Fatalf("from template: %+v, %v", b, err)
+	}
+	found := false
+	for _, l := range b.Lists {
+		for _, e := range l.Entries {
+			found = found || e == "reddit.com"
+		}
+	}
+	if !found {
+		t.Error("the template's entries are missing")
+	}
+	if err := runCLI(t, "block", "create", "x", "--template", "nope"); err == nil {
+		t.Error("an unknown template accepted")
+	}
+	mustRun(t, "template", "remove", "Focus")
+	if names, _ := d.Templates(); len(names) != 0 {
+		t.Errorf("templates = %v", names)
+	}
+}

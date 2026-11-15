@@ -3336,7 +3336,9 @@ class Window(Gtk.ApplicationWindow):
         rename.connect("clicked", self.rename_block)
         duplicate = Gtk.Button(label="Duplicate…")
         duplicate.connect("clicked", self.duplicate_block)
-        for button in (self.delete_button, rename, duplicate):
+        as_template = Gtk.Button(label="Save as template…")
+        as_template.connect("clicked", self.save_template)
+        for button in (self.delete_button, rename, duplicate, as_template):
             actions.pack_end(button, False, False, 0)
         self.detail.pack_start(actions, False, False, 0)
 
@@ -3928,11 +3930,37 @@ class Window(Gtk.ApplicationWindow):
 
     # Block actions -------------------------------------------------------
     def create_block(self, _button):
+        templates = (self.state or {}).get("templates") or []
+        template = None
+        if templates:
+            # §3.2: start from one of your templates, or empty.
+            dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                       buttons=Gtk.ButtonsType.OK_CANCEL, text="New block",
+                                       secondary_text="Start empty or from a template.")
+            combo = Gtk.ComboBoxText()
+            combo.append("", "Empty")
+            for name in templates:
+                combo.append(name, "Template: " + name)
+            combo.set_active(0)
+            dialog.get_message_area().pack_start(combo, False, False, 0)
+            dialog.show_all()
+            answer = dialog.run()
+            template = combo.get_active_id()
+            dialog.destroy()
+            if answer != Gtk.ResponseType.OK:
+                return
         name = self.ask_text("New block", "A short name, such as social-media.")
         if name:
             self.selected = name
             self.stack.set_visible_child_name("blocks")
-            self.run(["block", "create", name])
+            self.run(["block", "create", name] + (["--template", template] if template else []))
+
+    def save_template(self, _button):
+        if not self.selected:
+            return
+        name = self.ask_text("Save as template", "A name for this block's definition.", initial=self.selected)
+        if name:
+            self.run(["template", "save", self.selected, name])
 
     def rename_block(self, _button):
         name = self.ask_text("Rename block", initial=self.selected or "")

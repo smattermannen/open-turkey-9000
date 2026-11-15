@@ -106,12 +106,13 @@ type placeExport struct {
 }
 
 type projectExport struct {
-	KC9KProject int             `json:"kc9k_project"`
-	Kind        string          `json:"kind,omitempty"` // "backup" or "share"
-	Places      []placeExport   `json:"places,omitempty"`
-	Blocks      []projectBlock  `json:"blocks"`
-	Clusters    []clusterExport `json:"clusters,omitempty"`
-	Browser     map[string]bool `json:"browser_options,omitempty"`
+	KC9KProject int                        `json:"kc9k_project"`
+	Kind        string                     `json:"kind,omitempty"` // "backup" or "share"
+	Places      []placeExport              `json:"places,omitempty"`
+	Blocks      []projectBlock             `json:"blocks"`
+	Clusters    []clusterExport            `json:"clusters,omitempty"`
+	Templates   map[string]json.RawMessage `json:"templates,omitempty"` // §3.2
+	Browser     map[string]bool            `json:"browser_options,omitempty"`
 	// Tamper holds block unsupported browsers (in older files the browser
 	// option force-librewolf).
 	Tamper  map[string]bool   `json:"tamper_protection,omitempty"`
@@ -466,6 +467,16 @@ passwords, hotkeys and statistics are never in it.`,
 			out.Freezes = append(out.Freezes, w)
 		}
 		out.Circadian = exportCircadian(database)
+		if names, err := database.Templates(); err == nil {
+			for _, n := range names {
+				if data, err := database.Template(n); err == nil {
+					if out.Templates == nil {
+						out.Templates = map[string]json.RawMessage{}
+					}
+					out.Templates[n] = json.RawMessage(data)
+				}
+			}
+		}
 		out.StrictUse = enforce.StrictUseOn(database)
 		if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
 			n := enforce.LoadNoticeOptions(database)
@@ -836,6 +847,23 @@ With --dry-run, says what would happen and changes nothing.`,
 		}
 		if err := importCircadian(database, in.Circadian, dry, say); err != nil {
 			return err
+		}
+		for name, raw := range in.Templates {
+			var check blockExport
+			if json.Unmarshal(raw, &check) != nil || name == "" {
+				fmt.Printf("Template '%s' in the file is damaged: left out.\n", name)
+				continue
+			}
+			if _, err := database.Template(name); err == nil {
+				fmt.Printf("Template '%s' exists already: left as it is.\n", name)
+				continue
+			}
+			say("add template '%s'", name)
+			if !dry {
+				if err := database.SaveTemplate(name, string(raw)); err != nil {
+					return err
+				}
+			}
 		}
 		if in.StrictUse && !enforce.StrictUseOn(database) {
 			say("turn on strict use counting")

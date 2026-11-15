@@ -248,6 +248,7 @@ type guiState struct {
 	Notifications enforce.NoticeOptions     `json:"notifications"`
 	StrictUse     bool                      `json:"strict_use"`
 	StrictExempt  []string                  `json:"strict_exempt"` // §3.8
+	Templates     []string                  `json:"templates"`     // §3.2
 	// UnsupportedBrowsers is block unsupported browsers, with its lock;
 	// Browsers the supported browsers (§4.10 Browsers).
 	UnsupportedBrowsers bool           `json:"unsupported_browsers"`
@@ -380,6 +381,9 @@ var guiStateCmd = &cobra.Command{
 		state.Notifications = enforce.LoadNoticeOptions(database)
 		state.StrictUse = enforce.StrictUseOn(database)
 		state.StrictExempt = append([]string{}, enforce.ExemptFolders(database)...)
+		if state.Templates, err = database.Templates(); err != nil {
+			return err
+		}
 		if v, err := database.GetSetting(SettingPasswordForLocks); err == nil {
 			state.PasswordLocks = v == "on" && state.SettingsPass
 		}

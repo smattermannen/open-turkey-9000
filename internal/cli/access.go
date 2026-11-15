@@ -86,6 +86,7 @@ var commandAreas = map[string][]string{
 	"circadian":    {areaSettings},
 	"hotkey":       {areaSettings},
 	"option":       {areaSettings},
+	"behaviour":    {areaSettings},
 	"password":     {areaSettings},
 	"master":       {areaSettings},
 	"master-set":   {areaSettings},

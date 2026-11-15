@@ -49,7 +49,7 @@ def cleanup():
         ot_quiet("list", "test", name, "off")
         ot_quiet("stop", name)
         ot_quiet("block", "remove", name)
-    ot_quiet("option", "block-page-details", "on")
+    ot_quiet("behaviour", "block-page-details", "on")
     subprocess.run(["sudo", "rm", "-f", REMOTE_CONTROL_MARKER])
 
 
@@ -208,12 +208,12 @@ try:
         check("with test mode off the page is blocked", on_block_page(driver))
 
         # The option hides the reason; the page is blocked all the same.
-        ot("option", "block-page-details", "off")
+        ot("behaviour", "block-page-details", "off")
         time.sleep(5)
         visit(driver, "https://example.org/")
         check("with the option off the block page gives no reason",
               on_block_page(driver) and (text_of(driver, "why") or "") == "")
-        ot("option", "block-page-details", "on")
+        ot("behaviour", "block-page-details", "on")
 
         # Actions that change the page: dark, no video.
         ot("block", "create", "extralooks")

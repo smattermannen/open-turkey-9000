@@ -750,7 +750,7 @@ With --dry-run, says what would happen and changes nothing.`,
 		}
 		for _, o := range enforce.Options {
 			if want, given := in.Options[o.Name]; given && want != enforce.OptionOn(database, o.Name) {
-				say("turn the option %s %s", o.Name, map[bool]string{true: "on", false: "off"}[want])
+				say("turn the behaviour setting %s %s", o.Name, map[bool]string{true: "on", false: "off"}[want])
 				if !dry {
 					if err := enforce.SetOption(database, o.Name, want); err != nil {
 						return err

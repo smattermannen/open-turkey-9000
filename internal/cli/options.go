@@ -1,4 +1,4 @@
-// options.go — kc9k option: switches for how KC9K behaves.
+// options.go — kc9k behaviour: behaviour settings, how KC9K behaves (§3.13).
 package cli
 
 import (
@@ -11,9 +11,11 @@ import (
 )
 
 var optionCmd = &cobra.Command{
-	Use:   "option [<name> on|off]",
-	Short: "Switches for how Killer Chicken 9000 behaves",
-	Long: `Options change how Killer Chicken 9000 behaves, not what it blocks:
+	Use:     "behaviour [<name> on|off]",
+	Aliases: []string{"option"},
+	Short:   "Behaviour settings: how Killer Chicken 9000 behaves",
+	Long: `Behaviour settings change how Killer Chicken 9000 behaves, not what it
+blocks; they are never locked:
 
   polite-close        ask a blocked app to close (so it can offer to save)
                       and kill it a few seconds later; off kills at once
@@ -34,7 +36,7 @@ Without arguments, shows them.`,
 			return nil
 		}
 		if len(args) != 2 || (args[1] != "on" && args[1] != "off") {
-			return fmt.Errorf("usage: kc9k option <name> on|off")
+			return fmt.Errorf("usage: kc9k behaviour <name> on|off")
 		}
 		name := strings.ToLower(args[0])
 		if err := enforce.SetOption(database, name, args[1] == "on"); err != nil {

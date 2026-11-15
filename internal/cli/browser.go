@@ -48,10 +48,10 @@ until you turn it off: LibreWolf's developer tools can switch the extension
 off, so turn it off only to develop websites. Browsers read it when they start.
 no-private turns off private windows in LibreWolf (and Firefox), from the
 browser's next start; during website blocks, older LibreWolf windows are
-closed so it restarts. Without arguments, lists every option,
+closed so it restarts. Without arguments, lists every browser setting,
 its locks, and the installed LibreWolf version.
 
-The Killer Chicken extension isn't an option: it is always installed, and
+The Killer Chicken extension isn't a setting: it is always installed, and
 while a block has websites (or web-only or force-search is on), browsers
 without it are closed. It runs in the supported browsers, LibreWolf, Google
 Chrome and Chromium; 'kc9k browsers' lists them and installs them. To close
@@ -61,7 +61,7 @@ every other browser at any time, turn on 'kc9k tamper unsupported-browsers'.`,
 			return nil
 		}
 		if len(args) != 0 && len(args) != 2 {
-			return fmt.Errorf("give no arguments to list options, a setting and on|off, unlock and a setting, or install-librewolf")
+			return fmt.Errorf("give no arguments to list browser settings, a setting and on|off, unlock and a setting, or install-librewolf")
 		}
 		return nil
 	},
@@ -102,7 +102,7 @@ every other browser at any time, turn on 'kc9k tamper unsupported-browsers'.`,
 			return nil
 		case "off":
 			if lockFlagsGiven(cmd) {
-				return fmt.Errorf("lock options only go with 'on'")
+				return fmt.Errorf("lock flags only go with 'on'")
 			}
 			if err := browserSettingOff(database, name); err != nil {
 				return err
@@ -462,7 +462,7 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 		locks = append(locks, lockToSet{target, "timer lock", timerLength(cur.trusted, next.LockedUntil)})
 	}
 	if next.TimerAfter != old.TimerAfter {
-		locks = append(locks, lockToSet{target, "timer lock", (time.Duration(next.TimerAfter)*time.Second).String() + ", counting from when the locks before it are unlocked"})
+		locks = append(locks, lockToSet{target, "timer lock", (time.Duration(next.TimerAfter) * time.Second).String() + ", counting from when the locks before it are unlocked"})
 	}
 	if next.LockChars != old.LockChars {
 		length := ""

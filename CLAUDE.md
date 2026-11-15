@@ -254,8 +254,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   area; `daemon`, `hotkey run`, `gui-state` exempt. Passwords first on
   stdin, counted by hidden `--access-lines N`. `gui-state` reports
   `access`/`access_unused`, `hideLocked` empties locked pages.
-- **Options** (`enforce/options.go`): `polite-close`, `block-page-details`;
-  never held.
+- **Behaviour settings** (`enforce/options.go`, `kc9k behaviour`, alias
+  `option`): `polite-close`, `block-page-details`; never locked.
 - **Circadian** (`internal/circadian/`, `enforce/circadian.go`,
   `cli/circadian.go`; GUI `CircadianPage`, `ClipEditor`): JSON settings
   `circadian` (`circadian.Config`: three clips of `Point{Minute, Value,

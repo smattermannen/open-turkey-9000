@@ -278,7 +278,7 @@ func setGlobalNepsis(cmd *cobra.Command, database *db.DB, n db.Nepsis) error {
 	}
 	if lockFlagsGiven(cmd) {
 		if !n.On() {
-			return fmt.Errorf("lock options only go with 'set'")
+			return fmt.Errorf("lock flags only go with 'set'")
 		}
 		if err := requireLockPassword(database); err != nil {
 			return err

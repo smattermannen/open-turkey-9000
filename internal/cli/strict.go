@@ -46,7 +46,7 @@ or remove /etc/sudoers.d/zz-kc9k-lockdown from recovery mode.`,
 			return strictOn(cmd, database)
 		case "off":
 			if lockFlagsGiven(cmd) {
-				return fmt.Errorf("lock options only go with 'on'")
+				return fmt.Errorf("lock flags only go with 'on'")
 			}
 			return strictOff(database)
 		case "unlock":

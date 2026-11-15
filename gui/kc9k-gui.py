@@ -5037,7 +5037,7 @@ class Window(Gtk.ApplicationWindow):
         box.set_spacing(10)
         for side in ("start", "end", "top", "bottom"):
             getattr(box, f"set_margin_{side}")(16)
-        box.pack_start(dim("The option is turned on and can't be turned off until the lock ends. "
+        box.pack_start(dim("The setting is turned on and can't be turned off until the lock ends. "
                            "Locks can be added later, but only made stronger."), False, False, 0)
         grid = Gtk.Grid(column_spacing=10, row_spacing=8)
         minutes = Gtk.SpinButton.new_with_range(0, 57600, 5)
@@ -5125,7 +5125,7 @@ class Window(Gtk.ApplicationWindow):
     def toggle_option(self, _switch, wanted, name):
         if self.updating:
             return False
-        self.run(["option", name, "on" if wanted else "off"])
+        self.run(["behaviour", name, "on" if wanted else "off"])
         return True
 
     def update_social(self, block):

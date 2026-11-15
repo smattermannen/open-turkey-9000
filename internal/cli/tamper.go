@@ -78,7 +78,7 @@ password, then turns it off if nothing else is locked.`,
 				return nil
 			case "off":
 				if lockFlagsGiven(cmd) {
-					return fmt.Errorf("lock options only go with 'on'")
+					return fmt.Errorf("lock flags only go with 'on'")
 				}
 				if err := browserSettingOff(database, db.UnsupportedBrowsers); err != nil {
 					return err

@@ -123,7 +123,7 @@ func (b *backupExtras) backupLocks(renamed map[string]string, database *db.DB, t
 			out = append(out, lockToSet{target, "timer lock", timerLength(trusted, l.LockedUntil)})
 		}
 		if l.TimerAfter > 0 {
-			out = append(out, lockToSet{target, "timer lock", (time.Duration(l.TimerAfter)*time.Second).String() + " after the locks before it"})
+			out = append(out, lockToSet{target, "timer lock", (time.Duration(l.TimerAfter) * time.Second).String() + " after the locks before it"})
 		}
 		if l.LockChars > 0 {
 			out = append(out, lockToSet{target, textLockKind(l.Style, l.LockChars), ""})

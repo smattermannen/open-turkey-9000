@@ -142,6 +142,7 @@ type guiBlock struct {
 	Autostarts        []string       `json:"autostarts"`               // §3.6
 	Hidden            bool           `json:"hidden,omitempty"`         // contents left out until revealed
 	Lifted            bool           `json:"lifted"`                   // active, but its windows or places lift it now
+	Enabled           bool           `json:"enabled"`                  // §3.3: active and enforcing now
 	LockSeconds       int64          `json:"lock_seconds"`
 	QuotaLimit        int64          `json:"quota_limit"`
 	QuotaUsed         int64          `json:"quota_used"`
@@ -443,6 +444,7 @@ var guiStateCmd = &cobra.Command{
 			state.Places = append(state.Places, guiPlace{Name: p.Name, Networks: len(p.Networks)})
 		}
 		lifted := enforce.ScheduleLifted(database, now)
+		enabled := enforce.EnabledNames(database, trusted)
 		for _, b := range blocks {
 			detail, err := database.GetBlock(b.Name)
 			if err != nil {
@@ -463,6 +465,7 @@ var guiStateCmd = &cobra.Command{
 				Active:    detail.Active, Held: hold.held(), CharLocked: detail.Active && hold.charLocked,
 				Scheduled: len(schedules) > 0 || enforce.HasScheduleOrPlace(database, b.Name),
 				Lifted:    detail.Active && lifted[b.Name],
+				Enabled:   enabled[b.Name],
 			}
 			g.TodayWindows = windowsLeftToday(db.Windows(schedules), now)
 			g.Autostarts = []string{}

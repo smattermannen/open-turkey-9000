@@ -437,7 +437,8 @@ NOTICE_KINDS = (
 
 def block_summary(block):
     """One line describing a block's state and locks."""
-    parts = ["Active" if block["active"] else "Inactive"]
+    # §3.3: active (switched on) and enabled (enforcing now) or lifted.
+    parts = [("Active, enabled" if block.get("enabled") else "Active, lifted") if block["active"] else "Inactive"]
     if block["lock_seconds"]:
         parts.append(f"time-locked for {fmt_seconds(block['lock_seconds'])}")
     if block["char_locked"]:

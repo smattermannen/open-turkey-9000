@@ -86,3 +86,17 @@ func HasScheduleOrPlace(d *db.DB, name string) bool {
 	ruled, err := PlaceRuled(d)
 	return err == nil && ruled[name]
 }
+
+// EnabledNames returns the active blocks that are enabled now (§3.3), the
+// rest being lifted.
+func EnabledNames(d *db.DB, trusted int64) map[string]bool {
+	out := map[string]bool{}
+	active, err := d.GetActiveBlocks()
+	if err != nil {
+		return out
+	}
+	for _, b := range enabledBlocks(d, active, trusted) {
+		out[b.BlockName] = true
+	}
+	return out
+}

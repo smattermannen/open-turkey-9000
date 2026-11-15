@@ -647,6 +647,7 @@ var statusCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		enabled := enforce.EnabledNames(database, trusted)
 		var active, inactive []string
 		for _, block := range blocks {
 			detail, err := database.GetBlock(block.Name)
@@ -666,6 +667,11 @@ var statusCmd = &cobra.Command{
 				tags += fmt.Sprintf(" [schedule lock, %s lead, %s]", time.Duration(hold.scheduleLead)*time.Minute, state)
 			}
 			if detail.Active {
+				if enabled[detail.Name] {
+					tags += " [enabled]" // §3.3
+				} else {
+					tags += " [lifted]"
+				}
 				if enforce.LiftedBySchedule(database, detail.Name, time.Now()) {
 					tags += " [lifted by its schedule]"
 				}

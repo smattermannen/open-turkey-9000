@@ -198,3 +198,36 @@ func TestDelayBreak(t *testing.T) {
 		t.Error("the lock went")
 	}
 }
+
+// R-SCHED-3: the Pomodoro rhythm starts afresh, work first, each time the
+// block is enabled; not on the daemon's first look.
+func TestPomodoroRestarts(t *testing.T) {
+	d := testDB(t)
+	pomodoroWatch = nil
+	t.Cleanup(func() { pomodoroWatch = nil })
+	if err := d.CreateBlock("p"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetPomodoro("p", db.Pomodoro{On: 1500, Off: 300, Anchor: 100}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	restartPomodoros(d, now, 1000) // first look, block off
+	if err := d.ActivateBlock("p", false, 0, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	restartPomodoros(d, now, 2000)
+	if p, _ := d.GetPomodoro("p"); p.Anchor != 2000 {
+		t.Fatalf("anchor after switching on = %d; want 2000", p.Anchor)
+	}
+	restartPomodoros(d, now, 2005)
+	if p, _ := d.GetPomodoro("p"); p.Anchor != 2000 {
+		t.Error("re-anchored while it stayed enabled")
+	}
+	_ = d.SetPause("p", 3000) // a break lifts it
+	restartPomodoros(d, now, 2500)
+	restartPomodoros(d, now, 3001) // the break ended
+	if p, _ := d.GetPomodoro("p"); p.Anchor != 3001 {
+		t.Errorf("anchor after a break = %d; want 3001", p.Anchor)
+	}
+}

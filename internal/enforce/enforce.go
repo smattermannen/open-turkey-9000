@@ -307,6 +307,7 @@ func Tick(d *db.DB, now time.Time) error {
 		log.Printf("daemon: pending edits error: %v", err)
 	}
 	runAutostarts(d, now) // §3.6: before the layers, so a started block applies this cycle
+	restartPomodoros(d, now, trusted) // R-SCHED-3
 	if err := reconcileSchedulesAt(d, now, trusted); err != nil {
 		log.Printf("daemon: schedule reconciliation error: %v", err)
 	}

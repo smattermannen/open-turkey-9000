@@ -121,7 +121,6 @@ Only items not simply Built.
 | §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI fixed order; one lock per kind |
 | §3.4 R-LOCK-9 | Partial | extension/other protection: Unchecked |
 | §3.6 Break per block window | Not built | |
-| §3.6 R-SCHED-3 rhythm | Unchecked | |
 | §3.6 Allowance | Partial | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). Not built: rolling 24 h, per window |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month` (default one, as before), GUI choice, projects; longer keep weakens |
 | §3.6 Delay break | Built | `break delay B LENGTH WAIT`, `break request B`, GUI row, projects |

@@ -26,9 +26,10 @@ func (d *DB) GetQuota(name string) (*quota.State, error) {
 		return nil, err
 	}
 	var s quota.State
-	err = d.conn.QueryRow(`SELECT limit_seconds, used_seconds, day, open, session_end, last_tick, pending_limit, period, refill
+	err = d.conn.QueryRow(`SELECT limit_seconds, used_seconds, day, open, session_end, last_tick, pending_limit, period, refill, max_sessions, sessions, last_use
 		FROM quotas WHERE block_id = ?`, blockID).
-		Scan(&s.Limit, &s.Used, &s.Day, &s.Open, &s.SessionEnd, &s.LastTick, &s.PendingLimit, &s.Period, &s.Refill)
+		Scan(&s.Limit, &s.Used, &s.Day, &s.Open, &s.SessionEnd, &s.LastTick, &s.PendingLimit, &s.Period, &s.Refill,
+			&s.MaxSessions, &s.Sessions, &s.LastUse)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -45,9 +46,11 @@ func (d *DB) SaveQuota(name string, s quota.State) error {
 		return err
 	}
 	_, err = d.conn.Exec(`INSERT OR REPLACE INTO quotas
-		(block_id, limit_seconds, used_seconds, day, open, session_end, last_tick, pending_limit, period, refill)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		blockID, s.Limit, s.Used, s.Day, s.Open, s.SessionEnd, s.LastTick, s.PendingLimit, s.Period, s.Refill)
+		(block_id, limit_seconds, used_seconds, day, open, session_end, last_tick, pending_limit, period, refill,
+		max_sessions, sessions, last_use)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		blockID, s.Limit, s.Used, s.Day, s.Open, s.SessionEnd, s.LastTick, s.PendingLimit, s.Period, s.Refill,
+		s.MaxSessions, s.Sessions, s.LastUse)
 	if err != nil {
 		return fmt.Errorf("failed to save quota of '%s': %w", name, err)
 	}
@@ -63,10 +66,12 @@ func (d *DB) UpdateQuotaIfUnchanged(name string, prev, next quota.State) (bool, 
 		return false, err
 	}
 	result, err := d.conn.Exec(`UPDATE quotas SET limit_seconds = ?, used_seconds = ?, day = ?, open = ?,
-		session_end = ?, last_tick = ?, pending_limit = ?, period = ?, refill = ?
+		session_end = ?, last_tick = ?, pending_limit = ?, period = ?, refill = ?,
+		max_sessions = ?, sessions = ?, last_use = ?
 		WHERE block_id = ? AND limit_seconds = ? AND used_seconds = ? AND day = ? AND open = ?
 		AND session_end = ? AND last_tick = ? AND pending_limit = ?`,
 		next.Limit, next.Used, next.Day, next.Open, next.SessionEnd, next.LastTick, next.PendingLimit, next.Period, next.Refill,
+		next.MaxSessions, next.Sessions, next.LastUse,
 		blockID, prev.Limit, prev.Used, prev.Day, prev.Open, prev.SessionEnd, prev.LastTick, prev.PendingLimit)
 	if err != nil {
 		return false, fmt.Errorf("failed to update quota of '%s': %w", name, err)

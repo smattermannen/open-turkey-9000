@@ -200,3 +200,20 @@ func TestAllowancePeriod(t *testing.T) {
 		t.Error("changed the period of a locked block")
 	}
 }
+
+// §3.6 session limit from the CLI.
+func TestSessionLimitCommand(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add-app", "b", "steam")
+	mustRun(t, "allowance", "set", "b", "1h", "--sessions", "1")
+	mustRun(t, "allowance", "start", "b")
+	mustRun(t, "allowance", "end", "b")
+	if err := runCLI(t, "allowance", "start", "b"); err == nil {
+		t.Error("a second session with a limit of one")
+	}
+	if q, _ := d.GetQuota("b"); q.MaxSessions != 1 || q.Sessions != 1 {
+		t.Errorf("quota = %+v", q)
+	}
+}

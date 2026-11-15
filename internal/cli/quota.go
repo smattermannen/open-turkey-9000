@@ -82,6 +82,10 @@ var quotaSetCmd = &cobra.Command{
 		if err := quota.ValidateFor(d, per); err != nil {
 			return err
 		}
+		maxSessions, _ := cmd.Flags().GetInt("sessions")
+		if maxSessions < 0 || maxSessions > 100 {
+			return fmt.Errorf("--sessions is 0 (no limit) to 100")
+		}
 		refill := 0
 		if spec, _ := cmd.Flags().GetString("refill"); spec != "" {
 			if refill, err = schedule.ParseTimeOfDay(spec); err != nil {
@@ -107,9 +111,18 @@ var quotaSetCmd = &cobra.Command{
 		var s quota.State
 		if existing == nil {
 			s = quota.New(limit, now.Unix(), "")
-			s.Period, s.Refill = per, refill
+			s.Period, s.Refill, s.MaxSessions = per, refill, maxSessions
 			s.Day = s.PeriodOf(now)
 		} else {
+			if cmd.Flags().Changed("sessions") && existing.MaxSessions != maxSessions {
+				// More sessions, or none limit, weakens (§3.6).
+				if maxSessions == 0 || (existing.MaxSessions != 0 && maxSessions > existing.MaxSessions) {
+					if err := ensureEditable(database, name, false); err != nil {
+						return err
+					}
+				}
+				existing.MaxSessions = maxSessions
+			}
 			if existing.Period != per || existing.Refill != refill {
 				// Another period or refill time can give time back: it
 				// weakens, refused while the block is locked.
@@ -209,7 +222,11 @@ var quotaStartCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' is in a Pomodoro work period; its allowance can be used in the break", name)
 		}
 
-		s.Open, s.SessionEnd = true, 0
+		if why := s.CanOpen(); why != "" {
+			return fmt.Errorf("block '%s': %s", name, why) // §3.6 session limit
+		}
+		s = s.Opened(now.Unix())
+		s.SessionEnd = 0
 		if forDur != "" {
 			d, err := time.ParseDuration(forDur)
 			if err != nil {
@@ -273,6 +290,7 @@ func init() {
 	quotaStartCmd.Flags().String("for", "", "End the session after this long (e.g. 10m)")
 	quotaSetCmd.Flags().String("per", "day", "The period the allowance covers: day, week or month")
 	quotaSetCmd.Flags().String("refill", "", "When the allowance starts afresh (HH:MM; default midnight)")
+	quotaSetCmd.Flags().Int("sessions", 0, "Session limit: at most this many sessions per period, each ending 3 minutes after switching away (0: no limit)")
 	quotaCmd.AddCommand(quotaSetCmd, quotaRemoveCmd, quotaStartCmd, quotaEndCmd)
 	rootCmd.AddCommand(quotaCmd)
 }

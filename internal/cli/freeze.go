@@ -110,51 +110,53 @@ type guiPhrase struct {
 }
 
 type guiBlock struct {
-	Name          string         `json:"name"`
-	Lists         []guiList      `json:"lists"`
-	PhraseSets    []guiPhraseSet `json:"phrase_sets"`
-	Apps          []string       `json:"apps"`
-	Titles        []string       `json:"titles"`
-	Nepsis        db.Nepsis      `json:"nepsis"`
-	NepsisCount   int            `json:"nepsis_count"`
-	Schedules     []string       `json:"schedules"`
-	Windows       []guiWin       `json:"schedule_windows"`
-	Active        bool           `json:"active"`
-	Held          bool           `json:"held"`
-	CharLocked    bool           `json:"char_locked"`
-	PomodoroOn    int64          `json:"pomodoro_on"`
-	PomodoroOff   int64          `json:"pomodoro_off"`
-	PomodoroLong  int64          `json:"pomodoro_long"`
-	PomodoroEvery int64          `json:"pomodoro_every"`
-	OnBreak       bool           `json:"on_break"`
-	Password      bool           `json:"password_locked"`
-	Restart       bool           `json:"restart_locked"`
-	Delay         int64          `json:"delay_seconds"`
-	StopSeconds   int64          `json:"stop_seconds"`
-	DelayLeft     int64          `json:"delay_left"`            // the delay lock unlocks in this many seconds, once asked
-	LockOrder     []string       `json:"lock_order,omitempty"`  // locks on, in unlock order (R-LOCK-6)
-	TimerAfter    int64          `json:"timer_after,omitempty"` // a timer lock's seconds, counted once the locks before it are unlocked
-	RangeLock     string         `json:"range_lock,omitempty"`  // §3.4, e.g. "mon,tue 09:00-17:00"
-	RangeOn       bool           `json:"range_on,omitempty"`
-	Scheduled     bool           `json:"scheduled"`                // has windows or a place rule (§3.3)
-	HasPassword   bool           `json:"block_password,omitempty"` // §3.11
-	TodayWindows  []string       `json:"today_windows,omitempty"`  // §4.1: windows still to come or open today
-	Autostarts    []string       `json:"autostarts"`               // §3.6
-	Hidden        bool           `json:"hidden,omitempty"`         // contents left out until revealed
-	Lifted        bool           `json:"lifted"`                   // active, but its windows or places lift it now
-	LockSeconds   int64          `json:"lock_seconds"`
-	QuotaLimit    int64          `json:"quota_limit"`
-	QuotaUsed     int64          `json:"quota_used"`
-	QuotaOpen     bool           `json:"quota_open"`
-	QuotaNext     int64          `json:"quota_next"`
-	QuotaPeriod   string         `json:"quota_period,omitempty"` // "" day, week, month (§3.6)
-	QuotaRefill   string         `json:"quota_refill,omitempty"` // HH:MM
-	KeywordTest   bool           `json:"keyword_test"`
-	Places        []string       `json:"places"`
-	LoosenDelay   int64          `json:"loosen_delay"`
-	ScheduleLock  bool           `json:"schedule_lock"`
-	ScheduleLead  int            `json:"schedule_lead"` // minutes
-	Social        []string       `json:"social"`
+	Name              string         `json:"name"`
+	Lists             []guiList      `json:"lists"`
+	PhraseSets        []guiPhraseSet `json:"phrase_sets"`
+	Apps              []string       `json:"apps"`
+	Titles            []string       `json:"titles"`
+	Nepsis            db.Nepsis      `json:"nepsis"`
+	NepsisCount       int            `json:"nepsis_count"`
+	Schedules         []string       `json:"schedules"`
+	Windows           []guiWin       `json:"schedule_windows"`
+	Active            bool           `json:"active"`
+	Held              bool           `json:"held"`
+	CharLocked        bool           `json:"char_locked"`
+	PomodoroOn        int64          `json:"pomodoro_on"`
+	PomodoroOff       int64          `json:"pomodoro_off"`
+	PomodoroLong      int64          `json:"pomodoro_long"`
+	PomodoroEvery     int64          `json:"pomodoro_every"`
+	OnBreak           bool           `json:"on_break"`
+	Password          bool           `json:"password_locked"`
+	Restart           bool           `json:"restart_locked"`
+	Delay             int64          `json:"delay_seconds"`
+	StopSeconds       int64          `json:"stop_seconds"`
+	DelayLeft         int64          `json:"delay_left"`            // the delay lock unlocks in this many seconds, once asked
+	LockOrder         []string       `json:"lock_order,omitempty"`  // locks on, in unlock order (R-LOCK-6)
+	TimerAfter        int64          `json:"timer_after,omitempty"` // a timer lock's seconds, counted once the locks before it are unlocked
+	RangeLock         string         `json:"range_lock,omitempty"`  // §3.4, e.g. "mon,tue 09:00-17:00"
+	RangeOn           bool           `json:"range_on,omitempty"`
+	Scheduled         bool           `json:"scheduled"`                // has windows or a place rule (§3.3)
+	HasPassword       bool           `json:"block_password,omitempty"` // §3.11
+	TodayWindows      []string       `json:"today_windows,omitempty"`  // §4.1: windows still to come or open today
+	Autostarts        []string       `json:"autostarts"`               // §3.6
+	Hidden            bool           `json:"hidden,omitempty"`         // contents left out until revealed
+	Lifted            bool           `json:"lifted"`                   // active, but its windows or places lift it now
+	LockSeconds       int64          `json:"lock_seconds"`
+	QuotaLimit        int64          `json:"quota_limit"`
+	QuotaUsed         int64          `json:"quota_used"`
+	QuotaOpen         bool           `json:"quota_open"`
+	QuotaNext         int64          `json:"quota_next"`
+	QuotaPeriod       string         `json:"quota_period,omitempty"`        // "" day, week, month (§3.6)
+	QuotaRefill       string         `json:"quota_refill,omitempty"`        // HH:MM
+	QuotaSessions     int            `json:"quota_sessions,omitempty"`      // §3.6 session limit (0: none)
+	QuotaSessionsUsed int            `json:"quota_sessions_used,omitempty"` // this period
+	KeywordTest       bool           `json:"keyword_test"`
+	Places            []string       `json:"places"`
+	LoosenDelay       int64          `json:"loosen_delay"`
+	ScheduleLock      bool           `json:"schedule_lock"`
+	ScheduleLead      int            `json:"schedule_lead"` // minutes
+	Social            []string       `json:"social"`
 	// Breaks: the allowance (seconds per BreakPer of blocking), what is
 	// earned, the relock time, and how long the block is lifted for now.
 	BreakAllowance int64  `json:"break_allowance"`
@@ -524,6 +526,7 @@ var guiStateCmd = &cobra.Command{
 				s := q.Step(now.Unix(), q.PeriodOf(now))
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 				g.QuotaPeriod, g.QuotaRefill = s.Period, schedule.FormatMinutes(s.Refill)
+				g.QuotaSessions, g.QuotaSessionsUsed = s.MaxSessions, s.Sessions
 			}
 			g.Places = placeNames(places, b.Name)
 			g.LoosenDelay, _ = database.LoosenDelay(b.Name)

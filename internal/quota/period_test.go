@@ -35,3 +35,25 @@ func TestPeriods(t *testing.T) {
 		t.Error("limits per period")
 	}
 }
+
+// §3.6 session limit: N openings per period; a limited session ends 3
+// minutes after its last use.
+func TestSessionLimit(t *testing.T) {
+	s := State{Limit: 3600, MaxSessions: 2, PendingLimit: NoPending, Day: "d1"}
+	s = s.Opened(100)
+	s.Open = false
+	s = s.Opened(200)
+	if s.CanOpen() == "" {
+		t.Error("a third session allowed")
+	}
+	if s.Idle(200+SessionIdle-1).Open == false || s.Idle(200+SessionIdle).Open {
+		t.Error("idle end")
+	}
+	if s.Step(300, "d2").CanOpen() != "" {
+		t.Error("sessions not counted afresh in a new period")
+	}
+	unlimited := State{Limit: 3600, Open: true, LastUse: 1}
+	if !unlimited.Idle(10000).Open {
+		t.Error("an unlimited session ended by idling")
+	}
+}

@@ -123,7 +123,7 @@ Only items not simply Built.
 | §3.6 Allowance | Partial | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). Not built: rolling 24 h, per window |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month` (default one, as before), GUI choice, projects; longer keep weakens |
 | §3.6 Delay break | Built | `break delay B LENGTH WAIT`, `break request B`, GUI row, projects |
-| §3.6 Session limit | Not built | |
+| §3.6 Session limit | Built | `allowance set B 1h --sessions N`: N openings per period; a limited session ends 3 min after its last use; more weakens. GUI, projects |
 | §3.6 Autostart | Built | `kc9k autostart B add once DATE HH:MM / at HH:MM [DAYS] / sign-in / next-window`, GUI list, projects; removing weakens. `at` checked live; sign-in/wake: Unchecked |
 | §3.7 Use | Partial | statistics ignore background-tab sound |
 | §3.7 Strict use counting | Built | `kc9k use-counting strict|normal`, GUI switch; every open tab (`rules.strict_use`) and running apps (`RunningApps`) count; normal weakens. Live: Unchecked |

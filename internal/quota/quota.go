@@ -37,6 +37,37 @@ type State struct {
 	// minute of the day the allowance starts afresh (0: midnight).
 	Period string
 	Refill int
+	// Session limit (§3.6): at most MaxSessions openings per period (0: no
+	// limit); Sessions counts this period's. With a limit, a session ends
+	// SessionIdle seconds after its last use (LastUse, unix seconds).
+	MaxSessions int
+	Sessions    int
+	LastUse     int64
+}
+
+// SessionIdle is how long after switching away a limited session ends.
+const SessionIdle = 3 * 60
+
+// CanOpen says why a session can't open now, or "".
+func (s State) CanOpen() string {
+	if s.MaxSessions > 0 && s.Sessions >= s.MaxSessions {
+		return fmt.Sprintf("all %d sessions of this period are used", s.MaxSessions)
+	}
+	return ""
+}
+
+// Opened counts a session opening.
+func (s State) Opened(now int64) State {
+	s.Open, s.Sessions, s.LastUse = true, s.Sessions+1, now
+	return s
+}
+
+// Idle closes a limited session SessionIdle seconds after its last use.
+func (s State) Idle(now int64) State {
+	if s.Open && s.MaxSessions > 0 && s.LastUse > 0 && now-s.LastUse >= SessionIdle {
+		s.Open, s.SessionEnd = false, 0
+	}
+	return s
 }
 
 // Periods an allowance can cover.
@@ -115,7 +146,7 @@ func (s State) SetLimit(limit int64) State {
 // and closes a session that reached its end. It spends nothing: see Spend.
 func (s State) Step(now int64, day string) State {
 	if day != s.Day {
-		s.Day, s.Used, s.Open, s.SessionEnd = day, 0, false, 0
+		s.Day, s.Used, s.Open, s.SessionEnd, s.Sessions = day, 0, false, 0, 0
 		if s.PendingLimit != NoPending {
 			s.Limit, s.PendingLimit = s.PendingLimit, NoPending
 		}

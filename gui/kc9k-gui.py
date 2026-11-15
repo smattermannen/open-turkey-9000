@@ -3564,6 +3564,9 @@ class Window(Gtk.ApplicationWindow):
         quota_row.pack_start(Gtk.Label(label="refill at"), False, False, 0)
         self.quota_refill = Gtk.Entry(text="00:00", width_chars=5, max_length=5)
         quota_row.pack_start(self.quota_refill, False, False, 0)
+        quota_row.pack_start(Gtk.Label(label="sessions (0: any)"), False, False, 0)
+        self.quota_sessions = Gtk.SpinButton.new_with_range(0, 100, 1)
+        quota_row.pack_start(self.quota_sessions, False, False, 0)
         self.quota_set = Gtk.Button(label="Save allowance")
         self.quota_set.connect("clicked", self.set_quota)
         self.quota_start = Gtk.Button(label="Use allowance now")
@@ -3802,9 +3805,12 @@ class Window(Gtk.ApplicationWindow):
         if limit and not self.quota_refill.has_focus() and not self.quota_minutes.has_focus():
             self.quota_per.set_active_id(block.get("quota_period") or "day")
             self.quota_refill.set_text(block.get("quota_refill") or "00:00")
+            self.quota_sessions.set_value(block.get("quota_sessions", 0))
             self.quota_minutes.set_value(limit // 60)
         self.quota_label.set_text(
             f"Used this {block.get('quota_period') or 'day'}: {block['quota_used'] // 60} of {limit // 60} min"
+            + (f" · sessions {block.get('quota_sessions_used', 0)} of {block['quota_sessions']}"
+               if block.get("quota_sessions") else "")
             + (" · session open" if block["quota_open"] else "") if limit else "No allowance set.")
         self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
                                                          if block["active"] else None))
@@ -4088,7 +4094,8 @@ class Window(Gtk.ApplicationWindow):
         if self.selected:
             self.run(["allowance", "set", self.selected, f"{self.quota_minutes.get_value_as_int()}m",
                       "--per", self.quota_per.get_active_id() or "day",
-                      "--refill", self.quota_refill.get_text().strip() or "00:00"])
+                      "--refill", self.quota_refill.get_text().strip() or "00:00",
+                      "--sessions", str(self.quota_sessions.get_value_as_int())])
 
     def start_quota(self, _button):
         if self.selected:

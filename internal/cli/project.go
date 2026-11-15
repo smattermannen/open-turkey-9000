@@ -74,15 +74,16 @@ type breaksExport struct {
 type blockExtras struct {
 	Schedules []windowExport `json:"schedules,omitempty"`
 	// ScheduleLock is the schedule lock's lead time in minutes; nil: none.
-	ScheduleLock *int            `json:"schedule_lock_minutes,omitempty"`
-	Social       []string        `json:"social,omitempty"`
-	Places       []string        `json:"places,omitempty"` // backups only
-	Quota        int64           `json:"quota_seconds,omitempty"`
-	QuotaPer     string          `json:"quota_per,omitempty"`    // "" day, week, month (§3.6)
-	QuotaRefill  int             `json:"quota_refill,omitempty"` // minute of the day
-	Pomodoro     *pomodoroExport `json:"pomodoro,omitempty"`
-	Breaks       *breaksExport   `json:"breaks,omitempty"`
-	Autostarts   []db.Autostart  `json:"autostarts,omitempty"` // §3.6
+	ScheduleLock  *int            `json:"schedule_lock_minutes,omitempty"`
+	Social        []string        `json:"social,omitempty"`
+	Places        []string        `json:"places,omitempty"` // backups only
+	Quota         int64           `json:"quota_seconds,omitempty"`
+	QuotaPer      string          `json:"quota_per,omitempty"`      // "" day, week, month (§3.6)
+	QuotaRefill   int             `json:"quota_refill,omitempty"`   // minute of the day
+	QuotaSessions int             `json:"quota_sessions,omitempty"` // §3.6 session limit
+	Pomodoro      *pomodoroExport `json:"pomodoro,omitempty"`
+	Breaks        *breaksExport   `json:"breaks,omitempty"`
+	Autostarts    []db.Autostart  `json:"autostarts,omitempty"` // §3.6
 }
 
 type projectBlock struct {
@@ -203,7 +204,7 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	if q, err := database.GetQuota(name); err != nil {
 		return out, err
 	} else if q != nil {
-		out.Quota, out.QuotaPer, out.QuotaRefill = q.Limit, q.Period, q.Refill
+		out.Quota, out.QuotaPer, out.QuotaRefill, out.QuotaSessions = q.Limit, q.Period, q.Refill, q.MaxSessions
 	}
 	if p, err := database.GetPomodoro(name); err != nil {
 		return out, err
@@ -353,7 +354,7 @@ func createBlock(database *db.DB, c checkedBlock) error {
 	now := time.Now()
 	if in.Quota > 0 {
 		q := quota.New(in.Quota, now.Unix(), "")
-		q.Period, q.Refill = in.QuotaPer, in.QuotaRefill
+		q.Period, q.Refill, q.MaxSessions = in.QuotaPer, in.QuotaRefill, min(max(in.QuotaSessions, 0), 100)
 		q.Day = q.PeriodOf(now)
 		if err := database.SaveQuota(in.Name, q); err != nil {
 			return err

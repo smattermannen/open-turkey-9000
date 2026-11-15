@@ -122,6 +122,10 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 			spent = state.Elapsed(now.Unix())
 		}
 		s := state.Spend(spent).Step(now.Unix(), state.PeriodOf(now))
+		if spent > 0 && countsByUse(detail) {
+			s.LastUse = now.Unix()
+		}
+		s = s.Idle(now.Unix()) // §3.6: a limited session ends 3 min after switching away
 		extras, err := d.GetLockExtras(name)
 		if err != nil {
 			log.Printf("daemon: allowance: %v", err)

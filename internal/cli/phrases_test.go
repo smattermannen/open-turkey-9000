@@ -538,3 +538,75 @@ func TestOldTypedFilesImport(t *testing.T) {
 		t.Errorf("old term cluster = %+v, %v", c, err)
 	}
 }
+
+// Changing a phrase (§4.3, R-WEAK-5): one command, never a lost or doubled
+// phrase.
+func TestPhraseChange(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "phrase-set", "create", "b", "P", "--text")
+	mustRun(t, "phrase-set", "add", "b", "P", "[eat, nice] [hello, grandpa]")
+	phrases := func() []string {
+		s, err := d.FindPhraseSet("b", "P")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, p := range s.Phrases {
+			out = append(out, p.String())
+		}
+		return out
+	}
+	// Only letter case or spacing: unchanged, not removed.
+	mustRun(t, "phrase-set", "change", "b", "P", "[eat, nice] [hello, grandpa]", "[Eat,  nice] [hello, Grandpa]")
+	if got := phrases(); len(got) != 1 || got[0] != "[eat, nice] [hello, grandpa]" {
+		t.Fatalf("a case-only change: %v", got)
+	}
+	mustRun(t, "phrase-set", "add", "b", "P", "[second] [one]")
+	mustRun(t, "phrase-set", "change", "b", "P", "[eat, nice] [hello, grandpa]", "[eat] [grandpa] [now]?")
+	if got := phrases(); len(got) != 2 || got[0] != "[eat] [grandpa] [now]?" {
+		t.Fatalf("after a change (in place, first): %v", got)
+	}
+	// Changed into one the set has: the old one just goes.
+	mustRun(t, "phrase-set", "change", "b", "P", "[second] [one]", "[eat] [grandpa] [now]?")
+	if got := phrases(); len(got) != 1 || got[0] != "[eat] [grandpa] [now]?" {
+		t.Fatalf("after a change into an existing phrase: %v", got)
+	}
+	// The old phrase written with its default length still matches.
+	mustRun(t, "phrase-set", "change", "b", "P", "[eat] [grandpa] [now]? :2", "[eat] [grandpa] [now]? :3")
+	if got := phrases(); len(got) != 1 || got[0] != "[eat] [grandpa] [now]? :3" {
+		t.Fatalf("after a length change: %v", got)
+	}
+	for _, bad := range [][]string{
+		{"[not] [there]", "[a] [b]"},                     // no such phrase
+		{"[eat] [grandpa] [now]? :3", "[-gorilla] [x]"}, // a one-ended bridge
+		{"[eat] [grandpa] [now]? :3", "eat grandpa"},    // not a phrase
+	} {
+		if err := runCLI(t, "phrase-set", "change", "b", "P", bad[0], bad[1]); err == nil {
+			t.Errorf("change %q -> %q was accepted", bad[0], bad[1])
+		}
+	}
+	if got := phrases(); len(got) != 1 {
+		t.Fatalf("a refused change touched the set: %v", got)
+	}
+	// Locked: the new phrase is added (stricter), the old one stays.
+	mustRun(t, "block", "add", "b", "reddit.com")
+	if err := d.ActivateBlock("b", true, 0, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	err := runCLI(t, "phrase-set", "change", "b", "P", "[eat] [grandpa] [now]? :3", "[eat] [grandma]")
+	if err == nil || !strings.Contains(err.Error(), "stays") {
+		t.Errorf("a change on a locked block: %v", err)
+	}
+	if got := phrases(); len(got) != 2 {
+		t.Errorf("locked: want the old and the new phrase, got %v", got)
+	}
+	// A stored phrase today's rules refuse can still be removed (unlocked).
+	if err := d.DeactivateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "phrase-set", "remove", "b", "P", "[eat] [grandma]", "[eat] [grandpa] [now]? :3")
+	if got := phrases(); len(got) != 0 {
+		t.Errorf("after removing both: %v", got)
+	}
+}

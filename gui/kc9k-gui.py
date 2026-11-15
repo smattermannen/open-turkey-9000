@@ -1834,6 +1834,12 @@ def phrase_text(sets, length=0):
     return f"{text} :{length}" if length and length != max(necessary, 2) else text
 
 
+def phrase_key(text):
+    """A phrase's text for comparing, as the command keeps it: letter case
+    and spacing don't count (db.Phrase.Canonical)."""
+    return " ".join((text or "").lower().replace(",", ", ").split())
+
+
 def word_set_terms(lines):
     """Terms for one word set from lines (one term each): # comments,
     blanks and duplicates dropped; brackets and commas can't be in a term."""
@@ -1964,7 +1970,10 @@ class PhraseEditor(Gtk.Box):
             self.length.set_value(low)
         self.add_set.set_sensitive(len(rows) < MAX_WORD_SETS)
         text = self.get_text()
-        self.preview.set_text(f"Phrase: {text}" if text else "Fill in at least two word sets.")
+        sets = self.word_sets()
+        self.preview.set_text(f"Phrase: {text}" if text else
+                              "A phrase needs at least two word sets." if len(sets) < 2 else
+                              "Every word set needs at least one term.")
         if self.on_change:
             self.on_change(text)
 
@@ -2099,8 +2108,8 @@ class PhraseSetCard(ListCard):
             # A saved change replaced the phrase being edited: keep editing
             # the new one, never fall back to adding a copy.
             if getattr(self, "editing", None) is not None:
-                texts = {p["text"]: p for p in data["phrases"]}
-                current = texts.get(getattr(self, "saved_as", None)) or texts.get(self.editing["text"])
+                texts = {phrase_key(p["text"]): p for p in data["phrases"]}
+                current = texts.get(getattr(self, "saved_as", None)) or texts.get(phrase_key(self.editing["text"]))
                 if current is None:
                     self.edit_phrase(None)
                 elif current is not self.editing:
@@ -2131,24 +2140,26 @@ class PhraseSetCard(ListCard):
 
     def editor_changed(self, text):
         if hasattr(self, "save_phrase"):
-            self.save_phrase.set_sensitive(bool(text) and not (self.editing and text == self.editing["text"]))
+            unchanged = self.editing and phrase_key(text) == phrase_key(self.editing["text"])
+            known = not self.editing and phrase_key(text) in {phrase_key(p["text"]) for p in self.data["phrases"]}
+            self.save_phrase.set_sensitive(bool(text) and not unchanged and not known)
+            self.save_phrase.set_tooltip_text("The set has this phrase already." if known else None)
 
     def commit_phrase(self):
-        """Adds the editor's phrase; a change adds the new one, then removes
-        the old one, which weakens and may be refused (R-WEAK-5)."""
+        """Adds the editor's phrase, then clears the editor for the next
+        one. A loaded phrase is changed in one command (phrase-set change):
+        the new one is added and the old one removed; removing weakens, so
+        on a locked block the old one stays, and the editor goes on with the
+        new one (R-WEAK-5). Never a lost phrase: a change of letter case or
+        spacing only changes nothing."""
         new, old = self.editor.get_text(), self.editing
-        if not new or (old and new == old["text"]):
+        if not new or (old and phrase_key(new) == phrase_key(old["text"])):
             return
         if old is None:
-            self.add_entries([new])
+            self.window.run(self.command("add", new), then=lambda _o: self.edit_phrase(None))
             return
-        self.saved_as = new.lower()
-
-        def remove_old(_o):
-            # Only remove the old phrase if it is still there.
-            if any(p["text"] == old["text"] for p in self.data["phrases"]):
-                self.window.run(self.command("remove", old["text"]))
-        self.window.run(self.command("add", new), then=remove_old)
+        self.saved_as = phrase_key(new)
+        self.window.run(self.command("change", old["text"], new))
 
     def save_numbers(self, _button):
         current = {a["action"]: a for a in self.data["actions"]}

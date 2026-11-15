@@ -51,10 +51,22 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     done.)
   - [ ] Phrase editor: "Save changes" sometimes becomes "Add phrase"
     (copies), and saving sometimes says the set has no such phrase (§4.3).
-    Cause found: after a change the card keeps the removed phrase as the one
-    being edited; next save removes a phrase that is gone, or a rebuilt card
-    adds a copy. Fixed (GUI keeps editing the saved phrase); confirm on the
-    laptop, `ci/gui_phrase_smoke.py` not run here (no GTK).
+    Causes found: (1) a phrase stored with its default length written out
+    (`[a] [b] :2`, older rows) reads `[a] [b]`, but removing `[a] [b]`
+    matched the stored JSON, removed nothing and still printed "Removed",
+    so a change left a copy; (2) a change of letter case only added
+    nothing (already there) and then removed the phrase: lost; (3) a stored
+    phrase today's rules refuse couldn't be removed (removal parsed
+    strictly); (4) after a change the card kept the removed phrase. Fixed:
+    phrases compare by canonical form (`Phrase.Canonical`/`Same`; stored
+    canonical; listed once); removal reads loosely
+    (`ParsePhraseLoose`); `kc9k phrase-set change B S OLD NEW` changes in
+    place in one step (locked: the new one is added, the old one stays,
+    and it says so); the GUI uses it, compares ignoring case and spacing,
+    won't add a phrase the set has, clears the editor after adding, keeps
+    the edit through refreshes and renames. Tests: `TestPhraseChange`,
+    `TestStoredPhrasesFoundByCanonicalForm`, `ci/gui_phrase_edit_smoke.py`.
+    Confirm on the laptop.
   - [ ] Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
   - [x] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
     none allowed; length ≥ 2. Built in `db.Phrase`, `match.js`, GUI.

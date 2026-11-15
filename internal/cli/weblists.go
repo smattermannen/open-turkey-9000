@@ -771,6 +771,25 @@ func listRate(cmd *cobra.Command, database *db.DB, block, list, action string, n
 	return settle(database, block)
 }
 
+var listCopyCmd = &cobra.Command{
+	Use:   "copy [from block] [from list] [to block] [to list]",
+	Short: "Add another list's entries to a list (§4.3 import from KC9K)",
+	Args:  cobra.ExactArgs(4),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if err := revealBlock(database, args[0]); err != nil { // §3.11
+			return err
+		}
+		_, from, err := findList(database, args[0], args[1])
+		if err != nil {
+			return err
+		}
+		if len(from.Entries) == 0 {
+			return fmt.Errorf("list '%s' of '%s' is empty", args[1], args[0])
+		}
+		return listAdd(cmd, database, args[2], args[3], from.Entries)
+	}),
+}
+
 var listExportCmd = &cobra.Command{
 	Use:   "export [block] [list]",
 	Short: "Print a list's entries, one per line",
@@ -819,6 +838,6 @@ func init() {
 	listCreateCmd.Flags().Bool("text", false, "Look at the page text")
 	addNowFlag(listDeleteCmd, listAddCmd, listRemoveCmd, listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listImportCmd)
 	listCmd.AddCommand(listShowCmd, listCreateCmd, listRenameCmd, listDeleteCmd, listAddCmd, listRemoveCmd,
-		listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listExportCmd, listImportCmd)
+		listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listExportCmd, listImportCmd, listCopyCmd)
 	rootCmd.AddCommand(listCmd)
 }

@@ -275,3 +275,22 @@ func TestTemplates(t *testing.T) {
 		t.Errorf("templates = %v", names)
 	}
 }
+
+// §4.3 import from KC9K: copy another block's list into a list.
+func TestListCopy(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "a")
+	mustRun(t, "block", "add", "a", "reddit.com", "x.com")
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "list", "copy", "a", "Blocked", "b", "Blocked")
+	if l := list(t, d, "b", "Blocked"); len(l.Entries) != 2 {
+		t.Errorf("copied entries = %v", l.Entries)
+	}
+	if err := runWith(t, 0, []string{"pw12"}, "block", "password", "a", "set"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, []string{"nope"}, "list", "copy", "a", "Blocked", "b", "Blocked"); err == nil {
+		t.Error("copied from a hidden block without its password")
+	}
+}

@@ -4268,12 +4268,68 @@ class Window(Gtk.ApplicationWindow):
         return path if answer == Gtk.ResponseType.OK else None
 
     def import_list(self, command):
-        """Runs command (an import with its block and list) with a file."""
+        """Runs command (an import with its block and list) with a file, or
+        for a block's list, copies other lists and clusters into it (§4.3
+        import from KC9K)."""
         if not self.selected:
             return
+        if command[:2] == ["list", "import"]:
+            dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                       buttons=Gtk.ButtonsType.NONE, text="Import into this list",
+                                       secondary_text="From a text file with one entry per line, or from "
+                                                      "other lists and clusters in Killer Chicken 9000.")
+            dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+            dialog.add_button("From KC9K…", 2)
+            dialog.add_button("From file…", Gtk.ResponseType.OK)
+            answer = dialog.run()
+            dialog.destroy()
+            if answer == 2:
+                self.import_from_kc9k(command[2], command[3])
+                return
+            if answer != Gtk.ResponseType.OK:
+                return
         path = self.choose_file("Import list", Gtk.FileChooserAction.OPEN, "Import")
         if path:
             self.run(command + [path], then=self.queued_note)
+
+    def import_from_kc9k(self, block, list_name):
+        """Ticks other blocks' lists and clusters to copy into a list."""
+        sources = []
+        for other in (self.state or {}).get("blocks") or []:
+            if other.get("hidden"):
+                continue
+            for lst in other.get("lists") or []:
+                if (other["name"], lst["name"]) != (block, list_name) and lst.get("entries"):
+                    sources.append((f"{other['name']}: {lst['name']}", ["list", "copy", other["name"], lst["name"], block, list_name]))
+        for cluster in (self.state or {}).get("clusters") or []:
+            if not cluster.get("phrases"):
+                sources.append((f"Cluster: {cluster['name']}", ["cluster", "copy", cluster["name"], block, "--into", list_name]))
+        if not sources:
+            self.message("No other lists or clusters to import from.", Gtk.MessageType.INFO)
+            return
+        dialog = Gtk.Dialog(title="Import from Killer Chicken 9000", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Import", Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(4)
+        box.set_border_width(12)
+        checks = []
+        for label, command in sources:
+            check = Gtk.CheckButton(label=label)
+            box.pack_start(check, False, False, 0)
+            checks.append((check, command))
+        dialog.show_all()
+        answer = dialog.run()
+        chosen = [command for check, command in checks if check.get_active()]
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK:
+            return
+
+        def next_copy(_output=None):
+            if chosen:
+                self.run(chosen.pop(0), then=next_copy)
+
+        next_copy()
 
     def export_list(self, command):
         """Saves what command (an export) prints to a file."""

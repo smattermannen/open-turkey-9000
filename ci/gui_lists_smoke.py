@@ -118,6 +118,19 @@ if len(card.entries.store):
     card.entries._edit(card.entries.view, Gtk.TreePath(0), None); settle()
     check(card.entries.entry.get_text() == first, "double-click moves the entry into the box: %r" % card.entries.entry.get_text())
 
+# §4.3 import from KC9K: copy another block's list in (the dialog ticked).
+r = cli("block", "create", "src"); r = cli("block", "add", "src", "copied.example"); settle()
+real_run = Gtk.Dialog.run
+def tick_all(dialog):
+    for child in dialog.get_content_area().get_children():
+        if isinstance(child, Gtk.CheckButton) and "src" in child.get_label():
+            child.set_active(True)
+    return Gtk.ResponseType.OK
+Gtk.Dialog.run = tick_all
+win.selected = "b"; win.import_from_kc9k("b", "Blocked"); settle()
+Gtk.Dialog.run = real_run
+check("copied.example" in [l for l in win.blocks["b"]["lists"] if l["name"] == "Blocked"][0]["entries"], "imported from another block")
+
 # §3.6 autostart from the block page.
 win.selected = "b"; win.autostarts.on_add(["at 08:00 mon-fri"]); settle(); win.show_block()
 check(win.blocks["b"]["autostarts"] == ["at 08:00 weekdays"], "autostart added: %s" % win.blocks["b"].get("autostarts"))

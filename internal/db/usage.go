@@ -10,6 +10,14 @@ const usageSchema = `CREATE TABLE IF NOT EXISTS usage (
     name TEXT NOT NULL,
     seconds INTEGER NOT NULL,
     PRIMARY KEY (day, kind, name)
+);
+CREATE TABLE IF NOT EXISTS usage_users (
+    day TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    user TEXT NOT NULL,
+    seconds INTEGER NOT NULL,
+    PRIMARY KEY (day, kind, name, user)
 );`
 
 // The kinds of usage that statistics record.
@@ -44,6 +52,58 @@ func (d *DB) AddUsage(day, kind, name string, seconds int64) error {
 	return nil
 }
 
+// AddUserUsage adds seconds of a user's use (§4.9 statistics per user),
+// besides the totals AddUsage keeps.
+func (d *DB) AddUserUsage(day, kind, name, user string, seconds int64) error {
+	if seconds <= 0 || user == "" {
+		return nil
+	}
+	_, err := d.conn.Exec(`INSERT INTO usage_users (day, kind, name, user, seconds) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(day, kind, name, user) DO UPDATE SET seconds = seconds + excluded.seconds`,
+		day, kind, name, user, seconds)
+	if err != nil {
+		return fmt.Errorf("failed to record usage: %w", err)
+	}
+	return nil
+}
+
+// UserUsageSince is UsageSince for one user's time (sites and apps).
+func (d *DB) UserUsageSince(day, user string) ([]UsageRow, error) {
+	rows, err := d.conn.Query(`SELECT day, kind, name, seconds FROM usage_users
+		WHERE day >= ? AND user = ? ORDER BY day, seconds DESC, name`, day, user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read usage: %w", err)
+	}
+	defer rows.Close()
+	result := []UsageRow{}
+	for rows.Next() {
+		var r UsageRow
+		if err := rows.Scan(&r.Day, &r.Kind, &r.Name, &r.Seconds); err != nil {
+			return nil, fmt.Errorf("failed to read usage: %w", err)
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// UsageUsers lists the users with statistics.
+func (d *DB) UsageUsers() ([]string, error) {
+	rows, err := d.conn.Query(`SELECT DISTINCT user FROM usage_users ORDER BY user`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // UsageSince returns every row from day (inclusive) on, oldest day first and
 // the most used first within a day.
 func (d *DB) UsageSince(day string) ([]UsageRow, error) {
@@ -66,7 +126,7 @@ func (d *DB) UsageSince(day string) ([]UsageRow, error) {
 
 // ClearUsage deletes all statistics.
 func (d *DB) ClearUsage() error {
-	if _, err := d.conn.Exec("DELETE FROM usage"); err != nil {
+	if _, err := d.conn.Exec("DELETE FROM usage; DELETE FROM usage_users"); err != nil {
 		return fmt.Errorf("failed to clear usage: %w", err)
 	}
 	return nil
@@ -74,7 +134,7 @@ func (d *DB) ClearUsage() error {
 
 // PruneUsage deletes statistics older than day.
 func (d *DB) PruneUsage(day string) error {
-	if _, err := d.conn.Exec("DELETE FROM usage WHERE day < ?", day); err != nil {
+	if _, err := d.conn.Exec("DELETE FROM usage WHERE day < ?1; DELETE FROM usage_users WHERE day < ?1", day); err != nil {
 		return fmt.Errorf("failed to prune usage: %w", err)
 	}
 	return nil

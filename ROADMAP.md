@@ -146,7 +146,7 @@ Only items not simply Built.
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters. "All searches containing…" not built |
 | §4.5 Grid drag-move, copy to days, similar windows | Built | drag a window to move it (time; day for one-day windows); click to edit days (copy to days), times, its break, or remove; a window on several days is edited as one; other blocks' windows greyed |
 | §4.9 Statistics: times blocked, top N, search, filter by block | Built | blocked pages counted per site and block (`blocked`, `blocked-block` rows); `stats --top N --search T --block B`; GUI Times blocked view |
-| §4.9 Statistics per user, skip private windows | Partial | skip private windows built (`stats private skip|count`, rules `stats_skip_private`, GUI switch); per user: Not built |
+| §4.9 Statistics per user, skip private windows | Built | skip private windows (`stats private skip|count`, rules `stats_skip_private`, GUI switch); per user (`usage_users`: apps by desktop session user, sites by the uid of the extension's socket, `blocker.ClientUser`; `stats --user U`, `--users`, GUI chooser; checked live for apps). Times blocked are counted for all users only; backups carry totals only |
 | §4.10 Preferences | Partial | theme with darkness slider (dark grey to black), clock 24-/12-hour (shown times: grid and clip axes, tooltips, pauses; entry fields stay HH:MM), first day of the week (schedule grid), open at login built; tray: Not built |
 | §4.10 Notifications choice | Built | `kc9k notifications`, GUI group; window start/end, timer lock end, Pomodoro, allowance, app closed; advance minutes. Live: Unchecked |
 

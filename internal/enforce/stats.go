@@ -53,13 +53,20 @@ func RecordApps(d *db.DB, now time.Time, elapsed time.Duration) {
 	if seconds > 10 {
 		seconds = 10
 	}
-	apps := blocker.ForegroundApps(idleLimit)
+	byUser := blocker.ForegroundAppsByUser(idleLimit)
+	apps := make([]string, 0, len(byUser))
+	for _, a := range byUser {
+		apps = append(apps, a.App)
+	}
 	noteQuotaApps(d, apps, seconds)
 	if !StatsOn(d) {
 		return
 	}
-	for _, app := range apps {
-		if err := d.AddUsage(Day(now), db.UsageApp, app, seconds); err != nil {
+	for _, a := range byUser {
+		if err := d.AddUsage(Day(now), db.UsageApp, a.App, seconds); err != nil {
+			log.Printf("stats: %v", err)
+		}
+		if err := d.AddUserUsage(Day(now), db.UsageApp, a.App, a.User, seconds); err != nil {
 			log.Printf("stats: %v", err)
 		}
 	}
@@ -70,6 +77,12 @@ func PruneStats(d *db.DB, now time.Time) {
 	if err := d.PruneUsage(Day(now.AddDate(0, 0, -StatsKeepDays))); err != nil {
 		log.Printf("stats: %v", err)
 	}
+}
+
+// clientUser names the user whose program sent a request (the extension's
+// browser); replaceable in tests.
+var clientUser = func(remoteAddr string) string {
+	return blocker.ClientUser(remoteAddr, rulesPort)
 }
 
 // usageReport is what the browser extension sends since its last report:
@@ -110,6 +123,7 @@ func usageHandler(d *db.DB) http.HandlerFunc {
 			return
 		}
 		day := Day(time.Now())
+		who := clientUser(r.RemoteAddr)
 		for site, seconds := range report.Sites {
 			site = blocker.NormalizeDomain(site)
 			if !blocker.IsValidDomain(site) || seconds <= 0 {
@@ -119,6 +133,9 @@ func usageHandler(d *db.DB) http.HandlerFunc {
 				seconds = maxReportSeconds
 			}
 			if err := d.AddUsage(day, db.UsageSite, site, seconds); err != nil {
+				log.Printf("stats: %v", err)
+			}
+			if err := d.AddUserUsage(day, db.UsageSite, site, who, seconds); err != nil {
 				log.Printf("stats: %v", err)
 			}
 		}

@@ -5021,7 +5021,13 @@ class Window(Gtk.ApplicationWindow):
             button.set_mode(False)
             button.connect("toggled", lambda b: b.get_active() and self.update_stats())
             kinds.pack_start(button, False, False, 0)
+        # §4.9: one user's time, or everyone's.
+        self.stats_user = Gtk.ComboBoxText()
+        self.stats_user.append("", "All users")
+        self.stats_user.set_active_id("")
+        self.stats_user.connect("changed", lambda c: not self.updating and self.refresh_stats())
         controls.pack_start(self.stats_period, False, False, 0)
+        controls.pack_start(self.stats_user, False, False, 0)
         controls.pack_start(kinds, False, False, 0)
         box.pack_start(controls, False, False, 0)
 
@@ -5083,9 +5089,11 @@ class Window(Gtk.ApplicationWindow):
         if self.locked("stats") and self.locked("dashboard"):
             return True
         passwords = list(self.access_passwords)
+        who = self.stats_user.get_active_id() if hasattr(self, "stats_user") else ""
 
         def work():
-            ok, output = cli_with_access(passwords, ["stats", "--json", "--days", str(max(days, 1))])
+            ok, output = cli_with_access(passwords, ["stats", "--json", "--days", str(max(days, 1))]
+                                         + (["--user", who] if who else []))
             GLib.idle_add(self.apply_stats, ok, output)
 
         threading.Thread(target=work, daemon=True).start()
@@ -5097,6 +5105,17 @@ class Window(Gtk.ApplicationWindow):
         data = json.loads(output)
         self.stats_rows = data["rows"]
         self.stats_on = data["enabled"]
+        users = [""] + (data.get("users") or [])
+        if hasattr(self, "stats_user") and users != getattr(self, "stats_users_shown", [""]):
+            chosen = self.stats_user.get_active_id() or ""
+            was, self.updating = self.updating, True
+            self.stats_user.remove_all()
+            for u in users:
+                self.stats_user.append(u, u or "All users")
+            self.stats_user.set_active_id(chosen if chosen in users else "")
+            self.updating = was
+            self.stats_users_shown = users
+        self.stats_user.set_visible(len(users) > 2) if hasattr(self, "stats_user") else None
         if not self.locked("stats"):
             self.update_stats()
         if not self.locked("dashboard"):

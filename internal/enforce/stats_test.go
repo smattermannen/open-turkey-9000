@@ -1,13 +1,16 @@
 package enforce
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 )
 
@@ -54,5 +57,64 @@ func TestUsageHandler(t *testing.T) {
 	postUsage(h, `{"sites":{"example.com":30}}`, true)
 	if rows, _ := d.UsageSince(Day(time.Now())); len(rows) != 2 || rows[0].Seconds+rows[1].Seconds != 30+maxReportSeconds {
 		t.Errorf("recorded with statistics off: %v", rows)
+	}
+}
+
+// §4.9 statistics per user: site time goes to the user whose browser
+// reported it, besides the totals.
+func TestUsagePerUser(t *testing.T) {
+	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	who := "anna"
+	old := clientUser
+	clientUser = func(string) string { return who }
+	defer func() { clientUser = old }()
+	h := usageHandler(d)
+	postUsage(h, `{"sites":{"example.com":30}}`, true)
+	who = "ben"
+	postUsage(h, `{"sites":{"example.com":10,"other.example":5}}`, true)
+	who = ""
+	postUsage(h, `{"sites":{"example.com":1}}`, true)
+	today := Day(time.Now())
+	if rows, _ := d.UserUsageSince(today, "anna"); len(rows) != 1 || rows[0].Seconds != 30 {
+		t.Errorf("anna: %v", rows)
+	}
+	if rows, _ := d.UserUsageSince(today, "ben"); len(rows) != 2 {
+		t.Errorf("ben: %v", rows)
+	}
+	if users, _ := d.UsageUsers(); len(users) != 2 || users[0] != "anna" || users[1] != "ben" {
+		t.Errorf("users: %v", users)
+	}
+	if rows, _ := d.UsageSince(today); len(rows) != 2 || rows[0].Seconds != 41 {
+		t.Errorf("totals: %v", rows)
+	}
+	if err := d.ClearUsage(); err != nil {
+		t.Fatal(err)
+	}
+	if users, _ := d.UsageUsers(); len(users) != 0 {
+		t.Error("clear kept per-user rows")
+	}
+}
+
+// ClientUser reads the uid of a real connection's socket.
+func TestClientUserLive(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer ln.Close()
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Skip(err)
+	}
+	defer conn.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	me, _ := user.Current()
+	got := blocker.ClientUser(conn.LocalAddr().String(), port)
+	if me.Uid != "0" && got != me.Username {
+		t.Errorf("ClientUser = %q; want %q", got, me.Username)
 	}
 }

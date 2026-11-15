@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/user"
 	"strconv"
 	"strings"
 	"sync"
@@ -310,4 +311,40 @@ func parseAge(stat string, uptime time.Duration) (time.Duration, bool) {
 		return 0, false
 	}
 	return uptime - time.Duration(ticks)*time.Second/clockTicks, true
+}
+
+// ClientUser names the local user owning the TCP connection from
+// remoteAddr ("127.0.0.1:port") to the daemon's port, by the socket's uid
+// in /proc/net/tcp; "" when unknown or not a regular user.
+func ClientUser(remoteAddr string, daemonPort int) string {
+	_, portText, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return ""
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		return ""
+	}
+	local := fmt.Sprintf(":%04X", port)
+	remote := fmt.Sprintf(":%04X", daemonPort)
+	for _, table := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
+		data, err := os.ReadFile(table)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) > 7 && strings.HasSuffix(fields[1], local) && strings.HasSuffix(fields[2], remote) {
+				uid, err := strconv.ParseUint(fields[7], 10, 32)
+				if err != nil || !regularUser(uid) {
+					return ""
+				}
+				if u, err := user.LookupId(fields[7]); err == nil {
+					return u.Username
+				}
+				return ""
+			}
+		}
+	}
+	return ""
 }

@@ -17,6 +17,7 @@ type statsOutput struct {
 	Enabled bool          `json:"enabled"`
 	Since   string        `json:"since"`
 	Rows    []db.UsageRow `json:"rows"`
+	Users   []string      `json:"users"` // §4.9: users with statistics
 }
 
 var statsCmd = &cobra.Command{
@@ -78,11 +79,35 @@ this computer and is kept for a year.
 			return fmt.Errorf("--days must be between 1 and %d", enforce.StatsKeepDays)
 		}
 		since := enforce.Day(time.Now().AddDate(0, 0, -(days - 1)))
-		rows, err := database.UsageSince(since)
+		var rows []db.UsageRow
+		var err error
+		if who, _ := cmd.Flags().GetString("user"); who != "" {
+			rows, err = database.UserUsageSince(since, who) // §4.9: one user's time
+		} else {
+			rows, err = database.UsageSince(since)
+		}
 		if err != nil {
 			return err
 		}
+		if users, _ := cmd.Flags().GetBool("users"); users {
+			list, err := database.UsageUsers()
+			if err != nil {
+				return err
+			}
+			if asJSON, _ := cmd.Flags().GetBool("json"); asJSON {
+				data, _ := json.Marshal(list)
+				fmt.Println(string(data))
+				return nil
+			}
+			for _, u := range list {
+				fmt.Println(u)
+			}
+			return nil
+		}
 		out := statsOutput{Enabled: enforce.StatsOn(database), Since: since, Rows: rows}
+		if out.Users, err = database.UsageUsers(); err != nil {
+			return err
+		}
 		if asJSON, _ := cmd.Flags().GetBool("json"); asJSON {
 			data, err := json.Marshal(out)
 			if err != nil {
@@ -160,6 +185,8 @@ func formatSpent(seconds int64) string {
 func init() {
 	statsCmd.Flags().Int("days", 7, "How many days back to include, today counted")
 	statsCmd.Flags().Bool("json", false, "Print the rows as JSON (for the graphical interface)")
+	statsCmd.Flags().String("user", "", "Only this user's time on websites and apps (times blocked are counted for all)")
+	statsCmd.Flags().Bool("users", false, "List the users with statistics")
 	statsCmd.Flags().Int("top", 15, "Show this many of each (e.g. 5 or 10)")
 	statsCmd.Flags().String("search", "", "Only names containing this text")
 	statsCmd.Flags().String("block", "", "Only the sites and apps of this block")

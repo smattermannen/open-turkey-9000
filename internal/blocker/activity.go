@@ -16,12 +16,25 @@ import (
 // named by its Flatpak app ID when it runs in a Flatpak, otherwise by its
 // executable, the same names a block's apps use.
 func ForegroundApps(idleLimit uint64) []string {
+	var apps []string
+	for _, a := range ForegroundAppsByUser(idleLimit) {
+		apps = append(apps, a.App)
+	}
+	return apps
+}
+
+// UserApp is an app in the foreground of a desktop user's session.
+type UserApp struct{ User, App string }
+
+// ForegroundAppsByUser is ForegroundApps with the user each app is in the
+// foreground for (§4.9 statistics per user).
+func ForegroundAppsByUser(idleLimit uint64) []UserApp {
 	xprop, err := exec.LookPath("xprop")
 	if err != nil {
 		return nil
 	}
 	gdbus, _ := exec.LookPath("gdbus")
-	var apps []string
+	var apps []UserApp
 	for _, u := range desktopUsers() {
 		if gdbus != "" && awayFromDesktop(u, gdbus, idleLimit) {
 			continue
@@ -43,7 +56,7 @@ func ForegroundApps(idleLimit uint64) []string {
 			continue
 		}
 		if name := appName(pid); name != "" {
-			apps = append(apps, name)
+			apps = append(apps, UserApp{u.Username, name})
 		}
 	}
 	return apps

@@ -1,3 +1,4 @@
+import json
 """GUI smoke test for the settings groups (SPEC §4.10): builds kc9k into a
 scratch folder, points a wrapper at a scratch database (KC9K_DB: no layers
 are ever applied), loads gui/kc9k-gui.py as a module with CLI replaced and
@@ -216,6 +217,10 @@ settle()
 check(win.state.get("stats_skip_private") is True, "stats private skip from the switch")
 win.stats_private_switch.set_active(False)
 settle()
+
+# §4.9 statistics per user: the chooser lists the users with statistics.
+win.apply_stats(True, json.dumps({"enabled": True, "since": "2026-11-01", "rows": [], "users": ["anna", "ben"]}))
+check([r[0] for r in win.stats_user.get_model()] == ["All users", "anna", "ben"], "stats user chooser")
 
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")

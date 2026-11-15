@@ -56,7 +56,7 @@ func TestSocketInodeFindsOwnConnection(t *testing.T) {
 // closeReason decides which browsers the guard closes.
 func TestCloseReason(t *testing.T) {
 	now := time.Unix(1_000_000, 0)
-	old := ExtensionGrace + time.Minute
+	old := ExtensionGrace() + time.Minute
 	cases := []struct {
 		name        string
 		p           guardedProcess
@@ -67,7 +67,7 @@ func TestCloseReason(t *testing.T) {
 		{"new browser, grace", guardedProcess{supported: true, age: 10 * time.Second, ageKnown: true}, time.Time{}, false, false},
 		{"old, never checked in", guardedProcess{supported: true, age: old, ageKnown: true}, time.Time{}, false, true},
 		{"old, checked in", guardedProcess{supported: true, age: old, ageKnown: true, seen: true, lastSeen: now.Add(-5 * time.Second)}, time.Time{}, false, false},
-		{"old, check-in stale", guardedProcess{supported: true, age: old, ageKnown: true, seen: true, lastSeen: now.Add(-2 * ExtensionGrace)}, time.Time{}, false, true},
+		{"old, check-in stale", guardedProcess{supported: true, age: old, ageKnown: true, seen: true, lastSeen: now.Add(-2 * ExtensionGrace())}, time.Time{}, false, true},
 		{"remote control", guardedProcess{supported: true, remote: true, age: time.Second, ageKnown: true}, time.Time{}, false, true},
 		{"started before a protecting change", guardedProcess{supported: true, age: 10 * time.Minute, ageKnown: true, seen: true, lastSeen: now},
 			now.Add(-2 * time.Minute), false, true},

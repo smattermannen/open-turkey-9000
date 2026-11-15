@@ -190,3 +190,31 @@ func TestTamperFileURLs(t *testing.T) {
 		t.Error("not in the project")
 	}
 }
+
+// §4.10: the extension's grace (longer weakens) and closing task managers
+// while locked (off refused while locked).
+func TestTamperGraceAndTaskManagers(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "tamper", "grace", "30")
+	mustRun(t, "tamper", "task-managers", "on")
+	if enforce.ExtensionGraceSeconds(d) != 30 {
+		t.Fatalf("grace = %d", enforce.ExtensionGraceSeconds(d))
+	}
+	if err := runCLI(t, "tamper", "grace", "5"); err == nil {
+		t.Error("a 5 s grace accepted")
+	}
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "tamper", "grace", "120"); err == nil {
+		t.Error("a longer grace while locked")
+	}
+	mustRun(t, "tamper", "grace", "20")
+	if err := runCLI(t, "tamper", "task-managers", "off"); err == nil {
+		t.Error("task managers allowed again while locked")
+	}
+	if !strings.Contains(capture(t, "gui-state"), `"anything_locked":true`) {
+		t.Error("gui-state doesn't say something is locked")
+	}
+}

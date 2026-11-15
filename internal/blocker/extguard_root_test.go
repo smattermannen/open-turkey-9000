@@ -42,7 +42,7 @@ func alive(cmd *exec.Cmd) bool { return cmd.Process.Signal(syscall.Signal(0)) ==
 // its grace period to check in.
 func TestGuardClosesRemoteControlledBrowser(t *testing.T) {
 	g := NewExtensionGuard(47613)
-	g.started = time.Now().Add(-2 * ExtensionGrace) // the daemon has been up a while
+	g.started = time.Now().Add(-2 * ExtensionGrace()) // the daemon has been up a while
 
 	normal := startChrome(t)
 	remote := startChrome(t, "--remote-debugging-port=9333")
@@ -65,7 +65,7 @@ func TestGuardClosesRemoteControlledBrowser(t *testing.T) {
 // one started after the change is left alone.
 func TestGuardRestartsBrowsersOlderThanSettings(t *testing.T) {
 	g := NewExtensionGuard(47613)
-	g.started = time.Now().Add(-2 * ExtensionGrace)
+	g.started = time.Now().Add(-2 * ExtensionGrace())
 
 	before := startChrome(t)
 	changed := time.Now()
@@ -73,12 +73,12 @@ func TestGuardRestartsBrowsersOlderThanSettings(t *testing.T) {
 	after := startChrome(t)
 
 	// Within the grace period nothing happens yet.
-	g.Enforce(changed.Add(ExtensionGrace/2), changed, false)
+	g.Enforce(changed.Add(ExtensionGrace()/2), changed, false)
 	if !alive(before) || !alive(after) {
 		t.Fatal("a browser was closed inside the grace period after the change")
 	}
 
-	g.Enforce(changed.Add(2*ExtensionGrace), changed, false)
+	g.Enforce(changed.Add(2*ExtensionGrace()), changed, false)
 	done := make(chan struct{})
 	go func() { _, _ = before.Process.Wait(); close(done) }()
 	select {

@@ -17,6 +17,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -251,6 +252,7 @@ func FileURLsOn(d *db.DB) bool {
 // blocking setting.
 func loadDNSChoice(d *db.DB) {
 	fileURLsOn.Store(FileURLsOn(d))
+	blocker.SetExtensionGrace(time.Duration(ExtensionGraceSeconds(d)) * time.Second)
 	choice, err := d.GetSetting(SettingDNS)
 	if err != nil {
 		log.Printf("daemon: dns setting: %v", err)
@@ -410,6 +412,7 @@ func Tick(d *db.DB, now time.Time) error {
 		}
 	}
 	enforceNepsis(d, now, active)
+	closeTaskManagers(d, now, trusted)
 	return nil
 }
 
@@ -559,4 +562,38 @@ func dedup(in []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// Tamper protection settings for the extension's grace and task managers
+// (§4.10).
+const (
+	SettingExtensionGrace = "tamper.grace"         // seconds; "" = 60
+	SettingTaskManagers   = "tamper.task-managers" // "on": closed while anything is locked
+)
+
+// ExtensionGraceSeconds is how long a browser may run without the
+// extension checking in (10 to 600 s; default 60).
+func ExtensionGraceSeconds(d *db.DB) int {
+	v, _ := d.GetSetting(SettingExtensionGrace)
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 10 || n > 600 {
+		return int(blocker.DefaultExtensionGrace / time.Second)
+	}
+	return n
+}
+
+// TaskManagers are the programs "block task managers while locked" closes.
+var TaskManagers = []string{"gnome-system-monitor", "mate-system-monitor", "xfce4-taskmanager", "lxtask",
+	"plasma-systemmonitor", "ksysguard", "htop", "btop", "atop", "top", "glances", "stacer", "resources"}
+
+// closeTaskManagers closes task managers while anything is locked, when
+// the tamper protection setting is on.
+func closeTaskManagers(d *db.DB, now time.Time, trusted int64) {
+	if v, _ := d.GetSetting(SettingTaskManagers); v != "on" {
+		return
+	}
+	if locked, err := AnyLock(d, now, trusted); err != nil || !locked {
+		return
+	}
+	killApps(d, TaskManagers, db.EventTamper)
 }

@@ -15,6 +15,8 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -31,6 +33,10 @@ var tamperCmd = &cobra.Command{
   clock                 while a timer lock runs, changing the date or time
                         doesn't move it (time the computer is switched off
                         isn't counted then either)
+  task-managers         close task managers (System Monitor, htop, …) while
+                        anything is locked
+  grace SECONDS         how long a browser may run without the extension
+                        checking in (10 to 600; default 60); longer weakens
   file-urls             allow file:// blocking: blacklist entries such as
                         file:///home/me/games/* block local files in the
                         browsers (a block's own file:// exceptions, file://*
@@ -61,6 +67,9 @@ password, then turns it off if nothing else is locked.`,
 		if len(args) == 0 {
 			fmt.Printf("clock %s\n", onOff(tamperClockOn(database)))
 			fmt.Printf("file-urls %s\n", onOff(enforce.FileURLsOn(database)))
+			tm, _ := database.GetSetting(enforce.SettingTaskManagers)
+			fmt.Printf("task-managers %s\n", onOff(tm == "on"))
+			fmt.Printf("grace %ds\n", enforce.ExtensionGraceSeconds(database))
 			return printUnsupportedBrowsers(database)
 		}
 		if args[0] == "unlock" {
@@ -93,6 +102,9 @@ password, then turns it off if nothing else is locked.`,
 				return nil
 			}
 			return fmt.Errorf("use 'on' or 'off'")
+		}
+		if args[0] == "grace" {
+			return tamperGrace(database, args[1:])
 		}
 		key, ok := simpleTamper[args[0]]
 		if !ok {
@@ -132,6 +144,10 @@ password, then turns it off if nothing else is locked.`,
 			fmt.Printf("Tamper protection for the clock is %s\n", args[1])
 			return nil
 		}
+		if args[0] == "task-managers" {
+			fmt.Printf("Closing task managers while locked is %s\n", args[1])
+			return nil
+		}
 		fmt.Printf("file:// blocking is %s\n", args[1])
 		return enforce.ApplyFromDB(database)
 	}),
@@ -139,7 +155,8 @@ password, then turns it off if nothing else is locked.`,
 
 // simpleTamper are the tamper protection settings without a lock of their
 // own, by name: on is free, off refused while anything is locked.
-var simpleTamper = map[string]string{"clock": db.SettingTamperClock, "file-urls": enforce.SettingFileURLs}
+var simpleTamper = map[string]string{"clock": db.SettingTamperClock, "file-urls": enforce.SettingFileURLs,
+	"task-managers": enforce.SettingTaskManagers}
 
 func tamperClockOn(database *db.DB) bool {
 	v, err := database.GetSetting(db.SettingTamperClock)
@@ -171,4 +188,39 @@ func init() {
 	addYesFlag(tamperCmd)
 	trackLockFlagOrder(tamperCmd)
 	rootCmd.AddCommand(tamperCmd)
+}
+
+// tamperGrace shows or sets the grace for a missing extension. A longer
+// grace weakens: refused while anything is locked, like turning tamper
+// protection off.
+func tamperGrace(database *db.DB, args []string) error {
+	cur := enforce.ExtensionGraceSeconds(database)
+	if len(args) == 0 {
+		fmt.Printf("grace %ds\n", cur)
+		return nil
+	}
+	n, err := strconv.Atoi(strings.TrimSuffix(args[0], "s"))
+	if err != nil || n < 10 || n > 600 {
+		return fmt.Errorf("the grace is 10 to 600 seconds")
+	}
+	if n > cur {
+		if err := requireSettingsPassword(database); err != nil {
+			return err
+		}
+		now := time.Now()
+		trusted, err := database.TrustedNow(now)
+		if err != nil {
+			return err
+		}
+		if locked, err := enforce.AnyLock(database, now, trusted); err != nil {
+			return err
+		} else if locked {
+			return refused(database, "", fmt.Errorf("a longer grace weakens tamper protection: refused while a block or setting is locked"))
+		}
+	}
+	if err := database.SetSetting(enforce.SettingExtensionGrace, strconv.Itoa(n)); err != nil {
+		return err
+	}
+	fmt.Printf("Browsers without the extension are closed after %d seconds\n", n)
+	return nil
 }

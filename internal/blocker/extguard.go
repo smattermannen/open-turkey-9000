@@ -1,6 +1,7 @@
 package blocker
 
 import (
+	"sync/atomic"
 	"bufio"
 	"fmt"
 	"log"
@@ -13,10 +14,24 @@ import (
 	"time"
 )
 
-// ExtensionGrace is how long a browser may run without the extension checking
-// in before ExtensionGuard closes it. It gives a fresh browser time to start
-// and load its extensions.
-const ExtensionGrace = 60 * time.Second
+// DefaultExtensionGrace is how long a browser may run without the extension
+// checking in before ExtensionGuard closes it, unless the user chose
+// otherwise (§4.10 tamper protection). It gives a fresh browser time to
+// start and load its extensions.
+const DefaultExtensionGrace = 60 * time.Second
+
+// extensionGrace is the grace in force (nanoseconds); SetExtensionGrace.
+var extensionGrace atomic.Int64
+
+func init() { extensionGrace.Store(int64(DefaultExtensionGrace)) }
+
+// SetExtensionGrace sets the grace (10 s to 10 min).
+func SetExtensionGrace(d time.Duration) {
+	extensionGrace.Store(int64(min(max(d, 10*time.Second), 10*time.Minute)))
+}
+
+// ExtensionGrace returns the grace in force.
+func ExtensionGrace() time.Duration { return time.Duration(extensionGrace.Load()) }
 
 // guardedBrowsers are the executables treated as browsers that must run the
 // extension. "tor" is left out: it is also the name of the Tor daemon. Tor
@@ -35,7 +50,7 @@ var guardedBrowsers = map[string]bool{
 // extension fetches its rules from the daemon every few seconds; the daemon
 // passes each request to CheckIn, which finds the browser behind the
 // connection. Enforce closes every browser that hasn't checked in within
-// ExtensionGrace.
+// ExtensionGrace().
 type ExtensionGuard struct {
 	mu       sync.Mutex
 	seen     map[int]time.Time // main browser PID -> last check-in
@@ -77,19 +92,19 @@ func (g *ExtensionGuard) CheckIn(remoteAddr string) (bool, string) {
 }
 
 // Enforce closes, with all their child processes, the browsers that have run
-// for longer than ExtensionGrace without a check-in in the last
-// ExtensionGrace. It returns how many browsers it closed.
+// for longer than ExtensionGrace() without a check-in in the last
+// ExtensionGrace(). It returns how many browsers it closed.
 //
 // Browser settings only take effect when a browser starts, so browsers that
 // started before settingsChanged (KC9K changed something that protects the
 // extension: its version, blocked developer tools, locked settings) are
-// closed too, ExtensionGrace after the change. Zero means no such change.
+// closed too, ExtensionGrace() after the change. Zero means no such change.
 //
 // With unsupported set (block unsupported browsers, §4.10), every browser
 // that isn't an installed supported browser (see SupportedBrowsers) is
 // closed at once: it can never run the extension.
 func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time, unsupported bool) int {
-	if now.Sub(g.started) < ExtensionGrace {
+	if now.Sub(g.started) < ExtensionGrace() {
 		return 0 // the daemon just started: give running browsers time to check in
 	}
 	uptime := systemUptime()
@@ -141,14 +156,14 @@ func closeReason(p guardedProcess, now, settingsChanged time.Time, unsupported b
 	if unsupported && !p.supported {
 		return "not a supported browser (block unsupported browsers is on)"
 	}
-	if !settingsChanged.IsZero() && now.Sub(settingsChanged) >= ExtensionGrace &&
+	if !settingsChanged.IsZero() && now.Sub(settingsChanged) >= ExtensionGrace() &&
 		p.ageKnown && now.Add(-p.age).Before(settingsChanged) {
 		return "started before KC9K changed its browser settings"
 	}
-	if !p.ageKnown || p.age < ExtensionGrace {
+	if !p.ageKnown || p.age < ExtensionGrace() {
 		return ""
 	}
-	if p.seen && now.Sub(p.lastSeen) < ExtensionGrace {
+	if p.seen && now.Sub(p.lastSeen) < ExtensionGrace() {
 		return ""
 	}
 	return "no Killer Chicken extension"

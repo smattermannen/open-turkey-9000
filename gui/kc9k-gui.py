@@ -70,6 +70,9 @@ TAMPER_SETTINGS = (
     ("clock", "Clock: ignore time and date changes",
      "While a timer lock runs, changing the date or time doesn't move it, and time the "
      "computer is off isn't counted.", ("tamper", "clock")),
+    ("task-managers", "Block task managers while locked",
+     "While a block or setting is locked, System Monitor, htop and other task managers are closed.",
+     ("tamper", "task-managers")),
     ("file-urls", "Allow file:// blocking",
      "Blacklist entries such as file:///home/me/games/* block local files in the browsers. "
      "Each block's own file:// exceptions (file://* by default) still spare them.",
@@ -5204,6 +5207,10 @@ class Window(Gtk.ApplicationWindow):
             elif key == "unsupported-browsers" and not current[key] and not has_supported:
                 check.set_sensitive(False)
                 note += " Install a supported browser first (Browsers, below)."
+            elif current[key] and self.state.get("anything_locked"):
+                # §4.10: stuck on while anything is locked.
+                check.set_sensitive(False)
+                note += " Something is locked, so it stays on."
             checks[key] = check
             item = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             item.pack_start(check, False, False, 0)
@@ -5212,11 +5219,23 @@ class Window(Gtk.ApplicationWindow):
             item.pack_start(text, False, False, 0)
             box.pack_start(item, False, False, 0)
         self.tamper_checks = checks  # for tests
+        grace_row = Gtk.Box(spacing=8)
+        grace_row.pack_start(Gtk.Label(label="Close browsers without the extension after"), False, False, 0)
+        grace = Gtk.SpinButton.new_with_range(10, 600, 5)
+        grace.set_value(self.state.get("tamper_grace", 60))
+        grace_row.pack_start(grace, False, False, 0)
+        grace_row.pack_start(Gtk.Label(label="seconds (longer weakens)"), False, False, 0)
+        box.pack_start(grace_row, False, False, 0)
+        self.tamper_grace = grace  # for tests
         dialog.show_all()
         answer = dialog.run()
         wanted = {key: check.get_active() for key, check in checks.items()}
+        new_grace = grace.get_value_as_int()
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
+            return
+        if new_grace != self.state.get("tamper_grace", 60):
+            self.run(["tamper", "grace", str(new_grace)], then=lambda _o: self.apply_tamper(current, wanted))
             return
         self.apply_tamper(current, wanted)
 
@@ -5235,6 +5254,7 @@ class Window(Gtk.ApplicationWindow):
     def tamper_state(self):
         return {"clock": bool(self.state.get("tamper_clock", False)),
                 "file-urls": bool(self.state.get("tamper_file_urls", False)),
+                "task-managers": bool(self.state.get("tamper_task_managers", False)),
                 "unsupported-browsers": bool(self.state.get("unsupported_browsers", False))}
 
     def setting_lock_info(self, name):

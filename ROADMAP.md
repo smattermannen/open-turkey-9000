@@ -66,8 +66,17 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     KC9K list), phrase set card Import/Export. Confirm on the laptop.
   - [ ] Statistics bar chart: one colour per site/app over time (§4.9). Not
     built. M
+  - [ ] Durations minutes only (R-GUI-1): every GUI duration is a minutes
+    spin button (`ask_minutes`, ladder steps, quiet time); GTK silently
+    clamps out-of-range values on Enter (100000 min became 43200). Not
+    built. S
+  - [ ] Timer lock until a calendar date (R-GUI-2): the GUI asks only a
+    duration. Not built. S
+  - [ ] No flashing (R-PAGE-1): a page judged by its text shows before it
+    is blocked or gets its looks (also on blocks with title/text exceptions,
+    whose sites are left to the extension). Not built. M
   - [ ] GUI overall unclear, hard to read, not pretty or easy to use (owner,
-    2026-11-15; §4). Needs the owner's worst pages first. L
+    2026-11-15; R-GUI-3). Redesign page by page. L
   - Strict lockdown polkit now allows the backlight helper and colord.
 
 - [ ] **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock

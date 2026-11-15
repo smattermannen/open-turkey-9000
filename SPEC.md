@@ -321,7 +321,8 @@ GUI and CLI offer the same functions.
   blocks greyed; break per window; allow windows; place rules.
 - **4.6 Locks**: all of §3.4, alone or layered, on blocks, browser settings
   and settings (global ladder too). Layer order fixed while locked; new lock
-  goes last. Timer locks always extendable.
+  goes last. Timer locks always extendable; set for a duration or until a
+  date picked on a calendar (R-GUI-2).
 - **4.7 Breaks and autostart**: all of §3.6. Break status also in the
   extension's toolbar button and popup.
 - **4.8 Frozen Chicken**: start for a time; schedule; both may coexist.
@@ -445,6 +446,14 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-PHRASE-10** Phrase sets can be exported, imported and kept as clusters; no recording into them.
 - **R-TITLE-1** Window title entries never apply to browsers.
 
+**GUI**
+- **R-GUI-1** Every duration field takes days, hours and minutes (or typed text such as `2d 4h`, `300m`); never minutes only. A value outside the allowed range is never changed silently: the field says why and keeps what was typed.
+- **R-GUI-2** Every timer lock is set either for a duration (R-GUI-1) or until a date and time picked on a calendar (e.g. 24 December 2099, 18:00).
+- **R-GUI-3** The GUI follows the GNOME Human Interface Guidelines and the usual usability heuristics: tasks first (the overview shows what is on, until when and how locked; common tasks one or two clicks away); one primary action per view; advanced options behind *More options*; plain glossary words, short sentences; lock state shown wherever a locked thing appears; controls that can't be used are disabled with the reason; input checked where it is typed; one widget per concept everywhere; everything reachable by keyboard; the window never freezes while a command runs.
+
+**Browsing**
+- **R-PAGE-1** No flashing: a page that a list or phrase set will block, replace or give a look action never shows its content without it, also when moving within a site. Content stays hidden until judged, at most 3 s (then shown and judged as usual).
+
 **Events**
 - **R-EVENT-1** At most one event per tab and blocked site per minute. Restored tabs at browser start, preloaded pages and embedded frames don't count.
 
@@ -480,6 +489,7 @@ Decisions not already written into §1–5:
 - 2026-11-14: No search lists: URL-scope terms catch queries (R-PHRASE-6), text scope catches results.
 - 2026-11-15: Phrase word sets are freely necessary or optional, none necessary allowed; phrase length (≥ 2) sets how many terms a match needs (R-PHRASE-1).
 - 2026-11-15: Lists and phrase sets may have no action.
+- 2026-11-15: Durations in days, hours and minutes, never minutes only, never silently changed (R-GUI-1); timer locks also by calendar date (R-GUI-2); the GUI is redesigned to be beautiful, intelligent and intuitive (R-GUI-3); no flashing (R-PAGE-1).
 
 ## 7. Open decisions
 

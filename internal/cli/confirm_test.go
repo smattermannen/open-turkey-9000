@@ -162,7 +162,7 @@ func TestRLOCK12_TerminalConfirmation(t *testing.T) {
 	if err == nil || blockActive(t, d) {
 		t.Fatalf("answered no: err = %v, active = %v", err, blockActive(t, d))
 	}
-	for _, want := range []string{"block 'b'", "timer lock", "2h0m0s, until", "text lock (random characters (300 chars))"} {
+	for _, want := range []string{"block 'b'", "timer lock", "2 hours, until", "text lock (random characters (300 chars))"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the question %q doesn't show %q", out, want)
 		}

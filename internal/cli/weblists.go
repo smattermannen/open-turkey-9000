@@ -288,7 +288,7 @@ func readActionSettings(cmd *cobra.Command, action string) (actionSettings, erro
 		s.param = name
 	}
 	if length != "" {
-		d, err := time.ParseDuration(length)
+		d, err := parseUserDuration(length)
 		if err != nil || d < 0 || d%time.Minute != 0 {
 			return s, fmt.Errorf("invalid --for %q: give whole minutes, like 30m or 2h", length)
 		}

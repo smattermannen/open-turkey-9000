@@ -91,7 +91,7 @@ shortened or removed this way.`,
 		delaySpec, _ := cmd.Flags().GetString("delay")
 		var extras db.LockExtras
 		if delaySpec != "" {
-			d, err := time.ParseDuration(delaySpec)
+			d, err := parseUserDuration(delaySpec)
 			if err != nil {
 				return fmt.Errorf("invalid --delay duration %q: %w", delaySpec, err)
 			}
@@ -122,7 +122,7 @@ shortened or removed this way.`,
 		}
 		extras.Style = style
 		if spec, _ := cmd.Flags().GetString("relock"); spec != "" {
-			d, err := time.ParseDuration(spec)
+			d, err := parseUserDuration(spec)
 			if err != nil || d < time.Minute || d > 30*24*time.Hour {
 				return fmt.Errorf("invalid --relock %q (1m to 720h)", spec)
 			}
@@ -159,7 +159,7 @@ shortened or removed this way.`,
 		now := time.Now()
 		switch {
 		case forDur != "":
-			d, err := time.ParseDuration(forDur)
+			d, err := parseUserDuration(forDur)
 			if err != nil {
 				return fmt.Errorf("invalid --for duration %q: %w", forDur, err)
 			}
@@ -266,7 +266,7 @@ func startLocks(name string, kinds []string, style string, chars int, until, tru
 	target := "block '" + name + "'"
 	relock := ""
 	if extras.Relock > 0 {
-		relock = fmt.Sprintf(", re-lock %s after unlocking", time.Duration(extras.Relock)*time.Second)
+		relock = fmt.Sprintf(", re-lock %s after unlocking", humanDuration(time.Duration(extras.Relock)*time.Second))
 	}
 	var locks []lockToSet
 	for i, k := range kinds {
@@ -282,7 +282,7 @@ func startLocks(name string, kinds []string, style string, chars int, until, tru
 		case db.LayerTimer:
 			length := timerLength(trusted, until)
 			if extras.TimerAfter > 0 {
-				length = fmt.Sprintf("%s, counting from when the %s is unlocked", time.Duration(extras.TimerAfter)*time.Second, db.LayerName(kinds[i-1]))
+				length = fmt.Sprintf("%s, counting from when the %s is unlocked", humanDuration(time.Duration(extras.TimerAfter)*time.Second), db.LayerName(kinds[i-1]))
 			}
 			locks = append(locks, lockToSet{target, order + "timer lock", length})
 		case db.LayerText:
@@ -298,7 +298,7 @@ func startLocks(name string, kinds []string, style string, chars int, until, tru
 		case db.LayerRange:
 			locks = append(locks, lockToSet{target, order + "range lock", describeRange(extras) + " (can't be unlocked then)"})
 		case db.LayerDelay:
-			length := fmt.Sprintf("unlocking takes %s", time.Duration(extras.Delay)*time.Second)
+			length := fmt.Sprintf("unlocking takes %s", humanDuration(time.Duration(extras.Delay)*time.Second))
 			if after != "" {
 				length += ", " + after
 			}
@@ -380,7 +380,7 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 			}
 			e.TimerAfter = forSeconds
 			changes = append(changes, fmt.Sprintf("timer lock of %s after the locks before it", time.Duration(forSeconds)*time.Second))
-			confirm = append(confirm, lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", time.Duration(forSeconds)*time.Second)})
+			confirm = append(confirm, lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", humanDuration(time.Duration(forSeconds)*time.Second))})
 		case detail.LockedUntil != 0:
 			if lockedUntil <= detail.LockedUntil {
 				return fmt.Errorf("block '%s' is already timer-locked until %s; a timer lock can only be extended", name, time.Unix(detail.LockedUntil, 0).Format("2006-01-02 15:04"))
@@ -392,7 +392,7 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 			e.TimerAfter = forSeconds
 			order = db.AppendLayers(order, db.LayerTimer)
 			changes = append(changes, fmt.Sprintf("timer lock of %s after the locks before it", time.Duration(forSeconds)*time.Second))
-			confirm = append(confirm, lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", time.Duration(forSeconds)*time.Second)})
+			confirm = append(confirm, lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", humanDuration(time.Duration(forSeconds)*time.Second))})
 		default:
 			detail.LockedUntil = lockedUntil
 			order = db.AppendLayers(order, db.LayerTimer)
@@ -931,24 +931,6 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 	return h, nil
 }
 
-// untilToday parses "HH:MM" into the next time it occurs from now (today, or
-// tomorrow if the time has already passed today). Tomorrow is the next
-// calendar day, not 24 hours on: the two differ when the clocks change.
-func untilToday(now time.Time, clock string) (time.Time, error) {
-	var h, m int
-	if _, err := fmt.Sscanf(clock, "%d:%d", &h, &m); err != nil {
-		return time.Time{}, fmt.Errorf("invalid --until time %q (want HH:MM)", clock)
-	}
-	if h < 0 || h > 23 || m < 0 || m > 59 {
-		return time.Time{}, fmt.Errorf("invalid --until time %q", clock)
-	}
-	t := time.Date(now.Year(), now.Month(), now.Day(), h, m, 0, 0, now.Location())
-	if !t.After(now) {
-		t = time.Date(now.Year(), now.Month(), now.Day()+1, h, m, 0, 0, now.Location())
-	}
-	return t, nil
-}
-
 func init() {
 	startCmd.Flags().Bool("lock", false, "Lock the block (requires a challenge to deactivate)")
 	startCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
@@ -958,8 +940,8 @@ func init() {
 	startCmd.Flags().String("delay", "", "Delay lock: unlocking takes this long (1m to 960h)")
 	addYesFlag(startCmd)
 	startCmd.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m)")
-	startCmd.Flags().String("for", "", "Timer lock: keep the block un-removable for this duration (e.g. 2h, 90m)")
-	startCmd.Flags().String("until", "", "Timer lock: keep the block un-removable until this clock time (HH:MM)")
+	startCmd.Flags().String("for", "", "Timer lock: keep the block un-removable for this duration (e.g. 90m, 2h, 3d, 1w)")
+	startCmd.Flags().String("until", "", "Timer lock: keep the block un-removable until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
 
 	startCmd.Flags().String("range", "", `Range lock: locked at these times, e.g. "mon-fri 09:00-17:00" (22:00-06:00 runs past midnight)`)
 	startCmd.Flags().Bool("range-invert", false, "Range lock: locked outside those times instead")

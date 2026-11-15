@@ -257,7 +257,7 @@ func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.
 	now := time.Now()
 	switch {
 	case forDur != "":
-		d, err := time.ParseDuration(forDur)
+		d, err := parseUserDuration(forDur)
 		if err != nil {
 			return want, fmt.Errorf("invalid --for duration %q: %w", forDur, err)
 		}
@@ -340,7 +340,7 @@ func relockRequested(cmd *cobra.Command) (int64, error) {
 	if spec == "" {
 		return 0, nil
 	}
-	d, err := time.ParseDuration(spec)
+	d, err := parseUserDuration(spec)
 	if err != nil || d < time.Minute || d > 30*24*time.Hour {
 		return 0, fmt.Errorf("invalid --relock %q (1m to 720h)", spec)
 	}
@@ -496,7 +496,7 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 		locks = append(locks, lockToSet{target, "timer lock", timerLength(cur.trusted, next.LockedUntil)})
 	}
 	if next.TimerAfter != old.TimerAfter {
-		locks = append(locks, lockToSet{target, "timer lock", (time.Duration(next.TimerAfter) * time.Second).String() + ", counting from when the locks before it are unlocked"})
+		locks = append(locks, lockToSet{target, "timer lock", humanDuration(time.Duration(next.TimerAfter)*time.Second) + ", counting from when the locks before it are unlocked"})
 	}
 	if next.LockChars != old.LockChars {
 		length := ""
@@ -737,8 +737,8 @@ func nextSettingLock(label string, s settingLockState, rest []string, unlockCmd 
 }
 
 func init() {
-	browserCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 2h, 90m)")
-	browserCmd.Flags().String("until", "", "Timer lock: can't be turned off until this clock time (HH:MM)")
+	browserCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 90m, 2h, 3d, 1w)")
+	browserCmd.Flags().String("until", "", "Timer lock: can't be turned off until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
 	browserCmd.Flags().Bool("lock", false, "Typing challenge lock ('kc9k browser unlock <setting>')")
 	browserCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	browserCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")

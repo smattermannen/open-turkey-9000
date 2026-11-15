@@ -70,8 +70,11 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     spin button (`ask_minutes`, ladder steps, quiet time); GTK silently
     clamps out-of-range values on Enter (100000 min became 43200). Not
     built. S
-  - [ ] Timer lock until a calendar date (R-GUI-2): the GUI asks only a
-    duration. Not built. S
+  - [ ] Timer lock until a calendar date (R-GUI-2). CLI built: `--until`
+    takes `YYYY-MM-DD [HH:MM]` as well as `HH:MM` (a passed date refused),
+    every typed duration takes days and weeks (`2d 4h`, `1w`;
+    `parseUserDuration`), confirmations say "69 days 10 hours 40 minutes"
+    (`humanDuration`); `until_test.go`. GUI: Not built. S
   - [ ] No flashing (R-PAGE-1): a page judged by its text shows before it
     is blocked or gets its looks (also on blocks with title/text exceptions,
     whose sites are left to the extension). Not built. M

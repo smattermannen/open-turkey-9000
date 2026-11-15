@@ -147,7 +147,7 @@ itself queued for the delay the block has now.`,
 			fmt.Printf("Weakening changes to '%s' wait %s.\n", name, time.Duration(current)*time.Second)
 			return nil
 		}
-		d, err := time.ParseDuration(args[1])
+		d, err := parseUserDuration(args[1])
 		if err != nil {
 			return fmt.Errorf("invalid time %q (e.g. 48h)", args[1])
 		}

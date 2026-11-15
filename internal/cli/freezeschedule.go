@@ -177,7 +177,7 @@ func leadMinutes(spec string, given bool) (int, error) {
 	if !given {
 		return db.NoScheduleLock, nil
 	}
-	d, err := time.ParseDuration(spec)
+	d, err := parseUserDuration(spec)
 	if err != nil || d < 0 || d%time.Minute != 0 || d > time.Duration(db.MaxScheduleLockLead)*time.Minute {
 		return 0, fmt.Errorf("invalid lead time %q (whole minutes, up to 7 days, e.g. 2h)", spec)
 	}
@@ -323,7 +323,7 @@ func init() {
 	freezeScheduleAddCmd.Flags().String("lock-lead", "", "Lock the schedule from this long before each window (e.g. 2h; 0m: only while it runs)")
 	freezeScheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h)")
 	freezeScheduleLockCmd.Flags().String("for", "", "Timer lock: not removable for this long")
-	freezeScheduleLockCmd.Flags().String("until", "", "Timer lock until this clock time (HH:MM)")
+	freezeScheduleLockCmd.Flags().String("until", "", "Timer lock until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
 	freezeScheduleLockCmd.Flags().Bool("lock", false, "Text lock ('kc9k freeze schedule unlock N')")
 	freezeScheduleLockCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	freezeScheduleLockCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")

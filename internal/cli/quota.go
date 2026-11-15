@@ -68,7 +68,7 @@ var quotaSetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
-		d, err := time.ParseDuration(args[1])
+		d, err := parseUserDuration(args[1])
 		if err != nil {
 			return fmt.Errorf("invalid duration %q: %w", args[1], err)
 		}
@@ -228,7 +228,7 @@ var quotaStartCmd = &cobra.Command{
 		s = s.Opened(now.Unix())
 		s.SessionEnd = 0
 		if forDur != "" {
-			d, err := time.ParseDuration(forDur)
+			d, err := parseUserDuration(forDur)
 			if err != nil {
 				return fmt.Errorf("invalid --for duration %q: %w", forDur, err)
 			}

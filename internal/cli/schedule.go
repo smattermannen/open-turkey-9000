@@ -212,7 +212,7 @@ A longer lead time is always allowed; a shorter one, or off, weakens the block.`
 		want := db.NoScheduleLock
 		switch args[1] {
 		case "on":
-			d, err := time.ParseDuration(cmd.Flag("lead").Value.String())
+			d, err := parseUserDuration(cmd.Flag("lead").Value.String())
 			if err != nil || d < 0 {
 				return fmt.Errorf("invalid --lead %q (e.g. 2h)", cmd.Flag("lead").Value.String())
 			}

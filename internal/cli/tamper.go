@@ -185,8 +185,8 @@ func printUnsupportedBrowsers(database *db.DB) error {
 }
 
 func init() {
-	tamperCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 2h, 90m)")
-	tamperCmd.Flags().String("until", "", "Timer lock: can't be turned off until this clock time (HH:MM)")
+	tamperCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 90m, 2h, 3d, 1w)")
+	tamperCmd.Flags().String("until", "", "Timer lock: can't be turned off until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
 	tamperCmd.Flags().Bool("lock", false, "Text lock ('kc9k tamper unlock unsupported-browsers')")
 	tamperCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	tamperCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")

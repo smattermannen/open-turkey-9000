@@ -78,7 +78,7 @@ func timerLength(now, until int64) string {
 	if left < 0 {
 		left = 0
 	}
-	return fmt.Sprintf("%s, until %s", left.Round(time.Minute), time.Unix(until, 0).Format("2006-01-02 15:04"))
+	return fmt.Sprintf("%s, until %s", humanDuration(left), time.Unix(until, 0).Format("2006-01-02 15:04"))
 }
 
 // textLockKind names a text lock with its challenge.
@@ -91,7 +91,7 @@ func leadLength(minutes int) string {
 	if minutes == 0 {
 		return "while each window is open"
 	}
-	return fmt.Sprintf("while each window is open and %s before it", time.Duration(minutes)*time.Minute)
+	return fmt.Sprintf("while each window is open and %s before it", humanDuration(time.Duration(minutes)*time.Minute))
 }
 
 // requireMonkAck refuses to set up something that starts monk mode by itself

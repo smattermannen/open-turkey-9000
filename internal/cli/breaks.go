@@ -78,7 +78,7 @@ func seconds(n int64) time.Duration { return time.Duration(n) * time.Second }
 
 // parseBreak parses a break length.
 func parseBreak(text string, max int64) (int64, error) {
-	d, err := time.ParseDuration(text)
+	d, err := parseUserDuration(text)
 	if err != nil || d < time.Minute || int64(d.Seconds()) > max {
 		return 0, fmt.Errorf("%q isn't a time from 1m to %s", text, seconds(max))
 	}

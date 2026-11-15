@@ -270,8 +270,8 @@ Booting a USB stick still works unless the firmware is locked with a password.`,
 func init() {
 	noEscapeCmd.Flags().Bool("yes", false, "Confirm")
 	addYesFlag(strictCmd)
-	strictCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 2h, 90m)")
-	strictCmd.Flags().String("until", "", "Timer lock: can't be turned off until this clock time (HH:MM)")
+	strictCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 90m, 2h, 3d, 1w)")
+	strictCmd.Flags().String("until", "", "Timer lock: can't be turned off until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
 	strictCmd.Flags().Bool("lock", false, "Text lock ('kc9k strict unlock')")
 	strictCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	strictCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")

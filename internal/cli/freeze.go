@@ -35,7 +35,7 @@ Emergency exit: in GRUB, press e on the boot entry and add
 			return fmt.Errorf("unknown mode %q (use lock, logout, shutdown or apps)", mode)
 		}
 
-		d, err := time.ParseDuration(forDur)
+		d, err := parseUserDuration(forDur)
 		if err != nil {
 			return fmt.Errorf("invalid --for duration %q: %w", forDur, err)
 		}

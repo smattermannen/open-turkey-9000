@@ -54,7 +54,7 @@ Without arguments, shows whether monk mode is on.`,
 			fmt.Println(monkStatus(database))
 			return nil
 		}
-		d, err := time.ParseDuration(length)
+		d, err := parseUserDuration(length)
 		if err != nil || d < time.Minute {
 			return fmt.Errorf("give --for, at least 1m (e.g. 45m, 2h)")
 		}
@@ -124,7 +124,7 @@ var stepPattern = regexp.MustCompile(`^\s*(\d+)\s+in\s+(\S+)\s*:\s*(.+)$`)
 
 // parseMinutes reads a duration in whole minutes ("5m", "2h").
 func parseMinutes(text, what string) (int, error) {
-	d, err := time.ParseDuration(strings.TrimSpace(text))
+	d, err := parseUserDuration(strings.TrimSpace(text))
 	if err != nil || d < 0 || d%time.Minute != 0 {
 		return 0, fmt.Errorf("invalid %s %q: give whole minutes, like 5m or 2h", what, text)
 	}
@@ -456,7 +456,7 @@ func init() {
 		c.Flags().String("block", "", "A block's own bypass prevention, instead of the global one")
 	}
 	nepsisSetCmd.Flags().String("for", "", "Global only. Timer lock: can't be weakened for this long")
-	nepsisSetCmd.Flags().String("until", "", "Global only. Timer lock until this clock time (HH:MM)")
+	nepsisSetCmd.Flags().String("until", "", "Global only. Timer lock until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
 	nepsisSetCmd.Flags().Bool("lock", false, "Global only. Typing challenge lock ('kc9k bypass unlock')")
 	nepsisSetCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	nepsisSetCmd.Flags().Bool("password-stdin", false, "Global only. Password lock, read from standard input")

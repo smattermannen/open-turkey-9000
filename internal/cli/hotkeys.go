@@ -50,7 +50,7 @@ var hotkeyAddCmd = &cobra.Command{
 		lockFor, _ := cmd.Flags().GetString("for")
 		noConfirm, _ := cmd.Flags().GetBool("no-confirm")
 		if lockFor != "" {
-			d, err := time.ParseDuration(lockFor)
+			d, err := parseUserDuration(lockFor)
 			if err != nil || d < time.Minute || d > maxHotkeyLock {
 				return fmt.Errorf("--for must be a duration from 1m to 24h, like 1h or 90m")
 			}
@@ -211,7 +211,7 @@ func syncHotkeys(database *db.DB) error {
 }
 
 func init() {
-	hotkeyAddCmd.Flags().String("for", "", "Time-lock the block for this long when the hotkey starts it (e.g. 1h, 90m)")
+	hotkeyAddCmd.Flags().String("for", "", "Time-lock the block for this long when the hotkey starts it (e.g. 90m, 1h, 1d)")
 	addYesFlag(hotkeyAddCmd)
 	hotkeyAddCmd.Flags().Bool("no-confirm", false, "Run without confirmation: pressing the hotkey sets its lock without asking (the lock is confirmed only now)")
 	hotkeyCmd.AddCommand(hotkeyAddCmd, hotkeyRemoveCmd, hotkeyListCmd, hotkeyRunCmd)

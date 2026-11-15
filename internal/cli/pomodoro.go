@@ -28,11 +28,11 @@ breaks is a long one:
 While a block's work period runs, its allowance session can't be opened.`,
 	Args: cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		on, err := time.ParseDuration(args[1])
+		on, err := parseUserDuration(args[1])
 		if err != nil {
 			return fmt.Errorf("invalid work time %q: %w", args[1], err)
 		}
-		off, err := time.ParseDuration(args[2])
+		off, err := parseUserDuration(args[2])
 		if err != nil {
 			return fmt.Errorf("invalid break time %q: %w", args[2], err)
 		}
@@ -43,7 +43,7 @@ While a block's work period runs, its allowance session can't be opened.`,
 		longText, _ := cmd.Flags().GetString("long")
 		every, _ := cmd.Flags().GetInt("every")
 		if longText != "" || every != 0 {
-			long, err := time.ParseDuration(longText)
+			long, err := parseUserDuration(longText)
 			if err != nil || long < minPomodoroPhase {
 				return fmt.Errorf("--long needs a time of at least %s, e.g. 15m", minPomodoroPhase)
 			}

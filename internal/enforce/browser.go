@@ -295,6 +295,7 @@ type RuleAction struct {
 	Name     string `json:"action"`
 	Distinct int    `json:"distinct"`
 	Hits     int    `json:"hits"`
+	Rate     int    `json:"rate,omitempty"` // matches per 1,000 words; 0: none
 	Param    string `json:"param,omitempty"`
 }
 
@@ -352,7 +353,7 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 			rule.Text = append(rule.Text, l.Entries...)
 		}
 		for _, a := range l.Actions {
-			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct, Hits: a.Hits, Param: a.Param})
+			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct, Hits: a.Hits, Rate: a.Rate, Param: a.Param})
 		}
 		out = append(out, rule)
 	}

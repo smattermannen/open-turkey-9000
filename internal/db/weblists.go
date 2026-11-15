@@ -174,9 +174,18 @@ type ListAction struct {
 	Name     string `json:"action"`
 	Distinct int    `json:"distinct"`
 	Hits     int    `json:"hits"`
-	Param    string `json:"param,omitempty"`
-	Minutes  int    `json:"minutes,omitempty"`
+	// Rate: matches per 1,000 words (tenths of a percent) a page's text
+	// needs, on pages of at least RateMinWords words; 0 means none (§3.9).
+	Rate    int    `json:"rate,omitempty"`
+	Param   string `json:"param,omitempty"`
+	Minutes int    `json:"minutes,omitempty"`
 }
+
+// RateMinWords is the shortest page a rate is judged on (§3.9).
+const RateMinWords = 200
+
+// MaxRate is the highest rate: 100 %.
+const MaxRate = 1000
 
 // WebList is one of a block's website lists.
 type WebList struct {
@@ -394,7 +403,7 @@ func listEntries(q querier, listID int) ([]string, error) {
 }
 
 func listActions(q querier, listID int) ([]ListAction, error) {
-	rows, err := q.Query("SELECT action, distinct_min, hits_min, param, minutes FROM web_list_actions WHERE list_id = ?", listID)
+	rows, err := q.Query("SELECT action, distinct_min, hits_min, rate_min, param, minutes FROM web_list_actions WHERE list_id = ?", listID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch list actions: %w", err)
 	}
@@ -402,7 +411,7 @@ func listActions(q querier, listID int) ([]ListAction, error) {
 	found := map[string]ListAction{}
 	for rows.Next() {
 		var a ListAction
-		if err := rows.Scan(&a.Name, &a.Distinct, &a.Hits, &a.Param, &a.Minutes); err != nil {
+		if err := rows.Scan(&a.Name, &a.Distinct, &a.Hits, &a.Rate, &a.Param, &a.Minutes); err != nil {
 			return nil, fmt.Errorf("failed to read a list action: %w", err)
 		}
 		a.Distinct, a.Hits = max(a.Distinct, 1), max(a.Hits, 1)
@@ -639,6 +648,22 @@ func (d *DB) SetListHits(listID int, action string, n int) error {
 	return d.setListCount(listID, action, "hits_min", n)
 }
 
+// SetListRate sets the rate (per 1,000 words; 0: none) a page's text needs
+// for a blacklist's action (§3.9). The action must be on.
+func (d *DB) SetListRate(listID int, action string, perMille int) error {
+	if perMille < 0 || perMille > MaxRate {
+		return fmt.Errorf("a rate is from 0.1 to 100 percent")
+	}
+	res, err := d.conn.Exec("UPDATE web_list_actions SET rate_min = ? WHERE list_id = ? AND action = ?", perMille, listID, action)
+	if err != nil {
+		return fmt.Errorf("failed to set the %s rate: %w", action, err)
+	}
+	if count, _ := res.RowsAffected(); count == 0 {
+		return fmt.Errorf("the list doesn't take the %s action; turn it on first", action)
+	}
+	return nil
+}
+
 // setListCount sets one of an action's counts (column is a constant).
 func (d *DB) setListCount(listID int, action, column string, n int) error {
 	if !IsAction(action) {
@@ -679,8 +704,8 @@ func (d *DB) copyLists(from Lists, toBlock string) error {
 				return err
 			}
 			for _, a := range l.Actions {
-				if _, err := d.conn.Exec("INSERT INTO web_list_actions (list_id, action, distinct_min, hits_min, param, minutes) VALUES (?, ?, ?, ?, ?, ?)",
-					id, a.Name, max(a.Distinct, 1), max(a.Hits, 1), a.Param, a.Minutes); err != nil {
+				if _, err := d.conn.Exec("INSERT INTO web_list_actions (list_id, action, distinct_min, hits_min, rate_min, param, minutes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+					id, a.Name, max(a.Distinct, 1), max(a.Hits, 1), min(max(a.Rate, 0), MaxRate), a.Param, a.Minutes); err != nil {
 					return err
 				}
 			}

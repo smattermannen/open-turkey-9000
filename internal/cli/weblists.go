@@ -721,6 +721,53 @@ Lowering it is always allowed; raising it weakens the list.`,
 	}),
 }
 
+var listRateCmd = &cobra.Command{
+	Use:   "rate [block] [list] [action] [percent|off]",
+	Short: "What share of a page's words must be the list's entries (pages of 200 words or more)",
+	Long: `For a blacklist that looks at page text: matches divided by the page's
+words, in percent (0.1 to 100), that the action also needs. Pages under 200
+words never meet a rate. Threshold, hit count and rate must all be met
+(R-LIST-6). Lowering it or 'off' is always allowed; setting or raising it
+weakens the list.`,
+	Args: cobra.ExactArgs(4),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		n := 0
+		if args[3] != "off" {
+			pct, err := strconv.ParseFloat(strings.TrimSuffix(args[3], "%"), 64)
+			if err != nil || pct < 0.1 || pct > 100 {
+				return fmt.Errorf("a rate is a percent from 0.1 to 100, or off")
+			}
+			n = int(pct*10 + 0.5)
+		}
+		return listRate(cmd, database, args[0], args[1], strings.ToLower(args[2]), n)
+	}),
+}
+
+// listRate sets an action's rate (per 1,000 words, 0: none). A new or
+// higher rate weakens; a lower one or none strengthens (§3.5).
+func listRate(cmd *cobra.Command, database *db.DB, block, list, action string, n int) error {
+	_, l, err := findList(database, block, list)
+	if err != nil {
+		return err
+	}
+	a, ok := l.Action(action)
+	if !ok {
+		return fmt.Errorf("list '%s' doesn't take the %s action; turn it on first", list, action)
+	}
+	if n == a.Rate {
+		return nil
+	}
+	strengthens := n == 0 || (a.Rate != 0 && n < a.Rate)
+	proceed, err := gateEdit(cmd, database, block, strengthens, listEdit(db.EditListSetRate, l, action, strconv.Itoa(n)))
+	if err != nil || !proceed {
+		return err
+	}
+	if err := database.SetListRate(l.ID, action, n); err != nil {
+		return err
+	}
+	return settle(database, block)
+}
+
 var listExportCmd = &cobra.Command{
 	Use:   "export [block] [list]",
 	Short: "Print a list's entries, one per line",
@@ -764,8 +811,8 @@ func init() {
 	listCreateCmd.Flags().Bool("url", false, "Look at the address (the default)")
 	listCreateCmd.Flags().Bool("title", false, "Look at the page title")
 	listCreateCmd.Flags().Bool("text", false, "Look at the page text")
-	addNowFlag(listDeleteCmd, listAddCmd, listRemoveCmd, listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listImportCmd)
+	addNowFlag(listDeleteCmd, listAddCmd, listRemoveCmd, listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listImportCmd)
 	listCmd.AddCommand(listShowCmd, listCreateCmd, listRenameCmd, listDeleteCmd, listAddCmd, listRemoveCmd,
-		listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listExportCmd, listImportCmd)
+		listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listExportCmd, listImportCmd)
 	rootCmd.AddCommand(listCmd)
 }

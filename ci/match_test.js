@@ -158,6 +158,21 @@ const failed0 = [];
   console.log("typical page judged in " + slowest + " ms");
 }
 
+// §3.9 rate: matches per 1,000 words, on pages of at least 200 words.
+{
+  const rated = (rate) => kc9kCompileLists([{
+    id: 11, block: "b", name: "Words", url: [], title: [], text: ["casino"],
+    actions: [{ action: "block", distinct: 1, hits: 1, rate }], except: { url: [], title: [], text: [] },
+  }]);
+  const page = (n, of) => ({ url: "https://example.com/", title: "",
+    text: Array.from({ length: of }, (_, i) => (i < n ? "casino" : "word")).join(" ") });
+  const acts = (rate, p) => kc9kListMatches(rated(rate), p).length > 0;
+  if (!acts(0, page(1, 50)) || acts(10, page(1, 150)) || !acts(10, page(3, 300)) || acts(20, page(3, 300)) ||
+    kc9kTestReport([Object.assign(rated(20)[0], { test: true })], page(3, 300))[0].actions[0].met) {
+    failed0.push("rate");
+  }
+}
+
 // R-LIST-5: case and accents ignored, look-alike letters read as Latin.
 {
   const list = kc9kCompileLists([{

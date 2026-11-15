@@ -90,5 +90,10 @@ for name in ("Blocked", "Exceptions", "Mixed", "Spared"):
 card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) and c.data.get("name") == "Blocked")
 card.place_checks["title"].set_active(True); settle()
 check(lists()["Blocked"]["where"] == ["url", "title"], "Blocked ticks title from its card")
+# §3.9 rate from the card of a text list: saved through 'kc9k list rate'.
+card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) and c.data.get("name") == "Mixed")
+card.rates["block"].set_value(2.5); card.save_numbers(None); settle()
+rate = [a for a in lists()["Mixed"]["actions"] if a["action"] == "block"][0].get("rate")
+check(rate == 25, "rate saved from the card: %s" % rate)
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

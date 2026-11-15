@@ -135,7 +135,6 @@ Only items not simply Built.
 | §3.8 Factory reset protection | Not built | 2.6 |
 | §3.9 Strongest action across blocks | Unchecked | built within a page |
 | §3.9 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`); hidden text, frames Unchecked |
-| §3.9 Rate | Not built | |
 | §3.9 Ad trigger | Not built | 2.2 |
 | §3.11 Block password | Not built | |
 | §3.10 R-WEAK-4 beyond strict/browser/ladder/password | Unchecked | |

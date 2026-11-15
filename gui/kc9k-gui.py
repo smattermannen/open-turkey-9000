@@ -873,14 +873,21 @@ class ListCard(Gtk.Frame):
             grid = Gtk.Grid(column_spacing=8, row_spacing=4)
             grid.attach(dim("Different", wrap=False), 1, 0, 1, 1)
             grid.attach(dim("In all", wrap=False), 2, 0, 1, 1)
+            # §3.9 rate: share of the page's words, pages of 200+ words; 0 = none.
+            grid.attach(dim("Rate %", wrap=False), 3, 0, 1, 1)
+            self.rates = {}
             for row, (name, title) in enumerate(SITE_ACTIONS, start=1):
                 label = Gtk.Label(label=title, xalign=0)
                 distinct = Gtk.SpinButton.new_with_range(1, 1000, 1)
                 hits = Gtk.SpinButton.new_with_range(1, 1000, 1)
+                rate = Gtk.SpinButton.new_with_range(0, 100, 0.1)
+                rate.set_digits(1)
                 self.spins[name] = (label, distinct, hits)
+                self.rates[name] = rate
                 grid.attach(label, 0, row, 1, 1)
                 grid.attach(distinct, 1, row, 1, 1)
                 grid.attach(hits, 2, row, 1, 1)
+                grid.attach(rate, 3, row, 1, 1)
             save = Gtk.Button(label="Save numbers", halign=Gtk.Align.START)
             save.connect("clicked", self.save_numbers)
             grid.attach(save, 1, len(SITE_ACTIONS) + 1, 2, 1)
@@ -916,7 +923,11 @@ class ListCard(Gtk.Frame):
             for name, (label, distinct, hits) in self.spins.items():
                 distinct.set_value(actions.get(name, {}).get("distinct", 1))
                 hits.set_value(actions.get(name, {}).get("hits", 1))
-                for widget in (label, distinct, hits):
+                widgets = [label, distinct, hits]
+                if name in getattr(self, "rates", {}):
+                    self.rates[name].set_value(actions.get(name, {}).get("rate", 0) / 10)
+                    widgets.append(self.rates[name])
+                for widget in widgets:
                     widget.set_no_show_all(name not in actions)
                     widget.set_visible(name in actions)
             if self.threshold_row is not None:
@@ -1023,6 +1034,10 @@ class ListCard(Gtk.Frame):
             for command, spin, key in (("threshold", distinct, "distinct"), ("hits", hits, "hits")):
                 if spin.get_value_as_int() != current[name].get(key, 1):
                     changes.append((command, name, spin.get_value_as_int()))
+            if name in getattr(self, "rates", {}):
+                tenths = round(self.rates[name].get_value() * 10)
+                if tenths != current[name].get("rate", 0):
+                    changes.append(("rate", name, f"{tenths / 10:g}" if tenths else "off"))
         self.window.run_thresholds(self.window.selected, self.data["name"], changes)
 
     def rename(self, _button):

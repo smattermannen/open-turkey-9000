@@ -610,6 +610,16 @@ function kc9kReadsPage(compiled) {
 // A match in the address or the title takes every action of the list; in
 // the text, an action needs its number of different entries (distinct) and
 // of times they occur in all (hits).
+// kc9kRateMet reports whether an action's rate (matches per 1,000 words)
+// is met (§3.9, R-LIST-6): pages under 200 words never meet one.
+function kc9kRateMet(action, total, text) {
+  if (!action.rate) {
+    return true;
+  }
+  const words = (kc9kFoldCached(text || "").match(/[\p{L}\p{N}]+/gu) || []).length;
+  return words >= 200 && total * 1000 >= action.rate * words;
+}
+
 function kc9kListMatches(compiled, page) {
   const out = [];
   if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
@@ -645,7 +655,8 @@ function kc9kListMatches(compiled, page) {
       (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
     const found = hasText && list.text.length > 0 ? kc9kTextHits(list.text, page.text) : { distinct: 0, total: 0 };
     const actions = list.actions.filter((action) => whole ||
-      (found.distinct > 0 && found.distinct >= (action.distinct || 1) && found.total >= (action.hits || 1)));
+      (found.distinct > 0 && found.distinct >= (action.distinct || 1) && found.total >= (action.hits || 1) &&
+        kc9kRateMet(action, found.total, page.text)));
     if (actions.length > 0) {
       out.push({ list, actions });
     }
@@ -724,7 +735,9 @@ function kc9kTestReport(compiled, page) {
       distinct: entries.length, total,
       actions: list.actions.map((action) => ({
         action: action.action, distinct: action.distinct || 1, hits: action.hits || 1,
-        met: !spared && (whole || (entries.length > 0 && entries.length >= (action.distinct || 1) && total >= (action.hits || 1))),
+        rate: action.rate || 0,
+        met: !spared && (whole || (entries.length > 0 && entries.length >= (action.distinct || 1) && total >= (action.hits || 1) &&
+          kc9kRateMet(action, total, text))),
       })),
     });
   }

@@ -31,6 +31,7 @@ const (
 	EditListUnsetAction  = "list-unset-action"  // Values: action
 	EditListSetThreshold = "list-set-threshold" // Values: action, number
 	EditListSetHits      = "list-set-hits"      // Values: action, number
+	EditListSetRate      = "list-set-rate"      // Values: action, per 1,000 words
 	EditListSetParams    = "list-set-params"    // Values: action, param, minutes
 	EditListDelete       = "list-delete"        // a blacklist
 
@@ -165,7 +166,7 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 		err = d.RemoveApps(blockName, e.Values)
 	case EditRemoveTitles:
 		err = d.RemoveTitles(blockName, e.Values)
-	case EditListRemove, EditListAdd, EditListWhere, EditListUnsetAction, EditListSetThreshold, EditListSetHits, EditListSetParams, EditListDelete:
+	case EditListRemove, EditListAdd, EditListWhere, EditListUnsetAction, EditListSetThreshold, EditListSetHits, EditListSetRate, EditListSetParams, EditListDelete:
 		err = d.applyListEdit(e)
 	case legacyAddSites, legacyRemoveSites, legacyRemovePatterns, legacyAddExceptions,
 		legacySetMode, legacyUnsetAction, legacyRemoveKeywords, legacySetThreshold:
@@ -256,6 +257,15 @@ func (d *DB) applyListEdit(e Edit) error {
 			return fmt.Errorf("list-unset-action needs exactly one action")
 		}
 		return d.SetListAction(list.ID, e.Values[0], false)
+	case EditListSetRate:
+		if len(e.Values) != 2 {
+			return fmt.Errorf("%s needs an action and a number", e.Action)
+		}
+		n, err := strconv.Atoi(e.Values[1])
+		if err != nil {
+			return fmt.Errorf("bad number %q", e.Values[1])
+		}
+		return d.SetListRate(list.ID, e.Values[0], n)
 	case EditListSetThreshold, EditListSetHits:
 		if len(e.Values) != 2 {
 			return fmt.Errorf("%s needs an action and a number", e.Action)

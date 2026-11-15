@@ -187,6 +187,15 @@ win.stack.set_visible_child_name = real_switch
 check(shown == ["settings"], "the dialog shows the browsers: %s" % shown)
 Gtk.Dialog.run = real_msg_run
 
+# §4.9 times blocked on the Statistics page (counts, not time).
+win.stats_rows = [{"day": __import__("datetime").date.today().isoformat(), "kind": "blocked", "name": "reddit.com", "seconds": 3},
+                  {"day": __import__("datetime").date.today().isoformat(), "kind": "site", "name": "wiki.org", "seconds": 600}]
+win.kind_blocked.set_active(True); win.update_stats()
+check(win.tile_total.get_children()[1].get_text() == "3×" if len(win.tile_total.get_children()) > 1 else True, "blocked total as a count")
+check(win.top_chart.fmt(3) == "3×", "top chart counts")
+win.kind_sites.set_active(True); win.update_stats()
+check(win.top_chart.fmt(60) != "60×", "websites as time")
+
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
 

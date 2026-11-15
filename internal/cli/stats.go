@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -74,13 +75,26 @@ this computer and is kept for a year.
 		if !out.Enabled {
 			fmt.Println("Statistics are off ('kc9k stats on' to record).")
 		}
+		top, _ := cmd.Flags().GetInt("top")
+		search, _ := cmd.Flags().GetString("search")
+		var keep func(kind, name string) bool
+		if b, _ := cmd.Flags().GetString("block"); b != "" {
+			if keep, err = statsBlockFilter(database, b); err != nil {
+				return err
+			}
+		}
 		fmt.Printf("Since %s:\n", since)
-		for _, kind := range []struct{ key, title string }{{db.UsageSite, "Websites"}, {db.UsageApp, "Apps"}} {
+		for _, kind := range []struct{ key, title string }{{db.UsageSite, "Websites"}, {db.UsageApp, "Apps"},
+			{db.UsageBlocked, "Times blocked (sites)"}, {db.UsageBlockedBlock, "Times blocked (blocks)"}} {
 			totals := map[string]int64{}
 			for _, r := range rows {
-				if r.Kind == kind.key {
-					totals[r.Name] += r.Seconds
+				if r.Kind != kind.key || (search != "" && !strings.Contains(strings.ToLower(r.Name), strings.ToLower(search))) {
+					continue
 				}
+				if keep != nil && !keep(r.Kind, r.Name) {
+					continue
+				}
+				totals[r.Name] += r.Seconds
 			}
 			names := make([]string, 0, len(totals))
 			for name := range totals {
@@ -97,11 +111,15 @@ this computer and is kept for a year.
 				fmt.Println("  (nothing recorded)")
 			}
 			for i, name := range names {
-				if i == 15 {
-					fmt.Printf("  … and %d more\n", len(names)-15)
+				if i == top {
+					fmt.Printf("  … and %d more\n", len(names)-top)
 					break
 				}
-				fmt.Printf("  %-32s %s\n", name, formatSpent(totals[name]))
+				if kind.key == db.UsageBlocked || kind.key == db.UsageBlockedBlock {
+					fmt.Printf("  %-32s %d×\n", name, totals[name])
+				} else {
+					fmt.Printf("  %-32s %s\n", name, formatSpent(totals[name]))
+				}
 			}
 		}
 		return nil
@@ -122,5 +140,47 @@ func formatSpent(seconds int64) string {
 func init() {
 	statsCmd.Flags().Int("days", 7, "How many days back to include, today counted")
 	statsCmd.Flags().Bool("json", false, "Print the rows as JSON (for the graphical interface)")
+	statsCmd.Flags().Int("top", 15, "Show this many of each (e.g. 5 or 10)")
+	statsCmd.Flags().String("search", "", "Only names containing this text")
+	statsCmd.Flags().String("block", "", "Only the sites and apps of this block")
 	rootCmd.AddCommand(statsCmd)
+}
+
+// statsBlockFilter keeps the rows that belong to a block: its apps, the
+// sites its lists name (and their subdomains), and its own blocked count.
+func statsBlockFilter(database *db.DB, name string) (func(kind, row string) bool, error) {
+	detail, err := database.GetBlock(name)
+	if err != nil {
+		return nil, err
+	}
+	apps := map[string]bool{}
+	for _, a := range detail.Apps {
+		apps[a] = true
+	}
+	var sites []string
+	for _, l := range detail.Lists.Blacklists() {
+		for _, e := range l.Addresses() {
+			e = strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(e), "*."), "www.")
+			if i := strings.IndexAny(e, "/*"); i >= 0 {
+				e = e[:i]
+			}
+			if e != "" {
+				sites = append(sites, e)
+			}
+		}
+	}
+	return func(kind, row string) bool {
+		switch kind {
+		case db.UsageApp:
+			return apps[row]
+		case db.UsageBlockedBlock:
+			return row == name
+		}
+		for _, s := range sites {
+			if row == s || strings.HasSuffix(row, "."+s) {
+				return true
+			}
+		}
+		return false
+	}, nil
 }

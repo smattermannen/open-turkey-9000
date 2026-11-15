@@ -211,6 +211,7 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 			kind = db.EventWorkaround
 		}
 		logEvent(d, kind, block, hit.URL)
+		countBlocked(d, hit.URL, block)
 		scopes := []string{""}
 		if block != "" {
 			scopes = append(scopes, block)
@@ -240,4 +241,23 @@ func imageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", types[filepath.Ext(name)])
 	w.Header().Set("Cache-Control", "max-age=86400")
 	_, _ = w.Write(data)
+}
+
+// countBlocked adds a blocked page to the statistics (§4.9 times blocked):
+// per site and per block, when statistics are on.
+func countBlocked(d *db.DB, address, block string) {
+	if !StatsOn(d) {
+		return
+	}
+	day := Day(time.Now())
+	if u, err := url.Parse(address); err == nil && u.Hostname() != "" {
+		if err := d.AddUsage(day, db.UsageBlocked, strings.TrimPrefix(strings.ToLower(u.Hostname()), "www."), 1); err != nil {
+			log.Printf("stats: %v", err)
+		}
+	}
+	if block != "" {
+		if err := d.AddUsage(day, db.UsageBlockedBlock, block, 1); err != nil {
+			log.Printf("stats: %v", err)
+		}
+	}
 }

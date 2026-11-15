@@ -231,3 +231,21 @@ func TestPomodoroRestarts(t *testing.T) {
 		t.Errorf("anchor after a break = %d; want 3001", p.Anchor)
 	}
 }
+
+// §4.9 times blocked: a blocked page counts for its site and its block.
+func TestCountBlocked(t *testing.T) {
+	d := testDB(t)
+	if err := d.SetSetting(SettingStats, "on"); err != nil {
+		t.Fatal(err)
+	}
+	countBlocked(d, "https://www.reddit.com/r/x", "social")
+	countBlocked(d, "https://reddit.com/", "social")
+	rows, _ := d.UsageSince("")
+	got := map[string]int64{}
+	for _, r := range rows {
+		got[r.Kind+" "+r.Name] = r.Seconds
+	}
+	if got[db.UsageBlocked+" reddit.com"] != 2 || got[db.UsageBlockedBlock+" social"] != 2 {
+		t.Errorf("rows = %v", got)
+	}
+}

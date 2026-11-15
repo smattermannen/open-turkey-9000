@@ -16,6 +16,10 @@ const usageSchema = `CREATE TABLE IF NOT EXISTS usage (
 const (
 	UsageSite = "site"
 	UsageApp  = "app"
+	// UsageBlocked counts (not seconds) how often a site was blocked
+	// (§4.9 times blocked); UsageBlockedBlock the same per block.
+	UsageBlocked      = "blocked"
+	UsageBlockedBlock = "blocked-block"
 )
 
 // UsageRow is the time spent on one site or app on one day (YYYY-MM-DD, local).
@@ -85,7 +89,7 @@ func (d *DB) ImportUsage(rows []UsageRow) error {
 	}
 	defer tx.Rollback()
 	for _, r := range rows {
-		if r.Seconds <= 0 || (r.Kind != UsageSite && r.Kind != UsageApp) {
+		if r.Seconds <= 0 || (r.Kind != UsageSite && r.Kind != UsageApp && r.Kind != UsageBlocked && r.Kind != UsageBlockedBlock) {
 			continue
 		}
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO usage (day, kind, name, seconds) VALUES (?, ?, ?, ?)`,

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
@@ -292,5 +293,26 @@ func TestListCopy(t *testing.T) {
 	}
 	if err := runWith(t, 0, []string{"nope"}, "list", "copy", "a", "Blocked", "b", "Blocked"); err == nil {
 		t.Error("copied from a hidden block without its password")
+	}
+}
+
+// §4.9: stats top N, search and a block's own rows.
+func TestStatsFilters(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "social")
+	mustRun(t, "block", "add", "social", "reddit.com")
+	day := time.Now().Format("2006-01-02")
+	_ = d.AddUsage(day, db.UsageSite, "old.reddit.com", 600)
+	_ = d.AddUsage(day, db.UsageSite, "wikipedia.org", 900)
+	_ = d.AddUsage(day, db.UsageBlocked, "reddit.com", 3)
+	out := capture(t, "stats", "--block", "social")
+	if !strings.Contains(out, "old.reddit.com") || strings.Contains(out, "wikipedia") || !strings.Contains(out, "3×") {
+		t.Errorf("--block social:\n%s", out)
+	}
+	if out := capture(t, "stats", "--search", "wiki"); strings.Contains(out, "reddit") {
+		t.Errorf("--search wiki:\n%s", out)
+	}
+	if out := capture(t, "stats", "--top", "1"); !strings.Contains(out, "and 1 more") {
+		t.Errorf("--top 1:\n%s", out)
 	}
 }

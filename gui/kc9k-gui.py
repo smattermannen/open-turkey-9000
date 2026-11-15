@@ -1596,7 +1596,14 @@ class WeekCalendar(Gtk.DrawingArea):
         return False
 
 
+def fmt_count(n):
+    """A count of times, for charts of times blocked."""
+    return f"{n}×"
+
+
 class DailyChart(Gtk.DrawingArea):
+    fmt = staticmethod(fmt_spent)  # how values read; fmt_count for counts
+
     """Time spent per day: one series of vertical bars, hover for the value."""
 
     def __init__(self):
@@ -1641,7 +1648,7 @@ class DailyChart(Gtk.DrawingArea):
         if index is None:
             return False
         day, seconds = self.days[index]
-        tooltip.set_text(f"{day.strftime('%a %-d %b')}: {fmt_spent(seconds)}")
+        tooltip.set_text(f"{day.strftime('%a %-d %b')}: {self.fmt(seconds)}")
         return True
 
     def on_draw(self, widget, cr):
@@ -1664,7 +1671,7 @@ class DailyChart(Gtk.DrawingArea):
             cr.move_to(left, round(y) + 0.5)
             cr.line_to(width - 8, round(y) + 0.5)
             cr.stroke()
-            layout.set_text(fmt_spent(value) if value else "0", -1)
+            layout.set_text(self.fmt(value) if value else "0", -1)
             w, h = layout.get_pixel_size()
             cr.set_source_rgba(*muted)
             cr.move_to(left - 8 - w, y - h / 2)
@@ -1692,6 +1699,8 @@ class DailyChart(Gtk.DrawingArea):
 
 
 class TopChart(Gtk.DrawingArea):
+    fmt = staticmethod(fmt_spent)  # how values read; fmt_count for counts
+
     """The most used sites or apps: horizontal bars with name and time."""
 
     ROW = 26
@@ -1732,7 +1741,7 @@ class TopChart(Gtk.DrawingArea):
             return False
         name, seconds = self.items[index]
         total = sum(s for _n, s in self.items) or 1
-        tooltip.set_text(f"{name}: {fmt_spent(seconds)} ({round(100 * seconds / total)}% of the listed time)")
+        tooltip.set_text(f"{name}: {self.fmt(seconds)} ({round(100 * seconds / total)}% of the listed total)")
         return True
 
     def on_draw(self, widget, cr):
@@ -1764,7 +1773,7 @@ class TopChart(Gtk.DrawingArea):
             cr.fill()
 
             layout.set_width(-1)
-            layout.set_text(fmt_spent(seconds), -1)
+            layout.set_text(self.fmt(seconds), -1)
             _w, h = layout.get_pixel_size()
             cr.set_source_rgba(*muted)
             cr.move_to(name_width + bar + 8, y + (self.ROW - h) / 2)
@@ -3355,7 +3364,8 @@ class Window(Gtk.ApplicationWindow):
         apps = sum(r["seconds"] for r in rows if r["kind"] == "app")
         self.tile_sites.set_value(fmt_spent(sites) if self.stats_on else "off")
         self.tile_apps.set_value(fmt_spent(apps) if self.stats_on else "off")
-        top = sorted(((r["name"], r["seconds"]) for r in rows), key=lambda item: -item[1])[:5]
+        top = sorted(((r["name"], r["seconds"]) for r in rows if r["kind"] in ("site", "app")),
+                     key=lambda item: -item[1])[:5]
         self.dash_top.set_items(top)
         self.dash_top.set_visible(bool(top))
         self.dash_top_empty.set_visible(not top)
@@ -4848,7 +4858,8 @@ class Window(Gtk.ApplicationWindow):
         kinds.get_style_context().add_class("linked")
         self.kind_sites = Gtk.RadioButton.new_with_label(None, "Websites")
         self.kind_apps = Gtk.RadioButton.new_with_label_from_widget(self.kind_sites, "Apps")
-        for button in (self.kind_sites, self.kind_apps):
+        self.kind_blocked = Gtk.RadioButton.new_with_label_from_widget(self.kind_sites, "Times blocked")
+        for button in (self.kind_sites, self.kind_apps, self.kind_blocked):
             button.set_mode(False)
             button.connect("toggled", lambda b: b.get_active() and self.update_stats())
             kinds.pack_start(button, False, False, 0)
@@ -4930,7 +4941,10 @@ class Window(Gtk.ApplicationWindow):
         return False
 
     def update_stats(self):
-        kind = "site" if self.kind_sites.get_active() else "app"
+        kind = "site" if self.kind_sites.get_active() else "blocked" if self.kind_blocked.get_active() else "app"
+        # §4.9: times blocked are counts, not seconds.
+        fmt = fmt_count if kind == "blocked" else fmt_spent
+        self.daily_chart.fmt = self.top_chart.fmt = fmt
         days = int(self.stats_period.get_active_id() or 7)
         today = datetime.date.today()
         dates = [today - datetime.timedelta(days=n) for n in range(days - 1, -1, -1)]
@@ -4946,17 +4960,19 @@ class Window(Gtk.ApplicationWindow):
         self.stats_off.set_visible(not self.stats_on)
         if not self.stats_on:
             self.stats_off.show_all()
-        self.tile_total.set_value(fmt_spent(total))
-        self.tile_average.set_value(fmt_spent(total // days))
+        self.tile_total.set_value(fmt(total))
+        self.tile_average.set_value(fmt(total // days))
         self.tile_average.set_visible(days > 1)
-        self.tile_count.get_children()[0].set_text("Different websites" if kind == "site" else "Different apps")
+        self.tile_count.get_children()[0].set_text(
+            {"site": "Different websites", "app": "Different apps", "blocked": "Different sites blocked"}[kind])
         self.tile_count.set_value(str(len(totals)))
         self.daily_section.set_visible(days > 1)
         self.daily_chart.set_days([(d, per_day[d.isoformat()]) for d in dates])
 
         top = sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:15]
         self.top_title.set_markup(
-            f"<span size='medium' weight='bold'>Most used {'websites' if kind == 'site' else 'apps'}</span>")
+            f"<span size='medium' weight='bold'>"
+            f"{ {'site': 'Most used websites', 'app': 'Most used apps', 'blocked': 'Most blocked sites'}[kind] }</span>")
         self.top_chart.set_items(top)
         self.top_chart.set_visible(bool(top))
         self.top_empty.set_visible(not top)

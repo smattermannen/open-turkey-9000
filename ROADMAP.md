@@ -130,7 +130,7 @@ Only items not simply Built.
 | §3.8 R-LOCK-12 | Partial | see 0.1 |
 | §3.8 Strict mode exempt folders | Built | `kc9k strict exempt add|remove DIR`, GUI list; exec bind mounts over the noexec folders (`noexecPlan`); adding weakens. Not in projects (import never weakens). Live: Unchecked (strict mode not run overnight) |
 | §3.8 Forgotten password recovery | Built | `kc9k-bin recover` (root, recovery boot, not with no-escape): settings password and password locks (`--access`: access passwords). Live: Unchecked (needs a recovery boot) |
-| §3.8 Factory reset protection | Not built | 2.6 |
+| §3.8 Factory reset protection | Partial | installer media guard built (`reset-guard on|off`, GUI switch under device protection): while anything is locked an in-memory block (`enforce/resetguard.go`) blocks OS image and USB writer download pages and closes image writers and Disks; checked live (hosts follow the lock). Firmware lock, PAM root guard, guided setup: Not built (2.6) |
 | §3.9 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`); hidden text, frames Unchecked |
 | §3.9 Ad trigger | Not built | 2.2 |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
@@ -163,7 +163,7 @@ Only items not simply Built.
   the one `safesearch` setting. Left: a lock per engine, if wanted.
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
   order, `unlock` lifts only the first, status and GUI show the order). Left:
-  order chosen in the GUI; several locks of one kind.
+  several locks of one kind (the order is chosen in the GUI now).
 - **2.6 Factory reset protection** (M): firmware lock via
   `/sys/class/firmware-attributes/` (password given to a trusted person,
   no USB/network boot, fixed order); installer media guard (block OS image

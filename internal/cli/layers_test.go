@@ -220,3 +220,62 @@ func TestSettingRangeLock(t *testing.T) {
 	mustRun(t, "browser", "web-only", "on", "--range", spec, "--range-invert", "--yes")
 	mustRun(t, "browser", "web-only", "off")
 }
+
+// R-LOCK-7: locking a block that is already on adds any kind of lock,
+// last in the unlock order; locks already set only get stronger.
+func TestLockActiveBlock(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b")
+	boot, _ := db.BootID()
+
+	// The owner's report: a password lock on an enabled block.
+	if err := runWith(t, 0, []string{"pw"}, "start", "b", "--password-stdin", "--yes"); err != nil {
+		t.Fatalf("password lock on an active block: %v", err)
+	}
+	extras, _ := d.GetLockExtras("b")
+	if extras.PasswordHash == "" || extras.Order != "password" {
+		t.Fatalf("after the password lock: %+v", extras)
+	}
+	if err := runWith(t, 0, []string{"other"}, "start", "b", "--password-stdin", "--yes"); err == nil {
+		t.Error("password replaced")
+	}
+	// More kinds go last, in the order given; the restart and the timer
+	// lock wait behind the password.
+	mustRun(t, "start", "b", "--delay", "10m", "--restart", "--for", "1h", "--lock-words", "--yes")
+	detail, _ := d.GetBlock("b")
+	extras, _ = d.GetLockExtras("b")
+	if extras.Order != "password,delay,restart,timer,text" || extras.Delay != 600 || extras.RestartBoot != db.RestartPending ||
+		extras.TimerAfter != 3600 || !detail.Locked || extras.Style == "" {
+		t.Fatalf("after adding locks: locked %v, %+v", detail.Locked, extras)
+	}
+	trusted := mustTrusted(t, d)
+	if on := db.LayersOn(detail, extras, trusted, boot); len(on) != 5 || on[0] != db.LayerPassword {
+		t.Errorf("locks on = %v", on)
+	}
+	// Only stronger from here.
+	for _, args := range [][]string{
+		{"start", "b", "--delay", "5m", "--yes"},
+		{"start", "b", "--lock", "--yes"}, // another kind of text lock
+		{"start", "b", "--for", "30m", "--yes"},
+	} {
+		if err := runCLI(t, args...); err == nil {
+			t.Errorf("%v on a locked block was allowed", args)
+		}
+	}
+	mustRun(t, "start", "b", "--delay", "20m", "--yes")
+	mustRun(t, "start", "b", "--range", "daily 00:00-23:55", "--yes")
+	if err := runCLI(t, "start", "b", "--range", "mon 09:00-10:00", "--yes"); err == nil {
+		t.Error("range lock replaced")
+	}
+	mustRun(t, "start", "b", "--relock", "1h", "--yes")
+	extras, _ = d.GetLockExtras("b")
+	if extras.Delay != 1200 || extras.RangeDays == 0 || extras.Relock != 3600 || extras.Order != "password,delay,restart,timer,text,range" {
+		t.Errorf("after strengthening: %+v", extras)
+	}
+	if err := runCLI(t, "stop", "b"); err == nil {
+		t.Error("stopped while locked")
+	}
+}

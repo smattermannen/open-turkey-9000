@@ -18,8 +18,9 @@
 //     lead time the user chose before each window. Without it a schedule
 //     protects nothing (R-LOCK-10).
 //
-// Locks can be strengthened while held ("start" on an active block adds or
-// lengthens a char lock and adds or extends a time lock), never weakened. A
+// Locks can be strengthened while held ("start" on an active block adds any
+// kind of lock, lengthens a char or delay lock, extends a time lock), never
+// weakened. A
 // lock added to a block its schedule activated outlives the schedule: the
 // daemon won't deactivate a locked block (see enforce.reconcileSchedules).
 //
@@ -57,10 +58,10 @@ Locks (optional, and combinable):
 
 A timer lock cannot be lifted early by anyone short of root — that is the point.
 
-On a block that is already active, start only strengthens its locks: --lock
-adds a text lock (or lengthens it with a larger --lock-chars), and --for or
---until adds a timer lock or extends it to a later time. Locks can never be
-shortened or removed this way.`,
+On a block that is already active, start only strengthens its locks: any
+kind of lock can be added (it goes last in the unlock order), --lock-chars
+lengthens a text lock, --for or --until extends a timer lock and --delay a
+delay lock. Locks can never be shortened, replaced or removed this way.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockName := args[0]
@@ -125,9 +126,6 @@ shortened or removed this way.`,
 			d, err := time.ParseDuration(spec)
 			if err != nil || d < time.Minute || d > 30*24*time.Hour {
 				return fmt.Errorf("invalid --relock %q (1m to 720h)", spec)
-			}
-			if !useLock && !usePassword {
-				return fmt.Errorf("--relock goes with a text or password lock")
 			}
 			extras.Relock = int64(d / time.Second)
 		}
@@ -197,13 +195,17 @@ shortened or removed this way.`,
 		if blockEmpty(detail) {
 			return fmt.Errorf("block '%s' has nothing to enforce. Add websites to a list, apps or window titles first", blockName)
 		}
-		if detail.Active && hasExtras {
-			return fmt.Errorf("block '%s' is already active; password, restart, delay and range locks, and a text lock of words or your own text, are set when it starts", blockName)
-		}
 		if detail.Active {
-			return strengthenLocks(cmd, database, detail, useLock, lockChars, cmd.Flags().Changed("lock-chars"), lockedUntil, forSeconds, trusted)
+			return strengthenLocks(cmd, database, detail, newLocks{
+				kinds: lockKindsInOrder(cmd), text: useLock, style: style, chars: lockChars,
+				charsGiven: cmd.Flags().Changed("lock-chars"), until: lockedUntil, forSeconds: forSeconds,
+				restart: useRestart, extras: extras,
+			}, trusted)
 		}
 
+		if extras.Relock > 0 && !useLock && !usePassword {
+			return fmt.Errorf("--relock goes with a text or password lock")
+		}
 		chars := 0
 		if useLock {
 			chars = lockChars
@@ -318,15 +320,30 @@ func startLockRequested(cmd *cobra.Command) bool {
 	return false
 }
 
-// strengthenLocks handles "start" on a block that is already active: it can add
-// or lengthen a char lock and add or extend a time lock, but refuses anything
-// that would weaken the current locks. This is safe on a held block, since it
-// can only make the hold stronger. New locks go last (R-LOCK-7): a timer
-// lock for a duration behind locks still on counts from their unlocking.
-func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail, useLock bool, lockChars int, charsGiven bool, lockedUntil, forSeconds, trusted int64) error {
+// newLocks is what a start on an active block asks for: the lock kinds in
+// the order their flags were given, and their settings.
+type newLocks struct {
+	kinds      []string
+	text       bool
+	style      string
+	chars      int
+	charsGiven bool
+	until      int64 // timer lock end (0: none)
+	forSeconds int64 // timer lock given as a duration
+	restart    bool
+	extras     db.LockExtras // password hash, delay, range, re-lock
+}
+
+// strengthenLocks handles "start" on a block that is already active: every
+// kind of lock can be added, and goes last in the unlock order (R-LOCK-7),
+// in the order the flags were given; a text lock can be lengthened, a timer
+// lock or a delay lock extended. Anything that would weaken or replace a
+// lock already set is refused. A timer lock for a duration or a restart
+// lock added behind locks still on waits for them (R-LOCK-6).
+func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail, n newLocks, trusted int64) error {
 	name := detail.Name
-	if !useLock && lockedUntil == 0 {
-		return fmt.Errorf("block '%s' is already active (use --lock, --for or --until to strengthen its locks)", name)
+	if len(n.kinds) == 0 && n.extras.Relock == 0 {
+		return fmt.Errorf("block '%s' is already active (add a lock to strengthen it, such as --lock, --for or --password-stdin)", name)
 	}
 	bootID, err := db.BootID()
 	if err != nil {
@@ -345,6 +362,8 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 		e.RestartBoot = ""
 	}
 	order := db.Layers(detail, e)
+	// Whether a lock other than a timer lock holds now (or was just
+	// added): a timer lock for a duration or a restart lock then waits.
 	othersOn := false
 	for _, k := range db.LayersOn(detail, e, trusted, bootID) {
 		othersOn = othersOn || k != db.LayerTimer
@@ -353,51 +372,115 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 	var changes []string
 	var confirm []lockToSet
 	target := "block '" + name + "'"
-	if useLock {
-		switch {
-		case !detail.Locked:
-			detail.Locked, detail.LockChars = true, lockChars
-			order = db.AppendLayers(order, db.LayerText)
-			changes = append(changes, fmt.Sprintf("text lock of %d chars", lockChars))
-			confirm = append(confirm, lockToSet{target, textLockKind("", lockChars), ""})
-		case lockChars > detail.LockChars && charsGiven:
-			detail.LockChars = lockChars
-			changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", lockChars))
-			confirm = append(confirm, lockToSet{target, textLockKind("", lockChars), "lengthened"})
-		case lockChars < detail.LockChars && charsGiven:
-			return fmt.Errorf("block '%s' is already locked with a %d-character challenge; it can't be shortened", name, detail.LockChars)
+	add := func(kind, change string, c lockToSet) {
+		order = db.AppendLayers(order, kind)
+		changes = append(changes, change)
+		confirm = append(confirm, c)
+		if kind != db.LayerTimer {
+			othersOn = true
 		}
 	}
-	if lockedUntil != 0 {
+	for _, kind := range n.kinds {
+		switch kind {
+		case db.LayerText:
+			switch {
+			case !detail.Locked:
+				detail.Locked, detail.LockChars, e.Style = true, n.chars, n.style
+				add(kind, "text lock ("+lock.DescribeStyle(n.style, n.chars)+")", lockToSet{target, textLockKind(n.style, n.chars), ""})
+			case n.style != e.Style:
+				return fmt.Errorf("block '%s' already has a text lock (%s); it can't be changed into another kind", name, lock.DescribeStyle(e.Style, detail.LockChars))
+			case n.chars > detail.LockChars && n.charsGiven:
+				detail.LockChars = n.chars
+				changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", n.chars))
+				confirm = append(confirm, lockToSet{target, textLockKind(e.Style, n.chars), "lengthened"})
+			case n.chars < detail.LockChars && n.charsGiven:
+				return fmt.Errorf("block '%s' is already locked with a %d-character challenge; it can't be shortened", name, detail.LockChars)
+			}
+		case db.LayerTimer:
+			switch {
+			case e.TimerAfter > 0:
+				// Waiting behind other locks: only a longer duration.
+				if n.forSeconds == 0 {
+					return fmt.Errorf("block '%s' has a timer lock that counts from unlocking the locks before it; extend it with --for", name)
+				}
+				if n.forSeconds <= e.TimerAfter {
+					return fmt.Errorf("block '%s' already has a timer lock of %s after the locks before it; a timer lock can only be extended", name, time.Duration(e.TimerAfter)*time.Second)
+				}
+				e.TimerAfter = n.forSeconds
+				changes = append(changes, fmt.Sprintf("timer lock of %s after the locks before it", time.Duration(n.forSeconds)*time.Second))
+				confirm = append(confirm, lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", time.Duration(n.forSeconds)*time.Second)})
+			case detail.LockedUntil != 0:
+				if n.until <= detail.LockedUntil {
+					return fmt.Errorf("block '%s' is already timer-locked until %s; a timer lock can only be extended", name, time.Unix(detail.LockedUntil, 0).Format("2006-01-02 15:04"))
+				}
+				detail.LockedUntil = n.until
+				changes = append(changes, fmt.Sprintf("timer lock until %s", time.Unix(n.until, 0).Format("2006-01-02 15:04")))
+				confirm = append(confirm, lockToSet{target, "timer lock", timerLength(trusted, n.until)})
+			case othersOn && n.forSeconds > 0:
+				e.TimerAfter = n.forSeconds
+				add(kind, fmt.Sprintf("timer lock of %s after the locks before it", time.Duration(n.forSeconds)*time.Second),
+					lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", time.Duration(n.forSeconds)*time.Second)})
+			default:
+				detail.LockedUntil = n.until
+				add(kind, fmt.Sprintf("timer lock until %s", time.Unix(n.until, 0).Format("2006-01-02 15:04")),
+					lockToSet{target, "timer lock", timerLength(trusted, n.until)})
+			}
+		case db.LayerPassword:
+			if e.PasswordHash != "" {
+				return fmt.Errorf("block '%s' already has a password lock; a password can't be replaced", name)
+			}
+			e.PasswordHash = n.extras.PasswordHash
+			add(kind, "password lock", lockToSet{target, "password lock", ""})
+		case db.LayerRestart:
+			if e.RestartBoot != "" {
+				continue // already on until a restart
+			}
+			length := "until the computer restarts"
+			e.RestartBoot = bootID
+			if othersOn {
+				e.RestartBoot, length = db.RestartPending, "until a restart after the locks before it are unlocked"
+			}
+			add(kind, "restart lock", lockToSet{target, "restart lock", length})
+		case db.LayerDelay:
+			d := n.extras.Delay
+			switch {
+			case e.Delay == 0:
+				e.Delay = d
+				add(kind, fmt.Sprintf("delay lock of %s", time.Duration(d)*time.Second),
+					lockToSet{target, "delay lock", fmt.Sprintf("unlocking takes %s", time.Duration(d)*time.Second)})
+			case d < e.Delay:
+				return fmt.Errorf("block '%s' already has a delay lock of %s; it can only be lengthened", name, time.Duration(e.Delay)*time.Second)
+			case d > e.Delay:
+				if e.DelayUntil != 0 { // counting down: it takes the longer time
+					e.DelayUntil += d - e.Delay
+				}
+				e.Delay = d
+				changes = append(changes, fmt.Sprintf("delay lock lengthened to %s", time.Duration(d)*time.Second))
+				confirm = append(confirm, lockToSet{target, "delay lock", fmt.Sprintf("unlocking takes %s (lengthened)", time.Duration(d)*time.Second)})
+			}
+		case db.LayerRange:
+			r := n.extras
+			if e.RangeDays != 0 {
+				if e.RangeDays == r.RangeDays && e.RangeFrom == r.RangeFrom && e.RangeTo == r.RangeTo && e.RangeInvert == r.RangeInvert {
+					continue
+				}
+				return fmt.Errorf("block '%s' already has a range lock (%s); it can't be changed", name, describeRange(e))
+			}
+			e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert = r.RangeDays, r.RangeFrom, r.RangeTo, r.RangeInvert
+			add(kind, "range lock ("+describeRange(e)+")", lockToSet{target, "range lock", describeRange(e) + " (can't be unlocked then)"})
+		}
+	}
+	if r := n.extras.Relock; r > 0 {
 		switch {
-		case e.TimerAfter > 0:
-			// Waiting behind other locks: only a longer duration.
-			if forSeconds == 0 {
-				return fmt.Errorf("block '%s' has a timer lock that counts from unlocking the locks before it; extend it with --for", name)
-			}
-			if forSeconds <= e.TimerAfter {
-				return fmt.Errorf("block '%s' already has a timer lock of %s after the locks before it; a timer lock can only be extended", name, time.Duration(e.TimerAfter)*time.Second)
-			}
-			e.TimerAfter = forSeconds
-			changes = append(changes, fmt.Sprintf("timer lock of %s after the locks before it", time.Duration(forSeconds)*time.Second))
-			confirm = append(confirm, lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", time.Duration(forSeconds)*time.Second)})
-		case detail.LockedUntil != 0:
-			if lockedUntil <= detail.LockedUntil {
-				return fmt.Errorf("block '%s' is already timer-locked until %s; a timer lock can only be extended", name, time.Unix(detail.LockedUntil, 0).Format("2006-01-02 15:04"))
-			}
-			detail.LockedUntil = lockedUntil
-			changes = append(changes, fmt.Sprintf("timer lock until %s", time.Unix(lockedUntil, 0).Format("2006-01-02 15:04")))
-			confirm = append(confirm, lockToSet{target, "timer lock", timerLength(trusted, lockedUntil)})
-		case othersOn && forSeconds > 0:
-			e.TimerAfter = forSeconds
-			order = db.AppendLayers(order, db.LayerTimer)
-			changes = append(changes, fmt.Sprintf("timer lock of %s after the locks before it", time.Duration(forSeconds)*time.Second))
-			confirm = append(confirm, lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", time.Duration(forSeconds)*time.Second)})
+		case e.Relock == r:
+		case e.Relock != 0:
+			return fmt.Errorf("block '%s' already re-locks %s after unlocking; that can't be changed", name, time.Duration(e.Relock)*time.Second)
+		case !detail.Locked && e.PasswordHash == "":
+			return fmt.Errorf("--relock goes with a text or password lock")
 		default:
-			detail.LockedUntil = lockedUntil
-			order = db.AppendLayers(order, db.LayerTimer)
-			changes = append(changes, fmt.Sprintf("timer lock until %s", time.Unix(lockedUntil, 0).Format("2006-01-02 15:04")))
-			confirm = append(confirm, lockToSet{target, "timer lock", timerLength(trusted, lockedUntil)})
+			e.Relock = r
+			changes = append(changes, fmt.Sprintf("re-lock %s after unlocking", time.Duration(r)*time.Second))
+			confirm = append(confirm, lockToSet{target, "re-lock of its text/password locks", fmt.Sprintf("%s after unlocking", time.Duration(r)*time.Second)})
 		}
 	}
 	if len(changes) == 0 {
@@ -409,6 +492,9 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 	e.Order = strings.Join(order, ",")
 	if err := database.SaveLayers(detail, e); err != nil {
 		return err
+	}
+	if err := enforce.ApplyFromDB(database); err != nil {
+		return fmt.Errorf("failed to apply blocking layers: %w", err)
 	}
 	fmt.Printf("Block '%s' strengthened: %s\n", name, strings.Join(changes, ", "))
 	if layers := db.Layers(detail, e); len(layers) > 1 {

@@ -62,6 +62,10 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     Cancel (asks before dropping unsaved work, also on double-click),
     Delete phrase while a saved one is loaded. `ci/gui_phrase_smoke.py`
     passes here; confirm on the laptop.
+  - [ ] Locking an enabled block refused password, restart, delay, range
+    and word/own-text locks ("already active; … are set when it starts"),
+    against R-LOCK-7. Fixed: `strengthenLocks` adds every kind last in the
+    order given (`TestLockActiveBlock`); confirm in the GUI on the laptop.
   - [ ] Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
   - [x] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
     none allowed; length ≥ 2. Built in `db.Phrase`, `match.js`, GUI.

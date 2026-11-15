@@ -8,7 +8,7 @@
     "gecko_android": {}
   },
   "incognito": "spanning",
-  "permissions": ["webRequest", "webRequestBlocking", "storage", "tabs", "idle", "<all_urls>", "http://127.0.0.1/*"],
+  "permissions": ["webRequest", "webRequestBlocking", "storage", "tabs", "idle", "downloads", "<all_urls>", "http://127.0.0.1/*"],
   "browser_action": {
     "default_title": "Killer Chicken 9000",
     "default_popup": "popup.html",

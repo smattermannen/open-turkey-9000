@@ -51,7 +51,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   locks hold them before windows).
 - Browser tests: `GECKOWEBDRIVER=~/.local/share/kc9k-browsertest
   ~/.local/share/kc9k-browsertest/venv/bin/python ci/<name>.py`
-  (`browser_test`, `extras_test`, `actions_test`, `quota_test`). No Node
+  (`browser_test`, `extras_test`, `actions_test`, `quota_test`,
+  `download_test`). No Node
   there: `cjs ci/match_test_cjs.js`.
 - GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
   `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
@@ -174,7 +175,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   (one box, or in exception lists) use `kc9kCombination`.
   Case-insensitive lookup.
 - **Actions** (`db/actions.go`, Param/Minutes): block, greyscale,
-  no-images, mute (`applyMute`), no-video, dark, redirect, image
+  no-images, mute (`applyMute`), no-video, dark, no-downloads (background
+  `downloadBlocked`, `downloads` permission; `ci/download_test.py`), redirect, image
   (`db.ImagesDir`, served `/image/`), close-tab; device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
   picks the strongest, closes tab/browser itself, POSTs `/hit`
   (`enforce/hits.go`, header required) so the daemon logs and runs

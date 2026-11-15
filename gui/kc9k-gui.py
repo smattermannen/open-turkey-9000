@@ -98,6 +98,7 @@ SITE_ACTIONS = (
     ("mute", "Mute sound"),
     ("no-video", "Stop and hide video"),
     ("dark", "Dark page"),
+    ("no-downloads", "Cancel downloads"),
     ("redirect", "Open another page"),
     ("image", "Show a picture"),
     ("close-tab", "Close the tab"),

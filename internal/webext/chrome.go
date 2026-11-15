@@ -149,7 +149,7 @@ func ChromeManifest() ([]byte, error) {
 		"description":            ff.Description,
 		"minimum_chrome_version": "120",
 		// alarms wakes the service worker should Chrome ever stop it.
-		"permissions":      []string{"webRequest", "webRequestBlocking", "storage", "tabs", "idle", "alarms"},
+		"permissions":      []string{"webRequest", "webRequestBlocking", "storage", "tabs", "idle", "alarms", "downloads"},
 		"host_permissions": []string{"<all_urls>"},
 		"action": map[string]interface{}{
 			"default_title": ff.BrowserAction.DefaultTitle,

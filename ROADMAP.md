@@ -133,7 +133,6 @@ Only items not simply Built.
 | §3.8 Strict mode exempt folders | Not built | |
 | §3.8 Forgotten password recovery | Partial | root removes it while nothing locked |
 | §3.8 Factory reset protection | Not built | 2.6 |
-| §3.9 No downloads | Not built | 2.3 |
 | §3.9 Strongest action across blocks | Unchecked | built within a page |
 | §3.9 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`); hidden text, frames Unchecked |
 | §3.9 Rate | Not built | |
@@ -165,7 +164,6 @@ Only items not simply Built.
   LibreWolf reports as light. Not in `project export` yet (S).
 - **2.2 Ad trigger** (M): fourth scope from third-party requests
   (`webRequest`); shipped ad-network list per industry.
-- **2.3 No downloads** (S): extension cancels downloads (`downloads` permission).
 - **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under
   the one `safesearch` setting. Left: a lock per engine, if wanted.
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored

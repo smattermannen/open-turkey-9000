@@ -596,6 +596,9 @@ function onMessage(message, sender) {
   }
   if (message && message.type === "page-hits") {
     pageHit(message, sender);
+    if (Array.isArray(message.matches)) {
+      noteDownloadPage(message.url, message.matches.flatMap((m) => (Array.isArray(m.actions) ? m.actions : [])));
+    }
   }
   if (message && message.type === "mirror") {
     mirrorHit(message, sender);
@@ -965,3 +968,35 @@ async function reportQuota() {
 
 setInterval(sampleQuota, SAMPLE_SECONDS * 1000);
 setInterval(reportQuota, QUOTA_REPORT_MS);
+
+// No downloads (§3.9): a download is cancelled when the page it comes from
+// (its referrer, by address or by the hits its text reported) or its own
+// address has a list with the no-downloads action.
+const downloadPages = new Map(); // page address -> actions its text matched
+function noteDownloadPage(url, actions) {
+  if (typeof url !== "string" || !Array.isArray(actions) || !actions.includes("no-downloads")) {
+    return;
+  }
+  downloadPages.set(url, true);
+  if (downloadPages.size > 200) {
+    downloadPages.delete(downloadPages.keys().next().value);
+  }
+}
+function downloadBlocked(item) {
+  for (const url of [item.referrer, item.url, item.finalUrl]) {
+    if (typeof url !== "string" || !url) {
+      continue;
+    }
+    if (downloadPages.has(url) || kc9kListActions(lists, { url })["no-downloads"]) {
+      return true;
+    }
+  }
+  return false;
+}
+if (browser.downloads && browser.downloads.onCreated) {
+  browser.downloads.onCreated.addListener((item) => {
+    if (downloadBlocked(item)) {
+      browser.downloads.cancel(item.id).then(() => browser.downloads.erase({ id: item.id })).catch(() => {});
+    }
+  });
+}

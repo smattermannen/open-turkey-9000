@@ -4096,12 +4096,22 @@ class Window(Gtk.ApplicationWindow):
         grid.attach(relock, 1, 10, 1, 1)
         grid.attach(dim("Once the text or password lock is unlocked, it comes on again after this "
                         "long, unless the block was stopped. 0: it stays unlocked."), 1, 11, 1, 1)
+        # §3.4 range lock: on at set times on set days (or outside them).
+        range_entry = Gtk.Entry(placeholder_text="mon-fri 09:00-17:00")
+        range_invert = Gtk.CheckButton(label="outside these times")
+        grid.attach(Gtk.Label(label="Range lock", xalign=0), 0, 12, 1, 1)
+        range_box = Gtk.Box(spacing=6)
+        range_box.pack_start(range_entry, True, True, 0)
+        range_box.pack_start(range_invert, False, False, 0)
+        grid.attach(range_box, 1, 12, 1, 1)
+        grid.attach(dim("Can't be stopped at these times; it can't be unlocked, only waited out."), 1, 13, 1, 1)
         box.pack_start(grid, False, False, 0)
-        box.pack_start(dim("Several locks are unlocked one at a time: timer, restart, password, "
-                           "text, then delay."), False, False, 0)
+        box.pack_start(dim("Several locks are unlocked one at a time; you choose the order next."),
+                       False, False, 0)
         dialog.show_all()
         answer = dialog.run()
         relock_minutes = relock.get_value_as_int()
+        range_spec, range_out = range_entry.get_text().strip(), range_invert.get_active()
         values = (minutes.get_value_as_int(), delay.get_value_as_int(), password.get_text(),
                   typing.get_active(), restart.get_active())
         lock_args = challenge_args(chars)
@@ -4128,6 +4138,13 @@ class Window(Gtk.ApplicationWindow):
             chosen.append((lock_args, f"text lock{relock_note}"))
         if delay_minutes:
             chosen.append((["--delay", f"{delay_minutes}m"], f"delay lock, unlocking takes {delay_minutes} minutes"))
+        if range_spec:
+            chosen.append((["--range", range_spec] + (["--range-invert"] if range_out else []),
+                           f"range lock, {'outside ' if range_out else ''}{range_spec}"))
+        if len(chosen) > 1:
+            chosen = self.choose_lock_order(chosen)
+            if chosen is None:
+                return
         locks = []
         for i, (flags, text) in enumerate(chosen):
             args += flags
@@ -4140,6 +4157,52 @@ class Window(Gtk.ApplicationWindow):
         if locks:
             args.append("--yes")
         self.run(args, secret + "\n" if secret else None)
+
+    def choose_lock_order(self, chosen):
+        """R-LOCK-6: the user puts the locks in the order they are unlocked
+        (first at the top). None when cancelled."""
+        dialog = Gtk.Dialog(title="Unlock order", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("OK", Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(12)
+        box.pack_start(dim("The locks are unlocked one at a time, top first. A timer lock below "
+                           "another counts from when the one above is unlocked."), False, False, 0)
+        order = list(chosen)
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
+        box.pack_start(listbox, False, False, 0)
+
+        def fill(select=0):
+            for row in listbox.get_children():
+                listbox.remove(row)
+            for _flags, text in order:
+                label = Gtk.Label(label=text.split(" (")[0], xalign=0, margin=4)
+                listbox.add(label)
+            listbox.show_all()
+            listbox.select_row(listbox.get_row_at_index(select))
+
+        def move(step):
+            row = listbox.get_selected_row()
+            if row is None:
+                return
+            i, j = row.get_index(), row.get_index() + step
+            if 0 <= j < len(order):
+                order[i], order[j] = order[j], order[i]
+                fill(j)
+
+        buttons = Gtk.Box(spacing=6)
+        for label, step in (("Up", -1), ("Down", 1)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", lambda _b, s=step: move(s))
+            buttons.pack_start(button, False, False, 0)
+        box.pack_start(buttons, False, False, 0)
+        fill()
+        self.lock_order_dialog = (dialog, move)  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        dialog.destroy()
+        return order if answer == Gtk.ResponseType.OK else None
 
     def reveal_block(self, _button):
         """Asks a block's password and shows its contents until the window closes."""

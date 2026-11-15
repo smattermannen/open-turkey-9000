@@ -1,7 +1,6 @@
 package blocker
 
 import (
-	"sync/atomic"
 	"bufio"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )

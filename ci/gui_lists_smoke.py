@@ -150,5 +150,14 @@ win.quota_refill.set_text("04:00"); win.set_quota(None); settle(); win.show_bloc
 blk = win.blocks["b"]
 check(blk["quota_limit"] == 18000 and blk.get("quota_period") == "week" and blk.get("quota_refill") == "04:00",
       "allowance per week saved: %s %s %s" % (blk["quota_limit"], blk.get("quota_period"), blk.get("quota_refill")))
+# R-LOCK-6 in the GUI: the user moves the second lock up.
+real_run = Gtk.Dialog.run
+def move_up(dialog):
+    win.lock_order_dialog[1](1)  # first row down = second row up
+    return Gtk.ResponseType.OK
+Gtk.Dialog.run = move_up
+got = win.choose_lock_order([(["--for", "5m"], "timer lock"), (["--lock"], "text lock")])
+Gtk.Dialog.run = real_run
+check(got is not None and [f[0] for f, _t in got] == ["--lock", "--for"], "unlock order chosen: %s" % got)
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

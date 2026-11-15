@@ -34,7 +34,8 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
   strict mode, global ladder); active vs enabled for schedules and places
   (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
   scheduled blocks on once); allowance sessions lift their block (it stays
-  on). Not built: hardware/internet clock check (see §5); choosing the order in the GUI (fixed order). (L)
+  on); the GUI block start dialog asks the unlock order. Not built:
+  hardware/internet clock check (see §5); order in the setting lock dialogs. (L)
 - [ ] **Android extension can be switched off** (§3.13): built (5 s grace
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unchecked: unit tests not run (no JDK/Android SDK on the
@@ -116,8 +117,8 @@ Only items not simply Built.
 | §3.2 Template | Built | your own saved definitions: `template save B T`, `template`, `template remove T`, `block create X --template T`; GUI "Save as template…" and a choice in New block; projects. None shipped |
 | §3.2 Affected users | Not built | |
 | §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
-| §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. Not in the GUI lock dialogs |
-| §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI fixed order; one lock per kind |
+| §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. GUI: block start dialog; not the setting lock dialogs |
+| §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI start dialog asks the order (Up/Down); setting lock dialogs keep a fixed order; one lock per kind |
 | §3.6 Break per block window | Not built | |
 | §3.6 Allowance | Partial | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). Not built: rolling 24 h, per window |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month` (default one, as before), GUI choice, projects; longer keep weakens |

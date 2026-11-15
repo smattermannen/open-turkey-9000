@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"database/sql"
 	"fmt"
 
@@ -26,15 +27,19 @@ func (d *DB) GetQuota(name string) (*quota.State, error) {
 		return nil, err
 	}
 	var s quota.State
-	err = d.conn.QueryRow(`SELECT limit_seconds, used_seconds, day, open, session_end, last_tick, pending_limit, period, refill, max_sessions, sessions, last_use
+	var rolling string
+	err = d.conn.QueryRow(`SELECT limit_seconds, used_seconds, day, open, session_end, last_tick, pending_limit, period, refill, max_sessions, sessions, last_use, rolling, roll_hour
 		FROM quotas WHERE block_id = ?`, blockID).
 		Scan(&s.Limit, &s.Used, &s.Day, &s.Open, &s.SessionEnd, &s.LastTick, &s.PendingLimit, &s.Period, &s.Refill,
-			&s.MaxSessions, &s.Sessions, &s.LastUse)
+			&s.MaxSessions, &s.Sessions, &s.LastUse, &rolling, &s.RollHour)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to read quota of '%s': %w", name, err)
+	}
+	if rolling != "" {
+		_ = json.Unmarshal([]byte(rolling), &s.Rolling)
 	}
 	return &s, nil
 }
@@ -47,10 +52,10 @@ func (d *DB) SaveQuota(name string, s quota.State) error {
 	}
 	_, err = d.conn.Exec(`INSERT OR REPLACE INTO quotas
 		(block_id, limit_seconds, used_seconds, day, open, session_end, last_tick, pending_limit, period, refill,
-		max_sessions, sessions, last_use)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		max_sessions, sessions, last_use, rolling, roll_hour)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		blockID, s.Limit, s.Used, s.Day, s.Open, s.SessionEnd, s.LastTick, s.PendingLimit, s.Period, s.Refill,
-		s.MaxSessions, s.Sessions, s.LastUse)
+		s.MaxSessions, s.Sessions, s.LastUse, rollingJSON(s.Rolling), s.RollHour)
 	if err != nil {
 		return fmt.Errorf("failed to save quota of '%s': %w", name, err)
 	}
@@ -67,11 +72,11 @@ func (d *DB) UpdateQuotaIfUnchanged(name string, prev, next quota.State) (bool, 
 	}
 	result, err := d.conn.Exec(`UPDATE quotas SET limit_seconds = ?, used_seconds = ?, day = ?, open = ?,
 		session_end = ?, last_tick = ?, pending_limit = ?, period = ?, refill = ?,
-		max_sessions = ?, sessions = ?, last_use = ?
+		max_sessions = ?, sessions = ?, last_use = ?, rolling = ?, roll_hour = ?
 		WHERE block_id = ? AND limit_seconds = ? AND used_seconds = ? AND day = ? AND open = ?
 		AND session_end = ? AND last_tick = ? AND pending_limit = ?`,
 		next.Limit, next.Used, next.Day, next.Open, next.SessionEnd, next.LastTick, next.PendingLimit, next.Period, next.Refill,
-		next.MaxSessions, next.Sessions, next.LastUse,
+		next.MaxSessions, next.Sessions, next.LastUse, rollingJSON(next.Rolling), next.RollHour,
 		blockID, prev.Limit, prev.Used, prev.Day, prev.Open, prev.SessionEnd, prev.LastTick, prev.PendingLimit)
 	if err != nil {
 		return false, fmt.Errorf("failed to update quota of '%s': %w", name, err)
@@ -111,4 +116,13 @@ func (d *DB) QuotaBlocks() ([]string, error) {
 		names = append(names, name)
 	}
 	return names, rows.Err()
+}
+
+// rollingJSON stores a rolling allowance's hourly use.
+func rollingJSON(b []int64) string {
+	if len(b) == 0 {
+		return ""
+	}
+	data, _ := json.Marshal(b)
+	return string(data)
 }

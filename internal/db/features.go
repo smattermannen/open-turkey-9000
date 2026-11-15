@@ -65,6 +65,8 @@ func upgradeSchema(conn *sql.DB) error {
 		{"quotas", "max_sessions", "INTEGER NOT NULL DEFAULT 0"},
 		{"quotas", "sessions", "INTEGER NOT NULL DEFAULT 0"},
 		{"quotas", "last_use", "INTEGER NOT NULL DEFAULT 0"},
+		{"quotas", "rolling", "TEXT NOT NULL DEFAULT ''"},
+		{"quotas", "roll_hour", "INTEGER NOT NULL DEFAULT 0"},
 		{"setting_locks", "range_days", "INTEGER NOT NULL DEFAULT 0"},
 		{"setting_locks", "range_from", "INTEGER NOT NULL DEFAULT 0"},
 		{"setting_locks", "range_to", "INTEGER NOT NULL DEFAULT 0"},

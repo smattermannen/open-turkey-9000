@@ -43,6 +43,33 @@ type State struct {
 	MaxSessions int
 	Sessions    int
 	LastUse     int64
+	// Rolling (Period "rolling", §3.6): seconds used per hour over the last
+	// 24 hours, newest last; Used is their sum. RollHour is the hour (unix
+	// seconds / 3600) of the last bucket.
+	Rolling  []int64
+	RollHour int64
+}
+
+// roll moves the rolling buckets to now, dropping hours older than 24.
+func (s State) roll(now int64) State {
+	hour := now / 3600
+	if len(s.Rolling) != 24 {
+		s.Rolling, s.RollHour = make([]int64, 24), hour
+	}
+	if shift := hour - s.RollHour; shift > 0 {
+		if shift >= 24 {
+			s.Rolling = make([]int64, 24)
+		} else {
+			s.Rolling = append(append([]int64{}, s.Rolling[shift:]...), make([]int64, shift)...)
+		}
+		s.RollHour = hour
+	}
+	var used int64
+	for _, v := range s.Rolling {
+		used += v
+	}
+	s.Used = used
+	return s
 }
 
 // SessionIdle is how long after switching away a limited session ends.
@@ -70,8 +97,8 @@ func (s State) Idle(now int64) State {
 	return s
 }
 
-// Periods an allowance can cover.
-var Periods = []string{"day", "week", "month"}
+// Periods an allowance can cover; "rolling" is the last 24 hours.
+var Periods = []string{"day", "week", "month", "rolling"}
 
 // PeriodOf names the period t falls in: the day, ISO week or month,
 // counted from the refill time instead of midnight. Step starts a new
@@ -79,6 +106,8 @@ var Periods = []string{"day", "week", "month"}
 func (s State) PeriodOf(t time.Time) string {
 	t = t.Add(-time.Duration(s.Refill) * time.Minute)
 	switch s.Period {
+	case "rolling":
+		return "rolling" // never a new period: old use drops off hour by hour
 	case "week":
 		y, w := t.ISOWeek()
 		return fmt.Sprintf("%d-W%02d", y, w)
@@ -145,6 +174,9 @@ func (s State) SetLimit(limit int64) State {
 // Step advances a quota to now: it starts a new day when the date changes
 // and closes a session that reached its end. It spends nothing: see Spend.
 func (s State) Step(now int64, day string) State {
+	if s.Period == "rolling" {
+		s = s.roll(now)
+	}
 	if day != s.Day {
 		s.Day, s.Used, s.Open, s.SessionEnd, s.Sessions = day, 0, false, 0, 0
 		if s.PendingLimit != NoPending {
@@ -170,7 +202,13 @@ func (s State) Spend(seconds int64) State {
 	if !s.Open || seconds <= 0 {
 		return s
 	}
-	s.Used += min(seconds, 2*MaxStep)
+	spent := min(seconds, 2*MaxStep)
+	s.Used += spent
+	if s.Period == "rolling" {
+		s = s.roll(s.LastTick)
+		s.Rolling[23] += spent
+		s.Used += spent
+	}
 	if s.Used >= s.Limit {
 		s.Open, s.SessionEnd = false, 0
 	}

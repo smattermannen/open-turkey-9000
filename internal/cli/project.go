@@ -283,7 +283,7 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 		}
 	}
 	if in.Quota < 0 || in.Quota > 31*24*3600 || (in.Quota > 0 && quota.ValidateFor(time.Duration(in.Quota)*time.Second, in.QuotaPer) != nil) ||
-		(in.QuotaPer != "" && in.QuotaPer != "week" && in.QuotaPer != "month") || in.QuotaRefill < 0 || in.QuotaRefill >= 24*60 {
+		(in.QuotaPer != "" && in.QuotaPer != "week" && in.QuotaPer != "month" && in.QuotaPer != "rolling") || in.QuotaRefill < 0 || in.QuotaRefill >= 24*60 {
 		return out, fmt.Errorf("allowance out of range")
 	}
 	if p := in.Pomodoro; p != nil && (p.Work < int64(minPomodoroPhase.Seconds()) || p.Break < int64(minPomodoroPhase.Seconds()) ||

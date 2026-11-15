@@ -120,7 +120,7 @@ Only items not simply Built.
 | §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. GUI: block start dialog; not the setting lock dialogs |
 | §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI start dialog asks the order (Up/Down); setting lock dialogs keep a fixed order; one lock per kind |
 | §3.6 Break per block window | Not built | |
-| §3.6 Allowance | Partial | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). Not built: rolling 24 h, per window |
+| §3.6 Allowance | Partial | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). and rolling 24 hours (`--per rolling`, hourly buckets). Not built: per window |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month` (default one, as before), GUI choice, projects; longer keep weakens |
 | §3.6 Delay break | Built | `break delay B LENGTH WAIT`, `break request B`, GUI row, projects |
 | §3.6 Session limit | Built | `allowance set B 1h --sessions N`: N openings per period; a limited session ends 3 min after its last use; more weakens. GUI, projects |

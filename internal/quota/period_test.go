@@ -57,3 +57,23 @@ func TestSessionLimit(t *testing.T) {
 		t.Error("an unlimited session ended by idling")
 	}
 }
+
+// §3.6 rolling 24 hours: use drops off as it gets older than a day.
+func TestRolling(t *testing.T) {
+	s := State{Limit: 3600, Period: "rolling", Day: "rolling", PendingLimit: NoPending, Open: true}
+	t0 := int64(1_000_000_000)
+	s = s.Step(t0, s.PeriodOf(time.Unix(t0, 0)))
+	s = s.Spend(60)
+	s = s.Step(t0+30, "rolling")
+	if s.Used != 60 {
+		t.Fatalf("used = %d", s.Used)
+	}
+	s = s.Step(t0+12*3600, "rolling")
+	if s.Used != 60 {
+		t.Errorf("after 12 h: used = %d", s.Used)
+	}
+	s = s.Step(t0+25*3600, "rolling")
+	if s.Used != 0 {
+		t.Errorf("after 25 h: used = %d; want 0", s.Used)
+	}
+}

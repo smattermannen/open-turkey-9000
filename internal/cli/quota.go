@@ -76,8 +76,8 @@ var quotaSetCmd = &cobra.Command{
 		if per == "day" {
 			per = ""
 		}
-		if per != "" && per != "week" && per != "month" {
-			return fmt.Errorf("--per is day, week or month")
+		if per != "" && per != "week" && per != "month" && per != "rolling" {
+			return fmt.Errorf("--per is day, week, month or rolling (the last 24 hours)")
 		}
 		if err := quota.ValidateFor(d, per); err != nil {
 			return err
@@ -288,7 +288,7 @@ var quotaEndCmd = &cobra.Command{
 
 func init() {
 	quotaStartCmd.Flags().String("for", "", "End the session after this long (e.g. 10m)")
-	quotaSetCmd.Flags().String("per", "day", "The period the allowance covers: day, week or month")
+	quotaSetCmd.Flags().String("per", "day", "The period the allowance covers: day, week, month, or rolling (the last 24 hours)")
 	quotaSetCmd.Flags().String("refill", "", "When the allowance starts afresh (HH:MM; default midnight)")
 	quotaSetCmd.Flags().Int("sessions", 0, "Session limit: at most this many sessions per period, each ending 3 minutes after switching away (0: no limit)")
 	quotaCmd.AddCommand(quotaSetCmd, quotaRemoveCmd, quotaStartCmd, quotaEndCmd)

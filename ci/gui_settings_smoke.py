@@ -196,6 +196,13 @@ check(win.top_chart.fmt(3) == "3×", "top chart counts")
 win.kind_sites.set_active(True); win.update_stats()
 check(win.top_chart.fmt(60) != "60×", "websites as time")
 
+# §4.10 darkness slider: with the dark theme, the background grey to black.
+app.prefs["theme"] = "dark"; win.darkness_scale.set_value(100)
+check(getattr(app.theme, "level", None) == 0, "darkness 100 is black")
+win.darkness_scale.set_value(0)
+check(getattr(app.theme, "level", None) == 48, "darkness 0 is dark grey")
+app.theme.apply("system")
+
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
 

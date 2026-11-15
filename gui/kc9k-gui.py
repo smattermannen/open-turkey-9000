@@ -342,10 +342,29 @@ class Theme:
         self.system = (self.settings.props.gtk_theme_name,
                        self.settings.props.gtk_application_prefer_dark_theme)
 
-    def apply(self, choice):
+    def apply(self, choice, darkness=None):
         name, dark = self.system if choice not in ("light", "dark") else themed(self.system[0], choice == "dark")
         self.settings.props.gtk_theme_name = name
         self.settings.props.gtk_application_prefer_dark_theme = dark
+        self.set_darkness(darkness if choice == "dark" else None)
+
+    def set_darkness(self, darkness):
+        """§4.10: with the dark theme, the background from dark grey (0) to
+        black (100); None leaves the theme's own."""
+        screen = Gdk.Screen.get_default()
+        if screen is None:
+            return
+        if getattr(self, "css", None) is not None:
+            Gtk.StyleContext.remove_provider_for_screen(screen, self.css)
+            self.css = None
+        if darkness is None:
+            return
+        level = round(48 * (100 - max(0, min(100, darkness))) / 100)
+        self.css = Gtk.CssProvider()
+        self.css.load_from_data(
+            f"window, .background {{ background-color: rgb({level},{level},{level}); }}".encode())
+        Gtk.StyleContext.add_provider_for_screen(screen, self.css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.level = level  # for tests
 
 
 def challenge_length(typing):
@@ -5092,6 +5111,12 @@ class Window(Gtk.ApplicationWindow):
         self.top_empty.set_visible(not top)
 
     # Settings ------------------------------------------------------------
+    def choose_darkness(self, scale):
+        app = self.get_application()
+        app.prefs["darkness"] = int(scale.get_value())
+        save_prefs(app.prefs)
+        app.theme.apply(app.prefs.get("theme", "system"), app.prefs["darkness"])
+
     def choose_first_day(self, combo):
         global FIRST_DAY
         app = self.get_application()
@@ -5119,7 +5144,7 @@ class Window(Gtk.ApplicationWindow):
     def choose_theme(self, combo):
         app = self.get_application()
         app.prefs["theme"] = combo.get_active_id()
-        app.theme.apply(app.prefs["theme"])
+        app.theme.apply(app.prefs["theme"], app.prefs.get("darkness"))
         save_prefs(app.prefs)
 
     def build_settings(self):
@@ -5135,6 +5160,14 @@ class Window(Gtk.ApplicationWindow):
         row = Gtk.Box(spacing=16)
         row.pack_start(Gtk.Label(label="Theme", xalign=0), True, True, 0)
         row.pack_end(theme, False, False, 0)
+        darkness = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 5)
+        darkness.set_size_request(160, -1)
+        darkness.set_value(self.get_application().prefs.get("darkness", 0))
+        darkness.connect("value-changed", self.choose_darkness)
+        dark_row = Gtk.Box(spacing=16)
+        dark_row.pack_start(Gtk.Label(label="Darkness (dark theme): grey to black", xalign=0), True, True, 0)
+        dark_row.pack_end(darkness, False, False, 0)
+        self.darkness_scale = darkness  # for tests
         first_day = Gtk.ComboBoxText(valign=Gtk.Align.CENTER)
         first_day.append("monday", "Monday")
         first_day.append("sunday", "Sunday")
@@ -5145,7 +5178,7 @@ class Window(Gtk.ApplicationWindow):
         day_row.pack_end(first_day, False, False, 0)
         self.login_switch = Gtk.Switch(valign=Gtk.Align.CENTER, active=os.path.exists(LOGIN_DESKTOP))
         self.login_switch.connect("state-set", self.toggle_open_at_login)
-        box.pack_start(section("Preferences", row, day_row,
+        box.pack_start(section("Preferences", row, dark_row, day_row,
                                self.switch_row(self.login_switch, "Open at login",
                                                "Start this window when you sign in.")), False, False, 0)
 
@@ -5848,7 +5881,7 @@ class App(Gtk.Application):
         global FIRST_DAY
         FIRST_DAY = 6 if self.prefs.get("first_day") == "sunday" else 0
         self.theme = Theme()
-        self.theme.apply(self.prefs.get("theme", "system"))
+        self.theme.apply(self.prefs.get("theme", "system"), self.prefs.get("darkness"))
 
     def do_activate(self):
         window = self.get_active_window() or Window(self)

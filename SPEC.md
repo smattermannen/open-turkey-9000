@@ -90,7 +90,7 @@ After publishing: Windows support.
 | **Phrase** | Terms from two or more **word sets** occurring together (formerly *word combination*). `[eat, nice] [hello, grandpa]` matches "Let's eat grandpa", not "Let's eat, grandpa!". | Rendered term |
 | **Term** | A word or several words (`long cat`). | |
 | **Word set** | Terms that may fill one place in a phrase; *necessary* or *optional*. | |
-| **Phrase length** | Terms a match needs: from the number of necessary sets (default) up to all sets. | |
+| **Phrase length** | Terms a match needs: from the number of necessary sets, but at least 2 (default), up to all sets. | |
 | **Bridge** | `big-` … `-gorilla`: up to 20 words of one sentence may be skipped between them. `-strong-` is a middle link. | Wildcard |
 
 ### 3.2 Grouping
@@ -426,7 +426,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-LIST-4** Text = rendered visible text; hidden/collapsed text doesn't count, text further down does. Each frame is judged on its own text.
 - **R-LIST-5** Case and accents ignored (é = e); look-alike letters from other alphabets count as Latin. Languages without word spaces are out of scope.
 - **R-LIST-6** Every count set on an action (threshold, hit count, rate) must be met.
-- **R-PHRASE-1** A phrase has ≥ 2 word sets; the first two are necessary, others either.
+- **R-PHRASE-1** A phrase has ≥ 2 word sets; each set is freely necessary or optional (none necessary is allowed). Phrase length ≥ 2 and ≥ the number of necessary sets (owner, 2026-11-15).
 - **R-PHRASE-2** A match takes one term from each necessary set, plus optional ones up to the phrase length.
 - **R-PHRASE-3** One word set gives at most one term: `[long cat, neko] [running, sitting]` matches "long cat running", not "long cat neko".
 - **R-PHRASE-4** Terms in any order, directly adjacent, separated only by blank space. Punctuation breaks the match. An in-word apostrophe is part of the word ("let's"); a hyphen between letters is blank space (`long cat` matches "long-cat").

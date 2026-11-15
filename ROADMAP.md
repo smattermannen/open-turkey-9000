@@ -14,6 +14,21 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
 
 ### 0.1 Code contradicting `SPEC.md`
 
+- [ ] **Owner report 2026-11-15** (real use; check each against the latest
+  build first, Unchecked until then):
+  - `no-images` doesn't stop GIFs (§3.2 actions). S
+  - `no-downloads` doesn't block downloads (`ci/download_test.py` passes, so
+    real-use path differs). S
+  - Circadian: brightness slider vanished from the desktop menu; blue-light
+    filter toggles on and off; desktop night light turns itself off while
+    shown on (`nightlight off`, `PauseGamma`; §3.x circadian). M
+  - Phrase editor: sometimes "Save new phrase" instead of "Save edits"
+    (duplicates); sometimes "set has no phrase" after saving; UI awkward
+    overall (§4 phrase editor). M
+  - R-PHRASE-1 changed: any set necessary or optional, none allowed; length
+    ≥ 2. Code (`db.Phrase.Check`, `kc9kPhraseCheck`, GUI) still forces the
+    first two necessary. S
+
 - [ ] **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
   (`kc9k schedule lock B on --lead D`) replaces built-in schedule/place
   protection, 2 h edit freeze and 24 h allow-window queue (upgrade gives
@@ -193,6 +208,12 @@ Only items not simply Built.
 - Windows (L): platform layer; `internal/blocker/` is Linux-only.
 
 ## 5. Proposed, not agreed
+
+- Phrase set import/export (owner, 2026-11-15): mode 1 imports a plain
+  term-per-line list (e.g. a block's list) into a phrase set; mode 2
+  exports as phrases `[term1, term2], [term1, term2]`. Needs format details.
+- Statistics: one colour per site/app in the bar chart over time (owner,
+  2026-11-15).
 
 - DECIDED OVERNIGHT: how to check the clock against hardware and internet
   time (§4.10) → not built yet; trusted time stays CLOCK_BOOTTIME with

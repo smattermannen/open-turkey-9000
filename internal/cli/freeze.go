@@ -135,8 +135,10 @@ type guiBlock struct {
 	TimerAfter    int64          `json:"timer_after,omitempty"` // a timer lock's seconds, counted once the locks before it are unlocked
 	RangeLock     string         `json:"range_lock,omitempty"`  // §3.4, e.g. "mon,tue 09:00-17:00"
 	RangeOn       bool           `json:"range_on,omitempty"`
-	Scheduled     bool           `json:"scheduled"` // has windows or a place rule (§3.3)
-	Lifted        bool           `json:"lifted"`    // active, but its windows or places lift it now
+	Scheduled     bool           `json:"scheduled"`                // has windows or a place rule (§3.3)
+	HasPassword   bool           `json:"block_password,omitempty"` // §3.11
+	Hidden        bool           `json:"hidden,omitempty"`         // contents left out until revealed
+	Lifted        bool           `json:"lifted"`                   // active, but its windows or places lift it now
 	LockSeconds   int64          `json:"lock_seconds"`
 	QuotaLimit    int64          `json:"quota_limit"`
 	QuotaUsed     int64          `json:"quota_used"`
@@ -269,6 +271,15 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 		state := guiState{Blocks: []guiBlock{}}
+		// §3.11: blocks with a block password show their contents only
+		// when revealed: --reveal B, its password on stdin, in order.
+		revealed := map[string]bool{}
+		reveal, _ := cmd.Flags().GetStringArray("reveal")
+		for _, name := range reveal {
+			if err := revealBlock(database, name); err == nil {
+				revealed[name] = true
+			}
+		}
 		until, err := database.FreezeUntil()
 		if err != nil {
 			return err
@@ -423,6 +434,10 @@ var guiStateCmd = &cobra.Command{
 				Scheduled: len(schedules) > 0 || enforce.HasScheduleOrPlace(database, b.Name),
 				Lifted:    detail.Active && lifted[b.Name],
 			}
+			if hash, _ := database.BlockViewPassword(b.Name); hash != "" {
+				g.HasPassword = true
+				g.Hidden = !revealed[b.Name]
+			}
 			for _, l := range detail.Lists {
 				actions := l.Actions
 				if actions == nil {
@@ -501,6 +516,17 @@ var guiStateCmd = &cobra.Command{
 			if until, _ := database.PausedUntil(b.Name); detail.Active && until > trusted {
 				g.PausedSeconds = until - trusted
 			}
+			if g.Hidden {
+				// §3.11: the names of lists and sets stay; their entries,
+				// apps and titles don't.
+				for i := range g.Lists {
+					g.Lists[i].Entries = []string{}
+				}
+				for i := range g.PhraseSets {
+					g.PhraseSets[i].Phrases = []guiPhrase{}
+				}
+				g.Apps, g.Titles = []string{}, []string{}
+			}
 			state.Blocks = append(state.Blocks, g)
 		}
 
@@ -532,5 +558,6 @@ func init() {
 	freezeCmd.Flags().Bool("yes", false, "Confirm the freeze")
 	freezeCmd.Flags().String("mode", freeze.ModeLock, "How to freeze: lock, logout or shutdown")
 	_ = freezeCmd.MarkFlagRequired("for")
+	guiStateCmd.Flags().StringArray("reveal", nil, "Show a block with a block password (its password on stdin)")
 	rootCmd.AddCommand(freezeCmd, guiStateCmd)
 }

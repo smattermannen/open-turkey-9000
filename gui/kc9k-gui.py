@@ -2565,6 +2565,7 @@ class Window(Gtk.ApplicationWindow):
         self.updating = False  # set while widgets are filled from the state
         self.settings_password = None  # remembered for this session once given
         self.access_passwords = []  # access passwords given, until closed or locked
+        self.block_passwords = {}  # §3.11: block passwords typed, until closed
         self.access = {}  # area -> "none", "open" or "locked"
         self.covers = {}  # page name -> (stack, cover text, entry, title)
         self.last_input = GLib.get_monotonic_time()  # for locking again when idle
@@ -2956,8 +2957,13 @@ class Window(Gtk.ApplicationWindow):
 
         passwords = list(self.access_passwords)
 
+        reveal = dict(self.block_passwords)
+
         def work():
-            ok, output = cli_with_access(passwords, ["gui-state"])
+            args = ["gui-state"]
+            for name in reveal:
+                args += ["--reveal", name]
+            ok, output = cli_with_access(passwords, args, "".join(p + "\n" for p in reveal.values()) or None)
             GLib.idle_add(self.apply_state, ok, output, passwords)
 
         threading.Thread(target=work, daemon=True).start()
@@ -3099,6 +3105,7 @@ class Window(Gtk.ApplicationWindow):
 
     def lock_access(self, _button=None):
         self.access_passwords = []
+        self.block_passwords = {}
         self.state_json = None
         self.refresh()
 
@@ -3299,6 +3306,16 @@ class Window(Gtk.ApplicationWindow):
         self.status_label = dim("")
         self.detail.pack_start(self.title_label, False, False, 0)
         self.detail.pack_start(self.status_label, False, False, 0)
+        # §3.11: a block password hides the contents until typed.
+        self.hidden_bar = Gtk.Box(spacing=8, no_show_all=True)
+        self.hidden_bar.pack_start(dim("Its lists, apps and window titles are hidden by its block password."),
+                                   False, False, 0)
+        reveal = Gtk.Button(label="Show contents…")
+        reveal.connect("clicked", self.reveal_block)
+        reveal.show()
+        self.hidden_bar.pack_start(reveal, False, False, 0)
+        self.hidden_bar.get_children()[0].show()
+        self.detail.pack_start(self.hidden_bar, False, False, 0)
 
         actions = Gtk.Box(spacing=6)
         self.start_button = Gtk.Button(label="Start…")
@@ -3669,6 +3686,7 @@ class Window(Gtk.ApplicationWindow):
             return
         self.title_label.set_markup(f"<big><b>{GLib.markup_escape_text(block['name'])}</b></big>")
         self.status_label.set_text(block_summary(block))
+        self.hidden_bar.set_visible(bool(block.get("hidden")))
         self.update_lists(block.get("lists", []), block.get("phrase_sets", []))
         self.apps.set_items(block["apps"], owner=block["name"])
         self.titles.set_items(block.get("titles", []), owner=block["name"])
@@ -3946,6 +3964,25 @@ class Window(Gtk.ApplicationWindow):
         if locks:
             args.append("--yes")
         self.run(args, secret + "\n" if secret else None)
+
+    def reveal_block(self, _button):
+        """Asks a block's password and shows its contents until the window closes."""
+        name = self.selected
+        password = self.ask_text(f"Show '{name}'", "Its block password.", password=True)
+        if not password:
+            return
+        args = ["--reveal", name]
+        ok, output = cli_with_access(list(self.access_passwords), ["gui-state", *args], password + "\n")
+        try:
+            hidden = ok and next(b for b in json.loads(output)["blocks"] if b["name"] == name).get("hidden")
+        except (ValueError, StopIteration, KeyError):
+            hidden = True
+        if not ok or hidden:
+            self.message("Wrong block password.", Gtk.MessageType.INFO)
+            return
+        self.block_passwords[name] = password
+        self.state = None
+        self.refresh()
 
     def stop_block(self, _button):
         if self.selected:

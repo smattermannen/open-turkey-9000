@@ -135,7 +135,7 @@ Only items not simply Built.
 | §3.8 Factory reset protection | Not built | 2.6 |
 | §3.9 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`); hidden text, frames Unchecked |
 | §3.9 Ad trigger | Not built | 2.2 |
-| §3.11 Block password | Not built | |
+| §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
 | §3.10 R-WEAK-4 beyond strict/browser/ladder/password | Unchecked | |
 | §3.12 Word recording, specificity, cut | Not built | |
 | §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |

@@ -390,6 +390,10 @@ var blockInfoCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		defer database.Close()
+		if err := revealBlock(database, name); err != nil { // §3.11
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 
 		// GetBlock returns a pointer to a BlockDetail with all the information.
 		block, err := database.GetBlock(name)

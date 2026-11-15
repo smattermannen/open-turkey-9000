@@ -122,6 +122,9 @@ var blockExportListCmd = &cobra.Command{
 	Short: "Print one list, one entry per line",
 	Args:  cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if err := revealBlock(database, args[0]); err != nil {
+			return err
+		}
 		detail, err := database.GetBlock(args[0])
 		if err != nil {
 			return err

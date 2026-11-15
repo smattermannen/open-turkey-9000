@@ -95,5 +95,12 @@ card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) an
 card.rates["block"].set_value(2.5); card.save_numbers(None); settle()
 rate = [a for a in lists()["Mixed"]["actions"] if a["action"] == "block"][0].get("rate")
 check(rate == 25, "rate saved from the card: %s" % rate)
+# §3.11 block password: contents hidden until it is typed.
+r = subprocess.run([W, "block", "password", "b", "set"], input="open1\n", capture_output=True, text=True)
+check(r.returncode == 0, "block password set: " + r.stderr)
+settle(); win.show_block()
+check(win.hidden_bar.get_visible() and not any(l["entries"] for l in win.blocks["b"]["lists"]), "hidden block shows no entries")
+win.block_passwords["b"] = "open1"; settle(); win.show_block()
+check(not win.hidden_bar.get_visible() and any(l["entries"] for l in win.blocks["b"]["lists"]), "revealed with its password")
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

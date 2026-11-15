@@ -33,6 +33,9 @@ func TestBackupHoldsEverything(t *testing.T) {
 	if err := runWith(t, 0, []string{"secret1"}, "password", "set"); err != nil {
 		t.Fatal(err)
 	}
+	if err := runWith(t, 0, []string{"view1"}, "block", "password", "work", "set"); err != nil {
+		t.Fatal(err)
+	}
 	backup := capture(t, "project", "export")
 	share := capture(t, "project", "export", "--share")
 	if strings.Contains(share, "\"backup\"") || !strings.Contains(backup, "settings_password_hash") {
@@ -65,6 +68,9 @@ func TestBackupHoldsEverything(t *testing.T) {
 	}
 	if rows, _ := d2.UsageSince(""); len(rows) != 1 || rows[0].Seconds != 600 {
 		t.Errorf("statistics = %+v", rows)
+	}
+	if h, _ := d2.BlockViewPassword("work"); h == "" {
+		t.Error("block password not restored")
 	}
 	// Again: nothing doubled, the existing password kept.
 	if err := runWith(t, 0, []string{"secret1"}, "project", "import", file, "--yes"); err != nil {

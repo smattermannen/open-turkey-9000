@@ -59,6 +59,11 @@ var phraseSetShowCmd = &cobra.Command{
 	Short: "Show a block's phrase sets, or one with its phrases",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if len(args) == 2 {
+			if err := revealBlock(database, args[0]); err != nil {
+				return err
+			}
+		}
 		sets, err := database.PhraseSets(args[0])
 		if err != nil {
 			return err

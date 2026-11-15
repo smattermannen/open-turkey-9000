@@ -214,6 +214,9 @@ var blockExportCmd = &cobra.Command{
 	Short: "Print a block as JSON (redirect to a file to save it)",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if err := revealBlock(database, args[0]); err != nil {
+			return err
+		}
 		detail, err := database.GetBlock(args[0])
 		if err != nil {
 			return err

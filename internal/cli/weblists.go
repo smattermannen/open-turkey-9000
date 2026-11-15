@@ -530,6 +530,9 @@ var listShowCmd = &cobra.Command{
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if len(args) == 2 {
+			if err := revealBlock(database, args[0]); err != nil {
+				return err
+			}
 			_, l, err := findList(database, args[0], args[1])
 			if err != nil {
 				return err
@@ -773,6 +776,9 @@ var listExportCmd = &cobra.Command{
 	Short: "Print a list's entries, one per line",
 	Args:  cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if err := revealBlock(database, args[0]); err != nil {
+			return err
+		}
 		_, l, err := findList(database, args[0], args[1])
 		if err != nil {
 			return err

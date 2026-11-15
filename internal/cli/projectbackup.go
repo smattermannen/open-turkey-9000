@@ -36,6 +36,7 @@ type backupExtras struct {
 	PasswordForLocks bool              `json:"settings_password_for_locks,omitempty"`
 	AccessPasswords  map[string]string `json:"access_password_hashes,omitempty"`
 	Hotkeys          []db.Hotkey       `json:"hotkeys,omitempty"`
+	BlockPasswords   map[string]string `json:"block_password_hashes,omitempty"` // §3.11, by block
 	Statistics       []db.UsageRow     `json:"statistics,omitempty"`
 }
 
@@ -96,6 +97,12 @@ func exportBackupExtras(database *db.DB) (*backupExtras, error) {
 	for _, area := range accessAreas {
 		if hash, _ := database.GetSetting(db.AccessPasswordSetting + area); hash != "" {
 			out.AccessPasswords[area] = hash
+		}
+	}
+	out.BlockPasswords = map[string]string{}
+	for _, b := range blocks {
+		if hash, _ := database.BlockViewPassword(b.Name); hash != "" {
+			out.BlockPasswords[b.Name] = hash
 		}
 	}
 	if out.Hotkeys, err = database.Hotkeys(); err != nil {
@@ -245,6 +252,16 @@ func importBackupExtras(database *db.DB, b *backupExtras, renamed map[string]str
 		if !dry {
 			if err := database.SetSetting(db.AccessPasswordSetting+area, hash); err != nil {
 				return err
+			}
+		}
+	}
+	for from, hash := range b.BlockPasswords {
+		if name, ok := renamed[from]; ok && hash != "" {
+			say("hide block '%s' behind its block password", name)
+			if !dry {
+				if err := database.SetBlockViewPassword(name, hash); err != nil {
+					return err
+				}
 			}
 		}
 	}

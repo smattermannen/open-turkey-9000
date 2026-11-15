@@ -701,7 +701,7 @@ class EditableList(Gtk.Box):
 
     def __init__(self, title, placeholder, on_add, on_remove,
                  on_import=None, on_export=None, help_text="", search=False, hidden=False,
-                 on_activate=None, split=None, entry=True):
+                 on_activate=None, split=None, entry=True, multi=False):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
         self.split = split or split_entries
@@ -719,9 +719,19 @@ class EditableList(Gtk.Box):
         self.view = Gtk.TreeView(model=self.filtered, headers_visible=False)
         self.view.append_column(
             Gtk.TreeViewColumn("", Gtk.CellRendererText(), text=0))
+        # §4.3: several entries at once (Ctrl/Shift-click, Ctrl+A) where
+        # entries are removed by value; Delete or Backspace removes.
+        self.multi = multi
+        if multi:
+            self.view.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
+        self.view.connect("key-press-event", self._key)
         if on_activate:
             self.view.connect("row-activated", lambda view, path, _c: on_activate(
                 view.get_model()[path][0]))
+        elif entry:
+            # §4.3: double-click moves an entry into the box to edit it
+            # (removed, then added again: R-WEAK-5).
+            self.view.connect("row-activated", self._edit)
         scroll = Gtk.ScrolledWindow(min_content_height=120)
         scroll.set_shadow_type(Gtk.ShadowType.IN)
         scroll.add(self.view)
@@ -799,6 +809,11 @@ class EditableList(Gtk.Box):
             self.store.clear()
             for item in items:
                 self.store.append([item])
+            # §4.3: after a removal, the selection moves to the next entry.
+            index = getattr(self, "next_index", None)
+            if index is not None and len(self.filtered) > 0:
+                self.next_index = None
+                self.view.get_selection().select_path(Gtk.TreePath(min(index, len(self.filtered) - 1)))
         self._show_cover()
 
     def _add(self, _widget):
@@ -807,11 +822,40 @@ class EditableList(Gtk.Box):
             self.entry.set_text("")
             self.on_add(values)
 
+    def _selected(self):
+        """The selected rows as (value, 1-based position), last first."""
+        model, paths = self.view.get_selection().get_selected_rows()
+        out = []
+        for path in paths:
+            child = model.convert_iter_to_child_iter(model.get_iter(path))
+            out.append((self.store[child][0], self.store.get_path(child)[0] + 1))
+        return sorted(out, key=lambda pair: -pair[1])
+
     def _remove(self, _button):
-        model, iterator = self.view.get_selection().get_selected()
-        if iterator:
-            child = model.convert_iter_to_child_iter(iterator)
-            self.on_remove(self.store[child][0], self.store.get_path(child)[0] + 1)
+        chosen = self._selected()
+        if not chosen:
+            return
+        # The selection moves to the row after the (first) removed one.
+        self.next_index = min(i for _v, i in chosen) - 1
+        for value, index in chosen if self.multi else chosen[:1]:
+            self.on_remove(value, index)
+
+    def _key(self, _view, event):
+        ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
+        if event.keyval in (Gdk.KEY_Delete, Gdk.KEY_BackSpace):
+            self._remove(None)
+            return True
+        if ctrl and event.keyval in (Gdk.KEY_f, Gdk.KEY_F) and self.search is not None:
+            self.search.grab_focus()  # §4.3 Find
+            return True
+        return False
+
+    def _edit(self, view, path, _column):
+        value = view.get_model()[path][0]
+        child = self.filtered.convert_iter_to_child_iter(self.filtered.get_iter(path))
+        self.entry.set_text(value)
+        self.entry.grab_focus()
+        self.on_remove(value, self.store.get_path(child)[0] + 1)
 
 
 class ListCard(Gtk.Frame):
@@ -912,7 +956,7 @@ class ListCard(Gtk.Frame):
             "", "reddit.com  *casino*  nsfw", self.add_entries, self.remove_entry,
             lambda: window.import_list(["list", "import", window.selected, self.data["name"]]),
             lambda: window.export_list(["list", "export", window.selected, self.data["name"]]),
-            search=True, hidden=True)
+            search=True, hidden=True, multi=True)
         box.pack_start(self.entries, True, True, 0)
         self.update(data)
 
@@ -1265,7 +1309,7 @@ class PhraseSetCard(ListCard):
         self.entries = EditableList(
             "", "", self.add_entries, self.remove_entry,
             search=True, hidden=True, on_activate=self.edit_phrase,
-            split=lambda text: [text.strip()] if text.strip() else [], entry=False)
+            split=lambda text: [text.strip()] if text.strip() else [], entry=False, multi=True)
         box.pack_start(self.entries, True, True, 0)
         box.pack_start(dim("Double-click a phrase to load it into the editor below."), False, False, 0)
 
@@ -3396,7 +3440,7 @@ class Window(Gtk.ApplicationWindow):
             lambda: self.export_list(["block", "export-list", self.selected, "apps"]),
             help_text="Executable names, Flatpak app IDs (see 'flatpak list --app'), or folders "
                       "whose programs can't run. Everything a blocked app started is closed too.",
-            search=True)
+            search=True, multi=True)
         pick_row = Gtk.Box(spacing=6)
         choose_apps = Gtk.Button(label="Choose from installed apps…")
         choose_apps.connect("clicked", self.pick_apps)
@@ -3416,7 +3460,7 @@ class Window(Gtk.ApplicationWindow):
             lambda: self.export_list(["block", "export-list", self.selected, "titles"]),
             help_text="Any app whose window title contains one of these words is closed while "
                       "the block is on; in a browser, just that tab. Separate words with spaces.",
-            search=True, hidden=True)
+            search=True, hidden=True, multi=True)
         apps.set_spacing(14)
         apps.pack_start(self.titles, True, True, 0)
         tabs.append_page(apps, Gtk.Label(label="Apps"))
@@ -4320,7 +4364,7 @@ class Window(Gtk.ApplicationWindow):
             "Entries", "reddit.com  *casino*",
             lambda values: self.cluster_name() and self.run(["cluster", "add", self.cluster_name(), *values]),
             lambda value, _n: self.cluster_name() and self.run(["cluster", "remove", self.cluster_name(), value]),
-            search=True)
+            search=True, multi=True)
         box.pack_start(self.cluster_entries, True, True, 0)
 
         self.record_label = Gtk.Label(xalign=0, wrap=True)
@@ -5351,7 +5395,7 @@ class Window(Gtk.ApplicationWindow):
             lambda d, *_: self.run(["strict", "exempt", "remove", d]),
             help_text="Exempt folders: programs in them still start while strict mode holds "
                       "(adding one weakens strict mode).",
-            split=lambda text: [text.strip()] if text.strip() else [])
+            split=lambda text: [text.strip()] if text.strip() else [], multi=True)
         return self.strict_exempt
 
     def toggle_strict_use(self, _switch, wanted):

@@ -102,6 +102,22 @@ settle(); win.show_block()
 check(win.hidden_bar.get_visible() and not any(l["entries"] for l in win.blocks["b"]["lists"]), "hidden block shows no entries")
 win.block_passwords["b"] = "open1"; settle(); win.show_block()
 check(not win.hidden_bar.get_visible() and any(l["entries"] for l in win.blocks["b"]["lists"]), "revealed with its password")
+# §4.3: select several entries and remove them; double-click to edit one.
+card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) and c.data.get("name") == "Mixed")
+card.entries.reveal()
+sel = card.entries.view.get_selection()
+sel.unselect_all(); sel.select_path(Gtk.TreePath(0)); sel.select_path(Gtk.TreePath(1))
+before = list(card.data["entries"])
+card.entries._remove(None); settle(); win.show_block()
+after = [l for l in win.blocks["b"]["lists"] if l["name"] == "Mixed"][0]["entries"]
+check(len(after) == len(before) - 2, "two entries removed at once: %s -> %s" % (before, after))
+card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) and c.data.get("name") == "Mixed")
+card.entries.reveal()
+if len(card.entries.store):
+    first = card.entries.store[0][0]
+    card.entries._edit(card.entries.view, Gtk.TreePath(0), None); settle()
+    check(card.entries.entry.get_text() == first, "double-click moves the entry into the box: %r" % card.entries.entry.get_text())
+
 # §3.6 autostart from the block page.
 win.selected = "b"; win.autostarts.on_add(["at 08:00 mon-fri"]); settle(); win.show_block()
 check(win.blocks["b"]["autostarts"] == ["at 08:00 weekdays"], "autostart added: %s" % win.blocks["b"].get("autostarts"))

@@ -436,7 +436,7 @@ func BuildRulesFor(d *db.DB, user string) (Rules, error) {
 		}
 		except := blockExcept(b.Lists)
 		blockRules := listRules(b)
-		if b.BlockName != MonkName || len(b.Lists) == 0 || b.Lists[0].ID != MonkListID {
+		if len(b.Lists) == 0 || (b.Lists[0].ID != MonkListID && b.Lists[0].ID != ResetGuardListID) {
 			blockRules = append(blockRules, phraseRules(d, b.BlockName, except)...)
 		}
 		for _, rule := range blockRules {

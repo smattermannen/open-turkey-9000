@@ -381,6 +381,10 @@ func Tick(d *db.DB, now time.Time) error {
 	if monk {
 		enforced = append(append([]db.ActiveBlockDetail{}, active...), monkBlock())
 	}
+	guard := resetGuardActive(d, trusted)
+	if guard {
+		enforced = append(append([]db.ActiveBlockDetail{}, enforced...), resetGuardBlock())
+	}
 	hosts, _, bp := Inputs(enforced)
 	enforceExtension(d, now, enforced)
 	enforceTitles(d, active, now)
@@ -449,6 +453,9 @@ func Tick(d *db.DB, now time.Time) error {
 	// event of its block.
 	for _, b := range active {
 		killAppsFor(d, b.Apps, blockUIDs(b), db.EventApp, b.BlockName)
+	}
+	if guard {
+		killApps(d, ResetGuardApps, db.EventTamper) // installer media guard
 	}
 	// Download and streaming tools given a blocked site's address.
 	for _, b := range active {

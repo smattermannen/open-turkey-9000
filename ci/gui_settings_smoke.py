@@ -231,6 +231,7 @@ check([r[0] for r in win.stats_user.get_model()] == ["All users", "anna", "ben"]
 
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
+check("reset_guard" in win.state and win.reset_guard_switch.get_active() == win.state["reset_guard"], "reset guard switch shows the state")
 
 # §3.4 in the setting lock dialog: a timer and a range lock, unlock order asked.
 asked = []

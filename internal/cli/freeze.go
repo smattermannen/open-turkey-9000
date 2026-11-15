@@ -234,6 +234,7 @@ type guiState struct {
 	FreezeApps    []string `json:"freeze_apps"` // §3.8: allowed apps only
 	Strict        bool     `json:"strict"`
 	NoEscape      bool     `json:"no_escape"`
+	ResetGuard    bool     `json:"reset_guard"` // §3.8 installer media guard
 	Stats         bool     `json:"stats"`
 	StatsPrivate  bool     `json:"stats_skip_private"` // §4.9
 	Accounts      []string `json:"accounts"`           // §3.2: people accounts of this computer
@@ -335,6 +336,7 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 		state.NoEscape = noEscape == "on"
+		state.ResetGuard = enforce.ResetGuardOn(database)
 		state.Stats = enforce.StatsOn(database)
 		if state.FreezeApps = enforce.FreezeApps(database); state.FreezeApps == nil {
 			state.FreezeApps = []string{}

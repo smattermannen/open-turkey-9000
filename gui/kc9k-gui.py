@@ -5033,6 +5033,12 @@ class Window(Gtk.ApplicationWindow):
                 return
         self.run(["dns", choice])
 
+    def toggle_reset_guard(self, _switch, wanted):
+        if self.updating:
+            return False
+        self.run(["reset-guard", "on" if wanted else "off"])
+        return True
+
     def toggle_no_weakening(self, _switch, wanted):
         if self.updating:
             return False
@@ -5426,6 +5432,8 @@ class Window(Gtk.ApplicationWindow):
 
         self.strict_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.strict_switch.connect("state-set", self.toggle_strict)
+        self.reset_guard_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.reset_guard_switch.connect("state-set", self.toggle_reset_guard)
         self.no_escape_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.no_escape_switch.connect("state-set", self.toggle_no_escape)
         box.pack_start(section(
@@ -5442,7 +5450,11 @@ class Window(Gtk.ApplicationWindow):
                             "recovery entries, so the emergency exit (kc9k.nofreeze) stops "
                             "working. Normal boot entries, Windows included, still start. The "
                             "only way past a lock is then booting a USB stick or reinstalling. "
-                            "It can't be turned off during a lock.")), False, False, 0)
+                            "It can't be turned off during a lock."),
+            self.switch_row(self.reset_guard_switch, "Factory reset protection: installer media guard",
+                            "While anything is locked, the download pages of operating systems and USB "
+                            "image writers are blocked and image writers (USB Image Writer, Etcher, "
+                            "Disks, …) are closed. It can't be turned off during a lock.")), False, False, 0)
 
         self.password_status = Gtk.Label(xalign=0, wrap=True)
         password_row = Gtk.Box(spacing=6)
@@ -5716,6 +5728,7 @@ class Window(Gtk.ApplicationWindow):
         self.strict_exempt.set_items(self.state.get("strict_exempt") or [])
         self.strict_switch.set_sensitive(not self.setting_locked("strict"))
         set_switch(self.no_escape_switch, self.state["no_escape"])
+        set_switch(self.reset_guard_switch, self.state.get("reset_guard", False))
         tamper = self.tamper_state()
         on = [title for key, title, _detail, _command in TAMPER_SETTINGS if tamper[key]]
         self.tamper_summary.set_markup(

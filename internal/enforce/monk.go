@@ -78,12 +78,17 @@ func MonkEnd(d *db.DB, trusted int64) int64 {
 // MonkOn reports whether monk mode is running.
 func MonkOn(d *db.DB, trusted int64) bool { return MonkEnd(d, trusted) > 0 }
 
-// withMonk adds what monk mode blocks to the blocks being enforced.
+// withMonk adds what monk mode blocks to the blocks being enforced, and
+// the installer media guard's block while it acts (resetguard.go).
 func withMonk(d *db.DB, active []db.ActiveBlockDetail, trusted int64) []db.ActiveBlockDetail {
-	if !MonkOn(d, trusted) {
-		return active
+	out := active
+	if MonkOn(d, trusted) {
+		out = append(append([]db.ActiveBlockDetail{}, out...), monkBlock())
 	}
-	return append(append([]db.ActiveBlockDetail{}, active...), monkBlock())
+	if resetGuardActive(d, trusted) {
+		out = append(append([]db.ActiveBlockDetail{}, out...), resetGuardBlock())
+	}
+	return out
 }
 
 // StartMonk turns monk mode on for a while, or extends it; a shorter time

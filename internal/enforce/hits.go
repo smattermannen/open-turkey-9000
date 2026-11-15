@@ -136,6 +136,13 @@ func findActiveList(d *db.DB, listID int) (string, db.WebList, bool) {
 		log.Printf("hit: %v", err)
 		return "", db.WebList{}, false
 	}
+	if listID == ResetGuardListID {
+		// The installer media guard's list: no block's either.
+		if !resetGuardActive(d, trusted) {
+			return "", db.WebList{}, false
+		}
+		return "", resetGuardBlock().Lists[0], true
+	}
 	if listID == MonkListID {
 		// Monk mode's own list. It belongs to no block, so the page counts
 		// for the whole computer only.

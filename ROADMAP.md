@@ -119,7 +119,6 @@ Only items not simply Built.
 | §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
 | §3.4 Range lock | Partial | blocks: `start --range "mon-fri 09:00-17:00" [--range-invert]`, a layer that holds while in range and can't be unlocked; not on setting locks; not in the GUI start dialog |
 | §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI fixed order; one lock per kind |
-| §3.4 R-LOCK-9 | Partial | extension/other protection: Unchecked |
 | §3.6 Break per block window | Not built | |
 | §3.6 Allowance | Partial | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). Not built: rolling 24 h, per window |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month` (default one, as before), GUI choice, projects; longer keep weakens |

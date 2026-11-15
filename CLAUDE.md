@@ -381,8 +381,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   force-librewolf` hidden): own lock as a browser setting's; off refused
   while anything is locked; on refused with no supported browser installed.
 - **Extension guard**: required while an active block has a non-empty
-  blacklist, or web-only/force-search is on; app-only blocks leave browsers
-  alone. With block unsupported browsers on, always: other browsers
+  blacklist, web-only/force-search is on, or anything is locked (R-LOCK-9);
+  unlocked app-only blocks leave browsers alone. With block unsupported browsers on, always: other browsers
   (Firefox too) close at once, supported ones after 60 s without a check-in.
   Nothing closed without LibreWolf, Chrome or Chromium installed (`status`
   says so). `kc9k browsers` lists them with per-browser check-in

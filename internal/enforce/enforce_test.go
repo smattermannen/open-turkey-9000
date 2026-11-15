@@ -298,3 +298,33 @@ func TestRulesSafeSearch(t *testing.T) {
 		t.Error("the setting didn't reach the rules")
 	}
 }
+
+// R-LOCK-9: while anything is locked, the extension is required, even for
+// a block of apps only or a locked setting alone.
+func TestExtensionRequiredWhileLocked(t *testing.T) {
+	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if err := d.CreateBlock("apps"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddApps("apps", []string{"steam"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ActivateBlock("apps", false, 0, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	active, _ := d.GetActiveBlocks()
+	if ExtensionRequired(d, active) {
+		t.Error("required for an unlocked app-only block")
+	}
+	if err := d.StrengthenLocks("apps", false, 0, time.Now().Add(time.Hour).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	active, _ = d.GetActiveBlocks()
+	if !ExtensionRequired(d, active) {
+		t.Error("not required while a block is locked")
+	}
+}

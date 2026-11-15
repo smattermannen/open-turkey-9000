@@ -105,7 +105,17 @@ func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
 			return true
 		}
 	}
-	return BrowserOn(d, "web-only") || BrowserOn(d, "force-search")
+	if BrowserOn(d, "web-only") || BrowserOn(d, "force-search") {
+		return true
+	}
+	// R-LOCK-9: while anything is locked, the extension is required.
+	now := time.Now()
+	trusted, err := d.TrustedNow(now)
+	if err != nil {
+		return false
+	}
+	locked, err := AnyLock(d, now, trusted)
+	return err == nil && locked
 }
 
 // ExtensionRequiredNow is ExtensionRequired for the blocks in force now,

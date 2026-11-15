@@ -20,7 +20,7 @@ type statsOutput struct {
 }
 
 var statsCmd = &cobra.Command{
-	Use:   "stats [on|off|clear]",
+	Use:   "stats [on|off|clear|private skip|count]",
 	Short: "Show time spent on websites and apps, or turn statistics on or off",
 	Long: `Statistics count the time each app is in the foreground and, in browsers
 with the bundled extension, the time on each website. Time behind a locked
@@ -30,10 +30,30 @@ this computer and is kept for a year.
   kc9k stats            totals for the last 7 days
   kc9k stats --days 30  totals for the last 30 days
   kc9k stats off        stop recording (on starts again)
-  kc9k stats clear      delete all statistics`,
-	ValidArgs: []string{"on", "off", "clear"},
-	Args:      cobra.MaximumNArgs(1),
+  kc9k stats clear      delete all statistics
+  kc9k stats private skip   leave private windows out (count: back in)`,
+	ValidArgs: []string{"on", "off", "clear", "private"},
+	Args:      cobra.MaximumNArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if len(args) == 2 || (len(args) == 1 && args[0] == "private") {
+			if args[0] != "private" {
+				return fmt.Errorf("use on, off, clear or private skip|count")
+			}
+			if len(args) == 2 {
+				if args[1] != "skip" && args[1] != "count" {
+					return fmt.Errorf("use 'stats private skip' or 'stats private count'")
+				}
+				if err := database.SetSetting(enforce.SettingStatsPrivate, args[1]); err != nil {
+					return err
+				}
+			}
+			if v, _ := database.GetSetting(enforce.SettingStatsPrivate); v == "skip" {
+				fmt.Println("Private windows are left out of statistics.")
+			} else {
+				fmt.Println("Private windows count in statistics.")
+			}
+			return nil
+		}
 		if len(args) == 1 {
 			switch args[0] {
 			case "on", "off":

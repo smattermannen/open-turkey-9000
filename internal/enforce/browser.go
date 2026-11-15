@@ -237,6 +237,8 @@ type Rules struct {
 	// Words: "record" (a word recording) or "baseline": report each page's
 	// rendered words to /words (§3.12, see words.go); "" not.
 	Words string `json:"words,omitempty"`
+	// StatsSkipPrivate: leave private windows out of statistics (§4.9).
+	StatsSkipPrivate bool `json:"stats_skip_private,omitempty"`
 	// Details: the block page may say which block and list stopped a page.
 	Details bool `json:"details"`
 	// Ends: when each active block ends (unix seconds), where that is known.
@@ -393,6 +395,9 @@ func BuildRules(d *db.DB) (Rules, error) {
 		rules.Words = "record"
 	} else if recording != nil {
 		rules.Recording = true
+	}
+	if v, _ := d.GetSetting(SettingStatsPrivate); v == "skip" {
+		rules.StatsSkipPrivate = true
 	}
 	if rules.Words == "" && d.WordBaselineOn() {
 		rules.Words = "baseline"

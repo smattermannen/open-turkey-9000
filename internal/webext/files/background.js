@@ -692,6 +692,7 @@ function apply(rules) {
   webOnly = Boolean(rules.web_only);
   safeSearch = Boolean(rules.safesearch);
   strictUse = Boolean(rules.strict_use);
+  statsSkipPrivate = Boolean(rules.stats_skip_private);
   if (recording !== Boolean(rules.recording)) {
     recording = Boolean(rules.recording);
     visited.clear();
@@ -903,6 +904,7 @@ browser.storage.local.get("rules").then((stored) => {
 // window, unless the user has been idle for 3 minutes, and every site playing
 // sound, and send the totals to the daemon every 30 seconds. The daemon drops them if statistics are off.
 const USAGE_URL = "http://127.0.0.1:47613/usage";
+let statsSkipPrivate = false;
 const SAMPLE_SECONDS = 5;
 const REPORT_MS = 30000;
 let usage = {};
@@ -923,6 +925,9 @@ async function sampleUsage() {
     }
     const sites = new Set();
     for (const tab of tabs) {
+      if (tab.incognito && statsSkipPrivate) {
+        continue; // §4.9: private windows left out when asked
+      }
       if (tab.url && /^https?:/i.test(tab.url)) {
         sites.add(new URL(tab.url).hostname.replace(/^www\./, ""));
       }

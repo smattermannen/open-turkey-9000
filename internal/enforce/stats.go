@@ -15,6 +15,10 @@ import (
 // and never leave the computer.
 const SettingStats = "stats"
 
+// SettingStatsPrivate is "skip" when site time in private windows isn't
+// counted (§4.9); counted by default.
+const SettingStatsPrivate = "stats.private"
+
 const (
 	// StatsKeepDays is how long statistics are kept.
 	StatsKeepDays = 365

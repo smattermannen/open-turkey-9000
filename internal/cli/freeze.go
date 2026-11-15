@@ -228,6 +228,7 @@ type guiState struct {
 	Strict        bool   `json:"strict"`
 	NoEscape      bool   `json:"no_escape"`
 	Stats         bool   `json:"stats"`
+	StatsPrivate  bool   `json:"stats_skip_private"` // §4.9
 	LibreWolf     string `json:"librewolf"`
 	Chrome        bool   `json:"chrome"` // Google Chrome or Chromium installed
 	Extension     string `json:"extension_status"`
@@ -326,6 +327,9 @@ var guiStateCmd = &cobra.Command{
 		}
 		state.NoEscape = noEscape == "on"
 		state.Stats = enforce.StatsOn(database)
+		if v, _ := database.GetSetting(enforce.SettingStatsPrivate); v == "skip" {
+			state.StatsPrivate = true
+		}
 		state.LibreWolf = blocker.LibreWolfVersion()
 		state.Chrome = blocker.ChromeInstalled()
 		state.Extension = extensionStatus(database)

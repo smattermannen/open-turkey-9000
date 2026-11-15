@@ -210,6 +210,13 @@ check(app.prefs.get("clock_24") is False and gui.show_clock(14 * 60 + 30) == "2:
 win.clock_combo.set_active_id("24")
 check(gui.show_clock(14 * 60 + 30) == "14:30" and gui.show_clock(1440, True) == "24:00", "24-hour clock")
 
+# §4.9 private windows left out of statistics.
+win.stats_private_switch.set_active(True)
+settle()
+check(win.state.get("stats_skip_private") is True, "stats private skip from the switch")
+win.stats_private_switch.set_active(False)
+settle()
+
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
 

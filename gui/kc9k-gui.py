@@ -5059,6 +5059,8 @@ class Window(Gtk.ApplicationWindow):
 
         self.stats_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.stats_switch.connect("state-set", self.toggle_stats)
+        self.stats_private_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.stats_private_switch.connect("state-set", self.toggle_stats_private)
         clear = Gtk.Button(label="Delete all statistics…", halign=Gtk.Align.START)
         clear.get_style_context().add_class("destructive-action")
         clear.connect("clicked", self.clear_stats)
@@ -5066,11 +5068,14 @@ class Window(Gtk.ApplicationWindow):
             "Recording",
             self.switch_row(self.stats_switch, "Record time spent on websites and apps",
                             "Stored only on this computer and kept for a year."),
+            self.switch_row(self.stats_private_switch, "Leave out private windows",
+                            "Time on websites in private windows isn't counted."),
             clear), False, False, 0)
         return scroll
 
     def update_stats_setting(self):
         set_switch(self.stats_switch, self.state["stats"])
+        set_switch(self.stats_private_switch, self.state.get("stats_skip_private", False))
 
     def refresh_stats(self):
         days = int(self.stats_period.get_active_id() or 7) if hasattr(self, "stats_period") else 7
@@ -5904,6 +5909,12 @@ class Window(Gtk.ApplicationWindow):
         if self.updating:
             return False
         self.run(["stats", "on" if wanted else "off"], then=lambda _o: self.refresh_stats())
+        return True
+
+    def toggle_stats_private(self, _switch, wanted):
+        if self.updating:
+            return False
+        self.run(["stats", "private", "skip" if wanted else "count"])
         return True
 
     def clear_stats(self, _button):

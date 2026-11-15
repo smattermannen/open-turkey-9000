@@ -440,3 +440,22 @@ func TestAllowancePerWindow(t *testing.T) {
 		t.Error("the next opening is the same period")
 	}
 }
+
+// §4.9: private windows can be left out of statistics.
+func TestStatsSkipPrivate(t *testing.T) {
+	d := testDB(t)
+	if rules, _ := enforce.BuildRules(d); rules.StatsSkipPrivate {
+		t.Error("private windows skipped by default")
+	}
+	mustRun(t, "stats", "private", "skip")
+	if rules, _ := enforce.BuildRules(d); !rules.StatsSkipPrivate {
+		t.Error("stats private skip didn't reach the rules")
+	}
+	if err := runCLI(t, "stats", "private", "maybe"); err == nil {
+		t.Error("a bad value was taken")
+	}
+	mustRun(t, "stats", "private", "count")
+	if rules, _ := enforce.BuildRules(d); rules.StatsSkipPrivate {
+		t.Error("count didn't bring them back")
+	}
+}

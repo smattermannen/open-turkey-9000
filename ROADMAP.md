@@ -142,7 +142,7 @@ Only items not simply Built.
 | §3.10 R-WEAK-4 beyond strict/browser/ladder/password | Unchecked | |
 | §3.10 R-EVENT-1 | Unchecked | |
 | §3.12 Word recording, specificity, cut | Not built | |
-| §4.10 SafeSearch | Partial | Google only; 2.4 |
+| §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |
 | §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (`tamper unsupported-browsers`, own lock carried over from `force-librewolf`, `tamper unlock unsupported-browsers`; old command hidden alias). No group lock: clock has no lock flags. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). `tamper file-urls` (allow file:// blocking) built. Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, installer, inactive tabs, embedded content, task managers: no command |
 | §4.10 Extension install dialog | Not built | |
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
@@ -166,7 +166,8 @@ Only items not simply Built.
 - **2.2 Ad trigger** (M): fourth scope from third-party requests
   (`webRequest`); shipped ad-network list per industry.
 - **2.3 No downloads** (S): extension cancels downloads (`downloads` permission).
-- **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted, each lockable.
+- **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under
+  the one `safesearch` setting. Left: a lock per engine, if wanted.
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
   order, `unlock` lifts only the first, status and GUI show the order). Left:
   order chosen in the GUI; several locks of one kind.
@@ -204,3 +205,8 @@ Only items not simply Built.
   at most 20,000 sites, the rest are blocked by the browser policy, the
   extension and the firewall, because principle 9 says huge lists never
   slow the computer and those layers already cover every site.
+- DECIDED OVERNIGHT: should SafeSearch make the extension required (closing
+  browsers without it)? → no: Bing, DuckDuckGo and YouTube are pinned in
+  /etc/hosts for every browser, and the extension adds the rest where it
+  runs, because requiring it would close Firefox whenever SafeSearch is on,
+  a new default behaviour (principle 7).

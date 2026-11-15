@@ -5,16 +5,24 @@ import (
 	"testing"
 )
 
+// §4.10: SafeSearch pins Google, Bing, DuckDuckGo and YouTube.
 func TestSafeSearchSection(t *testing.T) {
 	base := "127.0.0.1 localhost\n"
-	once := renderSafeSearch(base, "1.2.3.4")
-	if !strings.Contains(once, "1.2.3.4 www.google.com") {
-		t.Fatalf("missing entry: %q", once)
+	ips := map[string]string{"forcesafesearch.google.com": "1.2.3.4", "strict.bing.com": "5.6.7.8",
+		"safe.duckduckgo.com": "9.9.9.1", "restrict.youtube.com": "1.1.1.2"}
+	once := renderSafeSearch(base, ips)
+	for _, want := range []string{"1.2.3.4 www.google.com", "5.6.7.8 bing.com", "9.9.9.1 duckduckgo.com", "1.1.1.2 www.youtube.com"} {
+		if !strings.Contains(once, want+"\n") {
+			t.Fatalf("missing %q: %q", want, once)
+		}
 	}
-	if twice := renderSafeSearch(once, "1.2.3.4"); twice != once {
+	if !safeSearchComplete(once) || safeSearchComplete(renderSafeSearch(base, map[string]string{"forcesafesearch.google.com": "1.2.3.4"})) {
+		t.Error("completeness: an old Google-only section must be rewritten")
+	}
+	if twice := renderSafeSearch(once, ips); twice != once {
 		t.Fatalf("not stable: %q", twice)
 	}
-	if got := stripSafeSearch(once); strings.Contains(got, "google") {
+	if got := stripSafeSearch(once); strings.Contains(got, "google") || strings.Contains(got, "bing") {
 		t.Fatalf("not removed: %q", got)
 	}
 }

@@ -215,8 +215,12 @@ type Rules struct {
 	Block      []string   `json:"block"`
 	Exceptions []string   `json:"exceptions"`
 	WebOnly    bool       `json:"web_only"`
-	Titles     []string   `json:"titles"`    // always empty: window title entries never apply to browsers (R-TITLE-1)
-	Recording  bool       `json:"recording"` // report opened addresses to /visit (see recording.go)
+	// SafeSearch: the extension keeps Bing, DuckDuckGo, Brave, Yahoo and
+	// SearXNG on strict, YouTube on Restricted Mode, and blocks engines it
+	// can't hold (§4.10; Google also by hosts, blocker.SyncSafeSearch).
+	SafeSearch bool     `json:"safesearch"`
+	Titles     []string `json:"titles"`    // always empty: window title entries never apply to browsers (R-TITLE-1)
+	Recording  bool     `json:"recording"` // report opened addresses to /visit (see recording.go)
 	// Details: the block page may say which block and list stopped a page.
 	Details bool `json:"details"`
 	// Ends: when each active block ends (unix seconds), where that is known.
@@ -359,8 +363,9 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 func BuildRules(d *db.DB) (Rules, error) {
 	rules := Rules{
 		Lists: []ListRule{}, Quota: []ListRule{}, Block: []string{}, Exceptions: []string{},
-		WebOnly: BrowserOn(d, "web-only"),
-		Titles:  []string{},
+		WebOnly:    BrowserOn(d, "web-only"),
+		SafeSearch: BrowserOn(d, "safesearch"),
+		Titles:     []string{},
 
 		ExtensionVersion: webext.Version(),
 	}

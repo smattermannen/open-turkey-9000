@@ -280,3 +280,21 @@ func TestFileEntriesInPolicy(t *testing.T) {
 		t.Errorf("an unrelated file exception spared it: %v", bp.BlockFiles)
 	}
 }
+
+// §4.10: the SafeSearch browser setting reaches the extension's rules.
+func TestRulesSafeSearch(t *testing.T) {
+	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if r, _ := BuildRules(d); r.SafeSearch {
+		t.Error("on without the setting")
+	}
+	if err := d.SetSetting(SettingKey("safesearch"), "on"); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := BuildRules(d); !r.SafeSearch {
+		t.Error("the setting didn't reach the rules")
+	}
+}

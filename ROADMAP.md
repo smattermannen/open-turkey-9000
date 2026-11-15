@@ -68,29 +68,40 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
 
 Script-tested, never by a person. Script what can be into `ci/`.
 
-- [ ] Notification before an allowance session ends.
+- [ ] Notification before an allowance session ends. (Not tried overnight:
+  a test allowance can only be removed at midnight, leaving its block on.)
 - [ ] Scheduled Frozen Chicken in logout/shutdown modes.
 - [ ] Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
 - [ ] Shutdown mode and `kc9k.nofreeze`; measure fast relock.
 - [ ] Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
 - [ ] Address change without load (YouTube) caught by a URL list; Websites tab on a real screen.
-- [ ] One-off logout/shutdown from a list; Dashboard monk button; locked global ladder refusing `bypass off`.
+- [ ] One-off logout/shutdown from a list; Dashboard monk button. (Checked
+  2026-11-15: a timer-locked global ladder refuses `bypass off` and a weaker
+  ladder, and turns off once the lock ends.)
 - [ ] Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
 - [ ] Mute and dark on real sites; polite close with a real app.
 - [ ] No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
 - [ ] Social presets beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
-- [ ] Chrome on the laptop: extension pinned, unremovable, incognito/guest off, block works, popup. Then rerun `browser_test.py`, `extras_test.py` in LibreWolf.
-- [ ] Block unsupported browsers (`kc9k tamper unsupported-browsers`): upgrade from `force-librewolf` keeps state and lock; Firefox and a portable LibreWolf close at once; LibreWolf/Chrome with the extension stay; Browsers list check-ins. `kc9k browsers install chromium|chrome` never run (Mint's chromium .deb assumed at `/usr/lib/chromium/chromium`, reading `/etc/chromium/policies`).
+- [ ] Chrome on the laptop. Checked 2026-11-15: the extension checks in from
+  Chrome and Chromium, both show the block page; the policy force-installs
+  and pins it, turns off incognito, guest and developer mode. Left (needs
+  a person): the popup, and that the extension really can't be removed in
+  the Extensions page.
+- [ ] Block unsupported browsers (`kc9k tamper unsupported-browsers`).
+  Checked 2026-11-15: Firefox is closed within ~2 s with the reason logged;
+  LibreWolf with the extension stays (browser_test); `kc9k browsers install
+  chromium` installs Mint's chromium (`/usr/lib/chromium/chromium`, policy
+  in `/etc/chromium/policies`) and works. Left: upgrade from
+  `force-librewolf` keeping a lock; a portable LibreWolf.
 - [ ] Monk mode live (`ci/monk_live_test.sh` unwritten), incl. reboot mid-way.
 - [ ] GUI design pass: pages since 2026-11-10 never seen on a real screen.
-- [ ] Lists without types (§3.2): after the upgrade the split `Blocked` /
-  `Blocked terms` pairs of `H` and `test` are one `Blocked` each; check
-  pages are blocked as before. New list dialog with scope boxes on a real
-  screen.
-- [ ] Active vs enabled on the laptop: after the upgrade, blocks with
-  windows are on (`status`: "lifted by its schedule" outside windows) and
-  enforce only in their windows; GUI shows "lifted by its schedule now".
-- [ ] Remove laptop leftovers (`quotatest`, `hej`, `Papers` list in `test`). `extras_test` fails one case only because the locked `test` block lists example.com.
+- [ ] Lists without types (§3.2): checked 2026-11-15: `H` and `test` have
+  one `Blocked` each; `H` blocks reddit.com by address and a page by its
+  text in LibreWolf. Left: the New list dialog on a real screen.
+- [ ] Active vs enabled on the laptop: checked 2026-11-15 with a throwaway
+  block: off it stays out of /etc/hosts in its window; on, it is in /etc/hosts
+  in its window, and outside it shows "lifted by its schedule" and leaves
+  /etc/hosts. Left: the GUI's "lifted by its schedule now" on a real screen.
 
 ## 1. `SPEC.md` coverage
 

@@ -174,5 +174,8 @@ check(win.blocks["grid"]["schedules"] == ["mon,tue 09:00-10:00"], "window copied
 w = win.blocks["grid"]["schedule_windows"][0]
 win.move_window_from_calendar(0, w["days"], w["start"] + 60, w["end"] + 60); settle(); settle()
 check(win.blocks["grid"]["schedules"] == ["mon,tue 10:00-11:00"], "window moved an hour: %s" % win.blocks["grid"]["schedules"])
+# §4.5: other blocks' windows are greyed behind the selected block's.
+win.selected = "b"; win.show_block()
+check(any(w["start"] == 600 for w in win.calendar.others), "other block's window greyed: %s" % win.calendar.others)
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

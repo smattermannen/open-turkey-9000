@@ -144,7 +144,7 @@ Only items not simply Built.
 | §4.3 Draft Save/Cancel | Not built | changes apply at once |
 | §4.3 Ctrl+F, multi-select, double-click edit | Built | `EditableList`: Ctrl+F to its search, Ctrl/Shift-click and Ctrl+A in website lists, phrase sets, apps, titles, clusters, exempt folders; Delete/Backspace removes, selection moves on; double-click moves an entry into the box |
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters. "All searches containing…" not built |
-| §4.5 Grid drag-move, copy to days, similar windows | Partial | drag a window to move it (time; day for one-day windows); click to edit days (copy to days) and times, or remove; a window on several days is edited as one. Not built: other blocks greyed |
+| §4.5 Grid drag-move, copy to days, similar windows | Built | drag a window to move it (time; day for one-day windows); click to edit days (copy to days), times, its break, or remove; a window on several days is edited as one; other blocks' windows greyed |
 | §4.9 Statistics: times blocked, top N, search, filter by block | Built | blocked pages counted per site and block (`blocked`, `blocked-block` rows); `stats --top N --search T --block B`; GUI Times blocked view |
 | §4.9 Statistics per user, skip private windows | Not built | |
 | §4.10 Preferences | Partial | theme, first day of the week (schedule grid), open at login built; 24-hour clock choice, darkness slider, tray: Not built |

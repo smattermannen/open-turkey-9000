@@ -1471,8 +1471,11 @@ class WeekCalendar(Gtk.DrawingArea):
         self.connect("motion-notify-event", self.on_motion)
         self.connect("button-release-event", self.on_release)
 
-    def set_windows(self, windows):
+    def set_windows(self, windows, others=()):
+        """windows: the block's; others: other blocks' block windows, drawn
+        grey behind them (§4.5)."""
         self.windows = windows
+        self.others = list(others)
         self.queue_draw()
 
     def geometry(self):
@@ -1589,6 +1592,13 @@ class WeekCalendar(Gtk.DrawingArea):
             PangoCairo.show_layout(cr, layout)
 
         r, g, b, _a = accent
+        for w in getattr(self, "others", []):
+            for column in range(7):
+                if w["days"] & self.weekday_bit(column):
+                    y0, y1 = y_of(w["start"]), y_of(w["end"])
+                    cr.rectangle(left + column * column_width + 2, y0, column_width - 4, max(y1 - y0, 2))
+                    cr.set_source_rgba(*faint[:3], 0.6)
+                    cr.fill()
         for w in self.windows:
             for column in range(7):
                 if not w["days"] & self.weekday_bit(column):
@@ -3856,7 +3866,9 @@ class Window(Gtk.ApplicationWindow):
         self.titles.set_items(block.get("titles", []), owner=block["name"])
         self.schedules.set_items(block["schedules"])
         self.autostarts.set_items(block.get("autostarts") or [])
-        self.calendar.set_windows(block.get("schedule_windows", []))
+        others = [w for other in self.state.get("blocks", []) if other["name"] != block["name"]
+                  for w in other.get("schedule_windows") or [] if not w.get("allow")]
+        self.calendar.set_windows(block.get("schedule_windows", []), others)
         set_switch(self.keyword_test_switch, block.get("keyword_test", False))
         self.update_social(block)
         covered = set()

@@ -111,7 +111,7 @@ Only items not simply Built.
 
 | Item | Status | Notes |
 |---|---|---|
-| §3.1 File URL entries | Partial | `file://*` default exception built; file URLs in blacklists block nothing |
+| §3.1 File URL entries | Partial | built: with tamper `file-urls` on, blacklist `file:///…` entries go into Firefox/LibreWolf and Chrome policies unless the block's file exceptions spare them (checked live in LibreWolf); Chrome live: Unchecked; the extension doesn't judge file pages |
 | §3.1 Folder entry | Partial | programs closed; windows showing it not |
 | §3.2 Template | Not built | |
 | §3.2 Affected users | Not built | |
@@ -144,7 +144,7 @@ Only items not simply Built.
 | §3.10 R-EVENT-1 | Unchecked | |
 | §3.12 Word recording, specificity, cut | Not built | |
 | §4.10 SafeSearch | Partial | Google only; 2.4 |
-| §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (`tamper unsupported-browsers`, own lock carried over from `force-librewolf`, `tamper unlock unsupported-browsers`; old command hidden alias). No group lock: clock has no lock flags. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, `file://`, installer, inactive tabs, embedded content, task managers: no command |
+| §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (`tamper unsupported-browsers`, own lock carried over from `force-librewolf`, `tamper unlock unsupported-browsers`; old command hidden alias). No group lock: clock has no lock flags. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). `tamper file-urls` (allow file:// blocking) built. Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, installer, inactive tabs, embedded content, task managers: no command |
 | §4.10 Extension install dialog | Not built | |
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |

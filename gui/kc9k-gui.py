@@ -70,6 +70,10 @@ TAMPER_SETTINGS = (
     ("clock", "Clock: ignore time and date changes",
      "While a timer lock runs, changing the date or time doesn't move it, and time the "
      "computer is off isn't counted.", ("tamper", "clock")),
+    ("file-urls", "Allow file:// blocking",
+     "Blacklist entries such as file:///home/me/games/* block local files in the browsers. "
+     "Each block's own file:// exceptions (file://* by default) still spare them.",
+     ("tamper", "file-urls")),
     ("unsupported-browsers", "Block unsupported browsers",
      "Only LibreWolf, Google Chrome and Chromium running the Killer Chicken extension stay "
      "open, even when no block is on. Every other browser, Firefox included (it can't run the "
@@ -4848,6 +4852,7 @@ class Window(Gtk.ApplicationWindow):
 
     def tamper_state(self):
         return {"clock": bool(self.state.get("tamper_clock", False)),
+                "file-urls": bool(self.state.get("tamper_file_urls", False)),
                 "unsupported-browsers": bool(self.state.get("unsupported_browsers", False))}
 
     def setting_lock_info(self, name):

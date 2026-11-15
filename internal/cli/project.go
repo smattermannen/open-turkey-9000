@@ -403,7 +403,8 @@ passwords, hotkeys and statistics are never in it.`,
 		for _, name := range enforce.BrowserSettings {
 			out.Browser[name] = enforce.BrowserOn(database, name)
 		}
-		out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database)}
+		out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database),
+			"file-urls": enforce.FileURLsOn(database)}
 		for _, o := range enforce.Options {
 			out.Options[o.Name] = enforce.OptionOn(database, o.Name)
 		}
@@ -732,6 +733,14 @@ With --dry-run, says what would happen and changes nothing.`,
 			say("turn on the browser setting %s", name)
 			if !dry {
 				if err := database.SetSetting("browser."+name, "on"); err != nil {
+					return err
+				}
+			}
+		}
+		if in.Tamper["file-urls"] && !enforce.FileURLsOn(database) {
+			say("turn on file:// blocking")
+			if !dry {
+				if err := database.SetSetting(enforce.SettingFileURLs, "on"); err != nil {
 					return err
 				}
 			}

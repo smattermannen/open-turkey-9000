@@ -2,6 +2,7 @@
 //
 //	kc9k tamper                                       # shows them
 //	kc9k tamper clock on|off                          # block time and date changes
+//	kc9k tamper file-urls on|off                      # allow file:// blocking
 //	kc9k tamper unsupported-browsers on [lock flags]  # block unsupported browsers
 //	kc9k tamper unlock unsupported-browsers
 //
@@ -23,13 +24,17 @@ import (
 )
 
 var tamperCmd = &cobra.Command{
-	Use:   "tamper [clock|unsupported-browsers [on|off] | unlock unsupported-browsers]",
-	Short: "Tamper protection: clock changes, unsupported browsers",
+	Use:   "tamper [clock|file-urls|unsupported-browsers [on|off] | unlock unsupported-browsers]",
+	Short: "Tamper protection: clock changes, file:// blocking, unsupported browsers",
 	Long: `Tamper protection settings:
 
   clock                 while a timer lock runs, changing the date or time
                         doesn't move it (time the computer is switched off
                         isn't counted then either)
+  file-urls             allow file:// blocking: blacklist entries such as
+                        file:///home/me/games/* block local files in the
+                        browsers (a block's own file:// exceptions, file://*
+                        by default, still spare them)
   unsupported-browsers  block unsupported browsers: every browser but the
                         supported ones (LibreWolf, Google Chrome, Chromium)
                         running the Killer Chicken extension is closed, at
@@ -55,6 +60,7 @@ password, then turns it off if nothing else is locked.`,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if len(args) == 0 {
 			fmt.Printf("clock %s\n", onOff(tamperClockOn(database)))
+			fmt.Printf("file-urls %s\n", onOff(enforce.FileURLsOn(database)))
 			return printUnsupportedBrowsers(database)
 		}
 		if args[0] == "unlock" {
@@ -88,14 +94,16 @@ password, then turns it off if nothing else is locked.`,
 			}
 			return fmt.Errorf("use 'on' or 'off'")
 		}
-		if args[0] != "clock" {
-			return fmt.Errorf("unknown tamper protection %q (use clock or %s)", args[0], db.UnsupportedBrowsers)
+		key, ok := simpleTamper[args[0]]
+		if !ok {
+			return fmt.Errorf("unknown tamper protection %q (use clock, file-urls or %s)", args[0], db.UnsupportedBrowsers)
 		}
 		if lockFlagsGiven(cmd) {
-			return fmt.Errorf("the clock setting has no lock of its own")
+			return fmt.Errorf("the %s setting has no lock of its own", args[0])
 		}
 		if len(args) == 1 {
-			fmt.Printf("clock %s\n", onOff(tamperClockOn(database)))
+			v, _ := database.GetSetting(key)
+			fmt.Printf("%s %s\n", args[0], onOff(v == "on"))
 			return nil
 		}
 		switch args[1] {
@@ -117,13 +125,21 @@ password, then turns it off if nothing else is locked.`,
 		default:
 			return fmt.Errorf("use 'on' or 'off'")
 		}
-		if err := database.SetSetting(db.SettingTamperClock, args[1]); err != nil {
+		if err := database.SetSetting(key, args[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Tamper protection for the clock is %s\n", args[1])
-		return nil
+		if args[0] == "clock" {
+			fmt.Printf("Tamper protection for the clock is %s\n", args[1])
+			return nil
+		}
+		fmt.Printf("file:// blocking is %s\n", args[1])
+		return enforce.ApplyFromDB(database)
 	}),
 }
+
+// simpleTamper are the tamper protection settings without a lock of their
+// own, by name: on is free, off refused while anything is locked.
+var simpleTamper = map[string]string{"clock": db.SettingTamperClock, "file-urls": enforce.SettingFileURLs}
 
 func tamperClockOn(database *db.DB) bool {
 	v, err := database.GetSetting(db.SettingTamperClock)

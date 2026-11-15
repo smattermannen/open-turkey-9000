@@ -41,7 +41,7 @@ import (
 // exceptions spare. Greyscale and no-images only go to the extension (see
 // BuildRules). Apps are blocked whatever the lists do.
 func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp blocker.BrowserPolicy) {
-	var blockDomains, hostDomains, patterns, exceptions, appList []string
+	var blockDomains, hostDomains, patterns, exceptions, appList, files []string
 
 	for _, b := range active {
 		appList = append(appList, b.Apps...)
@@ -59,6 +59,15 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 				continue
 			}
 			used = true
+			if fileURLsOn.Load() {
+				// Local files (§3.1): only those the block's own file
+				// exceptions (file://* by default, R-LIST-3) don't spare.
+				for _, e := range addresses {
+					if !blocker.WebPattern(e) && !blocker.FileCovered(e, b.Lists.ExceptionAddresses()) {
+						files = append(files, e)
+					}
+				}
+			}
 			domains, pats := blocker.SplitURLEntries(addresses)
 			blockDomains = append(blockDomains, domains...)
 			patterns = append(patterns, pats...)
@@ -77,6 +86,7 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 		BlockDomains:  blockDomains,
 		BlockPatterns: patterns,
 		Exceptions:    exceptions,
+		BlockFiles:    files,
 	}
 	return blocker.ValidDomains(hostDomains), dedup(appList), bp
 }
@@ -223,8 +233,24 @@ func apply(active []db.ActiveBlockDetail, cut bool) error {
 // the user's own addresses.
 const SettingDNS = "dns"
 
-// loadDNSChoice hands the DNS setting to the blocker.
+// SettingFileURLs is tamper protection "allow file:// blocking" (§4.10):
+// "on" lets blacklists' file:// entries block local files in browsers.
+const SettingFileURLs = "tamper.file-urls"
+
+// fileURLsOn is SettingFileURLs, loaded with the DNS choice before each
+// apply (Inputs takes no database).
+var fileURLsOn atomic.Bool
+
+// FileURLsOn reports whether file:// blocking is allowed.
+func FileURLsOn(d *db.DB) bool {
+	v, err := d.GetSetting(SettingFileURLs)
+	return err == nil && v == "on"
+}
+
+// loadDNSChoice hands the DNS setting to the blocker, and loads the file://
+// blocking setting.
 func loadDNSChoice(d *db.DB) {
+	fileURLsOn.Store(FileURLsOn(d))
 	choice, err := d.GetSetting(SettingDNS)
 	if err != nil {
 		log.Printf("daemon: dns setting: %v", err)

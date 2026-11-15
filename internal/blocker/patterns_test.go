@@ -1,6 +1,9 @@
 package blocker
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTranslatePattern(t *testing.T) {
 	cases := []struct{ in, firefox, chromium string }{
@@ -54,4 +57,31 @@ func TestFileExceptionStaysOutOfPolicy(t *testing.T) {
 	if ff, _ := translated([]string{"https://*.example.com/x"}); len(ff) != 1 {
 		t.Errorf("a web pattern was dropped: %v", ff)
 	}
+}
+
+// §3.1: local file entries go into the policies as given; a block's file
+// exceptions spare what they cover.
+func TestFilePatterns(t *testing.T) {
+	got := FilePatterns([]string{"file://*", "file:///home/me/games/*", "file:///a/*/b", "https://x.com", "file://rel", "file:///a b"})
+	if strings.Join(got, " ") != "file:///* file:///home/me/games/*" {
+		t.Errorf("FilePatterns = %q", got)
+	}
+	if !FileCovered("file:///home/me/games/x.html", []string{"file://*"}) ||
+		!FileCovered("file:///home/me/games/x.html", []string{"file:///home/me/*"}) ||
+		FileCovered("file:///home/me/games/x.html", []string{"file:///tmp/*"}) {
+		t.Error("FileCovered")
+	}
+	p := BrowserPolicy{BlockFiles: []string{"file:///home/me/games/*"}}
+	if p.Empty() || !contains(firefoxBlockSet(p), "file:///home/me/games/*") || !contains(chromiumBlockSet(p), "file:///home/me/games/*") {
+		t.Errorf("policy: %v / %v", firefoxBlockSet(p), chromiumBlockSet(p))
+	}
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }

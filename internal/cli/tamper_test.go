@@ -170,3 +170,23 @@ func TestForceLibreWolfAlias(t *testing.T) {
 		t.Error("the alias is shown in the browser command's help")
 	}
 }
+
+// §4.10: allow file:// blocking is a tamper protection setting: on is free,
+// off is refused while anything is locked; it goes in a project.
+func TestTamperFileURLs(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "tamper", "file-urls", "on")
+	if v, _ := d.GetSetting("tamper.file-urls"); v != "on" {
+		t.Fatalf("setting = %q", v)
+	}
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "tamper", "file-urls", "off"); err == nil {
+		t.Error("turned off while a block is locked")
+	}
+	if !strings.Contains(capture(t, "project", "export"), `"file-urls": true`) {
+		t.Error("not in the project")
+	}
+}

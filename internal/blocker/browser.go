@@ -73,11 +73,15 @@ type BrowserPolicy struct {
 	AllowDomains []string
 	// Exceptions are entries that stay reachable despite the block.
 	Exceptions []string
+	// BlockFiles are local file entries to block (file:///home/me/games/*),
+	// with tamper protection "allow file:// blocking" on (§3.1, §4.10).
+	BlockFiles []string
 }
 
 // empty reports whether the policy would block nothing.
 func (p BrowserPolicy) Empty() bool {
-	return !p.AllowMode && len(ValidDomains(p.BlockDomains)) == 0 && len(ValidPatterns(p.BlockPatterns)) == 0
+	return !p.AllowMode && len(ValidDomains(p.BlockDomains)) == 0 && len(ValidPatterns(p.BlockPatterns)) == 0 &&
+		len(FilePatterns(p.BlockFiles)) == 0
 }
 
 // =============================================================================
@@ -122,10 +126,10 @@ func firefoxBlockSet(p BrowserPolicy) []string {
 	if p.AllowMode {
 		// Block all http/https URLs; allowed sites go in Exceptions.
 		ffPatterns, _ := translated(p.BlockPatterns)
-		return dedupSort(append([]string{"*://*/*"}, ffPatterns...))
+		return dedupSort(append(append([]string{"*://*/*"}, ffPatterns...), FilePatterns(p.BlockFiles)...))
 	}
 	ffPatterns, _ := translated(p.BlockPatterns)
-	return dedupSort(append(firefoxPatterns(ValidDomains(p.BlockDomains)), ffPatterns...))
+	return dedupSort(append(append(firefoxPatterns(ValidDomains(p.BlockDomains)), ffPatterns...), FilePatterns(p.BlockFiles)...))
 }
 
 // firefoxExceptionSet builds Firefox's WebsiteFilter.Exceptions array (only
@@ -145,10 +149,10 @@ func firefoxExceptionSet(p BrowserPolicy) []string {
 func chromiumBlockSet(p BrowserPolicy) []string {
 	if p.AllowMode {
 		_, crPatterns := translated(p.BlockPatterns)
-		return dedupSort(append([]string{"*"}, crPatterns...))
+		return dedupSort(append(append([]string{"*"}, crPatterns...), FilePatterns(p.BlockFiles)...))
 	}
 	_, crPatterns := translated(p.BlockPatterns)
-	return dedupSort(append(chromiumFilters(ValidDomains(p.BlockDomains)), crPatterns...))
+	return dedupSort(append(append(chromiumFilters(ValidDomains(p.BlockDomains)), crPatterns...), FilePatterns(p.BlockFiles)...))
 }
 
 // chromiumAllowSet builds the URLAllowlist array (only meaningful in allowlist

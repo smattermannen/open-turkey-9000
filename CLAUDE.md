@@ -77,6 +77,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
     `resolveAll`: 16 parallel, 30 min cache.
   - Browser policies (Firefox, Chrome, Chromium, Brave, Edge, Opera,
     Vivaldi): blocklist, allowlist, wildcards, DoH off.
+    `file://` entries (`BlockFiles`, `FilePatterns`) only with tamper
+    `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions.
   - Process kill: exact name, Flatpak ID (`app-flatpak-<ID>-<n>.scope` or
     `/.flatpak-info`), desktop units `app-[<launcher>-]<ID>-<n>.scope`/`@….service`
     with ID equal to or ending in `.<name>`; descendants too, except under

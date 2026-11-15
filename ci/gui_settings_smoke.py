@@ -120,7 +120,7 @@ check(any("locked" in m for m in msgs), "refusal shown: " + "; ".join(msgs))
 # nothing); its lock line shows a lock; it can't be turned off while locked.
 if supported:
     answer(Gtk.ResponseType.OK, {"unsupported-browsers": True}); win.tamper_dialog(); settle()
-    check(cli("tamper").stdout.splitlines()[1].startswith("unsupported-browsers on"), "OK turns block unsupported browsers on")
+    check(any(l.startswith("unsupported-browsers on") for l in cli("tamper").stdout.splitlines()), "OK turns block unsupported browsers on")
     r = cli("tamper", "unsupported-browsers", "on", "--for", "1h", "--yes"); check(r.returncode == 0, "locked: " + r.stderr)
     settle()
     status, _unlock = win.setting_locks["unsupported-browsers"]

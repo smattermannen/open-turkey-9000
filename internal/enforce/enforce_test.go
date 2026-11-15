@@ -254,3 +254,29 @@ func TestInputsEverythingExcept(t *testing.T) {
 		t.Errorf("policy = %+v; want *.* except work.com and docs.com", bp)
 	}
 }
+
+// §3.1, §4.10: with "allow file:// blocking" on, a blacklist's file entries
+// reach the browser policy unless the block's file exceptions (file://* by
+// default, R-LIST-3) spare them; off, they never do.
+func TestFileEntriesInPolicy(t *testing.T) {
+	t.Cleanup(func() { fileURLsOn.Store(false) })
+	url := db.Where{URL: true}
+	block := func(except ...string) []db.ActiveBlockDetail {
+		return []db.ActiveBlockDetail{{BlockName: "b", Lists: db.Lists{
+			blacklist("Blocked", url, "reddit.com", "file:///home/me/games/*"),
+			exceptionList("Exceptions", url, except...)}}}
+	}
+	if _, _, bp := Inputs(block()); len(bp.BlockFiles) != 0 {
+		t.Errorf("setting off: %v", bp.BlockFiles)
+	}
+	fileURLsOn.Store(true)
+	if _, _, bp := Inputs(block()); len(bp.BlockFiles) != 1 {
+		t.Errorf("setting on, no exception: %v", bp.BlockFiles)
+	}
+	if _, _, bp := Inputs(block("file://*")); len(bp.BlockFiles) != 0 {
+		t.Errorf("spared by file://*: %v", bp.BlockFiles)
+	}
+	if _, _, bp := Inputs(block("file:///tmp/*")); len(bp.BlockFiles) != 1 {
+		t.Errorf("an unrelated file exception spared it: %v", bp.BlockFiles)
+	}
+}

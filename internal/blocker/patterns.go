@@ -143,3 +143,50 @@ func IsAddressEntry(e string) bool {
 	}
 	return IsURLEntry(e)
 }
+
+// FilePatterns keeps the local file entries that can go in a browser policy
+// as they are: "file://" plus an absolute path of plain characters, with *
+// only at the end ("file:///home/me/games/*"); "file://*" means every local
+// file ("file:///*"). Firefox and Chrome both read that form.
+func FilePatterns(entries []string) []string {
+	var out []string
+	for _, e := range entries {
+		e = strings.TrimSpace(e)
+		if !strings.HasPrefix(strings.ToLower(e), "file://") {
+			continue
+		}
+		path := e[len("file://"):]
+		if path == "*" {
+			path = "/*"
+		}
+		if !strings.HasPrefix(path, "/") || strings.Contains(strings.TrimSuffix(path, "*"), "*") {
+			continue
+		}
+		ok := true
+		for _, r := range path {
+			if r < 0x21 || r == 0x7f || strings.ContainsRune(`"'\<>`+"`", r) {
+				ok = false
+			}
+		}
+		if ok {
+			out = append(out, "file://"+path)
+		}
+	}
+	return out
+}
+
+// FileCovered reports whether a local file entry is spared by one of a
+// block's file exceptions: "file://*" spares every file, "file:///a/*"
+// everything under /a, otherwise the same entry.
+func FileCovered(entry string, exceptions []string) bool {
+	want := FilePatterns([]string{entry})
+	if len(want) == 0 {
+		return true
+	}
+	for _, x := range FilePatterns(exceptions) {
+		if x == want[0] || (strings.HasSuffix(x, "*") && strings.HasPrefix(strings.TrimSuffix(want[0], "*"), strings.TrimSuffix(x, "*"))) {
+			return true
+		}
+	}
+	return false
+}

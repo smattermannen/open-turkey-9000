@@ -228,6 +228,7 @@ type guiState struct {
 	PasswordLocks bool                      `json:"password_for_locks"`
 	DNS           string                    `json:"dns"`
 	TamperClock   bool                      `json:"tamper_clock"`
+	FileURLs      bool                      `json:"tamper_file_urls"`
 	// UnsupportedBrowsers is block unsupported browsers, with its lock;
 	// Browsers the supported browsers (§4.10 Browsers).
 	UnsupportedBrowsers bool           `json:"unsupported_browsers"`
@@ -346,6 +347,7 @@ var guiStateCmd = &cobra.Command{
 		if v, err := database.GetSetting(db.SettingTamperClock); err == nil {
 			state.TamperClock = v == "on"
 		}
+		state.FileURLs = enforce.FileURLsOn(database)
 		if v, err := database.GetSetting(SettingPasswordForLocks); err == nil {
 			state.PasswordLocks = v == "on" && state.SettingsPass
 		}

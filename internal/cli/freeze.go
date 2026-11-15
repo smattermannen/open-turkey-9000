@@ -232,6 +232,7 @@ type guiState struct {
 	TamperClock   bool                      `json:"tamper_clock"`
 	FileURLs      bool                      `json:"tamper_file_urls"`
 	DesktopWarn   string                    `json:"desktop_warning,omitempty"` // R-DESKTOP-1
+	Notifications enforce.NoticeOptions     `json:"notifications"`
 	// UnsupportedBrowsers is block unsupported browsers, with its lock;
 	// Browsers the supported browsers (§4.10 Browsers).
 	UnsupportedBrowsers bool           `json:"unsupported_browsers"`
@@ -352,6 +353,7 @@ var guiStateCmd = &cobra.Command{
 		}
 		state.FileURLs = enforce.FileURLsOn(database)
 		state.DesktopWarn = blocker.DesktopWarning()
+		state.Notifications = enforce.LoadNoticeOptions(database)
 		if v, err := database.GetSetting(SettingPasswordForLocks); err == nil {
 			state.PasswordLocks = v == "on" && state.SettingsPass
 		}

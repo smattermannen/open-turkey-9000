@@ -150,6 +150,13 @@ settle()
 check("locks on again in" in status.get_text(), "lifted lock shown: " + status.get_text())
 check(win.browser_switches["web-only"].get_sensitive(), "lifted: switch usable")
 
+# §4.10 notifications from the Settings page.
+win.notice_checks["window-end"].set_active(False); settle()
+check("window-end" in (state()["notifications"].get("off") or []), "a notification turned off from its box")
+win.notice_advance.set_text("2,5"); win.apply_notice_advance(None); settle()
+check(state()["notifications"]["advance"] == [2, 5], "advance minutes saved")
+check(not win.notice_checks["window-end"].get_active() and win.notice_checks["timer-end"].get_active(), "boxes show the state")
+
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
 

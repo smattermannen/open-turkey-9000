@@ -418,6 +418,16 @@ LOCK_KIND_NAMES = {"timer": "timer lock", "text": "text lock", "password": "pass
                    "restart": "restart lock", "delay": "delay lock"}
 
 
+NOTICE_KINDS = (
+    ("window-start", "A window opens"),
+    ("window-end", "A window closes"),
+    ("timer-end", "A timer lock ends"),
+    ("pomodoro", "Pomodoro work or rest begins"),
+    ("allowance", "An allowance runs out"),
+    ("app-blocked", "A blocked app was closed"),
+)
+
+
 def block_summary(block):
     """One line describing a block's state and locks."""
     parts = ["Active" if block["active"] else "Inactive"]
@@ -4674,6 +4684,28 @@ class Window(Gtk.ApplicationWindow):
                                     "tools also can't be turned off while a block is locked."), *rows),
             False, False, 0)
 
+        # §4.10 notifications: which ones, and how many minutes ahead.
+        self.notice_checks = {}
+        notice_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3,
+                                  column_spacing=12, row_spacing=2)
+        for key, title in NOTICE_KINDS:
+            check = Gtk.CheckButton(label=title)
+            check.connect("toggled", self.toggle_notice, key)
+            self.notice_checks[key] = check
+            notice_flow.add(check)
+        advance_row = Gtk.Box(spacing=6)
+        advance_row.pack_start(Gtk.Label(label="Minutes ahead:"), False, False, 0)
+        self.notice_advance = Gtk.Entry(width_chars=10, placeholder_text="2,5")
+        advance_apply = Gtk.Button(label="Apply")
+        advance_apply.connect("clicked", self.apply_notice_advance)
+        advance_row.pack_start(self.notice_advance, False, False, 0)
+        advance_row.pack_start(advance_apply, False, False, 0)
+        box.pack_start(section(
+            "Notifications",
+            dim("Desktop notifications before things happen. A scheduled Frozen Chicken is "
+                "always announced."),
+            notice_flow, advance_row), False, False, 0)
+
         dns_row = Gtk.Box(spacing=6)
         self.dns_choice = Gtk.ComboBoxText()
         for key, label in (("network", "The network's own server, then Quad9"),
@@ -4942,6 +4974,16 @@ class Window(Gtk.ApplicationWindow):
         self.nepsis_label.set_text(text)
         for name, switch in self.browser_switches.items():
             set_switch(switch, self.state["browser"].get(name, False))
+        notices = self.state.get("notifications") or {}
+        off = set(notices.get("off") or [])
+        was, self.updating = self.updating, True
+        try:
+            for key, check in self.notice_checks.items():
+                check.set_active(key not in off)
+        finally:
+            self.updating = was
+        if not self.notice_advance.has_focus():
+            self.notice_advance.set_text(",".join(str(m) for m in notices.get("advance") or [5]))
         for name, (label, unlock) in self.setting_locks.items():
             info = self.setting_lock_info(name)
             parts = describe_setting_lock(info)
@@ -5145,6 +5187,14 @@ class Window(Gtk.ApplicationWindow):
             subprocess.Popen(["x-terminal-emulator", "-e", command])
         except OSError as error:
             self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+
+    def toggle_notice(self, check, key):
+        if self.updating:
+            return
+        self.run(["notifications", key, "on" if check.get_active() else "off"])
+
+    def apply_notice_advance(self, _button):
+        self.run(["notifications", "advance", self.notice_advance.get_text().replace(" ", "")])
 
     def toggle_browser(self, _switch, wanted, name):
         if self.updating:

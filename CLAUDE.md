@@ -430,9 +430,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Hotkeys**: `ctrl|alt|shift|super+key`, F1–F24 alone; shown as
   "KC9K: …" in keyboard settings; notification on press; on an active block
   only extends the lock. Older hotkeys ask at each press.
-- **Notifications** (`notify-send`): 5 min before a schedule starts, before a
-  scheduled freeze (5 and 1 min, naming the mode), at 5 min allowance left;
-  each once.
+- **Notifications** (`notify-send`, `enforce/notices.go`, `kc9k notifications`):
+  user picks kinds (window start/end, timer lock end, Pomodoro, allowance,
+  app closed) and advance minutes (default 5; each advance once); windows
+  only of blocks that are on; scheduled freeze always (5 and 1 min).
 - **Settings password**: needed for weakening, `stop`, `unlock`, schedules,
   allowances, browser settings off, strict off, no-escape, uninstall. Free:
   reading, starting, adding entries, actions on, opening a session. GUI

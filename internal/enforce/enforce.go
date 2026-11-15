@@ -428,6 +428,10 @@ func killApps(d *db.DB, apps []string, kind string, blocks ...string) {
 	} else if killed > 0 {
 		log.Printf("daemon: %d blocked processes terminated", killed)
 		logEventFor(d, kind, blocks, "")
+		if kind == db.EventApp && LoadNoticeOptions(d).On(NoticeAppBlocked) {
+			noticeOnce("app-blocked "+time.Now().Format("2006-01-02 15:04"), "A blocked app was closed",
+				"Killer Chicken 9000 closed it: it is in a block that is on.")
+		}
 	}
 }
 

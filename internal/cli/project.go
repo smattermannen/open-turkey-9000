@@ -113,6 +113,8 @@ type projectExport struct {
 	Backup  *backupExtras     `json:"backup,omitempty"` // backups only
 	// Circadian is the circadian rhythm with its wallpapers (2.1).
 	Circadian *circadianExport `json:"circadian,omitempty"`
+	// Notifications are the notification choices (§4.10).
+	Notifications *enforce.NoticeOptions `json:"notifications,omitempty"`
 }
 
 func exportWindow(w schedule.Window) windowExport {
@@ -429,6 +431,10 @@ passwords, hotkeys and statistics are never in it.`,
 			out.Freezes = append(out.Freezes, w)
 		}
 		out.Circadian = exportCircadian(database)
+		if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
+			n := enforce.LoadNoticeOptions(database)
+			out.Notifications = &n
+		}
 		if !share {
 			if out.Backup, err = exportBackupExtras(database); err != nil {
 				return err
@@ -794,6 +800,18 @@ With --dry-run, says what would happen and changes nothing.`,
 		}
 		if err := importCircadian(database, in.Circadian, dry, say); err != nil {
 			return err
+		}
+		if n := in.Notifications; n != nil && len(n.Advance) > 0 {
+			if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
+				fmt.Println("Notification choices are set here already: left as they are.")
+			} else {
+				say("set the notification choices")
+				if !dry {
+					if err := enforce.SaveNoticeOptions(database, *n); err != nil {
+						return err
+					}
+				}
+			}
 		}
 		for _, f := range newFreezes {
 			say("add a scheduled Frozen Chicken: %s (%s)", f.w, f.mode)

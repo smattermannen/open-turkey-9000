@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/quota"
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
@@ -53,5 +54,43 @@ func TestUpcomingNotices(t *testing.T) {
 	b := UpcomingNotices(blocks, nil, nil, nil, at(8, 58))
 	if len(a) != 1 || len(b) != 1 || a[0].Key != b[0].Key {
 		t.Errorf("keys differ for one event: %+v %+v", a, b)
+	}
+}
+
+// §4.10: the user's choices: kinds off, several advances (each once), and
+// the new events: window end, timer lock end, Pomodoro change.
+func TestNoticeChoices(t *testing.T) {
+	at := func(h, m int) time.Time { return time.Date(2026, 11, 16, h, m, 0, 0, time.Local) }
+	w := []schedule.Window{{Days: schedule.AllDays, Start: 9 * 60, End: 10 * 60}}
+	in := NoticeInput{BlockWindows: map[string][]schedule.Window{"b": w},
+		TimerEnds: map[string]int64{"t": at(12, 3).Unix()},
+		Pomodoros: map[string]quota.Cycle{"p": {On: 25 * 60, Off: 5 * 60, Anchor: at(13, 0).Unix()}}}
+	o := NoticeOptions{Advance: []int{2, 5}}
+	keys := func(ns []Notice) string {
+		var out []string
+		for _, n := range ns {
+			out = append(out, n.Title)
+		}
+		return strings.Join(out, " | ")
+	}
+	if got := keys(Notices(in, o, at(8, 56))); got != "'b' starts in 4 minutes" {
+		t.Errorf("8:56: %q", got)
+	}
+	a, b := Notices(in, o, at(8, 56)), Notices(in, o, at(8, 58))
+	if a[0].Key == b[0].Key {
+		t.Error("the 2-minute warning has the same key as the 5-minute one")
+	}
+	if got := keys(Notices(in, o, at(9, 57))); got != "'b' ends in 3 minutes" {
+		t.Errorf("9:57: %q", got)
+	}
+	if got := keys(Notices(in, o, at(12, 1))); got != "The timer lock of 't' ends in 2 minutes" {
+		t.Errorf("12:01: %q", got)
+	}
+	if got := keys(Notices(in, o, at(13, 22))); got != "'p': rest in 3 minutes" {
+		t.Errorf("13:22: %q", got)
+	}
+	o.Off = []string{NoticeWindowStart}
+	if got := Notices(in, o, at(8, 56)); len(got) != 0 {
+		t.Errorf("window-start off: %q", keys(got))
 	}
 }

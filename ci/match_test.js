@@ -158,6 +158,23 @@ const failed0 = [];
   console.log("typical page judged in " + slowest + " ms");
 }
 
+// §3.9 strongest action across blocks: consequence > close tab > image >
+// redirect > block page; look actions only when none applies.
+{
+  const rule = (id, block, action) => ({ id, block, name: "L", url: ["example.com"], title: [], text: [],
+    actions: [{ action, distinct: 1, hits: 1, param: action === "redirect" ? "https://x.org/" : "" }],
+    except: { url: [], title: [], text: [] } });
+  const page = { url: "https://example.com/" };
+  const outcome = (...rules) => kc9kOutcome(kc9kListMatches(kc9kCompileLists(rules), page));
+  const a = outcome(rule(1, "a", "block"), rule(2, "b", "redirect"), rule(3, "c", "greyscale"));
+  const b = outcome(rule(1, "a", "redirect"), rule(2, "b", "close-tab"));
+  const c = outcome(rule(1, "a", "close-tab"), rule(2, "b", "logout"));
+  const d = outcome(rule(1, "a", "greyscale"));
+  if (a.page !== "redirect" || b.page !== "close-tab" || !c.device || kc9kTakesAway(d)) {
+    failed0.push("strongest action across blocks: " + JSON.stringify([a, b, c, d]));
+  }
+}
+
 // §3.9 rate: matches per 1,000 words, on pages of at least 200 words.
 {
   const rated = (rate) => kc9kCompileLists([{

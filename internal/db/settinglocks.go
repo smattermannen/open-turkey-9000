@@ -109,7 +109,9 @@ func (l SettingLock) PendingRelock(trusted int64) bool {
 }
 
 // TimeLocked reports whether the time lock is running or waiting.
-func (l SettingLock) TimeLocked(trusted int64) bool { return l.LockedUntil > trusted || l.TimerAfter > 0 }
+func (l SettingLock) TimeLocked(trusted int64) bool {
+	return l.LockedUntil > trusted || l.TimerAfter > 0
+}
 
 // RestartLocked reports whether the lock lasts until a restart that hasn't
 // happened yet (or waits behind other locks).

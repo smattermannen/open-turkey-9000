@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/enforce"
+	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
 // §4.12: toggle switches a block on (no locks) or off; a locked block stays
@@ -94,5 +97,20 @@ func TestStrictExempt(t *testing.T) {
 	mustRun(t, "strict", "exempt", "remove", dir)
 	if got := enforce.ExemptFolders(d); len(got) != 0 {
 		t.Errorf("after remove: %v", got)
+	}
+}
+
+// §4.1: the windows still to come (or open) today.
+func TestWindowsLeftToday(t *testing.T) {
+	mon := time.Date(2026, 11, 16, 12, 30, 0, 0, time.Local)
+	ws := []schedule.Window{
+		{Days: schedule.AllDays, Start: 9 * 60, End: 10 * 60},
+		{Days: schedule.AllDays, Start: 12 * 60, End: 13 * 60},
+		{Days: 1 << uint(time.Monday), Start: 18 * 60, End: 24 * 60, Allow: true},
+		{Days: 1 << uint(time.Tuesday), Start: 14 * 60, End: 15 * 60},
+	}
+	got := strings.Join(windowsLeftToday(ws, mon), " | ")
+	if got != "12:00-13:00 | allow 18:00-24:00" {
+		t.Errorf("left today = %q", got)
 	}
 }

@@ -669,6 +669,11 @@ var statusCmd = &cobra.Command{
 				if enforce.LiftedBySchedule(database, detail.Name, time.Now()) {
 					tags += " [lifted by its schedule]"
 				}
+				if schedules, err := database.ListSchedules(detail.Name); err == nil {
+					if left := windowsLeftToday(db.Windows(schedules), time.Now()); len(left) > 0 {
+						tags += " [today: " + strings.Join(left, ", ") + "]" // §4.1
+					}
+				}
 				if q, _ := database.GetQuota(detail.Name); q != nil && q.Open {
 					tags += " [lifted: allowance session open]"
 				}

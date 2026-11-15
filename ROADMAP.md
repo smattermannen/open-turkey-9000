@@ -144,7 +144,6 @@ Only items not simply Built.
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Not built | |
-| §4.1 Windows still to come today | Unchecked | |
 | §4.3 Draft Save/Cancel | Not built | changes apply at once |
 | §4.3 Ctrl+F, multi-select, double-click edit | Unchecked | |
 | §4.3 Import "From KC9K" | Unchecked | file import/export built |

@@ -150,3 +150,22 @@ func describeRange(e db.LockExtras) string {
 	}
 	return text
 }
+
+// windowsLeftToday lists a block's windows that are still to come or open
+// today, as "14:00-16:00" ("allow 18:00-24:00" for allow windows) (§4.1).
+func windowsLeftToday(ws []schedule.Window, now time.Time) []string {
+	minute := now.Hour()*60 + now.Minute()
+	var out []string
+	for _, w := range ws {
+		if w.Days&(1<<uint(now.Weekday())) == 0 || w.End <= minute {
+			continue
+		}
+		text := schedule.FormatMinutes(w.Start) + "-" + schedule.FormatMinutes(w.End)
+		if w.Allow {
+			text = "allow " + text
+		}
+		out = append(out, text)
+	}
+	sort.Strings(out)
+	return out
+}

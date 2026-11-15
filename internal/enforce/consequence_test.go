@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,16 +15,32 @@ import (
 	"github.com/smattermannen/kc9k/internal/quota"
 )
 
+// didMu guards the list fakeDevice records into.
+var didMu sync.Mutex
+
+// joinDid reads what fakeDevice recorded, under its lock.
+func joinDid(did *[]string) string {
+	didMu.Lock()
+	defer didMu.Unlock()
+	return strings.Join(*did, " ")
+}
+
 // fakeDevice replaces what consequences do to the computer and records it.
 func fakeDevice(t *testing.T) *[]string {
 	t.Helper()
 	var did []string
+	// Announced consequences run on a timer's goroutine: record under a lock.
+	record := func(what string) {
+		didMu.Lock()
+		defer didMu.Unlock()
+		did = append(did, what)
+	}
 	saved := []any{closeBrowsers, logoutUsers, powerOff, notifyDesktop, applyFreeze}
-	closeBrowsers = func() error { did = append(did, "close-browsers"); return nil }
-	logoutUsers = func() error { did = append(did, "logout"); return nil }
-	powerOff = func() error { did = append(did, "poweroff"); return nil }
-	notifyDesktop = func(title, _ string) { did = append(did, "notify") }
-	applyFreeze = func(*db.DB, time.Time) { did = append(did, "freeze") }
+	closeBrowsers = func() error { record("close-browsers"); return nil }
+	logoutUsers = func() error { record("logout"); return nil }
+	powerOff = func() error { record("poweroff"); return nil }
+	notifyDesktop = func(title, _ string) { record("notify") }
+	applyFreeze = func(*db.DB, time.Time) { record("freeze") }
 	t.Cleanup(func() {
 		closeBrowsers = saved[0].(func() error)
 		logoutUsers = saved[1].(func() error)
@@ -509,11 +526,11 @@ func TestListLogoutAnnounced(t *testing.T) {
 	runAnnounced(d, c, "test")
 	runAnnounced(d, c, "test") // a second hit meanwhile
 	time.Sleep(100 * time.Millisecond)
-	if got := strings.Join(*did, " "); got != "notify" {
+	if got := joinDid(did); got != "notify" {
 		t.Fatalf("before the delay: %q; want one announcement", got)
 	}
 	time.Sleep(500 * time.Millisecond)
-	if got := strings.Join(*did, " "); got != "notify notify logout" {
+	if got := joinDid(did); got != "notify notify logout" {
 		t.Errorf("after the delay: %q", got)
 	}
 }

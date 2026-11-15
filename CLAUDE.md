@@ -25,6 +25,7 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 ```
 
 - No CGo (`modernc.org/sqlite`). Check: `CGO_ENABLED=0 go build ./...`.
+- Race check (tests only, needs gcc): `CGO_ENABLED=1 go test -race ./internal/...`.
 - Run tests as a normal user, never `sudo`: as root `KC9K_DB` is ignored and
   `internal/cli` tests would hit the real DB (they refuse).
 - Install: `/usr/local/bin/kc9k-bin` (binary), `kc9k` wrapper (`exec sudo`),

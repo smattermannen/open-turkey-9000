@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -62,7 +63,8 @@ func settingLocked(d *db.DB, trusted int64, skip string) (bool, error) {
 		if l.Name == skip {
 			continue
 		}
-		if (IsLockableSetting(l.Name) || l.Name == db.NepsisLockName || l.Name == StrictLockName) && l.InForce(trusted, bootID) {
+		if (IsLockableSetting(l.Name) || l.Name == db.NepsisLockName || l.Name == StrictLockName ||
+			strings.HasPrefix(l.Name, FreezeLockPrefix)) && l.InForce(trusted, bootID) {
 			return true, nil
 		}
 	}
@@ -239,6 +241,10 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 		log.Printf("daemon: noexec: %v", err)
 	}
 }
+
+// FreezeLockPrefix names a scheduled freeze's setting lock: "freeze:<id>"
+// (§3.8: a scheduled freeze can have locks).
+const FreezeLockPrefix = "freeze:"
 
 // SettingStrictExempt holds strict mode's exempt folders (§3.8), JSON.
 const SettingStrictExempt = "strict.exempt"

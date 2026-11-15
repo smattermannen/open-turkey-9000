@@ -13,7 +13,9 @@ package cli
 
 import (
 	"fmt"
+	"github.com/smattermannen/kc9k/internal/lock"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -121,6 +123,11 @@ var freezeScheduleListCmd = &cobra.Command{
 			if s.LockLead >= 0 {
 				note += fmt.Sprintf("  [lock from %s before]", time.Duration(s.LockLead)*time.Minute)
 			}
+			if l, err := loadSettingLock(database, freezeLockName(s.ID)); err == nil {
+				if text := l.describe(); text != "" {
+					note += "  [" + text + "]"
+				}
+			}
 			fmt.Printf("%d. %s (%s)%s\n", s.Num, s.Window, s.Mode, note)
 		}
 		return nil
@@ -147,12 +154,19 @@ var freezeScheduleRemoveCmd = &cobra.Command{
 		if enforce.FreezeScheduleHeld(s, time.Now()) {
 			return refused(database, "", fmt.Errorf("freeze schedule %d (%s) is locked: it is running or starts within its lock's lead time; it can be removed once it ends", num, s.Window))
 		}
+		if l, err := loadSettingLock(database, freezeLockName(s.ID)); err != nil {
+			return err
+		} else if l.lock.InForce(l.trusted, l.bootID) {
+			// R-FREEZE-2: a locked scheduled freeze can't be removed.
+			return refused(database, "", fmt.Errorf("freeze schedule %d is locked (%s); 'kc9k freeze schedule unlock %d' first", num, l.describe(), num))
+		}
 		if err := requireSettingsPassword(database); err != nil {
 			return err
 		}
 		if err := database.RemoveFreezeSchedule(s.ID); err != nil {
 			return err
 		}
+		_ = database.ClearSettingLock(freezeLockName(s.ID))
 		fmt.Printf("Freeze schedule %d removed: %s\n", num, s.Window)
 		return nil
 	}),
@@ -171,9 +185,9 @@ func leadMinutes(spec string, given bool) (int, error) {
 }
 
 var freezeScheduleLockCmd = &cobra.Command{
-	Use:   "lock [number] [on|off] [--lead D]",
-	Short: "Lock a freeze schedule: it can't be removed from the lead time before its window until it ends",
-	Args:  cobra.ExactArgs(2),
+	Use:   "lock [number] [on|off] [--lead D] | lock [number] [--for D|--until HH:MM|--lock|--password-stdin|--restart …]",
+	Short: "Lock a freeze schedule: a schedule lock with a lead time, or timer, text, password and restart locks",
+	Args:  cobra.RangeArgs(1, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		num, err := strconv.Atoi(args[0])
 		if err != nil {
@@ -187,6 +201,43 @@ var freezeScheduleLockCmd = &cobra.Command{
 			return fmt.Errorf("there is no freeze schedule %d", num)
 		}
 		s := schedules[num-1]
+		if lockFlagsGiven(cmd) {
+			// §3.8: the lock kinds of §3.4 on a scheduled freeze, as a
+			// setting lock "freeze:<id>" (R-FREEZE-2: then not removable).
+			if len(args) != 1 {
+				return fmt.Errorf("lock flags go without on|off")
+			}
+			if err := requireLockPassword(database); err != nil {
+				return err
+			}
+			name := freezeLockName(s.ID)
+			want, err := requestedSettingLock(cmd, database, name)
+			if err != nil {
+				return err
+			}
+			cur, err := loadSettingLock(database, name)
+			if err != nil {
+				return err
+			}
+			next, changes, err := strengthenSettingLock(cur, want, cmd.Flags().Changed("lock-chars"))
+			if err != nil {
+				return err
+			}
+			if len(changes) == 0 {
+				return fmt.Errorf("freeze schedule %d already has those locks", num)
+			}
+			if err := confirmLocks(cmd, settingLocks(fmt.Sprintf("freeze schedule %d (%s, %s mode)", num, s.Window, s.Mode), cur, next)...); err != nil {
+				return err
+			}
+			if err := database.SetSettingLock(next); err != nil {
+				return err
+			}
+			fmt.Printf("Freeze schedule %d is locked: %s\n", num, strings.Join(changes, ", "))
+			return nil
+		}
+		if len(args) != 2 {
+			return fmt.Errorf("use 'on' or 'off', or lock flags")
+		}
 		want := db.NoScheduleLock
 		switch args[1] {
 		case "on":
@@ -226,6 +277,43 @@ var freezeScheduleLockCmd = &cobra.Command{
 	}),
 }
 
+// freezeLockName is the setting lock of a scheduled freeze.
+func freezeLockName(id int) string { return enforce.FreezeLockPrefix + strconv.Itoa(id) }
+
+var freezeScheduleUnlockCmd = &cobra.Command{
+	Use:   "unlock [number]",
+	Short: "Unlock a freeze schedule's text or password lock",
+	Args:  cobra.ExactArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		num, err := strconv.Atoi(args[0])
+		if err != nil {
+			return fmt.Errorf("give the schedule's number from 'kc9k freeze schedule list'")
+		}
+		schedules, err := database.ListFreezeSchedules()
+		if err != nil {
+			return err
+		}
+		if num < 1 || num > len(schedules) {
+			return fmt.Errorf("there is no freeze schedule %d", num)
+		}
+		label := fmt.Sprintf("freeze schedule %d", num)
+		s, relocked, rest, err := unlockSetting(database, freezeLockName(schedules[num-1].ID), label, label+" is not locked by a text or password lock")
+		if err != nil {
+			return err
+		}
+		if len(rest) > 0 {
+			nextSettingLock(label, s, rest, "kc9k freeze schedule unlock "+args[0])
+			return nil
+		}
+		if relocked {
+			fmt.Printf("%s is unlocked for %s; then its locks are on again (re-lock).\n", label, time.Duration(s.lock.Relock)*time.Second)
+			return nil
+		}
+		fmt.Printf("%s is unlocked.\n", label)
+		return nil
+	}),
+}
+
 func init() {
 	freezeScheduleAddCmd.Flags().String("days", "daily", "Days: daily, weekdays, weekends, mon-fri, or mon,wed,fri")
 	freezeScheduleAddCmd.Flags().String("from", "", "Start time HH:MM (required)")
@@ -234,7 +322,16 @@ func init() {
 	freezeScheduleAddCmd.Flags().Bool("yes", false, "Confirm")
 	freezeScheduleAddCmd.Flags().String("lock-lead", "", "Lock the schedule from this long before each window (e.g. 2h; 0m: only while it runs)")
 	freezeScheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h)")
+	freezeScheduleLockCmd.Flags().String("for", "", "Timer lock: not removable for this long")
+	freezeScheduleLockCmd.Flags().String("until", "", "Timer lock until this clock time (HH:MM)")
+	freezeScheduleLockCmd.Flags().Bool("lock", false, "Text lock ('kc9k freeze schedule unlock N')")
+	freezeScheduleLockCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
+	freezeScheduleLockCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
+	freezeScheduleLockCmd.Flags().Bool("restart", false, "Restart lock: until the computer restarts")
+	addTextLockFlags(freezeScheduleLockCmd)
+	addRelockFlag(freezeScheduleLockCmd)
 	addYesFlag(freezeScheduleLockCmd)
-	freezeScheduleCmd.AddCommand(freezeScheduleAddCmd, freezeScheduleListCmd, freezeScheduleRemoveCmd, freezeScheduleLockCmd)
+	trackLockFlagOrder(freezeScheduleLockCmd)
+	freezeScheduleCmd.AddCommand(freezeScheduleAddCmd, freezeScheduleListCmd, freezeScheduleRemoveCmd, freezeScheduleLockCmd, freezeScheduleUnlockCmd)
 	freezeCmd.AddCommand(freezeScheduleCmd)
 }

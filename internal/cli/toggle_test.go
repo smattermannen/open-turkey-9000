@@ -217,3 +217,29 @@ func TestSessionLimitCommand(t *testing.T) {
 		t.Errorf("quota = %+v", q)
 	}
 }
+
+// §3.8, R-FREEZE-2: a scheduled freeze can have the lock kinds of §3.4;
+// while one holds it can't be removed, and it counts as a lock.
+func TestFreezeScheduleLocks(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	day := strings.ToLower(time.Now().AddDate(0, 0, 3).Weekday().String()[:3])
+	mustRun(t, "freeze", "schedule", "add", "--days", day, "--from", "03:00", "--to", "03:30", "--yes")
+	if err := runWith(t, 0, []string{"pw"}, "freeze", "schedule", "lock", "1", "--password-stdin", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	trusted, _ := d.TrustedNow(time.Now())
+	if locked, _ := enforce.AnySettingLocked(d, trusted); !locked {
+		t.Error("a locked freeze schedule doesn't count")
+	}
+	if err := runCLI(t, "freeze", "schedule", "remove", "1"); err == nil {
+		t.Error("removed a locked freeze schedule")
+	}
+	if err := runWith(t, 0, []string{"wrong"}, "freeze", "schedule", "unlock", "1"); err == nil {
+		t.Error("unlocked with a wrong password")
+	}
+	if err := runWith(t, 0, []string{"pw"}, "freeze", "schedule", "unlock", "1"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "freeze", "schedule", "remove", "1")
+}

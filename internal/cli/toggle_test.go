@@ -139,3 +139,27 @@ func TestAutostartCommand(t *testing.T) {
 		t.Error("removed an autostart of a locked block")
 	}
 }
+
+// §3.6: a delay break weakens when set or loosened, is free to remove.
+func TestDelayBreakCommand(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "break", "delay", "b", "10m", "30m")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "break", "delay", "b", "20m", "30m"); err == nil {
+		t.Error("a longer delay break while locked")
+	}
+	if err := runCLI(t, "break", "delay", "b", "10m", "5m"); err == nil {
+		t.Error("a shorter wait while locked")
+	}
+	mustRun(t, "break", "request", "b")
+	if k, _ := d.GetBreaks("b"); k.DelayAt == 0 {
+		t.Error("request didn't start the countdown")
+	}
+	if err := runCLI(t, "break", "request", "b"); err == nil {
+		t.Error("asked twice")
+	}
+	mustRun(t, "break", "delay", "b", "off")
+}

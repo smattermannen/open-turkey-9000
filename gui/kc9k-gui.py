@@ -3639,6 +3639,20 @@ class Window(Gtk.ApplicationWindow):
         relock_row.pack_start(self.relock_minutes, False, False, 0)
         relock_row.pack_start(Gtk.Label(label="min, then the block is back with its locks"), False, False, 0)
         relock_row.pack_start(relock_save, False, False, 0)
+        # §3.6 delay break: asked for, it begins after a countdown.
+        delay_row = Gtk.Box(spacing=6)
+        self.delay_break_check = Gtk.CheckButton(label="Delay break of")
+        self.delay_break_minutes = Gtk.SpinButton.new_with_range(1, 240, 1)
+        self.delay_break_minutes.set_value(10)
+        self.delay_wait_minutes = Gtk.SpinButton.new_with_range(1, 1440, 5)
+        self.delay_wait_minutes.set_value(30)
+        delay_save = Gtk.Button(label="Save")
+        delay_save.connect("clicked", self.set_delay_break)
+        self.delay_request = Gtk.Button(label="Request break")
+        self.delay_request.connect("clicked", lambda _b: self.selected and self.run(["break", "request", self.selected]))
+        for widget in (self.delay_break_check, self.delay_break_minutes, Gtk.Label(label="min, after waiting"),
+                       self.delay_wait_minutes, Gtk.Label(label="min"), delay_save, self.delay_request):
+            delay_row.pack_start(widget, False, False, 0)
         box.pack_start(section(
             "Breaks",
             dim("Break time is earned while the block is on and saved up to one allowance. Take "
@@ -3648,7 +3662,7 @@ class Window(Gtk.ApplicationWindow):
             dim("With the box below ticked, passing the typing challenge or giving the password "
                 "doesn't end the block: it lifts it for a while. Unlocking again during that "
                 "break ends it."),
-            relock_row), False, False, 0)
+            relock_row, delay_row), False, False, 0)
         return box
 
     def update_block_list(self):
@@ -3742,7 +3756,15 @@ class Window(Gtk.ApplicationWindow):
             text = "No reward."
         if block.get("relock"):
             text += f" Unlocking gives a break of {block['relock'] // 60} min."
+        if block.get("delay_break_in"):
+            text += f" Its delay break begins in {fmt_seconds(block['delay_break_in'])}."
         self.break_label.set_text(text)
+        if not self.delay_break_minutes.has_focus() and not self.delay_wait_minutes.has_focus():
+            self.delay_break_check.set_active(bool(block.get("delay_break")))
+            if block.get("delay_break"):
+                self.delay_break_minutes.set_value(block["delay_break"] // 60)
+                self.delay_wait_minutes.set_value(block.get("delay_wait", 0) // 60)
+        self.delay_request.set_sensitive(bool(block.get("delay_break")) and not block.get("delay_break_in") and not paused)
 
         self.start_button.set_label("Add locks…" if block["active"] else "Start…")
         # §3.4: unlocking lifts locks (a delay lock starts counting down) and
@@ -4087,6 +4109,15 @@ class Window(Gtk.ApplicationWindow):
         if self.selected:
             value = f"{self.relock_minutes.get_value_as_int()}m" if self.relock_check.get_active() else "off"
             self.run(["break", "text", self.selected, value])
+
+    def set_delay_break(self, _button):
+        if not self.selected:
+            return
+        if self.delay_break_check.get_active():
+            self.run(["break", "delay", self.selected, f"{self.delay_break_minutes.get_value_as_int()}m",
+                      f"{self.delay_wait_minutes.get_value_as_int()}m"])
+        else:
+            self.run(["break", "delay", self.selected, "off"])
 
     def clear_pomodoro(self, _button):
         if self.selected:

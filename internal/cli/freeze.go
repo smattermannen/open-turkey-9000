@@ -158,6 +158,9 @@ type guiBlock struct {
 	BreakPer       int64 `json:"break_per"`
 	BreakBalance   int64 `json:"break_balance"`
 	Relock         int64 `json:"relock"`
+	DelayBreak     int64 `json:"delay_break,omitempty"`    // §3.6: its length
+	DelayWait      int64 `json:"delay_wait,omitempty"`     // its countdown
+	DelayBreakIn   int64 `json:"delay_break_in,omitempty"` // asked: seconds until it begins
 	PausedSeconds  int64 `json:"paused_seconds"`
 }
 
@@ -526,6 +529,10 @@ var guiStateCmd = &cobra.Command{
 				return err
 			}
 			g.BreakAllowance, g.BreakPer, g.BreakBalance, g.Relock = k.Allowance, k.Per, k.Balance(), k.Relock
+			g.DelayBreak, g.DelayWait = k.DelayLength, k.DelayWait
+			if k.DelayAt > trusted {
+				g.DelayBreakIn = k.DelayAt - trusted
+			}
 			if until, _ := database.PausedUntil(b.Name); detail.Active && until > trusted {
 				g.PausedSeconds = until - trusted
 			}

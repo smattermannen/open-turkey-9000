@@ -164,6 +164,76 @@ var breakRelockCmd = &cobra.Command{
 	}),
 }
 
+var breakDelayCmd = &cobra.Command{
+	Use:   "delay [block] [length wait|off]",
+	Short: "Delay break: asking for it ('break request') gives a break of length after a countdown of wait",
+	Long: `A delay break (§3.6) is a preset break that starts after a countdown: with
+'kc9k break delay work 10m 30m', 'kc9k break request work' starts a 30-minute
+countdown, then the block is lifted for 10 minutes. The block stays locked.
+A longer break or a shorter wait weakens; 'off' is always allowed.`,
+	Args: cobra.RangeArgs(2, 3),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		old, err := database.GetBreaks(args[0])
+		if err != nil {
+			return err
+		}
+		if _, err := database.GetBlock(args[0]); err != nil {
+			return err
+		}
+		k := old
+		if args[1] == "off" {
+			k.DelayLength, k.DelayWait, k.DelayAt = 0, 0, 0
+		} else {
+			if len(args) != 3 {
+				return fmt.Errorf("give the break's length and the wait, e.g. 10m 30m")
+			}
+			if k.DelayLength, err = parseBreak(args[1], db.MaxBreakSeconds); err != nil {
+				return err
+			}
+			if k.DelayWait, err = parseBreak(args[2], db.MaxBreakPer); err != nil {
+				return err
+			}
+		}
+		if err := saveBreaks(database, args[0], old, k); err != nil {
+			return err
+		}
+		if k.DelayLength == 0 {
+			fmt.Printf("Block '%s' has no delay break.\n", args[0])
+		} else {
+			fmt.Printf("Block '%s': 'kc9k break request %s' gives a break of %s after %s.\n", args[0], args[0], seconds(k.DelayLength), seconds(k.DelayWait))
+		}
+		return nil
+	}),
+}
+
+var breakRequestCmd = &cobra.Command{
+	Use:   "request [block]",
+	Short: "Ask for the delay break: it starts after its countdown",
+	Args:  cobra.ExactArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		k, err := database.GetBreaks(args[0])
+		if err != nil {
+			return err
+		}
+		if k.DelayLength == 0 {
+			return fmt.Errorf("block '%s' has no delay break ('kc9k break delay %s 10m 30m')", args[0], args[0])
+		}
+		trusted, err := database.TrustedNow(time.Now())
+		if err != nil {
+			return err
+		}
+		if k.DelayAt > trusted {
+			return fmt.Errorf("the delay break of '%s' begins in %s", args[0], seconds(k.DelayAt-trusted))
+		}
+		k.DelayAt = trusted + k.DelayWait
+		if err := database.SetBreaks(args[0], k); err != nil {
+			return err
+		}
+		fmt.Printf("The break of '%s' begins in %s and lasts %s.\n", args[0], seconds(k.DelayWait), seconds(k.DelayLength))
+		return nil
+	}),
+}
+
 var breakStartCmd = &cobra.Command{
 	Use:   "start [block] [time]",
 	Short: "Take earned break time (all of it, or the time given)",
@@ -260,6 +330,6 @@ var breakEndCmd = &cobra.Command{
 
 func init() {
 	breakAllowanceCmd.Flags().String("per", "1h", "The stretch of blocking the break is earned over")
-	breakCmd.AddCommand(breakAllowanceCmd, breakRelockCmd, breakStartCmd, breakEndCmd)
+	breakCmd.AddCommand(breakAllowanceCmd, breakRelockCmd, breakDelayCmd, breakRequestCmd, breakStartCmd, breakEndCmd)
 	rootCmd.AddCommand(breakCmd)
 }

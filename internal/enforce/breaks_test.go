@@ -168,3 +168,33 @@ func TestDaemonMovesLayers(t *testing.T) {
 		t.Error("timer lock not holding exactly its time")
 	}
 }
+
+// §3.6 delay break: asked for, it begins after its countdown and lifts the
+// block for its length; the locks stay.
+func TestDelayBreak(t *testing.T) {
+	d := testDB(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	mustAdd(t, d, "b", db.DefaultBlockedList, "reddit.com")
+	if err := d.ActivateBlock("b", true, 50, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetBreaks("b", db.Breaks{DelayLength: 600, DelayWait: 1800, DelayAt: 5000}); err != nil {
+		t.Fatal(err)
+	}
+	finishDelayedStops(d, 4999)
+	if until, _ := d.PausedUntil("b"); until != 0 {
+		t.Fatal("began before its countdown ended")
+	}
+	finishDelayedStops(d, 5000)
+	if until, _ := d.PausedUntil("b"); until != 5600 {
+		t.Fatalf("paused until %d; want 5600", until)
+	}
+	if k, _ := d.GetBreaks("b"); k.DelayAt != 0 || k.DelayLength != 600 {
+		t.Errorf("after: %+v", k)
+	}
+	if detail, _ := d.GetBlock("b"); !detail.Locked {
+		t.Error("the lock went")
+	}
+}

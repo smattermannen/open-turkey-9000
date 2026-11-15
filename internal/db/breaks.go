@@ -36,6 +36,12 @@ type Breaks struct {
 	Per       int64
 	BalanceMs int64 // earned and not yet taken
 	Relock    int64 // seconds an unlock lifts the block for; 0: unlocking ends it
+	// Delay break (§3.6): asking for it starts a countdown of DelayWait,
+	// then the block is lifted for DelayLength; it stays locked. DelayAt is
+	// when an asked-for break begins (trusted unix), 0 when none is asked.
+	DelayLength int64
+	DelayWait   int64
+	DelayAt     int64
 }
 
 // Balance returns the break time available, in whole seconds.
@@ -55,6 +61,9 @@ func (b Breaks) LooserThan(old Breaks) bool {
 	if b.Relock > old.Relock {
 		return true
 	}
+	if b.DelayLength > old.DelayLength || (b.DelayLength > 0 && (old.DelayLength == 0 || b.DelayWait < old.DelayWait)) {
+		return true
+	}
 	if b.Allowance == 0 {
 		return false
 	}
@@ -65,8 +74,9 @@ func (b Breaks) LooserThan(old Breaks) bool {
 // GetBreaks returns a block's break settings (zero when it has none).
 func (d *DB) GetBreaks(name string) (Breaks, error) {
 	var b Breaks
-	err := d.conn.QueryRow(`SELECT k.allowance, k.per, k.balance_ms, k.relock FROM block_breaks k
-		JOIN blocks b ON b.id = k.block_id WHERE b.name = ?`, name).Scan(&b.Allowance, &b.Per, &b.BalanceMs, &b.Relock)
+	err := d.conn.QueryRow(`SELECT k.allowance, k.per, k.balance_ms, k.relock, k.delay_length, k.delay_wait, k.delay_at FROM block_breaks k
+		JOIN blocks b ON b.id = k.block_id WHERE b.name = ?`, name).Scan(&b.Allowance, &b.Per, &b.BalanceMs, &b.Relock,
+		&b.DelayLength, &b.DelayWait, &b.DelayAt)
 	if err == sql.ErrNoRows {
 		return Breaks{}, nil
 	}
@@ -85,12 +95,18 @@ func (d *DB) SetBreaks(name string, b Breaks) error {
 	if b.Allowance == 0 {
 		b.Per, b.BalanceMs = 0, 0
 	}
-	if b.Allowance == 0 && b.Relock == 0 {
+	if b.DelayLength == 0 {
+		b.DelayWait, b.DelayAt = 0, 0
+	}
+	if b.Allowance == 0 && b.Relock == 0 && b.DelayLength == 0 {
 		_, err = d.conn.Exec("DELETE FROM block_breaks WHERE block_id = ?", blockID)
 	} else {
-		_, err = d.conn.Exec(`INSERT INTO block_breaks (block_id, allowance, per, balance_ms, relock) VALUES (?, ?, ?, ?, ?)
+		_, err = d.conn.Exec(`INSERT INTO block_breaks (block_id, allowance, per, balance_ms, relock, delay_length, delay_wait, delay_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(block_id) DO UPDATE SET allowance = excluded.allowance, per = excluded.per,
-			balance_ms = excluded.balance_ms, relock = excluded.relock`, blockID, b.Allowance, b.Per, b.BalanceMs, b.Relock)
+			balance_ms = excluded.balance_ms, relock = excluded.relock, delay_length = excluded.delay_length,
+			delay_wait = excluded.delay_wait, delay_at = excluded.delay_at`,
+			blockID, b.Allowance, b.Per, b.BalanceMs, b.Relock, b.DelayLength, b.DelayWait, b.DelayAt)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to save the breaks of '%s': %w", name, err)

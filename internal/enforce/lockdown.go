@@ -270,6 +270,25 @@ func finishDelayedStops(d *db.DB, trusted int64) {
 		log.Printf("daemon: delay: %v", err)
 		return
 	}
+	// Delay breaks (§3.6) whose countdown is over begin.
+	for _, b := range blocks {
+		k, err := d.GetBreaks(b.Name)
+		if err != nil || k.DelayAt == 0 || trusted < k.DelayAt {
+			continue
+		}
+		k.DelayAt = 0
+		if err := d.SetBreaks(b.Name, k); err != nil {
+			log.Printf("daemon: delay break: %v", err)
+			continue
+		}
+		if err := d.SetPause(b.Name, trusted+k.DelayLength); err != nil {
+			log.Printf("daemon: delay break: %v", err)
+			continue
+		}
+		log.Printf("daemon: delay break of %s begins", b.Name)
+		noticeOnce("delay-break "+b.Name+" "+strconv.FormatInt(trusted/60, 10), "Break for '"+b.Name+"'",
+			"Its delay break begins now.")
+	}
 	bootID, bootErr := db.BootID()
 	defer func() {
 		if bootErr != nil {

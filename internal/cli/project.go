@@ -63,6 +63,9 @@ type breaksExport struct {
 	Allowance int64 `json:"allowance_seconds,omitempty"`
 	Per       int64 `json:"per_seconds,omitempty"`
 	Relock    int64 `json:"relock_seconds,omitempty"`
+	// Delay break (§3.6).
+	DelayLength int64 `json:"delay_break_seconds,omitempty"`
+	DelayWait   int64 `json:"delay_wait_seconds,omitempty"`
 }
 
 // blockExtras is what a project adds to a block's export.
@@ -205,8 +208,8 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	}
 	if k, err := database.GetBreaks(name); err != nil {
 		return out, err
-	} else if k.Allowance > 0 || k.Relock > 0 {
-		out.Breaks = &breaksExport{Allowance: k.Allowance, Per: k.Per, Relock: k.Relock}
+	} else if k.Allowance > 0 || k.Relock > 0 || k.DelayLength > 0 {
+		out.Breaks = &breaksExport{Allowance: k.Allowance, Per: k.Per, Relock: k.Relock, DelayLength: k.DelayLength, DelayWait: k.DelayWait}
 	}
 	rules, err := database.Autostarts(name)
 	if err != nil {
@@ -281,7 +284,8 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 		return out, fmt.Errorf("Pomodoro times out of range")
 	}
 	if k := in.Breaks; k != nil && (k.Allowance < 0 || k.Allowance > db.MaxBreakSeconds || k.Per < 0 || k.Per > db.MaxBreakPer ||
-		k.Relock < 0 || k.Relock > db.MaxBreakSeconds || (k.Allowance > 0 && k.Allowance >= k.Per)) {
+		k.Relock < 0 || k.Relock > db.MaxBreakSeconds || (k.Allowance > 0 && k.Allowance >= k.Per) ||
+		k.DelayLength < 0 || k.DelayLength > db.MaxBreakSeconds || k.DelayWait < 0 || k.DelayWait > db.MaxBreakPer) {
 		return out, fmt.Errorf("break times out of range")
 	}
 	return out, nil
@@ -357,7 +361,8 @@ func createBlock(database *db.DB, c checkedBlock) error {
 		}
 	}
 	if k := in.Breaks; k != nil {
-		if err := database.SetBreaks(in.Name, db.Breaks{Allowance: k.Allowance, Per: k.Per, Relock: k.Relock}); err != nil {
+		if err := database.SetBreaks(in.Name, db.Breaks{Allowance: k.Allowance, Per: k.Per, Relock: k.Relock,
+			DelayLength: k.DelayLength, DelayWait: k.DelayWait}); err != nil {
 			return err
 		}
 	}

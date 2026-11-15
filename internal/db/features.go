@@ -55,6 +55,9 @@ func upgradeSchema(conn *sql.DB) error {
 		{"active_blocks", "range_to", "INTEGER NOT NULL DEFAULT 0"},
 		{"active_blocks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
 		{"blocks", "view_password", "TEXT NOT NULL DEFAULT ''"},
+		{"block_breaks", "delay_length", "INTEGER NOT NULL DEFAULT 0"},
+		{"block_breaks", "delay_wait", "INTEGER NOT NULL DEFAULT 0"},
+		{"block_breaks", "delay_at", "INTEGER NOT NULL DEFAULT 0"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {

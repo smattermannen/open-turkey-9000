@@ -107,5 +107,9 @@ win.selected = "b"; win.autostarts.on_add(["at 08:00 mon-fri"]); settle(); win.s
 check(win.blocks["b"]["autostarts"] == ["at 08:00 weekdays"], "autostart added: %s" % win.blocks["b"].get("autostarts"))
 win.autostarts.on_remove("at 08:00 weekdays", 1); settle()
 check(win.blocks["b"]["autostarts"] == [], "autostart removed")
+# §3.6 delay break from the Breaks section.
+win.selected = "b"; win.delay_break_check.set_active(True); win.delay_break_minutes.set_value(10)
+win.delay_wait_minutes.set_value(30); win.set_delay_break(None); settle(); win.show_block()
+check(win.blocks["b"].get("delay_break") == 600 and win.blocks["b"].get("delay_wait") == 1800, "delay break saved")
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

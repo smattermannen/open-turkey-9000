@@ -207,9 +207,39 @@ function kc9kMatches(filter, url) {
 // ignored.
 const KC9K_WORD = "[\\p{L}\\p{N}]";
 
+// kc9kFold makes text and terms comparable (R-LIST-5): lower case, accents
+// dropped (é = e), and letters of other alphabets that look Latin read as
+// Latin (Cyrillic "раypal" = "paypal").
+const KC9K_LOOKALIKES = new Map(Object.entries({
+  "а": "a", "в": "b", "е": "e", "ё": "e", "к": "k", "м": "m", "н": "h", "о": "o", "р": "p", "с": "c",
+  "т": "t", "у": "y", "х": "x", "і": "i", "ї": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "ӏ": "l", "һ": "h",
+  "ԛ": "q", "ԝ": "w", "α": "a", "β": "b", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p",
+  "τ": "t", "υ": "u", "χ": "x", "ϲ": "c", "ı": "i",
+}));
+const KC9K_LOOKALIKE_RE = new RegExp("[" + [...KC9K_LOOKALIKES.keys()].join("") + "]", "g");
+function kc9kFold(input) {
+  return String(input).toLowerCase().normalize("NFD").replace(/\p{M}+/gu, "")
+    .replace(KC9K_LOOKALIKE_RE, (c) => KC9K_LOOKALIKES.get(c));
+}
+
+// kc9kFoldCached is kc9kFold for page strings, kept for the last few: a
+// page's title and text are read by many terms, folded once.
+const kc9kFoldCache = new Map();
+function kc9kFoldCached(input) {
+  const key = String(input);
+  let value = kc9kFoldCache.get(key);
+  if (value === undefined) {
+    value = kc9kFold(key);
+    if (kc9kFoldCache.size >= 4) {
+      kc9kFoldCache.delete(kc9kFoldCache.keys().next().value);
+    }
+    kc9kFoldCache.set(key, value);
+  }
+  return value;
+}
 // kc9kTermSource is the pattern for one word or phrase.
 function kc9kTermSource(term) {
-  const value = String(term).trim().toLowerCase();
+  const value = kc9kFold(String(term).trim());
   const body = value
     .split("*")
     .map((part) => kc9kEscapeRegex(part).replace(/\s+/g, "\\s+"))
@@ -313,7 +343,7 @@ function kc9kCombinationMatcher(boxes) {
   const order = sources.map((source, i) => i).sort((a, b) => terms[b].term.length - terms[a].term.length);
   const any = order.map((i) => "(?:" + sources[i] + ")").join("|");
   const count = (input) => {
-    const text = String(input);
+    const text = kc9kFoldCached(input); // terms are folded too (R-LIST-5)
     const finder = new RegExp(any, "giu");
     const known = new Map(); // a word -> the boxes it belongs to
     let found = 0;
@@ -365,8 +395,8 @@ function kc9kKeywordMatcher(keyword) {
   const source = kc9kTermSource(keyword);
   const regex = new RegExp(source, "iu");
   return {
-    test: (text) => regex.test(text),
-    count: (text) => (String(text).match(new RegExp(source, "giu")) || []).length,
+    test: (text) => regex.test(kc9kFoldCached(text)),
+    count: (text) => (kc9kFoldCached(text).match(new RegExp(source, "giu")) || []).length,
   };
 }
 
@@ -400,7 +430,7 @@ function kc9kWordIndex(terms) {
     map.set(key, list);
   };
   terms.forEach((term, i) => {
-    const value = String(term).trim().toLowerCase();
+    const value = kc9kFold(String(term).trim());
     if (kc9kCombination(term) || !/^[\p{L}\p{N}*]+$/u.test(value)) {
       index.rest.push(i);
       return;
@@ -454,7 +484,7 @@ function kc9kIndexCounts(index, text) {
       counts.set(i, (counts.get(i) || 0) + 1);
     }
   };
-  const words = String(text).toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
+  const words = kc9kFoldCached(text).match(/[\p{L}\p{N}]+/gu) || [];
   for (const word of words) {
     const exact = index.exact.get(word);
     if (exact) {
@@ -910,7 +940,7 @@ function kc9kPhraseTokenized(text) {
 }
 
 function kc9kPhraseTerm(raw) {
-  let value = String(raw).trim().toLowerCase();
+  let value = kc9kFold(String(raw).trim());
   const into = value.startsWith("-");
   const out = value.endsWith("-") && value.length > 1;
   value = value.replace(/^-/, "").replace(/-$/, "").trim();
@@ -934,7 +964,7 @@ function kc9kUrlWords(input) {
   } catch (error) {
     // keep it as it is
   }
-  return text.replace(/^[a-z]+:\/\//i, "").replace(/[-_/.?=&+#:,]/g, " ");
+  return kc9kFold(text.replace(/^[a-z]+:\/\//i, "").replace(/[-_/.?=&+#:,]/g, " "));
 }
 
 // kc9kPhraseMatcher compiles a phrase { sets: [{ terms: [...], necessary }],
@@ -947,7 +977,7 @@ function kc9kPhraseMatcher(phrase, scope) {
   }));
   const necessary = sets.filter((s) => s.necessary).length;
   const length = Math.min(Math.max(phrase.length || necessary, necessary), sets.length);
-  const prepare = (input) => (scope === "url" ? kc9kUrlWords(input) : input);
+  const prepare = (input) => (scope === "url" ? kc9kUrlWords(input) : kc9kFoldCached(input));
   const test = (input) => {
     const tokenized = kc9kPhraseTokenized(prepare(input));
     for (let si = 0; si < tokenized.sentences.length; si++) {

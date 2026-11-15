@@ -158,6 +158,22 @@ const failed0 = [];
   console.log("typical page judged in " + slowest + " ms");
 }
 
+// R-LIST-5: case and accents ignored, look-alike letters read as Latin.
+{
+  const list = kc9kCompileLists([{
+    id: 9, block: "b", name: "Words", url: [], title: ["cafe"], text: ["naive", "paypal", "über*"],
+    actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [] },
+  }]);
+  const hit = (title, text) => kc9kListMatches(list, { url: "https://example.com/", title, text }).length > 0;
+  if (!hit("Café de Flore", "") || !hit("", "a NAÏVE idea") || !hit("", "log in to раураl now") ||
+    !hit("", "Ubernacht") || hit("", "nothing here") || kc9kFold("ΡΟΚΕR") !== "poker") {
+    failed0.push("R-LIST-5 folding");
+  }
+  if (!kc9kPhraseMatcher({ sets: [{ terms: ["crème"] }, { terms: ["brulee"] }] }).test(kc9kFold("Creme Brûlée"))) {
+    failed0.push("R-LIST-5 folding in phrases");
+  }
+}
+
 // Phrases: the examples of SPEC R-PHRASE-1 to 8.
 {
   const P = (sets, length) => ({ sets: sets.map((terms) => Array.isArray(terms) ? { terms, necessary: true } : terms), length });

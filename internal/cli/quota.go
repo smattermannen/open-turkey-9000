@@ -160,7 +160,7 @@ var quotaSetCmd = &cobra.Command{
 
 var quotaRemoveCmd = &cobra.Command{
 	Use:   "remove [block]",
-	Short: "Remove a block's allowance at midnight",
+	Short: "Remove a block's allowance when it next refills",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		database, err := openDB()

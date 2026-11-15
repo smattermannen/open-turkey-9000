@@ -3630,7 +3630,7 @@ class Window(Gtk.ApplicationWindow):
         self.quota_start.connect("clicked", self.start_quota)
         self.quota_end = Gtk.Button(label="End session")
         self.quota_end.connect("clicked", self.end_quota)
-        self.quota_remove = Gtk.Button(label="Remove at midnight")
+        self.quota_remove = Gtk.Button(label="Remove at next refill")
         self.quota_remove.connect("clicked", self.remove_quota)
         quota_row.pack_start(self.quota_set, False, False, 0)
         # The session buttons get their own row, so the page fits a narrow screen.
@@ -4251,7 +4251,7 @@ class Window(Gtk.ApplicationWindow):
             return
         day, frm, to = DAY_NAMES[column_day(column)], f"{start // 60:02d}:{start % 60:02d}", f"{end // 60:02d}:{end % 60:02d}"
         if self.confirm(f"Add {day.capitalize()} {frm}-{to} to {self.selected}?",
-                        "The block turns on by itself then. To repeat it on other days, type "
+                        "While the block is on, it is enabled then. To repeat it on other days, type "
                         "them in the list below, e.g. weekdays " + frm + " " + to + ".", "Add"):
             self.run(["schedule", "add", self.selected, "--days", day, "--from", frm, "--to", to])
 

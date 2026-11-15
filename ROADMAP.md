@@ -17,8 +17,23 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
 - [ ] **Owner report 2026-11-15** (real use on the laptop; top priority).
   Status per item; check against the latest build before calling it fixed.
   - [ ] `no-images` doesn't hide GIFs (§3.9 Look actions: animated GIFs
-    included). Not built. Cause unknown (CSS `img` vs background/`<video>`
-    GIFs, or images already decoded). S
+    included). Likely the same causes as the next item; confirm on the
+    laptop. S
+  - [ ] Looks from page text (greyscale, no-images, no-video) unreliable
+    and lifted for a moment on every click inside a site (§3.9; owner
+    2026-11-15). Causes found: `render` forgot the page's looks on a new
+    address while `scanKeywords` thought the page already read, so a page
+    reached without loading never got them back; the background dropped
+    them on every address change; the hiding CSS was an author sheet
+    (beaten by page `!important`/inline styles, not in shadow roots, not on
+    `::before`/`::after`); videos stopped only once a second, not in shadow
+    roots. Fixed: one reset point (`enterAddress`); looks carried to the
+    next address until its first read (`page-judged`, ≤ 15 s); greyscale,
+    no-images, no-video drawn by a user-origin sheet in every frame
+    (`syncLookCss`, Chrome via `scripting`); `play` stopped at once, shadow
+    roots included; bfcache pages read again. Extension 1.19.0. Not run in
+    a browser here; confirm on the laptop (`ci/extras_test.py`,
+    `ci/browser_test.py`). S
   - [ ] `no-downloads` doesn't block downloads (§3.9). `ci/download_test.py`
     passes, so the real path differs (browser? download started from a
     link/blob, policy-blocked page?). Unchecked which browser. S

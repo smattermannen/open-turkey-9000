@@ -333,6 +333,7 @@ function blockTitledTab(tab) {
 const keywordNoImages = new Map();
 const keywordNoVideo = new Map();
 const keywordMute = new Map();
+const keywordGreyscale = new Map();
 
 // mute: the tab's sound is switched off while its page is one a list mutes,
 // and switched on again when it leaves (only if this is what muted it).
@@ -361,9 +362,10 @@ function applyMute(tab) {
 // FRAME_LOOKS are the look actions every frame of a tab must apply itself:
 // a frame from another site can't read the tab's title, text or (often)
 // address, and hiding it from the page around it doesn't stop its sound.
-// Mute needs no help: it silences the whole tab. Greyscale and dark are
-// drawn over the frames by the tab's own page.
-const FRAME_LOOKS = ["no-video", "no-images"];
+// Mute needs no help: it silences the whole tab; dark is drawn over the
+// frames by the tab's own page. Greyscale is among them so it is carried to
+// the next page like them and drawn by the user sheet from the first paint.
+const FRAME_LOOKS = ["no-video", "no-images", "greyscale"];
 // What each tab's frames were last told ("no-video no-images").
 const sentLooks = new Map();
 
@@ -376,8 +378,97 @@ function tabLooks(tab) {
     return [];
   }
   const byPage = kc9kListActions(lists, { url: tab.url, title: tab.title || "" });
-  const kept = { "no-video": keywordNoVideo, "no-images": keywordNoImages };
-  return FRAME_LOOKS.filter((name) => byPage[name] || kept[name].has(tab.id));
+  const kept = { "no-video": keywordNoVideo, "no-images": keywordNoImages, greyscale: keywordGreyscale };
+  return FRAME_LOOKS.filter((name) => byPage[name] || kept[name].has(tab.id) || carriedLook(tab.id, name));
+}
+
+// A tab whose page earned no-images or no-video from its title or text
+// keeps them when it goes to another address (a click inside a site that
+// changes pages without loading, back and forward, a link) until the new
+// page has been read (the top frame's "page-judged"), at most CARRY_MS: the
+// new page's pictures never show while it is still being read.
+const CARRY_MS = 15000;
+const carried = new Map(); // tab id → { looks: Set, until }
+
+function carriedLook(tabId, name) {
+  const carry = carried.get(tabId);
+  return Boolean(carry && carry.until > Date.now() && carry.looks.has(name));
+}
+
+function carryLooks(tabId, names) {
+  const carry = carried.get(tabId);
+  const looks = new Set(carry && carry.until > Date.now() ? carry.looks : []);
+  names.forEach((name) => looks.add(name));
+  if (looks.size === 0) {
+    return;
+  }
+  carried.set(tabId, { looks, until: Date.now() + CARRY_MS });
+  setTimeout(() => {
+    browser.tabs.get(tabId).then(tellFrames, () => {});
+  }, CARRY_MS + 100);
+}
+
+// The looks are also drawn by a user style sheet in every frame of the tab:
+// a user sheet's !important beats anything the page sets (its own
+// !important and inline styles included), reaches into shadow roots, can't
+// be removed by the page, and comes with the frame's first paint.
+// Pictures behind ::before/::after, list markers and borders go too.
+const LOOK_CSS = {
+  "no-images": "img, picture, video, canvas, svg image, svg use, image, object, embed, input[type=\"image\"] " +
+    "{ visibility: hidden !important; }\n" +
+    "*, *::before, *::after, *::marker { background-image: none !important; list-style-image: none !important; " +
+    "border-image-source: none !important; }\n",
+  // A page in dark mode draws greyscale itself, with its inversion (both
+  // are filters on the same element).
+  greyscale: ":root:not([data-kc9k-dark]) { filter: grayscale(1) !important; }\n",
+  "no-video": "video, audio, object, embed, iframe[src*=\"youtube\"], iframe[src*=\"vimeo\"], " +
+    "iframe[src*=\"player\"], iframe[src*=\"embed\"] { display: none !important; }\n",
+};
+const lookCss = new Map(); // tab id → the CSS last inserted in all its frames
+
+function cssFor(looks) {
+  return looks.map((name) => LOOK_CSS[name] || "").join("");
+}
+
+function insertCss(tabId, frameId, css) {
+  if (!css) {
+    return;
+  }
+  if (browser.scripting && browser.scripting.insertCSS) {
+    const target = frameId === undefined ? { tabId, allFrames: true } : { tabId, frameIds: [frameId] };
+    browser.scripting.insertCSS({ target, css, origin: "USER" }).catch(() => {});
+    return;
+  }
+  const details = { code: css, cssOrigin: "user", runAt: "document_start", matchAboutBlank: true };
+  if (frameId === undefined) {
+    details.allFrames = true;
+  } else {
+    details.frameId = frameId;
+  }
+  browser.tabs.insertCSS(tabId, details).catch(() => {});
+}
+
+function removeCss(tabId, css) {
+  if (!css) {
+    return;
+  }
+  if (browser.scripting && browser.scripting.removeCSS) {
+    browser.scripting.removeCSS({ target: { tabId, allFrames: true }, css, origin: "USER" }).catch(() => {});
+    return;
+  }
+  browser.tabs.removeCSS(tabId, { code: css, cssOrigin: "user", allFrames: true, matchAboutBlank: true }).catch(() => {});
+}
+
+function syncLookCss(tabId, looks) {
+  const css = cssFor(looks);
+  const old = lookCss.get(tabId) || "";
+  if (css === old) {
+    insertCss(tabId, undefined, css); // documents loaded since may lack it
+    return;
+  }
+  removeCss(tabId, old);
+  insertCss(tabId, undefined, css);
+  lookCss.set(tabId, css);
 }
 
 // tellFrames sends every frame of the tab its looks when they changed.
@@ -392,16 +483,25 @@ function tellFrames(tab) {
     return;
   }
   sentLooks.set(tab.id, key);
+  syncLookCss(tab.id, looks);
   browser.tabs.sendMessage(tab.id, { type: "tab-looks", looks }).catch(() => {});
 }
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url !== undefined) {
-    for (const kept of [keywordNoImages, keywordNoVideo, keywordMute]) {
-      if (kept.get(tabId) !== changeInfo.url) {
+    const dropped = [];
+    for (const [name, kept] of [["no-images", keywordNoImages], ["no-video", keywordNoVideo],
+      ["greyscale", keywordGreyscale], ["mute", keywordMute]]) {
+      if (kept.has(tabId) && kept.get(tabId) !== changeInfo.url) {
         kept.delete(tabId);
+        dropped.push(name);
       }
     }
+    carryLooks(tabId, dropped.filter((name) => FRAME_LOOKS.includes(name)));
+  }
+  if (changeInfo.status === "loading" || changeInfo.status === "complete") {
+    // A new document: the user sheet went with the old one.
+    insertCss(tabId, undefined, lookCss.get(tabId) || "");
   }
   if (changeInfo.url !== undefined || changeInfo.title !== undefined || changeInfo.mutedInfo !== undefined) {
     applyMute(tab);
@@ -421,6 +521,9 @@ browser.tabs.onRemoved.addListener((tabId) => {
   keywordNoImages.delete(tabId);
   keywordNoVideo.delete(tabId);
   keywordMute.delete(tabId);
+  keywordGreyscale.delete(tabId);
+  carried.delete(tabId);
+  lookCss.delete(tabId);
   sentLooks.delete(tabId);
   mutedHere.delete(tabId);
   cameFrom.delete(tabId);
@@ -486,11 +589,14 @@ function pageHit(message, sender) {
   if (takes("no-video")) {
     keywordNoVideo.set(tab.id, message.url);
   }
+  if (takes("greyscale")) {
+    keywordGreyscale.set(tab.id, message.url);
+  }
   if (takes("mute")) {
     keywordMute.set(tab.id, message.url);
     applyMute(tab);
   }
-  if (takes("no-video") || takes("no-images")) {
+  if (FRAME_LOOKS.some(takes)) {
     tellFrames(tab);
   }
   const outcome = kc9kOutcome(matches);
@@ -552,7 +658,8 @@ browser.webRequest.onBeforeRequest.addListener(
       noteVisit(details.url);
     }
     if (details.type === "image" || details.type === "imageset" || details.type === "media") {
-      if (keywordNoImages.has(details.tabId) || (details.type === "media" && keywordNoVideo.has(details.tabId))) {
+      if (keywordNoImages.has(details.tabId) || carriedLook(details.tabId, "no-images") ||
+        (details.type === "media" && (keywordNoVideo.has(details.tabId) || carriedLook(details.tabId, "no-video")))) {
         return { cancel: true };
       }
       const looks = kc9kListActions(lists, { url: pageUrl(details) });
@@ -690,7 +797,19 @@ function onMessage(message, sender) {
     browser.tabs.update(sender.tab.id, { url: blockedPage(message.url, "playlist").redirectUrl });
   }
   if (message && message.type === "tab-looks" && sender && sender.tab) {
-    return Promise.resolve(tabLooks(sender.tab));
+    // Every new document and frame asks as it starts: it gets the user
+    // sheet at once too.
+    const looks = tabLooks(sender.tab);
+    insertCss(sender.tab.id, sender.frameId, cssFor(looks));
+    return Promise.resolve(looks);
+  }
+  if (message && message.type === "page-judged" && sender && sender.tab && sender.frameId === 0 &&
+    message.url === sender.tab.url) {
+    // The top frame has read its page: what it earned was reported in
+    // page-hits; what the last page earned no longer holds.
+    if (carried.delete(sender.tab.id)) {
+      tellFrames(sender.tab);
+    }
   }
   if (message && message.type === "why") {
     return Promise.resolve(why(sender));

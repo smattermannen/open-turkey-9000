@@ -19,7 +19,7 @@ let lightFor = null;
 let light = true;
 let noVideo = false;
 // The looks the background script says this tab has now (no-video,
-// no-images): a frame can't see the tab's title or text, so it learns them
+// no-images, greyscale): a frame can't see the tab's title or text, so it learns them
 // from there, when it starts and whenever they change.
 let tabLooks = new Set();
 
@@ -97,17 +97,24 @@ function render() {
     return;
   }
   const url = topUrl();
-  if (keywordsFor !== url) {
-    keywordLooks = new Set();
-    keywordsFor = url;
-  }
+  enterAddress(url);
   const byAddress = kc9kListActions(lists, { url });
   const on = (name) => Boolean(byAddress[name]) || keywordLooks.has(name) || tabLooks.has(name);
   shownFor = url;
+  const wasNoVideo = noVideo;
   noVideo = on("no-video");
+  if (noVideo && !wasNoVideo) {
+    stopAllMedia();
+  }
   let css = "";
   const filters = [];
-  if ((on("dark") || darkPage(url)) && pageIsLight()) {
+  const dark = (on("dark") || darkPage(url)) && pageIsLight();
+  // The background script's user sheet greys pages, except those marked
+  // dark: they get both filters here.
+  if (document.documentElement) {
+    document.documentElement.toggleAttribute("data-kc9k-dark", dark);
+  }
+  if (dark) {
     // Turn the page over, then turn pictures and videos back.
     filters.push("invert(1) hue-rotate(180deg)");
     css += "img, picture, video, canvas, iframe, svg image, [style*=\"background-image\"] " +
@@ -120,9 +127,14 @@ function render() {
   if (filters.length > 0) {
     css += "html { filter: " + filters.join(" ") + " !important; }\n";
   }
+  // The background script also draws no-images and no-video with a user
+  // style sheet no page style can beat; this is the same in case that one
+  // isn't in yet.
   if (on("no-images")) {
-    css += "img, picture, video, canvas, svg image { visibility: hidden !important; }\n" +
-      "* { background-image: none !important; }\n";
+    css += "img, picture, video, canvas, svg image, svg use, object, embed, input[type=\"image\"] " +
+      "{ visibility: hidden !important; }\n" +
+      "*, *::before, *::after { background-image: none !important; list-style-image: none !important; " +
+      "border-image-source: none !important; }\n";
   }
   if (noVideo) {
     css += "video, audio, object, embed, iframe[src*=\"youtube\"], iframe[src*=\"vimeo\"], " +
@@ -239,14 +251,7 @@ function scanKeywords() {
   }
   textChanged = false;
   const url = location.href;
-  if (keywordsFor !== url) {
-    keywordLooks = new Set();
-    reportedHits = new Set();
-    keywordsFor = url;
-    readWhole = false;
-    readingDone = false;
-    wholeRead = null;
-  }
+  enterAddress(url);
   const testing = lists.some((list) => list.test);
   if (readingDone && !testing) {
     return;
@@ -279,6 +284,7 @@ function scanKeywords() {
     readingDone = true;
   }
   const fresh = [];
+  const looksBefore = keywordLooks.size;
   for (const match of matches) {
     const names = match.actions.map((action) => action.action);
     names.filter((name) => LOOKS.includes(name)).forEach((name) => keywordLooks.add(name));
@@ -288,11 +294,37 @@ function scanKeywords() {
       fresh.push({ id: match.list.id, actions: unseen });
     }
   }
-  if (fresh.length === 0) {
+  if (keywordLooks.size !== looksBefore) {
+    render();
+  }
+  if (fresh.length > 0) {
+    browser.runtime.sendMessage({ type: "page-hits", url, matches: fresh }).catch(() => {});
+  }
+  if (judgedFor !== url) {
+    // The first full read of this address is done: the looks the last
+    // address earned (kept meanwhile) can go.
+    judgedFor = url;
+    browser.runtime.sendMessage({ type: "page-judged", url }).catch(() => {});
+  }
+}
+
+// enterAddress starts over for a new address of the top page: the one place
+// that forgets what the last address earned, so rendering and reading can't
+// disagree about which page they are on. (Rendering used to forget the
+// looks alone, and reading then thought the page was done: a page reached
+// by a click inside a site never got its looks back.)
+let judgedFor = null;
+function enterAddress(url) {
+  if (keywordsFor === url) {
     return;
   }
-  render();
-  browser.runtime.sendMessage({ type: "page-hits", url, matches: fresh }).catch(() => {});
+  keywordsFor = url;
+  keywordLooks = new Set();
+  reportedHits = new Set();
+  readWhole = false;
+  readingDone = false;
+  wholeRead = null;
+  textChanged = true;
 }
 
 // readPageText returns the page's rendered text: all of it the first time
@@ -623,17 +655,73 @@ setInterval(() => {
   }
 }, 1000);
 
-// no-video: whatever still plays is stopped.
-setInterval(() => {
-  if (!noVideo) {
-    return;
+// no-video: nothing plays. A video that starts is stopped and muted at
+// once (also inside shadow roots, which the page's events don't leave), and
+// every second whatever plays is stopped.
+function shadowOf(el) {
+  try {
+    if (typeof chrome !== "undefined" && chrome.dom && chrome.dom.openOrClosedShadowRoot) {
+      return chrome.dom.openOrClosedShadowRoot(el);
+    }
+    return el.openOrClosedShadowRoot || el.shadowRoot || null;
+  } catch (error) {
+    return null;
   }
-  for (const m of document.querySelectorAll("video, audio")) {
-    if (!m.paused) {
+}
+const watchedRoots = new WeakSet();
+function stopMedia(event) {
+  const m = event.target;
+  if (noVideo && m && typeof m.pause === "function" && /^(VIDEO|AUDIO)$/.test(m.tagName || "")) {
+    m.muted = true;
+    m.pause();
+  }
+}
+function watchRoot(root) {
+  if (!watchedRoots.has(root)) {
+    watchedRoots.add(root);
+    for (const type of ["play", "playing", "loadeddata"]) {
+      root.addEventListener(type, stopMedia, true);
+    }
+  }
+}
+watchRoot(document);
+function allMedia(root, found) {
+  for (const el of root.querySelectorAll("*")) {
+    if (el.tagName === "VIDEO" || el.tagName === "AUDIO") {
+      found.push(el);
+    }
+    const shadow = shadowOf(el);
+    if (shadow) {
+      watchRoot(shadow);
+      allMedia(shadow, found);
+    }
+  }
+  return found;
+}
+function stopAllMedia() {
+  for (const m of allMedia(document, [])) {
+    if (!m.paused || !m.muted) {
+      m.muted = true;
       m.pause();
     }
   }
+}
+setInterval(() => {
+  if (noVideo) {
+    stopAllMedia();
+  }
 }, 1000);
+
+// A page shown again from the back/forward cache keeps this script's state,
+// but the background script forgot what it earned: read it again.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted && window === window.top) {
+    keywordsFor = null;
+    judgedFor = null;
+    render();
+    scanKeywords();
+  }
+});
 
 // While a quota session is open, tell the background script when this page
 // (or frame) plays sound or video, even muted: that time counts as use.

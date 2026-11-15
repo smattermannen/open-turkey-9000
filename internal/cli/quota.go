@@ -9,6 +9,7 @@ import (
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/quota"
+	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +39,7 @@ func currentQuota(database *db.DB, name string, now time.Time) (quota.State, err
 	if state == nil {
 		return quota.State{}, fmt.Errorf("block '%s' has no allowance", name)
 	}
-	return state.Step(now.Unix(), quota.DayOf(now)), nil
+	return state.Step(now.Unix(), state.PeriodOf(now)), nil
 }
 
 // ensureBlockActive turns a quota block on or off. The daemon may make the same
@@ -63,7 +64,7 @@ func ensureBlockActive(database *db.DB, name string, want bool) error {
 
 var quotaSetCmd = &cobra.Command{
 	Use:   "set [block] [duration]",
-	Short: "Set a block's daily allowance (e.g. 30m)",
+	Short: "Set a block's allowance (e.g. 30m; per day unless --per week|month; --refill HH:MM)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
@@ -71,8 +72,21 @@ var quotaSetCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("invalid duration %q: %w", args[1], err)
 		}
-		if err := quota.Validate(d); err != nil {
+		per, _ := cmd.Flags().GetString("per")
+		if per == "day" {
+			per = ""
+		}
+		if per != "" && per != "week" && per != "month" {
+			return fmt.Errorf("--per is day, week or month")
+		}
+		if err := quota.ValidateFor(d, per); err != nil {
 			return err
+		}
+		refill := 0
+		if spec, _ := cmd.Flags().GetString("refill"); spec != "" {
+			if refill, err = schedule.ParseTimeOfDay(spec); err != nil {
+				return fmt.Errorf("--refill: %w", err)
+			}
 		}
 		limit := int64(d.Seconds())
 
@@ -92,15 +106,25 @@ var quotaSetCmd = &cobra.Command{
 		}
 		var s quota.State
 		if existing == nil {
-			s = quota.New(limit, now.Unix(), quota.DayOf(now))
+			s = quota.New(limit, now.Unix(), "")
+			s.Period, s.Refill = per, refill
+			s.Day = s.PeriodOf(now)
 		} else {
-			s = existing.Step(now.Unix(), quota.DayOf(now)).SetLimit(limit)
+			if existing.Period != per || existing.Refill != refill {
+				// Another period or refill time can give time back: it
+				// weakens, refused while the block is locked.
+				if err := ensureEditable(database, name, false); err != nil {
+					return err
+				}
+				existing.Period, existing.Refill = per, refill
+			}
+			s = existing.Step(now.Unix(), existing.PeriodOf(now)).SetLimit(limit)
 		}
 		if err := database.SaveQuota(name, s); err != nil {
 			return err
 		}
 		if s.PendingLimit == limit {
-			fmt.Printf("Allowance of '%s' becomes %s at midnight\n", name, d)
+			fmt.Printf("Allowance of '%s' becomes %s when it next refills\n", name, d)
 			return nil
 		}
 
@@ -116,7 +140,7 @@ var quotaSetCmd = &cobra.Command{
 				return err
 			}
 		}
-		fmt.Printf("Allowance of '%s' is %s per day\n", name, d)
+		fmt.Printf("Allowance of '%s' is %s per %s\n", name, d, map[bool]string{true: "day", false: per}[per == ""])
 		return nil
 	},
 }
@@ -247,6 +271,8 @@ var quotaEndCmd = &cobra.Command{
 
 func init() {
 	quotaStartCmd.Flags().String("for", "", "End the session after this long (e.g. 10m)")
+	quotaSetCmd.Flags().String("per", "day", "The period the allowance covers: day, week or month")
+	quotaSetCmd.Flags().String("refill", "", "When the allowance starts afresh (HH:MM; default midnight)")
 	quotaCmd.AddCommand(quotaSetCmd, quotaRemoveCmd, quotaStartCmd, quotaEndCmd)
 	rootCmd.AddCommand(quotaCmd)
 }

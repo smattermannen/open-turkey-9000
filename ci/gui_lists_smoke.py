@@ -111,5 +111,11 @@ check(win.blocks["b"]["autostarts"] == [], "autostart removed")
 win.selected = "b"; win.delay_break_check.set_active(True); win.delay_break_minutes.set_value(10)
 win.delay_wait_minutes.set_value(30); win.set_delay_break(None); settle(); win.show_block()
 check(win.blocks["b"].get("delay_break") == 600 and win.blocks["b"].get("delay_wait") == 1800, "delay break saved")
+# §3.6 allowance per week, refilled at 04:00, from the block page.
+win.selected = "b"; win.quota_minutes.set_value(300); win.quota_per.set_active_id("week")
+win.quota_refill.set_text("04:00"); win.set_quota(None); settle(); win.show_block()
+blk = win.blocks["b"]
+check(blk["quota_limit"] == 18000 and blk.get("quota_period") == "week" and blk.get("quota_refill") == "04:00",
+      "allowance per week saved: %s %s %s" % (blk["quota_limit"], blk.get("quota_period"), blk.get("quota_refill")))
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

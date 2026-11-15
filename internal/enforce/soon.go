@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
-	"github.com/smattermannen/kc9k/internal/quota"
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
@@ -77,7 +76,7 @@ func soonRules(d *db.DB, active []db.ActiveBlockDetail, now time.Time, trusted i
 		if err != nil || q == nil {
 			continue
 		}
-		s := q.Step(now.Unix(), quota.DayOf(now))
+		s := q.Step(now.Unix(), q.PeriodOf(now))
 		lists := listRules(db.ActiveBlockDetail{BlockName: b.Name, Lists: b.Lists})
 		if s.Open && len(lists) > 0 {
 			out = append(out, SoonRule{Block: b.Name, Kind: "quota", Seconds: s.Remaining(), Lists: lists})

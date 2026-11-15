@@ -78,6 +78,8 @@ type blockExtras struct {
 	Social       []string        `json:"social,omitempty"`
 	Places       []string        `json:"places,omitempty"` // backups only
 	Quota        int64           `json:"quota_seconds,omitempty"`
+	QuotaPer     string          `json:"quota_per,omitempty"`    // "" day, week, month (§3.6)
+	QuotaRefill  int             `json:"quota_refill,omitempty"` // minute of the day
 	Pomodoro     *pomodoroExport `json:"pomodoro,omitempty"`
 	Breaks       *breaksExport   `json:"breaks,omitempty"`
 	Autostarts   []db.Autostart  `json:"autostarts,omitempty"` // §3.6
@@ -201,7 +203,7 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	if q, err := database.GetQuota(name); err != nil {
 		return out, err
 	} else if q != nil {
-		out.Quota = q.Limit
+		out.Quota, out.QuotaPer, out.QuotaRefill = q.Limit, q.Period, q.Refill
 	}
 	if p, err := database.GetPomodoro(name); err != nil {
 		return out, err
@@ -278,7 +280,8 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 			return out, fmt.Errorf("unknown social media setting %q", preset)
 		}
 	}
-	if in.Quota < 0 || in.Quota > int64(quota.MaxLimit.Seconds()) {
+	if in.Quota < 0 || in.Quota > 31*24*3600 || (in.Quota > 0 && quota.ValidateFor(time.Duration(in.Quota)*time.Second, in.QuotaPer) != nil) ||
+		(in.QuotaPer != "" && in.QuotaPer != "week" && in.QuotaPer != "month") || in.QuotaRefill < 0 || in.QuotaRefill >= 24*60 {
 		return out, fmt.Errorf("allowance out of range")
 	}
 	if p := in.Pomodoro; p != nil && (p.Work < int64(minPomodoroPhase.Seconds()) || p.Break < int64(minPomodoroPhase.Seconds()) ||
@@ -349,7 +352,10 @@ func createBlock(database *db.DB, c checkedBlock) error {
 	}
 	now := time.Now()
 	if in.Quota > 0 {
-		if err := database.SaveQuota(in.Name, quota.New(in.Quota, now.Unix(), quota.DayOf(now))); err != nil {
+		q := quota.New(in.Quota, now.Unix(), "")
+		q.Period, q.Refill = in.QuotaPer, in.QuotaRefill
+		q.Day = q.PeriodOf(now)
+		if err := database.SaveQuota(in.Name, q); err != nil {
 			return err
 		}
 	}

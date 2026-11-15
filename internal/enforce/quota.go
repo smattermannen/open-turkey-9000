@@ -8,7 +8,6 @@ import (
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
-	"github.com/smattermannen/kc9k/internal/quota"
 )
 
 // quotaUse collects, per block, the seconds its sites or apps were in use
@@ -122,7 +121,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		if !countsByUse(detail) {
 			spent = state.Elapsed(now.Unix())
 		}
-		s := state.Spend(spent).Step(now.Unix(), quota.DayOf(now))
+		s := state.Spend(spent).Step(now.Unix(), state.PeriodOf(now))
 		extras, err := d.GetLockExtras(name)
 		if err != nil {
 			log.Printf("daemon: allowance: %v", err)

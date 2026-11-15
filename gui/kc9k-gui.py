@@ -3551,10 +3551,19 @@ class Window(Gtk.ApplicationWindow):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, margin=12)
 
         quota_row = Gtk.Box(spacing=6)
-        quota_row.pack_start(Gtk.Label(label="Minutes per day:"), False, False, 0)
-        self.quota_minutes = Gtk.SpinButton.new_with_range(1, 1440, 5)
+        quota_row.pack_start(Gtk.Label(label="Minutes:"), False, False, 0)
+        self.quota_minutes = Gtk.SpinButton.new_with_range(1, 44640, 5)
         self.quota_minutes.set_value(30)
         quota_row.pack_start(self.quota_minutes, False, False, 0)
+        # §3.6: per day, week or month, refilled at a set time.
+        self.quota_per = Gtk.ComboBoxText()
+        for key, label in (("day", "per day"), ("week", "per week"), ("month", "per month")):
+            self.quota_per.append(key, label)
+        self.quota_per.set_active_id("day")
+        quota_row.pack_start(self.quota_per, False, False, 0)
+        quota_row.pack_start(Gtk.Label(label="refill at"), False, False, 0)
+        self.quota_refill = Gtk.Entry(text="00:00", width_chars=5, max_length=5)
+        quota_row.pack_start(self.quota_refill, False, False, 0)
         self.quota_set = Gtk.Button(label="Save allowance")
         self.quota_set.connect("clicked", self.set_quota)
         self.quota_start = Gtk.Button(label="Use allowance now")
@@ -3790,8 +3799,12 @@ class Window(Gtk.ApplicationWindow):
         self.quota_start.set_sensitive(limit > 0 and not block["quota_open"] and block["quota_used"] < limit)
         self.quota_end.set_sensitive(block["quota_open"])
         self.quota_remove.set_sensitive(limit > 0)
+        if limit and not self.quota_refill.has_focus() and not self.quota_minutes.has_focus():
+            self.quota_per.set_active_id(block.get("quota_period") or "day")
+            self.quota_refill.set_text(block.get("quota_refill") or "00:00")
+            self.quota_minutes.set_value(limit // 60)
         self.quota_label.set_text(
-            f"Used today: {block['quota_used'] // 60} of {limit // 60} min"
+            f"Used this {block.get('quota_period') or 'day'}: {block['quota_used'] // 60} of {limit // 60} min"
             + (" · session open" if block["quota_open"] else "") if limit else "No allowance set.")
         self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
                                                          if block["active"] else None))
@@ -4073,7 +4086,9 @@ class Window(Gtk.ApplicationWindow):
 
     def set_quota(self, _button):
         if self.selected:
-            self.run(["allowance", "set", self.selected, f"{self.quota_minutes.get_value_as_int()}m"])
+            self.run(["allowance", "set", self.selected, f"{self.quota_minutes.get_value_as_int()}m",
+                      "--per", self.quota_per.get_active_id() or "day",
+                      "--refill", self.quota_refill.get_text().strip() or "00:00"])
 
     def start_quota(self, _button):
         if self.selected:

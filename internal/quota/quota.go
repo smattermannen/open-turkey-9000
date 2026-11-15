@@ -33,6 +33,47 @@ type State struct {
 	SessionEnd   int64 // 0 means the session runs until the quota is spent
 	LastTick     int64
 	PendingLimit int64
+	// Period (§3.6): "" a day, "week" (ISO week) or "month"; Refill: the
+	// minute of the day the allowance starts afresh (0: midnight).
+	Period string
+	Refill int
+}
+
+// Periods an allowance can cover.
+var Periods = []string{"day", "week", "month"}
+
+// PeriodOf names the period t falls in: the day, ISO week or month,
+// counted from the refill time instead of midnight. Step starts a new
+// period when it changes.
+func (s State) PeriodOf(t time.Time) string {
+	t = t.Add(-time.Duration(s.Refill) * time.Minute)
+	switch s.Period {
+	case "week":
+		y, w := t.ISOWeek()
+		return fmt.Sprintf("%d-W%02d", y, w)
+	case "month":
+		return t.Format("2006-01")
+	}
+	return t.Format("2006-01-02")
+}
+
+// ValidateFor checks a limit for a period: up to the period's length.
+func ValidateFor(d time.Duration, period string) error {
+	max := MaxLimit
+	switch period {
+	case "week":
+		max = 7 * 24 * time.Hour
+	case "month":
+		max = 31 * 24 * time.Hour
+	}
+	if d < MinLimit || d > max {
+		name := period
+		if name == "" {
+			name = "day"
+		}
+		return fmt.Errorf("an allowance per %s must be between %s and %s", name, MinLimit, max)
+	}
+	return nil
 }
 
 // New returns a fresh quota.

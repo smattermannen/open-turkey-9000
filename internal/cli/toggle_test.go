@@ -180,3 +180,23 @@ func TestRewardKeepCommand(t *testing.T) {
 	}
 	mustRun(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "one")
 }
+
+// §3.6: allowance per week with a refill time; changing the period weakens.
+func TestAllowancePeriod(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "allowance", "set", "b", "5h", "--per", "week", "--refill", "04:00")
+	q, _ := d.GetQuota("b")
+	if q == nil || q.Period != "week" || q.Refill != 240 || q.Limit != 5*3600 {
+		t.Fatalf("quota = %+v", q)
+	}
+	if err := runCLI(t, "allowance", "set", "b", "30h"); err == nil {
+		t.Error("30h per day accepted")
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "allowance", "set", "b", "5h", "--per", "month", "--refill", "04:00"); err == nil {
+		t.Error("changed the period of a locked block")
+	}
+}

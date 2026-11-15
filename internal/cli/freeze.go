@@ -12,6 +12,7 @@ import (
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/freeze"
 	"github.com/smattermannen/kc9k/internal/quota"
+	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 )
 
@@ -146,6 +147,8 @@ type guiBlock struct {
 	QuotaUsed     int64          `json:"quota_used"`
 	QuotaOpen     bool           `json:"quota_open"`
 	QuotaNext     int64          `json:"quota_next"`
+	QuotaPeriod   string         `json:"quota_period,omitempty"` // "" day, week, month (§3.6)
+	QuotaRefill   string         `json:"quota_refill,omitempty"` // HH:MM
 	KeywordTest   bool           `json:"keyword_test"`
 	Places        []string       `json:"places"`
 	LoosenDelay   int64          `json:"loosen_delay"`
@@ -518,8 +521,9 @@ var guiStateCmd = &cobra.Command{
 			if q, err := database.GetQuota(b.Name); err != nil {
 				return err
 			} else if q != nil {
-				s := q.Step(now.Unix(), quota.DayOf(now))
+				s := q.Step(now.Unix(), q.PeriodOf(now))
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
+				g.QuotaPeriod, g.QuotaRefill = s.Period, schedule.FormatMinutes(s.Refill)
 			}
 			g.Places = placeNames(places, b.Name)
 			g.LoosenDelay, _ = database.LoosenDelay(b.Name)

@@ -113,7 +113,6 @@ Only items not simply Built.
 | Item | Status | Notes |
 |---|---|---|
 | §3.1 File URL entries | Partial | built: with tamper `file-urls` on, blacklist `file:///…` entries go into Firefox/LibreWolf and Chrome policies unless the block's file exceptions spare them (checked live in LibreWolf); Chrome live: Unchecked; the extension doesn't judge file pages |
-| §3.1 Folder entry | Partial | programs closed; windows showing it not |
 | §3.2 Template | Built | your own saved definitions: `template save B T`, `template`, `template remove T`, `block create X --template T`; GUI "Save as template…" and a choice in New block; projects. None shipped |
 | §3.2 Affected users | Not built | |
 | §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |

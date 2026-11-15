@@ -114,6 +114,16 @@ func enforceTitles(d *db.DB, active []db.ActiveBlockDetail, now time.Time) {
 	}
 	keywords := activeTitles(active)
 	owners := titleOwners(active)
+	var folders []string
+	for _, b := range active {
+		for _, a := range b.Apps {
+			if strings.HasSuffix(a, "/") && strings.HasPrefix(a, "/") {
+				folders = append(folders, a)
+				owners[a] = append(owners[a], b.BlockName)
+			}
+		}
+	}
+	titleGuard.SetFolders(folders)
 	go func() {
 		defer titleGuardBusy.Store(false)
 		_, asked := titleGuard.Enforce(keywords, now)

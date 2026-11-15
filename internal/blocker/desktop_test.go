@@ -29,3 +29,22 @@ func TestRunningApps(t *testing.T) {
 		t.Errorf("RunningApps = %v; want [%s]", got, self)
 	}
 }
+
+// §3.1 folder entry: a file manager window showing the folder, by title.
+func TestFolderWindow(t *testing.T) {
+	folders := []string{"/home/me/games/"}
+	for title, want := range map[string]string{
+		"games":                   "/home/me/games/",
+		"games — Dolphin":         "/home/me/games/",
+		"/home/me/games - Thunar": "/home/me/games/",
+		"Downloads":               "",
+		"gamesaves":               "",
+	} {
+		if got := folderWindow(title, folders); got != want {
+			t.Errorf("%q: %q; want %q", title, got, want)
+		}
+	}
+	if fileManagers["nemo-desktop"] || !fileManagers["nemo"] {
+		t.Error("the desktop's icons aren't a folder window")
+	}
+}

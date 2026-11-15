@@ -40,6 +40,7 @@ type titleSession struct {
 
 // TitleGuard closes apps whose window titles contain blocked keywords.
 type TitleGuard struct {
+	folders  []string // folder entries (§3.1): file manager windows showing them close
 	mu       sync.Mutex
 	asked    map[uint32]time.Time // window -> when it was asked to close
 	browsers *browserCache
@@ -83,7 +84,7 @@ func matchingKeyword(title string, keywords []string) string {
 func (g *TitleGuard) Enforce(keywords []string, now time.Time) (int, []string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if len(keywords) == 0 {
+	if len(keywords) == 0 && len(g.folders) == 0 {
 		g.asked = map[uint32]time.Time{}
 		return 0, nil
 	}
@@ -102,6 +103,9 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) (int, []string) {
 		}
 		for _, w := range windows {
 			keyword := matchingKeyword(w.Title, keywords)
+			if keyword == "" && fileManagers[exeName(w.PID)] {
+				keyword = folderWindow(w.Title, g.folders) // §3.1: a window showing a folder entry
+			}
 			if keyword == "" || w.PID <= 1 || !ownedBy(w.PID, s.uid) {
 				continue
 			}
@@ -157,4 +161,32 @@ func killTrees(roots map[int]uint64) int {
 		}
 	}
 	return killed
+}
+
+// fileManagers are the programs whose windows show folders.
+var fileManagers = map[string]bool{"nemo": true, "nautilus": true, "caja": true, "thunar": true,
+	"dolphin": true, "pcmanfm": true, "pcmanfm-qt": true, "nemo-desktop": false}
+
+// SetFolders sets the folder entries whose file manager windows close.
+func (g *TitleGuard) SetFolders(folders []string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.folders = folders
+}
+
+// folderWindow returns the folder a file manager window shows, by its
+// title: the folder's name ("games", "games — Dolphin") or its whole path;
+// "" for none.
+func folderWindow(title string, folders []string) string {
+	for _, f := range folders {
+		path := strings.TrimSuffix(f, "/")
+		base := path[strings.LastIndex(path, "/")+1:]
+		if base == "" {
+			continue
+		}
+		if title == base || strings.HasPrefix(title, base+" ") || strings.Contains(title, path) {
+			return f
+		}
+	}
+	return ""
 }

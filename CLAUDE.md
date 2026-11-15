@@ -106,7 +106,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
     `/etc/polkit-1/rules.d/00-kc9k-lockdown.rules`; no exec from `/home`,
     `/tmp`, `/var/tmp`, `/dev/shm`. Boot param `kc9k.nofreeze` skips freeze
     and lockdown for that boot.
-  - `titles.go`/`x11.go`: asks matching windows to close, kills after
+  - `titles.go`/`x11.go`: asks matching windows to close (also file manager
+    windows showing a folder entry: `SetFolders`, `folderWindow`), kills after
     `TitleCloseGrace`; cgo-free X11 client (user's own Xauthority only,
     cookie only to root/user-owned socket, capped replies, 3 s budget, PID
     trusted only for the session user). Runs beside the cycle

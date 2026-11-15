@@ -21,6 +21,7 @@ other planning/status files. No user-facing docs.
 ```bash
 export PATH="/usr/local/go/bin:$PATH"
 make build            # CGO_ENABLED=0 go build -o kc9k ./cmd/kc9k
+make deb              # packaging/build-deb.sh: kc9k_<version>_<arch>.deb (TAGS=devmaster for tests)
 sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 ```
 

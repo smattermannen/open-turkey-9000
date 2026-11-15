@@ -164,6 +164,13 @@ uninstall:
 	@echo ">> Uninstallation completed successfully!"
 
 # -------------------------------------------------------
+# deb: builds a .deb package (§4.11); TAGS=devmaster for testing builds
+# -------------------------------------------------------
+.PHONY: deb
+deb:
+	TAGS="$(TAGS)" sh packaging/build-deb.sh
+
+# -------------------------------------------------------
 # clean: removes build artifacts
 # -------------------------------------------------------
 .PHONY: clean

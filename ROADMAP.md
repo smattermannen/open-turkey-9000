@@ -33,28 +33,27 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     grep circadian`, and whether it stops with the daemon stopped. M
     (Strict lockdown's polkit rule also blocks the backlight helper and
     colord, which breaks the same controls while strict mode is on; fix
-    pending below.)
+    done.)
   - [ ] Phrase editor: "Save changes" sometimes becomes "Add phrase"
     (copies), and saving sometimes says the set has no such phrase (§4.3).
     Cause found: after a change the card keeps the removed phrase as the one
     being edited; next save removes a phrase that is gone, or a rebuilt card
-    adds a copy. Fix pending below. S
+    adds a copy. Fixed (GUI keeps editing the saved phrase); confirm on the
+    laptop, `ci/gui_phrase_smoke.py` not run here (no GTK).
   - [ ] Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
-  - [ ] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
-    none allowed; length ≥ 2. Differs: `db.Phrase`, `match.js`, GUI force
-    the first two necessary. Fix pending below. S
-  - [ ] Lists and phrase sets may have no action (§3.9, changed
-    2026-11-15). Differs: `list action … off` and `phrase-set action … off`
-    refuse the last action. Fix pending below. S
+  - [x] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
+    none allowed; length ≥ 2. Built in `db.Phrase`, `match.js`, GUI.
+  - [x] Lists and phrase sets may have no action (§3.9, changed
+    2026-11-15). Built: the last action can be turned off; no-action rules
+    reach the extension with no actions and do nothing.
   - [ ] Phrase import mode 1 (term list → one word set) and mode 2 (phrase
-    format) in the GUI (§4.3). `phrase-set import|export` exist on the
-    command line; GUI has neither. Fix pending below. S
+    format) in the GUI (§4.3). Built: editor "Import word set…" (file or
+    KC9K list), phrase set card Import/Export. Confirm on the laptop.
   - [ ] Statistics bar chart: one colour per site/app over time (§4.9). Not
     built. M
-  - Pending, uncommitted in the 2026-11-15 session (not pushed; owner to
-    decide): R-PHRASE-1, no-action lists/phrase sets, editor save fix,
-    import/export modes, strict-mode polkit allowing backlight helper and
-    colord. `internal/cli` tests need a rerun; GUI smoke on the laptop.
+  - [ ] GUI overall unclear, hard to read, not pretty or easy to use (owner,
+    2026-11-15; §4). Needs the owner's worst pages first. L
+  - Strict lockdown polkit now allows the backlight helper and colord.
 
 - [ ] **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
   (`kc9k schedule lock B on --lead D`) replaces built-in schedule/place

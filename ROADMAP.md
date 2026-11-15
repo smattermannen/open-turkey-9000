@@ -57,9 +57,12 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   Unchecked. (M)
 - [ ] **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
   `project import` refuses monk steps/actions without `--no-confirm-ok`
-  (`projectMonk`); both in `confirm_test.go`. `block import` the same. Left: the hotkey
-  press dialog is tested only with a stub (`blocker.ConfirmDesktop` is never
-  run for real; needs a live check). (S)
+  (`projectMonk`); both in `confirm_test.go`. `block import` the same. The
+  hotkey press dialog (`blocker.ConfirmDesktop`) ran live on the laptop
+  (2026-11-15): zenity shows "Lock 'B'?" with target, kind and length;
+  unanswered (screen locked) it times out after 60 s and nothing is locked;
+  synthetic keys from other programs are ignored. Left: a person clicks
+  Lock and Cancel on an unlocked screen. (S)
 
 ### 0.2 Not yet confirmed in real use
 

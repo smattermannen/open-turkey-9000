@@ -3616,7 +3616,15 @@ class Window(Gtk.ApplicationWindow):
         allowance_row.pack_start(self.allowance_minutes, False, False, 0)
         allowance_row.pack_start(Gtk.Label(label="min of break for every"), False, False, 0)
         allowance_row.pack_start(self.allowance_per, False, False, 0)
-        allowance_row.pack_start(Gtk.Label(label="min of blocking"), False, False, 0)
+        allowance_row.pack_start(Gtk.Label(label="min of blocking, kept"), False, False, 0)
+        # §3.6: saved up to one break, or accumulating until a period ends.
+        self.reward_keep = Gtk.ComboBoxText()
+        for key, label in (("one", "up to one break"), ("window", "until the window ends"),
+                           ("day", "until the day ends"), ("week", "until the week ends"),
+                           ("month", "until the month ends")):
+            self.reward_keep.append(key, label)
+        self.reward_keep.set_active_id("one")
+        allowance_row.pack_start(self.reward_keep, False, False, 0)
         allowance_buttons = Gtk.Box(spacing=6)
         for label, handler in (("Save allowance", self.set_allowance), ("Remove", self.clear_allowance)):
             button = Gtk.Button(label=label)
@@ -3744,6 +3752,8 @@ class Window(Gtk.ApplicationWindow):
             self.schedule_lock.set_active(block.get("schedule_lock", False))
             self.schedule_lead.set_value(block.get("schedule_lead", 0))
         allowance, balance = block.get("break_allowance", 0), block.get("break_balance", 0)
+        if allowance and not self.reward_keep.has_focus():
+            self.reward_keep.set_active_id(block.get("break_keep") or "one")
         paused = block.get("paused_seconds", 0)
         self.break_start.set_sensitive(block["active"] and allowance > 0 and balance >= 60 and not paused)
         self.break_end.set_sensitive(bool(paused))
@@ -4091,7 +4101,8 @@ class Window(Gtk.ApplicationWindow):
         if self.selected:
             self.run(["break", "reward", self.selected,
                       f"{self.allowance_minutes.get_value_as_int()}m",
-                      "--per", f"{self.allowance_per.get_value_as_int()}m"])
+                      "--per", f"{self.allowance_per.get_value_as_int()}m",
+                      "--keep", self.reward_keep.get_active_id() or "one"])
 
     def clear_allowance(self, _button):
         if self.selected:

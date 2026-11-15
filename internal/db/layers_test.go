@@ -98,3 +98,23 @@ func TestRangeLock(t *testing.T) {
 		t.Errorf("range layer: %v", on)
 	}
 }
+
+// §3.6 reward: kept for a period it accumulates past one break, and
+// empties when the period ends; a longer period is looser.
+func TestRewardKeep(t *testing.T) {
+	one := Breaks{Allowance: 600, Per: 3600}
+	if got := one.Earn(3600 * 3); got.BalanceMs != 600*1000 {
+		t.Errorf("one: balance %d", got.BalanceMs)
+	}
+	day := Breaks{Allowance: 600, Per: 3600, Keep: "day", Period: "2026-11-16"}
+	day = day.Earn(3600 * 3)
+	if day.BalanceMs != 1800*1000 {
+		t.Errorf("day: balance %d", day.BalanceMs)
+	}
+	if day.Expire("2026-11-16").BalanceMs != 1800*1000 || day.Expire("2026-11-17").BalanceMs != 0 {
+		t.Error("expiry")
+	}
+	if !day.LooserThan(one) || (Breaks{Allowance: 600, Per: 3600, Keep: "day"}).LooserThan(Breaks{Allowance: 600, Per: 3600, Keep: "week"}) {
+		t.Error("looser order")
+	}
+}

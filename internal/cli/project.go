@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -64,8 +65,9 @@ type breaksExport struct {
 	Per       int64 `json:"per_seconds,omitempty"`
 	Relock    int64 `json:"relock_seconds,omitempty"`
 	// Delay break (§3.6).
-	DelayLength int64 `json:"delay_break_seconds,omitempty"`
-	DelayWait   int64 `json:"delay_wait_seconds,omitempty"`
+	DelayLength int64  `json:"delay_break_seconds,omitempty"`
+	DelayWait   int64  `json:"delay_wait_seconds,omitempty"`
+	Keep        string `json:"reward_keep,omitempty"` // §3.6
 }
 
 // blockExtras is what a project adds to a block's export.
@@ -209,7 +211,7 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	if k, err := database.GetBreaks(name); err != nil {
 		return out, err
 	} else if k.Allowance > 0 || k.Relock > 0 || k.DelayLength > 0 {
-		out.Breaks = &breaksExport{Allowance: k.Allowance, Per: k.Per, Relock: k.Relock, DelayLength: k.DelayLength, DelayWait: k.DelayWait}
+		out.Breaks = &breaksExport{Allowance: k.Allowance, Per: k.Per, Relock: k.Relock, DelayLength: k.DelayLength, DelayWait: k.DelayWait, Keep: k.Keep}
 	}
 	rules, err := database.Autostarts(name)
 	if err != nil {
@@ -362,7 +364,7 @@ func createBlock(database *db.DB, c checkedBlock) error {
 	}
 	if k := in.Breaks; k != nil {
 		if err := database.SetBreaks(in.Name, db.Breaks{Allowance: k.Allowance, Per: k.Per, Relock: k.Relock,
-			DelayLength: k.DelayLength, DelayWait: k.DelayWait}); err != nil {
+			DelayLength: k.DelayLength, DelayWait: k.DelayWait, Keep: rewardKeep(k.Keep)}); err != nil {
 			return err
 		}
 	}
@@ -920,6 +922,14 @@ func projectMonk(in projectExport) string {
 	}
 	if ladder(in.Nepsis) {
 		return "a bypass prevention step"
+	}
+	return ""
+}
+
+// rewardKeep keeps a known reward period from a file, else one break.
+func rewardKeep(keep string) string {
+	if slices.Contains(db.RewardKeeps, keep) {
+		return keep
 	}
 	return ""
 }

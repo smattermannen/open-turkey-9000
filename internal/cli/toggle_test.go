@@ -163,3 +163,20 @@ func TestDelayBreakCommand(t *testing.T) {
 	}
 	mustRun(t, "break", "delay", "b", "off")
 }
+
+// §3.6 reward kept longer weakens.
+func TestRewardKeepCommand(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "day")
+	if k, _ := d.GetBreaks("b"); k.Keep != "day" {
+		t.Fatalf("keep = %q", k.Keep)
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "month"); err == nil {
+		t.Error("a longer keep while locked")
+	}
+	mustRun(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "one")
+}

@@ -42,6 +42,37 @@ type Breaks struct {
 	DelayLength int64
 	DelayWait   int64
 	DelayAt     int64
+	// Keep (§3.6 reward): "" saves up to one allowance; "window", "day",
+	// "week" or "month" lets reward accumulate until that period ends.
+	// Period names the period the balance was earned in.
+	Keep   string
+	Period string
+}
+
+// RewardKeeps are the periods a reward can accumulate over, shortest first.
+var RewardKeeps = []string{"window", "day", "week", "month"}
+
+// keepRank orders how long a reward may be kept: longer is looser.
+func keepRank(keep string) int {
+	for i, k := range RewardKeeps {
+		if k == keep {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// maxRewardMs bounds an accumulating balance: a day.
+const maxRewardMs = 24 * 3600 * 1000
+
+// Expire empties the balance of a reward kept for a period once period
+// (the current period's name) differs from the one it was earned in.
+func (b Breaks) Expire(period string) Breaks {
+	if b.Keep == "" || b.Period == period {
+		return b
+	}
+	b.BalanceMs, b.Period = 0, period
+	return b
 }
 
 // Balance returns the break time available, in whole seconds.
@@ -52,7 +83,11 @@ func (b Breaks) Earn(seconds int64) Breaks {
 	if b.Allowance <= 0 || b.Per <= 0 || seconds <= 0 {
 		return b
 	}
-	b.BalanceMs = min(b.BalanceMs+seconds*1000*b.Allowance/b.Per, b.Allowance*1000)
+	limit := b.Allowance * 1000
+	if b.Keep != "" {
+		limit = maxRewardMs
+	}
+	b.BalanceMs = min(b.BalanceMs+seconds*1000*b.Allowance/b.Per, limit)
 	return b
 }
 
@@ -62,6 +97,9 @@ func (b Breaks) LooserThan(old Breaks) bool {
 		return true
 	}
 	if b.DelayLength > old.DelayLength || (b.DelayLength > 0 && (old.DelayLength == 0 || b.DelayWait < old.DelayWait)) {
+		return true
+	}
+	if b.Allowance > 0 && keepRank(b.Keep) > keepRank(old.Keep) {
 		return true
 	}
 	if b.Allowance == 0 {
@@ -74,9 +112,9 @@ func (b Breaks) LooserThan(old Breaks) bool {
 // GetBreaks returns a block's break settings (zero when it has none).
 func (d *DB) GetBreaks(name string) (Breaks, error) {
 	var b Breaks
-	err := d.conn.QueryRow(`SELECT k.allowance, k.per, k.balance_ms, k.relock, k.delay_length, k.delay_wait, k.delay_at FROM block_breaks k
+	err := d.conn.QueryRow(`SELECT k.allowance, k.per, k.balance_ms, k.relock, k.delay_length, k.delay_wait, k.delay_at, k.keep, k.period FROM block_breaks k
 		JOIN blocks b ON b.id = k.block_id WHERE b.name = ?`, name).Scan(&b.Allowance, &b.Per, &b.BalanceMs, &b.Relock,
-		&b.DelayLength, &b.DelayWait, &b.DelayAt)
+		&b.DelayLength, &b.DelayWait, &b.DelayAt, &b.Keep, &b.Period)
 	if err == sql.ErrNoRows {
 		return Breaks{}, nil
 	}
@@ -101,12 +139,12 @@ func (d *DB) SetBreaks(name string, b Breaks) error {
 	if b.Allowance == 0 && b.Relock == 0 && b.DelayLength == 0 {
 		_, err = d.conn.Exec("DELETE FROM block_breaks WHERE block_id = ?", blockID)
 	} else {
-		_, err = d.conn.Exec(`INSERT INTO block_breaks (block_id, allowance, per, balance_ms, relock, delay_length, delay_wait, delay_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		_, err = d.conn.Exec(`INSERT INTO block_breaks (block_id, allowance, per, balance_ms, relock, delay_length, delay_wait, delay_at, keep, period)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(block_id) DO UPDATE SET allowance = excluded.allowance, per = excluded.per,
 			balance_ms = excluded.balance_ms, relock = excluded.relock, delay_length = excluded.delay_length,
-			delay_wait = excluded.delay_wait, delay_at = excluded.delay_at`,
-			blockID, b.Allowance, b.Per, b.BalanceMs, b.Relock, b.DelayLength, b.DelayWait, b.DelayAt)
+			delay_wait = excluded.delay_wait, delay_at = excluded.delay_at, keep = excluded.keep, period = excluded.period`,
+			blockID, b.Allowance, b.Per, b.BalanceMs, b.Relock, b.DelayLength, b.DelayWait, b.DelayAt, b.Keep, b.Period)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to save the breaks of '%s': %w", name, err)

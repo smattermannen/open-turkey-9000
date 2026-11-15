@@ -154,14 +154,15 @@ type guiBlock struct {
 	Social        []string       `json:"social"`
 	// Breaks: the allowance (seconds per BreakPer of blocking), what is
 	// earned, the relock time, and how long the block is lifted for now.
-	BreakAllowance int64 `json:"break_allowance"`
-	BreakPer       int64 `json:"break_per"`
-	BreakBalance   int64 `json:"break_balance"`
-	Relock         int64 `json:"relock"`
-	DelayBreak     int64 `json:"delay_break,omitempty"`    // §3.6: its length
-	DelayWait      int64 `json:"delay_wait,omitempty"`     // its countdown
-	DelayBreakIn   int64 `json:"delay_break_in,omitempty"` // asked: seconds until it begins
-	PausedSeconds  int64 `json:"paused_seconds"`
+	BreakAllowance int64  `json:"break_allowance"`
+	BreakPer       int64  `json:"break_per"`
+	BreakBalance   int64  `json:"break_balance"`
+	Relock         int64  `json:"relock"`
+	DelayBreak     int64  `json:"delay_break,omitempty"`    // §3.6: its length
+	BreakKeep      string `json:"break_keep,omitempty"`     // reward kept until this period ends ("": one break)
+	DelayWait      int64  `json:"delay_wait,omitempty"`     // its countdown
+	DelayBreakIn   int64  `json:"delay_break_in,omitempty"` // asked: seconds until it begins
+	PausedSeconds  int64  `json:"paused_seconds"`
 }
 
 // guiSettingLock is a browser setting's locks for the interface.
@@ -530,6 +531,7 @@ var guiStateCmd = &cobra.Command{
 			}
 			g.BreakAllowance, g.BreakPer, g.BreakBalance, g.Relock = k.Allowance, k.Per, k.Balance(), k.Relock
 			g.DelayBreak, g.DelayWait = k.DelayLength, k.DelayWait
+			g.BreakKeep = k.Keep
 			if k.DelayAt > trusted {
 				g.DelayBreakIn = k.DelayAt - trusted
 			}

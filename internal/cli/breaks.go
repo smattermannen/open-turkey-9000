@@ -10,6 +10,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -118,7 +119,19 @@ var breakAllowanceCmd = &cobra.Command{
 			if k.Allowance >= k.Per {
 				return fmt.Errorf("the break must be shorter than the time it is earned over")
 			}
-			k.BalanceMs = min(k.BalanceMs, k.Allowance*1000)
+			if cmd.Flags().Changed("keep") {
+				keep, _ := cmd.Flags().GetString("keep")
+				if keep == "one" {
+					keep = ""
+				}
+				if keep != "" && !slices.Contains(db.RewardKeeps, keep) {
+					return fmt.Errorf("--keep is one, window, day, week or month")
+				}
+				k.Keep = keep
+			}
+			if k.Keep == "" {
+				k.BalanceMs = min(k.BalanceMs, k.Allowance*1000)
+			}
 		}
 		if err := saveBreaks(database, args[0], old, k); err != nil {
 			return err
@@ -126,7 +139,11 @@ var breakAllowanceCmd = &cobra.Command{
 		if k.Allowance == 0 {
 			fmt.Printf("Block '%s' has no reward.\n", args[0])
 		} else {
-			fmt.Printf("Block '%s' earns %s of break per %s of blocking.\n", args[0], seconds(k.Allowance), seconds(k.Per))
+			keep := "saved up to one break"
+			if k.Keep != "" {
+				keep = "kept until the " + k.Keep + " ends"
+			}
+			fmt.Printf("Block '%s' earns %s of break per %s of blocking, %s.\n", args[0], seconds(k.Allowance), seconds(k.Per), keep)
 		}
 		return nil
 	}),
@@ -261,6 +278,7 @@ var breakStartCmd = &cobra.Command{
 		if until, _ := database.PausedUntil(name); until > trusted {
 			return fmt.Errorf("block '%s' is already on a break for %s more", name, seconds(until-trusted))
 		}
+		k = k.Expire(enforce.RewardPeriod(database, name, k.Keep, time.Unix(trusted, 0)))
 		take := k.Balance()
 		if len(args) == 2 {
 			want, err := parseBreak(args[1], db.MaxBreakSeconds)
@@ -330,6 +348,7 @@ var breakEndCmd = &cobra.Command{
 
 func init() {
 	breakAllowanceCmd.Flags().String("per", "1h", "The stretch of blocking the break is earned over")
+	breakAllowanceCmd.Flags().String("keep", "one", "How reward is kept: one (up to one break), or accumulating until the window, day, week or month ends")
 	breakCmd.AddCommand(breakAllowanceCmd, breakRelockCmd, breakDelayCmd, breakRequestCmd, breakStartCmd, breakEndCmd)
 	rootCmd.AddCommand(breakCmd)
 }

@@ -1,7 +1,9 @@
 package enforce
 
 import (
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
@@ -32,6 +34,13 @@ func earnBreaks(d *db.DB, enforced []db.ActiveBlockDetail, trusted int64) {
 			log.Printf("breaks: %v", err)
 			continue
 		}
+		expired := k.Expire(RewardPeriod(d, b.BlockName, k.Keep, time.Unix(trusted, 0)))
+		if expired != k {
+			if err := d.SetBreaks(b.BlockName, expired); err != nil {
+				log.Printf("breaks: %v", err)
+			}
+			k = expired
+		}
 		earned := k.Earn(elapsed)
 		if earned == k {
 			continue
@@ -48,4 +57,31 @@ func earnBreaks(d *db.DB, enforced []db.ActiveBlockDetail, trusted int64) {
 			}
 		}
 	}
+}
+
+// RewardPeriod names the period a reward kept for keep belongs to at t:
+// the day, ISO week or month, or the block window it falls in (the day,
+// for a block without windows). "" for a reward saved up to one allowance.
+func RewardPeriod(d *db.DB, block, keep string, t time.Time) string {
+	switch keep {
+	case "day":
+		return t.Format("2006-01-02")
+	case "week":
+		y, w := t.ISOWeek()
+		return fmt.Sprintf("%d-W%02d", y, w)
+	case "month":
+		return t.Format("2006-01")
+	case "window":
+		schedules, err := d.ListSchedules(block)
+		if err == nil {
+			for _, s := range schedules {
+				w := s.Window()
+				if !w.Allow && w.ActiveAt(t) {
+					return fmt.Sprintf("%s %d", t.Format("2006-01-02"), w.Start)
+				}
+			}
+		}
+		return t.Format("2006-01-02")
+	}
+	return ""
 }

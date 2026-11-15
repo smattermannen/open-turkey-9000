@@ -63,6 +63,13 @@ want = ["Settings", "Preferences", "No weakening during active locks", "Tamper p
 check([t for t in settings if t in want] == want, "Settings groups in §4.10 order: " + ", ".join(settings))
 check("Statistics" not in settings, "no Statistics group in Settings")
 device = titles("device")
+# §3.8: the allowed apps list of 'allowed apps only' freezes.
+win.freeze_apps.entry.set_text("libreoffice")
+win.freeze_apps._add(None)
+settle()
+check(win.state.get("freeze_apps") == ["libreoffice"], "allowed app added: %s" % win.state.get("freeze_apps"))
+r = cli("freeze", "apps", "remove", "libreoffice"); settle()
+
 check("Strict mode" not in device and "No-escape" not in device, "Device Blocks keeps only Frozen Chicken: " + ", ".join(device))
 check("Recording" in titles("stats"), "statistics recording on the Statistics page")
 check([n for n, *_ in gui.BROWSER_OPTIONS] == ["safesearch", "force-search", "web-only", "block-devtools", "no-private"],

@@ -104,6 +104,18 @@ win.cluster_entries._add(None); settle(); win.update_clusters()
 c = [c for c in json.loads(cli("gui-state").stdout)["clusters"] if c["name"] == "Cats"][0]
 check(c["phrases"] and c["entries"] == ["[long cat, neko] [running, sitting]"], "phrase typed into a cluster: %s" % c["entries"])
 check(not win.record_start.get_sensitive(), "no recording into a phrase cluster")
+check(not win.record_words.get_sensitive(), "no word recording into a phrase cluster")
+# §3.12 word recording into a text cluster.
+r = cli("cluster", "create", "Study", "--text"); assert r.returncode == 0, r.stderr
+settle(); win.update_clusters()
+win.cluster_combo.set_active(win.clusters_shown.index("Study")); win.update_clusters()
+check(win.record_words.get_sensitive(), "word recording offered for a text cluster")
+win.record_words.clicked(); settle(); win.update_clusters()
+rec = json.loads(cli("gui-state").stdout)["recording"]
+check(rec and rec["words"] and "Recording words" in win.record_label.get_label(), "word recording from the GUI: %s" % rec)
+r = cli("record", "stop", "--discard"); assert r.returncode == 0, r.stderr
+r = cli("record", "baseline", "off"); assert r.returncode == 0, r.stderr
+settle()
 # R-PHRASE-6, §3.2: a list's card ticks the URL, title and text.
 r = cli("list", "create", "b", "Url words", "--url", "--terms"); assert r.returncode == 0, r.stderr
 settle()

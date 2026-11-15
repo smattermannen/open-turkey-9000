@@ -215,6 +215,11 @@ type guiRecording struct {
 	Block   string `json:"block"`
 	List    string `json:"list"`
 	Sites   int    `json:"sites"`
+	// A word recording (§3.12): its words so far, and the most specific.
+	Words bool     `json:"words"`
+	Count int      `json:"word_count"`
+	Pages int64    `json:"pages"`
+	Top   []string `json:"top"`
 }
 
 // guiPlace is a saved place for the interface.
@@ -226,6 +231,7 @@ type guiPlace struct {
 type guiState struct {
 	FreezeSeconds int64    `json:"freeze_seconds"`
 	FreezeMode    string   `json:"freeze_mode"`
+	FreezeApps    []string `json:"freeze_apps"` // §3.8: allowed apps only
 	Strict        bool     `json:"strict"`
 	NoEscape      bool     `json:"no_escape"`
 	Stats         bool     `json:"stats"`
@@ -329,6 +335,9 @@ var guiStateCmd = &cobra.Command{
 		}
 		state.NoEscape = noEscape == "on"
 		state.Stats = enforce.StatsOn(database)
+		if state.FreezeApps = enforce.FreezeApps(database); state.FreezeApps == nil {
+			state.FreezeApps = []string{}
+		}
 		if state.Accounts = accounts(); state.Accounts == nil {
 			state.Accounts = []string{}
 		}
@@ -442,6 +451,15 @@ var guiStateCmd = &cobra.Command{
 			}
 			if sites, err := database.RecordedSites(); err == nil {
 				g.Sites = len(sites)
+			}
+			if g.Words = rec.Words; rec.Words {
+				g.Top = []string{}
+				if words, err := database.RecordedWords(); err == nil {
+					g.Count, g.Pages = len(words), database.RecordedPages()
+					for _, w := range words[:min(len(words), 15)] {
+						g.Top = append(g.Top, w.Word)
+					}
+				}
 			}
 			state.Recording = g
 		}

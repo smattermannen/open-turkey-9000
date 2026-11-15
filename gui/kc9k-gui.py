@@ -4735,19 +4735,31 @@ class Window(Gtk.ApplicationWindow):
         self.record_start = Gtk.Button(label="Record into this cluster")
         self.record_start.connect("clicked", lambda _b: self.cluster_name() and self.run(
             ["record", "start", "--cluster", self.cluster_name()]))
-        self.record_stop = Gtk.Button(label="Stop and add the sites")
+        # §3.12 word recording: the rendered words of the pages, ranked by
+        # how specific they are; the least specific cut before adding.
+        self.record_words = Gtk.Button(label="Record words")
+        self.record_words.set_tooltip_text("Record the words shown on the pages you open (the cluster must look at page text)")
+        self.record_words.connect("clicked", lambda _b: self.cluster_name() and self.run(
+            ["record", "start", "--cluster", self.cluster_name(), "--words"]))
+        self.record_cut = Gtk.SpinButton.new_with_range(0, 95, 5)
+        self.record_cut.set_tooltip_text("Words: drop this percentage of the least specific before adding")
+        self.record_stop = Gtk.Button(label="Stop and add")
         self.record_stop.connect("clicked", lambda _b: self.run(
-            ["record", "stop"], then=lambda output: self.message(output, Gtk.MessageType.INFO)))
+            ["record", "stop", "--cut", str(self.record_cut.get_value_as_int())],
+            then=lambda output: self.message(output, Gtk.MessageType.INFO)))
         self.record_discard = Gtk.Button(label="Stop and discard")
         self.record_discard.connect("clicked", lambda _b: self.run(["record", "stop", "--discard"]))
-        for button in (self.record_start, self.record_stop, self.record_discard):
+        for button in (self.record_start, self.record_words, Gtk.Label(label="cut %"), self.record_cut,
+                       self.record_stop, self.record_discard):
             record_row.pack_start(button, False, False, 0)
         box.pack_start(section(
-            "Record the sites you open",
+            "Record the sites or words you open",
             dim("While recording, every site opened in the browser (pages and the frames inside "
                 "them, such as a login from another site) is noted. Stopping adds them to the "
                 "cluster. Use it to collect what a task needs, then copy the cluster into a "
-                "block's exceptions."),
+                "block's exceptions. Recording words notes the words shown on each page instead, "
+                "ranked by how much more common they are there than in your normal browsing; "
+                "cut drops the least specific before adding."),
             self.record_label, record_row), False, False, 0)
         return scroll
 
@@ -4771,13 +4783,22 @@ class Window(Gtk.ApplicationWindow):
         if recording:
             target = (f"the cluster {recording['cluster']}" if recording.get("cluster")
                       else f"the list {recording.get('list')} of {recording.get('block')}")
-            self.record_label.set_markup(
-                f"<b>Recording</b> into {GLib.markup_escape_text(target)}: {recording.get('sites', 0)} sites so far.")
+            if recording.get("words"):
+                top = ", ".join(recording.get("top") or [])
+                self.record_label.set_markup(
+                    f"<b>Recording words</b> into {GLib.markup_escape_text(target)}: {recording.get('word_count', 0)} "
+                    f"words on {recording.get('pages', 0)} pages so far."
+                    + (f"\nMost specific: {GLib.markup_escape_text(top)}" if top else ""))
+            else:
+                self.record_label.set_markup(
+                    f"<b>Recording</b> into {GLib.markup_escape_text(target)}: {recording.get('sites', 0)} sites so far.")
         else:
             self.record_label.set_text("Not recording.")
         shown = next((c for c in self.state.get("clusters") or [] if c["name"] == self.cluster_name()), {})
         # R-PHRASE-10: phrases take no part in recording.
         self.record_start.set_sensitive(not recording and bool(self.cluster_name()) and not shown.get("phrases"))
+        self.record_words.set_sensitive(not recording and bool(self.cluster_name()) and not shown.get("phrases")
+                                        and "text" in (shown.get("where") or []))
         self.record_stop.set_sensitive(bool(recording))
         self.record_discard.set_sensitive(bool(recording))
 
@@ -4912,6 +4933,14 @@ class Window(Gtk.ApplicationWindow):
             help_text="Freeze at set times in the mode chosen above, for example every night. "
                       "Days, start and end; for overnight add two (23:00 24:00 and 00:00 06:00). "
                       "A locked schedule can't be removed from its lead time before it starts until it ends.")
+        # §3.8: the apps an "allowed apps only" freeze lets run.
+        self.freeze_apps = EditableList(
+            "Allowed apps (mode: allowed apps only)", "libreoffice  /opt/notes/",
+            lambda values: self.run(["freeze", "apps", "add", *values]),
+            lambda value, _num: self.run(["freeze", "apps", "remove", value]),
+            help_text="While an 'allowed apps only' freeze runs, every other program of yours is closed; "
+                      "the desktop keeps working. Adding an app isn't possible while a freeze runs or "
+                      "anything is locked.")
         self.freeze_lock = Gtk.CheckButton(label="Lock new schedules from")
         self.freeze_lead = Gtk.SpinButton.new_with_range(0, 7 * 24 * 60, 15)
         self.freeze_lead.set_value(120)
@@ -4925,7 +4954,7 @@ class Window(Gtk.ApplicationWindow):
                 "screen is locked again right away, sessions are logged out, or the computer "
                 "shuts down. It can't be cancelled from the desktop, only extended. The time "
                 "keeps counting while the computer is off."),
-            row, self.freeze_status, self.freeze_schedules, freeze_lock_row), False, False, 0)
+            row, self.freeze_status, self.freeze_schedules, freeze_lock_row, self.freeze_apps), False, False, 0)
 
         return scroll
 
@@ -4963,6 +4992,7 @@ class Window(Gtk.ApplicationWindow):
 
     def update_device(self):
         self.freeze_schedules.set_items(self.state.get("freeze_schedules", []))
+        self.freeze_apps.set_items(self.state.get("freeze_apps", []))
         frozen = self.state["freeze_seconds"]
         modes = {"lock": "locking the screen", "logout": "logging out", "shutdown": "shutting down"}
         self.freeze_status.set_markup(

@@ -76,10 +76,11 @@ Emergency exit: in GRUB, press e on the boot entry and add
 
 // guiWin is a schedule window for the interface's week calendar.
 type guiWin struct {
-	Days  int  `json:"days"` // bit 0 is Sunday
-	Start int  `json:"start"`
-	End   int  `json:"end"`
-	Allow bool `json:"allow"`
+	Days  int   `json:"days"` // bit 0 is Sunday
+	Start int   `json:"start"`
+	End   int   `json:"end"`
+	Allow bool  `json:"allow"`
+	Break int64 `json:"break,omitempty"` // §3.6: seconds of its one break
 }
 
 // guiList is one website list for the interface.
@@ -509,7 +510,7 @@ var guiStateCmd = &cobra.Command{
 			for _, s := range schedules {
 				g.Schedules = append(g.Schedules, s.Window().String())
 				w := s.Window()
-				g.Windows = append(g.Windows, guiWin{Days: w.Days, Start: w.Start, End: w.End, Allow: w.Allow})
+				g.Windows = append(g.Windows, guiWin{Days: w.Days, Start: w.Start, End: w.End, Allow: w.Allow, Break: s.Break})
 			}
 			g.Password, g.Restart, g.Delay = hold.passwordHash != "", hold.restartLocked, hold.extras.Delay
 			g.LockOrder = hold.layers

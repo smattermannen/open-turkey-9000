@@ -4436,11 +4436,20 @@ class Window(Gtk.ApplicationWindow):
         for widget in (Gtk.Label(label="From"), start, Gtk.Label(label="to"), end):
             times.pack_start(widget, False, False, 0)
         box.pack_start(times, False, False, 0)
-        self.window_dialog = (checks, start, end)  # for tests
+        # §3.6: one break each time this window is open.
+        break_row = Gtk.Box(spacing=6)
+        break_minutes = Gtk.SpinButton.new_with_range(0, 240, 5)
+        break_minutes.set_value(w.get("break", 0) // 60)
+        for widget in (Gtk.Label(label="Break each time"), break_minutes, Gtk.Label(label="min (0: none)")):
+            break_row.pack_start(widget, False, False, 0)
+        if not w.get("allow"):
+            box.pack_start(break_row, False, False, 0)
+        self.window_dialog = (checks, start, end, break_minutes)  # for tests
         dialog.show_all()
         answer = dialog.run()
         days = sum(bit for bit, check in checks.items() if check.get_active())
         frm, to = start.get_text().strip(), end.get_text().strip()
+        new_break = break_minutes.get_value_as_int()
         dialog.destroy()
         if answer == 3:
             self.remove_window_from_calendar(index)
@@ -4455,6 +4464,8 @@ class Window(Gtk.ApplicationWindow):
             return
         if (days, new_start, new_end) != (w["days"], w["start"], w["end"]):
             self.replace_window(index, days, new_start, new_end, w.get("allow", False))
+        elif new_break != w.get("break", 0) // 60:
+            self.run(["schedule", "break", self.selected, str(index + 1), f"{new_break}m" if new_break else "off"])
 
     def remove_schedule(self, _value, number):
         self.run(["schedule", "remove", self.selected, str(number)])

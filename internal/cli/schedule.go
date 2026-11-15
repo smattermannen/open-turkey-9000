@@ -256,6 +256,52 @@ A longer lead time is always allowed; a shorter one, or off, weakens the block.`
 	}),
 }
 
+var scheduleBreakCmd = &cobra.Command{
+	Use:   "break [block] [number] [time|off]",
+	Short: "A break for each time a window is open (§3.6), e.g. 10m",
+	Long: `Gives window N of a block one break of this length each time it is open:
+'kc9k break start B' takes it then, also while the block is locked; the block
+comes back by itself. A new or longer break weakens; 'off' is always allowed.`,
+	Args: cobra.ExactArgs(3),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		num, err := strconv.Atoi(args[1])
+		if err != nil {
+			return fmt.Errorf("give the window's number from 'kc9k schedule list %s'", args[0])
+		}
+		schedules, err := database.ListSchedules(args[0])
+		if err != nil {
+			return err
+		}
+		if num < 1 || num > len(schedules) {
+			return fmt.Errorf("block '%s' has no window %d", args[0], num)
+		}
+		s := schedules[num-1]
+		if s.Allow {
+			return fmt.Errorf("window %d is an allow window: the block is lifted then anyway", num)
+		}
+		var secs int64
+		if args[2] != "off" {
+			if secs, err = parseBreak(args[2], db.MaxBreakSeconds); err != nil {
+				return err
+			}
+		}
+		if secs > s.Break {
+			if err := ensureEditable(database, args[0], false); err != nil {
+				return err
+			}
+		}
+		if err := database.SetScheduleBreak(s.ID, secs); err != nil {
+			return err
+		}
+		if secs == 0 {
+			fmt.Printf("Window %d of '%s' has no break.\n", num, args[0])
+		} else {
+			fmt.Printf("Window %d of '%s' gives one break of %s each time it is open.\n", num, args[0], seconds(secs))
+		}
+		return nil
+	}),
+}
+
 func init() {
 	scheduleAddCmd.Flags().String("days", "daily", "Days: daily, weekdays, weekends, mon-fri, or mon,wed,fri")
 	scheduleAddCmd.Flags().String("from", "", "Start time HH:MM (required)")
@@ -265,7 +311,7 @@ func init() {
 	addNowFlag(scheduleAddCmd, scheduleRemoveCmd)
 	scheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h; at most 7 days)")
 	addYesFlag(scheduleLockCmd)
-	scheduleCmd.AddCommand(scheduleLockCmd)
+	scheduleCmd.AddCommand(scheduleBreakCmd, scheduleLockCmd)
 
 	scheduleCmd.AddCommand(scheduleAddCmd)
 	scheduleCmd.AddCommand(scheduleListCmd)

@@ -11,6 +11,7 @@ package cli
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -264,6 +265,10 @@ var breakStartCmd = &cobra.Command{
 		if !detail.Active {
 			return fmt.Errorf("block '%s' is not on", name)
 		}
+		// §3.6: the open window's own break, once each time it is open.
+		if taken, err := takeWindowBreak(database, name); err != nil || taken {
+			return err
+		}
 		k, err := database.GetBreaks(name)
 		if err != nil {
 			return err
@@ -351,4 +356,46 @@ func init() {
 	breakAllowanceCmd.Flags().String("keep", "one", "How reward is kept: one (up to one break), or accumulating until the window, day, week or month ends")
 	breakCmd.AddCommand(breakAllowanceCmd, breakRelockCmd, breakDelayCmd, breakRequestCmd, breakStartCmd, breakEndCmd)
 	rootCmd.AddCommand(breakCmd)
+}
+
+// takeWindowBreak gives the break of the block window open now, if it has
+// one not yet taken this time; taken reports whether it did.
+func takeWindowBreak(database *db.DB, name string) (bool, error) {
+	schedules, err := database.ListSchedules(name)
+	if err != nil {
+		return false, err
+	}
+	now := time.Now()
+	for _, s := range schedules {
+		w := s.Window()
+		if s.Break == 0 || s.Allow || !w.ActiveAt(now) {
+			continue
+		}
+		occurrence := now.Format("2006-01-02") + " " + strconv.Itoa(w.Start)
+		if s.BreakTaken == occurrence {
+			if k, err := database.GetBreaks(name); err == nil && k.Allowance > 0 {
+				return false, nil // earned reward can still be taken
+			}
+			return false, fmt.Errorf("the break of this window is taken already; the next one comes with its next opening")
+		}
+		trusted, err := database.TrustedNow(now)
+		if err != nil {
+			return false, err
+		}
+		if until, _ := database.PausedUntil(name); until > trusted {
+			return false, fmt.Errorf("block '%s' is already on a break for %s more", name, seconds(until-trusted))
+		}
+		if err := database.TakeScheduleBreak(s.ID, occurrence); err != nil {
+			return false, err
+		}
+		if err := database.SetPause(name, trusted+s.Break); err != nil {
+			return false, err
+		}
+		if err := enforce.ApplyFromDB(database); err != nil {
+			return false, err
+		}
+		fmt.Printf("Block '%s' is on a break for %s (this window's break).\n", name, seconds(s.Break))
+		return true, nil
+	}
+	return false, nil
 }

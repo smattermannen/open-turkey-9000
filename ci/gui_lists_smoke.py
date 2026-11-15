@@ -164,7 +164,7 @@ r = cli("block", "create", "grid"); r = cli("block", "add", "grid", "grid.exampl
 r = cli("schedule", "add", "grid", "--days", "mon", "--from", "09:00", "--to", "10:00"); settle()
 win.selected = "grid"; win.show_block()
 def tick_tuesday(dialog):
-    checks, _start, _end = win.window_dialog
+    checks, _start, _end, _break = win.window_dialog
     checks[1 << 2].set_active(True)  # Tuesday
     return Gtk.ResponseType.OK
 Gtk.Dialog.run = tick_tuesday

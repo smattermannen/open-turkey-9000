@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -350,4 +351,36 @@ func TestRecover(t *testing.T) {
 		t.Error("password lock kept")
 	}
 	mustRun(t, "stop", "b")
+}
+
+// §3.6 break per block window: one break each time the window is open.
+func TestWindowBreak(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	now := time.Now()
+	start := (now.Hour()*60 + now.Minute()) / 5 * 5
+	end := start + 30
+	if end > 24*60 {
+		t.Skip("too close to midnight")
+	}
+	clock := func(m int) string { return fmt.Sprintf("%02d:%02d", m/60, m%60) }
+	to := clock(end)
+	if end == 24*60 {
+		to = "24:00"
+	}
+	mustRun(t, "schedule", "add", "b", "--days", "daily", "--from", clock(start), "--to", to)
+	mustRun(t, "schedule", "break", "b", "1", "10m")
+	mustRun(t, "start", "b")
+	mustRun(t, "break", "start", "b")
+	trusted, _ := d.TrustedNow(time.Now())
+	if until, _ := d.PausedUntil("b"); until < trusted+590 {
+		t.Fatalf("paused until %d (now %d)", until, trusted)
+	}
+	mustRun(t, "break", "end", "b")
+	if err := runCLI(t, "break", "start", "b"); err == nil {
+		t.Error("a second break in the same window")
+	}
+	mustRun(t, "schedule", "break", "b", "1", "off")
 }

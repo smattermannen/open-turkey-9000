@@ -71,6 +71,8 @@ func upgradeSchema(conn *sql.DB) error {
 		{"setting_locks", "range_from", "INTEGER NOT NULL DEFAULT 0"},
 		{"setting_locks", "range_to", "INTEGER NOT NULL DEFAULT 0"},
 		{"setting_locks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
+		{"schedules", "break_seconds", "INTEGER NOT NULL DEFAULT 0"},
+		{"schedules", "break_taken", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {
@@ -170,6 +172,10 @@ type Schedule struct {
 	StartMin  int
 	EndMin    int
 	Allow     bool // allow window rather than block window (see schedule.Enforced)
+	// Break per window (§3.6): seconds of one break each time the window
+	// is open (0: none); BreakTaken names the occurrence it was taken in.
+	Break      int64
+	BreakTaken string
 }
 
 // Window returns the schedule's time window.
@@ -224,7 +230,7 @@ func (d *DB) ListSchedules(blockName string) ([]Schedule, error) {
 		return nil, err
 	}
 	rows, err := d.conn.Query(
-		"SELECT id, days_mask, start_min, end_min, allow FROM schedules WHERE block_id = ? ORDER BY id",
+		"SELECT id, days_mask, start_min, end_min, allow, break_seconds, break_taken FROM schedules WHERE block_id = ? ORDER BY id",
 		blockID,
 	)
 	if err != nil {
@@ -235,12 +241,24 @@ func (d *DB) ListSchedules(blockName string) ([]Schedule, error) {
 	var out []Schedule
 	for rows.Next() {
 		s := Schedule{BlockName: blockName, Num: len(out) + 1}
-		if err := rows.Scan(&s.ID, &s.DaysMask, &s.StartMin, &s.EndMin, &s.Allow); err != nil {
+		if err := rows.Scan(&s.ID, &s.DaysMask, &s.StartMin, &s.EndMin, &s.Allow, &s.Break, &s.BreakTaken); err != nil {
 			return nil, fmt.Errorf("failed to read schedule: %w", err)
 		}
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// SetScheduleBreak sets a window's break (seconds; 0 none).
+func (d *DB) SetScheduleBreak(id int, seconds int64) error {
+	_, err := d.conn.Exec("UPDATE schedules SET break_seconds = ? WHERE id = ?", seconds, id)
+	return err
+}
+
+// TakeScheduleBreak records that a window's break was taken in occurrence.
+func (d *DB) TakeScheduleBreak(id int, occurrence string) error {
+	_, err := d.conn.Exec("UPDATE schedules SET break_taken = ? WHERE id = ?", occurrence, id)
+	return err
 }
 
 // AllSchedules returns every schedule across all blocks. The daemon uses it to

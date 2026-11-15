@@ -118,7 +118,7 @@ Only items not simply Built.
 | §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
 | §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. GUI: block start dialog; not the setting lock dialogs |
 | §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI start dialog asks the order (Up/Down); setting lock dialogs keep a fixed order; one lock per kind |
-| §3.6 Break per block window | Not built | |
+| §3.6 Break per block window | Built | `schedule break B N 10m|off`: one break each time window N is open (`break start` takes it, then reward); new/longer weakens; GUI window editor; projects |
 | §3.6 Allowance | Partial | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). and rolling 24 hours (`--per rolling`, hourly buckets). Not built: per window |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month` (default one, as before), GUI choice, projects; longer keep weakens |
 | §3.6 Delay break | Built | `break delay B LENGTH WAIT`, `break request B`, GUI row, projects |
@@ -144,7 +144,7 @@ Only items not simply Built.
 | §4.3 Draft Save/Cancel | Not built | changes apply at once |
 | §4.3 Ctrl+F, multi-select, double-click edit | Built | `EditableList`: Ctrl+F to its search, Ctrl/Shift-click and Ctrl+A in website lists, phrase sets, apps, titles, clusters, exempt folders; Delete/Backspace removes, selection moves on; double-click moves an entry into the box |
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters. "All searches containing…" not built |
-| §4.5 Grid drag-move, copy to days, similar windows | Partial | drag a window to move it (time; day for one-day windows); click to edit days (copy to days) and times, or remove; a window on several days is edited as one. Not built: break per window, other blocks greyed |
+| §4.5 Grid drag-move, copy to days, similar windows | Partial | drag a window to move it (time; day for one-day windows); click to edit days (copy to days) and times, or remove; a window on several days is edited as one. Not built: other blocks greyed |
 | §4.9 Statistics: times blocked, top N, search, filter by block | Built | blocked pages counted per site and block (`blocked`, `blocked-block` rows); `stats --top N --search T --block B`; GUI Times blocked view |
 | §4.9 Statistics per user, skip private windows | Not built | |
 | §4.10 Preferences | Partial | theme, first day of the week (schedule grid), open at login built; 24-hour clock choice, darkness slider, tray: Not built |

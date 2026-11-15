@@ -51,6 +51,8 @@ type windowExport struct {
 	// LockLead is a Frozen Chicken window's lock lead time in minutes; nil:
 	// no lock.
 	LockLead *int `json:"lock_minutes,omitempty"`
+	// Break is a block window's one break each time it is open (§3.6).
+	Break int64 `json:"break_seconds,omitempty"`
 }
 
 type pomodoroExport struct {
@@ -194,7 +196,9 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 		return out, err
 	}
 	for _, s := range schedules {
-		out.Schedules = append(out.Schedules, exportWindow(s.Window()))
+		w := exportWindow(s.Window())
+		w.Break = s.Break
+		out.Schedules = append(out.Schedules, w)
 	}
 	if on, lead, err := database.ScheduleLock(name); err != nil {
 		return out, err
@@ -337,9 +341,16 @@ func createBlock(database *db.DB, c checkedBlock) error {
 			return err
 		}
 	}
-	for _, w := range c.windows {
+	for i, w := range c.windows {
 		if err := database.AddSchedule(in.Name, w); err != nil {
 			return err
+		}
+		if i < len(in.Schedules) && in.Schedules[i].Break > 0 && in.Schedules[i].Break <= db.MaxBreakSeconds && !w.Allow {
+			if schedules, err := database.ListSchedules(in.Name); err == nil && len(schedules) > 0 {
+				if err := database.SetScheduleBreak(schedules[len(schedules)-1].ID, in.Schedules[i].Break); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	if l := in.ScheduleLock; l != nil {

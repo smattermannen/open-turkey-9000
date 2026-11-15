@@ -74,7 +74,9 @@ Script-tested, never by a person. Script what can be into `ci/`.
 - [ ] Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
 - [ ] Shutdown mode and `kc9k.nofreeze`; measure fast relock.
 - [ ] Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
-- [ ] Address change without load (YouTube) caught by a URL list; Websites tab on a real screen.
+- [ ] Websites tab on a real screen. (Address change without load: a
+  `history.pushState` page is caught by a URL list in LibreWolf,
+  `extras_test.py`; on YouTube itself still Unchecked.)
 - [ ] One-off logout/shutdown from a list; Dashboard monk button. (Checked
   2026-11-15: a timer-locked global ladder refuses `bypass off` and a weaker
   ladder, and turns off once the lock ends.)

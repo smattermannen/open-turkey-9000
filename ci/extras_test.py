@@ -198,6 +198,17 @@ try:
         check("an alternative front-end of a blocked site is blocked",
               on_block_page(driver) and "reason=mirror" in driver.current_url)
 
+        # A single-page site (YouTube) changes its address without loading:
+        # a URL list still catches it.
+        ot("block", "add", "extras", "example.net/kcninespa")
+        time.sleep(6)
+        visit(driver, "https://example.net/")
+        check("a page outside the URL entry opens", "example.net" in driver.current_url and not on_block_page(driver))
+        driver.execute_script("history.pushState({}, '', '/kcninespa/watch');"
+                              "document.body.appendChild(document.createElement('p')).textContent = 'next video';")
+        time.sleep(6)
+        check("an address changed without loading is caught by a URL list", on_block_page(driver))
+
         # Keyword test mode: the page stays, with the panel.
         visit(driver, pages.base + "/words", wait=6)
         panel = driver.execute_script("return Boolean(document.getElementById('kc9k-test-panel'));")

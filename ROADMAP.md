@@ -8,7 +8,7 @@ on; write "Unchecked" rather than guess. Order: §0 first, top to bottom,
 then §2.
 
 Status: Built, Partial, Differs (built unlike SPEC), Not built, Unchecked.
-Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
+Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
 
 ## 0. Fix what exists
 

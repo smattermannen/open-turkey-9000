@@ -541,6 +541,11 @@ var blockRemoveCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+		// §4.3: a removed draft, or a removed block's draft, is forgotten.
+		_ = database.SetSetting(settingDraftOf+name, "")
+		if draftOf(database, draftName(name)) == name {
+			_ = dropDraft(database, draftName(name))
+		}
 		if detail.Active {
 			if err := enforce.ApplyFromDB(database); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)

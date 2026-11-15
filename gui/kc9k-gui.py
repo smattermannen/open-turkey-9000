@@ -3502,6 +3502,18 @@ class Window(Gtk.ApplicationWindow):
         self.hidden_bar.pack_start(reveal, False, False, 0)
         self.hidden_bar.get_children()[0].show()
         self.detail.pack_start(self.hidden_bar, False, False, 0)
+        # §4.3: editing a draft; nothing applies until Save.
+        self.draft_bar = Gtk.Box(spacing=8, no_show_all=True)
+        self.draft_label = dim("")
+        draft_save = Gtk.Button(label="Save")
+        draft_save.get_style_context().add_class("suggested-action")
+        draft_save.connect("clicked", lambda _b: self.finish_draft("save"))
+        draft_cancel = Gtk.Button(label="Cancel")
+        draft_cancel.connect("clicked", lambda _b: self.finish_draft("cancel"))
+        for widget in (self.draft_label, draft_save, draft_cancel):
+            widget.show()
+            self.draft_bar.pack_start(widget, widget is self.draft_label, widget is self.draft_label, 0)
+        self.detail.pack_start(self.draft_bar, False, False, 0)
 
         actions = Gtk.Box(spacing=6)
         self.start_button = Gtk.Button(label="Start…")
@@ -3511,7 +3523,10 @@ class Window(Gtk.ApplicationWindow):
         self.stop_button.connect("clicked", self.stop_block)
         self.unlock_button = Gtk.Button(label="Unlock…")
         self.unlock_button.connect("clicked", self.unlock_block)
-        for button in (self.start_button, self.stop_button, self.unlock_button):
+        self.draft_button = Gtk.Button(label="Edit as draft", no_show_all=True)
+        self.draft_button.set_tooltip_text("Changes wait until you save them (§4.3)")
+        self.draft_button.connect("clicked", self.start_draft)
+        for button in (self.start_button, self.stop_button, self.unlock_button, self.draft_button):
             actions.pack_start(button, False, False, 0)
         self.delete_button = Gtk.Button(label="Delete…")
         self.delete_button.get_style_context().add_class("destructive-action")
@@ -3878,7 +3893,12 @@ class Window(Gtk.ApplicationWindow):
         return box
 
     def update_block_list(self):
-        names = list(self.blocks)
+        # §4.3: a draft takes its block's place on the page, not in the list.
+        names = [n for n in self.blocks if not self.blocks[n].get("draft_of")]
+        draft = self.blocks.get(self.selected, {}).get("draft")
+        if draft and draft in self.blocks:
+            self.selected = draft
+        shown = self.blocks.get(self.selected, {}).get("draft_of") or self.selected
         rows = self.block_list.get_children()
         if [getattr(r, "block_name", None) for r in rows] != names or any(
                 r.active != self.blocks[r.block_name]["active"] for r in rows):
@@ -3897,17 +3917,43 @@ class Window(Gtk.ApplicationWindow):
                 self.block_list.add(row)
             self.block_list.show_all()
         if self.selected not in self.blocks:
-            self.selected = names[0] if names else None
+            self.selected = shown = names[0] if names else None
         for row in self.block_list.get_children():
-            if row.block_name == self.selected:
+            if row.block_name == shown:
                 self.block_list.select_row(row)
         self.show_block()
 
     def block_selected(self, _box, row):
         if row is None or self.updating:
             return
-        self.selected = row.block_name
+        self.selected = self.blocks.get(row.block_name, {}).get("draft") or row.block_name
         self.show_block()
+
+    def start_draft(self, _button):
+        """§4.3: a draft of the block; with a block password, that password
+        (the draft keeps it)."""
+        name = self.selected
+        block = self.blocks.get(name) or {}
+        if not name:
+            return
+        password = self.block_passwords.get(name)
+        if block.get("block_password") and not password:
+            password = self.ask_text(f"Draft of '{name}'", "Its block password.", password=True)
+            if not password:
+                return
+        if password:
+            self.block_passwords[name] = self.block_passwords[name + " (draft)"] = password
+        self.run(["block", "draft", name], password + "\n" if password else None)
+
+    def finish_draft(self, how):
+        """§4.3: save the draft into its block (weakening parts refused on a
+        locked block, and named) or drop it."""
+        block = self.blocks.get(self.selected) or {}
+        original = block.get("draft_of")
+        if not original:
+            return
+        self.selected = original
+        self.run(["block", "draft", original, how])
 
     def show_block(self):
         block = self.blocks.get(self.selected)
@@ -3928,6 +3974,14 @@ class Window(Gtk.ApplicationWindow):
         self.users_button.set_label("Users: " + (", ".join(users) if users else "all"))
         self.users_button.set_visible(len(self.state.get("accounts") or []) > 1 or bool(users))
         self.hidden_bar.set_visible(bool(block.get("hidden")))
+        drafting = block.get("draft_of")
+        self.draft_bar.set_visible(bool(drafting))
+        self.draft_label.set_text(f"Editing a draft of {drafting}: nothing applies until you save. "
+                                  "Schedules, allowance and other settings still apply at once." if drafting else "")
+        self.draft_button.set_visible(not drafting and not block.get("draft"))
+        for button in (self.start_button, self.stop_button, self.unlock_button):
+            if drafting:
+                button.set_sensitive(False)
         self.update_lists(block.get("lists", []), block.get("phrase_sets", []))
         self.apps.set_items(block["apps"], owner=block["name"])
         self.titles.set_items(block.get("titles", []), owner=block["name"])
@@ -3986,6 +4040,7 @@ class Window(Gtk.ApplicationWindow):
         self.delay_request.set_sensitive(bool(block.get("delay_break")) and not block.get("delay_break_in") and not paused)
 
         self.start_button.set_label("Add locks…" if block["active"] else "Start…")
+        self.start_button.set_sensitive(not block.get("draft_of"))  # §4.3: a draft never runs
         # §3.4: unlocking lifts locks (a delay lock starts counting down) and
         # leaves the block on; stopping needs every lock lifted.
         self.stop_button.set_sensitive(block["active"] and not block["held"])
@@ -3993,7 +4048,7 @@ class Window(Gtk.ApplicationWindow):
             (block["char_locked"] or block["password_locked"]
              or (block["delay_seconds"] > 0 and not block.get("delay_left")))
             and not block["lock_seconds"] and not block["restart_locked"])
-        self.delete_button.set_sensitive(not block["active"] and not block["held"])
+        self.delete_button.set_sensitive(not block["active"] and not block["held"] and not block.get("draft_of"))
 
         limit = block["quota_limit"]
         self.quota_start.set_sensitive(limit > 0 and not block["quota_open"] and block["quota_used"] < limit)

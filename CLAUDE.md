@@ -290,6 +290,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `popup.js`); `/add` adds the tab's site to Blocked (refused with a blocks
   access password). Reward (`break allowance`) earned in `earnBreaks`;
   `break text`/`relock` makes `unlock` pause instead (second unlock ends).
+- **Drafts** (`cli/draft.go`, §4.3): `block draft B` = `DuplicateBlock`
+  into "B (draft)" (setting `draft-of.<draft>`), never startable;
+  `saveDraft` replays differences via `listAdd`/`listWhere`/`listAction`…
+  and names refusals.
 - **Affected users** (`db/users.go`, `cli/blockusers.go`, §3.2):
   `blocks.users`; `enforce.forEveryone` keeps partial blocks out of shared
   layers, `blockUIDs` → `blocker.KillBlockedFor`, `BuildRulesFor(user)`

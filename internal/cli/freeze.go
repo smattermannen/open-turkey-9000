@@ -140,6 +140,8 @@ type guiBlock struct {
 	RangeOn           bool           `json:"range_on,omitempty"`
 	Scheduled         bool           `json:"scheduled"`                // has windows or a place rule (§3.3)
 	HasPassword       bool           `json:"block_password,omitempty"` // §3.11
+	DraftOf           string         `json:"draft_of,omitempty"`       // §4.3: this is a draft of that block
+	Draft             string         `json:"draft,omitempty"`          // §4.3: this block's draft
 	TodayWindows      []string       `json:"today_windows,omitempty"`  // §4.1: windows still to come or open today
 	Autostarts        []string       `json:"autostarts"`               // §3.6
 	Hidden            bool           `json:"hidden,omitempty"`         // contents left out until revealed
@@ -508,6 +510,10 @@ var guiStateCmd = &cobra.Command{
 			}
 			if g.Users, _ = database.BlockUsers(b.Name); g.Users == nil {
 				g.Users = []string{}
+			}
+			g.DraftOf = draftOf(database, b.Name)
+			if draftOf(database, draftName(b.Name)) == b.Name {
+				g.Draft = draftName(b.Name)
 			}
 			if hash, _ := database.BlockViewPassword(b.Name); hash != "" {
 				g.HasPassword = true

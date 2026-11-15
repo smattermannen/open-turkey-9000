@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -486,5 +487,67 @@ func TestBlockUsers(t *testing.T) {
 	}
 	if err := runCLI(t, "block", "users", "b", "anna"); err == nil {
 		t.Error("all → some while locked")
+	}
+}
+
+// §4.3 drafts: nothing applies until save; on a locked block save applies
+// what strengthens and names what would weaken.
+func TestBlockDraft(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com", "x.com")
+	mustRun(t, "block", "add-app", "b", "steam")
+	mustRun(t, "block", "draft", "b")
+	draft := "b (draft)"
+	if err := runCLI(t, "start", draft); err == nil {
+		t.Error("a draft started")
+	}
+	mustRun(t, "block", "add", draft, "tiktok.com")
+	mustRun(t, "block", "remove-site", draft, "x.com")
+	mustRun(t, "block", "add-app", draft, "minecraft")
+	mustRun(t, "list", "create", draft, "Words", "--text")
+	if b, _ := d.GetBlock("b"); len(b.Lists[0].Entries) != 2 {
+		t.Fatal("the draft changed the block before save")
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	err := runCLI(t, "block", "draft", "b", "save")
+	if err == nil || !strings.Contains(err.Error(), "x.com") {
+		t.Fatalf("save on a locked block: %v", err)
+	}
+	b, _ := d.GetBlock("b")
+	blocked, _ := b.Lists.Find(db.DefaultBlockedList)
+	_, words := b.Lists.Find("Words")
+	if !slices.Contains(blocked.Entries, "tiktok.com") || !slices.Contains(blocked.Entries, "x.com") ||
+		!slices.Contains(b.Apps, "minecraft") || !words {
+		t.Errorf("after save: %v apps %v words %v", blocked.Entries, b.Apps, words)
+	}
+	if _, err := d.GetBlock(draft); err == nil {
+		t.Error("the draft stayed after save")
+	}
+	mustRun(t, "block", "draft", "b")
+	mustRun(t, "block", "draft", "b", "cancel")
+	if _, err := d.GetBlock(draft); err == nil {
+		t.Error("cancel kept the draft")
+	}
+}
+
+// §3.11 with §4.3: a draft of a password-protected block needs the block
+// password and keeps it.
+func TestDraftBlockPassword(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "p")
+	if err := runWith(t, 0, []string{"secret1"}, "block", "password", "p", "set"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, []string{"wrong"}, "block", "draft", "p"); err == nil {
+		t.Error("a draft without the block password")
+	}
+	if err := runWith(t, 0, []string{"secret1"}, "block", "draft", "p"); err != nil {
+		t.Fatal(err)
+	}
+	if hash, _ := d.BlockViewPassword("p (draft)"); hash == "" {
+		t.Error("the draft lost the block password")
 	}
 }

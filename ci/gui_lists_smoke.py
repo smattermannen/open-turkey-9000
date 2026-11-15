@@ -1,3 +1,4 @@
+import json
 """GUI smoke test for lists without types (SPEC §3.2): the New list dialog
 has the three scope boxes URL, title, text instead of a type question, and
 every list card shows them. Builds kc9k into a scratch folder, points a
@@ -184,5 +185,22 @@ check(isinstance(win.state.get("accounts"), list) and win.blocks["b"].get("users
 win.choose_block_users(None, list(win.state["accounts"]))
 settle()
 check(win.users_button.get_label() == "Users: all", "users button: %s" % win.users_button.get_label())
+# §4.3 drafts: edit as draft, the draft takes the block's place, save applies.
+def entries_of(name):
+    b = next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == name)
+    return [e for l in b["lists"] for e in l["entries"]]
+win.selected = "b"; win.show_block()
+win.draft_button.clicked(); settle()
+check(win.selected == "b (draft)" and win.draft_bar.get_visible(), "editing the draft: %s" % win.selected)
+check("b (draft)" not in [r.block_name for r in win.block_list.get_children()], "draft not in the block list")
+r = cli("block", "add", "b (draft)", "drafted.example")
+def entries_of(name):
+    out = subprocess.run([W, "gui-state", "--reveal", name], input="open1\n", capture_output=True, text=True).stdout
+    b = next(b for b in json.loads(out)["blocks"] if b["name"] == name)
+    return [e for l in b["lists"] for e in l["entries"]]
+check("drafted.example" in entries_of("b (draft)") and "drafted.example" not in entries_of("b"), "nothing applies before save")
+check(next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == "b (draft)").get("hidden"), "the draft keeps the block password")
+win.finish_draft("save"); settle()
+check("drafted.example" in entries_of("b") and win.selected == "b", "save applies the draft")
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

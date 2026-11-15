@@ -447,6 +447,9 @@ passwords, hotkeys and statistics are never in it.`,
 			return err
 		}
 		for _, b := range blocks {
+			if draftOf(database, b.Name) != "" {
+				continue // §4.3: a draft isn't a block of its own
+			}
 			pb, err := exportBlock(database, b.Name, out.Images)
 			if err != nil {
 				return err

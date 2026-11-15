@@ -64,6 +64,13 @@ shortened or removed this way.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockName := args[0]
+		if database, err := openDB(); err == nil {
+			of := draftOf(database, blockName)
+			database.Close()
+			if of != "" {
+				return fmt.Errorf("'%s' is a draft of '%s': save it with 'kc9k block draft %s save'", blockName, of, of)
+			}
+		}
 
 		// A lock may need the settings password (the user's choice), asked
 		// before any lock password.

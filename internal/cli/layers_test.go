@@ -199,3 +199,24 @@ func TestRangeLockCLI(t *testing.T) {
 	mustRun(t, "start", "r", "--range", spec, "--range-invert", "--yes")
 	mustRun(t, "stop", "r")
 }
+
+// §3.4 range lock on a setting: while on, it can't be turned off.
+func TestSettingRangeLock(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	now := time.Now()
+	from, to := now.Add(-time.Minute), now.Add(2*time.Minute)
+	spec := fmt.Sprintf("daily %02d:%02d-%02d:%02d", from.Hour(), from.Minute(), to.Hour(), to.Minute())
+	mustRun(t, "browser", "safesearch", "on", "--range", spec, "--yes")
+	if l, _ := d.GetSettingLock("safesearch"); l.RangeDays == 0 {
+		t.Fatal("no range lock")
+	}
+	if err := runCLI(t, "browser", "safesearch", "off"); err == nil {
+		t.Error("turned off during its range lock")
+	}
+	if err := runCLI(t, "browser", "unlock", "safesearch"); err == nil {
+		t.Error("unlocked during its range lock")
+	}
+	mustRun(t, "browser", "web-only", "on", "--range", spec, "--range-invert", "--yes")
+	mustRun(t, "browser", "web-only", "off")
+}

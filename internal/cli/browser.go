@@ -194,6 +194,8 @@ func (s settingLockState) describe() string {
 			parts = append(parts, fmt.Sprintf("typing challenge (%d chars)", s.lock.LockChars))
 		case db.LayerPassword:
 			parts = append(parts, "password")
+		case db.LayerRange:
+			parts = append(parts, "range "+describeRange(db.LockExtras{RangeDays: s.lock.RangeDays, RangeFrom: s.lock.RangeFrom, RangeTo: s.lock.RangeTo, RangeInvert: s.lock.RangeInvert}))
 		}
 	}
 	if s.lock.Relock > 0 && s.lock.TextOrPasswordLocked(s.trusted) {
@@ -236,7 +238,7 @@ func listBrowserSettings(database *db.DB) error {
 }
 
 func lockFlagsGiven(cmd *cobra.Command) bool {
-	for _, f := range []string{"for", "until", "lock", "lock-chars", "password-stdin", "restart", "text-lock", "lock-words", "lock-text", "relock"} {
+	for _, f := range []string{"for", "until", "lock", "lock-chars", "password-stdin", "restart", "text-lock", "lock-words", "lock-text", "relock", "range", "range-invert"} {
 		if cmd.Flags().Lookup(f) != nil && cmd.Flags().Changed(f) {
 			return true
 		}
@@ -307,7 +309,26 @@ func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.
 	if want.Relock, err = relockRequested(cmd); err != nil {
 		return want, err
 	}
+	if cmd.Flags().Lookup("range") != nil {
+		if spec, _ := cmd.Flags().GetString("range"); spec != "" {
+			if want.RangeDays, want.RangeFrom, want.RangeTo, err = parseRange(spec); err != nil {
+				return want, err
+			}
+			want.RangeInvert, _ = cmd.Flags().GetBool("range-invert")
+		} else if cmd.Flags().Changed("range-invert") {
+			return want, fmt.Errorf("--range-invert goes with --range")
+		}
+	}
 	return want, nil
+}
+
+// addRangeFlags adds --range and --range-invert to commands that lock a
+// setting (§3.4 range lock).
+func addRangeFlags(cmds ...*cobra.Command) {
+	for _, c := range cmds {
+		c.Flags().String("range", "", `Range lock: locked at these times, e.g. "mon-fri 09:00-17:00"`)
+		c.Flags().Bool("range-invert", false, "Range lock: locked outside those times instead")
+	}
 }
 
 // relockRequested reads --relock: seconds, or 0 when not given.
@@ -358,7 +379,7 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 	}
 	order := next.Layers()
 	kinds := db.ParseLayerOrder(want.Order)
-	kinds = db.AppendLayers(kinds, db.LayerTimer, db.LayerText, db.LayerPassword, db.LayerRestart)
+	kinds = db.AppendLayers(kinds, db.LayerTimer, db.LayerText, db.LayerPassword, db.LayerRestart, db.LayerRange)
 	anyOn := func() bool { return len(next.LayersOn(trusted, boot)) > 0 }
 	var changes []string
 	for _, kind := range kinds {
@@ -419,6 +440,19 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 			next.PasswordHash = want.PasswordHash
 			order = db.AppendLayers(order, db.LayerPassword)
 			changes = append(changes, "password")
+		case db.LayerRange:
+			if want.RangeDays == 0 {
+				continue
+			}
+			if next.RangeDays != 0 {
+				if next.RangeDays != want.RangeDays || next.RangeFrom != want.RangeFrom || next.RangeTo != want.RangeTo || next.RangeInvert != want.RangeInvert {
+					return next, nil, fmt.Errorf("%s already has a range lock; it can't change while locked", name)
+				}
+				continue
+			}
+			next.RangeDays, next.RangeFrom, next.RangeTo, next.RangeInvert = want.RangeDays, want.RangeFrom, want.RangeTo, want.RangeInvert
+			order = db.AppendLayers(order, db.LayerRange)
+			changes = append(changes, "range lock "+describeRange(db.LockExtras{RangeDays: next.RangeDays, RangeFrom: next.RangeFrom, RangeTo: next.RangeTo, RangeInvert: next.RangeInvert}))
 		case db.LayerRestart:
 			if want.RestartBoot == "" || next.RestartBoot != "" {
 				continue
@@ -481,6 +515,9 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 		}
 		locks = append(locks, lockToSet{target, "restart lock", length})
 	}
+	if next.RangeDays != 0 && old.RangeDays == 0 {
+		locks = append(locks, lockToSet{target, "range lock", describeRange(db.LockExtras{RangeDays: next.RangeDays, RangeFrom: next.RangeFrom, RangeTo: next.RangeTo, RangeInvert: next.RangeInvert}) + " (can't be unlocked then)"})
+	}
 	if order := next.Layers(); len(order) > 1 {
 		locks = append(locks, lockToSet{target, "unlock order", strings.Join(order, " → ")})
 	}
@@ -531,6 +568,10 @@ func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
 // refuseWhileHeld returns why a setting can't be turned off by unlocking it,
 // or nil. Time and restart locks can only be waited out.
 func (s settingLockState) refuseWhileHeld(name string) error {
+	if s.lock.LayerOn(db.LayerRange, s.trusted, s.bootID) {
+		return fmt.Errorf("%s has a range lock (%s) that is on now; it can't be unlocked, only waited out", name,
+			describeRange(db.LockExtras{RangeDays: s.lock.RangeDays, RangeFrom: s.lock.RangeFrom, RangeTo: s.lock.RangeTo, RangeInvert: s.lock.RangeInvert}))
+	}
 	if s.lock.TimerAfter > 0 {
 		return fmt.Errorf("%s has a timer lock of %s that starts once the locks before it are unlocked", name, time.Duration(s.lock.TimerAfter)*time.Second)
 	}
@@ -653,7 +694,7 @@ func unlockSetting(database *db.DB, name, label, notLocked string) (s settingLoc
 		return s, false, nil, errors.New(notLocked)
 	}
 	switch on[0] {
-	case db.LayerTimer, db.LayerRestart:
+	case db.LayerTimer, db.LayerRestart, db.LayerRange:
 		return s, false, nil, refused(database, "", s.refuseWhileHeld(label))
 	case db.LayerPassword:
 		password, err := readPasswordStdin("Setting password")
@@ -704,6 +745,7 @@ func init() {
 	browserCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(browserCmd)
 	addRelockFlag(browserCmd)
+	addRangeFlags(browserCmd)
 	addYesFlag(browserCmd)
 	trackLockFlagOrder(browserCmd)
 	rootCmd.AddCommand(browserCmd)

@@ -116,7 +116,7 @@ Only items not simply Built.
 | §3.2 Template | Built | your own saved definitions: `template save B T`, `template`, `template remove T`, `block create X --template T`; GUI "Save as template…" and a choice in New block; projects. None shipped |
 | §3.2 Affected users | Not built | |
 | §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
-| §3.4 Range lock | Partial | blocks: `start --range "mon-fri 09:00-17:00" [--range-invert]`, a layer that holds while in range and can't be unlocked; not on setting locks; not in the GUI start dialog |
+| §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. Not in the GUI lock dialogs |
 | §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI fixed order; one lock per kind |
 | §3.6 Break per block window | Not built | |
 | §3.6 Allowance | Partial | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). Not built: rolling 24 h, per window |

@@ -463,6 +463,7 @@ func init() {
 	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be weakened until the computer restarts")
 	addTextLockFlags(nepsisSetCmd)
 	addRelockFlag(nepsisSetCmd)
+	addRangeFlags(nepsisSetCmd)
 	addYesFlag(nepsisSetCmd)
 	trackLockFlagOrder(nepsisSetCmd)
 	addMonkAckFlag(nepsisSetCmd)

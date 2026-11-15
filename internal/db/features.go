@@ -65,6 +65,10 @@ func upgradeSchema(conn *sql.DB) error {
 		{"quotas", "max_sessions", "INTEGER NOT NULL DEFAULT 0"},
 		{"quotas", "sessions", "INTEGER NOT NULL DEFAULT 0"},
 		{"quotas", "last_use", "INTEGER NOT NULL DEFAULT 0"},
+		{"setting_locks", "range_days", "INTEGER NOT NULL DEFAULT 0"},
+		{"setting_locks", "range_from", "INTEGER NOT NULL DEFAULT 0"},
+		{"setting_locks", "range_to", "INTEGER NOT NULL DEFAULT 0"},
+		{"setting_locks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {

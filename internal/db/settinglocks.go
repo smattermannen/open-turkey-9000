@@ -39,13 +39,19 @@ type SettingLock struct {
 	Order       string
 	TimerAfter  int64
 	LiftedKinds string
+	// Range lock (§3.4), as LockExtras: on at those times on those days.
+	RangeDays   int
+	RangeFrom   int
+	RangeTo     int
+	RangeInvert bool
 }
 
 // asBlock views a setting lock as a block's locks, so layers.go judges both.
 func (l SettingLock) asBlock() (*BlockDetail, LockExtras) {
 	return &BlockDetail{Name: l.Name, Active: true, Locked: l.LockChars > 0, LockChars: l.LockChars, LockedUntil: l.LockedUntil},
 		LockExtras{PasswordHash: l.PasswordHash, RestartBoot: l.RestartBoot, Style: l.Style, Relock: l.Relock,
-			LiftedUntil: l.LiftedUntil, Order: l.Order, TimerAfter: l.TimerAfter, LiftedKinds: l.LiftedKinds}
+			LiftedUntil: l.LiftedUntil, Order: l.Order, TimerAfter: l.TimerAfter, LiftedKinds: l.LiftedKinds,
+			RangeDays: l.RangeDays, RangeFrom: l.RangeFrom, RangeTo: l.RangeTo, RangeInvert: l.RangeInvert}
 }
 
 // fromBlock copies back what layer code changed.
@@ -56,6 +62,7 @@ func (l *SettingLock) fromBlock(detail *BlockDetail, e LockExtras) {
 	}
 	l.PasswordHash, l.RestartBoot, l.Style, l.Relock = e.PasswordHash, e.RestartBoot, e.Style, e.Relock
 	l.LiftedUntil, l.Order, l.TimerAfter, l.LiftedKinds = e.LiftedUntil, e.Order, e.TimerAfter, e.LiftedKinds
+	l.RangeDays, l.RangeFrom, l.RangeTo, l.RangeInvert = e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert
 }
 
 // Layers returns the setting's locks in unlock order (R-LOCK-6).
@@ -128,9 +135,9 @@ func (l SettingLock) InForce(trusted int64, bootID string) bool {
 func (d *DB) GetSettingLock(name string) (SettingLock, error) {
 	l := SettingLock{Name: name}
 	err := d.conn.QueryRow(`SELECT locked_until, lock_chars, password, restart_boot, lock_style, relock, lifted_until,
-		lock_order, timer_after, lifted_kinds
+		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert
 		FROM setting_locks WHERE name = ?`, name).Scan(&l.LockedUntil, &l.LockChars, &l.PasswordHash, &l.RestartBoot, &l.Style, &l.Relock, &l.LiftedUntil,
-		&l.Order, &l.TimerAfter, &l.LiftedKinds)
+		&l.Order, &l.TimerAfter, &l.LiftedKinds, &l.RangeDays, &l.RangeFrom, &l.RangeTo, &l.RangeInvert)
 	if err == sql.ErrNoRows {
 		return l, nil
 	}
@@ -143,14 +150,15 @@ func (d *DB) GetSettingLock(name string) (SettingLock, error) {
 // SetSettingLock stores a setting's locks.
 func (d *DB) SetSettingLock(l SettingLock) error {
 	_, err := d.conn.Exec(`INSERT INTO setting_locks (name, locked_until, lock_chars, password, restart_boot, lock_style, relock, lifted_until,
-			lock_order, timer_after, lifted_kinds)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET locked_until = excluded.locked_until, lock_chars = excluded.lock_chars,
 			password = excluded.password, restart_boot = excluded.restart_boot, lock_style = excluded.lock_style,
 			relock = excluded.relock, lifted_until = excluded.lifted_until, lock_order = excluded.lock_order,
-			timer_after = excluded.timer_after, lifted_kinds = excluded.lifted_kinds`,
+			timer_after = excluded.timer_after, lifted_kinds = excluded.lifted_kinds, range_days = excluded.range_days,
+			range_from = excluded.range_from, range_to = excluded.range_to, range_invert = excluded.range_invert`,
 		l.Name, l.LockedUntil, l.LockChars, l.PasswordHash, l.RestartBoot, l.Style, l.Relock, l.LiftedUntil,
-		l.Order, l.TimerAfter, l.LiftedKinds)
+		l.Order, l.TimerAfter, l.LiftedKinds, l.RangeDays, l.RangeFrom, l.RangeTo, l.RangeInvert)
 	if err != nil {
 		return fmt.Errorf("failed to save the lock on %s: %w", l.Name, err)
 	}
@@ -169,7 +177,7 @@ func (d *DB) ClearSettingLock(name string) error {
 // longer be in force; check InForce.
 func (d *DB) SettingLocks() ([]SettingLock, error) {
 	rows, err := d.conn.Query(`SELECT name, locked_until, lock_chars, password, restart_boot, lock_style, relock, lifted_until,
-		lock_order, timer_after, lifted_kinds
+		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert
 		FROM setting_locks ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list setting locks: %w", err)
@@ -179,7 +187,7 @@ func (d *DB) SettingLocks() ([]SettingLock, error) {
 	for rows.Next() {
 		var l SettingLock
 		if err := rows.Scan(&l.Name, &l.LockedUntil, &l.LockChars, &l.PasswordHash, &l.RestartBoot, &l.Style, &l.Relock, &l.LiftedUntil,
-			&l.Order, &l.TimerAfter, &l.LiftedKinds); err != nil {
+			&l.Order, &l.TimerAfter, &l.LiftedKinds, &l.RangeDays, &l.RangeFrom, &l.RangeTo, &l.RangeInvert); err != nil {
 			return nil, fmt.Errorf("failed to read a setting lock: %w", err)
 		}
 		out = append(out, l)

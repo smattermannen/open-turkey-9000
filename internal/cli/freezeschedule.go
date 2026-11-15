@@ -330,6 +330,7 @@ func init() {
 	freezeScheduleLockCmd.Flags().Bool("restart", false, "Restart lock: until the computer restarts")
 	addTextLockFlags(freezeScheduleLockCmd)
 	addRelockFlag(freezeScheduleLockCmd)
+	addRangeFlags(freezeScheduleLockCmd)
 	addYesFlag(freezeScheduleLockCmd)
 	trackLockFlagOrder(freezeScheduleLockCmd)
 	freezeScheduleCmd.AddCommand(freezeScheduleAddCmd, freezeScheduleListCmd, freezeScheduleRemoveCmd, freezeScheduleLockCmd, freezeScheduleUnlockCmd)

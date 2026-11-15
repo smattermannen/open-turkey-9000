@@ -185,6 +185,7 @@ func init() {
 	tamperCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(tamperCmd)
 	addRelockFlag(tamperCmd)
+	addRangeFlags(tamperCmd)
 	addYesFlag(tamperCmd)
 	trackLockFlagOrder(tamperCmd)
 	rootCmd.AddCommand(tamperCmd)

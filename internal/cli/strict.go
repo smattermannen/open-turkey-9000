@@ -278,6 +278,7 @@ func init() {
 	strictCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(strictCmd)
 	addRelockFlag(strictCmd)
+	addRangeFlags(strictCmd)
 	trackLockFlagOrder(strictCmd)
 	rootCmd.AddCommand(strictCmd, noEscapeCmd)
 }

@@ -5845,43 +5845,62 @@ class Window(Gtk.ApplicationWindow):
         grid.attach(relock, 1, 8, 1, 1)
         grid.attach(dim("With a text or password lock: unlocking lifts them only this long, "
                         "then they are on again unless it was turned off. 0 = no re-lock."), 1, 9, 1, 1)
+        # §3.4 range lock, as in the block start dialog.
+        range_entry = Gtk.Entry(placeholder_text="mon-fri 09:00-17:00")
+        range_invert = Gtk.CheckButton(label="outside these times")
+        grid.attach(Gtk.Label(label="Range lock", xalign=0), 0, 10, 1, 1)
+        range_box = Gtk.Box(spacing=6)
+        range_box.pack_start(range_entry, True, True, 0)
+        range_box.pack_start(range_invert, False, False, 0)
+        grid.attach(range_box, 1, 10, 1, 1)
+        grid.attach(dim("Can't be turned off at these times; it can't be unlocked, only waited out."), 1, 11, 1, 1)
         box.pack_start(grid, False, False, 0)
+        box.pack_start(dim("Several locks are unlocked one at a time; you choose the order next."),
+                       False, False, 0)
+        self.setting_lock_widgets = (minutes, password, typing, restart, relock, range_entry, range_invert)  # tests
         dialog.show_all()
         answer = dialog.run()
         lock_minutes, secret = minutes.get_value_as_int(), password.get_text()
         use_typing, use_restart = typing.get_active(), restart.get_active()
         relock_minutes = relock.get_value_as_int()
+        range_spec, range_out = range_entry.get_text().strip(), range_invert.get_active()
         lock_args = challenge_args(chars)
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
             return
-        args = self.setting_command(name, "on")
-        base = len(args)
-        if lock_minutes:
-            args += ["--for", f"{lock_minutes}m"]
-        if use_typing:
-            args += lock_args
-        if use_restart:
-            args.append("--restart")
-        if secret:
-            args.append("--password-stdin")
-        if len(args) == base:
-            self.message("Choose at least one lock.", Gtk.MessageType.INFO)
-            return
         relock_note = ""
         if relock_minutes and (use_typing or secret):
-            args += ["--relock", f"{relock_minutes}m"]
             relock_note = f", re-lock {relock_minutes} minutes after unlocking"
-        locks = []
+        # R-LOCK-6: the locks unlock one at a time in the order of their flags.
+        chosen = []
         if lock_minutes:
-            locks.append(f"{title}: timer lock, {lock_minutes} minutes (it can't be turned off until "
-                         "then, not even with the typing challenge; time the computer is off doesn't count)")
-        if use_typing:
-            locks.append(f"{title}: text lock{relock_note}")
-        if secret:
-            locks.append(f"{title}: password lock{relock_note}")
+            chosen.append((["--for", f"{lock_minutes}m"],
+                           f"timer lock, {lock_minutes} minutes (it can't be turned off until then, not even "
+                           "with the typing challenge; time the computer is off doesn't count)"))
         if use_restart:
-            locks.append(f"{title}: restart lock, until the computer restarts")
+            chosen.append((["--restart"], "restart lock, until the computer restarts"))
+        if secret:
+            chosen.append((["--password-stdin"], f"password lock{relock_note}"))
+        if use_typing:
+            chosen.append((lock_args, f"text lock{relock_note}"))
+        if range_spec:
+            chosen.append((["--range", range_spec] + (["--range-invert"] if range_out else []),
+                           f"range lock, {'outside ' if range_out else ''}{range_spec}"))
+        if not chosen:
+            self.message("Choose at least one lock.", Gtk.MessageType.INFO)
+            return
+        if len(chosen) > 1:
+            chosen = self.choose_lock_order(chosen)
+            if chosen is None:
+                return
+        args = self.setting_command(name, "on")
+        locks = []
+        for i, (flags, text) in enumerate(chosen):
+            args += flags
+            order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
+            locks.append(f"{title}: {order}{text}")
+        if relock_note:
+            args += ["--relock", f"{relock_minutes}m"]
         if not self.confirm_lock(locks):
             return
         self.run(args + ["--yes"], secret + "\n" if secret else None)

@@ -232,6 +232,20 @@ check([r[0] for r in win.stats_user.get_model()] == ["All users", "anna", "ben"]
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
 
+# §3.4 in the setting lock dialog: a timer and a range lock, unlock order asked.
+asked = []
+def lock_dialogs(dialog):
+    asked.append(dialog.get_title() or "")
+    if dialog.get_title() and dialog.get_title().startswith("Lock:"):
+        minutes, *_rest, range_entry, _invert = win.setting_lock_widgets
+        minutes.set_value(5)
+        range_entry.set_text("mon-sun 00:00-23:55")
+    return Gtk.ResponseType.OK
+Gtk.Dialog.run = lock_dialogs
+win.lock_setting(None, "force-search", "Force search"); settle()
+out = cli("browser").stdout
+check("Unlock order" in asked and "force-search on" in out and "range" in out.lower(), "setting lock with range and order: %s %s" % (asked, out))
+
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")
 sys.exit(1 if fails else 0)

@@ -1,6 +1,7 @@
 package enforce
 
 import (
+	"encoding/json"
 	"log"
 	"strconv"
 	"time"
@@ -234,9 +235,31 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 	if err := blocker.ApplyLockdown(user); err != nil {
 		log.Printf("daemon: lockdown: %v", err)
 	}
-	if err := blocker.ApplyNoexec(); err != nil {
+	if err := blocker.ApplyNoexec(ExemptFolders(d)...); err != nil {
 		log.Printf("daemon: noexec: %v", err)
 	}
+}
+
+// SettingStrictExempt holds strict mode's exempt folders (§3.8), JSON.
+const SettingStrictExempt = "strict.exempt"
+
+// ExemptFolders returns the folders programs may still start from during
+// strict mode's lockdown.
+func ExemptFolders(d *db.DB) []string {
+	var out []string
+	if v, err := d.GetSetting(SettingStrictExempt); err == nil && v != "" {
+		_ = json.Unmarshal([]byte(v), &out)
+	}
+	return out
+}
+
+// SetExemptFolders stores them.
+func SetExemptFolders(d *db.DB, dirs []string) error {
+	data, err := json.Marshal(dirs)
+	if err != nil {
+		return err
+	}
+	return d.SetSetting(SettingStrictExempt, string(data))
 }
 
 // finishDelayedStops ends blocks whose delay lock has run out, and moves

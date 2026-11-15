@@ -73,3 +73,26 @@ func TestUseCounting(t *testing.T) {
 		t.Error("weakened while locked with no weakening on")
 	}
 }
+
+// §3.8: adding an exempt folder weakens strict mode; removing is free.
+func TestStrictExempt(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	dir := t.TempDir()
+	mustRun(t, "strict", "exempt", "add", dir)
+	if got := enforce.ExemptFolders(d); len(got) != 1 || got[0] != dir {
+		t.Fatalf("exempt = %v", got)
+	}
+	if err := runCLI(t, "strict", "exempt", "add", "/usr/bin"); err == nil {
+		t.Error("a system folder was exempted")
+	}
+	mustRun(t, "strict", "on", "--for", "1h", "--yes")
+	other := t.TempDir()
+	if err := runCLI(t, "strict", "exempt", "add", other); err == nil {
+		t.Error("exempted a folder while strict mode is locked")
+	}
+	mustRun(t, "strict", "exempt", "remove", dir)
+	if got := enforce.ExemptFolders(d); len(got) != 0 {
+		t.Errorf("after remove: %v", got)
+	}
+}

@@ -4792,6 +4792,7 @@ class Window(Gtk.ApplicationWindow):
                             "terminal. Rights return when the lock ends. Strict mode itself can "
                             "be turned off at any time unless you lock it."),
             self.setting_lock_line("strict", "Strict mode"),
+            self.strict_exempt_list(),
             self.switch_row(self.no_escape_switch, "No-escape: close the ways out through the boot menu",
                             "Sets a random boot menu password that nobody knows and hides the "
                             "recovery entries, so the emergency exit (kc9k.nofreeze) stops "
@@ -5050,6 +5051,7 @@ class Window(Gtk.ApplicationWindow):
                 self.browser_switches[name].set_sensitive(not parts)
         set_switch(self.strict_switch, self.state["strict"])
         set_switch(self.strict_use_switch, self.state.get("strict_use", False))
+        self.strict_exempt.set_items(self.state.get("strict_exempt") or [])
         self.strict_switch.set_sensitive(not self.setting_locked("strict"))
         set_switch(self.no_escape_switch, self.state["no_escape"])
         tamper = self.tamper_state()
@@ -5235,6 +5237,17 @@ class Window(Gtk.ApplicationWindow):
             subprocess.Popen(["x-terminal-emulator", "-e", command])
         except OSError as error:
             self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+
+    def strict_exempt_list(self):
+        """§3.8: folders programs may still start from during strict mode's
+        lockdown. Adding one weakens strict mode."""
+        self.strict_exempt = EditableList(
+            "", "/home/me/bin", lambda dirs: [self.run(["strict", "exempt", "add", d]) for d in dirs],
+            lambda d, *_: self.run(["strict", "exempt", "remove", d]),
+            help_text="Exempt folders: programs in them still start while strict mode holds "
+                      "(adding one weakens strict mode).",
+            split=lambda text: [text.strip()] if text.strip() else [])
+        return self.strict_exempt
 
     def toggle_strict_use(self, _switch, wanted):
         if self.updating:

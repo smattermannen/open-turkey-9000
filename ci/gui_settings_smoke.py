@@ -157,6 +157,13 @@ win.notice_advance.set_text("2,5"); win.apply_notice_advance(None); settle()
 check(state()["notifications"]["advance"] == [2, 5], "advance minutes saved")
 check(not win.notice_checks["window-end"].get_active() and win.notice_checks["timer-end"].get_active(), "boxes show the state")
 
+# §3.8 strict mode's exempt folders from Device protection.
+exempt = tempfile.mkdtemp(prefix="kc9k-exempt-")
+win.strict_exempt.on_add([exempt]); settle()
+check(state()["strict_exempt"] == [exempt], "exempt folder added from the list")
+win.strict_exempt.on_remove(exempt, 1); settle()
+check(state()["strict_exempt"] == [], "exempt folder removed")
+
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")
 

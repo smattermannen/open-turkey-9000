@@ -130,7 +130,7 @@ Only items not simply Built.
 | §3.8 Scheduled freeze lock kinds beyond lead | Not built | |
 | §3.8 Allowed apps only | Not built | |
 | §3.8 R-LOCK-12 | Partial | see 0.1 |
-| §3.8 Strict mode exempt folders | Not built | |
+| §3.8 Strict mode exempt folders | Built | `kc9k strict exempt add|remove DIR`, GUI list; exec bind mounts over the noexec folders (`noexecPlan`); adding weakens. Not in projects (import never weakens). Live: Unchecked (strict mode not run overnight) |
 | §3.8 Forgotten password recovery | Partial | root removes it while nothing locked |
 | §3.8 Factory reset protection | Not built | 2.6 |
 | §3.9 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`); hidden text, frames Unchecked |

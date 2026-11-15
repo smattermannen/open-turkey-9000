@@ -25,6 +25,7 @@ gui.CLI = W
 from gi.repository import Gtk, GLib
 app = gui.App(); app.set_application_id("io.test.kc9ksmoke"); app.register(None)
 win = gui.Window(app)
+win.extension_asked = True  # no install dialog in a test
 def pump(cond, secs=15):
     end = time.time() + secs
     while time.time() < end and not cond():
@@ -63,7 +64,10 @@ check(len(d.rows.get_children()) == 13 and d.add_set.get_sensitive(), "more than
 check(win.free_phrase_set_name() == "Phrase set 1", "unnamed phrase set gets a name")
 # Through the card: add, threshold, action, scope, test, rename.
 def settle():
-    pump(lambda: win.get_sensitive()); win.state = None; win.busy = False; win.refresh(); pump(lambda: win.state is not None)
+    # Wait out a refresh already running (it may have read the state before
+    # the last change), then read it afresh.
+    pump(lambda: win.get_sensitive() and not win.busy)
+    win.state = None; win.state_json = None; win.refresh(); pump(lambda: win.state is not None)
     win.show_block()
 card.edit_phrase(None); rows = card.editor.rows.get_children()
 rows[0].entry.set_text("red"); rows[1].entry.set_text("car, truck")

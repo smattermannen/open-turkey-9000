@@ -771,6 +771,21 @@ func extensionStatus(database *db.DB) string {
 	return status + "; no check-in yet (open a supported browser)"
 }
 
+// extensionMissing reports whether the interface should offer to install
+// the extension (§4.10): no supported browser is installed, or the
+// extension is needed and hasn't checked in for 5 minutes.
+func extensionMissing(database *db.DB) bool {
+	if !blocker.ExtensionBrowserInstalled() {
+		return true
+	}
+	required, err := enforce.ExtensionRequiredNow(database)
+	if err != nil || !required {
+		return false
+	}
+	last, ok := enforce.LastExtensionCheckIn(database)
+	return !ok || time.Since(last) > 5*time.Minute
+}
+
 // fmtAgo formats an elapsed time roughly: "12 s", "5 min", "3 h", "2 days".
 func fmtAgo(d time.Duration) string {
 	switch {

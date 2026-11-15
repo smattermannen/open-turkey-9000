@@ -27,6 +27,7 @@ gui.CLI = W
 from gi.repository import Gtk, GLib
 app = gui.App(); app.set_application_id("io.test.kc9ksettingssmoke"); app.register(None)
 win = gui.Window(app)
+win.extension_asked = True  # no install dialog in a test
 def pump(cond, secs=15):
     end = time.time() + secs
     while time.time() < end and not cond():
@@ -173,6 +174,18 @@ check(not os.path.exists(gui.LOGIN_DESKTOP), "open at login entry removed")
 gui.FIRST_DAY = 6
 check(gui.column_day(0) == 6 and win.calendar.weekday_bit(0) == 1, "Sunday first: column 0 is Sunday")
 gui.FIRST_DAY = 0
+
+# §4.10 extension install dialog: "Show browsers" goes to Settings.
+real_msg_run = Gtk.Dialog.run
+Gtk.Dialog.run = lambda dialog: Gtk.ResponseType.OK
+win.state["browsers"] = [{"id": "librewolf", "installed": True}]
+shown = []
+real_switch = win.stack.set_visible_child_name
+win.stack.set_visible_child_name = shown.append  # the window is never shown, so record
+win.extension_dialog()
+win.stack.set_visible_child_name = real_switch
+check(shown == ["settings"], "the dialog shows the browsers: %s" % shown)
+Gtk.Dialog.run = real_msg_run
 
 check(win.strict_switch.get_active() == win.state["strict"], "strict switch shows the state")
 check(win.no_escape_switch.get_active() == win.state["no_escape"], "no-escape switch shows the state")

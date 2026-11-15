@@ -25,6 +25,7 @@ gui.CLI = W
 from gi.repository import Gtk, GLib
 app = gui.App(); app.set_application_id("io.test.kc9klists"); app.register(None)
 win = gui.Window(app)
+win.extension_asked = True  # no install dialog in a test
 def pump(cond, secs=15):
     end = time.time() + secs
     while time.time() < end and not cond():
@@ -34,7 +35,10 @@ fails = []
 def check(ok, what):
     print(("ok   " if ok else "FAIL ") + what); ok or fails.append(what)
 def settle():
-    pump(lambda: win.get_sensitive()); win.state = None; win.busy = False; win.refresh(); pump(lambda: win.state is not None)
+    # Wait out a refresh already running (it may have read the state before
+    # the last change), then read it afresh.
+    pump(lambda: win.get_sensitive() and not win.busy)
+    win.state = None; win.state_json = None; win.refresh(); pump(lambda: win.state is not None)
     win.show_block()
 def lists():
     return {l["name"]: l for l in json.loads(cli("gui-state").stdout)["blocks"][0]["lists"]}

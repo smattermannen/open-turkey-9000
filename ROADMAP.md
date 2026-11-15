@@ -139,7 +139,7 @@ Only items not simply Built.
 | §3.12 Word recording, specificity, cut | Not built | |
 | §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |
 | §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (`tamper unsupported-browsers`, own lock carried over from `force-librewolf`, `tamper unlock unsupported-browsers`; old command hidden alias). No group lock: clock has no lock flags. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). `tamper file-urls` (allow file:// blocking) built. Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, installer, inactive tabs, embedded content, task managers: no command |
-| §4.10 Extension install dialog | Not built | |
+| §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Not built | |

@@ -39,6 +39,7 @@ gui.CLI = W
 from gi.repository import Gdk, Gtk, GLib
 app = gui.App(); app.set_application_id("io.test.kc9kcircadian"); app.register(None)
 win = gui.Window(app)
+win.extension_asked = True  # no install dialog in a test
 def pump(cond, secs=15):
     end = time.time() + secs
     while time.time() < end and not cond():

@@ -3026,6 +3026,28 @@ class Window(Gtk.ApplicationWindow):
         threading.Thread(target=work, daemon=True).start()
         return True
 
+    def extension_dialog(self):
+        """§4.10: the Killer Chicken extension isn't running: offer to
+        install a supported browser, or show the Browsers list."""
+        none = not any(b.get("installed") for b in (self.state or {}).get("browsers") or [])
+        dialog = Gtk.MessageDialog(
+            transient_for=self, modal=True, message_type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.NONE,
+            text="The Killer Chicken extension isn't running",
+            secondary_text=("No supported browser is installed. LibreWolf runs the extension; installing it "
+                            "takes a few minutes." if none else
+                            "Your blocks need it, but no supported browser has checked in lately. Open "
+                            "LibreWolf, Chrome or Chromium, or see which have it under Settings > Browsers."))
+        dialog.add_button("Later", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Install LibreWolf" if none else "Show browsers", Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            if none:
+                self.run(["browsers", "install", "librewolf"], timeout=900)
+            else:
+                self.stack.set_visible_child_name("settings")
+        return False
+
     def apply_state(self, ok, output, passwords=()):
         self.busy = False
         if list(passwords) != self.access_passwords:
@@ -3046,6 +3068,9 @@ class Window(Gtk.ApplicationWindow):
                 self.access_passwords.remove(passwords[index])
         self.access = self.state.get("access") or {}
         self.update_covers()
+        if self.state.get("extension_missing") and not getattr(self, "extension_asked", False):
+            self.extension_asked = True  # once per session
+            GLib.idle_add(self.extension_dialog)
         self.blocks = {block["name"]: block for block in self.state["blocks"]}
         self.updating = True
         try:

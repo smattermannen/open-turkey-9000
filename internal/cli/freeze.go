@@ -221,34 +221,37 @@ type guiPlace struct {
 }
 
 type guiState struct {
-	FreezeSeconds int64                     `json:"freeze_seconds"`
-	FreezeMode    string                    `json:"freeze_mode"`
-	Strict        bool                      `json:"strict"`
-	NoEscape      bool                      `json:"no_escape"`
-	Stats         bool                      `json:"stats"`
-	LibreWolf     string                    `json:"librewolf"`
-	Chrome        bool                      `json:"chrome"` // Google Chrome or Chromium installed
-	Extension     string                    `json:"extension_status"`
-	SettingsPass  bool                      `json:"settings_password"`
-	FreezeSched   []string                  `json:"freeze_schedules"`
-	Browser       map[string]bool           `json:"browser"`
-	BrowserLocks  map[string]guiSettingLock `json:"browser_locks"`
-	Blocks        []guiBlock                `json:"blocks"`
-	Hotkeys       []db.Hotkey               `json:"hotkeys"`
-	Nepsis        db.Nepsis                 `json:"nepsis"`
-	NepsisCount   int                       `json:"nepsis_count"`
-	NepsisLock    guiSettingLock            `json:"nepsis_lock"`
-	StrictLock    guiSettingLock            `json:"strict_lock"`
-	NoWeakening   bool                      `json:"no_weakening"`
-	PasswordLocks bool                      `json:"password_for_locks"`
-	DNS           string                    `json:"dns"`
-	TamperClock   bool                      `json:"tamper_clock"`
-	FileURLs      bool                      `json:"tamper_file_urls"`
-	DesktopWarn   string                    `json:"desktop_warning,omitempty"` // R-DESKTOP-1
-	Notifications enforce.NoticeOptions     `json:"notifications"`
-	StrictUse     bool                      `json:"strict_use"`
-	StrictExempt  []string                  `json:"strict_exempt"` // §3.8
-	Templates     []string                  `json:"templates"`     // §3.2
+	FreezeSeconds int64  `json:"freeze_seconds"`
+	FreezeMode    string `json:"freeze_mode"`
+	Strict        bool   `json:"strict"`
+	NoEscape      bool   `json:"no_escape"`
+	Stats         bool   `json:"stats"`
+	LibreWolf     string `json:"librewolf"`
+	Chrome        bool   `json:"chrome"` // Google Chrome or Chromium installed
+	Extension     string `json:"extension_status"`
+	// ExtensionMissing: no supported browser, or the extension is needed
+	// and hasn't checked in lately (§4.10 install dialog).
+	ExtensionMissing bool                      `json:"extension_missing"`
+	SettingsPass     bool                      `json:"settings_password"`
+	FreezeSched      []string                  `json:"freeze_schedules"`
+	Browser          map[string]bool           `json:"browser"`
+	BrowserLocks     map[string]guiSettingLock `json:"browser_locks"`
+	Blocks           []guiBlock                `json:"blocks"`
+	Hotkeys          []db.Hotkey               `json:"hotkeys"`
+	Nepsis           db.Nepsis                 `json:"nepsis"`
+	NepsisCount      int                       `json:"nepsis_count"`
+	NepsisLock       guiSettingLock            `json:"nepsis_lock"`
+	StrictLock       guiSettingLock            `json:"strict_lock"`
+	NoWeakening      bool                      `json:"no_weakening"`
+	PasswordLocks    bool                      `json:"password_for_locks"`
+	DNS              string                    `json:"dns"`
+	TamperClock      bool                      `json:"tamper_clock"`
+	FileURLs         bool                      `json:"tamper_file_urls"`
+	DesktopWarn      string                    `json:"desktop_warning,omitempty"` // R-DESKTOP-1
+	Notifications    enforce.NoticeOptions     `json:"notifications"`
+	StrictUse        bool                      `json:"strict_use"`
+	StrictExempt     []string                  `json:"strict_exempt"` // §3.8
+	Templates        []string                  `json:"templates"`     // §3.2
 	// UnsupportedBrowsers is block unsupported browsers, with its lock;
 	// Browsers the supported browsers (§4.10 Browsers).
 	UnsupportedBrowsers bool           `json:"unsupported_browsers"`
@@ -321,6 +324,7 @@ var guiStateCmd = &cobra.Command{
 		state.LibreWolf = blocker.LibreWolfVersion()
 		state.Chrome = blocker.ChromeInstalled()
 		state.Extension = extensionStatus(database)
+		state.ExtensionMissing = extensionMissing(database)
 		state.SettingsPass, _ = settingsPasswordSet(database)
 		state.FreezeSched = []string{}
 		if schedules, err := database.ListFreezeSchedules(); err == nil {

@@ -124,7 +124,15 @@ shortened or removed this way.`,
 			}
 			extras.Relock = int64(d / time.Second)
 		}
-		hasExtras := usePassword || useRestart || delaySpec != "" || style != "" || extras.Relock > 0
+		if spec, _ := cmd.Flags().GetString("range"); spec != "" {
+			if extras.RangeDays, extras.RangeFrom, extras.RangeTo, err = parseRange(spec); err != nil {
+				return err
+			}
+			extras.RangeInvert, _ = cmd.Flags().GetBool("range-invert")
+		} else if cmd.Flags().Changed("range-invert") {
+			return fmt.Errorf("--range-invert goes with --range")
+		}
+		hasExtras := usePassword || useRestart || delaySpec != "" || style != "" || extras.Relock > 0 || extras.RangeDays != 0
 
 		forDur, err := cmd.Flags().GetString("for")
 		if err != nil {
@@ -183,7 +191,7 @@ shortened or removed this way.`,
 			return fmt.Errorf("block '%s' has nothing to enforce. Add websites to a list, apps or window titles first", blockName)
 		}
 		if detail.Active && hasExtras {
-			return fmt.Errorf("block '%s' is already active; password, restart and delay locks, and a text lock of words or your own text, are set when it starts", blockName)
+			return fmt.Errorf("block '%s' is already active; password, restart, delay and range locks, and a text lock of words or your own text, are set when it starts", blockName)
 		}
 		if detail.Active {
 			return strengthenLocks(cmd, database, detail, useLock, lockChars, cmd.Flags().Changed("lock-chars"), lockedUntil, forSeconds, trusted)
@@ -280,6 +288,8 @@ func startLocks(name string, kinds []string, style string, chars int, until, tru
 				length = "until a restart " + after
 			}
 			locks = append(locks, lockToSet{target, order + "restart lock", length})
+		case db.LayerRange:
+			locks = append(locks, lockToSet{target, order + "range lock", describeRange(extras) + " (can't be unlocked then)"})
 		case db.LayerDelay:
 			length := fmt.Sprintf("unlocking takes %s", time.Duration(extras.Delay)*time.Second)
 			if after != "" {
@@ -293,7 +303,7 @@ func startLocks(name string, kinds []string, style string, chars int, until, tru
 
 // startLockRequested reports whether a start asks for any kind of lock.
 func startLockRequested(cmd *cobra.Command) bool {
-	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay", "text-lock", "lock-words", "lock-text", "relock"} {
+	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay", "text-lock", "lock-words", "lock-text", "relock", "range", "range-invert"} {
 		if cmd.Flags().Changed(f) {
 			return true
 		}
@@ -442,6 +452,9 @@ var stopCmd = &cobra.Command{
 		if hold.charLocked || hold.passwordHash != "" || hold.extras.Delay > 0 {
 			return refused(database, blockName, fmt.Errorf("block '%s' is locked. Use 'kc9k unlock %s' first", blockName, blockName))
 		}
+		if len(hold.layers) > 0 { // a range lock, or any other still on
+			return refused(database, blockName, fmt.Errorf("block '%s' is locked (%s)", blockName, db.LayerName(hold.layers[0])))
+		}
 
 		if err := database.DeactivateBlock(blockName); err != nil {
 			return err
@@ -495,6 +508,8 @@ var unlockCmd = &cobra.Command{
 			return refused(database, blockName, fmt.Errorf("block '%s' is timer-locked until %s; it cannot be unlocked before then", blockName, hold.until()))
 		case db.LayerRestart:
 			return refused(database, blockName, fmt.Errorf("block '%s' stays on until the computer restarts", blockName))
+		case db.LayerRange:
+			return refused(database, blockName, fmt.Errorf("block '%s' has a range lock (%s) that is on now; it can't be unlocked, only waited out", blockName, describeRange(hold.extras)))
 		case db.LayerPassword:
 			password, err := readPasswordStdin("Block password")
 			if err != nil {
@@ -679,6 +694,13 @@ var statusCmd = &cobra.Command{
 					tags += fmt.Sprintf(" [delay lock: unlocked in %s]", time.Duration(hold.extras.DelayUntil-trusted)*time.Second)
 				case hold.extras.Delay > 0:
 					tags += fmt.Sprintf(" [delay lock of %s]", time.Duration(hold.extras.Delay)*time.Second)
+				}
+				if hold.extras.RangeDays != 0 {
+					state := "off now"
+					if hold.extras.InRange(time.Now()) {
+						state = "on now"
+					}
+					tags += " [range lock: " + describeRange(hold.extras) + ", " + state + "]"
 				}
 				if hold.extras.TimerAfter > 0 {
 					tags += fmt.Sprintf(" [timer lock of %s after the locks before it]", time.Duration(hold.extras.TimerAfter)*time.Second)
@@ -906,6 +928,8 @@ func init() {
 	startCmd.Flags().String("for", "", "Timer lock: keep the block un-removable for this duration (e.g. 2h, 90m)")
 	startCmd.Flags().String("until", "", "Timer lock: keep the block un-removable until this clock time (HH:MM)")
 
+	startCmd.Flags().String("range", "", `Range lock: locked at these times, e.g. "mon-fri 09:00-17:00" (22:00-06:00 runs past midnight)`)
+	startCmd.Flags().Bool("range-invert", false, "Range lock: locked outside those times instead")
 	trackLockFlagOrder(startCmd) // after every lock flag is defined
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)

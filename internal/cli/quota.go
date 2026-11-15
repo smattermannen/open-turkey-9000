@@ -178,7 +178,7 @@ var quotaStartCmd = &cobra.Command{
 			return err
 		}
 		if hold.active && (hold.charLocked || hold.timeLocked() || hold.scheduledNow ||
-			hold.passwordHash != "" || hold.restartLocked || hold.extras.Delay > 0) {
+			hold.passwordHash != "" || hold.restartLocked || hold.extras.Delay > 0 || len(hold.layers) > 0) {
 			return fmt.Errorf("block '%s' is locked or in a scheduled window, so its allowance can't be used now", name)
 		}
 		if enforce.PomodoroWorking(database, name) {

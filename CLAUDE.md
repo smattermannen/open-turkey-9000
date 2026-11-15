@@ -362,7 +362,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   or removing at midnight. A lock or window closes a session. Day follows
   the system clock.
 - **Locks**: flags `--for`, `--until`, `--lock` (`--text-lock`),
-  `--password-stdin`, `--restart`, `--delay`, `--relock D` (text/password
+  `--password-stdin`, `--restart`, `--delay`, `--range "DAYS HH:MM-HH:MM"`
+  (`--range-invert`; `LockExtras.InRange`), `--relock D` (text/password
   only; re-locks unless stopped meanwhile). Browser setting locks: same kinds
   minus delay (re-lock too: `SettingLock.LiftedUntil`, `unlockSetting`; also
   strict mode, global ladder, tamper); added later only stronger; password can't be replaced;

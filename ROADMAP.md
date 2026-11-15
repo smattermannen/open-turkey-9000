@@ -117,7 +117,7 @@ Only items not simply Built.
 | §3.2 Affected users | Not built | |
 | §3.3 Enabled/disabled/lifted words | Partial | |
 | §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
-| §3.4 Range lock | Not built | |
+| §3.4 Range lock | Partial | blocks: `start --range "mon-fri 09:00-17:00" [--range-invert]`, a layer that holds while in range and can't be unlocked; not on setting locks; not in the GUI start dialog |
 | §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI fixed order; one lock per kind |
 | §3.4 R-LOCK-9 | Partial | extension/other protection: Unchecked |
 | §3.6 Break per block window | Not built | |

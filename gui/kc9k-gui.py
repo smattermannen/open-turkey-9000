@@ -437,6 +437,8 @@ def block_summary(block):
         parts.append(f"delay lock of {fmt_seconds(block['delay_seconds'])}")
     if block.get("timer_after"):
         parts.append(f"timer lock of {fmt_seconds(block['timer_after'])} after the locks before it")
+    if block.get("range_lock"):
+        parts.append(f"range lock {block['range_lock']} ({'on' if block.get('range_on') else 'off'} now)")
     if len(block.get("lock_order") or []) > 1:
         # R-LOCK-6: unlocked one at a time in this order.
         parts.append("unlock order: " + " → ".join(LOCK_KIND_NAMES.get(k, k) for k in block["lock_order"]))

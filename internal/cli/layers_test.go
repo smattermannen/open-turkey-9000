@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
@@ -166,4 +168,34 @@ func TestLayeredSettingLocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustRun(t, "strict", "off")
+}
+
+// §3.4 range lock from the CLI: while on, stop and unlock are refused.
+func TestRangeLockCLI(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "r")
+	mustRun(t, "block", "add", "r", "reddit.com")
+	if err := runCLI(t, "start", "r", "--range", "daily 25:00-26:00", "--yes"); err == nil {
+		t.Error("a bad range was accepted")
+	}
+	// Daily, all but one minute from now: on now.
+	now := time.Now()
+	from := now.Add(-time.Minute)
+	to := now.Add(2 * time.Minute)
+	spec := fmt.Sprintf("daily %02d:%02d-%02d:%02d", from.Hour(), from.Minute(), to.Hour(), to.Minute())
+	mustRun(t, "start", "r", "--range", spec, "--yes")
+	if e, _ := d.GetLockExtras("r"); e.RangeDays == 0 {
+		t.Fatalf("no range lock stored: %+v", e)
+	}
+	if err := runCLI(t, "stop", "r"); err == nil {
+		t.Error("stopped during its range lock")
+	}
+	if err := runCLI(t, "unlock", "r"); err == nil {
+		t.Error("unlocked during its range lock")
+	}
+	// Inverted: off now, so it stops.
+	_ = d.DeactivateBlock("r")
+	mustRun(t, "start", "r", "--range", spec, "--range-invert", "--yes")
+	mustRun(t, "stop", "r")
 }

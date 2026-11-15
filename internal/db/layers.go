@@ -11,6 +11,7 @@ package db
 
 import (
 	"strings"
+	"time"
 )
 
 // Lock layer kinds.
@@ -20,6 +21,7 @@ const (
 	LayerPassword = "password"
 	LayerRestart  = "restart"
 	LayerDelay    = "delay"
+	LayerRange    = "range"
 )
 
 // RestartPending in LockExtras.RestartBoot marks a restart lock waiting for
@@ -29,7 +31,7 @@ const RestartPending = "pending"
 // legacyOrder is the order of blocks locked before layers were stored: the
 // timer and restart locks had to run out first, then unlock asked the
 // password, then the challenge, then started the delay countdown.
-var legacyOrder = []string{LayerTimer, LayerRestart, LayerPassword, LayerText, LayerDelay}
+var legacyOrder = []string{LayerTimer, LayerRestart, LayerPassword, LayerText, LayerDelay, LayerRange}
 
 // ParseLayerOrder reads a stored order ("text,timer").
 func ParseLayerOrder(s string) []string {
@@ -88,8 +90,28 @@ func LayerOn(kind string, detail *BlockDetail, e LockExtras, trusted int64, boot
 		return e.RestartBoot == RestartPending || (e.RestartBoot != "" && e.RestartBoot == bootID)
 	case LayerDelay:
 		return e.Delay > 0
+	case LayerRange:
+		return e.RangeDays != 0 && e.InRange(time.Unix(trusted, 0))
 	}
 	return false
+}
+
+// InRange reports whether a range lock is on at t: within its times on its
+// days (an overnight range belongs to the day it starts), or outside them
+// when inverted.
+func (e LockExtras) InRange(t time.Time) bool {
+	if e.RangeDays == 0 {
+		return false
+	}
+	day := func(d time.Weekday) bool { return e.RangeDays&(1<<uint(d)) != 0 }
+	minute := t.Hour()*60 + t.Minute()
+	var in bool
+	if e.RangeFrom < e.RangeTo {
+		in = day(t.Weekday()) && minute >= e.RangeFrom && minute < e.RangeTo
+	} else {
+		in = (day(t.Weekday()) && minute >= e.RangeFrom) || (day(t.AddDate(0, 0, -1).Weekday()) && minute < e.RangeTo)
+	}
+	return in != e.RangeInvert
 }
 
 // Layers returns the block's locks in unlock order: the stored order, then
@@ -122,6 +144,8 @@ func layerSet(kind string, detail *BlockDetail, e LockExtras) bool {
 		return e.RestartBoot != ""
 	case LayerDelay:
 		return e.Delay > 0
+	case LayerRange:
+		return e.RangeDays != 0
 	}
 	return false
 }
@@ -236,6 +260,8 @@ func LayerName(kind string) string {
 		return "restart lock"
 	case LayerDelay:
 		return "delay lock"
+	case LayerRange:
+		return "range lock"
 	}
 	return kind
 }

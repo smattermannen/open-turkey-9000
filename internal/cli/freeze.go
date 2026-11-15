@@ -133,8 +133,10 @@ type guiBlock struct {
 	DelayLeft     int64          `json:"delay_left"`            // the delay lock unlocks in this many seconds, once asked
 	LockOrder     []string       `json:"lock_order,omitempty"`  // locks on, in unlock order (R-LOCK-6)
 	TimerAfter    int64          `json:"timer_after,omitempty"` // a timer lock's seconds, counted once the locks before it are unlocked
-	Scheduled     bool           `json:"scheduled"`             // has windows or a place rule (§3.3)
-	Lifted        bool           `json:"lifted"`                // active, but its windows or places lift it now
+	RangeLock     string         `json:"range_lock,omitempty"`  // §3.4, e.g. "mon,tue 09:00-17:00"
+	RangeOn       bool           `json:"range_on,omitempty"`
+	Scheduled     bool           `json:"scheduled"` // has windows or a place rule (§3.3)
+	Lifted        bool           `json:"lifted"`    // active, but its windows or places lift it now
 	LockSeconds   int64          `json:"lock_seconds"`
 	QuotaLimit    int64          `json:"quota_limit"`
 	QuotaUsed     int64          `json:"quota_used"`
@@ -455,6 +457,10 @@ var guiStateCmd = &cobra.Command{
 			g.Password, g.Restart, g.Delay = hold.passwordHash != "", hold.restartLocked, hold.extras.Delay
 			g.LockOrder = hold.layers
 			g.TimerAfter = hold.extras.TimerAfter
+			if hold.extras.RangeDays != 0 {
+				g.RangeLock = describeRange(hold.extras)
+				g.RangeOn = hold.extras.InRange(now)
+			}
 			if hold.extras.StopAt > trusted {
 				g.StopSeconds = hold.extras.StopAt - trusted
 			}

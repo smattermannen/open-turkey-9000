@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -23,6 +24,8 @@ var lockFlagKind = map[string]string{
 	"password-stdin": db.LayerPassword,
 	"restart":        db.LayerRestart,
 	"delay":          db.LayerDelay,
+	"range":          db.LayerRange,
+	"range-invert":   db.LayerRange,
 }
 
 // flagSeq numbers flag assignments, so the order they were given in can be
@@ -106,4 +109,44 @@ func describeLayers(layers []string, detail *db.BlockDetail, e db.LockExtras) st
 func liftTextLayer(database *db.DB, detail *db.BlockDetail, e *db.LockExtras, kind string, trusted int64, bootID string) error {
 	db.LiftTextLayer(detail, e, kind, trusted, bootID)
 	return database.SaveLayers(detail, *e)
+}
+
+// parseRange reads a range lock: "mon-fri 09:00-17:00" (days as for
+// schedules; "22:00-06:00" runs past midnight).
+func parseRange(spec string) (days, from, to int, err error) {
+	fields := strings.Fields(spec)
+	if len(fields) < 2 {
+		return 0, 0, 0, fmt.Errorf(`invalid --range %q (want days and times, e.g. "mon-fri 09:00-17:00")`, spec)
+	}
+	times := fields[len(fields)-1]
+	start, end, ok := strings.Cut(times, "-")
+	if !ok {
+		return 0, 0, 0, fmt.Errorf("invalid --range times %q (want HH:MM-HH:MM)", times)
+	}
+	if days, err = schedule.ParseDays(strings.Join(fields[:len(fields)-1], " ")); err != nil {
+		return 0, 0, 0, err
+	}
+	if from, err = schedule.ParseTimeOfDay(start); err != nil {
+		return 0, 0, 0, err
+	}
+	if to, err = schedule.ParseEndTime(end); err != nil {
+		return 0, 0, 0, err
+	}
+	if to == 24*60 {
+		to = 0
+	}
+	if from == to {
+		return 0, 0, 0, fmt.Errorf("a range lock needs two different times")
+	}
+	return days, from, to, nil
+}
+
+// describeRange shows a range lock, e.g. "mon,tue 09:00-17:00" or
+// "outside daily 22:00-06:00".
+func describeRange(e db.LockExtras) string {
+	text := fmt.Sprintf("%s %02d:%02d-%02d:%02d", schedule.FormatDays(e.RangeDays), e.RangeFrom/60, e.RangeFrom%60, e.RangeTo/60, e.RangeTo%60)
+	if e.RangeInvert {
+		return "outside " + text
+	}
+	return text
 }

@@ -38,6 +38,13 @@ type LockExtras struct {
 	Order       string
 	TimerAfter  int64
 	LiftedKinds string
+	// Range lock (§3.4): on from RangeFrom to RangeTo (minutes of the day;
+	// To before From runs past midnight) on RangeDays (schedule day bits);
+	// RangeInvert: on outside those times instead. RangeDays 0: none.
+	RangeDays   int
+	RangeFrom   int
+	RangeTo     int
+	RangeInvert bool
 }
 
 // BootID identifies the current boot.
@@ -106,9 +113,9 @@ func (d *DB) GetLockExtras(name string) (LockExtras, error) {
 	}
 	var e LockExtras
 	err = d.conn.QueryRow(`SELECT lock_password, restart_boot, lock_delay, stop_at, lock_style, delay_until, relock, lifted_until,
-		lock_order, timer_after, lifted_kinds
+		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert
 		FROM active_blocks WHERE block_id = ?`, blockID).Scan(&e.PasswordHash, &e.RestartBoot, &e.Delay, &e.StopAt, &e.Style, &e.DelayUntil,
-		&e.Relock, &e.LiftedUntil, &e.Order, &e.TimerAfter, &e.LiftedKinds)
+		&e.Relock, &e.LiftedUntil, &e.Order, &e.TimerAfter, &e.LiftedKinds, &e.RangeDays, &e.RangeFrom, &e.RangeTo, &e.RangeInvert)
 	if err == sql.ErrNoRows {
 		return LockExtras{}, nil
 	}
@@ -125,9 +132,11 @@ func (d *DB) SetLockExtras(name string, e LockExtras) error {
 		return err
 	}
 	_, err = d.conn.Exec(`UPDATE active_blocks SET lock_password = ?, restart_boot = ?, lock_delay = ?, stop_at = ?, lock_style = ?, delay_until = ?,
-		relock = ?, lifted_until = ?, lock_order = ?, timer_after = ?, lifted_kinds = ? WHERE block_id = ?`,
+		relock = ?, lifted_until = ?, lock_order = ?, timer_after = ?, lifted_kinds = ?,
+		range_days = ?, range_from = ?, range_to = ?, range_invert = ? WHERE block_id = ?`,
 		e.PasswordHash, e.RestartBoot, e.Delay, e.StopAt, e.Style, e.DelayUntil,
-		e.Relock, e.LiftedUntil, e.Order, e.TimerAfter, e.LiftedKinds, blockID)
+		e.Relock, e.LiftedUntil, e.Order, e.TimerAfter, e.LiftedKinds,
+		e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert, blockID)
 	if err != nil {
 		return fmt.Errorf("failed to save locks of '%s': %w", name, err)
 	}

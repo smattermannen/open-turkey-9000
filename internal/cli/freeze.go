@@ -32,7 +32,7 @@ Emergency exit: in GRUB, press e on the boot entry and add
 		yes, _ := cmd.Flags().GetBool("yes")
 		mode, _ := cmd.Flags().GetString("mode")
 		if !freeze.ValidMode(mode) {
-			return fmt.Errorf("unknown mode %q (use lock, logout or shutdown)", mode)
+			return fmt.Errorf("unknown mode %q (use lock, logout, shutdown or apps)", mode)
 		}
 
 		d, err := time.ParseDuration(forDur)
@@ -604,7 +604,7 @@ var guiStateCmd = &cobra.Command{
 func init() {
 	freezeCmd.Flags().String("for", "", "How long to stay frozen (e.g. 30m, 2h; at most 24h)")
 	freezeCmd.Flags().Bool("yes", false, "Confirm the freeze")
-	freezeCmd.Flags().String("mode", freeze.ModeLock, "How to freeze: lock, logout or shutdown")
+	freezeCmd.Flags().String("mode", freeze.ModeLock, "How to freeze: lock, logout, shutdown, or apps (allowed apps only: kc9k freeze apps)")
 	_ = freezeCmd.MarkFlagRequired("for")
 	guiStateCmd.Flags().StringArray("reveal", nil, "Show a block with a block password (its password on stdin)")
 	rootCmd.AddCommand(freezeCmd, guiStateCmd)

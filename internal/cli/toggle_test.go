@@ -384,3 +384,23 @@ func TestWindowBreak(t *testing.T) {
 	}
 	mustRun(t, "schedule", "break", "b", "1", "off")
 }
+
+// §3.8: the allowed apps list; adding weakens (refused while locked).
+func TestFreezeApps(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "freeze", "apps", "add", "libreoffice")
+	if got := enforce.FreezeApps(d); len(got) != 1 || got[0] != "libreoffice" {
+		t.Fatalf("apps = %v", got)
+	}
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "freeze", "apps", "add", "steam"); err == nil {
+		t.Error("an allowed app added while locked")
+	}
+	mustRun(t, "freeze", "apps", "remove", "libreoffice")
+	if got := enforce.FreezeApps(d); len(got) != 0 {
+		t.Errorf("after remove: %v", got)
+	}
+}

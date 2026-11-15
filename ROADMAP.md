@@ -126,7 +126,7 @@ Only items not simply Built.
 | §3.6 Autostart | Built | `kc9k autostart B add once DATE HH:MM / at HH:MM [DAYS] / sign-in / next-window`, GUI list, projects; removing weakens. `at` checked live; sign-in/wake: Unchecked |
 | §3.7 Strict use counting | Built | `kc9k use-counting strict|normal`, GUI switch; every open tab (`rules.strict_use`) and running apps (`RunningApps`) count; normal weakens. Live: Unchecked |
 | §3.8 Scheduled freeze lock kinds beyond lead | Built | `freeze schedule lock N --for/--lock/--password-stdin/--restart [--relock]`, `freeze schedule unlock N`; setting lock `freeze:<id>`; removal refused while on; counts as a lock. GUI: Not built |
-| §3.8 Allowed apps only | Not built | |
+| §3.8 Allowed apps only | Partial | freeze mode `apps` (`freeze --mode apps`, schedules too, GUI choice), list `kc9k freeze apps add|remove`; closes every regular-user process but allowed apps, their children and system/desktop helpers (`allowedAppKeep`, unit-tested). Live: never run (no freeze overnight); GUI list editor not built |
 | §3.8 R-LOCK-12 | Partial | see 0.1 |
 | §3.8 Strict mode exempt folders | Built | `kc9k strict exempt add|remove DIR`, GUI list; exec bind mounts over the noexec folders (`noexecPlan`); adding weakens. Not in projects (import never weakens). Live: Unchecked (strict mode not run overnight) |
 | §3.8 Forgotten password recovery | Built | `kc9k-bin recover` (root, recovery boot, not with no-escape): settings password and password locks (`--access`: access passwords). Live: Unchecked (needs a recovery boot) |

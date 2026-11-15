@@ -203,7 +203,7 @@ func Notices(in NoticeInput, o NoticeOptions, now time.Time) []Notice {
 			}
 		}
 		what := map[string]string{"lock": "The screen will lock.", "logout": "You will be logged out.",
-			"shutdown": "The computer will shut down."}[mode]
+			"shutdown": "The computer will shut down.", "apps": "Only the allowed apps will run."}[mode]
 		key := "freeze "
 		if m == 1 { // R-WARN-1: announced again 60 seconds before
 			key = "freeze-last "

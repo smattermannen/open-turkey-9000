@@ -194,6 +194,8 @@ func enforceFreeze(d *db.DB, now time.Time) {
 		err = blocker.LogoutUsers()
 	case freeze.ModeShutdown:
 		err = blocker.PowerOff()
+	case freeze.ModeApps:
+		blocker.CloseAllExcept(FreezeApps(d)) // R-FREEZE-1
 	default:
 		err = blocker.LockSessions()
 	}
@@ -240,6 +242,18 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 	if err := blocker.ApplyNoexec(ExemptFolders(d)...); err != nil {
 		log.Printf("daemon: noexec: %v", err)
 	}
+}
+
+// SettingFreezeApps is the app list of "allowed apps only" freezes (JSON).
+const SettingFreezeApps = "freeze.apps"
+
+// FreezeApps returns that list.
+func FreezeApps(d *db.DB) []string {
+	var out []string
+	if v, err := d.GetSetting(SettingFreezeApps); err == nil && v != "" {
+		_ = json.Unmarshal([]byte(v), &out)
+	}
+	return out
 }
 
 // FreezeLockPrefix names a scheduled freeze's setting lock: "freeze:<id>"

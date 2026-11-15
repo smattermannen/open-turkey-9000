@@ -28,11 +28,13 @@ const (
 	ModeLock     = "lock"
 	ModeLogout   = "logout"
 	ModeShutdown = "shutdown"
+	// ModeApps: allowed apps only (§3.8, R-FREEZE-1).
+	ModeApps = "apps"
 )
 
 // ValidMode reports whether mode is known.
 func ValidMode(mode string) bool {
-	return mode == ModeLock || mode == ModeLogout || mode == ModeShutdown
+	return mode == ModeLock || mode == ModeLogout || mode == ModeShutdown || mode == ModeApps
 }
 
 // Validate checks a requested freeze length.

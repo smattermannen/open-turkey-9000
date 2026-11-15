@@ -40,7 +40,7 @@ var freezeScheduleAddCmd = &cobra.Command{
 
 Windows are within one day; for an overnight freeze add two, as above, and
 they run on from one into the other. While a window is open the computer is
-frozen until it ends, in the chosen mode (lock, logout or shutdown); a
+frozen until it ends, in the chosen mode (lock, logout, shutdown or apps); a
 running freeze can't be ended. With --lock-lead the schedule is locked: it
 can't be removed from that long before its window opens until it closes.
 Without it, it can be removed whenever no freeze is running from it.`,
@@ -55,7 +55,7 @@ Without it, it can be removed whenever no freeze is running from it.`,
 			return fmt.Errorf("--from and --to are required (HH:MM)")
 		}
 		if !freeze.ValidMode(mode) {
-			return fmt.Errorf("unknown mode %q (use lock, logout or shutdown)", mode)
+			return fmt.Errorf("unknown mode %q (use lock, logout, shutdown or apps)", mode)
 		}
 		days, err := schedule.ParseDays(daysSpec)
 		if err != nil {
@@ -318,7 +318,7 @@ func init() {
 	freezeScheduleAddCmd.Flags().String("days", "daily", "Days: daily, weekdays, weekends, mon-fri, or mon,wed,fri")
 	freezeScheduleAddCmd.Flags().String("from", "", "Start time HH:MM (required)")
 	freezeScheduleAddCmd.Flags().String("to", "", "End time HH:MM, or 24:00 for midnight (required)")
-	freezeScheduleAddCmd.Flags().String("mode", freeze.ModeLock, "lock, logout or shutdown")
+	freezeScheduleAddCmd.Flags().String("mode", freeze.ModeLock, "lock, logout, shutdown or apps (allowed apps only)")
 	freezeScheduleAddCmd.Flags().Bool("yes", false, "Confirm")
 	freezeScheduleAddCmd.Flags().String("lock-lead", "", "Lock the schedule from this long before each window (e.g. 2h; 0m: only while it runs)")
 	freezeScheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h)")

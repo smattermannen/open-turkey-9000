@@ -4814,6 +4814,7 @@ class Window(Gtk.ApplicationWindow):
         self.freeze_mode.append("lock", "Lock the screen")
         self.freeze_mode.append("logout", "Log out")
         self.freeze_mode.append("shutdown", "Shut down")
+        self.freeze_mode.append("apps", "Allowed apps only")  # §3.8: kc9k freeze apps
         self.freeze_mode.set_active_id("lock")
         self.freeze_minutes = Gtk.SpinButton.new_with_range(1, 1440, 5)
         self.freeze_minutes.set_value(30)

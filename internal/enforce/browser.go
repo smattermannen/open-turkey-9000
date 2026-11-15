@@ -646,10 +646,17 @@ func protectionChanged(d *db.DB) time.Time {
 	return time.Unix(unix, 0)
 }
 
+// PrivateTamperOn reports tamper protection "close private windows and
+// Tor" (§4.10).
+func PrivateTamperOn(d *db.DB) bool {
+	v, err := d.GetSetting(SettingTamperPrivate)
+	return err == nil && v == "on"
+}
+
 func enforceBrowser(d *db.DB) {
 	setup := blocker.BrowserSetup{ForceSearch: BrowserOn(d, "force-search"),
 		DisableDevTools: BrowserOn(d, "block-devtools") && !blocker.RemoteControlAllowed(),
-		DisablePrivate:  BrowserOn(d, "no-private")}
+		DisablePrivate:  BrowserOn(d, "no-private") || PrivateTamperOn(d)}
 	xpi, err := webext.Pack()
 	if err == nil {
 		err = blocker.EnsureFile(webext.Path(), xpi)

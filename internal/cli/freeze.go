@@ -259,6 +259,7 @@ type guiState struct {
 	TamperClock      bool                      `json:"tamper_clock"`
 	FileURLs         bool                      `json:"tamper_file_urls"`
 	TaskManagers     bool                      `json:"tamper_task_managers"`
+	TamperPrivate    bool                      `json:"tamper_private"`
 	Grace            int                       `json:"tamper_grace"`
 	AnythingLocked   bool                      `json:"anything_locked"`           // §4.10: tamper protection can't go off now
 	DesktopWarn      string                    `json:"desktop_warning,omitempty"` // R-DESKTOP-1
@@ -406,6 +407,7 @@ var guiStateCmd = &cobra.Command{
 		state.FileURLs = enforce.FileURLsOn(database)
 		tm, _ := database.GetSetting(enforce.SettingTaskManagers)
 		state.TaskManagers = tm == "on"
+		state.TamperPrivate = enforce.PrivateTamperOn(database)
 		state.Grace = enforce.ExtensionGraceSeconds(database)
 		state.AnythingLocked, _ = enforce.AnyLock(database, now, trusted)
 		state.DesktopWarn = blocker.DesktopWarning()

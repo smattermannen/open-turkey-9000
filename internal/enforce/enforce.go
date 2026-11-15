@@ -460,6 +460,11 @@ func Tick(d *db.DB, now time.Time) error {
 	}
 	enforceNepsis(d, now, active)
 	closeTaskManagers(d, now, trusted)
+	if v, _ := d.GetSetting(SettingTamperPrivate); v == "on" && os.Getenv("KC9K_DB") == "" {
+		if n := blocker.CloseTor(); n > 0 {
+			logEvent(d, db.EventTamper, "", "Tor")
+		}
+	}
 	return nil
 }
 
@@ -615,6 +620,9 @@ func dedup(in []string) []string {
 const (
 	SettingExtensionGrace = "tamper.grace"         // seconds; "" = 60
 	SettingTaskManagers   = "tamper.task-managers" // "on": closed while anything is locked
+	// SettingTamperPrivate: "on" turns private windows off in every browser
+	// and closes Tor Browser (§4.10 close private windows and Tor).
+	SettingTamperPrivate = "tamper.private"
 )
 
 // ExtensionGraceSeconds is how long a browser may run without the

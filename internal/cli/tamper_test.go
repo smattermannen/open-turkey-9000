@@ -218,3 +218,20 @@ func TestTamperGraceAndTaskManagers(t *testing.T) {
 		t.Error("gui-state doesn't say something is locked")
 	}
 }
+
+// §4.10 close private windows and Tor: turns private windows off in the
+// browsers; off refused while locked.
+func TestTamperPrivate(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "tamper", "private", "on")
+	if !enforce.PrivateTamperOn(d) || !strings.Contains(capture(t, "gui-state"), `"tamper_private":true`) {
+		t.Fatal("private tamper not on")
+	}
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "tamper", "private", "off"); err == nil {
+		t.Error("private windows allowed again while locked")
+	}
+}

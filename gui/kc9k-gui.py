@@ -73,6 +73,9 @@ TAMPER_SETTINGS = (
     ("task-managers", "Block task managers while locked",
      "While a block or setting is locked, System Monitor, htop and other task managers are closed.",
      ("tamper", "task-managers")),
+    ("private", "Close private windows and Tor",
+     "Private windows are turned off in every browser (open ones close when it restarts) and "
+     "Tor Browser is closed.", ("tamper", "private")),
     ("file-urls", "Allow file:// blocking",
      "Blacklist entries such as file:///home/me/games/* block local files in the browsers. "
      "Each block's own file:// exceptions (file://* by default) still spare them.",
@@ -5616,6 +5619,7 @@ class Window(Gtk.ApplicationWindow):
         return {"clock": bool(self.state.get("tamper_clock", False)),
                 "file-urls": bool(self.state.get("tamper_file_urls", False)),
                 "task-managers": bool(self.state.get("tamper_task_managers", False)),
+                "private": bool(self.state.get("tamper_private", False)),
                 "unsupported-browsers": bool(self.state.get("unsupported_browsers", False))}
 
     def setting_lock_info(self, name):

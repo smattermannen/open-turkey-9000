@@ -35,6 +35,9 @@ var tamperCmd = &cobra.Command{
                         isn't counted then either)
   task-managers         close task managers (System Monitor, htop, …) while
                         anything is locked
+  private               close private windows and Tor: private windows are
+                        turned off in every browser (they close when it
+                        restarts) and Tor Browser is closed
   grace SECONDS         how long a browser may run without the extension
                         checking in (10 to 600; default 60); longer weakens
   file-urls             allow file:// blocking: blacklist entries such as
@@ -69,6 +72,7 @@ password, then turns it off if nothing else is locked.`,
 			fmt.Printf("file-urls %s\n", onOff(enforce.FileURLsOn(database)))
 			tm, _ := database.GetSetting(enforce.SettingTaskManagers)
 			fmt.Printf("task-managers %s\n", onOff(tm == "on"))
+			fmt.Printf("private %s\n", onOff(enforce.PrivateTamperOn(database)))
 			fmt.Printf("grace %ds\n", enforce.ExtensionGraceSeconds(database))
 			return printUnsupportedBrowsers(database)
 		}
@@ -148,6 +152,10 @@ password, then turns it off if nothing else is locked.`,
 			fmt.Printf("Closing task managers while locked is %s\n", args[1])
 			return nil
 		}
+		if args[0] == "private" {
+			fmt.Printf("Closing private windows and Tor is %s\n", args[1])
+			return enforce.ApplyFromDB(database)
+		}
 		fmt.Printf("file:// blocking is %s\n", args[1])
 		return enforce.ApplyFromDB(database)
 	}),
@@ -156,7 +164,7 @@ password, then turns it off if nothing else is locked.`,
 // simpleTamper are the tamper protection settings without a lock of their
 // own, by name: on is free, off refused while anything is locked.
 var simpleTamper = map[string]string{"clock": db.SettingTamperClock, "file-urls": enforce.SettingFileURLs,
-	"task-managers": enforce.SettingTaskManagers}
+	"task-managers": enforce.SettingTaskManagers, "private": enforce.SettingTamperPrivate}
 
 func tamperClockOn(database *db.DB) bool {
 	v, err := database.GetSetting(db.SettingTamperClock)

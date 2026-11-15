@@ -2704,6 +2704,8 @@ class Window(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="Killer Chicken 9000")
         self.set_default_size(980, 680)
+        # §4.10 tray: closing hides the window while the tray icon is on.
+        self.connect("delete-event", lambda w, _e: bool(getattr(w.get_application(), "tray", None)) and w.hide_on_delete())
         self.state_json = None
         self.state = None
         self.blocks = {}
@@ -3152,6 +3154,10 @@ class Window(Gtk.ApplicationWindow):
             return False
         self.state_json = output
         self.state = json.loads(output)
+        tray = getattr(self.get_application(), "tray", None)
+        if tray is not None:
+            on = [b["name"] for b in self.state.get("blocks", []) if b.get("active")]
+            tray.set_status(f"On: {', '.join(on)}" if on else "No block is on")
         # A password that opens nothing any more (it was changed) is dropped.
         for index in self.state.get("access_unused") or []:
             if index < len(passwords) and passwords[index] in self.access_passwords:
@@ -5242,6 +5248,13 @@ class Window(Gtk.ApplicationWindow):
         save_prefs(app.prefs)
         app.theme.apply(app.prefs.get("theme", "system"), app.prefs["darkness"])
 
+    def toggle_tray(self, _switch, wanted):
+        app = self.get_application()
+        app.prefs["tray"] = bool(wanted)
+        save_prefs(app.prefs)
+        app.set_tray(bool(wanted))
+        return False
+
     def choose_clock(self, combo):
         global CLOCK_24
         app = self.get_application()
@@ -5316,6 +5329,9 @@ class Window(Gtk.ApplicationWindow):
         clock.set_active_id("24" if self.get_application().prefs.get("clock_24", True) else "12")
         clock.connect("changed", self.choose_clock)
         self.clock_combo = clock  # for tests
+        self.tray_switch = Gtk.Switch(valign=Gtk.Align.CENTER,
+                                      active=bool(self.get_application().prefs.get("tray")))
+        self.tray_switch.connect("state-set", self.toggle_tray)
         clock_row = Gtk.Box(spacing=16)
         clock_row.pack_start(Gtk.Label(label="Clock", xalign=0), True, True, 0)
         clock_row.pack_end(clock, False, False, 0)
@@ -5323,7 +5339,10 @@ class Window(Gtk.ApplicationWindow):
         self.login_switch.connect("state-set", self.toggle_open_at_login)
         box.pack_start(section("Preferences", row, dark_row, clock_row, day_row,
                                self.switch_row(self.login_switch, "Open at login",
-                                               "Start this window when you sign in.")), False, False, 0)
+                                               "Start this window when you sign in."),
+                               self.switch_row(self.tray_switch, "Show in the tray",
+                                               "An icon in the panel shows what is on; closing the "
+                                               "window keeps it there.")), False, False, 0)
 
         self.no_weakening_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.no_weakening_switch.connect("state-set", self.toggle_no_weakening)
@@ -6045,11 +6064,75 @@ class Window(Gtk.ApplicationWindow):
             self.run(["stats", "clear"], then=lambda _o: self.refresh_stats())
 
 
+class Tray:
+    """§4.10 tray: an icon with a menu (open, what is on, quit), through
+    Ayatana AppIndicator or XApp's status icon, whichever the desktop has."""
+
+    def __init__(self, app):
+        self.app = app
+        self.menu = Gtk.Menu()
+        self.status = Gtk.MenuItem(label="Killer Chicken 9000", sensitive=False)
+        open_item = Gtk.MenuItem(label="Open Killer Chicken 9000")
+        open_item.connect("activate", lambda _i: app.activate())
+        quit_item = Gtk.MenuItem(label="Quit the window")
+        quit_item.connect("activate", lambda _i: app.quit())
+        for item in (self.status, Gtk.SeparatorMenuItem(), open_item, quit_item):
+            self.menu.append(item)
+        self.menu.show_all()
+        self.icon = None
+        try:
+            gi.require_version("AyatanaAppIndicator3", "0.1")
+            from gi.repository import AyatanaAppIndicator3 as Indicator
+            self.icon = Indicator.Indicator.new("kc9k", "security-high",
+                                                Indicator.IndicatorCategory.APPLICATION_STATUS)
+            self.icon.set_status(Indicator.IndicatorStatus.ACTIVE)
+            self.icon.set_menu(self.menu)
+            self.kind = "indicator"
+        except (ImportError, ValueError):
+            try:
+                gi.require_version("XApp", "1.0")
+                from gi.repository import XApp
+                self.icon = XApp.StatusIcon()
+                self.icon.set_icon_name("security-high")
+                self.icon.set_primary_menu(self.menu)
+                self.icon.set_secondary_menu(self.menu)
+                self.kind = "xapp"
+            except (ImportError, ValueError):
+                self.kind = None
+
+    def set_status(self, text):
+        self.status.set_label(text)
+        if self.kind == "xapp":
+            self.icon.set_tooltip_text(text)
+        elif self.kind == "indicator":
+            self.icon.set_title(text)
+
+    def remove(self):
+        if self.kind == "indicator":
+            from gi.repository import AyatanaAppIndicator3 as Indicator
+            self.icon.set_status(Indicator.IndicatorStatus.PASSIVE)
+        elif self.kind == "xapp":
+            self.icon.set_visible(False)
+        self.icon = None
+
+
 class App(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="io.github.kc9k.Gui")
         self.prefs = {}
         self.theme = None
+        self.tray = None
+
+    def set_tray(self, on):
+        """§4.10: with the tray on, closing the window keeps the app (and
+        its icon) running."""
+        if on and self.tray is None:
+            self.tray = Tray(self)
+            self.hold()
+        elif not on and self.tray is not None:
+            self.tray.remove()
+            self.tray = None
+            self.release()
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -6060,6 +6143,8 @@ class App(Gtk.Application):
         CLOCK_24 = self.prefs.get("clock_24", True)
         self.theme = Theme()
         self.theme.apply(self.prefs.get("theme", "system"), self.prefs.get("darkness"))
+        if self.prefs.get("tray"):
+            self.set_tray(True)
 
     def do_activate(self):
         window = self.get_active_window() or Window(self)

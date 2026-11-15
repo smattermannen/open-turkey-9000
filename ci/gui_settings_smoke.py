@@ -218,6 +218,15 @@ check(app.prefs.get("clock_24") is False and gui.show_clock(14 * 60 + 30) == "2:
 win.clock_combo.set_active_id("24")
 check(gui.show_clock(14 * 60 + 30) == "14:30" and gui.show_clock(1440, True) == "24:00", "24-hour clock")
 
+# §4.10 tray: the icon comes and goes with the preference; closing hides.
+win.tray_switch.set_active(True)
+check(app.tray is not None and app.prefs.get("tray") is True, "tray on")
+settle()
+check(app.tray is None or app.tray.status.get_label() in ("No block is on",) or app.tray.status.get_label().startswith("On:"),
+      "tray status: %s" % (app.tray and app.tray.status.get_label()))
+win.tray_switch.set_active(False)
+check(app.tray is None and app.prefs.get("tray") is False, "tray off")
+
 # §4.9 private windows left out of statistics.
 win.stats_private_switch.set_active(True)
 settle()

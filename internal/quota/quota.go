@@ -98,7 +98,7 @@ func (s State) Idle(now int64) State {
 }
 
 // Periods an allowance can cover; "rolling" is the last 24 hours.
-var Periods = []string{"day", "week", "month", "rolling"}
+var Periods = []string{"day", "week", "month", "rolling", "window"}
 
 // PeriodOf names the period t falls in: the day, ISO week or month,
 // counted from the refill time instead of midnight. Step starts a new
@@ -108,6 +108,10 @@ func (s State) PeriodOf(t time.Time) string {
 	switch s.Period {
 	case "rolling":
 		return "rolling" // never a new period: old use drops off hour by hour
+	case "window":
+		// Each opening of a block window is a period; only the caller knows
+		// the windows (enforce.QuotaPeriod). Without it: no new period.
+		return s.Day
 	case "week":
 		y, w := t.ISOWeek()
 		return fmt.Sprintf("%d-W%02d", y, w)

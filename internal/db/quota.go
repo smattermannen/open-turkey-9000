@@ -1,8 +1,8 @@
 package db
 
 import (
-	"encoding/json"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/smattermannen/kc9k/internal/quota"

@@ -542,7 +542,7 @@ var guiStateCmd = &cobra.Command{
 			if q, err := database.GetQuota(b.Name); err != nil {
 				return err
 			} else if q != nil {
-				s := q.Step(now.Unix(), q.PeriodOf(now))
+				s := q.Step(now.Unix(), enforce.QuotaPeriod(database, b.Name, *q, now))
 				g.QuotaLimit, g.QuotaUsed, g.QuotaOpen, g.QuotaNext = s.Limit, s.Used, s.Open, s.PendingLimit
 				g.QuotaPeriod, g.QuotaRefill = s.Period, schedule.FormatMinutes(s.Refill)
 				g.QuotaSessions, g.QuotaSessionsUsed = s.MaxSessions, s.Sessions

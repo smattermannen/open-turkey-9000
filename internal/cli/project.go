@@ -287,7 +287,7 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 		}
 	}
 	if in.Quota < 0 || in.Quota > 31*24*3600 || (in.Quota > 0 && quota.ValidateFor(time.Duration(in.Quota)*time.Second, in.QuotaPer) != nil) ||
-		(in.QuotaPer != "" && in.QuotaPer != "week" && in.QuotaPer != "month" && in.QuotaPer != "rolling") || in.QuotaRefill < 0 || in.QuotaRefill >= 24*60 {
+		(in.QuotaPer != "" && in.QuotaPer != "week" && in.QuotaPer != "month" && in.QuotaPer != "rolling" && in.QuotaPer != "window") || in.QuotaRefill < 0 || in.QuotaRefill >= 24*60 {
 		return out, fmt.Errorf("allowance out of range")
 	}
 	if p := in.Pomodoro; p != nil && (p.Work < int64(minPomodoroPhase.Seconds()) || p.Break < int64(minPomodoroPhase.Seconds()) ||
@@ -367,7 +367,7 @@ func createBlock(database *db.DB, c checkedBlock) error {
 	if in.Quota > 0 {
 		q := quota.New(in.Quota, now.Unix(), "")
 		q.Period, q.Refill, q.MaxSessions = in.QuotaPer, in.QuotaRefill, min(max(in.QuotaSessions, 0), 100)
-		q.Day = q.PeriodOf(now)
+		q.Day = enforce.QuotaPeriod(database, in.Name, q, now)
 		if err := database.SaveQuota(in.Name, q); err != nil {
 			return err
 		}

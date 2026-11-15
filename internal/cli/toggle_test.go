@@ -404,3 +404,39 @@ func TestFreezeApps(t *testing.T) {
 		t.Errorf("after remove: %v", got)
 	}
 }
+
+// §3.6 allowance per window: each opening of a block window is a period;
+// outside windows the period stays (nothing refills).
+func TestAllowancePerWindow(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	now := time.Now()
+	start := (now.Hour()*60 + now.Minute()) / 5 * 5
+	end := start + 30
+	if end >= 24*60 {
+		t.Skip("too close to midnight")
+	}
+	clock := func(m int) string { return fmt.Sprintf("%02d:%02d", m/60, m%60) }
+	mustRun(t, "schedule", "add", "b", "--days", "daily", "--from", clock(start), "--to", clock(end))
+	mustRun(t, "allowance", "set", "b", "20m", "--per", "window")
+	q, err := d.GetQuota("b")
+	if err != nil || q == nil {
+		t.Fatal(q, err)
+	}
+	want := fmt.Sprintf("%s %d", now.Format("2006-01-02"), start)
+	if got := enforce.QuotaPeriod(d, "b", *q, now); got != want || q.Day != want {
+		t.Errorf("period = %q, stored %q; want %q", got, q.Day, want)
+	}
+	later := now.Add(time.Duration(end-start+5) * time.Minute)
+	if later.Day() == now.Day() {
+		if got := enforce.QuotaPeriod(d, "b", *q, later); got != want {
+			t.Errorf("outside the window the period changed to %q", got)
+		}
+	}
+	tomorrow := now.Add(24 * time.Hour)
+	if got := enforce.QuotaPeriod(d, "b", *q, tomorrow); got == want {
+		t.Error("the next opening is the same period")
+	}
+}

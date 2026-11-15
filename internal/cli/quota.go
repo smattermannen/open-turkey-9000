@@ -39,7 +39,7 @@ func currentQuota(database *db.DB, name string, now time.Time) (quota.State, err
 	if state == nil {
 		return quota.State{}, fmt.Errorf("block '%s' has no allowance", name)
 	}
-	return state.Step(now.Unix(), state.PeriodOf(now)), nil
+	return state.Step(now.Unix(), enforce.QuotaPeriod(database, name, *state, now)), nil
 }
 
 // ensureBlockActive turns a quota block on or off. The daemon may make the same
@@ -76,8 +76,8 @@ var quotaSetCmd = &cobra.Command{
 		if per == "day" {
 			per = ""
 		}
-		if per != "" && per != "week" && per != "month" && per != "rolling" {
-			return fmt.Errorf("--per is day, week, month or rolling (the last 24 hours)")
+		if per != "" && per != "week" && per != "month" && per != "rolling" && per != "window" {
+			return fmt.Errorf("--per is day, week, month, rolling (the last 24 hours) or window (each opening of a block window)")
 		}
 		if err := quota.ValidateFor(d, per); err != nil {
 			return err
@@ -112,7 +112,7 @@ var quotaSetCmd = &cobra.Command{
 		if existing == nil {
 			s = quota.New(limit, now.Unix(), "")
 			s.Period, s.Refill, s.MaxSessions = per, refill, maxSessions
-			s.Day = s.PeriodOf(now)
+			s.Day = enforce.QuotaPeriod(database, name, s, now)
 		} else {
 			if cmd.Flags().Changed("sessions") && existing.MaxSessions != maxSessions {
 				// More sessions, or none limit, weakens (§3.6).
@@ -131,7 +131,7 @@ var quotaSetCmd = &cobra.Command{
 				}
 				existing.Period, existing.Refill = per, refill
 			}
-			s = existing.Step(now.Unix(), existing.PeriodOf(now)).SetLimit(limit)
+			s = existing.Step(now.Unix(), enforce.QuotaPeriod(database, name, *existing, now)).SetLimit(limit)
 		}
 		if err := database.SaveQuota(name, s); err != nil {
 			return err
@@ -288,7 +288,7 @@ var quotaEndCmd = &cobra.Command{
 
 func init() {
 	quotaStartCmd.Flags().String("for", "", "End the session after this long (e.g. 10m)")
-	quotaSetCmd.Flags().String("per", "day", "The period the allowance covers: day, week, month, or rolling (the last 24 hours)")
+	quotaSetCmd.Flags().String("per", "day", "The period the allowance covers: day, week, month, rolling (the last 24 hours), or window (each opening of a block window)")
 	quotaSetCmd.Flags().String("refill", "", "When the allowance starts afresh (HH:MM; default midnight)")
 	quotaSetCmd.Flags().Int("sessions", 0, "Session limit: at most this many sessions per period, each ending 3 minutes after switching away (0: no limit)")
 	quotaCmd.AddCommand(quotaSetCmd, quotaRemoveCmd, quotaStartCmd, quotaEndCmd)

@@ -1,6 +1,7 @@
 package enforce
 
 import (
+	"fmt"
 	"log"
 	"slices"
 	"sync"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/quota"
 )
 
 // quotaUse collects, per block, the seconds its sites or apps were in use
@@ -121,7 +123,7 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		if !countsByUse(detail) {
 			spent = state.Elapsed(now.Unix())
 		}
-		s := state.Spend(spent).Step(now.Unix(), state.PeriodOf(now))
+		s := state.Spend(spent).Step(now.Unix(), QuotaPeriod(d, name, *state, now))
 		if spent > 0 && countsByUse(detail) {
 			s.LastUse = now.Unix()
 		}
@@ -174,4 +176,25 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		}
 	}
 	return nil
+}
+
+// QuotaPeriod is the period a block's allowance is in at now (§3.6). For
+// an allowance per window it is the opening of the block window open now
+// (its date and start); outside windows the period stays, so nothing
+// refills until the next window opens.
+func QuotaPeriod(d *db.DB, name string, q quota.State, now time.Time) string {
+	if q.Period != "window" {
+		return q.PeriodOf(now)
+	}
+	if schedules, err := d.ListSchedules(name); err == nil {
+		for _, s := range schedules {
+			if w := s.Window(); !w.Allow && w.ActiveAt(now) {
+				return fmt.Sprintf("%s %d", now.Format("2006-01-02"), w.Start)
+			}
+		}
+	}
+	if q.Day == "" {
+		return "outside"
+	}
+	return q.Day
 }

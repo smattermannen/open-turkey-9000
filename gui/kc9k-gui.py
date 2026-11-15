@@ -3729,7 +3729,7 @@ class Window(Gtk.ApplicationWindow):
         # §3.6: per day, week or month, refilled at a set time.
         self.quota_per = Gtk.ComboBoxText()
         for key, label in (("day", "per day"), ("week", "per week"), ("month", "per month"),
-                           ("rolling", "per 24 hours, rolling")):
+                           ("rolling", "per 24 hours, rolling"), ("window", "per window")):
             self.quota_per.append(key, label)
         self.quota_per.set_active_id("day")
         quota_row.pack_start(self.quota_per, False, False, 0)

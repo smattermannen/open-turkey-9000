@@ -76,7 +76,7 @@ func soonRules(d *db.DB, active []db.ActiveBlockDetail, now time.Time, trusted i
 		if err != nil || q == nil {
 			continue
 		}
-		s := q.Step(now.Unix(), q.PeriodOf(now))
+		s := q.Step(now.Unix(), QuotaPeriod(d, b.Name, *q, now))
 		lists := listRules(db.ActiveBlockDetail{BlockName: b.Name, Lists: b.Lists})
 		if s.Open && len(lists) > 0 {
 			out = append(out, SoonRule{Block: b.Name, Kind: "quota", Seconds: s.Remaining(), Lists: lists})

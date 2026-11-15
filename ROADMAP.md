@@ -134,7 +134,7 @@ Only items not simply Built.
 | §3.9 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`); hidden text, frames Unchecked |
 | §3.9 Ad trigger | Not built | 2.2 |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
-| §3.12 Word recording, specificity, cut | Not built | |
+| §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--cluster C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Not built |
 | §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |
 | §4.10 Tamper settings | Partial | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. Not built: close private windows/Tor and guest profiles as tamper settings (no-private browser setting exists), extension stop, installer, inactive tabs, embedded content |
 | §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
@@ -195,6 +195,7 @@ Only items not simply Built.
 ## 5. Proposed, not agreed
 
 - DECIDED OVERNIGHT: how to check the clock against hardware and internet
+- DECIDED OVERNIGHT: Where does "normal browsing" for specificity come from? → a word baseline gathered by the extension (per word, pages it showed on; no addresses, no private windows, local), off until the first word recording turns it on; `record baseline off` forgets it, because specificity needs it but gathering everyone's browsing words unasked is more than SPEC asks.
   time (§4.10) → not built yet; trusted time stays CLOCK_BOOTTIME with
   powered-off time not counted, because that is the strictest choice: a
   hardware-clock count would only end timer locks sooner and the hardware

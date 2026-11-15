@@ -212,3 +212,46 @@ func TestRecording(t *testing.T) {
 		t.Errorf("Spared after a discarded recording = %q", got)
 	}
 }
+
+// §3.12 word recording: words ranked by specificity, cut, then saved.
+func TestWordRecording(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "record", "start", "--cluster", "study", "--words")
+	if !d.WordBaselineOn() {
+		t.Error("a word recording didn't turn the baseline on")
+	}
+	if c, err := d.GetCluster("study"); err != nil || !c.Where.Text {
+		t.Fatalf("cluster for words: %+v %v", c, err)
+	}
+	if err := runCLI(t, "record", "start", "--cluster", "other", "--words"); err == nil {
+		t.Error("a second recording started")
+	}
+	for i := 0; i < 5; i++ {
+		_ = d.AddBaselinePage(map[string]int{"the": 20, "and": 10})
+	}
+	for _, page := range []map[string]int{
+		{"the": 30, "and": 9, "derivative": 4, "integral": 2},
+		{"the": 25, "and": 8, "derivative": 1},
+	} {
+		if err := d.AddRecordedPage(page); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustRun(t, "record")
+	if err := runCLI(t, "record", "stop", "--cut", "100"); err == nil {
+		t.Error("--cut 100 accepted")
+	}
+	mustRun(t, "record", "stop", "--cut", "50")
+	c, _ := d.GetCluster("study")
+	if len(c.Entries) != 2 || c.Entries[0] != "derivative" || c.Entries[1] != "integral" {
+		t.Errorf("saved %v; want the two specific words", c.Entries)
+	}
+	if r, _ := d.GetRecording(); r != nil {
+		t.Error("still recording")
+	}
+	mustRun(t, "record", "baseline", "off")
+	if d.WordBaselineOn() || d.BaselinePages() != 0 {
+		t.Error("baseline off kept it")
+	}
+}

@@ -214,6 +214,7 @@ function checkPlaylistVideo(url) {
 setInterval(enforceSocial, 1000);
 
 function load(page) {
+  wordsMode = (page && page.words) || "";
   social = (page && page.social) || [];
   darkPages = (page && page.dark) || null;
   lists = kc9kCompileLists(page && page.lists);
@@ -585,6 +586,32 @@ browser.storage.onChanged.addListener((changes) => {
     load(changes.page.newValue);
   }
 });
+
+// Word recording (§3.12): while the rules say so, the top frame reports
+// its page's rendered words once per address, a few seconds after it
+// shows (so what loads late is in). Shown text only: innerText leaves out
+// what isn't rendered.
+let wordsMode = "";
+let wordsSentFor = "";
+let wordsSince = { url: "", at: 0 };
+setInterval(() => {
+  if (!wordsMode || window !== window.top || !document.body) {
+    return;
+  }
+  const url = location.href;
+  if (wordsSince.url !== url) {
+    wordsSince = { url, at: Date.now() };
+    return;
+  }
+  if (wordsSentFor === url || Date.now() - wordsSince.at < 4000) {
+    return;
+  }
+  wordsSentFor = url;
+  const words = kc9kPageWords((document.title || "") + "\n" + document.body.innerText.slice(0, 500000), 400);
+  if (Object.keys(words).length > 0) {
+    browser.runtime.sendMessage({ type: "page-words", mode: wordsMode, words }).catch(() => {});
+  }
+}, 1000);
 
 // Sites that change pages without reloading (YouTube, Reddit) keep this
 // script, so follow their address.

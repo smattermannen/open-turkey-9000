@@ -600,3 +600,18 @@ if (typeof kc9kSocialRedirect === "function") {
     }
   }
 }
+
+// §3.12 word recording: a page's words, counted.
+{
+  const words = kc9kPageWords("The Integral, the integral's DON’T 42 x a-b 2nd -dash-", 3);
+  const want = { the: 2, "2nd": 1, "a-b": 1 };
+  if (JSON.stringify(words) !== JSON.stringify(want)) {
+    console.error("FAIL page words", JSON.stringify(words));
+    process.exitCode = 1;
+  }
+  const all = kc9kPageWords("Ångström ångström ok 12 x");
+  if (all["ångström"] !== 2 || all.ok !== 1 || "12" in all || "x" in all) {
+    console.error("FAIL page words (unicode)", JSON.stringify(all));
+    process.exitCode = 1;
+  }
+}

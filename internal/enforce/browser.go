@@ -234,6 +234,9 @@ type Rules struct {
 	StrictUse bool     `json:"strict_use"`
 	Titles    []string `json:"titles"`    // always empty: window title entries never apply to browsers (R-TITLE-1)
 	Recording bool     `json:"recording"` // report opened addresses to /visit (see recording.go)
+	// Words: "record" (a word recording) or "baseline": report each page's
+	// rendered words to /words (§3.12, see words.go); "" not.
+	Words string `json:"words,omitempty"`
 	// Details: the block page may say which block and list stopped a page.
 	Details bool `json:"details"`
 	// Ends: when each active block ends (unix seconds), where that is known.
@@ -386,8 +389,13 @@ func BuildRules(d *db.DB) (Rules, error) {
 	}
 	if recording, err := d.GetRecording(); err != nil {
 		return rules, err
+	} else if recording != nil && recording.Words {
+		rules.Words = "record"
 	} else if recording != nil {
 		rules.Recording = true
+	}
+	if rules.Words == "" && d.WordBaselineOn() {
+		rules.Words = "baseline"
 	}
 	active, err := d.GetActiveBlocks()
 	if err != nil {
@@ -464,6 +472,7 @@ func ServeRules(d *db.DB) error {
 	mux.HandleFunc("/usage", usageHandler(d))
 	mux.HandleFunc("/hit", hitHandler(d))
 	mux.HandleFunc("/visit", visitHandler(d))
+	mux.HandleFunc("/words", wordsHandler(d))
 	mux.HandleFunc("/add", addHandler(d))
 	mux.HandleFunc("/image/", imageHandler)
 	mux.HandleFunc(chromeUpdatePath, chromeUpdateHandler)

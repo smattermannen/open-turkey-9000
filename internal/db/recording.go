@@ -29,6 +29,9 @@ type Recording struct {
 	Block   string `json:"block,omitempty"`
 	ListID  int    `json:"list,omitempty"`
 	Started int64  `json:"started"`
+	// Words: a word recording (§3.12): rendered words of the pages opened,
+	// not their sites.
+	Words bool `json:"words,omitempty"`
 }
 
 // GetRecording returns the recording in progress, or nil.
@@ -51,8 +54,11 @@ func (d *DB) StartRecording(r Recording) error {
 	if err != nil {
 		return err
 	}
-	if _, err := d.conn.Exec("DELETE FROM recorded_sites"); err != nil {
+	if _, err := d.conn.Exec("DELETE FROM recorded_sites; DELETE FROM recorded_words"); err != nil {
 		return fmt.Errorf("failed to start recording: %w", err)
+	}
+	if err := d.SetSetting(SettingRecordedPages, "0"); err != nil {
+		return err
 	}
 	return d.SetSetting(SettingRecording, string(data))
 }
@@ -62,10 +68,10 @@ func (d *DB) EndRecording() error {
 	if err := d.SetSetting(SettingRecording, ""); err != nil {
 		return err
 	}
-	if _, err := d.conn.Exec("DELETE FROM recorded_sites"); err != nil {
+	if _, err := d.conn.Exec("DELETE FROM recorded_sites; DELETE FROM recorded_words"); err != nil {
 		return fmt.Errorf("failed to clear the recording: %w", err)
 	}
-	return nil
+	return d.SetSetting(SettingRecordedPages, "0")
 }
 
 // AddRecordedSite notes a site, once, up to MaxRecordedSites.

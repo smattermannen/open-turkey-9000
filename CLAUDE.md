@@ -201,7 +201,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   never enforced. `cluster copy` goes through `listAdd` (gating applies).
 - **Link recording** (`db/recording.go`, `enforce/recording.go`,
   `cli/record.go`): `rules.recording` → extension POSTs `/visit`; daemon
-  buffers; `record stop` adds via `listAdd`/`clusterAdd`.
+  buffers; `record stop` adds via `listAdd`/`clusterAdd`. Word recording
+  (`--words`, `db/words.go`, `enforce/words.go`): `rules.words`
+  record|baseline → content.js `kc9kPageWords` → `/words`;
+  `RecordedWords` ranks by `Specificity`; `--cut N`; `record baseline`.
 - **Monk mode** (`enforce/monk.go`, `db/monk.go`, `blocker/netcut.go`,
   `ApplyFirewallCut`): settings `monk.until` (trusted time), `monk.net`
   (`db.MonkNet`, saved once, `SaveMonkNetIfNone`). `monkBlock()` built in

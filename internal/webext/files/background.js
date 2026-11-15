@@ -180,6 +180,22 @@ function originOf(tabId, url) {
   return /^https?:/i.test(prev) ? prev : "";
 }
 
+// Word recording (§3.12): a page's words go to the daemon, as the rules
+// say ("record" or "baseline"); the baseline never takes private windows.
+const WORDS_URL = "http://127.0.0.1:47613/words";
+function pageWords(message, tab) {
+  const mode = message.mode;
+  if ((mode !== "record" && mode !== "baseline") || (mode === "baseline" && tab.incognito) ||
+    !message.words || typeof message.words !== "object") {
+    return;
+  }
+  fetch(WORDS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-KC9K-Extension": "1" },
+    body: JSON.stringify({ mode, words: message.words }),
+  }).catch(() => {});
+}
+
 // Link recording ('kc9k record'): while the rules say so, the address of
 // every page and frame opened goes to the daemon, once per site.
 const VISIT_URL = "http://127.0.0.1:47613/visit";
@@ -644,6 +660,9 @@ function onMessage(message, sender) {
   if (message && message.type === "add-site" && typeof message.block === "string" && typeof message.url === "string") {
     return addSite(message.block, message.url);
   }
+  if (message && message.type === "page-words" && sender && sender.tab) {
+    pageWords(message, sender.tab);
+  }
   if (message && message.type === "playing" && sender && sender.tab) {
     playing.set(sender.tab.id, Date.now());
   }
@@ -726,7 +745,8 @@ async function poll() {
       checkForUpdate(rules.extension_version);
       await browser.storage.local.set({
         rules,
-        page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0, social: rules.social || [], dark: rules.dark || null },
+        page: { lists: rules.lists || [], quota: (rules.quota || []).length > 0, social: rules.social || [], dark: rules.dark || null,
+          words: rules.words || "" },
       });
       await closeNewlyBlockedTabs();
       daemonUp = true;

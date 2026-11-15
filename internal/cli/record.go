@@ -1,9 +1,11 @@
-// record.go — link recording.
+// record.go — link recording and word recording (§3.12).
 //
 //	kc9k record start <block> <list>     # record into a block's list
 //	kc9k record start --cluster <name>   # ... or into a cluster (made if needed)
+//	kc9k record start ... --words        # rendered words instead of sites
 //	kc9k record                          # what was recorded so far
-//	kc9k record stop [--discard]         # add the sites and stop
+//	kc9k record stop [--discard] [--cut N]  # add them and stop
+//	kc9k record baseline [on|off]        # word counts of normal browsing
 //
 // While a recording is on, the extension reports the site of every page and
 // frame the browser opens, and the daemon keeps them. Nothing reaches the
@@ -14,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -75,6 +78,17 @@ to stop later or discard). Without a subcommand, shows the recording.`,
 			fmt.Println("Not recording. Start with 'kc9k record start <block> <list>' or 'kc9k record start --cluster <name>'.")
 			return nil
 		}
+		if r.Words {
+			words, err := database.RecordedWords()
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Recording words into %s since %s: %d words on %d pages (baseline: %d pages)\n",
+				describeRecording(database, r), time.Unix(r.Started, 0).Format("15:04"), len(words),
+				database.RecordedPages(), database.BaselinePages())
+			printWords(words, 50)
+			return nil
+		}
 		sites, err := database.RecordedSites()
 		if err != nil {
 			return err
@@ -102,17 +116,22 @@ var recordStartCmd = &cobra.Command{
 		} else if r != nil {
 			return fmt.Errorf("already recording into %s; stop it first with 'kc9k record stop'", describeRecording(database, r))
 		}
-		var target db.Recording
+		words, _ := cmd.Flags().GetBool("words")
+		target := db.Recording{Words: words}
 		if cluster != "" {
 			exists, err := database.ClusterExists(cluster)
 			if err != nil {
 				return err
 			}
 			if !exists {
-				if err := database.CreateCluster(cluster, db.Where{URL: true}); err != nil {
+				where, looks := db.Where{URL: true}, "url"
+				if words {
+					where, looks = db.Where{Text: true}, "text"
+				}
+				if err := database.CreateCluster(cluster, where); err != nil {
 					return err
 				}
-				fmt.Printf("Cluster '%s' created (looks at: url).\n", cluster)
+				fmt.Printf("Cluster '%s' created (looks at: %s).\n", cluster, looks)
 			}
 			c, err := database.GetCluster(cluster)
 			if err != nil {
@@ -121,7 +140,10 @@ var recordStartCmd = &cobra.Command{
 			if c.Phrases {
 				return fmt.Errorf("cluster '%s' holds phrases, which take no part in recording (R-PHRASE-10)", cluster)
 			}
-			if !c.Where.URL {
+			if words && !c.Where.Text {
+				return fmt.Errorf("cluster '%s' doesn't look at page text; recorded words wouldn't match there", cluster)
+			}
+			if !words && !c.Where.URL {
 				return fmt.Errorf("cluster '%s' doesn't look at the url; recorded sites wouldn't match there", cluster)
 			}
 			target.Cluster = cluster
@@ -130,13 +152,27 @@ var recordStartCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			if !l.Where.URL {
+			if words && !l.Where.Text {
+				return fmt.Errorf("list '%s' doesn't look at page text; recorded words wouldn't match there", l.Name)
+			}
+			if !words && !l.Where.URL {
 				return fmt.Errorf("list '%s' doesn't look at the url; recorded sites wouldn't match there", l.Name)
 			}
 			target.Block, target.ListID = args[0], l.ID
 		}
 		if err := database.StartRecording(target); err != nil {
 			return err
+		}
+		if words {
+			if !database.WordBaselineOn() {
+				if err := database.SetWordBaseline(true); err != nil {
+					return err
+				}
+				fmt.Println("The word baseline is now gathered from your normal browsing (word counts only, no addresses,\n" +
+					"no private windows; kept on this computer) to rank recorded words. Off: 'kc9k record baseline off'.")
+			}
+			fmt.Printf("Recording words into %s. Browse in LibreWolf, then run 'kc9k record stop [--cut N]'.\n", describeRecording(database, &target))
+			return nil
 		}
 		fmt.Printf("Recording into %s. Browse in LibreWolf, then run 'kc9k record stop'.\n", describeRecording(database, &target))
 		return nil
@@ -155,18 +191,34 @@ var recordStopCmd = &cobra.Command{
 		if r == nil {
 			return fmt.Errorf("not recording")
 		}
-		sites, err := database.RecordedSites()
-		if err != nil {
+		cut, _ := cmd.Flags().GetInt("cut")
+		if cut < 0 || cut > 99 {
+			return fmt.Errorf("--cut is a percentage from 0 to 99")
+		}
+		var sites []string
+		if r.Words {
+			words, err := database.RecordedWords()
+			if err != nil {
+				return err
+			}
+			for _, w := range db.CutWords(words, cut) {
+				sites = append(sites, w.Word)
+			}
+		} else if sites, err = database.RecordedSites(); err != nil {
 			return err
+		}
+		kind := "sites"
+		if r.Words {
+			kind = "words"
 		}
 		if discard, _ := cmd.Flags().GetBool("discard"); discard || len(sites) == 0 {
 			if err := database.EndRecording(); err != nil {
 				return err
 			}
 			if discard {
-				fmt.Printf("Recording stopped; %d sites dropped.\n", len(sites))
+				fmt.Printf("Recording stopped; %d %s dropped.\n", len(sites), kind)
 			} else {
-				fmt.Println("Recording stopped; no sites were opened.")
+				fmt.Printf("Recording stopped; no %s were recorded.\n", kind)
 			}
 			return nil
 		}
@@ -191,7 +243,7 @@ var recordStopCmd = &cobra.Command{
 		if err := database.EndRecording(); err != nil {
 			return err
 		}
-		fmt.Printf("Recording stopped; %d sites for %s:\n", len(sites), where)
+		fmt.Printf("Recording stopped; %d %s for %s:\n", len(sites), kind, where)
 		for _, s := range sites {
 			fmt.Println("  " + s)
 		}
@@ -199,10 +251,53 @@ var recordStopCmd = &cobra.Command{
 	}),
 }
 
+// printWords shows up to n ranked words with their counts.
+func printWords(words []db.RecordedWord, n int) {
+	if len(words) > 0 {
+		fmt.Printf("  %-24s %8s %6s %11s\n", "word", "times", "pages", "specificity")
+	}
+	for i, w := range words {
+		if i == n {
+			fmt.Printf("  … %d more\n", len(words)-n)
+			break
+		}
+		fmt.Printf("  %-24s %8d %6d %11.1f\n", w.Word, w.Count, w.Pages, w.Specificity)
+	}
+}
+
+var recordBaselineCmd = &cobra.Command{
+	Use:   "baseline [on|off]",
+	Short: "The word baseline: word counts of normal browsing that rank recorded words",
+	Long: `Word recording ranks words by specificity: how much more common they are on
+the recorded pages than in normal browsing. The baseline is that normal
+browsing: per word, the number of pages it showed on; no addresses, no
+private windows, kept on this computer. A word recording turns it on; off
+forgets it.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if len(args) == 1 {
+			if args[0] != "on" && args[0] != "off" {
+				return fmt.Errorf("use 'on' or 'off'")
+			}
+			if err := database.SetWordBaseline(args[0] == "on"); err != nil {
+				return err
+			}
+		}
+		state := "off"
+		if database.WordBaselineOn() {
+			state = "on"
+		}
+		fmt.Printf("Word baseline: %s, %s pages\n", state, strconv.FormatInt(database.BaselinePages(), 10))
+		return nil
+	}),
+}
+
 func init() {
 	recordStartCmd.Flags().String("cluster", "", "Record into this cluster (made if there is none by that name)")
-	recordStopCmd.Flags().Bool("discard", false, "Drop the recorded sites instead of adding them")
+	recordStartCmd.Flags().Bool("words", false, "Record the rendered words of the pages opened, with counts, instead of their sites (§3.12)")
+	recordStopCmd.Flags().Bool("discard", false, "Drop the recorded sites or words instead of adding them")
+	recordStopCmd.Flags().Int("cut", 0, "Word recording: drop the lowest N % of words by specificity before saving")
 	addNowFlag(recordStopCmd)
-	recordCmd.AddCommand(recordStartCmd, recordStopCmd)
+	recordCmd.AddCommand(recordStartCmd, recordStopCmd, recordBaselineCmd)
 	rootCmd.AddCommand(recordCmd)
 }

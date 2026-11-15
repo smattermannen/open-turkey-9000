@@ -1111,3 +1111,21 @@ function kc9kPhraseCheck(phrase) {
   }
   return "";
 }
+
+// kc9kPageWords counts a page's rendered words for word recording (§3.12):
+// lower case, 2 to 40 characters with a letter, apostrophes and hyphens
+// kept inside words. The max most frequent are returned, as word → times.
+function kc9kPageWords(text, max) {
+  const counts = new Map();
+  const re = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu;
+  for (const m of String(text || "").matchAll(re)) {
+    const word = m[0].toLowerCase().replace(/’/g, "'");
+    const length = Array.from(word).length;
+    if (length < 2 || length > 40 || !/\p{L}/u.test(word)) {
+      continue;
+    }
+    counts.set(word, (counts.get(word) || 0) + 1);
+  }
+  const top = Array.from(counts).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, max || 400);
+  return Object.fromEntries(top);
+}

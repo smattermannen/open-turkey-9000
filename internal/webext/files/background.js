@@ -104,10 +104,29 @@ function replacement(url, outcome, reason) {
 }
 
 // Reports to the daemon: what took a page away (it counts these for bypass
-// prevention, and carries out logout, shutdown and monk mode). A tab and
-// address already reported in the last few seconds isn't reported again.
+// prevention, and carries out logout, shutdown and monk mode). R-EVENT-1:
+// at most one event per tab and blocked site per minute; pages loaded
+// without a tab (preloads) and the first load of tabs restored when the
+// browser started aren't reported.
 const HIT_URL = "http://127.0.0.1:47613/hit";
 const reported = new Map();
+const restoredTabs = new Set();
+if (browser.tabs && browser.tabs.query) {
+  // A restored tab shows its old address from the start; a new window's
+  // first tab shows about:newtab or about:blank.
+  browser.tabs.query({}).then((tabs) => tabs.filter((tab) => /^(https?|ftp):/i.test(tab.url || ""))
+    .forEach((tab) => restoredTabs.add(tab.id)), () => {});
+  setTimeout(() => restoredTabs.clear(), 30000); // only the session the browser brought back
+}
+
+// hitSite is the site an event is counted for: the host without www.
+function hitSite(url) {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch (error) {
+    return String(url);
+  }
+}
 
 // Where each tab's page was opened from: the page whose link led to it, as
 // the request for it said. The daemon counts a blocked page opened from a
@@ -209,9 +228,15 @@ function viaProxy(url) {
 function report(tabId, url, outcome, via) {
   noteHit(tabId, outcome);
   via = via || (viaProxy(url) ? "proxy" : "");
-  const key = tabId + " " + url;
+  if (tabId < 0) {
+    return Promise.resolve(); // a preload, not a page anyone opened
+  }
+  if (restoredTabs.delete(tabId) && !outcome.device) {
+    return Promise.resolve(); // brought back by the browser at its start
+  }
+  const key = tabId + " " + hitSite(url);
   const now = Date.now();
-  if (now - (reported.get(key) || 0) < 10000) {
+  if (now - (reported.get(key) || 0) < 60000) {
     return Promise.resolve();
   }
   reported.set(key, now);

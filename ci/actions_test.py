@@ -196,6 +196,22 @@ try:
             pass
     ot("nepsis", "off", "--block", "nepsistest")
 
+    # R-EVENT-1: one event per tab and blocked site per minute.
+    ot("nepsis", "set", "--block", "nepsistest", "--count", "2", "--within", "5m", "--then", "close-browser")
+    driver = start()
+    try:
+        visit(driver, "https://example.net/")
+        visit(driver, "https://example.net/again")
+        check("the same site twice in a tab within a minute is one event", not closed(driver, 8))
+        visit(driver, "https://example.org/")
+        check("another site is a second event", closed(driver, 30))
+    finally:
+        try:
+            driver.quit()
+        except WebDriverException:
+            pass
+    ot("nepsis", "off", "--block", "nepsistest")
+
     # The search detector: a blocked page opened by hand doesn't count, one
     # opened from a search engine's results does (any /search?q= page is one).
     ot("nepsis", "set", "--block", "nepsistest", "--detect", "search",

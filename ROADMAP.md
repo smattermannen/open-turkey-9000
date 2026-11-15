@@ -137,7 +137,6 @@ Only items not simply Built.
 | §3.9 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`); hidden text, frames Unchecked |
 | §3.9 Ad trigger | Not built | 2.2 |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
-| §3.10 R-WEAK-4 beyond strict/browser/ladder/password | Unchecked | |
 | §3.12 Word recording, specificity, cut | Not built | |
 | §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |
 | §4.10 Tamper settings | Partial | GUI group with OK/Cancel window: clock (`tamper clock`) and block unsupported browsers (`tamper unsupported-browsers`, own lock carried over from `force-librewolf`, `tamper unlock unsupported-browsers`; old command hidden alias). No group lock: clock has no lock flags. `gui-state` has no "anything locked" flag, so the window can't show which are stuck on (the command refuses). `tamper file-urls` (allow file:// blocking) built. Grace fixed 60 s; private windows/Tor, guest profiles, extension stop, installer, inactive tabs, embedded content, task managers: no command |

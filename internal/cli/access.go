@@ -438,6 +438,9 @@ var accessRemoveCmd = &cobra.Command{
 		if err := authorizeAccessChange(database, areas); err != nil {
 			return err
 		}
+		if err := refuseSettingWeakening(database, "access passwords"); err != nil { // R-WEAK-4
+			return err
+		}
 		for _, area := range areas {
 			if err := database.SetSetting(settingAccessPrefix+area, ""); err != nil {
 				return err

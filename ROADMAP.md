@@ -49,12 +49,19 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     (Strict lockdown's polkit rule also blocks the backlight helper and
     colord, which breaks the same controls while strict mode is on; fix
     done.)
-  - [ ] Phrase editor: "Save changes" sometimes becomes "Add phrase"
-    (copies), and saving sometimes says the set has no such phrase (§4.3).
-    Cause found: after a change the card keeps the removed phrase as the one
-    being edited; next save removes a phrase that is gone, or a rebuilt card
-    adds a copy. Fixed (GUI keeps editing the saved phrase); confirm on the
-    laptop, `ci/gui_phrase_smoke.py` not run here (no GTK).
+  - [ ] Phrase editor: saving a change said the set has no such phrase
+    (owner, again after the first fix: set 2's terms pasted into set 1 of a
+    7-set phrase). Causes: phrases stored by older versions (migrated
+    combinations, imports) differ from their shown form in case, spacing or
+    a spelled-out default length, and remove compared exact forms; the GUI
+    skipped the refresh after a command while one was running, so Save stayed
+    on with a stale phrase. Fixed: phrases compared by `db.Phrase.Key`
+    (gui-state shows it), `phrase-set change` replaces in place in one step
+    (free when it only adds terms, R-WEAK-5), GUI refreshes again after a
+    stale read and keeps Save off until it lands. Editor buttons: Clear →
+    Cancel (asks before dropping unsaved work, also on double-click),
+    Delete phrase while a saved one is loaded. `ci/gui_phrase_smoke.py`
+    passes here; confirm on the laptop.
   - [ ] Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
   - [x] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
     none allowed; length ≥ 2. Built in `db.Phrase`, `match.js`, GUI.

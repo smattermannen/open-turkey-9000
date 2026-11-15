@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -536,5 +537,88 @@ func TestOldTypedFilesImport(t *testing.T) {
 	mustRun(t, "cluster", "import", "words", cluster)
 	if c, err := d.GetCluster("words"); err != nil || c.Where != (db.Where{URL: true}) || len(c.Entries) != 2 {
 		t.Errorf("old term cluster = %+v, %v", c, err)
+	}
+}
+
+// §4.3: saving a loaded phrase changes it in one step, in place; a second
+// save of the same change names the missing phrase and adds nothing.
+// R-WEAK-5: only adding terms is free on a locked block.
+func TestPhraseSetChange(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "phrase-set", "create", "b", "P")
+	seven := "[a, b] [c, d] [e] [f] [g]? [h] [i]"
+	mustRun(t, "phrase-set", "add", "b", "P", "[x] [y]", seven, "[z] [w]")
+	// Copy one word set's terms into another.
+	copied := "[a, b] [c, d, a, b] [e] [f] [g]? [h] [i]"
+	mustRun(t, "phrase-set", "change", "b", "P", seven, "[A, B] [c, d, a, b] [e] [f] [g]? [h] [i]")
+	texts := func() string {
+		var out []string
+		for _, p := range phraseSet(t, d, "b", "P").Phrases {
+			out = append(out, p.String())
+		}
+		return strings.Join(out, " | ")
+	}
+	if got := texts(); got != "[x] [y] | "+copied+" | [z] [w]" {
+		t.Errorf("after change: %q", got)
+	}
+	if err := runCLI(t, "phrase-set", "change", "b", "P", seven, copied+" [j]"); err == nil || !strings.Contains(err.Error(), "has no phrase") {
+		t.Errorf("changing a phrase that is gone: %v", err)
+	}
+	// Changing into a phrase the set has merges them.
+	mustRun(t, "phrase-set", "change", "b", "P", "[z] [w]", "[x] [y]")
+	if got := texts(); got != "[x] [y] | "+copied {
+		t.Errorf("after merge: %q", got)
+	}
+	// A stored length equal to the default still matches.
+	mustRun(t, "phrase-set", "add", "b", "P", "[q] [r] [s]? :2")
+	mustRun(t, "phrase-set", "change", "b", "P", "[q] [r] [s]?", "[q] [r, t] [s]?")
+
+	if err := d.ActivateBlock("b", true, 300, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "phrase-set", "change", "b", "P", copied, "[a, b, k] [c, d, a, b] [e] [f] [g]? [h] [i]")
+	for _, to := range []string{"[x] [y, v]?", "[x] [y] [v]", "[x]  [v]", "[x] [y] :2 [v]?"} {
+		if err := runCLI(t, "phrase-set", "change", "b", "P", "[x] [y]", to); err == nil {
+			t.Errorf("change to %s on a locked block was allowed", to)
+		}
+	}
+}
+
+// Phrases stored by older versions (migrated word combinations, imports)
+// may differ from their typed form in case, spacing or a spelled-out
+// default length; removing or changing them must still find them.
+func TestPhraseSetOldStoredForm(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "phrase-set", "create", "b", "P")
+	s := phraseSet(t, d, "b", "P")
+	raw, err := sql.Open("sqlite", os.Getenv("KC9K_DB")+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	for _, spec := range []string{
+		`{"sets":[{"terms":["A","B ","c"],"necessary":true},{"terms":["d","e","f"],"necessary":true}]}`,
+		`{"sets":[{"terms":["x"],"necessary":true},{"terms":["y"],"necessary":true}],"length":2}`,
+	} {
+		if _, err := raw.Exec("INSERT INTO phrases (set_id, spec) VALUES (?, ?)", s.ID, spec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := captureStdout(func() error { return runCLI(t, "gui-state") })
+	if err != nil || !strings.Contains(out, `"text": "[a, b, c] [d, e, f]"`) && !strings.Contains(out, `"text":"[a, b, c] [d, e, f]"`) {
+		t.Errorf("gui-state does not show the normalized phrase: %v", err)
+	}
+	// The owner's report: set 2's terms pasted into set 1, then saved.
+	mustRun(t, "phrase-set", "change", "b", "P", "[a, b, c] [d, e, f]", "[a, b, c, d, e, f] [d, e, f]")
+	mustRun(t, "phrase-set", "add", "b", "P", "[X] [Y]") // already there
+	mustRun(t, "phrase-set", "remove", "b", "P", "[x] [y]")
+	var got []string
+	for _, p := range phraseSet(t, d, "b", "P").Phrases {
+		got = append(got, p.String())
+	}
+	if strings.Join(got, " | ") != "[a, b, c, d, e, f] [d, e, f]" {
+		t.Errorf("phrases = %q", got)
 	}
 }

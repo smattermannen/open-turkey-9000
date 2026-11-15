@@ -1392,13 +1392,21 @@ class PhraseSetCard(ListCard):
         self.save_phrase = Gtk.Button(label="Add phrase")
         self.save_phrase.get_style_context().add_class("suggested-action")
         self.save_phrase.connect("clicked", lambda _b: self.commit_phrase())
-        clear = Gtk.Button(label="Clear")
-        clear.connect("clicked", lambda _b: self.edit_phrase(None))
+        # Cancel drops unsaved changes (asking first); it never deletes a
+        # saved phrase. Delete phrase does, and says so.
+        self.cancel_phrase = Gtk.Button(label="Cancel")
+        self.cancel_phrase.set_tooltip_text("Stop editing; the saved phrases stay as they are")
+        self.cancel_phrase.connect("clicked", lambda _b: self.edit_phrase(None))
+        self.delete_phrase = Gtk.Button(label="Delete phrase")
+        self.delete_phrase.get_style_context().add_class("destructive-action")
+        self.delete_phrase.connect("clicked", lambda _b: self.remove_loaded())
         buttons.pack_start(self.save_phrase, False, False, 0)
-        buttons.pack_start(clear, False, False, 0)
+        buttons.pack_start(self.cancel_phrase, False, False, 0)
+        buttons.pack_end(self.delete_phrase, False, False, 0)
         box.pack_start(buttons, False, False, 0)
+        self.saving = False
         self.update(data)
-        self.edit_phrase(None)
+        self.edit_phrase(None, ask=False)
 
     def update(self, data):
         self.data = data
@@ -1425,16 +1433,27 @@ class PhraseSetCard(ListCard):
                     widget.set_visible(name in actions)
             self.entries.set_items([p["text"] for p in data["phrases"]])
             # A saved change replaced the phrase being edited: keep editing
-            # the new one, never fall back to adding a copy.
-            if getattr(self, "editing", None) is not None:
+            # the new one, never fall back to adding a copy. The editor's
+            # work is never thrown away here: a phrase that is gone (deleted
+            # elsewhere) leaves it as a new phrase.
+            self.saving = False
+            if getattr(self, "editing", None) is None and getattr(self, "saved_as", None):
+                # A new phrase was added: it is now the one being edited.
+                added = next((p for p in data["phrases"] if p["text"] == self.saved_as), None)
+                if added is not None:
+                    self.editing = added
+                    self.show_mode()
+            elif getattr(self, "editing", None) is not None:
                 texts = {p["text"]: p for p in data["phrases"]}
                 current = texts.get(getattr(self, "saved_as", None)) or texts.get(self.editing["text"])
                 if current is None:
-                    self.edit_phrase(None)
+                    self.editing, self.saved_as = None, None
+                    self.show_mode()
                 elif current is not self.editing:
                     self.editing = current
-                    self.save_phrase.set_label("Save changes")
-                    self.editor_changed(self.editor.get_text())
+                    self.show_mode()
+            if hasattr(self, "save_phrase"):
+                self.editor_changed(self.editor.get_text())
         finally:
             self.filling = False
 
@@ -1446,37 +1465,65 @@ class PhraseSetCard(ListCard):
             return
         self.window.run(self.command("test", "on" if check.get_active() else "off"))
 
-    def edit_phrase(self, text):
-        """Loads a phrase (text) into the editor to change it, or clears the
-        editor for a new one (None)."""
+    def unsaved(self):
+        """Whether the editor holds work that isn't saved: a changed loaded
+        phrase, or a new one with any term typed."""
+        if self.editing is not None:
+            return self.editor.get_text().lower() != self.editing["text"]
+        return any(terms for terms, _n in self.editor.word_sets())
+
+    def edit_phrase(self, text, ask=True):
+        """Loads a phrase (text) into the editor to change it, or empties the
+        editor for a new one (None). Unsaved work is dropped only after
+        asking."""
         old = next((p for p in self.data["phrases"] if p["text"] == text), None) if text else None
         if text and old is None:
             return
+        if ask and self.unsaved() and not self.window.confirm(
+                "Drop the unsaved phrase?",
+                "The phrase in the editor has changes that aren't saved. They will be lost.",
+                "Drop changes", destructive=True):
+            return
         self.editing, self.saved_as = old, None
+        self.show_mode()
+        self.editor.load(old)
+
+    def show_mode(self):
+        old = self.editing
         self.editor_title.set_markup("<b>Change phrase</b>" if old else "<b>New phrase</b>")
         self.save_phrase.set_label("Save changes" if old else "Add phrase")
-        self.editor.load(old)
+        self.delete_phrase.set_no_show_all(old is None)
+        self.delete_phrase.set_visible(old is not None)
 
     def editor_changed(self, text):
         if hasattr(self, "save_phrase"):
-            self.save_phrase.set_sensitive(bool(text) and not (self.editing and text == self.editing["text"]))
+            same = self.editing is not None and text.lower() == self.editing["text"]
+            self.save_phrase.set_sensitive(bool(text) and not same and not self.saving)
 
     def commit_phrase(self):
-        """Adds the editor's phrase; a change adds the new one, then removes
-        the old one, which weakens and may be refused (R-WEAK-5)."""
+        """Adds the editor's phrase, or changes the loaded one in one step
+        (`phrase-set change`: in place, refused while locked unless it only
+        adds terms, R-WEAK-5). Saving stays off until the new state is read,
+        so a second click can't act on a phrase that is already gone."""
         new, old = self.editor.get_text(), self.editing
-        if not new or (old and new == old["text"]):
+        if not new or self.saving or (old and new.lower() == old["text"]):
             return
+        self.saving = True
+        self.save_phrase.set_sensitive(False)
+        self.saved_as = new.lower()
         if old is None:
             self.add_entries([new])
             return
-        self.saved_as = new.lower()
+        self.window.run(self.command("change", old["text"], new))
 
-        def remove_old(_o):
-            # Only remove the old phrase if it is still there.
-            if any(p["text"] == old["text"] for p in self.data["phrases"]):
-                self.window.run(self.command("remove", old["text"]))
-        self.window.run(self.command("add", new), then=remove_old)
+    def remove_loaded(self):
+        """Deletes the phrase loaded in the editor, after asking."""
+        old = self.editing
+        if old is None or not self.window.confirm(
+                "Delete this phrase?", old["text"] + "\n\nDeleting a phrase weakens the block.",
+                "Delete", destructive=True):
+            return
+        self.window.run(self.command("remove", old["text"]))
 
     def save_numbers(self, _button):
         current = {a["action"]: a for a in self.data["actions"]}
@@ -3156,8 +3203,12 @@ class Window(Gtk.ApplicationWindow):
         if hasattr(self, "circadian"):
             self.circadian.refresh()
         if self.busy:
+            # A read already running may predate the last change: read
+            # again when it lands, so the last command is always shown.
+            self.refresh_again = True
             return True
         self.busy = True
+        self.refresh_again = False
 
         passwords = list(self.access_passwords)
 
@@ -3197,6 +3248,10 @@ class Window(Gtk.ApplicationWindow):
 
     def apply_state(self, ok, output, passwords=()):
         self.busy = False
+        if getattr(self, "refresh_again", False):
+            # Read before the last change: show the newer state instead.
+            self.refresh()
+            return False
         if list(passwords) != self.access_passwords:
             # Locked or unlocked while this was being read: read again
             # rather than show what the old passwords opened.

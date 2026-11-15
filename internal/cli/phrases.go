@@ -4,6 +4,7 @@
 //	kc9k phrase-set create <block> <set> [--url --title --text]
 //	kc9k phrase-set add <block> <set> "[eat, nice] [hello, grandpa]" ...
 //	kc9k phrase-set remove <block> <set> "<phrase>"
+//	kc9k phrase-set change <block> <set> "<old phrase>" "<new phrase>"
 //	kc9k phrase-set scope <block> <set> url|title|text on|off
 //	kc9k phrase-set action <block> <set> <action> on|off [--url U --image F --for D]
 //	kc9k phrase-set threshold <block> <set> <action> <n>
@@ -213,10 +214,11 @@ var phraseSetRemoveCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("%q: %w", text, err)
 			}
-			if !slices.ContainsFunc(s.Phrases, func(q db.Phrase) bool { return q.String() == p.String() }) {
+			stored, ok := storedPhrase(s, p)
+			if !ok {
 				return fmt.Errorf("'%s' has no phrase %s", s.Name, p)
 			}
-			phrases = append(phrases, p)
+			phrases = append(phrases, stored)
 		}
 		if err := ensureEditable(database, args[0], false); err != nil {
 			return err
@@ -227,6 +229,53 @@ var phraseSetRemoveCmd = &cobra.Command{
 			}
 		}
 		fmt.Printf("Removed from '%s' of '%s'.\n", s.Name, args[0])
+		return settle(database, args[0])
+	}),
+}
+
+// storedPhrase finds a set's phrase as it is stored: older versions may
+// have stored it in other case or spacing, or with its default length
+// spelled out, so phrases are compared by Key.
+func storedPhrase(s db.PhraseSet, p db.Phrase) (db.Phrase, bool) {
+	i := slices.IndexFunc(s.Phrases, func(q db.Phrase) bool { return q.Key() == p.Key() })
+	if i < 0 {
+		return db.Phrase{}, false
+	}
+	return s.Phrases[i], true
+}
+
+var phraseSetChangeCmd = &cobra.Command{
+	Use:   "change <block> <set> <old phrase> <new phrase>",
+	Short: "Change a phrase in one step (weakens the block unless the new one only adds terms)",
+	Args:  cobra.ExactArgs(4),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		s, err := phraseSetArgs(database, args[0], args[1])
+		if err != nil {
+			return err
+		}
+		old, err := db.ParsePhrase(args[2])
+		if err != nil {
+			return fmt.Errorf("%q: %w", args[2], err)
+		}
+		p, err := db.ParsePhrase(args[3])
+		if err != nil {
+			return fmt.Errorf("%q: %w", args[3], err)
+		}
+		stored, ok := storedPhrase(s, old)
+		if !ok {
+			return fmt.Errorf("'%s' has no phrase %s", s.Name, old)
+		}
+		if p.Key() == stored.Key() {
+			fmt.Println("No change.")
+			return nil
+		}
+		if err := ensureEditable(database, args[0], p.Widens(stored)); err != nil {
+			return err
+		}
+		if _, err := database.ReplacePhrase(s.ID, stored, p); err != nil {
+			return err
+		}
+		fmt.Printf("Changed in '%s' of '%s': %s\n", s.Name, args[0], p)
 		return settle(database, args[0])
 	}),
 }
@@ -398,7 +447,7 @@ func init() {
 	phraseSetActionCmd.Flags().String("image", "", "For image: the picture to show instead")
 	addMonkAckFlag(phraseSetActionCmd)
 	phraseSetActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
-	phraseSetCmd.AddCommand(phraseSetShowCmd, phraseSetCreateCmd, phraseSetAddCmd, phraseSetRemoveCmd, phraseSetScopeCmd,
+	phraseSetCmd.AddCommand(phraseSetShowCmd, phraseSetCreateCmd, phraseSetAddCmd, phraseSetRemoveCmd, phraseSetChangeCmd, phraseSetScopeCmd,
 		phraseSetActionCmd, phraseSetThresholdCmd, phraseSetTestCmd, phraseSetRenameCmd, phraseSetDeleteCmd,
 		phraseSetExportCmd, phraseSetImportCmd)
 	rootCmd.AddCommand(phraseSetCmd)

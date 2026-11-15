@@ -452,26 +452,131 @@ func (d *DB) AddPhrase(id int, p Phrase) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	var n int
-	if err := d.conn.QueryRow("SELECT COUNT(*) FROM phrases WHERE set_id = ? AND spec = ?", id, string(raw)).Scan(&n); err != nil || n > 0 {
+	if same, err := phraseRows(d.conn, id, p); err != nil || len(same) > 0 {
 		return false, err
 	}
 	_, err = d.conn.Exec("INSERT INTO phrases (set_id, spec) VALUES (?, ?)", id, string(raw))
 	return err == nil, err
 }
 
+// Key is what makes two phrases the same phrase: normalized, with the
+// default length spelled the same way. Phrases stored by older versions
+// (migrated combinations, imports) may differ from their typed form only
+// in case, spacing or a spelled-out default length.
+func (p Phrase) Key() string {
+	p = p.Normalize()
+	if p.Length == p.MinLength() {
+		p.Length = 0
+	}
+	return p.String()
+}
+
+// phraseRows returns the ids of a set's stored phrases that are p.
+func phraseRows(q interface {
+	Query(string, ...any) (*sql.Rows, error)
+}, id int, p Phrase) ([]int64, error) {
+	rows, err := q.Query("SELECT id, spec FROM phrases WHERE set_id = ? ORDER BY id", id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	key := p.Key()
+	var out []int64
+	for rows.Next() {
+		var rowID int64
+		var raw string
+		if err := rows.Scan(&rowID, &raw); err != nil {
+			return nil, err
+		}
+		var stored Phrase
+		if json.Unmarshal([]byte(raw), &stored) == nil && stored.Key() == key {
+			out = append(out, rowID)
+		}
+	}
+	return out, rows.Err()
+}
+
 // RemovePhrase removes a phrase from a set; it reports whether it was there.
 func (d *DB) RemovePhrase(id int, p Phrase) (bool, error) {
-	raw, err := json.Marshal(p.Normalize())
+	ids, err := phraseRows(d.conn, id, p)
 	if err != nil {
 		return false, err
 	}
-	res, err := d.conn.Exec("DELETE FROM phrases WHERE set_id = ? AND spec = ?", id, string(raw))
+	for _, rowID := range ids {
+		if _, err := d.conn.Exec("DELETE FROM phrases WHERE id = ?", rowID); err != nil {
+			return false, err
+		}
+	}
+	return len(ids) > 0, nil
+}
+
+// ReplacePhrase changes a phrase of a set in place (it keeps its place in
+// the list); if the set already has the new one, the old one just goes. It
+// reports whether the old one was there.
+func (d *DB) ReplacePhrase(id int, old, p Phrase) (bool, error) {
+	p = p.Normalize()
+	if err := p.Check(); err != nil {
+		return false, err
+	}
+	raw, err := json.Marshal(p)
 	if err != nil {
 		return false, err
 	}
-	n, _ := res.RowsAffected()
-	return n > 0, nil
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	olds, err := phraseRows(tx, id, old)
+	if err != nil || len(olds) == 0 {
+		return false, err
+	}
+	news, err := phraseRows(tx, id, p)
+	if err != nil {
+		return false, err
+	}
+	// The first old row becomes the new phrase, unless the set has it
+	// already; other copies of the old one go.
+	drop := olds[1:]
+	if len(news) > 0 {
+		drop = olds
+	} else if _, err := tx.Exec("UPDATE phrases SET spec = ? WHERE id = ?", string(raw), olds[0]); err != nil {
+		return false, err
+	}
+	for _, rowID := range drop {
+		if _, err := tx.Exec("DELETE FROM phrases WHERE id = ?", rowID); err != nil {
+			return false, err
+		}
+	}
+	return true, tx.Commit()
+}
+
+// Widens reports whether p matches everything old matches: the same word
+// sets, each just as necessary and holding at least old's terms, and the
+// same phrase length (R-WEAK-5: such a change is not weakening).
+func (p Phrase) Widens(old Phrase) bool {
+	p, old = p.Normalize(), old.Normalize()
+	if len(p.Sets) != len(old.Sets) || p.effectiveLength() != old.effectiveLength() {
+		return false
+	}
+	for i, s := range old.Sets {
+		if s.Necessary != p.Sets[i].Necessary {
+			return false
+		}
+		for _, t := range s.Terms {
+			if !slices.Contains(p.Sets[i].Terms, t) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (p Phrase) effectiveLength() int {
+	if p.Length == 0 {
+		return p.MinLength()
+	}
+	return p.Length
 }
 
 // AddPhraseSet adds a whole phrase set to a block (from an import or a

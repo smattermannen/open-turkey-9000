@@ -114,3 +114,28 @@ func TestWindowsLeftToday(t *testing.T) {
 		t.Errorf("left today = %q", got)
 	}
 }
+
+// §3.6: autostart rules from the CLI; removing one weakens.
+func TestAutostartCommand(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "autostart", "b", "add", "at", "08:00", "mon-fri")
+	mustRun(t, "autostart", "b", "add", "sign-in")
+	if err := runCLI(t, "autostart", "b", "add", "once", "2001-01-01", "08:00"); err == nil {
+		t.Error("a time in the past accepted")
+	}
+	rules, _ := d.Autostarts("b")
+	if len(rules) != 2 || rules[0].String() != "at 08:00 weekdays" {
+		t.Fatalf("rules = %+v", rules)
+	}
+	out := capture(t, "project", "export")
+	if !strings.Contains(out, `"kind": "sign-in"`) {
+		t.Error("autostart not in the project")
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "autostart", "b", "remove", "1"); err == nil {
+		t.Error("removed an autostart of a locked block")
+	}
+}

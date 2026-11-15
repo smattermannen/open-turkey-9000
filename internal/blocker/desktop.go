@@ -56,3 +56,28 @@ func DesktopWarning() string {
 	}
 	return ""
 }
+
+// GraphicalSessions returns the IDs of the user desktop sessions now (for
+// autostart at sign-in). A variable for tests.
+var GraphicalSessions = func() map[string]bool {
+	out := map[string]bool{}
+	list, err := exec.Command("loginctl", "list-sessions", "--no-legend").Output()
+	if err != nil {
+		return out
+	}
+	for _, line := range strings.Split(string(list), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		props, err := exec.Command("loginctl", "show-session", fields[0], "-p", "Type", "-p", "Class").Output()
+		if err != nil {
+			continue
+		}
+		text := string(props)
+		if strings.Contains(text, "Class=user") && (strings.Contains(text, "Type=x11") || strings.Contains(text, "Type=wayland")) {
+			out[fields[0]] = true
+		}
+	}
+	return out
+}

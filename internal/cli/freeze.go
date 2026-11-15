@@ -138,6 +138,7 @@ type guiBlock struct {
 	Scheduled     bool           `json:"scheduled"`                // has windows or a place rule (§3.3)
 	HasPassword   bool           `json:"block_password,omitempty"` // §3.11
 	TodayWindows  []string       `json:"today_windows,omitempty"`  // §4.1: windows still to come or open today
+	Autostarts    []string       `json:"autostarts"`               // §3.6
 	Hidden        bool           `json:"hidden,omitempty"`         // contents left out until revealed
 	Lifted        bool           `json:"lifted"`                   // active, but its windows or places lift it now
 	LockSeconds   int64          `json:"lock_seconds"`
@@ -440,6 +441,12 @@ var guiStateCmd = &cobra.Command{
 				Lifted:    detail.Active && lifted[b.Name],
 			}
 			g.TodayWindows = windowsLeftToday(db.Windows(schedules), now)
+			g.Autostarts = []string{}
+			if rules, err := database.Autostarts(b.Name); err == nil {
+				for _, a := range rules {
+					g.Autostarts = append(g.Autostarts, a.String())
+				}
+			}
 			if hash, _ := database.BlockViewPassword(b.Name); hash != "" {
 				g.HasPassword = true
 				g.Hidden = !revealed[b.Name]

@@ -124,7 +124,8 @@ Only items not simply Built.
 | §3.6 R-SCHED-3 rhythm | Unchecked | |
 | §3.6 Allowance | Partial | daily only; no rolling/window/week/month, no refill |
 | §3.6 Reward | Partial | capped at one; no accumulate/expire |
-| §3.6 Delay break, session limit, autostart | Not built | |
+| §3.6 Delay break, session limit | Not built | |
+| §3.6 Autostart | Built | `kc9k autostart B add once DATE HH:MM / at HH:MM [DAYS] / sign-in / next-window`, GUI list, projects; removing weakens. Live sign-in/wake: Unchecked |
 | §3.7 Use | Partial | statistics ignore background-tab sound |
 | §3.7 Strict use counting | Built | `kc9k use-counting strict|normal`, GUI switch; every open tab (`rules.strict_use`) and running apps (`RunningApps`) count; normal weakens. Live: Unchecked |
 | §3.8 Scheduled freeze lock kinds beyond lead | Not built | |

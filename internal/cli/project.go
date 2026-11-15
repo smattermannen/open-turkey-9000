@@ -75,6 +75,7 @@ type blockExtras struct {
 	Quota        int64           `json:"quota_seconds,omitempty"`
 	Pomodoro     *pomodoroExport `json:"pomodoro,omitempty"`
 	Breaks       *breaksExport   `json:"breaks,omitempty"`
+	Autostarts   []db.Autostart  `json:"autostarts,omitempty"` // §3.6
 }
 
 type projectBlock struct {
@@ -207,6 +208,13 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	} else if k.Allowance > 0 || k.Relock > 0 {
 		out.Breaks = &breaksExport{Allowance: k.Allowance, Per: k.Per, Relock: k.Relock}
 	}
+	rules, err := database.Autostarts(name)
+	if err != nil {
+		return out, err
+	}
+	for _, a := range rules {
+		out.Autostarts = append(out.Autostarts, db.Autostart{Kind: a.Kind, At: a.At, Days: a.Days, Minute: a.Minute})
+	}
 	return out, nil
 }
 
@@ -303,6 +311,18 @@ func createBlock(database *db.DB, c checkedBlock) error {
 	}
 	if in.Nepsis != nil {
 		if err := database.SetBlockNepsis(in.Name, *in.Nepsis); err != nil {
+			return err
+		}
+	}
+	for _, a := range in.Autostarts {
+		if a.Kind == db.AutostartOnce && a.At <= time.Now().Unix() {
+			continue // its time has passed
+		}
+		if a.Kind == db.AutostartAt && (a.Minute < 0 || a.Minute >= 24*60 || a.Days&^schedule.AllDays != 0) {
+			continue
+		}
+		a.Block = in.Name
+		if err := database.AddAutostart(a); err != nil {
 			return err
 		}
 	}

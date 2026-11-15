@@ -1,6 +1,7 @@
 package enforce
 
 import (
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"os"
 	"testing"
 	"time"
@@ -33,6 +34,7 @@ func (n *fakeNet) install() {
 // Every test runs with a fake network, so none can cut the real one.
 func TestMain(m *testing.M) {
 	(&fakeNet{eth: map[string]bool{}}).install()
+	blocker.GraphicalSessions = func() map[string]bool { return map[string]bool{} }
 	os.Exit(m.Run())
 }
 

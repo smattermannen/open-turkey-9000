@@ -284,6 +284,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Block password** (`cli/blockpassword.go`, `blocks.view_password`, §3.11):
   `revealBlock` before showing contents; gui-state `--reveal B` (password on
   stdin) else `hidden` with entries emptied; GUI `block_passwords`.
+- **Autostart** (`db/autostart.go`, `enforce/autostart.go`, `cli/autostart.go`, §3.6):
+  once/at/sign-in/next-window; daemon `runAutostarts` in `Tick` (first look
+  only records; sign-in = new loginctl session or wake by BOOTTIME−MONOTONIC).
 - **Project** (`cli/project.go`): versioned JSON; import validates all, then
   only adds (existing untouched, options only strengthened).
 - **Social** (`db/social.go`, `cli/social.go`): `block_social`,

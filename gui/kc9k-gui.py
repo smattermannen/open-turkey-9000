@@ -3427,9 +3427,19 @@ class Window(Gtk.ApplicationWindow):
         self.schedules = EditableList(
             "Schedule", "weekdays 09:00 17:00", self.add_schedule, self.remove_schedule,
             help_text="Days, start and end: weekdays 09:00 17:00, or mon,wed,fri 18:00 22:00. "
-                      "The block turns on and off by itself. With a schedule lock (below) it "
+                      "While the block is on, it is enabled only in its windows (switch it on "
+                      "with Start). With a schedule lock (below) it "
                       "can't be weakened during its windows and for a lead time before them.")
         schedule.pack_start(self.schedules, True, True, 0)
+        # §3.6 autostart: rules that switch the block on by itself.
+        self.autostarts = EditableList(
+            "Autostart", "at 08:00 mon-fri",
+            lambda specs: [self.run(["autostart", self.selected, "add", *spec.split()]) for spec in specs],
+            lambda _value, num: self.run(["autostart", self.selected, "remove", str(num)]),
+            help_text="Switches the block on by itself, without locks: at 08:00 [days], once "
+                      "2026-11-20 08:00, sign-in (also waking up), or next-window.",
+            split=lambda text: [text.strip()] if text.strip() else [])
+        schedule.pack_start(self.autostarts, False, False, 0)
         preset_row = Gtk.Box(spacing=6)
         preset_row.pack_start(Gtk.Label(label="Add:"), False, False, 0)
         for label, days, start, end in SCHEDULE_PRESETS:
@@ -3679,7 +3689,7 @@ class Window(Gtk.ApplicationWindow):
         if block is None:
             self.title_label.set_markup("<big><b>No blocks yet</b></big>")
             self.status_label.set_text("Create a block, add sites or apps, then start it.")
-            for widget in (self.apps, self.titles, self.schedules):
+            for widget in (self.apps, self.titles, self.schedules, self.autostarts):
                 widget.set_items([])
             self.update_lists([])
             self.calendar.set_windows([])
@@ -3693,6 +3703,7 @@ class Window(Gtk.ApplicationWindow):
         self.apps.set_items(block["apps"], owner=block["name"])
         self.titles.set_items(block.get("titles", []), owner=block["name"])
         self.schedules.set_items(block["schedules"])
+        self.autostarts.set_items(block.get("autostarts") or [])
         self.calendar.set_windows(block.get("schedule_windows", []))
         set_switch(self.keyword_test_switch, block.get("keyword_test", False))
         self.update_social(block)

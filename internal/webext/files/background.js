@@ -880,8 +880,8 @@ browser.storage.local.get("rules").then((stored) => {
 });
 
 // Statistics: every 5 seconds, count the site in the active tab of the focused
-// window, unless the user has been idle for 3 minutes, and send the totals to
-// the daemon every 30 seconds. The daemon drops them if statistics are off.
+// window, unless the user has been idle for 3 minutes, and every site playing
+// sound, and send the totals to the daemon every 30 seconds. The daemon drops them if statistics are off.
 const USAGE_URL = "http://127.0.0.1:47613/usage";
 const SAMPLE_SECONDS = 5;
 const REPORT_MS = 30000;
@@ -889,15 +889,27 @@ let usage = {};
 
 async function sampleUsage() {
   try {
-    if (!(await userActive())) {
-      return;
+    // Use (§3.7): the tab in front while the user is active, and any tab
+    // playing sound, in the background too. A site counts once a sample.
+    const tabs = [];
+    if (await userActive()) {
+      const tab = await frontTab();
+      if (tab) {
+        tabs.push(tab);
+      }
     }
-    const tab = await frontTab();
-    if (!tab || !tab.url || !/^https?:/i.test(tab.url)) {
-      return;
+    for (const tab of await browser.tabs.query({ audible: true })) {
+      tabs.push(tab);
     }
-    const site = new URL(tab.url).hostname.replace(/^www\./, "");
-    usage[site] = (usage[site] || 0) + SAMPLE_SECONDS;
+    const sites = new Set();
+    for (const tab of tabs) {
+      if (tab.url && /^https?:/i.test(tab.url)) {
+        sites.add(new URL(tab.url).hostname.replace(/^www\./, ""));
+      }
+    }
+    for (const site of sites) {
+      usage[site] = (usage[site] || 0) + SAMPLE_SECONDS;
+    }
   } catch (error) {
     // A closed window or tab between the calls: skip this sample.
   }

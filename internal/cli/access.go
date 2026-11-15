@@ -102,7 +102,7 @@ var commandAreas = map[string][]string{
 // (its password was asked when the hotkey was made), the interface's state
 // (it filters what it prints itself) and uninstalling (root's business,
 // guarded by the settings password).
-var accessExempt = []string{"daemon", "hotkey run", "gui-state", "prepare-uninstall", "help", "completion"}
+var accessExempt = []string{"daemon", "hotkey run", "gui-state", "prepare-uninstall", "help", "completion", "recover"}
 
 // accessGiven are the access passwords given so far in this command.
 var (

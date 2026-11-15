@@ -93,8 +93,8 @@ Give it to someone else to keep, and they decide when your blocks may weaken.
 Passwords are read from standard input (hidden on a terminal), the current
 one first.
 
-If it's lost, root can remove it while nothing is locked:
-  sudo python3 -c "import sqlite3; c=sqlite3.connect('/var/lib/kc9k/kc9k.db'); c.execute(\"DELETE FROM settings WHERE key='settings.password'\"); c.commit()"`,
+If it's lost: boot the recovery entry of the boot menu and run, as root,
+'kc9k-bin recover' (not while no-escape is on).`,
 }
 
 var passwordSetCmd = &cobra.Command{

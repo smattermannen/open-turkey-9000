@@ -443,7 +443,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Settings password**: needed for weakening, `stop`, `unlock`, schedules,
   allowances, browser settings off, strict off, no-escape, uninstall. Free:
   reading, starting, adding entries, actions on, opening a session. GUI
-  remembers it until closed. Lost: root removes it while nothing is locked;
+  remembers it until closed. Lost: `kc9k-bin recover` as root in a recovery boot
+  (not with no-escape) removes it and password locks;
   devmaster `master` clears it.
 - **Access passwords**: command areas — `block`, `list`, `schedule`,
   `quota`… → blocks; `freeze`, `strict`, `no-escape` → device; `browser`,

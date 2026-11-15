@@ -316,3 +316,38 @@ func TestStatsFilters(t *testing.T) {
 		t.Errorf("--top 1:\n%s", out)
 	}
 }
+
+// §3.11, R-ESCAPE-1: from recovery mode, root removes a forgotten settings
+// password and password locks, unless no-escape is on.
+func TestRecover(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	oldRoot, oldRec := isRoot, inRecovery
+	t.Cleanup(func() { isRoot, inRecovery = oldRoot, oldRec })
+	isRoot, inRecovery = func() bool { return true }, func() bool { return false }
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	if err := runWith(t, 0, []string{"pw1"}, "start", "b", "--password-stdin", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, []string{"settings1"}, "password", "set"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(t, "recover"); err == nil {
+		t.Error("recovered outside a recovery boot")
+	}
+	inRecovery = func() bool { return true }
+	_ = d.SetSetting(enforce.SettingNoEscape, "on")
+	if err := runCLI(t, "recover"); err == nil {
+		t.Error("recovered with no-escape on")
+	}
+	_ = d.SetSetting(enforce.SettingNoEscape, "off")
+	mustRun(t, "recover")
+	if v, _ := d.GetSetting(SettingSettingsPassword); v != "" {
+		t.Error("settings password kept")
+	}
+	if e, _ := d.GetLockExtras("b"); e.PasswordHash != "" {
+		t.Error("password lock kept")
+	}
+	mustRun(t, "stop", "b")
+}

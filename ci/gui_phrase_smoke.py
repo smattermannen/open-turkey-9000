@@ -49,7 +49,7 @@ d = card.editor
 check(d.get_text() == "[big-] [-gorilla] [x]? :3", "editor reads a phrase back: " + d.get_text())
 check(card.save_phrase.get_label() == "Save changes" and not card.save_phrase.get_sensitive(), "unchanged phrase can't be saved")
 rows = d.rows.get_children()
-check(not rows[0].check.get_sensitive() and rows[2].check.get_sensitive(), "first two sets can't be optional")
+check(all(r.check.get_sensitive() for r in rows), "every set can be optional")
 rows[2].check.set_active(True)
 check(d.get_text() == "[big-] [-gorilla] [x]", "all necessary: length is the default: " + d.get_text())
 card.edit_phrase(None)

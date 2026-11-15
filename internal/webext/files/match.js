@@ -678,8 +678,8 @@ function kc9kUrlTermsMatch(matchers, url) {
 // kc9kPhraseText writes a phrase as it is typed: [a, b] [c]? :N.
 function kc9kPhraseText(phrase) {
   const sets = phrase.sets || [];
-  const necessary = sets.filter((set, i) => i < 2 || set.necessary).length;
-  const text = sets.map((set, i) => "[" + (set.terms || []).join(", ") + "]" + (i >= 2 && !set.necessary ? "?" : "")).join(" ");
+  const necessary = Math.max(sets.filter((set) => set.necessary).length, 2);
+  const text = sets.map((set) => "[" + (set.terms || []).join(", ") + "]" + (!set.necessary ? "?" : "")).join(" ");
   return phrase.length && phrase.length !== necessary ? text + " :" + phrase.length : text;
 }
 
@@ -987,10 +987,10 @@ function kc9kUrlWords(input) {
 function kc9kPhraseMatcher(phrase, scope) {
   const sets = (phrase.sets || []).map((set, i) => ({
     terms: (set.terms || []).map(kc9kPhraseTerm).filter((t) => t.words.length > 0),
-    necessary: i < 2 || Boolean(set.necessary),
+    necessary: Boolean(set.necessary),
   }));
   const necessary = sets.filter((s) => s.necessary).length;
-  const length = Math.min(Math.max(phrase.length || necessary, necessary), sets.length);
+  const length = Math.min(Math.max(phrase.length || 2, necessary, 2), sets.length);
   const prepare = (input) => (scope === "url" ? kc9kUrlWords(input) : kc9kFoldCached(input));
   const test = (input) => {
     const tokenized = kc9kPhraseTokenized(prepare(input));

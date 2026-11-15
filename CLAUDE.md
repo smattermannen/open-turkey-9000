@@ -334,7 +334,7 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Blocks**: new block = blacklist `Blocked` + exception list `Exceptions`
   (`file://*`; spares no website); `Page words` made on first `add-keyword`.
   `--allowlist` = `*.*` in Blocked. `block action B A on|off` sets all
-  blacklists. A blacklist keeps ≥ 1 scope and ≥ 1 action. Pre-list blocks
+  blacklists. A blacklist keeps ≥ 1 scope; lists and phrase sets may have no action (they then do nothing). Pre-list blocks
   (sites, patterns, exceptions, keywords, allowlist) were migrated into the
   three lists; `block import` reads pre-list exports. `add-pattern`,
   `remove-site`, `remove-entry` are Blocked shortcuts. List/apps/titles

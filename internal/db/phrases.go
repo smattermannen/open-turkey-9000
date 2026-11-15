@@ -56,12 +56,12 @@ type Phrase struct {
 // sets (§4.3).
 const MaxWordSets = 100
 
-// Normalize makes the first two word sets necessary (R-PHRASE-1), trims
+// Normalize trims
 // and lowercases the terms, and drops empty ones.
 func (p Phrase) Normalize() Phrase {
 	out := Phrase{Length: p.Length}
-	for i, s := range p.Sets {
-		set := WordSet{Necessary: i < 2 || s.Necessary}
+	for _, s := range p.Sets {
+		set := WordSet{Necessary: s.Necessary}
 		for _, t := range s.Terms {
 			if t = strings.ToLower(strings.Join(strings.Fields(t), " ")); t != "" && strings.Trim(t, "*-") != "" {
 				set.Terms = append(set.Terms, t)
@@ -75,12 +75,18 @@ func (p Phrase) Normalize() Phrase {
 // Necessary counts the necessary word sets.
 func (p Phrase) Necessary() int {
 	n := 0
-	for i, s := range p.Sets {
-		if i < 2 || s.Necessary {
+	for _, s := range p.Sets {
+		if s.Necessary {
 			n++
 		}
 	}
 	return n
+}
+
+// MinLength is the shortest phrase length allowed: the necessary word sets,
+// but at least two terms (R-PHRASE-1).
+func (p Phrase) MinLength() int {
+	return max(p.Necessary(), 2)
 }
 
 // Check refuses a phrase that can't be used (R-PHRASE-1, R-PHRASE-8).
@@ -139,8 +145,8 @@ func (p Phrase) Check() error {
 			}
 		}
 	}
-	if p.Length != 0 && (p.Length < p.Necessary() || p.Length > len(p.Sets)) {
-		return fmt.Errorf("the phrase length is from %d (its necessary word sets) to %d (all its word sets)", p.Necessary(), len(p.Sets))
+	if p.Length != 0 && (p.Length < p.MinLength() || p.Length > len(p.Sets)) {
+		return fmt.Errorf("the phrase length is from %d (its necessary word sets, at least 2) to %d (all its word sets)", p.MinLength(), len(p.Sets))
 	}
 	return nil
 }
@@ -155,22 +161,22 @@ func BridgeEnds(term string) (in, out bool) {
 // length other than the default.
 func (p Phrase) String() string {
 	var parts []string
-	for i, s := range p.Sets {
+	for _, s := range p.Sets {
 		part := "[" + strings.Join(s.Terms, ", ") + "]"
-		if i >= 2 && !s.Necessary {
+		if !s.Necessary {
 			part += "?"
 		}
 		parts = append(parts, part)
 	}
 	out := strings.Join(parts, " ")
-	if p.Length != 0 && p.Length != p.Necessary() {
+	if p.Length != 0 && p.Length != p.MinLength() {
 		out += fmt.Sprintf(" :%d", p.Length)
 	}
 	return out
 }
 
 // ParsePhrase reads "[eat, nice] [hello, grandpa] [today]? :3": word sets
-// in brackets, a ? after an optional one (from the third on), and :N for
+// in brackets, a ? after an optional one, and :N for
 // the phrase length.
 func ParsePhrase(text string) (Phrase, error) {
 	var p Phrase

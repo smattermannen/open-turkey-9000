@@ -79,8 +79,8 @@ func TestPhraseSetCommands(t *testing.T) {
 	}
 }
 
-// R-PHRASE-1: a phrase has at least two word sets, and the first two are
-// necessary; later ones may be optional.
+// R-PHRASE-1: a phrase has at least two word sets, each freely necessary or
+// optional (none necessary allowed); the length is at least 2.
 func TestRPhrase1(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "block", "create", "b")
@@ -90,8 +90,15 @@ func TestRPhrase1(t *testing.T) {
 	}
 	mustRun(t, "phrase-set", "add", "b", "P", "[a] [b]? [c]?")
 	p := phraseSet(t, d, "b", "P").Phrases[0]
-	if !p.Sets[0].Necessary || !p.Sets[1].Necessary || p.Sets[2].Necessary {
-		t.Errorf("word sets = %+v; want the first two necessary, the third optional", p.Sets)
+	if !p.Sets[0].Necessary || p.Sets[1].Necessary || p.Sets[2].Necessary {
+		t.Errorf("word sets = %+v; want only the first necessary", p.Sets)
+	}
+	mustRun(t, "phrase-set", "add", "b", "P", "[x]? [y]? [z]?")
+	if q := phraseSet(t, d, "b", "P").Phrases[1]; q.Necessary() != 0 || q.String() != "[x]? [y]? [z]?" {
+		t.Errorf("no necessary sets: %+v %q", q.Sets, q.String())
+	}
+	if err := runCLI(t, "phrase-set", "add", "b", "P", "[x]? [y]? :1"); err == nil {
+		t.Error("a phrase length of 1 was accepted")
 	}
 	// R-PHRASE-2: the length is from the necessary sets to all of them.
 	if err := runCLI(t, "phrase-set", "add", "b", "P", "[a] [b] [c]? :4"); err == nil {
@@ -260,9 +267,9 @@ func TestPhraseSetMonk(t *testing.T) {
 	if err := runCLI(t, "phrase-set", "action", "b", "P", "greyscale", "off", "--for", "1h"); err == nil {
 		t.Error("--for was taken with off")
 	}
-	if err := runCLI(t, "phrase-set", "action", "b", "P", "block", "off"); err == nil {
-		t.Error("a phrase set was left without actions")
-	}
+	// A phrase set may have no action (§3.9): it then does nothing.
+	mustRun(t, "phrase-set", "action", "b", "P", "block", "off")
+	mustRun(t, "phrase-set", "action", "b", "P", "block", "on")
 	if err := runCLI(t, "phrase-set", "action", "b", "P", "launch", "on"); err == nil {
 		t.Error("an unknown action was accepted")
 	}

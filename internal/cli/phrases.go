@@ -280,9 +280,6 @@ var phraseSetActionCmd = &cobra.Command{
 		if !on && (cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for")) {
 			return fmt.Errorf("--url, --image and --for only go with 'on'")
 		}
-		if !on && len(s.Actions) == 1 && s.Actions[0].Name == action {
-			return fmt.Errorf("a phrase set keeps at least one action")
-		}
 		var set actionSettings
 		if on {
 			if set, err = readActionSettings(cmd, action); err != nil {

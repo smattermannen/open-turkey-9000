@@ -332,8 +332,6 @@ func listAction(cmd *cobra.Command, database *db.DB, block, list, action string,
 		return settle(database, block)
 	case has == on:
 		return nil
-	case !on && len(l.Actions) == 1:
-		return fmt.Errorf("list '%s' needs at least one action; turn another on first", list)
 	case !on:
 		proceed, err := gateEdit(cmd, database, block, false, listEdit(db.EditListUnsetAction, l, action))
 		if err != nil || !proceed {

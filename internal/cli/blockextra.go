@@ -172,8 +172,8 @@ the pages they match, show them in greyscale, block their images, or any
 combination. Apps are always blocked.
 
 Turning an action on is always allowed. Turning one off weakens the block, so
-it is refused while the block is locked. Each list keeps
-at least one action. With only the block name, prints each list's actions.`,
+it is refused while the block is locked. A list may have no action: then it
+does nothing. With only the block name, prints each list's actions.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 && len(args) != 3 {
 			return fmt.Errorf("give a block, or a block, an action and on|off")

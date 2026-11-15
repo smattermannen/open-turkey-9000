@@ -20,10 +20,13 @@ const (
 )
 
 // lockdownPolkitRule denies every privileged desktop action except power,
-// session and network ones, so people can still log out and join a network.
+// session, network, colour (night light) and backlight ones, so people can
+// still log out, join a network and change screen brightness.
 const lockdownPolkitRule = `polkit.addRule(function(action, subject) {
     if (action.id.indexOf("org.freedesktop.login1.") === 0) { return polkit.Result.NOT_HANDLED; }
     if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0) { return polkit.Result.NOT_HANDLED; }
+    if (action.id.indexOf("org.freedesktop.color-manager.") === 0) { return polkit.Result.NOT_HANDLED; }
+    if (/^org\.(cinnamon|gnome)\.settings-daemon\.plugins\.power\.backlight-helper$/.test(action.id)) { return polkit.Result.NOT_HANDLED; }
     return polkit.Result.NO;
 });
 `

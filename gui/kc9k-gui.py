@@ -1155,12 +1155,24 @@ def phrase_text(sets, length=0):
     """Writes a phrase as it is typed: "[eat, nice] [hello, grandpa] [today]? :3"
     (like db.Phrase.String). sets is [(terms, necessary)]."""
     parts, necessary = [], 0
-    for i, (terms, needed) in enumerate(sets):
-        needed = needed or i < 2
+    for terms, needed in sets:
         necessary += 1 if needed else 0
         parts.append("[" + ", ".join(terms) + "]" + ("" if needed else "?"))
     text = " ".join(parts)
-    return f"{text} :{length}" if length and length != necessary else text
+    return f"{text} :{length}" if length and length != max(necessary, 2) else text
+
+
+def word_set_terms(lines):
+    """Terms for one word set from lines (one term each): # comments,
+    blanks and duplicates dropped; brackets and commas can't be in a term."""
+    out = []
+    for line in lines:
+        term = " ".join(str(line).split("#", 1)[0].replace("[", " ").replace("]", " ").split())
+        for part in term.split(","):
+            part = part.strip()
+            if part and part.strip("*- ") and part.lower() not in (t.lower() for t in out):
+                out.append(part)
+    return out
 
 
 class PhraseEditor(Gtk.Box):
@@ -1168,7 +1180,7 @@ class PhraseEditor(Gtk.Box):
     sets, each ticked necessary or optional, and the phrase length;
     get_text() gives the typed form. on_change(text) follows every edit."""
 
-    def __init__(self, initial=None, on_change=None):
+    def __init__(self, initial=None, on_change=None, import_terms=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_change = on_change
         self.loading = False
@@ -1177,13 +1189,23 @@ class PhraseEditor(Gtk.Box):
             "each other in any order, in one sentence (no punctuation between). Separate a "
             "set's terms with commas; * matches inside a word (porn*). A term ending in - "
             "(big-) and one starting with - (-gorilla) in another set make a bridge: up to "
-            "20 words may stand between them. The first two word sets are always necessary."),
+            "20 words may stand between them. Any word set may be necessary or optional; the "
+            "phrase length (at least 2) says how many terms a match needs."),
             False, False, 0)
         self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.pack_start(self.rows, False, False, 0)
         self.add_set = Gtk.Button(label="+ Add word set", halign=Gtk.Align.START)
         self.add_set.connect("clicked", lambda _b: self.add_row())
-        self.pack_start(self.add_set, False, False, 0)
+        set_buttons = Gtk.Box(spacing=6)
+        set_buttons.pack_start(self.add_set, False, False, 0)
+        if import_terms:
+            # Mode 1: a plain term list (one per line) becomes one word set.
+            imp = Gtk.Button(label="Import word set…")
+            imp.set_tooltip_text("Make one word set from a text file with one term per line, "
+                                 "or from a list in Killer Chicken 9000")
+            imp.connect("clicked", lambda _b: self.add_imported(import_terms()))
+            set_buttons.pack_start(imp, False, False, 0)
+        self.pack_start(set_buttons, False, False, 0)
         length_row = Gtk.Box(spacing=8)
         length_row.pack_start(Gtk.Label(label="Phrase length (terms a match needs):"), False, False, 0)
         self.length = Gtk.SpinButton.new_with_range(2, MAX_WORD_SETS, 1)
@@ -1207,7 +1229,7 @@ class PhraseEditor(Gtk.Box):
         self.loading = False
         self.last_necessary = self.necessary()
         self.length.set_range(2, max(len(sets), 2))
-        self.length.set_value((initial or {}).get("length") or self.last_necessary)
+        self.length.set_value((initial or {}).get("length") or max(self.last_necessary, 2))
         self.changed()
 
     def add_row(self, terms=(), necessary=True):
@@ -1227,11 +1249,23 @@ class PhraseEditor(Gtk.Box):
         row.show_all()
         self.changed()
 
+    def add_imported(self, terms):
+        """Fills the first empty word set with terms, or adds a new one."""
+        terms = [t for t in (terms or []) if t]
+        if not terms:
+            return
+        for row in self.rows.get_children():
+            if not row.entry.get_text().strip():
+                row.entry.set_text(", ".join(terms))
+                return
+        if len(self.rows.get_children()) < MAX_WORD_SETS:
+            self.add_row(terms)
+
     def word_sets(self):
         out = []
         for i, row in enumerate(self.rows.get_children()):
             terms = [" ".join(t.split()) for t in row.entry.get_text().replace("[", " ").replace("]", " ").split(",")]
-            out.append(([t for t in terms if t.strip("*- ")], i < 2 or row.check.get_active()))
+            out.append(([t for t in terms if t.strip("*- ")], row.check.get_active()))
         return out
 
     def necessary(self):
@@ -1247,17 +1281,13 @@ class PhraseEditor(Gtk.Box):
         if not hasattr(self, "length") or self.loading:
             return
         rows = self.rows.get_children()
-        for i, row in enumerate(rows):
-            # R-PHRASE-1: the first two word sets are necessary.
-            row.check.set_sensitive(i >= 2)
-            if i < 2:
-                row.check.set_active(True)
+        for row in rows:
             row.remove.set_sensitive(len(rows) > 2)
         # The length follows the necessary word sets until it is set apart.
-        low, high = self.necessary(), max(len(rows), 2)
-        follow = self.length.get_value_as_int() == getattr(self, "last_necessary", low)
+        low, high = max(self.necessary(), 2), max(len(rows), 2)
+        follow = self.length.get_value_as_int() == max(getattr(self, "last_necessary", low), 2)
         self.last_necessary = low
-        self.length.set_range(max(low, 2), high)
+        self.length.set_range(low, high)
         if follow:
             self.length.set_value(low)
         self.add_set.set_sensitive(len(rows) < MAX_WORD_SETS)
@@ -1345,6 +1375,8 @@ class PhraseSetCard(ListCard):
 
         self.entries = EditableList(
             "", "", self.add_entries, self.remove_entry,
+            lambda: window.import_list(["phrase-set", "import", window.selected, self.data["name"]]),
+            lambda: window.export_list(["phrase-set", "export", window.selected, self.data["name"]]),
             search=True, hidden=True, on_activate=self.edit_phrase,
             split=lambda text: [text.strip()] if text.strip() else [], entry=False, multi=True)
         box.pack_start(self.entries, True, True, 0)
@@ -1354,7 +1386,7 @@ class PhraseSetCard(ListCard):
         self.editing = None  # the phrase loaded for a change, or None for a new one
         self.editor_title = Gtk.Label(xalign=0)
         box.pack_start(self.editor_title, False, False, 0)
-        self.editor = PhraseEditor(on_change=self.editor_changed)
+        self.editor = PhraseEditor(on_change=self.editor_changed, import_terms=window.import_terms)
         box.pack_start(self.editor, False, False, 0)
         buttons = Gtk.Box(spacing=6)
         self.save_phrase = Gtk.Button(label="Add phrase")
@@ -1392,6 +1424,17 @@ class PhraseSetCard(ListCard):
                     widget.set_no_show_all(name not in actions)
                     widget.set_visible(name in actions)
             self.entries.set_items([p["text"] for p in data["phrases"]])
+            # A saved change replaced the phrase being edited: keep editing
+            # the new one, never fall back to adding a copy.
+            if getattr(self, "editing", None) is not None:
+                texts = {p["text"]: p for p in data["phrases"]}
+                current = texts.get(getattr(self, "saved_as", None)) or texts.get(self.editing["text"])
+                if current is None:
+                    self.edit_phrase(None)
+                elif current is not self.editing:
+                    self.editing = current
+                    self.save_phrase.set_label("Save changes")
+                    self.editor_changed(self.editor.get_text())
         finally:
             self.filling = False
 
@@ -1409,7 +1452,7 @@ class PhraseSetCard(ListCard):
         old = next((p for p in self.data["phrases"] if p["text"] == text), None) if text else None
         if text and old is None:
             return
-        self.editing = old
+        self.editing, self.saved_as = old, None
         self.editor_title.set_markup("<b>Change phrase</b>" if old else "<b>New phrase</b>")
         self.save_phrase.set_label("Save changes" if old else "Add phrase")
         self.editor.load(old)
@@ -1427,8 +1470,13 @@ class PhraseSetCard(ListCard):
         if old is None:
             self.add_entries([new])
             return
-        self.window.run(self.command("add", new), then=lambda _o: self.window.run(
-            self.command("remove", old["text"])))
+        self.saved_as = new.lower()
+
+        def remove_old(_o):
+            # Only remove the old phrase if it is still there.
+            if any(p["text"] == old["text"] for p in self.data["phrases"]):
+                self.window.run(self.command("remove", old["text"]))
+        self.window.run(self.command("add", new), then=remove_old)
 
     def save_numbers(self, _button):
         current = {a["action"]: a for a in self.data["actions"]}
@@ -4708,6 +4756,61 @@ class Window(Gtk.ApplicationWindow):
                 self.run(chosen.pop(0), then=next_copy)
 
         next_copy()
+
+    def import_terms(self):
+        """Mode 1 of phrase import: terms for one word set, from a text file
+        (one term per line, # comments) or from a list in KC9K."""
+        dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   buttons=Gtk.ButtonsType.NONE, text="Import a word set",
+                                   secondary_text="Every term becomes part of one word set: "
+                                                  "[term 1, term 2, term 3].")
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("From KC9K…", 2)
+        dialog.add_button("From file…", Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            path = self.choose_file("Import a word set", Gtk.FileChooserAction.OPEN, "Import")
+            if not path:
+                return []
+            try:
+                with open(path, encoding="utf-8") as file:
+                    lines = file.read().splitlines()
+            except (OSError, UnicodeDecodeError) as error:
+                self.message(str(error))
+                return []
+            return word_set_terms(lines)
+        if answer != 2:
+            return []
+        sources = []
+        for other in (self.state or {}).get("blocks") or []:
+            if other.get("hidden"):
+                continue
+            for lst in other.get("lists") or []:
+                if lst.get("entries"):
+                    sources.append((f"{other['name']}: {lst['name']}", lst["entries"]))
+        for cluster in (self.state or {}).get("clusters") or []:
+            if not cluster.get("phrases") and cluster.get("entries"):
+                sources.append((f"Cluster: {cluster['name']}", cluster["entries"]))
+        if not sources:
+            self.message("No lists or clusters to import from.", Gtk.MessageType.INFO)
+            return []
+        dialog = Gtk.Dialog(title="Import a word set from Killer Chicken 9000", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Import", Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(4)
+        box.set_border_width(12)
+        checks = []
+        for label, entries in sources:
+            check = Gtk.CheckButton(label=label)
+            box.pack_start(check, False, False, 0)
+            checks.append((check, entries))
+        dialog.show_all()
+        answer = dialog.run()
+        chosen = [e for check, entries in checks if check.get_active() for e in entries]
+        dialog.destroy()
+        return word_set_terms(chosen) if answer == Gtk.ResponseType.OK else []
 
     def export_list(self, command):
         """Saves what command (an export) prints to a file."""

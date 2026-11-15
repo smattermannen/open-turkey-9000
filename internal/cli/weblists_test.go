@@ -110,9 +110,13 @@ func TestListEntries(t *testing.T) {
 	if err := runCLI(t, "list", "where", "b", "Mixed", "url", "off"); err == nil {
 		t.Error("a list was left looking nowhere")
 	}
-	if err := runCLI(t, "list", "action", "b", "Mixed", "block", "off"); err == nil {
-		t.Error("a list was left without actions")
+	// A list may have no action (it then does nothing), so an action can be
+	// turned off before another is turned on.
+	mustRun(t, "list", "action", "b", "Mixed", "block", "off")
+	if got := list(t, d, "b", "Mixed").Actions; len(got) != 0 {
+		t.Errorf("actions after turning the last off: %+v", got)
 	}
+	mustRun(t, "list", "action", "b", "Mixed", "block", "on")
 	if err := runCLI(t, "list", "action", "b", "Exceptions", "greyscale", "on"); err == nil {
 		t.Error("an exception list took an action")
 	}

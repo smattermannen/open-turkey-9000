@@ -52,3 +52,37 @@ func TestResetGuard(t *testing.T) {
 		t.Error("reset-guard doesn't show on")
 	}
 }
+
+// §3.9 ad trigger: a blacklist that looks at ads sends its networks (and
+// its industries' networks) to the extension, and nothing to the shared
+// layers; exception lists and phrase sets don't look at ads.
+func TestAdTrigger(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "list", "create", "b", "Ads", "--ads")
+	mustRun(t, "list", "add", "b", "Ads", "adult", "myadnet.example")
+	if err := runCLI(t, "list", "create", "b", "Spare", "--exceptions", "--ads"); err == nil {
+		t.Error("an exception list looking at ads")
+	}
+	if err := runCLI(t, "list", "where", "b", "Exceptions", "ads", "on"); err == nil {
+		t.Error("ads ticked on an exception list")
+	}
+	mustRun(t, "start", "b")
+	rules, err := enforce.BuildRules(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ads []string
+	for _, l := range rules.Lists {
+		if l.Name == "Ads" {
+			ads = l.Ads
+		}
+	}
+	if !slices.Contains(ads, "exoclick.com") || !slices.Contains(ads, "myadnet.example") || slices.Contains(rules.Block, "myadnet.example") {
+		t.Errorf("ads %v, block %v", ads, rules.Block)
+	}
+	if !strings.Contains(capture(t, "list", "show", "b"), "looks at: ads") {
+		t.Error("list show doesn't say ads")
+	}
+}

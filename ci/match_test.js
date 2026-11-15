@@ -615,3 +615,24 @@ if (typeof kc9kSocialRedirect === "function") {
     process.exitCode = 1;
   }
 }
+
+// §3.9 ad trigger: a page loading a listed ad network matches, with every
+// action; subdomains count; address exceptions spare the page.
+{
+  const compiled = kc9kCompileLists([
+    { id: 7, block: "b", name: "Adult ads", url: [], title: [], text: [], ads: ["exoclick.com"],
+      actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: ["safe.example"] } },
+    { id: 8, block: "b", name: "Other", url: ["x.example"], title: [], text: [],
+      actions: [{ action: "block" }], except: {} },
+  ]);
+  const hit = kc9kAdMatches(compiled, "syndication.exoclick.com", "https://tube.example/v/1");
+  if (hit.length !== 1 || hit[0].list.id !== 7 || hit[0].actions[0].action !== "block") {
+    console.error("FAIL ad trigger match", JSON.stringify(hit.map((m) => m.list.id)));
+    process.exitCode = 1;
+  }
+  if (kc9kAdMatches(compiled, "notexoclick.com", "https://tube.example/").length !== 0 ||
+    kc9kAdMatches(compiled, "ads.exoclick.com", "https://safe.example/page").length !== 0) {
+    console.error("FAIL ad trigger: lookalike host or excepted page matched");
+    process.exitCode = 1;
+  }
+}

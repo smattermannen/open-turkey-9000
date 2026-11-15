@@ -185,6 +185,10 @@ LIST_PLACES = (
     ("title", "Title"),
     ("text", "Text"),
 )
+# §3.9 ad trigger: blacklists and clusters can also look at the ad networks
+# a page loads (entries: ad network domains, or adult, crypto, dating,
+# gambling). Not phrase sets or exception lists.
+AD_PLACE = ("ads", "Ads")
 
 
 # Helpers -----------------------------------------------------------------
@@ -915,9 +919,12 @@ class ListCard(Gtk.Frame):
         self.place_checks = {}
         places = Gtk.Box(spacing=12)
         places.pack_start(Gtk.Label(label="Looks at:"), False, False, 0)
-        for name, title in LIST_PLACES:
+        for name, title in LIST_PLACES + (() if self.is_exceptions else (AD_PLACE,)):
             check = Gtk.CheckButton(label=title)
             check.connect("toggled", self.toggle_place, name)
+            if name == "ads":
+                check.set_tooltip_text("The ad networks a page loads: entries are ad network domains "
+                                       "or adult, crypto, dating, gambling")
             self.place_checks[name] = check
             places.pack_start(check, False, False, 0)
         box.pack_start(places, False, False, 0)
@@ -4054,7 +4061,7 @@ class Window(Gtk.ApplicationWindow):
         area.pack_start(entry, False, False, 0)
         checks = {}
         boxes = Gtk.Box(spacing=12)
-        for name, title in LIST_PLACES:
+        for name, title in LIST_PLACES + (() if kind == "exceptions" else (AD_PLACE,)):
             checks[name] = Gtk.CheckButton(label=title, active=name == "url")
             boxes.pack_start(checks[name], False, False, 0)
         area.pack_start(boxes, False, False, 0)
@@ -4725,7 +4732,7 @@ class Window(Gtk.ApplicationWindow):
         where = Gtk.Box(spacing=12)
         where.pack_start(Gtk.Label(label="Looks at:"), False, False, 0)
         self.cluster_where = {}
-        for key, label in LIST_PLACES:
+        for key, label in LIST_PLACES + (AD_PLACE,):
             check = Gtk.CheckButton(label=label)
             check.connect("toggled", self.toggle_cluster_where, key)
             self.cluster_where[key] = check

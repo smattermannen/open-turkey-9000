@@ -502,11 +502,52 @@ function pageHit(message, sender) {
   }
 }
 
+// Ad trigger (§3.9): a page that loads one of a list's ad networks (a
+// third-party request from its tab) matches that list, once per page.
+const adSeen = new Map(); // tab id → "page url" + list ids already acted on
+function noteAdRequest(details) {
+  if (details.tabId < 0 || details.type === "main_frame" || !lists.some((l) => l.ads && l.ads.length > 0)) {
+    return;
+  }
+  const pageUrl = details.documentUrl || details.originUrl || details.initiator || "";
+  let host = "";
+  let pageHost = "";
+  try {
+    host = new URL(details.url).hostname;
+    pageHost = new URL(pageUrl).hostname;
+  } catch (error) {
+    return;
+  }
+  if (!/^https?:/i.test(pageUrl) || host === pageHost || host.endsWith("." + pageHost)) {
+    return; // first-party: not an ad network's
+  }
+  const found = kc9kAdMatches(lists, host, pageUrl);
+  if (found.length === 0) {
+    return;
+  }
+  let seen = adSeen.get(details.tabId);
+  if (!seen || seen.page !== pageUrl) {
+    seen = { page: pageUrl, ids: new Set() };
+    adSeen.set(details.tabId, seen);
+  }
+  const fresh = found.filter((m) => !seen.ids.has(m.list.id));
+  if (fresh.length === 0) {
+    return;
+  }
+  fresh.forEach((m) => seen.ids.add(m.list.id));
+  browser.tabs.get(details.tabId).then((tab) => {
+    pageHit({ url: tab.url, matches: fresh.map((m) => ({ id: m.list.id, actions: m.actions.map((a) => a.action) })) },
+      { tab, frameId: 0 });
+  }, () => {});
+}
+browser.tabs.onRemoved.addListener((tabId) => adSeen.delete(tabId));
+
 browser.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (details.url.startsWith("http://127.0.0.1:47613/")) {
       return {};
     }
+    noteAdRequest(details);
     if (details.type === "main_frame" || details.type === "sub_frame") {
       noteVisit(details.url);
     }

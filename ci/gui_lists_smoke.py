@@ -49,7 +49,8 @@ win.selected = "b"; win.show_block()
 # URL ticked; no type question.
 check([t for _, t in gui.LIST_PLACES] == ["URL", "Title", "Text"], "scope words: %s" % [t for _, t in gui.LIST_PLACES])
 dialog, entry, checks = win.list_dialog("blacklist")
-check(list(checks) == ["url", "title", "text"], "three scope boxes")
+check(list(checks) == ["url", "title", "text", "ads"], "scope boxes, ads for blacklists: %s" % list(checks))
+check(list(win.list_dialog("exceptions")[2]) == ["url", "title", "text"], "no ads box for exception lists")
 check(checks["url"].get_active() and not checks["title"].get_active() and not checks["text"].get_active(), "URL ticked at first")
 radios = []
 def walk(w):
@@ -85,11 +86,12 @@ dialog.destroy()
 win.run(args); settle()
 check(lists().get("Spared", {}).get("where") == ["title"], "exception list made")
 
-# Every card shows the three boxes, the default lists too.
+# Every card shows the three boxes, the default lists too; blacklists also Ads (§3.9).
 for name in ("Blocked", "Exceptions", "Mixed", "Spared"):
     card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) and not isinstance(c, gui.PhraseSetCard)
                 and c.data["name"] == name)
-    check(list(card.place_checks) == ["url", "title", "text"] and
+    want = ["url", "title", "text"] + ([] if card.is_exceptions else ["ads"])
+    check(list(card.place_checks) == want and
           [n for n, c in card.place_checks.items() if c.get_active()] == card.data["where"], "%s card boxes" % name)
 card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) and c.data.get("name") == "Blocked")
 card.place_checks["title"].set_active(True); settle()

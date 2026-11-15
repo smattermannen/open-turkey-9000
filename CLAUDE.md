@@ -187,6 +187,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   is tab-wide (`applyMute`). Removed actions (declutter):
   `migrateRemovedActions` drops them on open (emptied → block), imports
   skip them (`db.IsRemovedAction`).
+- **Ad trigger** (§3.9, `db/adnetworks.go`): scope `ads` (`Where.Ads`,
+  `in_ads`; not exception lists or phrase sets); `WebList.AdNetworks`
+  expands industries; rules `ads`; background `noteAdRequest` →
+  `kc9kAdMatches` → `pageHit`.
 - **Phrase sets** (`db/phrases.go`, `cli/phrases.go`, `kc9k phrase-set`):
   `db.Phrase` JSON, typed `[a, b] [c]? :N` (`ParsePhrase`, `String`);
   `Check` refuses one-ended bridges (mirrored `kc9kPhraseCheck`). Rules

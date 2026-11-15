@@ -59,8 +59,8 @@ func (d *DB) clusterEntries(id int) ([]string, error) {
 // GetCluster returns the named cluster with its entries.
 func (d *DB) GetCluster(name string) (Cluster, error) {
 	c := Cluster{Name: name}
-	err := d.conn.QueryRow("SELECT id, in_url, in_title, in_text, phrases FROM clusters WHERE name = ?", name).
-		Scan(&c.ID, &c.Where.URL, &c.Where.Title, &c.Where.Text, &c.Phrases)
+	err := d.conn.QueryRow("SELECT id, in_url, in_title, in_text, in_ads, phrases FROM clusters WHERE name = ?", name).
+		Scan(&c.ID, &c.Where.URL, &c.Where.Title, &c.Where.Text, &c.Where.Ads, &c.Phrases)
 	if err == sql.ErrNoRows {
 		return c, fmt.Errorf("there is no cluster named '%s'", name)
 	}
@@ -82,14 +82,14 @@ func (d *DB) ClusterExists(name string) (bool, error) {
 
 // ListClusters returns every cluster with its entries, by name.
 func (d *DB) ListClusters() ([]Cluster, error) {
-	rows, err := d.conn.Query("SELECT id, name, in_url, in_title, in_text, phrases FROM clusters ORDER BY name COLLATE NOCASE")
+	rows, err := d.conn.Query("SELECT id, name, in_url, in_title, in_text, in_ads, phrases FROM clusters ORDER BY name COLLATE NOCASE")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list clusters: %w", err)
 	}
 	var out []Cluster
 	for rows.Next() {
 		var c Cluster
-		if err := rows.Scan(&c.ID, &c.Name, &c.Where.URL, &c.Where.Title, &c.Where.Text, &c.Phrases); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Where.URL, &c.Where.Title, &c.Where.Text, &c.Where.Ads, &c.Phrases); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("failed to read a cluster: %w", err)
 		}
@@ -125,8 +125,8 @@ func (d *DB) createCluster(name string, where Where, phrases bool) error {
 	if err := checkClusterWhere(where, phrases); err != nil {
 		return err
 	}
-	_, err := d.conn.Exec("INSERT INTO clusters (name, in_url, in_title, in_text, phrases) VALUES (?, ?, ?, ?, ?)",
-		name, where.URL, where.Title, where.Text, phrases)
+	_, err := d.conn.Exec("INSERT INTO clusters (name, in_url, in_title, in_text, in_ads, phrases) VALUES (?, ?, ?, ?, ?, ?)",
+		name, where.URL, where.Title, where.Text, where.Ads, phrases)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return fmt.Errorf("there already is a cluster named '%s'", name)
@@ -178,8 +178,8 @@ func (d *DB) SetClusterWhere(id int, where Where) error {
 	if err := checkClusterWhere(where, phrases); err != nil {
 		return err
 	}
-	_, err := d.conn.Exec("UPDATE clusters SET in_url = ?, in_title = ?, in_text = ? WHERE id = ?",
-		where.URL, where.Title, where.Text, id)
+	_, err := d.conn.Exec("UPDATE clusters SET in_url = ?, in_title = ?, in_text = ?, in_ads = ? WHERE id = ?",
+		where.URL, where.Title, where.Text, where.Ads, id)
 	if err != nil {
 		return fmt.Errorf("failed to set where the cluster looks: %w", err)
 	}

@@ -236,6 +236,9 @@ func listWhere(cmd *cobra.Command, database *db.DB, block, list, place string, o
 	if l.Where.Has(place) == on {
 		return nil
 	}
+	if place == db.PlaceAds && on && l.IsExceptions() {
+		return fmt.Errorf("exception lists don't look at ads: the ad trigger blocks pages, it never spares them")
+	}
 	next := l.Where.With(place, on)
 	if !next.Any() {
 		return fmt.Errorf("list '%s' needs to look somewhere; tick another place first", list)
@@ -571,12 +574,16 @@ it changes nothing.`,
 		where.URL, _ = cmd.Flags().GetBool("url")
 		where.Title, _ = cmd.Flags().GetBool("title")
 		where.Text, _ = cmd.Flags().GetBool("text")
+		where.Ads, _ = cmd.Flags().GetBool("ads")
 		if !where.Any() {
 			where.URL = true
 		}
 		kind := db.ListBlacklist
 		if exceptions {
 			kind = db.ListExceptions
+			if where.Ads {
+				return fmt.Errorf("exception lists don't look at ads: the ad trigger blocks pages, it never spares them")
+			}
 		}
 		if _, err := database.CreateList(args[0], kind, args[1], where); err != nil {
 			return err
@@ -836,6 +843,7 @@ func init() {
 	listCreateCmd.Flags().Bool("url", false, "Look at the address (the default)")
 	listCreateCmd.Flags().Bool("title", false, "Look at the page title")
 	listCreateCmd.Flags().Bool("text", false, "Look at the page text")
+	listCreateCmd.Flags().Bool("ads", false, "Look at the ad networks a page loads (§3.9 ad trigger): entries are ad network domains or industries ("+strings.Join(db.AdIndustryNames(), ", ")+")")
 	addNowFlag(listDeleteCmd, listAddCmd, listRemoveCmd, listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listImportCmd)
 	listCmd.AddCommand(listShowCmd, listCreateCmd, listRenameCmd, listDeleteCmd, listAddCmd, listRemoveCmd,
 		listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listExportCmd, listImportCmd, listCopyCmd)

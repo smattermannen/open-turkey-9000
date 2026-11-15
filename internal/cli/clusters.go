@@ -34,6 +34,7 @@ func whereFlags(cmd *cobra.Command) db.Where {
 	where.URL, _ = cmd.Flags().GetBool("url")
 	where.Title, _ = cmd.Flags().GetBool("title")
 	where.Text, _ = cmd.Flags().GetBool("text")
+	where.Ads, _ = cmd.Flags().GetBool("ads")
 	if !where.Any() {
 		where.URL = true
 	}
@@ -44,6 +45,7 @@ func addWhereFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("url", false, "Look at the address (the default)")
 	cmd.Flags().Bool("title", false, "Look at the page title")
 	cmd.Flags().Bool("text", false, "Look at the page text")
+	cmd.Flags().Bool("ads", false, "Look at the ad networks a page loads (ad network domains or industries)")
 }
 
 func describeCluster(c db.Cluster) string {
@@ -460,7 +462,7 @@ making it if there is none by that name. A new cluster looks where --url,
 		if err != nil {
 			return err
 		}
-		flagged := cmd.Flags().Changed("url") || cmd.Flags().Changed("title") || cmd.Flags().Changed("text")
+		flagged := cmd.Flags().Changed("url") || cmd.Flags().Changed("title") || cmd.Flags().Changed("text") || cmd.Flags().Changed("ads")
 		if exists && flagged {
 			return fmt.Errorf("cluster '%s' exists; change where it looks with 'kc9k cluster where'", args[0])
 		}

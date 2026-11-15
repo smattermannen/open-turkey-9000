@@ -44,7 +44,7 @@ func toPhraseSets(in []phraseSetExport) ([]db.PhraseSet, error) {
 		}
 		s := db.PhraseSet{Name: e.Name, Test: e.Test}
 		for _, place := range e.Where {
-			if !db.IsPlace(place) {
+			if !db.IsPlace(place) || place == db.PlaceAds {
 				return nil, fmt.Errorf("phrase set '%s' looks at an unknown place %q", e.Name, place)
 			}
 			s.Where = s.Where.With(place, true)

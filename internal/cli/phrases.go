@@ -240,7 +240,7 @@ var phraseSetScopeCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if !db.IsPlace(args[2]) || (args[3] != "on" && args[3] != "off") {
+		if !db.IsPlace(args[2]) || args[2] == db.PlaceAds || (args[3] != "on" && args[3] != "off") {
 			return fmt.Errorf("usage: kc9k phrase-set scope <block> <set> url|title|text on|off")
 		}
 		on := args[3] == "on"

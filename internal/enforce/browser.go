@@ -271,9 +271,11 @@ type ListRule struct {
 	// URL holds the list's sites and URL entries; URLTerms its rendered
 	// terms, looked for as words in the decoded address, separators as
 	// blank space (R-PHRASE-6, §3.2).
-	URLTerms []string     `json:"url_terms,omitempty"`
-	Actions  []RuleAction `json:"actions"`
-	Except   RuleExcept   `json:"except"`
+	URLTerms []string `json:"url_terms,omitempty"`
+	// Ads: ad network domains; a page loading one matches (§3.9 ad trigger).
+	Ads     []string     `json:"ads,omitempty"`
+	Actions []RuleAction `json:"actions"`
+	Except  RuleExcept   `json:"except"`
 	// Test: the list is in test mode (§3.2). The extension shows what it
 	// found on each page instead of acting on it.
 	Test bool `json:"test,omitempty"`
@@ -370,6 +372,7 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 		if l.Where.Text {
 			rule.Text = append(rule.Text, l.Entries...)
 		}
+		rule.Ads = l.AdNetworks()
 		for _, a := range l.Actions {
 			rule.Actions = append(rule.Actions, RuleAction{Name: a.Name, Distinct: a.Distinct, Hits: a.Hits, Rate: a.Rate, Param: a.Param})
 		}

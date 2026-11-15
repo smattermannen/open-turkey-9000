@@ -121,9 +121,12 @@ r = cli("list", "create", "b", "Url words", "--url", "--terms"); assert r.return
 settle()
 card = next(c for c in win.list_cards.values() if isinstance(c, gui.ListCard) and not isinstance(c, gui.PhraseSetCard)
             and c.data["name"] == "Url words")
-check(set(card.place_checks) == {"url", "title", "text"} and card.place_checks["url"].get_active(), "list card ticks url")
+check(set(card.place_checks) == {"url", "title", "text", "ads"} and card.place_checks["url"].get_active(), "list card ticks url")
 card.place_checks["text"].set_active(True); settle()
 out = cli("list", "show", "b").stdout
 check("Url words (blacklist) looks at: url, text" in out, "list scope from the card")
+# §3.9 ad trigger: the Ads box on a blacklist card.
+card.place_checks["ads"].set_active(True); settle()
+check("Url words (blacklist) looks at: url, text, ads" in cli("list", "show", "b").stdout, "ads scope from the card")
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

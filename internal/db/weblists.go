@@ -47,10 +47,12 @@ const (
 	PlaceURL   = "url"
 	PlaceTitle = "title"
 	PlaceText  = "text"
+	// PlaceAds: the ad networks a page loads (§3.9 ad trigger).
+	PlaceAds = "ads"
 )
 
 // Places lists the places in display order.
-var Places = []string{PlaceURL, PlaceTitle, PlaceText}
+var Places = []string{PlaceURL, PlaceTitle, PlaceText, PlaceAds}
 
 // The lists a new block starts with, and those made from older blocks.
 const (
@@ -95,6 +97,7 @@ type Where struct {
 	URL   bool `json:"url"`
 	Title bool `json:"title"`
 	Text  bool `json:"text"`
+	Ads   bool `json:"ads,omitempty"`
 }
 
 // IsPlace reports whether name is a place.
@@ -116,6 +119,8 @@ func (w Where) Has(place string) bool {
 		return w.Title
 	case PlaceText:
 		return w.Text
+	case PlaceAds:
+		return w.Ads
 	}
 	return false
 }
@@ -129,12 +134,14 @@ func (w Where) With(place string, on bool) Where {
 		w.Title = on
 	case PlaceText:
 		w.Text = on
+	case PlaceAds:
+		w.Ads = on
 	}
 	return w
 }
 
 // Any reports whether the list looks anywhere.
-func (w Where) Any() bool { return w.URL || w.Title || w.Text }
+func (w Where) Any() bool { return w.URL || w.Title || w.Text || w.Ads }
 
 // freeListName returns name, or name 2, name 3… when taken (lower case).
 func freeListName(name string, taken map[string]bool) string {
@@ -354,7 +361,7 @@ type querier interface {
 }
 
 func getBlockLists(q querier, blockID int) (Lists, error) {
-	rows, err := q.Query(`SELECT id, kind, name, in_url, in_title, in_text FROM web_lists
+	rows, err := q.Query(`SELECT id, kind, name, in_url, in_title, in_text, in_ads FROM web_lists
 		WHERE block_id = ? ORDER BY CASE kind WHEN 'blacklist' THEN 0 ELSE 1 END, id`, blockID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch website lists: %w", err)
@@ -362,7 +369,7 @@ func getBlockLists(q querier, blockID int) (Lists, error) {
 	var lists Lists
 	for rows.Next() {
 		var l WebList
-		if err := rows.Scan(&l.ID, &l.Kind, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text); err != nil {
+		if err := rows.Scan(&l.ID, &l.Kind, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text, &l.Where.Ads); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("failed to read a website list: %w", err)
 		}
@@ -449,8 +456,8 @@ func (d *DB) ListID(blockName, listName string) (int, error) {
 // GetList returns one list by id.
 func (d *DB) GetList(listID int) (WebList, error) {
 	var l WebList
-	err := d.conn.QueryRow("SELECT id, kind, name, in_url, in_title, in_text FROM web_lists WHERE id = ?", listID).
-		Scan(&l.ID, &l.Kind, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text)
+	err := d.conn.QueryRow("SELECT id, kind, name, in_url, in_title, in_text, in_ads FROM web_lists WHERE id = ?", listID).
+		Scan(&l.ID, &l.Kind, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text, &l.Where.Ads)
 	if err == sql.ErrNoRows {
 		return l, fmt.Errorf("the list no longer exists")
 	}
@@ -479,8 +486,8 @@ func createList(q querier, blockID int, kind, name string, where Where) (int, er
 	if listNameTaken(q, blockID, 0, name) {
 		return 0, fmt.Errorf("the block already has a list named '%s' (names differ only in case)", name)
 	}
-	res, err := q.Exec("INSERT INTO web_lists (block_id, kind, name, in_url, in_title, in_text) VALUES (?, ?, ?, ?, ?, ?)",
-		blockID, kind, name, where.URL, where.Title, where.Text)
+	res, err := q.Exec("INSERT INTO web_lists (block_id, kind, name, in_url, in_title, in_text, in_ads) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		blockID, kind, name, where.URL, where.Title, where.Text, where.Ads)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return 0, fmt.Errorf("the block already has a list named '%s'", name)
@@ -551,8 +558,8 @@ func (d *DB) SetListWhere(listID int, where Where) error {
 	if err := CheckScope(where); err != nil {
 		return err
 	}
-	_, err := d.conn.Exec("UPDATE web_lists SET in_url = ?, in_title = ?, in_text = ? WHERE id = ?",
-		where.URL, where.Title, where.Text, listID)
+	_, err := d.conn.Exec("UPDATE web_lists SET in_url = ?, in_title = ?, in_text = ?, in_ads = ? WHERE id = ?",
+		where.URL, where.Title, where.Text, where.Ads, listID)
 	if err != nil {
 		return fmt.Errorf("failed to set where the list looks: %w", err)
 	}

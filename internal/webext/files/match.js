@@ -584,6 +584,7 @@ function kc9kCompileLists(lists) {
         page: kc9kPhraseMatcher(phrase),
       })),
       phraseScope: list.phrase_scope || [],
+      ads: (list.ads || []).map((d) => String(d).toLowerCase()),
       actions: list.actions || [],
       except: {
         url: kc9kFilter({ match: except.url || [] }),
@@ -1128,4 +1129,31 @@ function kc9kPageWords(text, max) {
   }
   const top = Array.from(counts).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, max || 400);
   return Object.fromEntries(top);
+}
+
+// kc9kAdMatches is the ad trigger (§3.9): the lists one of whose ad
+// networks a page at pageUrl loads from host, each with every action (it
+// counts like an address match). A page its block's address exceptions
+// spare doesn't count; lists in test mode don't run.
+function kc9kAdMatches(compiled, host, pageUrl) {
+  const h = String(host || "").toLowerCase().replace(/\.$/, "");
+  if (!h) {
+    return [];
+  }
+  const out = [];
+  for (const list of compiled || []) {
+    if (list.test || !list.ads || list.ads.length === 0) {
+      continue;
+    }
+    if (!list.ads.some((d) => h === d || h.endsWith("." + d))) {
+      continue;
+    }
+    if (pageUrl && list.except.url.match.length > 0 && kc9kMatches(list.except.url, pageUrl)) {
+      continue;
+    }
+    if (list.actions.length > 0) {
+      out.push({ list, actions: list.actions });
+    }
+  }
+  return out;
 }

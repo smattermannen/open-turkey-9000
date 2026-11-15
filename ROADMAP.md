@@ -132,7 +132,7 @@ Only items not simply Built.
 | §3.8 Forgotten password recovery | Built | `kc9k-bin recover` (root, recovery boot, not with no-escape): settings password and password locks (`--access`: access passwords). Live: Unchecked (needs a recovery boot) |
 | §3.8 Factory reset protection | Partial | installer media guard built (`reset-guard on|off`, GUI switch under device protection): while anything is locked an in-memory block (`enforce/resetguard.go`) blocks OS image and USB writer download pages and closes image writers and Disks; checked live (hosts follow the lock). Firmware lock, PAM root guard, guided setup: Not built (2.6) |
 | §3.9 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`); hidden text, frames Unchecked |
-| §3.9 Ad trigger | Not built | 2.2 |
+| §3.9 Ad trigger | Partial | scope `ads` on blacklists and clusters (`list create --ads`, `list where B L ads on`, GUI "Ads" box): entries are ad network domains or industries (`db.AdIndustries`: adult, crypto, dating, gambling); rules `ads`; the extension watches each tab's third-party requests (`noteAdRequest`) and a page loading a listed network matches with every action (`kc9kAdMatches`, unit-tested). Not in shared layers. Browser test: Not run (the owner was using the laptop; the browser test changes LibreWolf settings and would close their windows) |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
 | §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--cluster C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Clusters page "Record words" with cut % and the most specific words |
 | §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |
@@ -157,8 +157,8 @@ Only items not simply Built.
   System-following dark pages rely on `prefers-color-scheme`, which
   LibreWolf reports as light. In project files with its wallpapers
   (`cli/projectcircadian.go`; import only where none is set).
-- **2.2 Ad trigger** (M): fourth scope from third-party requests
-  (`webRequest`); shipped ad-network list per industry.
+- **2.2 Ad trigger** (M): built (scope `ads`); left: a browser test
+  (`ci/extras_test.py`), and growing the shipped industry lists.
 - **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under
   the one `safesearch` setting. Left: a lock per engine, if wanted.
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored

@@ -171,8 +171,15 @@ Only items not simply Built.
   Creator, GNOME Disks restore); PAM root guard in `login`, `su`, `su-l`
   via `ApplyLockdown`/`RemoveLockdown` (test on generated config); guided
   setup checklist for strict/no-escape.
-- **2.7 Hardening** (M each): rules server secret by policy; audit sudo
-  rule arguments (keep `env_reset`); GTK window for the typing challenge.
+- **2.7 Hardening** (M each): sudo rule arguments audited 2026-11-15: caller
+  paths are read as the caller (`readAsCaller`), direct reads only of
+  KC9K's own files, writes only into KC9K's folders under hash names;
+  `audit_test.go` keeps it so (`env_reset` untouched). Left: rules server
+  secret by policy (not rolled out overnight: if the extension can't read
+  it, every check-in fails and the guard closes browsers; the policy files
+  are user-readable anyway); GTK window for the typing challenge (needs a
+  way to answer that keeps R-LOCK-5: a stdin answer would let scripts
+  type it).
 - **2.8** Everything else Not built/Partial in §1.
 
 ## 3. Before release

@@ -115,6 +115,7 @@ type projectExport struct {
 	Circadian *circadianExport `json:"circadian,omitempty"`
 	// Notifications are the notification choices (§4.10).
 	Notifications *enforce.NoticeOptions `json:"notifications,omitempty"`
+	StrictUse     bool                   `json:"strict_use,omitempty"` // §3.7
 }
 
 func exportWindow(w schedule.Window) windowExport {
@@ -431,6 +432,7 @@ passwords, hotkeys and statistics are never in it.`,
 			out.Freezes = append(out.Freezes, w)
 		}
 		out.Circadian = exportCircadian(database)
+		out.StrictUse = enforce.StrictUseOn(database)
 		if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
 			n := enforce.LoadNoticeOptions(database)
 			out.Notifications = &n
@@ -800,6 +802,14 @@ With --dry-run, says what would happen and changes nothing.`,
 		}
 		if err := importCircadian(database, in.Circadian, dry, say); err != nil {
 			return err
+		}
+		if in.StrictUse && !enforce.StrictUseOn(database) {
+			say("turn on strict use counting")
+			if !dry {
+				if err := database.SetSetting(enforce.SettingStrictUse, "on"); err != nil {
+					return err
+				}
+			}
 		}
 		if n := in.Notifications; n != nil && len(n.Advance) > 0 {
 			if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {

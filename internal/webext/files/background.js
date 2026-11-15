@@ -672,6 +672,7 @@ function apply(rules) {
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
   safeSearch = Boolean(rules.safesearch);
+  strictUse = Boolean(rules.strict_use);
   if (recording !== Boolean(rules.recording)) {
     recording = Boolean(rules.recording);
     visited.clear();
@@ -929,6 +930,7 @@ setInterval(reportUsage, REPORT_MS);
 // (content scripts report those). The daemon spends that time.
 const QUOTA_REPORT_MS = 10000;
 let quotaLists = [];
+let strictUse = false;
 let quotaUse = {};
 const playing = new Map(); // tab id -> when its content script last said it plays
 
@@ -938,7 +940,12 @@ async function sampleQuota() {
   }
   const tabs = new Map();
   try {
-    if (await userActive()) {
+    if (strictUse) {
+      // Strict use counting (§3.7): every open tab counts.
+      for (const tab of await browser.tabs.query({})) {
+        tabs.set(tab.id, tab);
+      }
+    } else if (await userActive()) {
       const tab = await frontTab();
       if (tab) {
         tabs.set(tab.id, tab);

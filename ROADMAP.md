@@ -126,7 +126,7 @@ Only items not simply Built.
 | §3.6 Reward | Partial | capped at one; no accumulate/expire |
 | §3.6 Delay break, session limit, autostart | Not built | |
 | §3.7 Use | Partial | statistics ignore background-tab sound |
-| §3.7 Strict use counting | Not built | |
+| §3.7 Strict use counting | Built | `kc9k use-counting strict|normal`, GUI switch; every open tab (`rules.strict_use`) and running apps (`RunningApps`) count; normal weakens. Live: Unchecked |
 | §3.8 Scheduled freeze lock kinds beyond lead | Not built | |
 | §3.8 Allowed apps only | Not built | |
 | §3.8 R-LOCK-12 | Partial | see 0.1 |

@@ -60,13 +60,34 @@ func countsByUse(detail *db.BlockDetail) bool {
 	return !detail.Lists.Enforces() || blocker.ExtensionBrowserInstalled()
 }
 
+// SettingStrictUse is strict use counting (§3.7): "on" counts background
+// tabs and apps that aren't in front (minimised) as use.
+const SettingStrictUse = "use.strict"
+
+// StrictUseOn reports whether strict use counting is on.
+func StrictUseOn(d *db.DB) bool {
+	v, err := d.GetSetting(SettingStrictUse)
+	return err == nil && v == "on"
+}
+
 // noteQuotaApps adds seconds to the open sessions of blocks whose apps are
-// in the foreground.
+// in the foreground, or with strict use counting running at all.
 func noteQuotaApps(d *db.DB, foreground []string, seconds int64) {
+	open := openQuotaBlocks(d)
+	if len(open) == 0 {
+		return
+	}
+	if StrictUseOn(d) {
+		var apps []string
+		for _, b := range open {
+			apps = append(apps, b.Apps...)
+		}
+		foreground = append(foreground, blocker.RunningApps(apps)...)
+	}
 	if len(foreground) == 0 {
 		return
 	}
-	for _, b := range openQuotaBlocks(d) {
+	for _, b := range open {
 		for _, app := range b.Apps {
 			if slices.Contains(foreground, app) {
 				addQuotaUse(b.Name, seconds)

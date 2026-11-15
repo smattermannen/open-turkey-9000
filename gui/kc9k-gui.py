@@ -4721,6 +4721,16 @@ class Window(Gtk.ApplicationWindow):
                                     "tools also can't be turned off while a block is locked."), *rows),
             False, False, 0)
 
+        # §3.7 use counting.
+        self.strict_use_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.strict_use_switch.connect("state-set", self.toggle_strict_use)
+        box.pack_start(section(
+            "Use counting",
+            self.switch_row(self.strict_use_switch, "Strict use counting",
+                            "An allowance is spent while any tab of its sites is open and while "
+                            "its apps run, even in the background or minimised. Turning it off "
+                            "weakens your allowances.")), False, False, 0)
+
         # §4.10 notifications: which ones, and how many minutes ahead.
         self.notice_checks = {}
         notice_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3,
@@ -5039,6 +5049,7 @@ class Window(Gtk.ApplicationWindow):
             if name in self.browser_switches:
                 self.browser_switches[name].set_sensitive(not parts)
         set_switch(self.strict_switch, self.state["strict"])
+        set_switch(self.strict_use_switch, self.state.get("strict_use", False))
         self.strict_switch.set_sensitive(not self.setting_locked("strict"))
         set_switch(self.no_escape_switch, self.state["no_escape"])
         tamper = self.tamper_state()
@@ -5224,6 +5235,12 @@ class Window(Gtk.ApplicationWindow):
             subprocess.Popen(["x-terminal-emulator", "-e", command])
         except OSError as error:
             self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+
+    def toggle_strict_use(self, _switch, wanted):
+        if self.updating:
+            return False
+        self.run(["use-counting", "strict" if wanted else "normal"])
+        return True
 
     def toggle_notice(self, check, key):
         if self.updating:

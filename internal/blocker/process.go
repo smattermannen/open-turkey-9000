@@ -563,3 +563,33 @@ func ValidAppEntry(entry string) error {
 	}
 	return checkEssentialApp(entry)
 }
+
+// RunningApps returns the app entries (of names) that have a process now,
+// matched as KillBlocked matches them; for strict use counting (§3.7),
+// where an app counts whether or not it is in front.
+func RunningApps(names []string) []string {
+	names = withoutEssentialApps(names)
+	if len(names) == 0 {
+		return nil
+	}
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, name := range names {
+		one := []string{name}
+		ids := flatpakAppIDs(one)
+		for _, entry := range entries {
+			pid, err := strconv.Atoi(entry.Name())
+			if err != nil {
+				continue
+			}
+			if matchesBlockedProcess(pid, one) || matchesProcessScope(pid, one, ids) {
+				out = append(out, name)
+				break
+			}
+		}
+	}
+	return out
+}

@@ -52,3 +52,24 @@ func TestNotificationsCommand(t *testing.T) {
 		t.Error("not back on")
 	}
 }
+
+// §3.7: strict use counting on is free; back to normal weakens, refused
+// while locked with no weakening on (R-WEAK-4).
+func TestUseCounting(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "use-counting", "strict")
+	if !enforce.StrictUseOn(d) {
+		t.Fatal("not on")
+	}
+	if r, _ := enforce.BuildRules(d); !r.StrictUse {
+		t.Error("not in the rules")
+	}
+	mustRun(t, "no-weakening", "on")
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "use-counting", "normal"); err == nil {
+		t.Error("weakened while locked with no weakening on")
+	}
+}

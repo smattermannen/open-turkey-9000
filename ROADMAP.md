@@ -14,20 +14,47 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
 
 ### 0.1 Code contradicting `SPEC.md`
 
-- [ ] **Owner report 2026-11-15** (real use; check each against the latest
-  build first, Unchecked until then):
-  - `no-images` doesn't stop GIFs (§3.2 actions). S
-  - `no-downloads` doesn't block downloads (`ci/download_test.py` passes, so
-    real-use path differs). S
-  - Circadian: brightness slider vanished from the desktop menu; blue-light
-    filter toggles on and off; desktop night light turns itself off while
-    shown on (`nightlight off`, `PauseGamma`; §3.x circadian). M
-  - Phrase editor: sometimes "Save new phrase" instead of "Save edits"
-    (duplicates); sometimes "set has no phrase" after saving; UI awkward
-    overall (§4 phrase editor). M
-  - R-PHRASE-1 changed: any set necessary or optional, none allowed; length
-    ≥ 2. Code (`db.Phrase.Check`, `kc9kPhraseCheck`, GUI) still forces the
-    first two necessary. S
+- [ ] **Owner report 2026-11-15** (real use on the laptop; top priority).
+  Status per item; check against the latest build before calling it fixed.
+  - [ ] `no-images` doesn't hide GIFs (§3.9 Look actions: animated GIFs
+    included). Not built. Cause unknown (CSS `img` vs background/`<video>`
+    GIFs, or images already decoded). S
+  - [ ] `no-downloads` doesn't block downloads (§3.9). `ci/download_test.py`
+    passes, so the real path differs (browser? download started from a
+    link/blob, policy-blocked page?). Unchecked which browser. S
+  - [ ] Desktop brightness slider gone from the menu; blue-light filter
+    toggles on and off; desktop night light turns itself off while its
+    switch shows on, **also with circadian off and strict mode off** (§4.10
+    circadian: must leave the desktop's controls working, off touches
+    nothing). Cause unknown. Suspects: `RunCircadian` still drives the
+    gamma ramp or backlight when off (`gamma()` restore path, `levels`),
+    `circadian nightlight off` run earlier, or something outside KC9K.
+    Next: on the laptop, `kc9k circadian` status, `journalctl -u kc9k |
+    grep circadian`, and whether it stops with the daemon stopped. M
+    (Strict lockdown's polkit rule also blocks the backlight helper and
+    colord, which breaks the same controls while strict mode is on; fix
+    pending below.)
+  - [ ] Phrase editor: "Save changes" sometimes becomes "Add phrase"
+    (copies), and saving sometimes says the set has no such phrase (§4.3).
+    Cause found: after a change the card keeps the removed phrase as the one
+    being edited; next save removes a phrase that is gone, or a rebuilt card
+    adds a copy. Fix pending below. S
+  - [ ] Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
+  - [ ] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
+    none allowed; length ≥ 2. Differs: `db.Phrase`, `match.js`, GUI force
+    the first two necessary. Fix pending below. S
+  - [ ] Lists and phrase sets may have no action (§3.9, changed
+    2026-11-15). Differs: `list action … off` and `phrase-set action … off`
+    refuse the last action. Fix pending below. S
+  - [ ] Phrase import mode 1 (term list → one word set) and mode 2 (phrase
+    format) in the GUI (§4.3). `phrase-set import|export` exist on the
+    command line; GUI has neither. Fix pending below. S
+  - [ ] Statistics bar chart: one colour per site/app over time (§4.9). Not
+    built. M
+  - Pending, uncommitted in the 2026-11-15 session (not pushed; owner to
+    decide): R-PHRASE-1, no-action lists/phrase sets, editor save fix,
+    import/export modes, strict-mode polkit allowing backlight helper and
+    colord. `internal/cli` tests need a rerun; GUI smoke on the laptop.
 
 - [ ] **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
   (`kc9k schedule lock B on --lead D`) replaces built-in schedule/place
@@ -208,12 +235,6 @@ Only items not simply Built.
 - Windows (L): platform layer; `internal/blocker/` is Linux-only.
 
 ## 5. Proposed, not agreed
-
-- Phrase set import/export (owner, 2026-11-15): mode 1 imports a plain
-  term-per-line list (e.g. a block's list) into a phrase set; mode 2
-  exports as phrases `[term1, term2], [term1, term2]`. Needs format details.
-- Statistics: one colour per site/app in the bar chart over time (owner,
-  2026-11-15).
 
 - DECIDED OVERNIGHT: how to check the clock against hardware and internet
   time (§4.10) → not built yet; trusted time stays CLOCK_BOOTTIME with

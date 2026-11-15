@@ -202,10 +202,10 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Action** | What a blacklist, phrase set, app or title entry does on a match: page action or consequence. |
+| **Action** | What a blacklist, phrase set, app or title entry does on a match: page action or consequence. A blacklist or phrase set may have no action: it then does nothing (an action can be unticked before another is ticked). |
 | **Block page** | Replaces the page, with a motivational message. |
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
-| **Look actions** | Greyscale, no images, no video, mute, dark. Change, don't block; combine. |
+| **Look actions** | Greyscale, no images, no video, mute, dark. Change, don't block; combine. No images covers every image, animated GIFs included. |
 | **No downloads** | Cancels downloads from matching pages. |
 | **Strongest action** | Across all blocks: consequence > close tab > image > redirect > block page. Look actions only if none applies. |
 | **Threshold** | Per action. List: different rendered terms in page text. Phrase set: different phrases (default 1). |
@@ -301,12 +301,17 @@ GUI and CLI offer the same functions.
   - Import *From KC9K* (other blocks' lists/phrase sets, clusters; several)
     or *From file* (`.txt`, one entry per line); also *Whole internet* and
     *All searches containing…*. Export list/phrase set to `.txt`.
+  - Phrase import/export: mode 1 imports a term list (file with one term
+    per line, or a list in KC9K) into **one** word set: `[term 1, term 2,
+    term 3]`; mode 2 exports and imports phrases in phrase format
+    (`[a, b] [c]`), one per line.
   - Lists: create (kind; scope boxes), rename, delete, scope, actions,
     threshold, hit count, rate, test mode. Block password.
   - Phrase sets: create (unnamed gets a name), rename, delete, scope,
     actions, threshold, test mode. Phrase editor inside the set's card (not
     a pop-up): any number of word sets, each necessary/optional, phrase
-    length; double-click a phrase to load it.
+    length; double-click a phrase to load it. Saving a loaded phrase changes
+    it (never adds a copy).
   - Apps: program, folder, title entry; their actions. Social presets,
     playlists. The block's own ladder.
 - **4.4 Clusters and recording**: clusters create/edit/copy into block/save
@@ -321,7 +326,7 @@ GUI and CLI offer the same functions.
   extension's toolbar button and popup.
 - **4.8 Frozen Chicken**: start for a time; schedule; both may coexist.
 - **4.9 Statistics**: time used and times blocked per site, app, title. Time
-  frame (presets/custom), per user, top 5/10, search, filter by block, JSON
+  frame (presets/custom), bar chart over time with one colour per site/app, per user, top 5/10, search, filter by block, JSON
   export, delete, on/off, optionally skip private windows. Separate from
   events; local only.
 - **4.10 Settings**:
@@ -366,7 +371,9 @@ GUI and CLI offer the same functions.
     - not lockable;
     - never overrides the user: never puts a level back; a manual change
       pauses that clip until its next point or resume; a hand-picked
-      wallpaper/dark mode stays until the next scheduled change.
+      wallpaper/dark mode stays until the next scheduled change;
+    - leaves the desktop's own brightness control and night light working;
+      off, it touches nothing.
   - Device protection: strict mode, no-escape, factory reset protection,
     guided setup.
   - Passwords: settings, access. Global ladder, lockable. Hotkeys. Project:
@@ -471,6 +478,8 @@ Decisions not already written into §1–5:
 - 2026-11-14: `force-librewolf` becomes *block unsupported browsers* (tamper protection).
 - 2026-11-14: Declutter removed (broke pages).
 - 2026-11-14: No search lists: URL-scope terms catch queries (R-PHRASE-6), text scope catches results.
+- 2026-11-15: Phrase word sets are freely necessary or optional, none necessary allowed; phrase length (≥ 2) sets how many terms a match needs (R-PHRASE-1).
+- 2026-11-15: Lists and phrase sets may have no action.
 
 ## 7. Open decisions
 

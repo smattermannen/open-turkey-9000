@@ -66,15 +66,24 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     KC9K list), phrase set card Import/Export. Confirm on the laptop.
   - [ ] Statistics bar chart: one colour per site/app over time (§4.9). Not
     built. M
-  - [ ] Durations minutes only (R-GUI-1): every GUI duration is a minutes
-    spin button (`ask_minutes`, ladder steps, quiet time); GTK silently
-    clamps out-of-range values on Enter (100000 min became 43200). Not
-    built. S
-  - [ ] Timer lock until a calendar date (R-GUI-2). CLI built: `--until`
-    takes `YYYY-MM-DD [HH:MM]` as well as `HH:MM` (a passed date refused),
-    every typed duration takes days and weeks (`2d 4h`, `1w`;
-    `parseUserDuration`), confirmations say "69 days 10 hours 40 minutes"
-    (`humanDuration`); `until_test.go`. GUI: Not built. S
+  - [x] Durations (R-GUI-1): `DurationField` (days, hours, minutes or
+    typed `2d 4h`; out of range or unreadable it says why under the box and
+    keeps the text; dialogs' main buttons wait) in every duration: timer
+    lock, delay, re-lock, monk mode, list action times, ladder steps and
+    quiet time, schedule lock lead, allowance, Pomodoro, breaks, window
+    break, Frozen Chicken and its lead, idle timeout, extension grace;
+    counts as `NumberField` (text lock length, sessions, ladder count,
+    record cut). The block timer lock was capped at 7 days and setting locks
+    at 40 (SPEC: no upper limit): gone. `ci/gui_duration_smoke.py`.
+  - [x] Timer lock until a calendar date (R-GUI-2): `TimerLockField` (No
+    timer / For a time / Until a date: calendar with a year box, time of
+    day) in one `LockPicker` used by the block start and setting lock
+    dialogs (password asked twice, range lock as day buttons and two
+    times), and in the global ladder's lock. CLI: `--until` takes
+    `YYYY-MM-DD [HH:MM]` (a passed date refused), durations take `d`/`w`
+    (`parseUserDuration`), confirmations say "69 days 10 hours 40
+    minutes". The monk mode button never passed `--yes`, so the CLI always
+    refused it: now confirmed (R-LOCK-12) and run.
   - [ ] No flashing (R-PAGE-1): a page judged by its text shows before it
     is blocked or gets its looks (also on blocks with title/text exceptions,
     whose sites are left to the extension). Not built. M

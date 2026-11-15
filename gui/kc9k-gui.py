@@ -150,6 +150,7 @@ DETECTORS = (
 )
 # Consequences that take a time, and whether they need one.
 TIMED = {"lock-screen": True, "logout": False, "shutdown": False, "monk": True}
+NEPSIS_MAX_COUNT = 1000  # db.MaxNepsisCount
 
 
 def describe_step(step):
@@ -374,55 +375,6 @@ class Theme:
         self.level = level  # for tests
 
 
-def challenge_length(typing):
-    """The text lock chooser, usable only while typing is ticked: its kind
-    (random characters, random words or your own text) and its length."""
-    chars = Gtk.SpinButton.new_with_range(CHALLENGE_MIN, CHALLENGE_MAX, 10)
-    chars.set_value(CHALLENGE_DEFAULT)
-    style = Gtk.ComboBoxText()
-    for key, label in (("chars", "Random characters"), ("words", "Random words"), ("custom", "My own text")):
-        style.append(key, label)
-    style.set_active_id("chars")
-    text = Gtk.Entry(placeholder_text="The text to type", no_show_all=True)
-    chars.kc9k_style, chars.kc9k_text = style, text
-
-    def sync(*_args):
-        on = typing.get_active()
-        custom = style.get_active_id() == "custom"
-        style.set_sensitive(on)
-        chars.set_sensitive(on and not custom)
-        text.set_sensitive(on)
-        text.set_visible(custom)
-        chars.set_visible(not custom)
-
-    typing.connect("toggled", sync)
-    style.connect("changed", sync)
-    sync()
-    return chars
-
-
-def attach_challenge_length(grid, chars, row):
-    grid.attach(Gtk.Label(label="Text to type", xalign=0), 0, row, 1, 1)
-    line = Gtk.Box(spacing=6)
-    line.pack_start(chars.kc9k_style, False, False, 0)
-    line.pack_start(chars, False, False, 0)
-    line.pack_start(chars.kc9k_text, True, True, 0)
-    grid.attach(line, 1, row, 1, 1)
-    grid.attach(dim(f"Length in characters, {CHALLENGE_MIN} to {CHALLENGE_MAX}. About 300 "
-                    "characters take a few minutes to type; 5000 take about an hour. "
-                    "Pasting is refused."), 1, row + 1, 1, 1)
-
-
-def challenge_args(chars):
-    """The text lock flags for what the chooser shows (read it before the
-    dialog is destroyed)."""
-    style = chars.kc9k_style.get_active_id()
-    if style == "custom":
-        return ["--lock-text", chars.kc9k_text.get_text()]
-    args = ["--lock", "--lock-chars", str(chars.get_value_as_int())]
-    return args + ["--lock-words"] if style == "words" else args
-
-
 def set_switch(switch, value):
     """Show a switch's real state, also after a refused change (set_state alone
     is a no-op when the state didn't change, leaving the knob where it was)."""
@@ -546,6 +498,723 @@ def nice_step(maximum):
         if maximum / step <= 4:
             return step
     return 43200
+
+
+# Durations, numbers and timer locks (R-GUI-1, R-GUI-2) -------------------
+#
+# Every length is typed in days, hours and minutes ("2d 4h", "90m",
+# "1 week"); a number or length out of range is never changed silently: the
+# field says why under the box, keeps the text, and the dialog's main button
+# waits until it reads right.
+
+_DURATION_UNITS = {
+    "w": 604800, "wk": 604800, "wks": 604800, "week": 604800, "weeks": 604800,
+    "d": 86400, "day": 86400, "days": 86400,
+    "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600,
+    "m": 60, "min": 60, "mins": 60, "minute": 60, "minutes": 60,
+    "s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1,
+}
+_DURATION_PART = re.compile(r"\s*(\d+(?:\.\d+)?)\s*([a-z]*)\s*")
+DURATION_EXAMPLES = "45m, 2h 30m, 3d or 1w"
+
+
+def parse_duration(text, bare=60):
+    """Seconds in a typed length, or None when it can't be read: '2d 4h',
+    '2 days and 4 hours', '1w', '90m', '1.5 h', '1,5h'. A number alone
+    counts in `bare` seconds (minutes by default). Empty is 0."""
+    text = re.sub(r"(\d),(\d)", r"\1.\2", (text or "").strip().lower())
+    text = re.sub(r"\band\b|,|\+", " ", text).strip()
+    if not text:
+        return 0
+    total, pos, parts = 0.0, 0, 0
+    while pos < len(text):
+        match = _DURATION_PART.match(text, pos)
+        if not match or match.end() == pos:
+            return None
+        number, unit = float(match.group(1)), match.group(2)
+        if unit:
+            if unit not in _DURATION_UNITS:
+                return None
+            total += number * _DURATION_UNITS[unit]
+        elif pos == 0 and match.end() == len(text):
+            total += number * bare  # a number alone
+        else:
+            return None  # "2 4h": which unit is the 2?
+        pos, parts = match.end(), parts + 1
+    return int(round(total))
+
+
+def duration_words(seconds):
+    """A length for reading: '69 days 10 hours 40 minutes', '1 hour',
+    '45 seconds'."""
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds} second" + ("" if seconds == 1 else "s")
+    parts = []
+    for size, unit in ((86400, "day"), (3600, "hour"), (60, "minute")):
+        count, seconds = divmod(seconds, size)
+        if count:
+            parts.append(f"{count} {unit}" + ("" if count == 1 else "s"))
+    return " ".join(parts)
+
+
+def duration_text(seconds):
+    """A length as a field shows it: '2d 4h 30m', '45m', '30s'."""
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds}s"
+    parts = []
+    for size, unit in ((86400, "d"), (3600, "h"), (60, "m")):
+        count, seconds = divmod(seconds, size)
+        if count:
+            parts.append(f"{count}{unit}")
+    return " ".join(parts)
+
+
+def mark_problem(widget, problem):
+    """Shows a field as wrong (red) or right."""
+    context = widget.get_style_context()
+    if problem:
+        context.add_class("error")
+    else:
+        context.remove_class("error")
+
+
+class CheckedField(Gtk.Box):
+    """A typed value with a line under it that reads it back or says what
+    is wrong. Subclasses give read(); value is None while it is wrong."""
+
+    def __init__(self, text="", width=12, placeholder="", presets=(), hint=""):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.callbacks = []
+        line = Gtk.Box(spacing=6)
+        self.entry = Gtk.Entry(width_chars=width, text=text, placeholder_text=placeholder,
+                               activates_default=True)
+        self.entry.connect("changed", self.changed)
+        line.pack_start(self.entry, False, False, 0)
+        self.presets = []
+        for label, value in presets:
+            button = Gtk.Button(label=label, valign=Gtk.Align.CENTER)
+            button.get_style_context().add_class("kc9k-chip")
+            button.connect("clicked", lambda _b, v=value: self.set_text(v))
+            line.pack_start(button, False, False, 0)
+            self.presets.append(button)
+        self.pack_start(line, False, False, 0)
+        self.note = Gtk.Label(xalign=0, wrap=True, max_width_chars=60, no_show_all=True)
+        self.note.get_style_context().add_class("kc9k-note")
+        self.pack_start(self.note, False, False, 0)
+        self.hint = hint
+        self.value, self.problem = None, None
+        self.changed()
+
+    def set_text(self, text):
+        self.entry.set_text(text)
+
+    def read(self, text):
+        """(value, None) or (None, what is wrong)."""
+        raise NotImplementedError
+
+    def describe(self, value):
+        return ""
+
+    def changed(self, *_args):
+        self.value, self.problem = self.read(self.entry.get_text())
+        mark_problem(self.entry, self.problem)
+        mark_problem(self.note, self.problem)
+        self.note.set_text(self.problem or self.describe(self.value) or self.hint)
+        self.note.set_visible(bool(self.note.get_text()))
+        for callback in self.callbacks:
+            callback(self)
+
+    def on_change(self, callback):
+        self.callbacks.append(callback)
+
+    def is_valid(self):
+        return self.problem is None
+
+    def set_sensitive(self, sensitive):
+        super().set_sensitive(sensitive)
+
+
+class DurationField(CheckedField):
+    """R-GUI-1: a length in days, hours and minutes. minimum and maximum
+    are seconds (maximum None: no limit); zero, when given, is what an empty
+    or 0 field means ('No re-lock'), otherwise the minimum applies; bare is
+    what a number alone counts in (60: minutes, 1: seconds)."""
+
+    def __init__(self, seconds=0, minimum=60, maximum=None, zero=None, bare=60,
+                 presets=(), why_max="", width=12):
+        self.minimum, self.maximum, self.zero, self.bare, self.why_max = minimum, maximum, zero, bare, why_max
+        super().__init__(duration_text(seconds) if seconds else "", width,
+                         zero if zero else "e.g. 2h 30m" if bare == 60 else "e.g. 90s",
+                         [(short_length(p), duration_text(p)) for p in presets])
+
+    def read(self, text):
+        seconds = parse_duration(text, self.bare)
+        if seconds is None:
+            return None, f"Type a length such as {DURATION_EXAMPLES}." if self.bare == 60 else \
+                "Type a length such as 30s, 90s or 2m."
+        if seconds == 0 and self.zero is not None:
+            return 0, None
+        if seconds < self.minimum:
+            return None, f"At least {duration_words(self.minimum)}."
+        if self.bare == 60 and seconds % 60:
+            return None, "Use whole minutes (the commands take minutes)."
+        if self.maximum is not None and seconds > self.maximum:
+            return None, f"At most {duration_words(self.maximum)}." + (f" {self.why_max}" if self.why_max else "")
+        return seconds, None
+
+    def describe(self, value):
+        if value == 0 and self.zero is not None:
+            # The placeholder already says it while empty.
+            return "" if not self.entry.get_text().strip() else self.zero
+        return duration_words(value)
+
+    @property
+    def seconds(self):
+        return self.value
+
+    @property
+    def minutes(self):
+        return None if self.value is None else self.value // 60
+
+    def set_seconds(self, seconds):
+        self.set_text(duration_text(seconds) if seconds else "")
+
+    def arg(self):
+        """The value as a command takes it: '90m' or '45s'."""
+        return f"{self.value // 60}m" if self.bare == 60 else f"{self.value}s"
+
+    def set_limits(self, minimum=None, maximum=None, why_max=None):
+        """Changes the allowed range (e.g. an allowance per week may be
+        longer than one per day) and checks the text again."""
+        if minimum is not None:
+            self.minimum = minimum
+        self.maximum = maximum
+        if why_max is not None:
+            self.why_max = why_max
+        self.changed()
+
+    # As the spin buttons it replaces were used: whole minutes (seconds for
+    # a field of seconds); 0 while the text is wrong.
+    def get_value_as_int(self):
+        if self.value is None:
+            return 0
+        return self.value // 60 if self.bare == 60 else self.value
+
+    def set_value(self, amount):
+        self.set_seconds(int(amount) * (60 if self.bare == 60 else 1))
+
+    def has_focus(self):
+        return self.entry.has_focus()
+
+
+def short_length(seconds):
+    """A preset's label: '15 min', '1 hour', '1 day', '1 week', '30 days'."""
+    for size, one, many in ((604800, "week", "weeks"), (86400, "day", "days"), (3600, "hour", "hours")):
+        if seconds >= size and seconds % size == 0:
+            count = seconds // size
+            return f"{count} {one if count == 1 else many}"
+    if seconds >= 60:
+        return f"{seconds // 60} min"
+    return f"{seconds} s"
+
+
+class NumberField(CheckedField):
+    """A whole number between minimum and maximum, never clamped silently."""
+
+    def __init__(self, value, minimum, maximum, unit="", width=8, hint=""):
+        self.minimum, self.maximum, self.unit = minimum, maximum, unit
+        super().__init__(str(value), width, hint=hint)
+
+    def read(self, text):
+        text = text.strip().replace(" ", "")
+        if not re.fullmatch(r"\d+", text):
+            return None, f"Type a whole number from {self.minimum} to {self.maximum}."
+        number = int(text)
+        if number < self.minimum:
+            return None, f"At least {self.minimum}."
+        if number > self.maximum:
+            return None, f"At most {self.maximum}."
+        return number, None
+
+    def describe(self, value):
+        return self.hint
+
+    def get_value_as_int(self):
+        return self.value or 0
+
+    def set_value(self, number):
+        self.set_text(str(int(number)))
+
+    def has_focus(self):
+        return self.entry.has_focus()
+
+
+def parse_clock(text):
+    """Minutes after midnight in a typed time of day ('18:00', '18.00',
+    '6:30 pm', '6pm', '18'), or None."""
+    text = (text or "").strip().lower().replace(".", ":").replace(" ", "")
+    match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?(am|pm)?", text)
+    if not match:
+        return None
+    hour, minute = int(match.group(1)), int(match.group(2) or 0)
+    if match.group(3):
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if match.group(3) == "pm" else 0)
+    if hour > 23 or minute > 59:
+        return None
+    return hour * 60 + minute
+
+
+def top_align(box):
+    """Keeps a row's widgets at the top, so a note under one field doesn't
+    stretch the buttons beside it."""
+    for child in box.get_children():
+        child.set_valign(Gtk.Align.START)
+    return box
+
+
+def guard_button(button, *fields):
+    """Keeps button usable only while every field reads right."""
+    def update(*_args):
+        button.set_sensitive(all(field.is_valid() for field in fields))
+    for field in fields:
+        field.on_change(update)
+    update()
+    return update
+
+
+def date_words(moment):
+    """'Thursday 24 December 2099, 18:00' (by the clock preference)."""
+    return f"{moment.strftime('%A')} {moment.day} {moment.strftime('%B %Y')}, " \
+           f"{show_clock(moment.hour * 60 + moment.minute)}"
+
+
+def until_words(moment, now=None):
+    """How far a moment is: 'in 3 hours', 'in 73 years'."""
+    now = now or datetime.datetime.now()
+    seconds = (moment - now).total_seconds()
+    if seconds < 0:
+        return "already passed"
+    days = seconds / 86400
+    if days >= 730:
+        return f"in {int(days // 365.25)} years"
+    if days >= 60:
+        return f"in {int(days // 30.4)} months"
+    return "in " + duration_words(int(seconds) // 60 * 60 or 60)
+
+
+class TimerLockField(Gtk.Box):
+    """R-GUI-2: no timer lock, one for a length (R-GUI-1), or one until a
+    date and time picked on a calendar. flags() gives --for or --until."""
+
+    MODES = (("none", "No timer"), ("for", "For a time"), ("until", "Until a date"))
+
+    def __init__(self, allow_none=True, mode=None, seconds=3600):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.callbacks = []
+        switcher = Gtk.Box()
+        switcher.get_style_context().add_class("linked")
+        self.mode_buttons, group = {}, None
+        for key, label in self.MODES:
+            if key == "none" and not allow_none:
+                continue
+            button = Gtk.RadioButton.new_with_label_from_widget(group, label)
+            button.set_mode(False)  # drawn as a toggle button
+            group = group or button
+            button.connect("toggled", self.mode_toggled, key)
+            switcher.pack_start(button, False, False, 0)
+            self.mode_buttons[key] = button
+        self.pack_start(switcher, False, False, 0)
+        self.stack = Gtk.Stack(vhomogeneous=False, hhomogeneous=False,
+                               transition_type=Gtk.StackTransitionType.NONE)
+        self.pack_start(self.stack, False, False, 0)
+        self.stack.add_named(Gtk.Box(), "none")
+
+        self.duration = DurationField(seconds, minimum=60, presets=(3600, 86400, 7 * 86400, 30 * 86400))
+        self.duration.on_change(self.changed)
+        self.stack.add_named(self.duration, "for")
+
+        now = datetime.datetime.now()
+        start = (now + datetime.timedelta(days=1)).replace(second=0, microsecond=0)
+        self.day = start.date()
+        until = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        line = Gtk.Box(spacing=6)
+        self.date_button = Gtk.MenuButton()
+        self.date_label = Gtk.Label()
+        inner = Gtk.Box(spacing=6)
+        inner.pack_start(Gtk.Image.new_from_icon_name("x-office-calendar-symbolic", Gtk.IconSize.BUTTON),
+                         False, False, 0)
+        inner.pack_start(self.date_label, False, False, 0)
+        self.date_button.add(inner)
+        popover = Gtk.Popover()
+        pop = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, border_width=8)
+        self.calendar = Gtk.Calendar()
+        self.calendar.select_month(self.day.month - 1, self.day.year)
+        self.calendar.select_day(self.day.day)
+        jump = Gtk.Box(spacing=6)
+        jump.pack_start(Gtk.Label(label="Year"), False, False, 0)
+        self.year = Gtk.SpinButton.new_with_range(now.year, 9999, 1)
+        self.year.set_value(self.day.year)
+        jump.pack_start(self.year, False, False, 0)
+        pop.pack_start(self.calendar, False, False, 0)
+        pop.pack_start(jump, False, False, 0)
+        pop.show_all()
+        popover.add(pop)
+        self.date_button.set_popover(popover)
+        self.calendar.connect("day-selected", self.day_picked)
+        self.calendar.connect("day-selected-double-click", lambda *_a: popover.popdown())
+        self.year.connect("value-changed", self.year_picked)
+        line.pack_start(self.date_button, False, False, 0)
+        line.pack_start(Gtk.Label(label="at"), False, False, 0)
+        self.time_entry = Gtk.Entry(width_chars=8, text=show_clock(start.hour * 60), activates_default=True)
+        self.time_entry.connect("changed", self.changed)
+        line.pack_start(self.time_entry, False, False, 0)
+        until.pack_start(line, False, False, 0)
+        self.until_note = Gtk.Label(xalign=0, wrap=True)
+        self.until_note.get_style_context().add_class("kc9k-note")
+        until.pack_start(self.until_note, False, False, 0)
+        self.stack.add_named(until, "until")
+
+        first = mode or ("none" if allow_none else "for")
+        self.mode = first
+        self.mode_buttons[first].set_active(True)
+        self.stack.set_visible_child_name(first)
+        self.changed()
+
+    # The date ------------------------------------------------------------
+    def day_picked(self, calendar):
+        year, month, day = calendar.get_date()
+        self.day = datetime.date(year, month + 1, day)
+        if int(self.year.get_value()) != year and year >= self.year.get_adjustment().get_lower():
+            self.year.set_value(year)
+        self.changed()
+
+    def year_picked(self, spin):
+        year = int(spin.get_value())
+        month = self.day.month
+        day = min(self.day.day, 28 if month == 2 else 30 if month in (4, 6, 9, 11) else 31)
+        if month == 2 and day == 28 and (year % 4 == 0 and (year % 100 or year % 400 == 0)) and self.day.day == 29:
+            day = 29
+        self.calendar.select_month(month - 1, year)
+        self.calendar.select_day(day)
+
+    def set_until(self, moment):
+        """Picks a date and time (for tests and presets)."""
+        self.mode_buttons["until"].set_active(True)
+        self.calendar.select_month(moment.month - 1, moment.year)
+        self.calendar.select_day(moment.day)
+        self.day = moment.date()
+        self.time_entry.set_text(show_clock(moment.hour * 60 + moment.minute))
+        self.changed()
+
+    def until(self):
+        """The picked moment, or None while the time can't be read."""
+        minute = parse_clock(self.time_entry.get_text())
+        if minute is None:
+            return None
+        return datetime.datetime(self.day.year, self.day.month, self.day.day, minute // 60, minute % 60)
+
+    # State ---------------------------------------------------------------
+    def mode_toggled(self, button, key):
+        if button.get_active():
+            self.mode = key
+            self.stack.set_visible_child_name(key)
+            self.changed()
+
+    def on_change(self, callback):
+        self.callbacks.append(callback)
+
+    def problem(self):
+        if self.mode == "for":
+            return self.duration.problem
+        if self.mode == "until":
+            moment = self.until()
+            if moment is None:
+                return "Type a time of day such as 18:00."
+            if moment <= datetime.datetime.now():
+                return "That moment has passed: pick a later date or time."
+        return None
+
+    def is_valid(self):
+        return self.problem() is None
+
+    def changed(self, *_args):
+        moment = self.until()
+        self.date_label.set_text(f"{self.day.strftime('%a')} {self.day.day} {self.day.strftime('%b %Y')}")
+        problem = self.problem() if self.mode == "until" else None
+        mark_problem(self.time_entry, problem if moment is None else None)
+        mark_problem(self.until_note, problem)
+        if problem:
+            self.until_note.set_text(problem)
+        elif moment:
+            self.until_note.set_text(f"Until {date_words(moment)}, {until_words(moment)}.")
+        for callback in self.callbacks:
+            callback(self)
+
+    def flags(self):
+        if self.mode == "for" and self.duration.value:
+            return ["--for", self.duration.arg()]
+        if self.mode == "until" and self.until():
+            return ["--until", self.until().strftime("%Y-%m-%d %H:%M")]
+        return []
+
+    def describe(self):
+        """'timer lock for 2 days 4 hours' or 'timer lock until Thursday
+        24 December 2099, 18:00'."""
+        if self.mode == "for" and self.duration.value:
+            return f"timer lock for {duration_words(self.duration.value)}"
+        if self.mode == "until" and self.until():
+            return f"timer lock until {date_words(self.until())}"
+        return ""
+
+
+WEEKDAYS = (("mon", "Mon"), ("tue", "Tue"), ("wed", "Wed"), ("thu", "Thu"), ("fri", "Fri"),
+            ("sat", "Sat"), ("sun", "Sun"))
+
+
+class LockPicker(Gtk.Box):
+    """Every lock kind for a block or a setting (§3.4), the timer lock
+    first (R-GUI-2), the rest behind More locks. chosen() gives the locks
+    as (flags, words) in the order the dialog has always used (timer,
+    restart, password, text, delay, range); relock_flags() the re-lock.
+    kinds limits what is offered (an active block takes only a longer
+    timer lock or a longer text lock of random characters)."""
+
+    ALL_KINDS = ("timer", "password", "text", "restart", "delay", "range", "relock")
+
+    def __init__(self, verb="stop", done="stopped", kinds=ALL_KINDS, restart_note=""):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.callbacks, self.verb, self.done, self.kinds = [], verb, done, tuple(kinds)
+        self.only_chars = "relock" not in self.kinds and "password" not in self.kinds
+        grid = Gtk.Grid(column_spacing=16, row_spacing=6)
+        self.pack_start(grid, False, False, 0)
+        titles = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)  # one label column for both grids
+
+        def label(text, row, target):
+            title = Gtk.Label(label=text, xalign=0, yalign=0, margin_top=6)
+            title.get_style_context().add_class("kc9k-field-label")
+            titles.add_widget(title)
+            target.attach(title, 0, row, 1, 1)
+
+        label("Timer lock", 0, grid)
+        self.timer = TimerLockField()
+        self.timer.on_change(self.changed)
+        grid.attach(self.timer, 1, 0, 1, 1)
+        grid.attach(dim(f"Can't be {done} at all until then. Time the computer is off doesn't count."),
+                    1, 1, 1, 1)
+
+        others = [k for k in ("password", "text", "restart", "delay", "range") if k in self.kinds]
+        self.more = Gtk.Expander(label="More locks: " + ", ".join(others) if others else "")
+        more = Gtk.Grid(column_spacing=16, row_spacing=6, margin_top=8, margin_start=0)
+        self.more.add(more)
+        if others:
+            self.pack_start(self.more, False, False, 0)
+        row = 0
+
+        self.password = Gtk.Entry(visibility=False, placeholder_text="Password", width_chars=16)
+        self.password_again = Gtk.Entry(visibility=False, placeholder_text="Repeat it", width_chars=16)
+        for entry in (self.password, self.password_again):
+            entry.connect("changed", self.changed)
+        if "password" in self.kinds:
+            label("Password lock", row, more)
+            pw = Gtk.Box(spacing=6)
+            pw.pack_start(self.password, False, False, 0)
+            pw.pack_start(self.password_again, False, False, 0)
+            more.attach(pw, 1, row, 1, 1)
+            more.attach(dim(f"Needed to {verb} it. Give it to someone else to keep."), 1, row + 1, 1, 1)
+            row += 2
+
+        self.typing = Gtk.CheckButton(label="Type a text to unlock")
+        self.text_style = Gtk.ComboBoxText()
+        styles = (("chars", "Random characters"),) if self.only_chars else \
+            (("chars", "Random characters"), ("words", "Random words"), ("custom", "My own text"))
+        for key, title in styles:
+            self.text_style.append(key, title)
+        self.text_style.set_active_id("chars")
+        self.chars = NumberField(CHALLENGE_DEFAULT, CHALLENGE_MIN, CHALLENGE_MAX, width=6)
+        self.custom_text = Gtk.Entry(placeholder_text="The text to type", width_chars=24, no_show_all=True)
+        self.typing.connect("toggled", self.changed)
+        self.text_style.connect("changed", self.changed)
+        self.chars.on_change(self.changed)
+        self.custom_text.connect("changed", self.changed)
+        if "text" in self.kinds:
+            label("Text lock", row, more)
+            text_line = Gtk.Box(spacing=6)
+            for widget in (self.typing, self.text_style, self.chars, self.custom_text):
+                widget.set_valign(Gtk.Align.START)
+                text_line.pack_start(widget, False, False, 0)
+            more.attach(text_line, 1, row, 1, 1)
+            more.attach(dim("Length in characters: about 300 take a few minutes to type, 5000 about an "
+                            "hour. Pasting is refused." + (" A text lock already on can only get longer."
+                                                           if self.only_chars else "")), 1, row + 1, 1, 1)
+            row += 2
+
+        self.restart = Gtk.CheckButton(label="Stays on until the computer restarts")
+        self.restart.connect("toggled", self.changed)
+        if "restart" in self.kinds:
+            label("Restart lock", row, more)
+            more.attach(self.restart, 1, row, 1, 1)
+            if restart_note:
+                more.attach(dim(restart_note), 1, row + 1, 1, 1)
+            row += 2
+
+        self.delay = None
+        if "delay" in self.kinds:
+            label("Delay lock", row, more)
+            self.delay = DurationField(0, minimum=60, maximum=40 * 86400, zero="No delay lock",
+                                       presets=(3600, 86400))
+            self.delay.on_change(self.changed)
+            more.attach(self.delay, 1, row, 1, 1)
+            more.attach(dim("Unlocking only takes effect after this long."), 1, row + 1, 1, 1)
+            row += 2
+
+        self.range_on = Gtk.CheckButton(label="On at set times on set days")
+        self.range_on.connect("toggled", self.changed)
+        days = Gtk.Box()
+        days.get_style_context().add_class("linked")
+        self.range_days = {}
+        order = WEEKDAYS[FIRST_DAY:] + WEEKDAYS[:FIRST_DAY] if FIRST_DAY else WEEKDAYS
+        for key, title in order:
+            toggle = Gtk.ToggleButton(label=title, active=key not in ("sat", "sun"))
+            toggle.connect("toggled", self.changed)
+            days.pack_start(toggle, False, False, 0)
+            self.range_days[key] = toggle
+        times = Gtk.Box(spacing=6)
+        self.range_from = Gtk.Entry(width_chars=7, text=show_clock(9 * 60))
+        self.range_to = Gtk.Entry(width_chars=7, text=show_clock(17 * 60))
+        self.range_invert = Gtk.CheckButton(label="outside these times instead")
+        for widget in (Gtk.Label(label="from"), self.range_from, Gtk.Label(label="to"), self.range_to,
+                       self.range_invert):
+            times.pack_start(widget, False, False, 0)
+        for widget in (self.range_from, self.range_to):
+            widget.connect("changed", self.changed)
+        self.range_invert.connect("toggled", self.changed)
+        self.range_widgets = (days, times)
+        if "range" in self.kinds:
+            label("Range lock", row, more)
+            range_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+            range_box.pack_start(self.range_on, False, False, 0)
+            range_box.pack_start(days, False, False, 0)
+            range_box.pack_start(times, False, False, 0)
+            more.attach(range_box, 1, row, 1, 1)
+            more.attach(dim("Can't be unlocked at these times, only waited out."), 1, row + 1, 1, 1)
+            row += 2
+
+        self.relock = DurationField(0, minimum=60, maximum=30 * 86400, zero="No re-lock",
+                                    presets=(1800, 3600))
+        self.relock.on_change(self.changed)
+        if "relock" in self.kinds:
+            label("Re-lock", row, more)
+            more.attach(self.relock, 1, row, 1, 1)
+            more.attach(dim("With a password or text lock: unlocking lifts them only this long; then they "
+                            "come on again."), 1, row + 1, 1, 1)
+
+        self.problem_label = Gtk.Label(xalign=0, wrap=True, no_show_all=True)
+        self.problem_label.get_style_context().add_class("kc9k-note")
+        self.problem_label.get_style_context().add_class("error")
+        self.pack_start(self.problem_label, False, False, 0)
+        self.changed()
+
+    # Reading -------------------------------------------------------------
+    def on_change(self, callback):
+        self.callbacks.append(callback)
+
+    def range_spec(self):
+        """'mon,tue,wed 09:00-17:00', or None while it can't be read."""
+        days = [key for key, _title in WEEKDAYS if self.range_days[key].get_active()]
+        start, end = parse_clock(self.range_from.get_text()), parse_clock(self.range_to.get_text())
+        if not days or start is None or end is None or start == end:
+            return None
+        return f"{','.join(days)} {clock_text(start)}-{clock_text(end)}"
+
+    def problem(self):
+        if not self.timer.is_valid():
+            return self.timer.problem()
+        if self.password.get_text() != self.password_again.get_text():
+            return "The two passwords differ."
+        if self.typing.get_active():
+            if self.text_style.get_active_id() == "custom" and not self.custom_text.get_text().strip():
+                return "Type the text for the text lock."
+            if self.text_style.get_active_id() != "custom" and not self.chars.is_valid():
+                return "Text lock: " + self.chars.problem
+        if self.delay is not None and not self.delay.is_valid():
+            return "Delay lock: " + self.delay.problem
+        if self.range_on.get_active() and self.range_spec() is None:
+            if not any(t.get_active() for t in self.range_days.values()):
+                return "Range lock: pick at least one day."
+            return "Range lock: two different times of day, such as 09:00 and 17:00."
+        if not self.relock.is_valid():
+            return "Re-lock: " + self.relock.problem
+        return None
+
+    def is_valid(self):
+        return self.problem() is None
+
+    def changed(self, *_args):
+        custom = self.text_style.get_active_id() == "custom"
+        on = self.typing.get_active()
+        self.text_style.set_sensitive(on)
+        self.chars.set_visible(not custom)
+        self.chars.set_sensitive(on)
+        self.custom_text.set_visible(custom)
+        self.custom_text.set_sensitive(on)
+        for widget in self.range_widgets:
+            widget.set_sensitive(self.range_on.get_active())
+        self.relock.set_sensitive(on or bool(self.password.get_text()))
+        mark_problem(self.password_again, self.password.get_text() != self.password_again.get_text())
+        problem = self.problem()
+        self.problem_label.set_text(problem or "")
+        self.problem_label.set_visible(bool(problem))
+        for callback in self.callbacks:
+            callback(self)
+
+    def secret(self):
+        return self.password.get_text()
+
+    def text_flags(self):
+        style = self.text_style.get_active_id()
+        if style == "custom":
+            return ["--lock-text", self.custom_text.get_text()]
+        args = ["--lock", "--lock-chars", str(self.chars.value)]
+        return args + ["--lock-words"] if style == "words" else args
+
+    def relock_seconds(self):
+        if self.relock.value and (self.typing.get_active() or self.secret()):
+            return self.relock.value
+        return 0
+
+    def relock_flags(self):
+        seconds = self.relock_seconds()
+        return ["--relock", f"{seconds // 60}m"] if seconds else []
+
+    def chosen(self):
+        """The locks asked for, as (flags, words), in the dialog's order."""
+        relock = self.relock_seconds()
+        relock_note = f", re-lock {duration_words(relock)} after unlocking" if relock else ""
+        out = []
+        if self.timer.flags():
+            out.append((self.timer.flags(), self.timer.describe() +
+                        f" (it can't be {self.done} until then, "
+                        "not even with a text lock; time the computer is off doesn't count)"))
+        if self.restart.get_active():
+            out.append((["--restart"], "restart lock, until the computer restarts"))
+        if self.secret():
+            out.append((["--password-stdin"], f"password lock{relock_note}"))
+        if self.typing.get_active():
+            style = self.text_style.get_active_id()
+            what = {"chars": f"{self.chars.value} random characters", "words": f"{self.chars.value} characters of words",
+                    "custom": "your own text"}[style]
+            out.append((self.text_flags(), f"text lock ({what}){relock_note}"))
+        if self.delay is not None and self.delay.value:
+            out.append((["--delay", self.delay.arg()], f"delay lock, unlocking takes {duration_words(self.delay.value)}"))
+        if self.range_on.get_active() and self.range_spec():
+            spec, outside = self.range_spec(), self.range_invert.get_active()
+            out.append((["--range", spec] + (["--range-invert"] if outside else []),
+                        f"range lock, {'outside ' if outside else ''}{spec}"))
+        return out
 
 
 # Widgets -----------------------------------------------------------------
@@ -1106,10 +1775,13 @@ class ListCard(Gtk.Frame):
                              "time, it stays off that long; with 0, just once.", 0, 0),
             }[name]
             title, detail, minimum, initial = details
-            limit = 30 * 24 * 60 if name == "monk" else 24 * 60
-            minutes = window.ask_minutes(title, detail, minimum, limit, current.get("minutes", initial))
-            if minutes is not None:
-                args = ["--for", f"{minutes}m"] if minutes else []
+            seconds = window.ask_duration(
+                title, detail, current.get("minutes", initial) * 60, minimum * 60 or 60,
+                30 * 86400 if name == "monk" else 86400, zero=None if name == "monk" else "Just once",
+                presets=(3600, 86400) if name == "monk" else (3600, 8 * 3600),
+                why_max="" if name == "monk" else "It goes through Frozen Chicken, which lasts at most a day.")
+            if seconds is not None:
+                args = ["--for", f"{seconds // 60}m"] if seconds else []
                 if name == "monk":
                     if window.acknowledge_no_confirmation("This action"):
                         args.append("--no-confirm-ok")
@@ -2950,22 +3622,27 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return value if answer == Gtk.ResponseType.OK else ""
 
-    def ask_minutes(self, title, detail, minimum, maximum, initial):
-        """Asks for a number of minutes; None when cancelled."""
+    def ask_duration(self, title, detail, seconds, minimum=60, maximum=None, zero=None,
+                     presets=(), why_max=""):
+        """R-GUI-1: asks for a length in days, hours and minutes; its
+        seconds, or None when cancelled. OK waits until it reads right."""
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text=title, secondary_text=detail,
-            message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
-        row = Gtk.Box(spacing=8)
-        spin = Gtk.SpinButton.new_with_range(minimum, maximum, 5)
-        spin.set_value(max(minimum, initial))
-        row.pack_start(spin, False, False, 0)
-        row.pack_start(Gtk.Label(label="minutes"), False, False, 0)
-        dialog.get_message_area().pack_start(row, False, False, 0)
+            message_type=Gtk.MessageType.QUESTION)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("OK", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        field = DurationField(seconds, minimum=minimum, maximum=maximum, zero=zero, presets=presets,
+                              why_max=why_max)
+        guard_button(ok, field)
+        dialog.get_message_area().pack_start(field, False, False, 0)
+        self.duration_field = field  # for tests
         dialog.show_all()
         answer = dialog.run()
-        value = spin.get_value_as_int()
+        value = field.value
         dialog.destroy()
-        return value if answer == Gtk.ResponseType.OK else None
+        return value if answer == Gtk.ResponseType.OK and value is not None else None
 
     def ask_nepsis(self, title, current, allow_lock):
         """Asks for a bypass detection setting, its whole ladder; returns the
@@ -2987,37 +3664,55 @@ class Window(Gtk.ApplicationWindow):
         area.pack_start(intro, False, False, 0)
         steps_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         area.pack_start(steps_box, False, False, 0)
-        cards = []
+        cards, fields = [], []
+        save = dialog.get_widget_for_response(Gtk.ResponseType.OK)
+        save.get_style_context().add_class("suggested-action")
+
+        def live_fields():
+            """The fields that count: every step's numbers and the times of
+            the ticked consequences, the quiet time and the lock."""
+            out = []
+            for _frame, count, within, actions in cards:
+                out += [count, within]
+                out += [minutes for check, minutes in actions.values() if minutes is not None and check.get_active()]
+            return out + [f for f in fields if f is not None]
+
+        def refresh_save(*_args):
+            save.set_sensitive(all(f.is_valid() for f in live_fields()))
 
         def add_card(step):
             frame = Gtk.Frame(label=f"Step {len(cards) + 1}")
             grid = Gtk.Grid(column_spacing=10, row_spacing=4, border_width=8)
-            count = Gtk.SpinButton.new_with_range(1, 1000, 1)
-            count.set_value(step.get("count", 3))
-            within = Gtk.SpinButton.new_with_range(1, 24 * 60, 1)
-            within.set_value(step.get("minutes", 10))
+            count = NumberField(step.get("count", 3), 1, NEPSIS_MAX_COUNT, width=5)
+            within = DurationField(step.get("minutes", 10) * 60, minimum=60, maximum=86400, width=9)
             head = Gtk.Box(spacing=6)
             head.pack_start(count, False, False, 0)
-            head.pack_start(Gtk.Label(label="things stopped within"), False, False, 0)
+            head.pack_start(Gtk.Label(label="things stopped within", valign=Gtk.Align.START, margin_top=6),
+                            False, False, 0)
             head.pack_start(within, False, False, 0)
-            head.pack_start(Gtk.Label(label="minutes:"), False, False, 0)
             grid.attach(head, 0, 0, 3, 1)
+            count.on_change(refresh_save)
+            within.on_change(refresh_save)
             chosen = {a["action"]: a.get("minutes", 0) for a in step.get("actions") or []}
             actions = {}
             for row, (key, label) in enumerate(CONSEQUENCES, start=1):
                 check = Gtk.CheckButton(label=label, active=key in chosen)
+                check.connect("toggled", refresh_save)
                 grid.attach(check, 0, row, 1, 1)
                 minutes = None
                 if key in TIMED:
-                    minutes = Gtk.SpinButton.new_with_range(1 if TIMED[key] else 0, 30 * 24 * 60, 5)
-                    minutes.set_value(chosen.get(key) or (30 if TIMED[key] else 0))
+                    minutes = DurationField(
+                        (chosen.get(key) or (30 if TIMED[key] else 0)) * 60, minimum=60,
+                        maximum=30 * 86400 if key == "monk" else 86400,
+                        zero=None if TIMED[key] else "Just once", width=9)
                     grid.attach(minutes, 1, row, 1, 1)
-                    grid.attach(dim("minutes" if TIMED[key] else "minutes (0: once)"), 2, row, 1, 1)
+                    minutes.on_change(refresh_save)
                 actions[key] = (check, minutes)
             frame.add(grid)
             steps_box.pack_start(frame, False, False, 0)
             frame.show_all()
             cards.append((frame, count, within, actions))
+            refresh_save()
 
         for step in steps:
             add_card(step)
@@ -3026,6 +3721,7 @@ class Window(Gtk.ApplicationWindow):
             if len(cards) > 1:
                 frame = cards.pop()[0]
                 steps_box.remove(frame)
+                refresh_save()
 
         buttons = Gtk.Box(spacing=6)
         more = Gtk.Button(label="Add a step")
@@ -3038,11 +3734,13 @@ class Window(Gtk.ApplicationWindow):
         area.pack_start(buttons, False, False, 0)
 
         quiet_row = Gtk.Box(spacing=6)
-        quiet = Gtk.SpinButton.new_with_range(0, 30 * 24 * 60, 30)
-        quiet.set_value(current.get("quiet_minutes", 0))
-        quiet_row.pack_start(Gtk.Label(label="Fall back a step after"), False, False, 0)
+        quiet = DurationField(current.get("quiet_minutes", 0) * 60, minimum=60, maximum=30 * 86400,
+                              zero="Never falls back", width=9)
+        fields.append(quiet)
+        quiet.on_change(refresh_save)
+        quiet_row.pack_start(Gtk.Label(label="Fall back a step after quiet time of",
+                                       valign=Gtk.Align.START, margin_top=6), False, False, 0)
         quiet_row.pack_start(quiet, False, False, 0)
-        quiet_row.pack_start(Gtk.Label(label="quiet minutes (0: never)"), False, False, 0)
         area.pack_start(quiet_row, False, False, 0)
 
         area.pack_start(heading("What counts", "medium"), False, False, 0)
@@ -3054,12 +3752,15 @@ class Window(Gtk.ApplicationWindow):
             area.pack_start(check, False, False, 0)
         lock = None
         if allow_lock:
-            lock_row = Gtk.Box(spacing=6)
-            lock = Gtk.SpinButton.new_with_range(0, 24 * 30, 1)
-            lock_row.pack_start(Gtk.Label(label="Can't be weakened for"), False, False, 0)
-            lock_row.pack_start(lock, False, False, 0)
-            lock_row.pack_start(Gtk.Label(label="hours (0: no lock)"), False, False, 0)
-            area.pack_start(lock_row, False, False, 0)
+            area.pack_start(heading("Timer lock", "medium"), False, False, 0)
+            area.pack_start(dim("Can't be weakened until then."), False, False, 0)
+            lock = TimerLockField()
+            area.pack_start(lock, False, False, 0)
+            fields.append(lock)
+            lock.on_change(refresh_save)
+        self.nepsis_fields = (cards, quiet, lock)  # for tests
+        self.nepsis_lock_words = ""
+        refresh_save()
         dialog.show_all()
         answer = dialog.run()
         args, problem = [], ""
@@ -3067,20 +3768,21 @@ class Window(Gtk.ApplicationWindow):
             parts = []
             for key, (check, minutes) in actions.items():
                 if check.get_active():
-                    value = minutes.get_value_as_int() if minutes is not None else 0
+                    value = minutes.minutes if minutes is not None else 0
                     parts.append(f"{key} {value}m" if value else key)
             if not parts:
                 problem = f"Step {number} does nothing: tick at least one thing for it to do."
-            args += ["--step", f"{count.get_value_as_int()} in {within.get_value_as_int()}m: {', '.join(parts)}"]
+            args += ["--step", f"{count.value} in {within.minutes}m: {', '.join(parts)}"]
         detectors = [key for key, check in detector_checks.items() if check.get_active()]
         if not detectors:
             problem = "Nothing is counted: tick at least one thing under What counts."
         elif len(detectors) < len(DETECTORS):
             args += ["--detect", ",".join(detectors)]
-        if quiet.get_value_as_int():
-            args += ["--quiet", f"{quiet.get_value_as_int()}m"]
-        if lock is not None and lock.get_value_as_int():
-            args += ["--for", f"{lock.get_value_as_int()}h"]
+        if quiet.minutes:
+            args += ["--quiet", f"{quiet.minutes}m"]
+        if lock is not None:
+            args += lock.flags()
+            self.nepsis_lock_words = lock.describe()
         dialog.destroy()
         if answer != Gtk.ResponseType.OK:
             return None
@@ -3090,20 +3792,24 @@ class Window(Gtk.ApplicationWindow):
         return args
 
     def monk_mode(self, _button):
-        minutes = self.ask_minutes(
+        seconds = self.ask_duration(
             "Monk mode", "Every website is blocked and the internet connection is cut (Wi-Fi off, "
             "Ethernet down, firewall closed), for this long. It can't be ended early; a running "
             "monk mode can only be extended.",
-            1, 30 * 24 * 60, 60)
-        if minutes:
-            self.run(["monk", "--for", f"{minutes}m"])
+            3600, minimum=60, maximum=30 * 86400, presets=(1800, 3600, 4 * 3600, 86400))
+        if not seconds:
+            return
+        until = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+        # R-LOCK-12: monk mode is a lock like any other; the command needs --yes.
+        if self.confirm_lock([f"monk mode (no websites, no internet): {duration_words(seconds)}, "
+                              f"until {date_words(until)}"]):
+            self.run(["monk", "--for", f"{seconds // 60}m", "--yes"])
 
     def change_global_nepsis(self, _button):
         args = self.ask_nepsis("Bypass prevention", self.state.get("nepsis"), True)
         args = self.acknowledge_monk_steps(args)
-        if args and "--for" in args:
-            hours = args[args.index("--for") + 1].rstrip("h")
-            if not self.confirm_lock([f"bypass prevention: timer lock, {hours} hours"]):
+        if args and ("--for" in args or "--until" in args):
+            if not self.confirm_lock([f"bypass prevention: {self.nepsis_lock_words}"]):
                 return
             args.append("--yes")
         if args:
@@ -3707,12 +4413,15 @@ class Window(Gtk.ApplicationWindow):
         lock_row = Gtk.Box(spacing=6)
         self.schedule_lock = Gtk.CheckButton(label="Schedule lock, from")
         lock_row.pack_start(self.schedule_lock, False, False, 0)
-        self.schedule_lead = Gtk.SpinButton.new_with_range(0, 7 * 24 * 60, 15)
+        self.schedule_lead = DurationField(0, minimum=60, maximum=7 * 86400, zero="Only while each window is open",
+                                           presets=(900, 3600, 7200), width=9)
         lock_row.pack_start(self.schedule_lead, False, False, 0)
-        lock_row.pack_start(Gtk.Label(label="minutes before each window"), False, False, 0)
+        lock_row.pack_start(Gtk.Label(label="before each window", valign=Gtk.Align.START, margin_top=6),
+                            False, False, 0)
         lock_save = Gtk.Button(label="Save")
         lock_save.connect("clicked", self.save_schedule_lock)
         lock_row.pack_start(lock_save, False, False, 0)
+        top_align(lock_row)
         schedule.pack_start(lock_row, False, False, 0)
         schedule.pack_start(dim(
             "While the lock is on (during the windows, at the block's places, for the lead time "
@@ -3805,9 +4514,8 @@ class Window(Gtk.ApplicationWindow):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, margin=12)
 
         quota_row = Gtk.Box(spacing=6)
-        quota_row.pack_start(Gtk.Label(label="Minutes:"), False, False, 0)
-        self.quota_minutes = Gtk.SpinButton.new_with_range(1, 44640, 5)
-        self.quota_minutes.set_value(30)
+        quota_row.pack_start(Gtk.Label(label="Time:", valign=Gtk.Align.START, margin_top=6), False, False, 0)
+        self.quota_minutes = DurationField(1800, minimum=60, maximum=86400, width=9)
         quota_row.pack_start(self.quota_minutes, False, False, 0)
         # §3.6: per day, week or month, refilled at a set time.
         self.quota_per = Gtk.ComboBoxText()
@@ -3815,12 +4523,14 @@ class Window(Gtk.ApplicationWindow):
                            ("rolling", "per 24 hours, rolling"), ("window", "per window")):
             self.quota_per.append(key, label)
         self.quota_per.set_active_id("day")
+        self.quota_per.connect("changed", lambda combo: self.quota_minutes.set_limits(
+            maximum={"week": 7 * 86400, "month": 31 * 86400}.get(combo.get_active_id(), 86400)))
         quota_row.pack_start(self.quota_per, False, False, 0)
         quota_row.pack_start(Gtk.Label(label="refill at"), False, False, 0)
         self.quota_refill = Gtk.Entry(text="00:00", width_chars=5, max_length=5)
         quota_row.pack_start(self.quota_refill, False, False, 0)
-        quota_row.pack_start(Gtk.Label(label="sessions (0: any)"), False, False, 0)
-        self.quota_sessions = Gtk.SpinButton.new_with_range(0, 100, 1)
+        quota_row.pack_start(Gtk.Label(label="sessions", valign=Gtk.Align.START, margin_top=6), False, False, 0)
+        self.quota_sessions = NumberField(0, 0, 100, width=4, hint="0: any number")
         quota_row.pack_start(self.quota_sessions, False, False, 0)
         self.quota_set = Gtk.Button(label="Save allowance")
         self.quota_set.connect("clicked", self.set_quota)
@@ -3845,14 +4555,11 @@ class Window(Gtk.ApplicationWindow):
 
         pomodoro_row = Gtk.Box(spacing=6)
         pomodoro_row.pack_start(Gtk.Label(label="Work:"), False, False, 0)
-        self.work_minutes = Gtk.SpinButton.new_with_range(1, 240, 5)
-        self.work_minutes.set_value(25)
+        self.work_minutes = DurationField(25 * 60, minimum=60, maximum=86400, width=8)
         pomodoro_row.pack_start(self.work_minutes, False, False, 0)
-        pomodoro_row.pack_start(Gtk.Label(label="min   Break:"), False, False, 0)
-        self.break_minutes = Gtk.SpinButton.new_with_range(1, 240, 5)
-        self.break_minutes.set_value(5)
+        pomodoro_row.pack_start(Gtk.Label(label="Break:"), False, False, 0)
+        self.break_minutes = DurationField(5 * 60, minimum=60, maximum=86400, width=8)
         pomodoro_row.pack_start(self.break_minutes, False, False, 0)
-        pomodoro_row.pack_start(Gtk.Label(label="min"), False, False, 0)
         set_pomodoro = Gtk.Button(label="Save")
         set_pomodoro.connect("clicked", self.set_pomodoro)
         clear_pomodoro = Gtk.Button(label="Turn off")
@@ -3861,13 +4568,11 @@ class Window(Gtk.ApplicationWindow):
         pomodoro_row.pack_start(clear_pomodoro, False, False, 0)
         long_row = Gtk.Box(spacing=6)
         self.long_check = Gtk.CheckButton(label="A long break of")
-        self.long_minutes = Gtk.SpinButton.new_with_range(1, 240, 5)
-        self.long_minutes.set_value(15)
-        self.long_every = Gtk.SpinButton.new_with_range(2, 20, 1)
-        self.long_every.set_value(4)
+        self.long_minutes = DurationField(15 * 60, minimum=60, maximum=86400, width=8)
+        self.long_every = NumberField(4, 2, 20, width=4)
         long_row.pack_start(self.long_check, False, False, 0)
         long_row.pack_start(self.long_minutes, False, False, 0)
-        long_row.pack_start(Gtk.Label(label="min after every"), False, False, 0)
+        long_row.pack_start(Gtk.Label(label="after every"), False, False, 0)
         long_row.pack_start(self.long_every, False, False, 0)
         long_row.pack_start(Gtk.Label(label="work periods"), False, False, 0)
         box.pack_start(section(
@@ -3876,14 +4581,12 @@ class Window(Gtk.ApplicationWindow):
             pomodoro_row, long_row), False, False, 0)
 
         allowance_row = Gtk.Box(spacing=6)
-        self.allowance_minutes = Gtk.SpinButton.new_with_range(1, 240, 1)
-        self.allowance_minutes.set_value(10)
-        self.allowance_per = Gtk.SpinButton.new_with_range(5, 1440, 5)
-        self.allowance_per.set_value(60)
+        self.allowance_minutes = DurationField(600, minimum=60, maximum=4 * 3600, width=8)
+        self.allowance_per = DurationField(3600, minimum=300, maximum=86400, width=8)
         allowance_row.pack_start(self.allowance_minutes, False, False, 0)
-        allowance_row.pack_start(Gtk.Label(label="min of break for every"), False, False, 0)
+        allowance_row.pack_start(Gtk.Label(label="of break for every"), False, False, 0)
         allowance_row.pack_start(self.allowance_per, False, False, 0)
-        allowance_row.pack_start(Gtk.Label(label="min of blocking, kept"), False, False, 0)
+        allowance_row.pack_start(Gtk.Label(label="of blocking, kept"), False, False, 0)
         # §3.6: saved up to one break, or accumulating until a period ends.
         self.reward_keep = Gtk.ComboBoxText()
         for key, label in (("one", "up to one break"), ("window", "until the window ends"),
@@ -3906,27 +4609,24 @@ class Window(Gtk.ApplicationWindow):
         self.break_label = dim("")
         relock_row = Gtk.Box(spacing=6)
         self.relock_check = Gtk.CheckButton(label="Unlocking gives a break of")
-        self.relock_minutes = Gtk.SpinButton.new_with_range(1, 240, 1)
-        self.relock_minutes.set_value(5)
+        self.relock_minutes = DurationField(5 * 60, minimum=60, maximum=4 * 3600, width=8)
         relock_save = Gtk.Button(label="Save")
         relock_save.connect("clicked", self.set_relock)
         relock_row.pack_start(self.relock_check, False, False, 0)
         relock_row.pack_start(self.relock_minutes, False, False, 0)
-        relock_row.pack_start(Gtk.Label(label="min, then the block is back with its locks"), False, False, 0)
+        relock_row.pack_start(Gtk.Label(label="then the block is back with its locks"), False, False, 0)
         relock_row.pack_start(relock_save, False, False, 0)
         # §3.6 delay break: asked for, it begins after a countdown.
         delay_row = Gtk.Box(spacing=6)
         self.delay_break_check = Gtk.CheckButton(label="Delay break of")
-        self.delay_break_minutes = Gtk.SpinButton.new_with_range(1, 240, 1)
-        self.delay_break_minutes.set_value(10)
-        self.delay_wait_minutes = Gtk.SpinButton.new_with_range(1, 1440, 5)
-        self.delay_wait_minutes.set_value(30)
+        self.delay_break_minutes = DurationField(600, minimum=60, maximum=4 * 3600, width=8)
+        self.delay_wait_minutes = DurationField(1800, minimum=60, maximum=86400, width=8)
         delay_save = Gtk.Button(label="Save")
         delay_save.connect("clicked", self.set_delay_break)
         self.delay_request = Gtk.Button(label="Request break")
         self.delay_request.connect("clicked", lambda _b: self.selected and self.run(["break", "request", self.selected]))
-        for widget in (self.delay_break_check, self.delay_break_minutes, Gtk.Label(label="min, after waiting"),
-                       self.delay_wait_minutes, Gtk.Label(label="min"), delay_save, self.delay_request):
+        for widget in (self.delay_break_check, self.delay_break_minutes, Gtk.Label(label="after waiting"),
+                       self.delay_wait_minutes, delay_save, self.delay_request):
             delay_row.pack_start(widget, False, False, 0)
         box.pack_start(section(
             "Breaks",
@@ -3938,6 +4638,8 @@ class Window(Gtk.ApplicationWindow):
                 "doesn't end the block: it lifts it for a while. Unlocking again during that "
                 "break ends it."),
             relock_row, delay_row), False, False, 0)
+        for row in (quota_row, pomodoro_row, long_row, allowance_row, relock_row, delay_row):
+            top_align(row)
         return box
 
     def update_block_list(self):
@@ -4301,90 +5003,54 @@ class Window(Gtk.ApplicationWindow):
         if self.selected and name:
             self.run(["block", "duplicate", self.selected, name])
 
+    def lock_dialog(self, title, intro, button, picker):
+        """A dialog around a LockPicker; None when cancelled, else what it
+        asks for, read before the dialog goes: (locks as (flags, words),
+        re-lock flags, password). The button waits until every field reads
+        right."""
+        dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button(button, Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(12)
+        for side in ("start", "end", "top", "bottom"):
+            getattr(box, f"set_margin_{side}")(18)
+        box.pack_start(dim(intro), False, False, 0)
+        box.pack_start(picker, False, False, 0)
+        picker.on_change(lambda p: ok.set_sensitive(p.is_valid()))
+        ok.set_sensitive(picker.is_valid())
+        self.lock_picker = picker  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        chosen = (picker.chosen(), picker.relock_flags(), picker.secret()) if picker.is_valid() else None
+        dialog.destroy()
+        return chosen if answer == Gtk.ResponseType.OK else None
+
     def start_block(self, _button):
         block = self.blocks.get(self.selected)
         if not block:
             return
-        dialog = Gtk.Dialog(title=f"Start {block['name']}", transient_for=self, modal=True)
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        start = dialog.add_button("Add locks" if block["active"] else "Start", Gtk.ResponseType.OK)
-        start.get_style_context().add_class("suggested-action")
-        box = dialog.get_content_area()
-        box.set_spacing(10)
-        for side in ("start", "end", "top", "bottom"):
-            getattr(box, f"set_margin_{side}")(16)
-        box.pack_start(dim("Locks are optional. Once on, a lock can only be made stronger." if block["active"]
-                           else "Start without locks to stop any time, or add locks below."), False, False, 0)
-
-        grid = Gtk.Grid(column_spacing=10, row_spacing=8)
-        minutes = Gtk.SpinButton.new_with_range(0, 10080, 5)
-        delay = Gtk.SpinButton.new_with_range(0, 57600, 5)
-        password = Gtk.Entry(visibility=False, placeholder_text="optional")
-        typing = Gtk.CheckButton(label="Text lock: type a text to stop")
-        chars = challenge_length(typing)
-        restart = Gtk.CheckButton(label="Stay on until the computer restarts")
-        rows = (
-            ("Timer lock (minutes)", minutes, "Can't be stopped at all until the time has passed."),
-            ("Delay to stop (minutes)", delay, "Stopping only takes effect after this long."),
-            ("Password", password, "Needed to stop. Give it to someone else to keep."),
-        )
-        for i, (label, widget, note) in enumerate(rows):
-            grid.attach(Gtk.Label(label=label, xalign=0), 0, i * 2, 1, 1)
-            grid.attach(widget, 1, i * 2, 1, 1)
-            grid.attach(dim(note), 1, i * 2 + 1, 1, 1)
-        grid.attach(typing, 0, 6, 2, 1)
-        attach_challenge_length(grid, chars, 7)
-        grid.attach(restart, 0, 9, 2, 1)
-        relock = Gtk.SpinButton.new_with_range(0, 43200, 5)
-        grid.attach(Gtk.Label(label="Re-lock after (minutes)", xalign=0), 0, 10, 1, 1)
-        grid.attach(relock, 1, 10, 1, 1)
-        grid.attach(dim("Once the text or password lock is unlocked, it comes on again after this "
-                        "long, unless the block was stopped. 0: it stays unlocked."), 1, 11, 1, 1)
-        # §3.4 range lock: on at set times on set days (or outside them).
-        range_entry = Gtk.Entry(placeholder_text="mon-fri 09:00-17:00")
-        range_invert = Gtk.CheckButton(label="outside these times")
-        grid.attach(Gtk.Label(label="Range lock", xalign=0), 0, 12, 1, 1)
-        range_box = Gtk.Box(spacing=6)
-        range_box.pack_start(range_entry, True, True, 0)
-        range_box.pack_start(range_invert, False, False, 0)
-        grid.attach(range_box, 1, 12, 1, 1)
-        grid.attach(dim("Can't be stopped at these times; it can't be unlocked, only waited out."), 1, 13, 1, 1)
-        box.pack_start(grid, False, False, 0)
-        box.pack_start(dim("Several locks are unlocked one at a time; you choose the order next."),
-                       False, False, 0)
-        dialog.show_all()
-        answer = dialog.run()
-        relock_minutes = relock.get_value_as_int()
-        range_spec, range_out = range_entry.get_text().strip(), range_invert.get_active()
-        values = (minutes.get_value_as_int(), delay.get_value_as_int(), password.get_text(),
-                  typing.get_active(), restart.get_active())
-        lock_args = challenge_args(chars)
-        dialog.destroy()
-        if answer != Gtk.ResponseType.OK:
+        active = block["active"]
+        kinds = ("timer", "text") if active else LockPicker.ALL_KINDS
+        picker = LockPicker("stop", "stopped", kinds,
+                            restart_note="Continuous blocks only: a scheduled block's windows decide.")
+        asked = self.lock_dialog(
+            f"Add locks to {block['name']}" if active else f"Start {block['name']}",
+            "Locks are optional. Once on, a lock can only be made stronger: a longer timer lock "
+            "or a longer text lock." if active else
+            "Start without locks to stop any time, or add locks below. Once on, a lock can only "
+            "be made stronger.",
+            "Add locks" if active else "Start", picker)
+        if asked is None:
             return
-        lock_minutes, delay_minutes, secret, use_typing, use_restart = values
-
+        chosen, relock_flags, secret = asked
         args = ["start", block["name"]]
         target = f"block '{block['name']}'"
-        relock_note = f", re-lock {relock_minutes} minutes after unlocking" if relock_minutes else ""
-        # R-LOCK-6: locks unlock one at a time in the order of their flags;
-        # the dialog uses timer, restart, password, text, delay.
-        chosen = []
-        if lock_minutes:
-            chosen.append((["--for", f"{lock_minutes}m"],
-                           f"timer lock, {lock_minutes} minutes (it can't be stopped until then, not even "
-                           "with the typing challenge; time the computer is off doesn't count)"))
-        if use_restart:
-            chosen.append((["--restart"], "restart lock, until the computer restarts"))
-        if secret:
-            chosen.append((["--password-stdin"], f"password lock{relock_note}"))
-        if use_typing:
-            chosen.append((lock_args, f"text lock{relock_note}"))
-        if delay_minutes:
-            chosen.append((["--delay", f"{delay_minutes}m"], f"delay lock, unlocking takes {delay_minutes} minutes"))
-        if range_spec:
-            chosen.append((["--range", range_spec] + (["--range-invert"] if range_out else []),
-                           f"range lock, {'outside ' if range_out else ''}{range_spec}"))
+        if active and not chosen:
+            return  # nothing to add
+        # R-LOCK-6: locks unlock one at a time in the order of their flags.
         if len(chosen) > 1:
             chosen = self.choose_lock_order(chosen)
             if chosen is None:
@@ -4394,8 +5060,7 @@ class Window(Gtk.ApplicationWindow):
             args += flags
             order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
             locks.append(f"{target}: {order}{text}")
-        if relock_minutes and (use_typing or secret):
-            args += ["--relock", f"{relock_minutes}m"]
+        args += relock_flags
         if not self.confirm_lock(locks):
             return
         if locks:
@@ -4475,9 +5140,11 @@ class Window(Gtk.ApplicationWindow):
         if not self.selected:
             return
         if self.schedule_lock.get_active():
+            if not self.fields_ok(("Schedule lock", self.schedule_lead)):
+                return
             lead = self.schedule_lead.get_value_as_int()
             if not self.confirm_lock([f"block '{self.selected}': schedule lock, while each window is open"
-                                      + (f" and {lead} minutes before it" if lead else "")]):
+                                      + (f" and {duration_words(lead * 60)} before it" if lead else "")]):
                 return
             self.run(["schedule", "lock", self.selected, "on", "--lead", f"{lead}m", "--yes"])
         elif self.blocks.get(self.selected, {}).get("schedule_lock"):
@@ -4509,8 +5176,17 @@ class Window(Gtk.ApplicationWindow):
             name, self.selected = self.selected, None
             self.run(["block", "remove", name])
 
+    def fields_ok(self, *named):
+        """R-GUI-1: before a command, every (name, field) must read right;
+        else the first problem is shown and nothing runs."""
+        for name, field in named:
+            if field is not None and not field.is_valid():
+                self.message(f"{name}: {field.problem}", Gtk.MessageType.INFO)
+                return False
+        return True
+
     def set_quota(self, _button):
-        if self.selected:
+        if self.selected and self.fields_ok(("Allowance", self.quota_minutes), ("Sessions", self.quota_sessions)):
             self.run(["allowance", "set", self.selected, f"{self.quota_minutes.get_value_as_int()}m",
                       "--per", self.quota_per.get_active_id() or "day",
                       "--refill", self.quota_refill.get_text().strip() or "00:00",
@@ -4529,7 +5205,10 @@ class Window(Gtk.ApplicationWindow):
             self.run(["allowance", "remove", self.selected])
 
     def set_pomodoro(self, _button):
-        if self.selected:
+        long = self.long_check.get_active()
+        if self.selected and self.fields_ok(("Work", self.work_minutes), ("Break", self.break_minutes),
+                                            ("Long break", self.long_minutes if long else None),
+                                            ("Work periods", self.long_every if long else None)):
             args = ["pomodoro", "set", self.selected,
                     f"{self.work_minutes.get_value_as_int()}m",
                     f"{self.break_minutes.get_value_as_int()}m"]
@@ -4539,7 +5218,7 @@ class Window(Gtk.ApplicationWindow):
             self.run(args)
 
     def set_allowance(self, _button):
-        if self.selected:
+        if self.selected and self.fields_ok(("Break", self.allowance_minutes), ("Blocking", self.allowance_per)):
             self.run(["break", "reward", self.selected,
                       f"{self.allowance_minutes.get_value_as_int()}m",
                       "--per", f"{self.allowance_per.get_value_as_int()}m",
@@ -4558,7 +5237,8 @@ class Window(Gtk.ApplicationWindow):
             self.run(["break", "end", self.selected])
 
     def set_relock(self, _button):
-        if self.selected:
+        if self.selected and self.fields_ok(
+                ("Text break", self.relock_minutes if self.relock_check.get_active() else None)):
             value = f"{self.relock_minutes.get_value_as_int()}m" if self.relock_check.get_active() else "off"
             self.run(["break", "text", self.selected, value])
 
@@ -4566,6 +5246,8 @@ class Window(Gtk.ApplicationWindow):
         if not self.selected:
             return
         if self.delay_break_check.get_active():
+            if not self.fields_ok(("Delay break", self.delay_break_minutes), ("Waiting", self.delay_wait_minutes)):
+                return
             self.run(["break", "delay", self.selected, f"{self.delay_break_minutes.get_value_as_int()}m",
                       f"{self.delay_wait_minutes.get_value_as_int()}m"])
         else:
@@ -4650,9 +5332,8 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(times, False, False, 0)
         # §3.6: one break each time this window is open.
         break_row = Gtk.Box(spacing=6)
-        break_minutes = Gtk.SpinButton.new_with_range(0, 240, 5)
-        break_minutes.set_value(w.get("break", 0) // 60)
-        for widget in (Gtk.Label(label="Break each time"), break_minutes, Gtk.Label(label="min (0: none)")):
+        break_minutes = DurationField(w.get("break", 0), minimum=60, maximum=4 * 3600, zero="No break", width=8)
+        for widget in (Gtk.Label(label="Break each time"), break_minutes):
             break_row.pack_start(widget, False, False, 0)
         if not w.get("allow"):
             box.pack_start(break_row, False, False, 0)
@@ -4662,11 +5343,15 @@ class Window(Gtk.ApplicationWindow):
         days = sum(bit for bit, check in checks.items() if check.get_active())
         frm, to = start.get_text().strip(), end.get_text().strip()
         new_break = break_minutes.get_value_as_int()
+        break_problem = break_minutes.problem
         dialog.destroy()
         if answer == 3:
             self.remove_window_from_calendar(index)
             return
         if answer != Gtk.ResponseType.OK:
+            return
+        if break_problem:
+            self.message(f"Break: {break_problem}", Gtk.MessageType.INFO)
             return
         try:
             new_start = int(frm[:2]) * 60 + int(frm[3:5])
@@ -4915,10 +5600,10 @@ class Window(Gtk.ApplicationWindow):
         self.record_words.set_tooltip_text("Record the words shown on the pages you open (the cluster must look at page text)")
         self.record_words.connect("clicked", lambda _b: self.cluster_name() and self.run(
             ["record", "start", "--cluster", self.cluster_name(), "--words"]))
-        self.record_cut = Gtk.SpinButton.new_with_range(0, 95, 5)
+        self.record_cut = NumberField(0, 0, 95, width=4)
         self.record_cut.set_tooltip_text("Words: drop this percentage of the least specific before adding")
         self.record_stop = Gtk.Button(label="Stop and add")
-        self.record_stop.connect("clicked", lambda _b: self.run(
+        self.record_stop.connect("clicked", lambda _b: self.fields_ok(("Cut", self.record_cut)) and self.run(
             ["record", "stop", "--cut", str(self.record_cut.get_value_as_int())],
             then=lambda output: self.message(output, Gtk.MessageType.INFO)))
         self.record_discard = Gtk.Button(label="Stop and discard")
@@ -5092,15 +5777,14 @@ class Window(Gtk.ApplicationWindow):
         self.freeze_mode.append("shutdown", "Shut down")
         self.freeze_mode.append("apps", "Allowed apps only")  # §3.8: kc9k freeze apps
         self.freeze_mode.set_active_id("lock")
-        self.freeze_minutes = Gtk.SpinButton.new_with_range(1, 1440, 5)
-        self.freeze_minutes.set_value(30)
+        self.freeze_minutes = DurationField(1800, minimum=60, maximum=86400, presets=(1800, 3600, 4 * 3600),
+                                            why_max="Frozen Chicken lasts at most a day.", width=9)
         self.freeze_button = Gtk.Button(label="Start Frozen Chicken…")
         self.freeze_button.get_style_context().add_class("destructive-action")
         self.freeze_button.connect("clicked", self.freeze)
         row.pack_start(self.freeze_mode, False, False, 0)
         row.pack_start(Gtk.Label(label="for"), False, False, 0)
         row.pack_start(self.freeze_minutes, False, False, 0)
-        row.pack_start(Gtk.Label(label="minutes (at most 1440)"), False, False, 0)
         row.pack_end(self.freeze_button, False, False, 0)
         self.freeze_schedules = EditableList(
             "Scheduled", "daily 23:00 24:00", self.add_freeze_schedule, self.remove_freeze_schedule,
@@ -5116,12 +5800,14 @@ class Window(Gtk.ApplicationWindow):
                       "the desktop keeps working. Adding an app isn't possible while a freeze runs or "
                       "anything is locked.")
         self.freeze_lock = Gtk.CheckButton(label="Lock new schedules from")
-        self.freeze_lead = Gtk.SpinButton.new_with_range(0, 7 * 24 * 60, 15)
-        self.freeze_lead.set_value(120)
+        self.freeze_lead = DurationField(7200, minimum=60, maximum=7 * 86400, zero="No lead time", width=9)
         freeze_lock_row = Gtk.Box(spacing=6)
         freeze_lock_row.pack_start(self.freeze_lock, False, False, 0)
         freeze_lock_row.pack_start(self.freeze_lead, False, False, 0)
-        freeze_lock_row.pack_start(Gtk.Label(label="minutes before each window"), False, False, 0)
+        freeze_lock_row.pack_start(Gtk.Label(label="before each window", valign=Gtk.Align.START, margin_top=6),
+                                   False, False, 0)
+        top_align(freeze_lock_row)
+        top_align(row)
         box.pack_start(section(
             "Frozen Chicken",
             dim("Keeps the computer unusable until the time is up, even across restarts: the "
@@ -5148,11 +5834,13 @@ class Window(Gtk.ApplicationWindow):
         mode = self.freeze_mode.get_active_id()
         lock = self.freeze_lock.get_active()
         lead = self.freeze_lead.get_value_as_int()
+        if lock and not self.fields_ok(("Lead time", self.freeze_lead)):
+            return
         if lock:
             confirmed = self.confirm_lock([
                 f"freeze schedule {values[0]} {values[1]}-{values[2]} "
                 f"({self.freeze_mode.get_active_text().lower()}): schedule lock, while each window is open"
-                + (f" and {lead} minutes before it" if lead else "")])
+                + (f" and {duration_words(lead * 60)} before it" if lead else "")])
         else:
             confirmed = self.confirm(f"Freeze {values[0]} {values[1]}-{values[2]}?",
                                      f"The computer will be frozen then "
@@ -5175,6 +5863,8 @@ class Window(Gtk.ApplicationWindow):
         self.freeze_button.set_label("Extend…" if frozen else "Start Frozen Chicken…")
 
     def freeze(self, _button):
+        if not self.fields_ok(("Frozen Chicken", self.freeze_minutes)):
+            return
         minutes = self.freeze_minutes.get_value_as_int()
         mode = self.freeze_mode.get_active_id()
         effect = {
@@ -5182,7 +5872,7 @@ class Window(Gtk.ApplicationWindow):
             "logout": "Every session is logged out now, and logging in again ends at once.",
             "shutdown": "The computer shuts down now, and again whenever it starts.",
         }[mode]
-        if self.confirm(f"Freeze the computer for {minutes} minutes?",
+        if self.confirm(f"Freeze the computer for {duration_words(minutes * 60)}?",
                         f"{effect} It can't be cancelled. Save your work first.",
                         "Freeze", destructive=True):
             self.run(["freeze", "--for", f"{minutes}m", "--mode", mode, "--yes"])
@@ -5660,18 +6350,23 @@ class Window(Gtk.ApplicationWindow):
         access_row.pack_start(access_set, False, False, 0)
         access_row.pack_start(self.access_remove_button, False, False, 0)
         idle_row = Gtk.Box(spacing=6)
-        idle_row.pack_start(Gtk.Label(label="Lock the pages again after"), False, False, 0)
-        idle = Gtk.SpinButton.new_with_range(0, 240, 1)
-        idle.set_value(self.get_application().prefs.get("access_idle_minutes", 0))
+        idle_row.pack_start(Gtk.Label(label="Lock the pages again after", valign=Gtk.Align.START, margin_top=6),
+                            False, False, 0)
+        idle = DurationField(self.get_application().prefs.get("access_idle_minutes", 0) * 60, minimum=60,
+                             maximum=7 * 86400, zero="Never", width=9)
 
-        def save_idle(spin):
-            prefs = self.get_application().prefs
-            prefs["access_idle_minutes"] = spin.get_value_as_int()
-            save_prefs(prefs)
+        def save_idle(field):
+            if field.is_valid():
+                prefs = self.get_application().prefs
+                prefs["access_idle_minutes"] = field.get_value_as_int()
+                save_prefs(prefs)
 
-        idle.connect("value-changed", save_idle)
+        idle.on_change(save_idle)
         idle_row.pack_start(idle, False, False, 0)
-        idle_row.pack_start(Gtk.Label(label="minutes without using this window (0: never)"), False, False, 0)
+        idle_row.pack_start(Gtk.Label(label="without using this window", valign=Gtk.Align.START, margin_top=6),
+                            False, False, 0)
+        self.idle_field = idle  # for tests
+        top_align(idle_row)
         box.pack_start(section(
             "Passwords",
             Gtk.Label(label="Settings password", xalign=0, margin_top=6),
@@ -5780,11 +6475,16 @@ class Window(Gtk.ApplicationWindow):
             box.pack_start(item, False, False, 0)
         self.tamper_checks = checks  # for tests
         grace_row = Gtk.Box(spacing=8)
-        grace_row.pack_start(Gtk.Label(label="Close browsers without the extension after"), False, False, 0)
-        grace = Gtk.SpinButton.new_with_range(10, 600, 5)
-        grace.set_value(self.state.get("tamper_grace", 60))
+        grace_row.pack_start(Gtk.Label(label="Close browsers without the extension after",
+                                       valign=Gtk.Align.START, margin_top=6), False, False, 0)
+        grace = DurationField(self.state.get("tamper_grace", 60), minimum=10, maximum=600, bare=1, width=8)
         grace_row.pack_start(grace, False, False, 0)
-        grace_row.pack_start(Gtk.Label(label="seconds (longer weakens)"), False, False, 0)
+        grace_row.pack_start(Gtk.Label(label="(longer weakens)", valign=Gtk.Align.START, margin_top=6),
+                             False, False, 0)
+        top_align(grace_row)
+        ok_button = dialog.get_widget_for_response(Gtk.ResponseType.OK)
+        if ok_button is not None:
+            guard_button(ok_button, grace)
         box.pack_start(grace_row, False, False, 0)
         self.tamper_grace = grace  # for tests
         dialog.show_all()
@@ -6010,82 +6710,19 @@ class Window(Gtk.ApplicationWindow):
         return line
 
     def lock_setting(self, _button, name, title):
-        dialog = Gtk.Dialog(title=f"Lock: {title}", transient_for=self, modal=True)
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        ok = dialog.add_button("Turn on and lock", Gtk.ResponseType.OK)
-        ok.get_style_context().add_class("suggested-action")
-        box = dialog.get_content_area()
-        box.set_spacing(10)
-        for side in ("start", "end", "top", "bottom"):
-            getattr(box, f"set_margin_{side}")(16)
-        box.pack_start(dim("The setting is turned on and can't be turned off until the lock ends. "
-                           "Locks can be added later, but only made stronger."), False, False, 0)
-        grid = Gtk.Grid(column_spacing=10, row_spacing=8)
-        minutes = Gtk.SpinButton.new_with_range(0, 57600, 5)
-        password = Gtk.Entry(visibility=False, placeholder_text="optional")
-        typing = Gtk.CheckButton(label="Text lock: type a text to turn it off")
-        chars = challenge_length(typing)
-        restart = Gtk.CheckButton(label="Stay on until the computer restarts")
-        relock = Gtk.SpinButton.new_with_range(0, 43200, 5)
-        rows = (
-            ("Timer lock (minutes)", minutes, "Can't be turned off at all until the time has passed."),
-            ("Password", password, "Needed to turn it off. Give it to someone else to keep."),
-        )
-        for i, (label, widget, note) in enumerate(rows):
-            grid.attach(Gtk.Label(label=label, xalign=0), 0, i * 2, 1, 1)
-            grid.attach(widget, 1, i * 2, 1, 1)
-            grid.attach(dim(note), 1, i * 2 + 1, 1, 1)
-        grid.attach(typing, 0, 4, 2, 1)
-        attach_challenge_length(grid, chars, 5)
-        grid.attach(restart, 0, 7, 2, 1)
-        grid.attach(Gtk.Label(label="Re-lock (minutes)", xalign=0), 0, 8, 1, 1)
-        grid.attach(relock, 1, 8, 1, 1)
-        grid.attach(dim("With a text or password lock: unlocking lifts them only this long, "
-                        "then they are on again unless it was turned off. 0 = no re-lock."), 1, 9, 1, 1)
-        # §3.4 range lock, as in the block start dialog.
-        range_entry = Gtk.Entry(placeholder_text="mon-fri 09:00-17:00")
-        range_invert = Gtk.CheckButton(label="outside these times")
-        grid.attach(Gtk.Label(label="Range lock", xalign=0), 0, 10, 1, 1)
-        range_box = Gtk.Box(spacing=6)
-        range_box.pack_start(range_entry, True, True, 0)
-        range_box.pack_start(range_invert, False, False, 0)
-        grid.attach(range_box, 1, 10, 1, 1)
-        grid.attach(dim("Can't be turned off at these times; it can't be unlocked, only waited out."), 1, 11, 1, 1)
-        box.pack_start(grid, False, False, 0)
-        box.pack_start(dim("Several locks are unlocked one at a time; you choose the order next."),
-                       False, False, 0)
-        self.setting_lock_widgets = (minutes, password, typing, restart, relock, range_entry, range_invert)  # tests
-        dialog.show_all()
-        answer = dialog.run()
-        lock_minutes, secret = minutes.get_value_as_int(), password.get_text()
-        use_typing, use_restart = typing.get_active(), restart.get_active()
-        relock_minutes = relock.get_value_as_int()
-        range_spec, range_out = range_entry.get_text().strip(), range_invert.get_active()
-        lock_args = challenge_args(chars)
-        dialog.destroy()
-        if answer != Gtk.ResponseType.OK:
+        picker = LockPicker("turn it off", "turned off",
+                            ("timer", "password", "text", "restart", "range", "relock"))
+        asked = self.lock_dialog(
+            f"Lock: {title}",
+            "The setting is turned on and can't be turned off until the lock ends. Locks can be "
+            "added later, but only made stronger.", "Turn on and lock", picker)
+        if asked is None:
             return
-        relock_note = ""
-        if relock_minutes and (use_typing or secret):
-            relock_note = f", re-lock {relock_minutes} minutes after unlocking"
-        # R-LOCK-6: the locks unlock one at a time in the order of their flags.
-        chosen = []
-        if lock_minutes:
-            chosen.append((["--for", f"{lock_minutes}m"],
-                           f"timer lock, {lock_minutes} minutes (it can't be turned off until then, not even "
-                           "with the typing challenge; time the computer is off doesn't count)"))
-        if use_restart:
-            chosen.append((["--restart"], "restart lock, until the computer restarts"))
-        if secret:
-            chosen.append((["--password-stdin"], f"password lock{relock_note}"))
-        if use_typing:
-            chosen.append((lock_args, f"text lock{relock_note}"))
-        if range_spec:
-            chosen.append((["--range", range_spec] + (["--range-invert"] if range_out else []),
-                           f"range lock, {'outside ' if range_out else ''}{range_spec}"))
+        chosen, relock_flags, secret = asked
         if not chosen:
             self.message("Choose at least one lock.", Gtk.MessageType.INFO)
             return
+        # R-LOCK-6: the locks unlock one at a time in the order of their flags.
         if len(chosen) > 1:
             chosen = self.choose_lock_order(chosen)
             if chosen is None:
@@ -6096,8 +6733,7 @@ class Window(Gtk.ApplicationWindow):
             args += flags
             order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
             locks.append(f"{title}: {order}{text}")
-        if relock_note:
-            args += ["--relock", f"{relock_minutes}m"]
+        args += relock_flags
         if not self.confirm_lock(locks):
             return
         self.run(args + ["--yes"], secret + "\n" if secret else None)
@@ -6281,6 +6917,17 @@ class Tray:
         self.icon = None
 
 
+# The interface's own look, on top of the GTK theme (R-GUI-3): notes under
+# fields, red for what is wrong, small rounded preset buttons.
+APP_CSS = b"""
+.kc9k-note { font-size: 0.9em; opacity: 0.8; }
+label.error, .kc9k-note.error { color: @error_color; opacity: 1; }
+entry.error { border-color: @error_color; }
+button.kc9k-chip { padding: 2px 10px; min-height: 0; border-radius: 999px; font-size: 0.9em; }
+.kc9k-field-label { font-weight: bold; }
+"""
+
+
 class App(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="io.github.kc9k.Gui")
@@ -6308,6 +6955,11 @@ class App(Gtk.Application):
         CLOCK_24 = self.prefs.get("clock_24", True)
         self.theme = Theme()
         self.theme.apply(self.prefs.get("theme", "system"), self.prefs.get("darkness"))
+        screen = Gdk.Screen.get_default()
+        if screen is not None:
+            self.css = Gtk.CssProvider()
+            self.css.load_from_data(APP_CSS)
+            Gtk.StyleContext.add_provider_for_screen(screen, self.css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         if self.prefs.get("tray"):
             self.set_tray(True)
 

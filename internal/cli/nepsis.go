@@ -77,7 +77,7 @@ Without arguments, shows whether monk mode is on.`,
 
 // monkLength describes a monk mode of length d, from now.
 func monkLength(d time.Duration) string {
-	return fmt.Sprintf("%s, until %s", d.Round(time.Minute), time.Now().Add(d).Format("2006-01-02 15:04"))
+	return fmt.Sprintf("%s, until %s", humanDuration(d), time.Now().Add(d).Format("2006-01-02 15:04"))
 }
 
 // monkStatus says whether monk mode is on, and until when by the clock.

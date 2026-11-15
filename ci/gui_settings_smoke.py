@@ -247,9 +247,13 @@ asked = []
 def lock_dialogs(dialog):
     asked.append(dialog.get_title() or "")
     if dialog.get_title() and dialog.get_title().startswith("Lock:"):
-        minutes, *_rest, range_entry, _invert = win.setting_lock_widgets
-        minutes.set_value(5)
-        range_entry.set_text("mon-sun 00:00-23:55")
+        picker = win.lock_picker
+        picker.timer.mode_buttons["for"].set_active(True)
+        picker.timer.duration.set_text("5m")
+        picker.range_on.set_active(True)
+        for toggle in picker.range_days.values():
+            toggle.set_active(True)
+        picker.range_from.set_text("00:00"); picker.range_to.set_text("23:55")
     return Gtk.ResponseType.OK
 Gtk.Dialog.run = lock_dialogs
 win.lock_setting(None, "force-search", "Force search"); settle()

@@ -1449,15 +1449,17 @@ def column_day(column):
 
 
 class WeekCalendar(Gtk.DrawingArea):
-    """A block's schedule as a week: Monday to Sunday across, 00:00 to 24:00
-    down. Drag down a day to add a window (snapped to 15 minutes); click a
-    window to remove it."""
+    """A block's schedule as a week: the days across (from the first day of
+    the week), 00:00 to 24:00 down. Drag down a day to add a window (snapped
+    to 15 minutes); drag a window to move it; click a window to edit it
+    (§4.5)."""
 
     SNAP = 15
 
-    def __init__(self, on_create, on_pick):
+    def __init__(self, on_create, on_pick, on_move=None):
         super().__init__()
-        self.on_create, self.on_pick = on_create, on_pick
+        self.on_create, self.on_pick, self.on_move = on_create, on_pick, on_move
+        self.moving = None  # (window index, column, minute) while a window is dragged
         self.windows = []  # dicts: days (bit 0 Sunday), start, end, allow
         self.drag = None  # (column, start minute, current minute)
         self.press_y = 0
@@ -1502,6 +1504,9 @@ class WeekCalendar(Gtk.DrawingArea):
         if event.button != 1:
             return False
         column, minute = self.at(event.x, event.y)
+        exact = (event.y - self.geometry()[1]) / self.geometry()[3] * 1440
+        index = self.window_at(column, exact)
+        self.moving = (index, column, minute) if index is not None else None
         self.drag = (column, minute, minute)
         self.press_y = event.y
         return True
@@ -1518,9 +1523,24 @@ class WeekCalendar(Gtk.DrawingArea):
         if not self.drag:
             return False
         column, start, _ = self.drag
-        _, end = self.at(event.x, event.y)
+        to_column, end = self.at(event.x, event.y)
         self.drag = None
         self.queue_draw()
+        moving, self.moving = self.moving, None
+        if moving and self.on_move and (abs(event.y - self.press_y) >= 5 or to_column != column):
+            # Move the window: by the time dragged, and to another day for
+            # a window of one day.
+            index, from_column, from_minute = moving
+            w = self.windows[index]
+            delta = end - from_minute
+            length = w["end"] - w["start"]
+            new_start = min(max(w["start"] + delta, 0), 1440 - length)
+            days = w["days"]
+            if bin(days).count("1") == 1 and to_column != from_column:
+                days = self.weekday_bit(to_column)
+            if new_start != w["start"] or days != w["days"]:
+                self.on_move(index, days, new_start, new_start + length)
+            return True
         start, end = min(start, end), max(start, end)
         if abs(event.y - self.press_y) >= 5:  # a drag, not a click that wobbled
             if end - start >= self.SNAP:
@@ -3516,7 +3536,8 @@ class Window(Gtk.ApplicationWindow):
         tabs.append_page(apps, Gtk.Label(label="Apps"))
 
         schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
-        self.calendar = WeekCalendar(self.create_window_from_calendar, self.remove_window_from_calendar)
+        self.calendar = WeekCalendar(self.create_window_from_calendar, self.edit_window_from_calendar,
+                                     self.move_window_from_calendar)
         schedule.pack_start(dim("Drag down a day to add a window; click one to remove it. Filled: the "
                                 "block is on. Outlined: an allow window."), False, False, 0)
         schedule.pack_start(self.calendar, False, False, 0)
@@ -4362,9 +4383,77 @@ class Window(Gtk.ApplicationWindow):
         if not block or index >= len(block["schedules"]):
             return
         if self.confirm(f"Remove {block['schedules'][index]}?",
-                        "This can't be done from 2 hours before the window opens until it closes.",
+                        "With a schedule lock, this can't be done during the window or its lead time.",
                         "Remove", destructive=True):
             self.run(["schedule", "remove", self.selected, str(index + 1)])
+
+    def replace_window(self, index, days, start, end, allow=False):
+        """Changes a window: removes it, then adds the new one (§4.5; a
+        change that weakens is refused while the block is locked)."""
+        names = [DAY_NAMES[(bit - 1) % 7] for bit in range(7) if days & (1 << bit)]
+        if not names:
+            return
+        args = ["schedule", "add", self.selected, "--days", ",".join(names),
+                "--from", clock_text(start), "--to", "24:00" if end >= 1440 else clock_text(end)]
+        if allow:
+            args.append("--allow")
+        self.run(["schedule", "remove", self.selected, str(index + 1)], then=lambda _o: self.run(args))
+
+    def move_window_from_calendar(self, index, days, start, end):
+        windows = (self.blocks.get(self.selected) or {}).get("schedule_windows") or []
+        if index < len(windows):
+            self.replace_window(index, days, start, end, windows[index].get("allow", False))
+
+    def edit_window_from_calendar(self, index):
+        """§4.5: click a window to change its days (copy to days) and times,
+        or remove it."""
+        block = self.blocks.get(self.selected)
+        windows = (block or {}).get("schedule_windows") or []
+        if not block or index >= len(windows):
+            return
+        w = windows[index]
+        dialog = Gtk.Dialog(title="Window", transient_for=self, modal=True)
+        dialog.add_button("Remove", 3)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Save", Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(12)
+        days_row = Gtk.Box(spacing=6)
+        checks = {}
+        for column in range(7):
+            day = column_day(column)
+            bit = 1 << ((day + 1) % 7)
+            check = Gtk.CheckButton(label=DAY_NAMES[day].capitalize(), active=bool(w["days"] & bit))
+            checks[bit] = check
+            days_row.pack_start(check, False, False, 0)
+        box.pack_start(dim("Tick more days to copy the window to them."), False, False, 0)
+        box.pack_start(days_row, False, False, 0)
+        times = Gtk.Box(spacing=6)
+        start = Gtk.Entry(text=clock_text(w["start"]), width_chars=5)
+        end = Gtk.Entry(text="24:00" if w["end"] >= 1440 else clock_text(w["end"]), width_chars=5)
+        for widget in (Gtk.Label(label="From"), start, Gtk.Label(label="to"), end):
+            times.pack_start(widget, False, False, 0)
+        box.pack_start(times, False, False, 0)
+        self.window_dialog = (checks, start, end)  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        days = sum(bit for bit, check in checks.items() if check.get_active())
+        frm, to = start.get_text().strip(), end.get_text().strip()
+        dialog.destroy()
+        if answer == 3:
+            self.remove_window_from_calendar(index)
+            return
+        if answer != Gtk.ResponseType.OK:
+            return
+        try:
+            new_start = int(frm[:2]) * 60 + int(frm[3:5])
+            new_end = 1440 if to == "24:00" else int(to[:2]) * 60 + int(to[3:5])
+        except (ValueError, IndexError):
+            self.message("Times are HH:MM, e.g. 09:00 and 17:00.", Gtk.MessageType.INFO)
+            return
+        if (days, new_start, new_end) != (w["days"], w["start"], w["end"]):
+            self.replace_window(index, days, new_start, new_end, w.get("allow", False))
 
     def remove_schedule(self, _value, number):
         self.run(["schedule", "remove", self.selected, str(number)])

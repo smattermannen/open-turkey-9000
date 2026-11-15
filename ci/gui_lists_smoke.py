@@ -159,5 +159,20 @@ Gtk.Dialog.run = move_up
 got = win.choose_lock_order([(["--for", "5m"], "timer lock"), (["--lock"], "text lock")])
 Gtk.Dialog.run = real_run
 check(got is not None and [f[0] for f, _t in got] == ["--lock", "--for"], "unlock order chosen: %s" % got)
+# §4.5 schedule grid: click a window to copy it to another day; drag to move.
+r = cli("block", "create", "grid"); r = cli("block", "add", "grid", "grid.example")
+r = cli("schedule", "add", "grid", "--days", "mon", "--from", "09:00", "--to", "10:00"); settle()
+win.selected = "grid"; win.show_block()
+def tick_tuesday(dialog):
+    checks, _start, _end = win.window_dialog
+    checks[1 << 2].set_active(True)  # Tuesday
+    return Gtk.ResponseType.OK
+Gtk.Dialog.run = tick_tuesday
+win.edit_window_from_calendar(0); settle(); settle()
+Gtk.Dialog.run = real_run
+check(win.blocks["grid"]["schedules"] == ["mon,tue 09:00-10:00"], "window copied to Tuesday: %s" % win.blocks["grid"]["schedules"])
+w = win.blocks["grid"]["schedule_windows"][0]
+win.move_window_from_calendar(0, w["days"], w["start"] + 60, w["end"] + 60); settle(); settle()
+check(win.blocks["grid"]["schedules"] == ["mon,tue 10:00-11:00"], "window moved an hour: %s" % win.blocks["grid"]["schedules"])
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

@@ -259,10 +259,14 @@ try:
     ot("stop", "rectest")
 
     # monk mode from a list, for a minute: the browser closes and monk mode
-    # starts, then ends by itself.
+    # starts, then ends by itself. It cuts the whole computer's network, so
+    # it runs only when asked: KC9K_TEST_MONK=1.
+    if os.environ.get("KC9K_TEST_MONK") != "1":
+        print("SKIP: monk mode from a list (set KC9K_TEST_MONK=1; it cuts the network for a minute)")
+        sys.exit(failures)
     ot("block", "create", "monklist")
     ot("list", "add", "monklist", "Blocked", "example.net")
-    ot("list", "action", "monklist", "Blocked", "monk", "on", "--for", "1m")
+    ot("list", "action", "monklist", "Blocked", "monk", "on", "--for", "1m", "--no-confirm-ok")
     ot("start", "monklist")
     driver = start()
     visit(driver, "https://example.net/")

@@ -39,12 +39,13 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unchecked: unit tests not run (no JDK/Android SDK on the
   laptop overnight): run `./gradlew testDebugUnitTest`. (S)
-- [ ] **Page reading slow on big pages** (principle 9). Done: whole read once
-  per address, then only added visible text (`readPageText`), full re-read
-  ≤ every 30 s; one-word terms via `kc9kWordIndex` (1,000 terms × 40,000
-  words: 1.6 s → 37 ms; multi-word/symbol terms and combinations still one
-  regex each); scans in `requestIdleCallback` within 0.5 s, stop when done.
-  Left: split the first read into < 16 ms pieces; speed test in `ci/`. (M)
+- [ ] **Page reading slow on big pages** (principle 9). Done: the first
+  read of a page goes in ≤ 8 ms pieces in idle time (`readPageText`,
+  `READ_SLICE_MS`), then only added visible text, full re-read ≤ every 30 s;
+  one-word terms via `kc9kWordIndex`; phrases split the text once per page
+  and look words up in an index (100 phrases + 1,000 terms on a 3,000-word
+  page: 115 ms → 4 ms, timed in `ci/match_test.js`). Left: judging a huge
+  page (40,000 words) is still one piece (~37 ms). (M)
 - [ ] **Gigantic URL lists** (principle 9). Extension: done (`kc9kIndex`,
   timed at 100,000 in `ci/match_test.js`). Firewall: done (nft sets,
   iptables fallback). DNS on start: 16 parallel, 30 min cache

@@ -123,6 +123,39 @@ const failed0 = [];
   if (took > 200 || hits.distinct === 0) {
     failed0.push("1,000 terms on 40,000 words took " + took + " ms, " + JSON.stringify(hits));
   }
+  // Principle 9: a typical page (3,000 words) with 1,000 rendered terms and
+  // 100 phrases is judged in under 50 ms in all.
+  const typicalTerms = [];
+  for (let i = 0; i < 1000; i++) {
+    typicalTerms.push(i % 10 === 0 ? "long term" + i : "term" + i);
+  }
+  const typicalPhrases = [];
+  for (let i = 0; i < 100; i++) {
+    typicalPhrases.push(kc9kPhraseMatcher({ sets: [{ terms: ["alpha" + i, "beta" + i] }, { terms: ["gamma" + i] },
+      { terms: ["delta" + i], necessary: false }] }));
+  }
+  const typical = [];
+  for (let i = 0; i < 3000; i++) {
+    typical.push(["the", "a", "term" + (i % 1200), "alpha" + (i % 150), "gamma" + (i % 130), "word"][i % 6]);
+  }
+  const typicalText = typical.join(" ");
+  const typicalMatchers = kc9kKeywordMatchers(typicalTerms);
+  let slowest = 0;
+  for (let round = 0; round < 5; round++) { // the slowest of 5, after warm-up
+    const text = typicalText + " round" + round; // new text: split again
+    const t0 = Date.now();
+    kc9kTextHits(typicalMatchers, text);
+    for (const phrase of typicalPhrases) {
+      phrase.test(text);
+    }
+    if (round > 0) {
+      slowest = Math.max(slowest, Date.now() - t0);
+    }
+  }
+  if (slowest > 50) {
+    failed0.push("a typical page with 1,000 terms and 100 phrases took " + slowest + " ms (> 50)");
+  }
+  console.log("typical page judged in " + slowest + " ms");
 }
 
 // Phrases: the examples of SPEC R-PHRASE-1 to 8.

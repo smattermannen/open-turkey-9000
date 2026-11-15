@@ -37,10 +37,21 @@ def remove_test_block():
         ot_quiet("block", "remove", name)
 
 
+def unsupported_browsers():
+    """Block unsupported browsers (a tamper protection setting): "on" or "off"."""
+    out = subprocess.run(["kc9k", "tamper"], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        if line.startswith("unsupported-browsers "):
+            return line.split()[1]
+    return "off"
+
+
 def cleanup(saved):
     remove_test_block()
     for name, value in saved.items():
         ot_quiet("browser", name, value)
+    if saved_unsupported == "off":
+        ot_quiet("tamper", "unsupported-browsers", "off")
     subprocess.run(["pkill", "-f", "^/tmp/chromium"], stderr=subprocess.DEVNULL)
     if os.path.exists("/tmp/chromium"):
         os.remove("/tmp/chromium")
@@ -55,6 +66,7 @@ REMOTE_CONTROL_MARKER = "/var/lib/kc9k/allow-remote-control"
 # Leave the machine as we found it so the test can run again on real hardware.
 remove_test_block()
 saved_settings = browser_settings()
+saved_unsupported = unsupported_browsers()
 subprocess.run(["sudo", "touch", REMOTE_CONTROL_MARKER], check=True)
 
 def start(signatures_required=True):

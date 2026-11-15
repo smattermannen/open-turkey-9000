@@ -884,6 +884,31 @@ function kc9kPhraseTokens(text) {
 }
 
 // kc9kPhraseTerm parses one term: its words (with * patterns) and bridges.
+// kc9kPhraseTokenized is kc9kPhraseTokens with an index of each sentence's
+// words (word -> positions), kept for the last text: every phrase of a page
+// reads the same text, so it is split once, not once per phrase.
+let kc9kTokenCache = { text: null, value: null };
+function kc9kPhraseTokenized(text) {
+  const key = String(text);
+  if (kc9kTokenCache.text !== key) {
+    const sentences = kc9kPhraseTokens(key);
+    const index = sentences.map((words) => {
+      const map = new Map();
+      words.forEach((w, i) => {
+        const list = map.get(w.word);
+        if (list) {
+          list.push(i);
+        } else {
+          map.set(w.word, [i]);
+        }
+      });
+      return map;
+    });
+    kc9kTokenCache = { text: key, value: { sentences, index } };
+  }
+  return kc9kTokenCache.value;
+}
+
 function kc9kPhraseTerm(raw) {
   let value = String(raw).trim().toLowerCase();
   const into = value.startsWith("-");
@@ -924,23 +949,41 @@ function kc9kPhraseMatcher(phrase, scope) {
   const length = Math.min(Math.max(phrase.length || necessary, necessary), sets.length);
   const prepare = (input) => (scope === "url" ? kc9kUrlWords(input) : input);
   const test = (input) => {
-    for (const words of kc9kPhraseTokens(prepare(input))) {
-      // Every place a term occurs: [{ start, end, set, into, out }].
-      const at = words.map(() => []);
+    const tokenized = kc9kPhraseTokenized(prepare(input));
+    for (let si = 0; si < tokenized.sentences.length; si++) {
+      const words = tokenized.sentences[si];
+      const index = tokenized.index[si];
+      // Every place a term occurs: { start, end, set, into, out }. Exact
+      // first words are looked up in the sentence's index (principle 9).
+      const found = [];
+      const setHit = new Array(sets.length).fill(false);
       sets.forEach((set, s) => {
         for (const term of set.terms) {
-          for (let i = 0; i + term.words.length <= words.length; i++) {
+          const first = term.words[0];
+          const starts = first.exact !== undefined ? (index.get(first.exact) || []) : words.keys();
+          for (const i of starts) {
+            if (i + term.words.length > words.length) {
+              continue;
+            }
             let ok = true;
             for (let k = 0; k < term.words.length && ok; k++) {
               ok = kc9kPhraseWordMatches(term.words[k], words[i + k].word) &&
                 (k === 0 || words[i + k].gap === "space");
             }
             if (ok) {
-              at[i].push({ start: i, end: i + term.words.length - 1, set: s, into: term.into, out: term.out });
+              found.push({ start: i, end: i + term.words.length - 1, set: s, into: term.into, out: term.out });
+              setHit[s] = true;
             }
           }
         }
       });
+      if (sets.some((set, s) => set.necessary && !setHit[s])) {
+        continue; // a necessary word set is missing from this sentence
+      }
+      const at = words.map(() => []);
+      for (const p of found) {
+        at[p.start].push(p);
+      }
       // Chains of term places, each set used once (an array, not a bit
       // mask: a phrase may have any number of word sets).
       const used = new Array(sets.length).fill(false);

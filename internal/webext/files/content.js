@@ -244,6 +244,7 @@ function scanKeywords() {
     keywordsFor = url;
     readWhole = false;
     readingDone = false;
+    wholeRead = null;
   }
   const testing = lists.some((list) => list.test);
   if (readingDone && !testing) {
@@ -252,9 +253,17 @@ function scanKeywords() {
   // Lists that only look at addresses need no reading: this still catches a
   // page that changed address without loading (the background script only
   // sees real loads).
-  const page = kc9kReadsPage(lists) || testing
-    ? { url, title: document.title || "", text: readPageText(body) }
-    : { url };
+  let page = { url };
+  if (kc9kReadsPage(lists) || testing) {
+    const text = readPageText(body);
+    if (text === null) {
+      // The first read isn't finished: go on in the next idle time.
+      textChanged = true;
+      queueScan();
+      return;
+    }
+    page = { url, title: document.title || "", text };
+  }
   if (testing) {
     showTestPanel(kc9kTestReport(lists, page));
   } else {
@@ -293,12 +302,58 @@ function scanKeywords() {
 const REREAD_MS = 30000;
 let readWholeAt = 0;
 
+// A whole read goes in pieces of at most READ_SLICE_MS (principle 9: no
+// single piece of work in a page over 16 ms): readPageText returns null
+// until it is done. A container whose children are all elements is opened
+// up; anything with text of its own is read whole, so sentences stay whole.
+const READ_SLICE_MS = 8;
+let wholeRead = null; // { queue: [nodes], parts: [strings] } while reading
+
 function readPageText(body) {
-  if (!readWhole || (Date.now() - readWholeAt > REREAD_MS && addedNodes.size === 0)) {
-    readWhole = true;
+  if (!wholeRead && (!readWhole || (Date.now() - readWholeAt > REREAD_MS && addedNodes.size === 0))) {
+    readWhole = true; // the observer collects additions from now on
     readWholeAt = Date.now();
     addedNodes = new Set();
-    pageText = (body.innerText || body.textContent || "").slice(0, MAX_TEXT);
+    wholeRead = { queue: Array.from(body.childNodes), parts: [], length: 0 };
+  }
+  if (wholeRead) {
+    const until = performance.now() + READ_SLICE_MS;
+    const w = wholeRead;
+    while (w.queue.length > 0 && w.length < MAX_TEXT) {
+      if (performance.now() > until) {
+        return null;
+      }
+      const node = w.queue.shift();
+      if (node.nodeType === Node.TEXT_NODE) {
+        const parent = node.parentElement;
+        if (node.textContent.trim() && parent && parent.getClientRects().length > 0) {
+          w.parts.push(node.textContent);
+          w.length += node.textContent.length;
+        }
+        continue;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE || node.id === PANEL_ID ||
+        ["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"].includes(node.tagName)) {
+        continue;
+      }
+      const ownText = Array.from(node.childNodes).some((c) => c.nodeType === Node.TEXT_NODE && c.textContent.trim());
+      if (!ownText && node.childElementCount > 1) {
+        w.queue.unshift(...node.childNodes); // open it up, in order
+        continue;
+      }
+      // Only what is shown (R-LIST-4): innerText of an element that isn't
+      // rendered would be all of its text.
+      if (node.getClientRects().length === 0 && getComputedStyle(node).display !== "contents") {
+        continue;
+      }
+      const text = node.innerText;
+      if (text && text.trim()) {
+        w.parts.push(text);
+        w.length += text.length;
+      }
+    }
+    pageText = w.parts.join("\n").slice(0, MAX_TEXT);
+    wholeRead = null;
     return pageText;
   }
   const nodes = addedNodes;
@@ -489,8 +544,8 @@ new MutationObserver((records) => {
   }
 }).observe(document.documentElement || document, { childList: true, subtree: true, characterData: true });
 let scanQueued = false;
-setInterval(() => {
-  if (!textChanged || scanQueued) {
+function queueScan() {
+  if (scanQueued) {
     return;
   }
   scanQueued = true;
@@ -501,7 +556,12 @@ setInterval(() => {
   if (typeof requestIdleCallback === "function") {
     requestIdleCallback(run, { timeout: 500 });
   } else {
-    run();
+    setTimeout(run, 0);
+  }
+}
+setInterval(() => {
+  if (textChanged) {
+    queueScan();
   }
 }, 250);
 document.addEventListener("DOMContentLoaded", () => {

@@ -75,3 +75,23 @@ func (d *DB) PruneUsage(day string) error {
 	}
 	return nil
 }
+
+// ImportUsage adds statistics rows from a backup; a day, kind and name
+// already recorded here is kept as it is, so importing twice adds nothing.
+func (d *DB) ImportUsage(rows []UsageRow) error {
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, r := range rows {
+		if r.Seconds <= 0 || (r.Kind != UsageSite && r.Kind != UsageApp) {
+			continue
+		}
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO usage (day, kind, name, seconds) VALUES (?, ?, ?, ?)`,
+			r.Day, r.Kind, r.Name, r.Seconds); err != nil {
+			return fmt.Errorf("failed to import statistics: %w", err)
+		}
+	}
+	return tx.Commit()
+}

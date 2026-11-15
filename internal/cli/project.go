@@ -110,6 +110,7 @@ type projectExport struct {
 	Nepsis  *db.Nepsis        `json:"bypass_detection,omitempty"`
 	Freezes []windowExport    `json:"frozen_chicken_schedules,omitempty"`
 	Images  map[string]string `json:"images,omitempty"` // name -> base64
+	Backup  *backupExtras     `json:"backup,omitempty"` // backups only
 }
 
 func exportWindow(w schedule.Window) windowExport {
@@ -424,6 +425,11 @@ passwords, hotkeys and statistics are never in it.`,
 			}
 			out.Freezes = append(out.Freezes, w)
 		}
+		if !share {
+			if out.Backup, err = exportBackupExtras(database); err != nil {
+				return err
+			}
+		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
 			return err
@@ -586,6 +592,25 @@ With --dry-run, says what would happen and changes nothing.`,
 					locks = append(locks, lockToSet{fmt.Sprintf("imported freeze schedule %s (%s mode)", f.w, f.mode), "schedule lock", leadLength(f.lead)})
 				}
 			}
+			if in.Backup != nil {
+				// Block names as they will be: rename like the loop below.
+				names, taken := map[string]string{}, map[string]bool{}
+				for _, c := range blocks {
+					name := c.in.Name
+					for n := 2; ; n++ {
+						if _, err := database.GetBlock(name); err != nil && !taken[name] {
+							break
+						}
+						name = fmt.Sprintf("%s-%d", c.in.Name, n)
+					}
+					taken[name], names[c.in.Name] = true, name
+				}
+				trusted, err := database.TrustedNow(time.Now())
+				if err != nil {
+					return err
+				}
+				locks = append(locks, in.Backup.backupLocks(names, database, trusted)...)
+			}
 			if dry {
 				for _, l := range locks {
 					say("set a lock: %s", l)
@@ -637,6 +662,7 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 		}
 		taken := map[string]bool{}
+		renamed := map[string]string{} // the file's block names -> created here
 		for _, c := range blocks {
 			name := c.in.Name
 			for n := 2; ; n++ {
@@ -653,6 +679,7 @@ With --dry-run, says what would happen and changes nothing.`,
 			} else {
 				say("add block '%s' (%d lists, %d apps, %d schedules)", name, len(c.lists), len(visibleApps(c.in.Apps)), len(c.windows))
 			}
+			renamed[c.in.Name] = name
 			c.in.Name = name
 			if !dry {
 				if err := createBlock(database, c); err != nil {
@@ -746,6 +773,11 @@ With --dry-run, says what would happen and changes nothing.`,
 						return err
 					}
 				}
+			}
+		}
+		if in.Backup != nil {
+			if err := importBackupExtras(database, in.Backup, renamed, dry, say); err != nil {
+				return err
 			}
 		}
 		for _, f := range newFreezes {

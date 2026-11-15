@@ -467,7 +467,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Project**: holds blocks (lists, apps, titles, schedules, schedule lock,
   social, allowance, Pomodoro, breaks, ladders), clusters, browser and
   behaviour settings, global ladder, freeze schedules, list images; backup
-  adds places and place rules. Clashing block → `name-2`; existing
+  adds places and place rules, and (`cli/projectbackup.go`) running locks,
+  password hashes, hotkeys, statistics: import adds only where nothing is
+  here, confirms the locks, starts blocks that come with running locks. Clashing block → `name-2`; existing
   clusters/places kept; browser settings only on; ladder replaced only by a
   stricter one. `--dry-run` lists additions and locks.
 - **Frozen Chicken**: `freeze --for D --mode lock|logout|shutdown --yes`;

@@ -39,9 +39,6 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-14.
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unchecked: unit tests not run (no JDK/Android SDK on the
   laptop overnight): run `./gradlew testDebugUnitTest`. (S)
-- [ ] **Project** (§3.13): backup/share (`--share`), preview, renaming
-  built. Left: backup must include running locks, passwords, hotkeys,
-  statistics. (S)
 - [ ] **Words** (§3.14): done in commands/messages/GUI incl. `bypass`,
   `--text-lock`, `list scope`, `break text`, `allowance`, `break reward`.
   Left: "option" → behaviour setting; "active" used for enforcing. (S)

@@ -115,11 +115,8 @@ Only items not simply Built.
 | §3.1 Folder entry | Partial | programs closed; windows showing it not |
 | §3.2 Template | Not built | |
 | §3.2 Affected users | Not built | |
-| §3.2 Test mode for phrase sets | Unchecked | lists built |
 | §3.3 Enabled/disabled/lifted words | Partial | |
 | §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
-| §3.3 Duplicate starts inactive | Unchecked | |
-| §3.3 `kc9k toggle` | Not built | |
 | §3.4 Range lock | Not built | |
 | §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI fixed order; one lock per kind |
 | §3.4 R-LOCK-9 | Partial | extension/other protection: Unchecked |

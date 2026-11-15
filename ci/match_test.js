@@ -235,6 +235,20 @@ const failed0 = [];
   if (!kc9kReadsPage(rule(1))) {
     failed0.push("a text phrase set doesn't make the page be read");
   }
+  // §3.2 test mode for a phrase set: it never acts, and the report names
+  // the phrases found and whether each action would apply.
+  const testing = kc9kCompileLists([{
+    id: -2, block: "b", name: "Grandpa", test: true, url: [], title: [], text: [],
+    phrases: [{ sets: [{ terms: ["eat"], necessary: true }, { terms: ["grandpa"], necessary: true }] },
+      { sets: [{ terms: ["big-"], necessary: true }, { terms: ["-gorilla"], necessary: true }] }],
+    phrase_scope: ["text"], actions: [{ action: "block", distinct: 2, hits: 1 }, { action: "greyscale", distinct: 3, hits: 1 }],
+    except: { url: [], title: [], text: [] },
+  }]);
+  const report = kc9kTestReport(testing, page);
+  if (kc9kListMatches(testing, page).length !== 0 || report.length !== 1 || report[0].distinct !== 2 ||
+    !report[0].actions[0].met || report[0].actions[1].met) {
+    failed0.push("phrase set test mode: " + JSON.stringify(report));
+  }
 }
 
 let failed = failed0.length;

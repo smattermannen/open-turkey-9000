@@ -66,7 +66,7 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 ## Architecture
 
 - `cmd/kc9k/main.go` → `cli.Execute()`. Cobra commands in `internal/cli/`
-  (`block.go`, `control.go`: start/stop/unlock/status). `kc9k --help` lists them.
+  (`block.go`, `control.go`: start/stop/unlock/status; `toggle.go`). `kc9k --help` lists them.
 - **Layers** (`internal/blocker/`):
   - `/etc/hosts` (atomic; `validate.go` blocks injection).
   - Firewall: nft table `inet kc9k` (address sets, output+forward chains,

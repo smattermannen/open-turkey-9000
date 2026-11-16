@@ -80,6 +80,11 @@ class SettingsActivity : Activity() {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or
                 InputType.TYPE_NUMBER_FLAG_SIGNED
         }
+        // Owner, 2026-11-16: pick it on a map instead of looking coordinates up.
+        root.addView(Button(this).apply {
+            text = "Pick home on the map…"; isEnabled = away
+            setOnClickListener { startActivity(android.content.Intent(this@SettingsActivity, MapPickerActivity::class.java)) }
+        })
         val lat = field("Home latitude", if (store.homeSet) store.lat.toString() else "")
         val lon = field("Home longitude", if (store.homeSet) store.lon.toString() else "")
         val rad = field("Radius (m)", store.radiusM.toString())

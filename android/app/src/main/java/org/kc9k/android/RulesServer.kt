@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
@@ -57,7 +58,12 @@ class RulesServer(
     private fun loop() {
         while (running) {
             try {
-                ServerSocket(port, 50, InetAddress.getByName("127.0.0.1")).use { server ->
+                // Reuse the address: after a restart the last connections linger
+                // (TIME_WAIT) and would keep the port taken for a while.
+                ServerSocket().apply {
+                    reuseAddress = true
+                    bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), port), 50)
+                }.use { server ->
                     socket = server
                     while (running) {
                         val client = server.accept()

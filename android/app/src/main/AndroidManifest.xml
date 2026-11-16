@@ -33,6 +33,7 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".MapPickerActivity" android:exported="false" />
         <activity android:name=".ChallengeActivity" android:exported="false"
             android:excludeFromRecents="true" />
 

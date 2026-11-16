@@ -29,6 +29,12 @@ third-party libraries, no Play Services.
   `nokiaMode` = home set && at home && !lifted (the "loosening refused" test).
 - `SettingsActivity.kt`: home, options/locks, lists, updater, lift; redrawn
   on resume; no loosening in Nokia mode.
+- Home on a map (`MapPickerActivity.kt`, `MapView.kt`, `MapMath.kt`;
+  Settings → "Pick home on the map…", refused in Nokia mode):
+  OpenStreetMap tiles from `tile.openstreetmap.org` (User-Agent
+  `KC9K-Android/<version>`, two threads, 96 tiles cached), drag, pinch and
+  double tap; a tap sets home; radius 50–2000 m drawn; "Where I am" (last
+  known fix); the OSM credit drawn. Web Mercator in `MapMath` (tested).
 - `Updater.kt`: PackageInstaller (silent as DO, same key), allowed in Nokia mode.
 - `Picker.kt`: DocumentsUI let through Nokia mode ≤ 5 min while KC9K opens
   it; `Picker.done` + `GuardService.resync` re-pause.
@@ -61,7 +67,11 @@ remove "Lift everything".
 cd android && ./gradlew assembleDebug testDebugUnitTest
 ```
 
-Needs Android SDK (`local.properties` or `ANDROID_HOME`), JDK 17+.
+Needs Android SDK (`local.properties` or `ANDROID_HOME`), JDK 17+. In a
+cloud container: command-line tools in `/opt/android-sdk`, `sdkmanager
+"platforms;android-36" "build-tools;35.0.0" "platform-tools"`, then
+`ANDROID_HOME=/opt/android-sdk ./gradlew --no-daemon testDebugUnitTest
+assembleDebug` (37 unit tests, 2026-11-16).
 `node ci/android_rules_test.js` checks served rules with `match.js`;
 `node ci/android_background_test.js` runs `background.js` as in IronFox.
 Never run on a phone yet.

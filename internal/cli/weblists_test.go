@@ -121,11 +121,11 @@ func TestListEntries(t *testing.T) {
 		t.Error("an exception list took an action")
 	}
 
-	// The old commands reach the default lists; add-keyword makes Page words.
+	// The old commands reach the default lists; add-term (old name add-keyword) makes Rendered terms on page.
 	mustRun(t, "block", "add-exception", "b", "reddit.com/r/golang")
 	mustRun(t, "block", "add-keyword", "b", "nsfw", "18+", "*porn*")
 	if l := list(t, d, "b", db.DefaultWordsList); l.Where != (db.Where{Text: true}) || len(l.Entries) != 3 {
-		t.Errorf("Page words = %+v", l)
+		t.Errorf("Rendered terms on page = %+v", l)
 	}
 	if got := list(t, d, "b", "Exceptions").Entries; !reflect.DeepEqual(got, []string{db.FileException, "reddit.com/r/golang"}) {
 		t.Errorf("Exceptions = %q", got)
@@ -137,33 +137,33 @@ func TestListEntries(t *testing.T) {
 func TestListGating(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "block", "create", "b")
-	mustRun(t, "block", "add-keyword", "b", "nsfw", "18+")
+	mustRun(t, "block", "add-term", "b", "nsfw", "18+")
 	mustRun(t, "list", "add", "b", "Blocked", "reddit.com")
-	mustRun(t, "list", "threshold", "b", "Page words", "block", "3")
-	mustRun(t, "list", "hits", "b", "Page words", "block", "4")
-	if err := runCLI(t, "list", "threshold", "b", "Page words", "block", "0"); err == nil {
+	mustRun(t, "list", "threshold", "b", "Rendered terms on page", "block", "3")
+	mustRun(t, "list", "hits", "b", "Rendered terms on page", "block", "4")
+	if err := runCLI(t, "list", "threshold", "b", "Rendered terms on page", "block", "0"); err == nil {
 		t.Error("threshold 0 accepted")
 	}
 	if err := d.ActivateBlock("b", true, 300, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	refused := [][]string{
-		{"list", "threshold", "b", "Page words", "block", "5"},
-		{"list", "remove", "b", "Page words", "nsfw"},
+		{"list", "threshold", "b", "Rendered terms on page", "block", "5"},
+		{"list", "remove", "b", "Rendered terms on page", "nsfw"},
 		{"list", "remove", "b", "Blocked", "reddit.com"},
 		{"list", "add", "b", "Exceptions", "reddit.com/r/golang"},
 		{"list", "where", "b", "Exceptions", "text", "on"},
-		{"list", "delete", "b", "Page words"},
+		{"list", "delete", "b", "Rendered terms on page"},
 		{"block", "remove-keyword", "b", "nsfw"},
 		{"block", "threshold", "b", "block", "9"},
-		{"list", "hits", "b", "Page words", "block", "9"},
+		{"list", "hits", "b", "Rendered terms on page", "block", "9"},
 	}
 	for _, args := range refused {
 		if err := runCLI(t, args...); err == nil || !strings.Contains(err.Error(), "locked") {
 			t.Errorf("%s on a locked block: %v; want refused as held", strings.Join(args, " "), err)
 		}
 	}
-	if l := list(t, d, "b", "Page words"); len(l.Entries) != 2 || l.Actions[0].Distinct != 3 || l.Actions[0].Hits != 4 {
+	if l := list(t, d, "b", "Rendered terms on page"); len(l.Entries) != 2 || l.Actions[0].Distinct != 3 || l.Actions[0].Hits != 4 {
 		t.Errorf("after refused edits: %+v", l)
 	}
 }
@@ -213,7 +213,7 @@ func TestBlockExportImport(t *testing.T) {
 		t.Errorf("old Exceptions = %+v", l)
 	}
 	if l := list(t, d, "old", db.DefaultWordsList); l.Actions[0] != (db.ListAction{Name: "block", Distinct: 2, Hits: 1}) {
-		t.Errorf("old Page words = %+v", l)
+		t.Errorf("old Rendered terms on page = %+v", l)
 	}
 }
 

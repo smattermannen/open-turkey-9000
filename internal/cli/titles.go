@@ -23,23 +23,23 @@ func checkTitleKeywords(keywords []string) error {
 	for _, k := range keywords {
 		k = strings.TrimSpace(k)
 		if k == "" {
-			return fmt.Errorf("a window title keyword can't be empty")
+			return fmt.Errorf("a window title entry can't be empty")
 		}
 		if len(k) > maxTitleKeyword || strings.ContainsAny(k, "\n\r\t") {
-			return fmt.Errorf("invalid window title keyword %q (one line, at most %d characters)", k, maxTitleKeyword)
+			return fmt.Errorf("invalid window title entry %q (one line, at most %d characters)", k, maxTitleKeyword)
 		}
 	}
 	return nil
 }
 
 var blockAddTitleCmd = &cobra.Command{
-	Use:   "add-title [block] [keywords...]",
+	Use:   "add-title [block] [entries...]",
 	Short: "Close apps whose window title contains these words",
-	Long: `While the block is on, any app whose window title contains one of the
-keywords (case-insensitive) is asked to close, and closed if it stays open.
-In LibreWolf, the extension sends just the matching tab to the block page.
-Programs the desktop needs are never closed. Adding keywords only makes a
-block stricter, so it is always allowed.`,
+	Long: `While the block is on, any app whose window title contains one of these
+window title entries (case-insensitive) is asked to close, and closed if it
+stays open. Browsers are never matched by title: their tabs are judged by
+the block's lists (R-TITLE-1). Programs the desktop needs are never closed.
+Adding entries only makes a block stricter, so it is always allowed.`,
 	Args: cobra.MinimumNArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		name, keywords := args[0], args[1:]
@@ -64,7 +64,7 @@ block stricter, so it is always allowed.`,
 }
 
 var blockRemoveTitleCmd = &cobra.Command{
-	Use:   "remove-title [block] [keywords...]",
+	Use:   "remove-title [block] [entries...]",
 	Short: "Stop closing apps by these window-title words",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {

@@ -1,6 +1,6 @@
 // lists.go — the commands from before website lists, kept as shortcuts to a
 // block's default lists: "Blocked" (addresses), "Exceptions" (addresses) and
-// "Page words" (page text). See weblists.go for the lists themselves.
+// "Rendered terms on page" (page text). See weblists.go for the lists themselves.
 //
 //	kc9k block add <block> reddit.com '*casino*'       # to Blocked
 //	kc9k block add-exception <block> reddit.com/r/x   # to Exceptions

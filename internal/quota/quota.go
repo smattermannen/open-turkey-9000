@@ -145,13 +145,6 @@ func New(limit, now int64, day string) State {
 	return State{Limit: limit, Day: day, LastTick: now, PendingLimit: NoPending}
 }
 
-// Validate checks a requested limit.
-func Validate(d time.Duration) error {
-	if d < MinLimit || d > MaxLimit {
-		return fmt.Errorf("daily quota must be between %s and %s", MinLimit, MaxLimit)
-	}
-	return nil
-}
 
 // DayOf returns the local calendar day that a quota belongs to.
 func DayOf(t time.Time) string { return t.Format("2006-01-02") }

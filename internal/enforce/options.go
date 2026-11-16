@@ -60,7 +60,7 @@ func OptionOn(d *db.DB, name string) bool {
 // SetOption turns an option on or off.
 func SetOption(d *db.DB, name string, on bool) error {
 	if _, ok := FindOption(name); !ok {
-		return fmt.Errorf("unknown option %q", name)
+		return fmt.Errorf("unknown behaviour setting %q", name)
 	}
 	value := "off"
 	if on {

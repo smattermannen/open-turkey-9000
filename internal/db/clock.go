@@ -104,7 +104,7 @@ func (d *DB) TrustedNow(wall time.Time) (int64, error) {
 			(SELECT COUNT(*) FROM setting_locks WHERE locked_until > ?) +
 			(SELECT COUNT(*) FROM settings WHERE key = ? AND CAST(value AS INTEGER) > ?)`,
 			prev.Trusted, prev.Trusted, SettingMonkUntil, prev.Trusted).Scan(&n); err != nil {
-			return 0, fmt.Errorf("failed to check time locks: %w", err)
+			return 0, fmt.Errorf("failed to check timer locks: %w", err)
 		}
 		lockActive = n > 0
 	}

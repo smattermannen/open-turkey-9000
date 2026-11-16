@@ -602,3 +602,37 @@ func TestListCaseNamesMigrated(t *testing.T) {
 		}
 	}
 }
+
+// §3.14: the default page text list was "Page words"; every open renames
+// it to "Rendered terms on page", unless the block already has that name.
+func TestWordsListRenamed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.db")
+	d, err := OpenDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range []string{"a", "both"} {
+		if err := d.CreateBlock(b); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.CreateList(b, ListBlacklist, "Page words", Where{Text: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.CreateList("both", ListBlacklist, "rendered terms on page", Where{Text: true}); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	if d, err = OpenDB(path); err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	a, _ := d.GetBlock("a")
+	if _, ok := a.Lists.Find(DefaultWordsList); !ok {
+		t.Errorf("a's lists: %+v", a.Lists)
+	}
+	both, _ := d.GetBlock("both")
+	if _, ok := both.Lists.Find("Page words"); !ok {
+		t.Error("renamed onto a list the block already had")
+	}
+}

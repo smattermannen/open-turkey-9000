@@ -1,17 +1,17 @@
-// keywords.go — shortcuts to a block's "Page words" list, a blacklist that
-// looks at page text (created when first needed).
+// keywords.go — shortcuts to a block's "Rendered terms on page" list, a
+// blacklist that looks at page text (created when first needed).
 //
-//	kc9k block add-keyword <block> nsfw 18+ "*porn*"
-//	kc9k block remove-keyword <block> nsfw
+//	kc9k block add-term <block> nsfw 18+ "*porn*"   (old name: add-keyword)
+//	kc9k block remove-term <block> nsfw
 //	kc9k block threshold <block> greyscale 1
 //	kc9k block threshold <block> block 3
 //
-// The extension reads each page's text. A plain keyword counts only as a
-// whole word ("porn" misses "pornhub", "18+" misses "1118+"); a * matches
-// inside words ("*porn*" hits "pornhub"). A word combination such as
-// cars(red, big) or (car, lambo*) (big, small, nice):2 counts where its words
-// follow one another directly. When a page contains at least the
-// threshold's number of the list's different keywords, that action applies.
+// The extension reads each page's text. A plain rendered term counts only
+// as a whole word ("porn" misses "pornhub", "18+" misses "1118+"); a *
+// matches inside words ("*porn*" hits "pornhub"). Old files may still hold
+// word combinations such as cars(red, big); they become phrases
+// (db/combinations.go). When a page contains at least the threshold's
+// number of the list's different terms, that action applies.
 package cli
 
 import (
@@ -68,7 +68,7 @@ func checkPageKeywords(keywords []string) error {
 	for _, k := range keywords {
 		k = strings.TrimSpace(k)
 		if strings.Trim(k, "*") == "" {
-			return fmt.Errorf("a page keyword needs more than wildcards")
+			return fmt.Errorf("a rendered term needs more than wildcards")
 		}
 		limit := maxPageKeyword
 		if strings.ContainsAny(k, "()") {
@@ -78,21 +78,29 @@ func checkPageKeywords(keywords []string) error {
 			limit = maxWordCombination
 		}
 		if len(k) > limit || strings.ContainsAny(k, "\n\r\t") {
-			return fmt.Errorf("invalid page keyword %q (one line, at most %d characters)", k, limit)
+			return fmt.Errorf("invalid rendered term %q (one line, at most %d characters)", k, limit)
 		}
 	}
 	return nil
 }
 
-var blockAddKeywordCmd = shortcut("add-keyword [block] [keywords...]", "Look for these words in page text (the Page words list)", db.DefaultWordsList, true)
+var blockAddKeywordCmd = withAliases(shortcut("add-term [block] [terms...]", "Look for these rendered terms in page text (the Rendered terms on page list)", db.DefaultWordsList, true), "add-keyword")
 
-var blockRemoveKeywordCmd = shortcut("remove-keyword [block] [keywords...]", "Remove words from the Page words list", db.DefaultWordsList, false)
+var blockRemoveKeywordCmd = withAliases(shortcut("remove-term [block] [terms...]", "Remove rendered terms from the Rendered terms on page list", db.DefaultWordsList, false), "remove-keyword")
+
+// withAliases gives a command its old names (§4.12: old names stay as
+// aliases for a while).
+func withAliases(cmd *cobra.Command, aliases ...string) *cobra.Command {
+	cmd.Aliases = append(cmd.Aliases, aliases...)
+	return cmd
+}
 
 var blockThresholdCmd = &cobra.Command{
 	Use:   "threshold [block] [" + strings.Join(db.ActionNames, "|") + "] [count]",
-	Short: "How many different page words trigger each action (the Page words list)",
-	Long: `A shortcut for 'kc9k list threshold' on the block's Page words list: how many
-of its different words a page must contain before that action applies.
+	Short: "How many different rendered terms trigger each action (the Rendered terms on page list)",
+	Long: `A shortcut for 'kc9k list threshold' on the block's Rendered terms on page
+list: how many of its different terms a page must contain before that action
+applies.
 Repeats of the same word count once. Lowering a threshold is always allowed;
 raising one weakens the block. With only the block name, prints them.`,
 	Args: func(cmd *cobra.Command, args []string) error {

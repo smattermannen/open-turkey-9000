@@ -2,17 +2,16 @@
 //
 // Lifecycle:
 //
-//	kc9k start <block>   → Activate a block (start blocking)
-//	kc9k stop <block>    → Deactivate a block (stop blocking)
-//	kc9k unlock <block>  → Unlock a char-locked block via the challenge
-//	kc9k status          → Show the status of every block
+//	kc9k start <block>   → switch a block on, optionally with locks
+//	kc9k stop <block>    → switch it off (refused while locked)
+//	kc9k unlock <block>  → unlock its first lock (text, password, delay)
+//	kc9k status          → show the status of every block
 //
-// WAYS A BLOCK CAN BE "HELD" (not freely removable)
-// -------------------------------------------------
-//   - Character lock (--lock): removable only by completing the typing
-//     challenge via "unlock".
-//   - Time lock (--for / --until): cannot be removed AT ALL until the time
-//     passes — not even with the challenge. The strongest lock.
+// LOCKS (a locked block can only be made stricter; R-LOCK-1)
+// -----------------------------------------------------------
+//   - Text lock (--lock): unlocked only by typing the challenge ('unlock').
+//   - Timer lock (--for / --until): can't be unlocked at all until the time
+//     passes, not even with the challenge.
 //   - Schedule lock (kc9k schedule lock): on while a window is open or a
 //     place rule has the block on; for edits (not stop/unlock) also for the
 //     lead time the user chose before each window. Without it a schedule
@@ -47,18 +46,27 @@ import (
 
 var startCmd = &cobra.Command{
 	Use:   "start [block]",
-	Short: "Activate a block",
-	Long: `Activate a block, applying every blocking layer.
+	Short: "Switch a block on, optionally with locks",
+	Long: `Switch a block on, applying every blocking layer. It enforces whenever its
+schedule, places and breaks allow (§3.3: active, enabled when not lifted).
 
-Locks (optional, and combinable):
-  --lock            Require the typing challenge ('unlock') to deactivate.
-  --lock-chars N    Challenge length in characters (default 300, 10 to 5000).
-  --for DURATION    Timer lock: cannot be removed for this long (e.g. 2h, 90m, 1h30m).
-  --until HH:MM     Timer lock until a clock time today (or tomorrow if already past).
+Locks (optional and combinable; unlocked one at a time, in the order given):
+  --for DURATION     Timer lock for this long (e.g. 90m, 2h, 3d, 1w).
+  --until TIME       Timer lock until a time (HH:MM, or YYYY-MM-DD HH:MM).
+  --lock             Text lock: a challenge to type ('kc9k unlock'); its
+                     length --lock-chars N (default 300, 1 to 5000), or
+                     --lock-words, or your own text with --lock-text TEXT.
+  --password-stdin   Password lock (a partner's, say), read from standard input.
+  --restart          Restart lock: on until the computer restarts.
+  --delay DURATION   Delay lock: unlocking takes this long (1m to 40d).
+  --range SPEC       Range lock: on at these times, e.g. "mon-fri 09:00-17:00"
+                     (--range-invert: outside them instead).
+  --relock DURATION  Re-lock: the text and password locks come on again this
+                     long after unlocking.
 
-A timer lock cannot be lifted early by anyone short of root — that is the point.
+A timer lock can't be lifted early by anyone short of root; that is the point.
 
-On a block that is already active, start only strengthens its locks: any
+On a block that is already on, start only strengthens its locks: any
 kind of lock can be added (it goes last in the unlock order), --lock-chars
 lengthens a text lock, --for or --until extends a timer lock and --delay a
 delay lock. Locks can never be shortened, replaced or removed this way.`,
@@ -478,7 +486,7 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' is not active", blockName)
 		}
 		if hold.quota {
-			return fmt.Errorf("block '%s' has a daily allowance and stays on. Use 'kc9k allowance start %s'", blockName, blockName)
+			return fmt.Errorf("block '%s' has an allowance and stays on. Use 'kc9k allowance start %s'", blockName, blockName)
 		}
 		if hold.scheduledNow {
 			return refused(database, blockName, fmt.Errorf("block '%s' is in a scheduled window and can't be stopped until it closes", blockName))
@@ -798,7 +806,7 @@ var statusCmd = &cobra.Command{
 // 'kc9k status' and the interface.
 func extensionStatus(database *db.DB) string {
 	if !blocker.ExtensionBrowserInstalled() {
-		return "no supported browser (LibreWolf, Google Chrome, Chromium) is installed, so wildcards, keywords, greyscale, images and web-only aren't enforced in the browser, and no browser is closed. Install one: 'kc9k browsers install librewolf'."
+		return "no supported browser (LibreWolf, Google Chrome, Chromium) is installed, so wildcards, rendered terms, greyscale, images and web-only aren't enforced in the browser, and no browser is closed. Install one: 'kc9k browsers install librewolf'."
 	}
 	required, err := enforce.ExtensionRequiredNow(database)
 	if err != nil {

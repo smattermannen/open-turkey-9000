@@ -104,6 +104,9 @@ func upgradeSchema(conn *sql.DB) error {
 	}
 	// Lists have no types (§3.2): an older database may still have the
 	// column web_lists.type (and clusters.type); nothing reads it.
+	if err := migrateWordsListName(conn); err != nil {
+		return err
+	}
 	if err := migrateJoinLists(conn); err != nil {
 		return err
 	}

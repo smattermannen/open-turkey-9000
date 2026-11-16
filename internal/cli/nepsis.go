@@ -397,7 +397,7 @@ var nepsisSetCmd = &cobra.Command{
 		}
 		if block, _ := cmd.Flags().GetString("block"); block != "" {
 			if lockFlagsGiven(cmd) {
-				return fmt.Errorf("a block's bypass prevention is held by the block's own locks")
+				return fmt.Errorf("a block's bypass prevention is locked by the block's own locks; lock flags go with the global one")
 			}
 			return setBlockNepsis(cmd, database, block, n)
 		}
@@ -457,7 +457,7 @@ func init() {
 	}
 	nepsisSetCmd.Flags().String("for", "", "Global only. Timer lock: can't be weakened for this long")
 	nepsisSetCmd.Flags().String("until", "", "Global only. Timer lock until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
-	nepsisSetCmd.Flags().Bool("lock", false, "Global only. Typing challenge lock ('kc9k bypass unlock')")
+	nepsisSetCmd.Flags().Bool("lock", false, "Global only. Text lock: a challenge to type to unlock ('kc9k bypass unlock')")
 	nepsisSetCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	nepsisSetCmd.Flags().Bool("password-stdin", false, "Global only. Password lock, read from standard input")
 	nepsisSetCmd.Flags().Bool("restart", false, "Global only. Can't be weakened until the computer restarts")

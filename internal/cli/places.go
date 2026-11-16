@@ -20,9 +20,10 @@ var placeCmd = &cobra.Command{
 	Short: "Places, known by their Wi-Fi networks, where blocks turn on",
 	Long: `A place is the set of Wi-Fi networks in range when you save it: your own and
 the neighbours'. The computer is at the place when two of them are in range
-again. A block with a place rule is on while the computer is there, and is
-held like a block in a schedule window: it can't be stopped or weakened
-until you leave.
+again. A block with a place rule is enabled while the computer is there and
+lifted elsewhere (it stays switched on). With a schedule lock ('kc9k schedule
+lock'), it is locked while there, as in a block window: it can't be switched
+off or weakened until you leave.
 
 When no network at all can be seen (Wi-Fi switched off, or no adapter), the
 computer counts as being at every place, and a switched-off Wi-Fi is
@@ -86,7 +87,7 @@ var placeAddCmd = &cobra.Command{
 
 var placeRemoveCmd = &cobra.Command{
 	Use:   "remove [name]",
-	Short: "Forget a place (refused while it holds a block)",
+	Short: "Forget a place (refused while a block using it is locked)",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		p, err := database.GetPlace(args[0])

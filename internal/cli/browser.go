@@ -108,7 +108,7 @@ every other browser at any time, turn on 'kc9k tamper unsupported-browsers'.`,
 				return err
 			}
 			if name == "block-devtools" {
-				fmt.Println("LibreWolf's developer tools work from its next start. They can switch the extension off, so wildcards, keywords, greyscale, images and web-only can be got around while they're available; domain blocks still hold.")
+				fmt.Println("LibreWolf's developer tools work from its next start. They can switch the extension off, so wildcards, rendered terms, greyscale, images and web-only can be got around while they're available; domain blocks still hold.")
 			}
 			return nil
 		}
@@ -191,7 +191,7 @@ func (s settingLockState) describe() string {
 		case db.LayerRestart:
 			parts = append(parts, "until restart")
 		case db.LayerText:
-			parts = append(parts, fmt.Sprintf("typing challenge (%d chars)", s.lock.LockChars))
+			parts = append(parts, fmt.Sprintf("text lock (%d characters)", s.lock.LockChars))
 		case db.LayerPassword:
 			parts = append(parts, "password")
 		case db.LayerRange:
@@ -739,7 +739,7 @@ func nextSettingLock(label string, s settingLockState, rest []string, unlockCmd 
 func init() {
 	browserCmd.Flags().String("for", "", "Timer lock: can't be turned off for this long (e.g. 90m, 2h, 3d, 1w)")
 	browserCmd.Flags().String("until", "", "Timer lock: can't be turned off until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
-	browserCmd.Flags().Bool("lock", false, "Typing challenge lock ('kc9k browser unlock <setting>')")
+	browserCmd.Flags().Bool("lock", false, "Text lock: a challenge to type to unlock ('kc9k browser unlock <setting>')")
 	browserCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	browserCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	browserCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")

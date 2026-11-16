@@ -4755,7 +4755,7 @@ class Window(Gtk.ApplicationWindow):
         self.keyword_test_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.keyword_test_switch.connect("state-set", self.toggle_keyword_test)
         test_row = self.switch_row(
-            self.keyword_test_switch, "Keyword test mode",
+            self.keyword_test_switch, "Test mode",
             "Lists that read pages only show what they find. Turning it on weakens the block.")
         test_row.get_children()[0].get_children()[0].set_tooltip_text(
             "Lists that read a page's title or text do nothing; instead a panel on each page "
@@ -7192,7 +7192,7 @@ class Window(Gtk.ApplicationWindow):
             self.extension_status.set_text("Extension: " + self.state.get("extension_status", ""))
         else:
             self.extension_status.set_text(
-                "No supported browser is installed, so the extension can't run: wildcards, keywords, "
+                "No supported browser is installed, so the extension can't run: wildcards, rendered terms, "
                 "greyscale, images and web-only aren't enforced in the browser, and no browser is "
                 "closed. Install one above.")
 

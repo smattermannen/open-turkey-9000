@@ -252,7 +252,7 @@ func (d *DB) GlobalNepsis() (Nepsis, error) {
 		return n, err
 	}
 	if err := json.Unmarshal([]byte(value), &n); err != nil {
-		return Nepsis{}, fmt.Errorf("bad bypass detection setting: %w", err)
+		return Nepsis{}, fmt.Errorf("bad bypass prevention setting: %w", err)
 	}
 	return n.normalize(), nil
 }
@@ -314,12 +314,12 @@ func (d *DB) BlockNepsis(blockName string) (Nepsis, error) {
 		return Nepsis{}, nil
 	}
 	if err != nil {
-		return n, fmt.Errorf("failed to read bypass detection: %w", err)
+		return n, fmt.Errorf("failed to read bypass prevention: %w", err)
 	}
 	if config != "" {
 		n = Nepsis{}
 		if err := json.Unmarshal([]byte(config), &n); err != nil {
-			return Nepsis{}, fmt.Errorf("bad bypass detection of '%s': %w", blockName, err)
+			return Nepsis{}, fmt.Errorf("bad bypass prevention of '%s': %w", blockName, err)
 		}
 	}
 	return n.normalize(), nil
@@ -355,7 +355,7 @@ func (d *DB) SetBlockNepsis(blockName string, n Nepsis) error {
 		VALUES (?, 0, 0, '', 0, ?) ON CONFLICT(block_id) DO UPDATE SET count = 0, minutes = 0,
 		consequence = '', action_minutes = 0, config = excluded.config`, blockID, string(data))
 	if err != nil {
-		return fmt.Errorf("failed to save bypass detection: %w", err)
+		return fmt.Errorf("failed to save bypass prevention: %w", err)
 	}
 	return nil
 }

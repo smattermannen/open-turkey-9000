@@ -156,6 +156,17 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     (`TestSettingsLine`).
   - [x] A scratch database (`KC9K_DB`, GUI smoke tests) set hotkeys on the
     real desktop, clobbering KC9K's own; now it never does.
+  - [x] Words SPEC §3.14 avoids, in messages and help (found 2026-11-16):
+    the default list "Page words" is now "Rendered terms on page" (renamed
+    once in every block, `migrateWordsListName`); `block add-term` /
+    `remove-term` (old names `add-keyword` / `remove-keyword` stay as
+    aliases, §4.12); "keyword" → rendered term / window title entry;
+    "typing challenge lock" → text lock; "quota", "loosening", "held",
+    "bypass detection", "option" in messages → allowance, weakening,
+    locked, bypass prevention, behaviour setting; GUI "Keyword test mode" →
+    "Test mode". `start`'s help listed text locks as 10–5000 characters and
+    `--until` as a clock time only; `place`'s said a place rule alone
+    makes a block unstoppable (only a schedule lock does, R-LOCK-10).
 
 - [x] **Lock-bypass audit 2026-11-15** (R-LOCK-1, §3.5): every command
   that could weaken a block tried on a locked block that has something of

@@ -35,7 +35,7 @@ doesn't end it: it lifts it for that long, then it is back with its locks.
 Unlocking once more during that break lifts its locks; the block stays on.
 
 Allowing more breaks weakens a block, so it is refused while the block is
-held. Allowing fewer, or none, is always possible.`,
+locked. Allowing fewer, or none, is always possible.`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		blocks, err := database.ListBlocks()

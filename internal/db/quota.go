@@ -36,7 +36,7 @@ func (d *DB) GetQuota(name string) (*quota.State, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to read quota of '%s': %w", name, err)
+		return nil, fmt.Errorf("failed to read the allowance of '%s': %w", name, err)
 	}
 	if rolling != "" {
 		_ = json.Unmarshal([]byte(rolling), &s.Rolling)
@@ -57,7 +57,7 @@ func (d *DB) SaveQuota(name string, s quota.State) error {
 		blockID, s.Limit, s.Used, s.Day, s.Open, s.SessionEnd, s.LastTick, s.PendingLimit, s.Period, s.Refill,
 		s.MaxSessions, s.Sessions, s.LastUse, rollingJSON(s.Rolling), s.RollHour)
 	if err != nil {
-		return fmt.Errorf("failed to save quota of '%s': %w", name, err)
+		return fmt.Errorf("failed to save the allowance of '%s': %w", name, err)
 	}
 	return nil
 }
@@ -79,7 +79,7 @@ func (d *DB) UpdateQuotaIfUnchanged(name string, prev, next quota.State) (bool, 
 		next.MaxSessions, next.Sessions, next.LastUse, rollingJSON(next.Rolling), next.RollHour,
 		blockID, prev.Limit, prev.Used, prev.Day, prev.Open, prev.SessionEnd, prev.LastTick, prev.PendingLimit)
 	if err != nil {
-		return false, fmt.Errorf("failed to update quota of '%s': %w", name, err)
+		return false, fmt.Errorf("failed to update the allowance of '%s': %w", name, err)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
@@ -95,7 +95,7 @@ func (d *DB) DeleteQuota(name string) error {
 		return err
 	}
 	if _, err := d.conn.Exec("DELETE FROM quotas WHERE block_id = ?", blockID); err != nil {
-		return fmt.Errorf("failed to delete quota of '%s': %w", name, err)
+		return fmt.Errorf("failed to delete the allowance of '%s': %w", name, err)
 	}
 	return nil
 }
@@ -104,14 +104,14 @@ func (d *DB) DeleteQuota(name string) error {
 func (d *DB) QuotaBlocks() ([]string, error) {
 	rows, err := d.conn.Query("SELECT b.name FROM quotas q JOIN blocks b ON b.id = q.block_id ORDER BY b.name")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list quotas: %w", err)
+		return nil, fmt.Errorf("failed to list allowances: %w", err)
 	}
 	defer rows.Close()
 	var names []string
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("failed to read quota row: %w", err)
+			return nil, fmt.Errorf("failed to read an allowance: %w", err)
 		}
 		names = append(names, name)
 	}

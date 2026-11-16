@@ -10,7 +10,7 @@
 // Before lists, a block had one list of sites and patterns, one of
 // exceptions and one of page keywords, an allowlist mode, and its actions
 // and thresholds for the whole block. migrateWebLists turns those into the
-// lists "Blocked", "Exceptions" and "Page words".
+// lists "Blocked", "Exceptions" and "Rendered terms on page".
 package db
 
 import (
@@ -58,7 +58,9 @@ var Places = []string{PlaceURL, PlaceTitle, PlaceText, PlaceAds}
 const (
 	DefaultBlockedList    = "Blocked"
 	DefaultExceptionsList = "Exceptions"
-	DefaultWordsList      = "Page words"
+	DefaultWordsList      = "Rendered terms on page"
+	// oldWordsList is DefaultWordsList's name before 2026-11-16.
+	oldWordsList = "Page words"
 )
 
 // MaxListName bounds a list's name.
@@ -765,7 +767,7 @@ func legacyStrings(q querier, query string, blockID int) ([]string, error) {
 //   - "Blocked" (address): the sites and patterns, with the block's actions.
 //     An allowlist block becomes *.* plus its patterns.
 //   - "Exceptions" (address): the exceptions, plus an allowlist's sites.
-//   - "Page words" (text), if it had any: the keywords, with the block's
+//   - "Rendered terms on page" (text), if it had any: the keywords, with the block's
 //     actions at its thresholds.
 func migrateWebLists(conn *sql.DB) error {
 	if err := addColumnIfMissing(conn, "blocks", "lists_ready", "BOOLEAN NOT NULL DEFAULT 0"); err != nil {
@@ -905,4 +907,17 @@ func migrateBlockLists(conn *sql.DB, blockID int) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// migrateWordsListName renames the default page text list from its old name
+// "Page words" to DefaultWordsList (the glossary's words, §3.14), in every
+// block that has no list of the new name yet.
+func migrateWordsListName(conn *sql.DB) error {
+	_, err := conn.Exec(`UPDATE web_lists SET name = ? WHERE name = ? AND NOT EXISTS
+		(SELECT 1 FROM web_lists w WHERE w.block_id = web_lists.block_id AND lower(w.name) = lower(?))`,
+		DefaultWordsList, oldWordsList, DefaultWordsList)
+	if err != nil {
+		return fmt.Errorf("renaming the Page words lists: %w", err)
+	}
+	return nil
 }

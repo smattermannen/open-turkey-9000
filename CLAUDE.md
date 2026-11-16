@@ -188,8 +188,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   parts). Per action: threshold (distinct entries), hit count and rate
   (`list rate`, percent of the page's words, pages ≥ 200 words).
   Strengthening free; else gated (`EditList*` by id). Shortcuts (`block add`,
-  `add-exception`, `add-keyword`, `threshold`, `action`) use default lists
-  Blocked / Exceptions / Page words (`migrateWebLists`). Old combinations
+  `add-exception`, `add-term` (alias `add-keyword`), `threshold`, `action`)
+  use default lists Blocked / Exceptions / Rendered terms on page
+  (`migrateWebLists`; named Page words until `migrateWordsListName`).
+  User-facing words follow SPEC §3.14 (`rendered term`, `window title
+  entry`, `text lock`, `allowance`, `weakening`). Old combinations
   `(a, b) (c):2`: `migrateCombinations` (`db/combinations.go`, every open
   and after imports) turns blacklist/cluster ones (rendered terms only)
   into phrase sets; `refuseCombinations` refuses new typed ones; leftovers
@@ -361,7 +364,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 ## Built behaviour (not fixed by `SPEC.md`; the code is the truth)
 
 - **Blocks**: new block = blacklist `Blocked` + exception list `Exceptions`
-  (`file://*`; spares no website); `Page words` made on first `add-keyword`.
+  (`file://*`; spares no website); `Rendered terms on page` made on first
+  `add-term`.
   `--allowlist` = `*.*` in Blocked. `block action B A on|off` sets all
   blacklists. A blacklist keeps ≥ 1 scope; lists and phrase sets may have no action (they then do nothing). Pre-list blocks
   (sites, patterns, exceptions, keywords, allowlist) were migrated into the

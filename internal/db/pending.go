@@ -75,7 +75,7 @@ func (e Edit) String() string {
 	case EditSetDelay:
 		if len(e.Values) == 1 {
 			if n, err := strconv.ParseInt(e.Values[0], 10, 64); err == nil {
-				return fmt.Sprintf("shorten the loosening delay to %s", time.Duration(n)*time.Second)
+				return fmt.Sprintf("shorten the weakening delay to %s", time.Duration(n)*time.Second)
 			}
 		}
 	}
@@ -186,7 +186,7 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 		case 1: // the setting as JSON ("" or "{}": off)
 			if e.Values[0] != "" {
 				if jsonErr := json.Unmarshal([]byte(e.Values[0]), &n); jsonErr != nil {
-					return fmt.Errorf("bad set-nepsis edit: %v", jsonErr)
+					return fmt.Errorf("bad bypass prevention edit: %v", jsonErr)
 				}
 			}
 		case 4: // queued before the ladder: count, minutes, consequence, its minutes
@@ -197,11 +197,11 @@ func (d *DB) ApplyEdit(blockName string, e Edit) error {
 				}
 			}
 			if convErr != nil {
-				return fmt.Errorf("bad set-nepsis edit: %v", convErr)
+				return fmt.Errorf("bad bypass prevention edit: %v", convErr)
 			}
 			n.Consequence = e.Values[2]
 		default:
-			return fmt.Errorf("bad set-nepsis edit")
+			return fmt.Errorf("bad bypass prevention edit")
 		}
 		err = d.SetBlockNepsis(blockName, n)
 	case EditAddSchedule:
@@ -354,7 +354,7 @@ const (
 func (d *DB) LoosenDelay(name string) (int64, error) {
 	var n int64
 	if err := d.conn.QueryRow("SELECT loosen_delay FROM blocks WHERE name = ?", name).Scan(&n); err != nil {
-		return 0, fmt.Errorf("failed to read the loosening delay of '%s': %w", name, err)
+		return 0, fmt.Errorf("failed to read the weakening delay of '%s': %w", name, err)
 	}
 	if n <= 0 {
 		return DefaultLoosenDelay, nil
@@ -365,10 +365,10 @@ func (d *DB) LoosenDelay(name string) (int64, error) {
 // SetLoosenDelay sets a block's loosening delay in seconds.
 func (d *DB) SetLoosenDelay(name string, seconds int64) error {
 	if seconds < MinLoosenDelay || seconds > MaxLoosenDelay {
-		return fmt.Errorf("a loosening delay is from %s to %s", time.Duration(MinLoosenDelay)*time.Second, time.Duration(MaxLoosenDelay)*time.Second)
+		return fmt.Errorf("a weakening delay is from %s to %s", time.Duration(MinLoosenDelay)*time.Second, time.Duration(MaxLoosenDelay)*time.Second)
 	}
 	if _, err := d.conn.Exec("UPDATE blocks SET loosen_delay = ? WHERE name = ?", seconds, name); err != nil {
-		return fmt.Errorf("failed to save the loosening delay of '%s': %w", name, err)
+		return fmt.Errorf("failed to save the weakening delay of '%s': %w", name, err)
 	}
 	return nil
 }

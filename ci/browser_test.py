@@ -163,7 +163,7 @@ try:
         # greyscale (1) applies and the block page (3) doesn't, until the
         # block threshold comes down to 2.
         ot("block", "create", "words")
-        ot("block", "add-keyword", "words", "domain", "documentation", "zzqqxx")
+        ot("block", "add-term", "words", "domain", "documentation", "zzqqxx")
         ot("block", "action", "words", "greyscale", "on")
         ot("block", "threshold", "words", "block", "3")
         ot("start", "words")
@@ -178,8 +178,8 @@ try:
         print("keyword url:", driver.current_url)
         check("two different keywords block at threshold 2",
               driver.current_url.startswith("moz-extension:") and "reason=keyword" in driver.current_url)
-        ot("block", "remove-keyword", "words", "domain")
-        ot("block", "add-keyword", "words", "doma")
+        ot("block", "remove-term", "words", "domain")
+        ot("block", "add-term", "words", "doma")
         time.sleep(6)
         driver.get("https://example.net/")
         time.sleep(4)

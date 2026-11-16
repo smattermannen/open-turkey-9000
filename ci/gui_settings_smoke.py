@@ -198,7 +198,7 @@ check(shown == ["settings"], "the dialog shows the browsers: %s" % shown)
 Gtk.Dialog.run = real_msg_run
 
 # §4.9 times blocked on the Statistics page (counts, not time).
-win.stats_rows = [{"day": __import__("datetime").date.today().isoformat(), "kind": "blocked", "name": "reddit.com", "seconds": 3},
+win.stats_rows = win.stats_page_rows = [{"day": __import__("datetime").date.today().isoformat(), "kind": "blocked", "name": "reddit.com", "seconds": 3},
                   {"day": __import__("datetime").date.today().isoformat(), "kind": "site", "name": "wiki.org", "seconds": 600}]
 win.kind_blocked.set_active(True); win.update_stats()
 check(win.tile_total.get_children()[1].get_text() == "3×" if len(win.tile_total.get_children()) > 1 else True, "blocked total as a count")

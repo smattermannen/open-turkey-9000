@@ -104,6 +104,29 @@ this computer and is kept for a year.
 			}
 			return nil
 		}
+		// §4.9: only names containing --search, only a block's sites and
+		// apps (its contents: behind its block password, §3.11).
+		search, _ := cmd.Flags().GetString("search")
+		var keep func(kind, name string) bool
+		if b, _ := cmd.Flags().GetString("block"); b != "" {
+			if err := revealBlock(database, b); err != nil {
+				return fmt.Errorf("the sites and apps of '%s' are behind its block password: %w", b, err)
+			}
+			if keep, err = statsBlockFilter(database, b); err != nil {
+				return err
+			}
+		}
+		kept := rows[:0:0]
+		for _, r := range rows {
+			if search != "" && !strings.Contains(strings.ToLower(r.Name), strings.ToLower(search)) {
+				continue
+			}
+			if keep != nil && !keep(r.Kind, r.Name) {
+				continue
+			}
+			kept = append(kept, r)
+		}
+		rows = kept
 		out := statsOutput{Enabled: enforce.StatsOn(database), Since: since, Rows: rows}
 		if out.Users, err = database.UsageUsers(); err != nil {
 			return err
@@ -121,22 +144,12 @@ this computer and is kept for a year.
 			fmt.Println("Statistics are off ('kc9k stats on' to record).")
 		}
 		top, _ := cmd.Flags().GetInt("top")
-		search, _ := cmd.Flags().GetString("search")
-		var keep func(kind, name string) bool
-		if b, _ := cmd.Flags().GetString("block"); b != "" {
-			if keep, err = statsBlockFilter(database, b); err != nil {
-				return err
-			}
-		}
 		fmt.Printf("Since %s:\n", since)
 		for _, kind := range []struct{ key, title string }{{db.UsageSite, "Websites"}, {db.UsageApp, "Apps"},
 			{db.UsageBlocked, "Times blocked (sites)"}, {db.UsageBlockedBlock, "Times blocked (blocks)"}} {
 			totals := map[string]int64{}
 			for _, r := range rows {
-				if r.Kind != kind.key || (search != "" && !strings.Contains(strings.ToLower(r.Name), strings.ToLower(search))) {
-					continue
-				}
-				if keep != nil && !keep(r.Kind, r.Name) {
+				if r.Kind != kind.key {
 					continue
 				}
 				totals[r.Name] += r.Seconds

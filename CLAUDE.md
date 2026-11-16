@@ -377,7 +377,12 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Test mode** (`db/testmode.go`): lists go out `test: true`; extension
   shows `kc9kTestReport`, skips them in `kc9kListMatches`.
 - **Statistics**: foreground app time (daemon) and site time (extension);
-  not counted when locked or after 2 min idle; kept a year.
+  not counted when locked or after 2 min idle; kept a year. `stats --json`
+  rows are filtered by `--search`/`--block` (block password, §3.11). GUI:
+  `DailyChart.set_stacks` (top names stacked bottom up, the rest Other),
+  `Legend`, `assign_series` (a name keeps its palette slot, never two shown
+  in one), `SERIES_LIGHT`/`SERIES_DARK`; the dashboard reads `stats_rows`
+  (unfiltered), the page `stats_page_rows`. `ci/gui_stats_smoke.py`.
 - **GUI** (`gui/kc9k-gui.py`, GTK 3): reads `kc9k gui-state`,
   `kc9k stats --json`; every change runs a `kc9k` command. Design layer
   (R-GUI-3, `APP_CSS`): `page_header`, `section` (a card; `help=` puts

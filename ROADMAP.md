@@ -152,8 +152,28 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     now they are phrases and sites. `TestClassifyEntryLines`,
     `TestImportLayouts`, `ci/gui_import_smoke.py` (clicks the Import
     buttons).
-  - [ ] Statistics bar chart: one colour per site/app over time (§4.9). Not
-    built. M
+  - [x] Statistics bar chart: one colour per site/app over time (§4.9;
+    built 2026-11-16): each day's column stacks the top sites or apps
+    (Top 5 or 10; at most seven named, the rest as Other in grey), bottom
+    up from the most used, in the palette checked with the chart guide's
+    validator (light and dark), with a legend naming every series and a
+    tooltip per day; a site keeps its colour while the period, Top N,
+    search or block filter change, never two shown in one colour
+    (`assign_series`); the Most used list's bars take the same colours.
+    The GUI gained search and the block filter (`stats --json` now filters
+    its rows too; a block's contents behind its block password, §3.11:
+    refused with a reason, then read with the password typed); the
+    dashboard always reads unfiltered rows. `ci/gui_stats_smoke.py` (draws
+    the chart and reads its pixels), `TestStatsFilters`.
+  - [x] Android: pick home on a map (owner, 2026-11-16: OpenStreetMap):
+    `MapPickerActivity` (Settings → "Pick home on the map…", refused in
+    Nokia mode) shows OpenStreetMap tiles (`MapView`: drag, pinch, double
+    tap; one tap sets home; radius 50–2000 m drawn as a circle; "Where I
+    am"; the OSM credit), Web Mercator in `MapMath` (`MapMathTest`). The
+    Android unit tests now run in the cloud (Android SDK, Gradle): 37
+    pass; `RulesServerTest` failed once on a port still in TIME_WAIT, so the
+    rules server reuses the address (also after a restart on the phone).
+    Unchecked on a phone.
   - [x] Durations (R-GUI-1): `DurationField` (days, hours, minutes or
     typed `2d 4h`; out of range or unreadable it says why under the box and
     keeps the text; dialogs' main buttons wait) in every duration: timer
@@ -278,10 +298,10 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
   scheduled blocks on once); allowance sessions lift their block (it stays
   on); the GUI block start and setting lock dialogs ask the unlock order. Not built:
   hardware/internet clock check (see §5). (L)
-- [ ] **Android extension can be switched off** (§3.13): built (5 s grace
+- [x] **Android extension can be switched off** (§3.13): built (5 s grace
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
-  `ExtensionGuard`). Unchecked: unit tests not run (no JDK/Android SDK on the
-  laptop overnight): run `./gradlew testDebugUnitTest`. (S)
+  `ExtensionGuard`). Unit tests run in the cloud 2026-11-16:
+  `ExtensionGuardTest` (7) and the other 30 pass. On a phone: §0.2. (S)
 - [ ] **Page reading slow on big pages** (principle 9). Done: the first
   read of a page goes in ≤ 8 ms pieces in idle time (`readPageText`,
   `READ_SLICE_MS`), then only added visible text, full re-read ≤ every 30 s;
@@ -388,7 +408,7 @@ Only items not simply Built.
 | §4.3 Ctrl+F, multi-select, double-click edit | Built | `EditableList`: Ctrl+F to its search, Ctrl/Shift-click and Ctrl+A in website lists, phrase sets, apps, titles, clusters, exempt folders; Delete/Backspace removes, selection moves on; double-click moves an entry into the box |
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters. "All searches containing…" not built |
 | §4.5 Grid drag-move, copy to days, similar windows | Built | drag a window to move it (time; day for one-day windows); click to edit days (copy to days), times, its break, or remove; a window on several days is edited as one; other blocks' windows greyed |
-| §4.9 Statistics: times blocked, top N, search, filter by block | Built | blocked pages counted per site and block (`blocked`, `blocked-block` rows); `stats --top N --search T --block B`; GUI Times blocked view |
+| §4.9 Statistics: times blocked, top N, search, filter by block, colour per site/app | Built | blocked pages counted per site and block (`blocked`, `blocked-block` rows); `stats --top N --search T --block B` (JSON filtered too); GUI Times blocked view, Top 5/10, search, block filter, stacked daily chart with a colour per site/app and a legend (`ci/gui_stats_smoke.py`). Time frame: presets and `--days N`; no custom date range in the GUI |
 | §4.9 Statistics per user, skip private windows | Built | skip private windows (`stats private skip|count`, rules `stats_skip_private`, GUI switch); per user (`usage_users`: apps by desktop session user, sites by the uid of the extension's socket, `blocker.ClientUser`; `stats --user U`, `--users`, GUI chooser; checked live for apps). Times blocked are counted for all users only; backups carry totals only |
 | §4.10 Preferences | Built | theme with darkness slider (dark grey to black), clock 24-/12-hour (shown times: grid and clip axes, tooltips, pauses; entry fields stay HH:MM), first day of the week (schedule grid), open at login, tray (Ayatana AppIndicator or XApp status icon: what is on, open, quit; closing the window keeps it) built; tray untried on a real panel |
 | §4.10 Notifications choice | Built | `kc9k notifications`, GUI group; window start/end, timer lock end, Pomodoro, allowance, app closed; advance minutes. Live: Unchecked |

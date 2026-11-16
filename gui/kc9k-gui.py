@@ -2760,14 +2760,43 @@ def fmt_count(n):
     return f"{n}×"
 
 
-class DailyChart(Gtk.DrawingArea):
-    fmt = staticmethod(fmt_spent)  # how values read; fmt_count for counts
+# §4.9: one colour per site or app. The categorical palette's first seven
+# slots, light and dark (checked with the chart guide's palette validator:
+# lightness, chroma, colour-blind and normal-vision separation, contrast; in
+# light mode three are under 3:1 against the surface, so the legend and the
+# list name every series), in this order; the rest fold into Other.
+SERIES_LIGHT = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6")
+SERIES_DARK = ("#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#0ca30c", "#9085e9")
+OTHER_SERIES = "#898781"
 
-    """Time spent per day: one series of vertical bars, hover for the value."""
+
+def hex_rgba(color, alpha=1.0):
+    return (int(color[1:3], 16) / 255, int(color[3:5], 16) / 255, int(color[5:7], 16) / 255, alpha)
+
+
+def dark_theme(widget):
+    """Whether the window shows dark: its text is light."""
+    _accent, text, _muted, _faint = theme_colors(widget)
+    return 0.2126 * text[0] + 0.7152 * text[1] + 0.0722 * text[2] > 0.5
+
+
+def series_color(slot, dark):
+    """The colour of a series slot (None: Other)."""
+    if slot is None:
+        return hex_rgba(OTHER_SERIES)
+    return hex_rgba((SERIES_DARK if dark else SERIES_LIGHT)[slot])
+
+
+class DailyChart(Gtk.DrawingArea):
+    """Time spent per day: vertical bars, stacked by site or app (§4.9),
+    hover for the values."""
+
+    fmt = staticmethod(fmt_spent)  # how values read; fmt_count for counts
 
     def __init__(self):
         super().__init__()
         self.days = []  # [(date, seconds)]
+        self.stacks, self.series = None, []  # set_stacks
         self.hover = None
         self.set_size_request(-1, 200)
         self.set_has_tooltip(True)
@@ -2779,6 +2808,14 @@ class DailyChart(Gtk.DrawingArea):
 
     def set_days(self, days):
         self.days = days
+        self.stacks = None
+        self.queue_draw()
+
+    def set_stacks(self, days, stacks, series):
+        """Stacked columns (§4.9): days as for set_days, stacks a {name:
+        value} for each day, series [(name, slot)] bottom up (slot None:
+        Other). Colour follows the name, not its rank."""
+        self.days, self.stacks, self.series = days, stacks, series
         self.queue_draw()
 
     def geometry(self, width, height):
@@ -2807,7 +2844,11 @@ class DailyChart(Gtk.DrawingArea):
         if index is None:
             return False
         day, seconds = self.days[index]
-        tooltip.set_text(f"{day.strftime('%a %-d %b')}: {self.fmt(seconds)}")
+        text = f"{day.strftime('%a %-d %b')}: {self.fmt(seconds)}"
+        if getattr(self, "stacks", None):
+            parts = sorted(((v, n) for n, v in self.stacks[index].items() if v), reverse=True)
+            text += "".join(f"\n{n}: {self.fmt(v)}" for v, n in parts)
+        tooltip.set_text(text)
         return True
 
     def on_draw(self, widget, cr):
@@ -2837,15 +2878,33 @@ class DailyChart(Gtk.DrawingArea):
             PangoCairo.show_layout(cr, layout)
             value += step
 
-        # Bars: thin, 2px gaps, rounded data ends on the baseline.
-        bar_width = max(min(slot - 2, 28), 1)
+        # Bars: thin, 2px gaps, rounded data ends on the baseline; stacked,
+        # each part in its series' colour with a 2px surface gap above it.
+        bar_width = max(min(slot - 2, 24), 1)
         label_every = 1 if len(self.days) <= 10 else math.ceil(len(self.days) / 8)
+        dark = dark_theme(widget)
         for i, (day, seconds) in enumerate(self.days):
             x = left + i * slot + (slot - bar_width) / 2
-            if seconds > 0:
+            alpha = 1.0 if self.hover in (None, i) else 0.45
+            if seconds > 0 and getattr(self, "stacks", None):
+                base = top + plot
+                parts = [(color_slot, self.stacks[i].get(name, 0)) for name, color_slot in self.series]
+                parts = [p for p in parts if p[1] > 0]
+                for j, (color_slot, part) in enumerate(parts):
+                    part_height = plot * part / top_value
+                    last = j == len(parts) - 1
+                    drawn = max(part_height - (0 if last else 2), 1)
+                    cr.set_source_rgba(*series_color(color_slot, dark)[:3], alpha)
+                    if last:
+                        rounded_top_bar(cr, x, base - drawn, bar_width, drawn)
+                    else:
+                        cr.rectangle(x, base - drawn, bar_width, drawn)
+                    cr.fill()
+                    base -= part_height
+            elif seconds > 0:
                 bar_height = max(plot * seconds / top_value, 2)
                 r, g, b, _a = accent
-                cr.set_source_rgba(r, g, b, 1.0 if self.hover in (None, i) else 0.45)
+                cr.set_source_rgba(r, g, b, alpha)
                 rounded_top_bar(cr, x, top + plot - bar_height, bar_width, bar_height)
                 cr.fill()
             if i % label_every == 0 or i == len(self.days) - 1:
@@ -2858,15 +2917,16 @@ class DailyChart(Gtk.DrawingArea):
 
 
 class TopChart(Gtk.DrawingArea):
-    fmt = staticmethod(fmt_spent)  # how values read; fmt_count for counts
-
     """The most used sites or apps: horizontal bars with name and time."""
+
+    fmt = staticmethod(fmt_spent)  # how values read; fmt_count for counts
 
     ROW = 26
 
     def __init__(self):
         super().__init__()
         self.items = []  # [(name, seconds)]
+        self.colors = {}  # name -> series slot (None: Other), for the daily chart's colours
         self.hover = None
         self.set_has_tooltip(True)
         self.add_events(POINTER_EVENTS)
@@ -2926,7 +2986,7 @@ class TopChart(Gtk.DrawingArea):
             PangoCairo.show_layout(cr, layout)
 
             bar = max(bar_space * seconds / maximum, 2)
-            r, g, b, _a = accent
+            r, g, b, _a = series_color(self.colors[name], dark_theme(widget)) if name in self.colors else accent
             cr.set_source_rgba(r, g, b, 1.0 if self.hover in (None, i) else 0.45)
             rounded_end_bar(cr, name_width, y + 7, bar, self.ROW - 14)
             cr.fill()
@@ -2938,6 +2998,38 @@ class TopChart(Gtk.DrawingArea):
             cr.move_to(name_width + bar + 8, y + (self.ROW - h) / 2)
             PangoCairo.show_layout(cr, layout)
         return False
+
+
+class Legend(Gtk.FlowBox):
+    """The daily chart's legend (§4.9): a swatch in each series' colour and
+    its name in text ink; wraps on a narrow window."""
+
+    def __init__(self):
+        super().__init__(selection_mode=Gtk.SelectionMode.NONE, column_spacing=14, row_spacing=4,
+                         max_children_per_line=12, homogeneous=False)
+        self.entries = []
+
+    def set_series(self, series):
+        """series: [(name, slot)] (slot None: Other)."""
+        if series == self.entries:
+            return
+        self.entries = list(series)
+        for child in self.get_children():
+            self.remove(child)
+        for name, slot in series:
+            entry = Gtk.Box(spacing=6)
+            swatch = Gtk.DrawingArea()
+            swatch.set_size_request(10, 10)
+            swatch.set_valign(Gtk.Align.CENTER)
+            swatch.connect("draw", lambda w, cr, sl=slot: (
+                cr.set_source_rgba(*series_color(sl, dark_theme(w))),
+                rounded_rect(cr, 0, 0, 10, 10, 2), cr.fill(), False)[-1])
+            entry.pack_start(swatch, False, False, 0)
+            entry.pack_start(Gtk.Label(label=name, xalign=0), False, False, 0)
+            self.add(entry)
+        self.set_visible(len(series) >= 2)
+        self.show_all()
+        self.set_visible(len(series) >= 2)
 
 
 # The window --------------------------------------------------------------
@@ -4232,7 +4324,7 @@ class Window(Gtk.ApplicationWindow):
         self.covers = {}  # page name -> (stack, cover text, entry, title)
         self.last_input = GLib.get_monotonic_time()  # for locking again when idle
         self.connect("event-after", self.note_input)
-        self.stats_rows = []
+        self.stats_rows = self.stats_page_rows = []  # the dashboard's and the Statistics page's (filtered)
         self.stats_on = True
 
         header = Gtk.HeaderBar(show_close_button=True, title="Killer Chicken 9000")
@@ -7105,10 +7197,27 @@ class Window(Gtk.ApplicationWindow):
         self.stats_user.append("", "All users")
         self.stats_user.set_active_id("")
         self.stats_user.connect("changed", lambda c: not self.updating and self.refresh_stats())
+        # §4.9: top 5 or 10, search, one block's sites and apps.
+        self.stats_top = Gtk.ComboBoxText()
+        for n in ("5", "10"):
+            self.stats_top.append(n, f"Top {n}")
+        self.stats_top.set_active_id("5")
+        self.stats_top.connect("changed", lambda _c: self.update_stats())
+        self.stats_search = Gtk.SearchEntry(placeholder_text="Find a site or app", width_chars=18)
+        self.stats_search.connect("search-changed", lambda _e: self.refresh_stats())
+        self.stats_block = Gtk.ComboBoxText()
+        self.stats_block.append("", "All blocks")
+        self.stats_block.set_active_id("")
+        self.stats_block.connect("changed", lambda c: not self.updating and self.refresh_stats())
         controls.pack_start(self.stats_period, False, False, 0)
         controls.pack_start(self.stats_user, False, False, 0)
         controls.pack_start(kinds, False, False, 0)
+        controls.pack_start(self.stats_top, False, False, 0)
+        controls.pack_start(self.stats_block, False, False, 0)
+        controls.pack_start(self.stats_search, False, False, 0)
         box.pack_start(controls, False, False, 0)
+        flow_row(controls)
+        self.series_slots = {}  # name -> palette slot: a site keeps its colour
 
         self.stats_off = Gtk.InfoBar(message_type=Gtk.MessageType.INFO)
         self.stats_off.get_content_area().add(
@@ -7125,7 +7234,8 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(tiles, False, False, 0)
 
         self.daily_chart = DailyChart()
-        self.daily_section = section("Per day", self.daily_chart)
+        self.daily_legend = Legend()
+        self.daily_section = section("Per day", self.daily_chart, self.daily_legend)
         box.pack_start(self.daily_section, False, False, 0)
 
         self.top_chart = TopChart()
@@ -7160,6 +7270,7 @@ class Window(Gtk.ApplicationWindow):
 
     def update_stats_setting(self):
         set_switch(self.stats_switch, self.state["stats"])
+        self.update_stats_blocks()
         set_switch(self.stats_private_switch, self.state.get("stats_skip_private", False))
 
     def refresh_stats(self):
@@ -7170,19 +7281,46 @@ class Window(Gtk.ApplicationWindow):
         passwords = list(self.access_passwords)
         who = self.stats_user.get_active_id() if hasattr(self, "stats_user") else ""
 
+        args = ["stats", "--json", "--days", str(max(days, 1))] + (["--user", who] if who else [])
+        # §4.9: the page's search and block filter; the dashboard always
+        # gets everything, so with a filter on there are two reads.
+        filters, secret = [], None
+        if hasattr(self, "stats_search"):
+            search = self.stats_search.get_text().strip()
+            block = self.stats_block.get_active_id() or ""
+            if search:
+                filters += ["--search", search]
+            if block:
+                filters += ["--block", block]
+                if block in self.block_passwords:
+                    secret = self.block_passwords[block] + "\n"
+
         def work():
-            ok, output = cli_with_access(passwords, ["stats", "--json", "--days", str(max(days, 1))]
-                                         + (["--user", who] if who else []))
-            GLib.idle_add(self.apply_stats, ok, output)
+            ok, output = cli_with_access(passwords, args)
+            filtered = cli_with_access(passwords, args + filters, secret) if filters and ok else (ok, output)
+            GLib.idle_add(self.apply_stats, ok, output, *filtered)
 
         threading.Thread(target=work, daemon=True).start()
         return True
 
-    def apply_stats(self, ok, output):
+    def apply_stats(self, ok, output, page_ok=None, page_output=None):
+        """The rows read: output for the dashboard, page_output (the same
+        without filters) for the Statistics page."""
         if not ok:
             return False
+        if page_ok is None:
+            page_ok, page_output = ok, output
+        if not page_ok and hasattr(self, "stats_block"):
+            if "block password" in (page_output or ""):
+                self.message("That block's sites and apps are behind its block password: open the block "
+                             "and use Show contents… first.", Gtk.MessageType.INFO)
+            else:
+                self.message(page_output or "The statistics could not be read.", Gtk.MessageType.WARNING)
+            self.stats_block.set_active_id("")  # reads again, without it
+            page_output = output
         data = json.loads(output)
         self.stats_rows = data["rows"]
+        self.stats_page_rows = json.loads(page_output)["rows"]
         self.stats_on = data["enabled"]
         users = [""] + (data.get("users") or [])
         if hasattr(self, "stats_user") and users != getattr(self, "stats_users_shown", [""]):
@@ -7201,6 +7339,33 @@ class Window(Gtk.ApplicationWindow):
             self.update_dashboard_stats()
         return False
 
+    def assign_series(self, names):
+        """Palette slots for names (§4.9: colour follows the site or app,
+        never its rank): a name keeps the slot it had; a new one takes a
+        free slot, one no remembered name holds if there is one; never two
+        shown names in one colour; past seven: Other (None)."""
+        out, used = {}, set()
+        for name in names:
+            slot = self.series_slots.get(name)
+            if slot is not None and slot not in used:
+                out[name] = slot
+                used.add(slot)
+        remembered = set(self.series_slots.values())
+        for name in names:
+            if name in out:
+                continue
+            free = [slot for slot in range(len(SERIES_LIGHT)) if slot not in used]
+            if not free:
+                out[name] = None
+                continue
+            slot = ([f for f in free if f not in remembered] or free)[0]
+            out[name] = slot
+            used.add(slot)
+            # The slot is this name's now: whoever had it before forgets it.
+            self.series_slots = {n: s for n, s in self.series_slots.items() if s != slot}
+            self.series_slots[name] = slot
+        return out
+
     def update_stats(self):
         kind = "site" if self.kind_sites.get_active() else "blocked" if self.kind_blocked.get_active() else "app"
         # §4.9: times blocked are counts, not seconds.
@@ -7210,11 +7375,13 @@ class Window(Gtk.ApplicationWindow):
         today = datetime.date.today()
         dates = [today - datetime.timedelta(days=n) for n in range(days - 1, -1, -1)]
         per_day = {d.isoformat(): 0 for d in dates}
+        by_name = {d.isoformat(): {} for d in dates}
         totals = {}
-        for row in self.stats_rows:
+        for row in self.stats_page_rows:
             if row["kind"] != kind or row["day"] not in per_day:
                 continue
             per_day[row["day"]] += row["seconds"]
+            by_name[row["day"]][row["name"]] = by_name[row["day"]].get(row["name"], 0) + row["seconds"]
             totals[row["name"]] = totals.get(row["name"], 0) + row["seconds"]
         total = sum(per_day.values())
 
@@ -7228,15 +7395,50 @@ class Window(Gtk.ApplicationWindow):
             {"site": "Different websites", "app": "Different apps", "blocked": "Different sites blocked"}[kind])
         self.tile_count.set_value(str(len(totals)))
         self.daily_section.set_visible(days > 1)
-        self.daily_chart.set_days([(d, per_day[d.isoformat()]) for d in dates])
 
-        top = sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:15]
+        ranked = sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+        top_n = int(self.stats_top.get_active_id() or 5)
+        top = ranked[:top_n]
+        # The chart: the top names, in at most seven colours, the rest Other.
+        named = [name for name, _v in top][:len(SERIES_LIGHT)]
+        slots = self.assign_series(named)
+        series = [(name, slots[name]) for name in named if slots[name] is not None]
+        shown = {name for name, _slot in series}
+        stacks = []
+        for d in dates:
+            day = by_name[d.isoformat()]
+            stack = {name: day.get(name, 0) for name in shown}
+            rest = sum(v for n, v in day.items() if n not in shown)
+            if rest:
+                stack["Other"] = rest
+            stacks.append(stack)
+        if any("Other" in stack for stack in stacks):
+            series.append(("Other", None))
+        self.daily_chart.set_stacks([(d, per_day[d.isoformat()]) for d in dates], stacks, series)
+        self.daily_legend.set_series(series)
+
         self.top_title.set_markup(
             f"<span size='medium' weight='bold'>"
             f"{ {'site': 'Most used websites', 'app': 'Most used apps', 'blocked': 'Most blocked sites'}[kind] }</span>")
+        self.top_chart.colors = {name: slots.get(name) for name, _v in top}
         self.top_chart.set_items(top)
         self.top_chart.set_visible(bool(top))
         self.top_empty.set_visible(not top)
+
+    def update_stats_blocks(self):
+        """The block filter's choices: the blocks there are."""
+        names = sorted(n for n, b in self.blocks.items() if not b.get("draft_of"))
+        if getattr(self, "stats_blocks_shown", None) == names:
+            return
+        chosen = self.stats_block.get_active_id() or ""
+        was, self.updating = self.updating, True
+        self.stats_block.remove_all()
+        self.stats_block.append("", "All blocks")
+        for name in names:
+            self.stats_block.append(name, name)
+        self.stats_block.set_active_id(chosen if chosen in names else "")
+        self.updating = was
+        self.stats_blocks_shown = names
 
     # Settings ------------------------------------------------------------
     def choose_darkness(self, scale):

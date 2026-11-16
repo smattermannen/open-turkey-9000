@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -321,6 +322,32 @@ func TestStatsFilters(t *testing.T) {
 	}
 	if out := capture(t, "stats", "--top", "1"); !strings.Contains(out, "and 1 more") {
 		t.Errorf("--top 1:\n%s", out)
+	}
+	// §4.9: the GUI's JSON is filtered too; a block's contents stay behind
+	// its block password (§3.11).
+	var got statsOutput
+	if err := json.Unmarshal([]byte(capture(t, "stats", "--json", "--block", "social")), &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range got.Rows {
+		if r.Name == "wikipedia.org" {
+			t.Errorf("--json --block social has %+v", r)
+		}
+	}
+	if err := json.Unmarshal([]byte(capture(t, "stats", "--json", "--search", "wiki")), &got); err != nil || len(got.Rows) != 1 {
+		t.Errorf("--json --search wiki: %+v, %v", got.Rows, err)
+	}
+	notTerminal(t)
+	if err := runWith(t, 0, []string{"view1", "view1"}, "block", "password", "social", "set"); err != nil {
+		t.Fatal(err)
+	}
+	// The GUI reads "block password" in the refusal to say why.
+	if err := runWith(t, 0, nil, "stats", "--json", "--block", "social"); err == nil ||
+		!strings.Contains(err.Error(), "behind its block password") {
+		t.Errorf("a password-hidden block's sites shown without its password: %v", err)
+	}
+	if err := runWith(t, 0, []string{"view1"}, "stats", "--json", "--block", "social"); err != nil {
+		t.Errorf("with its password: %v", err)
 	}
 }
 

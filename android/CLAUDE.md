@@ -1,5 +1,8 @@
 # KC9K Android
 
+**On hold until the Linux project is finished (owner, 2026-11-16).** No
+Android work until then.
+
 At home (GPS geofence) the phone is in **Nokia mode**: only default dialer
 and SMS app; everything else (Settings included) suspended; Wi-Fi off.
 Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk 29, no

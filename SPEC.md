@@ -61,7 +61,8 @@ After publishing: Windows support.
    not new defaults.
 8. Platform: Linux Mint Cinnamon on X11. Extension in LibreWolf and Google
    Chrome/Chromium. English only. Android companion runs the extension in
-   IronFox (`android/`).
+   IronFox (`android/`); on hold until the Linux project is finished
+   (owner, 2026-11-16).
 9. Browsing stays fast; page judging runs in the background:
    - no single piece of work in a page over 16 ms;
    - a typical page with 1,000 rendered terms and 100 phrases judged in
@@ -115,13 +116,13 @@ After publishing: Windows support.
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Active** | Switched on (`kc9k start`); enforces when type, schedule and breaks allow. | Enabled |
+| **Active** | Switched on (`kc9k start`); enforces when its automation and breaks allow. | Enabled |
 | **Inactive** | Switched off (`kc9k stop`); never enforces. | Unlocked |
 | **Enabled** | Enforcing now. | Active |
 | **Disabled** | Not enforcing now. | Inactive |
-| **Lifted** | Active but disabled (outside windows/place, in allow window, break, pause, Pomodoro rest, allowance time). | Inactive |
-| **Continuous** | Type: enabled whenever active, except allow windows and breaks. | Scheduled |
-| **Scheduled** | Type: enabled only in block windows or at places. | |
+| **Lifted** | Active but disabled (its automation says off, break, pause, Pomodoro rest, allowance time). | Inactive |
+| **Continuous** | Type: no schedule and no place rules: enabled whenever active (breaks, pauses, Pomodoro rest and allowance time still lift it). | Automated |
+| **Automated** | Type: has a schedule and/or place rules, which enable and lift it while active (§3.6 Automation). | Scheduled |
 | **Locked** | At least one lock on; can't be weakened. | Active |
 
 Enforcing ends by schedule or switch-off. A lock never ends or starts a block.
@@ -164,8 +165,8 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Block window** | Weekly time a scheduled block is enabled. 5-minute steps; a block's windows never overlap. |
-| **Allow window** | Weekly time a continuous block is lifted. |
+| **Block window** | Weekly time an automated block is enabled (the schedule says on). 5-minute steps; a block's windows never overlap; all block windows or all allow windows. |
+| **Allow window** | Weekly time an automated block is lifted (the schedule says off). |
 | **Break** | Lifts an enabled block for a while. One per continuous block, or one per block window. |
 | **Pomodoro** | Work (enabled) and rest (lifted) alternate, work first; optional long rest every N rounds. |
 | **Allowance** | N minutes of use per period (rolling 24 h, window, day, week, month; refill time), then enabled. |
@@ -176,7 +177,8 @@ tamper protection settings can't be turned off.
 | **Pause** | One-off lift until a set time. |
 | **Autostart** | Switches a block on: once, time of day on set days, sign-in/wake, or next block window. |
 | **Place** | A set of Wi-Fi access points (no GPS). The computer is there when as many of them as the user chooses (default 2) are in range. |
-| **Place rule** | A scheduled block is enabled at a place. |
+| **Place rule** | A place that switches a block: **on at** (an on-switch: the places say on there, off elsewhere) or **off at** (an off-switch: off there, on elsewhere). A block may have several; all on-at or all off-at. A place rule has **no actions of its own**: it only enables or lifts its block. |
+| **Automation** | What enables and lifts an active block by itself: its schedule and its place rules. With only one, that one decides. With both, the user picks **both** (enabled only when the schedule and the places both say on; either saying off lifts it) or **either** (one saying on enables it; lifted only when both say off). Default: either. Without either one the block is continuous. |
 
 ### 3.7 Use
 
@@ -202,7 +204,7 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Action** | What a blacklist or phrase set does on a match, and what a block's apps, its window titles and each place rule do when they fire (one set each): page action or consequence. Apps and window titles close by default, a place rule enables its block there by default; each may untick that and take consequences instead or too (fired when an app or window is found, at most once a minute; on arriving at the place). Any of them may have no action: it then does nothing (an action can be unticked before another is ticked). |
+| **Action** | What a blacklist or phrase set does on a match, and what a block's apps and its window titles do when they fire (one set each): page action or consequence. Apps and window titles close by default; each may untick that and take consequences instead or too (fired when an app or window is found, at most once a minute). Any of them may have no action: it then does nothing (an action can be unticked before another is ticked). A place rule has no actions (§3.6). |
 | **Block page** | Replaces the page, with a motivational message. |
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
 | **Look actions** | Greyscale, no images, no video, mute, dark. Change, don't block; combine. No images covers every image, animated GIFs included. |
@@ -289,8 +291,13 @@ GUI and CLI offer the same functions.
 - **4.1 Overview**: active blocks (enabled/lifted, locks), today's remaining
   windows, break status, ladder positions.
 - **4.2 Blocks**: create (empty, template, allowlist) · on/off · continuous
-  or scheduled · rename · duplicate (copy inactive) · delete (refused while
+  or automated · rename · duplicate (copy inactive) · delete (refused while
   locked) · affected users · export/import.
+  - The list (owner, 2026-11-16; modern and sleek, R-GUI-3): each block on
+    one card with its **name** (opens the block), its **on/off switch**,
+    **"Continuous block" or "Automated block"** (opens the automation view:
+    schedule and places, §4.5), its **breaks** ("No breaks" or what it
+    allows; opens them) and **locked/unlocked** (opens the locks).
 - **4.3 Block editor**:
   - Add: type, Enter; focus stays. Remove: button or Delete/Backspace;
     selection moves to next. Multi-select: Ctrl/Shift-click, Select all,
@@ -318,9 +325,12 @@ GUI and CLI offer the same functions.
     The block's own ladder. YouTube playlists let through: with the exceptions.
 - **4.4 Clusters and recording**: clusters create/edit/copy into block/save
   from block. Link recording; word recording, ranked, cut before saving.
-- **4.5 Schedules**: weekly grid; drag to add/move, click to edit; 15-min
-  grid, 5-min times; copy to days; similar windows edited together; other
-  blocks greyed; break per window; allow windows; place rules.
+- **4.5 Automation** (schedules and places, §3.6): weekly grid; drag to
+  add/move, click to edit; 15-min grid, 5-min times; copy to days; similar
+  windows edited together; other blocks greyed; break per window; allow
+  windows. Place rules: on at / off at, several places per block. With
+  both, both or either (phrased by the places' kind: "on at these places
+  only during the schedule" or "…or during the schedule").
 - **4.6 Locks**: all of §3.4, alone or layered, on blocks, browser settings
   and settings (global ladder too). Layer order fixed while locked; new lock
   goes last. Timer locks always extendable; set for a duration or until a
@@ -427,7 +437,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-WEAK-5** Editing an entry is remove + add: weakening unless the new entry clearly matches more.
 
 **Schedules and breaks**
-- **R-SCHED-1** An active scheduled block is enabled in its windows and at its places; an inactive block never.
+- **R-SCHED-1** An active automated block is enabled when its automation says on (§3.6: schedule, places, both or either); an inactive block never. Automation never switches a block on or off, and never acts by itself (no actions of its own).
 - **R-SCHED-2** A block's windows never overlap.
 - **R-SCHED-3** Pomodoro starts with work; its rhythm restarts each time the block is enabled.
 - **R-BREAK-1** Allowance counts only use.
@@ -470,7 +480,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 **Device**
 - **R-FREEZE-1** *Allowed apps only*: only listed programs (and system processes) run.
 - **R-FREEZE-2** A running freeze can't end; removing a locked scheduled freeze is refused.
-- **R-WARN-1** Logout, shutdown, and freezes from a list action, a trigger's action (apps, titles, place rule) or schedule are announced 60 s ahead.
+- **R-WARN-1** Logout, shutdown, and freezes from a list action, a trigger's action (apps, window titles) or schedule are announced 60 s ahead.
 - **R-WARN-2** Bypass prevention has no countdown: it notifies at every event and step ("Event triggered, be careful") and acts at once, up to immediate shutdown.
 - **R-STRICT-1** Strict mode is on only if the user turned it on. Turning off is refused only by its own lock and R-WEAK-4.
 - **R-ESCAPE-1** Until no-escape is on, a recovery path exists.
@@ -502,7 +512,8 @@ Decisions not already written into §1–5:
 - 2026-11-16: One Import button: KC9K tells phrases, rendered terms and sites (hosts files, adblock rules) apart by their layout.
 - 2026-11-16: YouTube playlists let through belong to the exception list, not the social presets.
 - 2026-11-16: Circadian rhythm: its own page only (not in Settings); wallpapers on a draggable timeline; Play the day preview.
-- 2026-11-16: Any trigger to any action: a block's apps, window titles and place rules each get one action set (close/enable by default, and consequences).
+- 2026-11-16: Any trigger to any action: a block's apps and window titles each get one action set (close by default, and consequences).
+- 2026-11-16 (later): A place rule only enables or lifts its block; it has no actions (withdrawn from the decision above). Place rules are on-switches or off-switches, several per block. Schedule and places together: the user picks both or either (default either). Blocks are continuous or automated; the block list shows name, on/off switch, Continuous/Automated block (opens the automation view), breaks and lock state. Android is on hold until the Linux project is finished.
 
 ## 7. Open decisions
 

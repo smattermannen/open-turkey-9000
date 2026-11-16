@@ -12,7 +12,31 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
 
 ## 0. Fix what exists
 
+**Android is on hold until the Linux project is finished** (owner,
+2026-11-16): no Android work; its items below wait.
+
 ### 0.1 Code contradicting `SPEC.md`
+
+- [ ] **Owner 2026-11-16: automation and the block list (TOP PRIORITY).**
+  - [ ] Place rules have no actions (§3.6 Place rule, §3.9 Action,
+    R-SCHED-1). A place only enables or lifts an active block. Built by
+    mistake the same day (it should have been questioned: a place already
+    means "enabled here" in the active/enabled model): the trigger group
+    `place:<id>` (`db/triggers.go`), `placeArrivals` firing actions and
+    `placeEnables` (`enforce/trigger.go`), `block trigger B place:NAME`,
+    the GUI's "Actions…" for a place rule, projects' place keys. Remove it
+    all; stored place action sets are dropped on open. S
+  - [ ] Automation (§3.6 Place rule, Automation; R-SCHED-1). Built: place
+    rules are on-switches only, and schedule and places combine as
+    "either" (`scheduleLifted`: enabled in a window or at a place). Not
+    built: off-at place rules (lifted at those places, enabled
+    elsewhere; all of a block's rules one kind), the both/either choice
+    (default either), its weakening rules (towards more enabled time is
+    free), CLI, GUI, projects. M
+  - [ ] Block list (§4.2, R-GUI-3): one card per block with its name
+    (opens the block), on/off switch, "Continuous block" or "Automated
+    block" (opens the automation view: schedule and places), breaks ("No
+    breaks" or what it allows) and locked/unlocked; modern and sleek. M
 
 - [ ] **Owner report 2026-11-15** (real use on the laptop; top priority).
   Status per item; check against the latest build before calling it fixed.

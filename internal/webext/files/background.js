@@ -414,10 +414,14 @@ function carryLooks(tabId, names) {
 // be removed by the page, and comes with the frame's first paint.
 // Pictures behind ::before/::after, list markers and borders go too.
 const LOOK_CSS = {
+  // Pictures a sheet draws as content are marked by the content script
+  // (data-kc9k-noimg): their content is emptied.
   "no-images": "img, picture, video, canvas, svg image, svg use, image, object, embed, input[type=\"image\"] " +
     "{ visibility: hidden !important; }\n" +
     "*, *::before, *::after, *::marker { background-image: none !important; list-style-image: none !important; " +
-    "border-image-source: none !important; }\n",
+    "border-image-source: none !important; }\n" +
+    "[data-kc9k-noimg~=\"before\"]::before, [data-kc9k-noimg~=\"after\"]::after { content: \"\" !important; }\n" +
+    "[data-kc9k-noimg~=\"self\"] { content: normal !important; }\n",
   // A page in dark mode draws greyscale itself, with its inversion (both
   // are filters on the same element).
   greyscale: ":root:not([data-kc9k-dark]) { filter: grayscale(1) !important; }\n",

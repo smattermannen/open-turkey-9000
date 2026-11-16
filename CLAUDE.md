@@ -73,6 +73,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   (`hidePage`) until judged and settled (`SETTLE_MS` after DOMContentLoaded
   or an address change seen in the MutationObserver), never over
   `HIDE_CAP_MS`. Don't hide with `visibility`: `innerText` skips it.
+- `no-images` pictures drawn as CSS content: `content.js` marks elements
+  (`data-kc9k-noimg` before/after/self, idle-time `scanPseudoImages`) and
+  both sheets empty them; shadow roots get an adopted sheet. Page script
+  harness (Node + Playwright, cloud only): `node ci/content_harness_test.js`.
 - State the Chrome service worker must keep across restarts goes in
   `storage.session` (e.g. `kc9kDownloadPages`).
 - LibreWolf's policy file is rewritten only by the daemon (Firefox's at once

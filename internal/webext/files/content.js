@@ -18,6 +18,17 @@ const LOOKS = ["greyscale", "no-images", "mute", "no-video", "dark"];
 let lightFor = null;
 let light = true;
 let noVideo = false;
+let noImages = false; // see scanPseudoImages
+const PSEUDO_ATTR = "data-kc9k-noimg";
+// no-images: in a shadow root (where the page's own sheets don't reach) as
+// is, in the document with :root before the marks so they beat the page's.
+const NO_IMAGES_CSS = "img, picture, video, canvas, svg image, svg use, object, embed, input[type=\"image\"] " +
+  "{ visibility: hidden !important; }\n" +
+  "*, *::before, *::after { background-image: none !important; list-style-image: none !important; " +
+  "border-image-source: none !important; }\n" +
+  "[data-kc9k-noimg~=\"before\"]::before, [data-kc9k-noimg~=\"after\"]::after { content: \"\" !important; }\n" +
+  "[data-kc9k-noimg~=\"self\"] { content: normal !important; }\n";
+const NO_IMAGES_PAGE_CSS = NO_IMAGES_CSS.replace(/\[data-kc9k-noimg/g, ":root [data-kc9k-noimg");
 // The looks the background script says this tab has now (no-video,
 // no-images, greyscale): a frame can't see the tab's title or text, so it learns them
 // from there, when it starts and whenever they change.
@@ -228,11 +239,16 @@ function render() {
   // The background script also draws no-images and no-video with a user
   // style sheet no page style can beat; this is the same in case that one
   // isn't in yet.
-  if (on("no-images")) {
-    css += "img, picture, video, canvas, svg image, svg use, object, embed, input[type=\"image\"] " +
-      "{ visibility: hidden !important; }\n" +
-      "*, *::before, *::after { background-image: none !important; list-style-image: none !important; " +
-      "border-image-source: none !important; }\n";
+  const wasNoImages = noImages;
+  noImages = on("no-images");
+  if (noImages) {
+    css += NO_IMAGES_PAGE_CSS;
+    if (!wasNoImages) {
+      pseudoRescanAfter = 1000;
+      scanPseudoImages(document);
+    }
+  } else if (wasNoImages) {
+    uncoverShadows();
   }
   if (noVideo) {
     css += "video, audio, object, embed, iframe[src*=\"youtube\"], iframe[src*=\"vimeo\"], " +
@@ -247,9 +263,15 @@ function render() {
     return;
   }
   if (!style) {
+    const parent = document.head || document.documentElement;
+    if (!parent) {
+      // Nothing to put it in yet: once the document has its elements.
+      document.addEventListener("DOMContentLoaded", render, { once: true });
+      return;
+    }
     style = document.createElement("style");
     style.id = STYLE_ID;
-    (document.head || document.documentElement).appendChild(style);
+    parent.appendChild(style);
   }
   style.textContent = css;
 }
@@ -701,6 +723,15 @@ new MutationObserver((records) => {
       }
     }
   }
+  if (noImages) {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node.nodeType === 1 && pseudoWalkers.length < 500) {
+          scanPseudoImages(node);
+        }
+      }
+    }
+  }
 }).observe(document.documentElement || document, { childList: true, subtree: true, characterData: true });
 let scanQueued = false;
 function queueScan() {
@@ -780,6 +811,131 @@ setInterval(() => {
     scanKeywords();
   }
 }, 1000);
+
+// no-images covers every image (§3.9), also one a style sheet draws as
+// content: ::before/::after { content: url(x.gif) }, or an element's own
+// content. No selector picks only those, so on a no-images page every
+// element is looked at in idle time (READ_SLICE_MS a piece, shadow roots
+// too; again for added content, and after 1, 2, 4 s, then every 10 s, for
+// shadow roots attached later and style changes) and marked; the style sheets (here and the background script's user sheet)
+// then empty that content. Marks stay: without no-images they do nothing.
+let pseudoWalkers = []; // [walker, root element still to look at, or null]
+let pseudoRunning = false;
+let pseudoScannedAt = 0;
+let pseudoRescanAfter = 1000;
+
+function drawsImage(content) {
+  return typeof content === "string" && /(url|image-set|cross-fade|gradient|image)\(/i.test(content);
+}
+
+function markPseudoImage(el) {
+  let marks = "";
+  try {
+    for (const [pseudo, mark] of [["::before", "before"], ["::after", "after"], [null, "self"]]) {
+      if (drawsImage(getComputedStyle(el, pseudo).content)) {
+        marks += " " + mark;
+      }
+    }
+  } catch (error) {
+    return;
+  }
+  const had = el.getAttribute(PSEUDO_ATTR) || "";
+  for (const mark of had.split(" ")) {
+    // Emptied by the sheet, a marked part reads "" now: keep its mark.
+    if (mark && !marks.includes(mark)) {
+      marks += " " + mark;
+    }
+  }
+  marks = marks.trim();
+  if (marks && marks !== had) {
+    el.setAttribute(PSEUDO_ATTR, marks);
+  }
+}
+
+function scanPseudoImages(root) {
+  pseudoWalkers.push([document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT), root.nodeType === 1 ? root : null]);
+  if (root === document) {
+    pseudoScannedAt = Date.now();
+  }
+  if (!pseudoRunning) {
+    pseudoRunning = true;
+    whenIdle(pseudoSlice);
+  }
+}
+
+function whenIdle(fn) {
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(fn, { timeout: 500 });
+  } else {
+    setTimeout(fn, 0);
+  }
+}
+
+function pseudoSlice() {
+  const until = performance.now() + READ_SLICE_MS;
+  let n = 0;
+  while (noImages && pseudoWalkers.length > 0) {
+    const top = pseudoWalkers[pseudoWalkers.length - 1];
+    let el = top[1];
+    if (el) {
+      top[1] = null;
+    } else if (!(el = top[0].nextNode())) {
+      pseudoWalkers.pop();
+      continue;
+    }
+    markPseudoImage(el);
+    const shadow = shadowOf(el);
+    if (shadow) {
+      coverShadow(shadow);
+      pseudoWalkers.push([document.createTreeWalker(shadow, NodeFilter.SHOW_ELEMENT), null]);
+    }
+    if ((++n & 15) === 0 && performance.now() >= until) {
+      break;
+    }
+  }
+  if (noImages && pseudoWalkers.length > 0) {
+    whenIdle(pseudoSlice);
+    return;
+  }
+  pseudoRunning = false;
+  if (!noImages) {
+    pseudoWalkers = [];
+  }
+}
+
+// A shadow root gets the no-images rules as its own sheet while no-images
+// is on (the background script's user sheet reaches it too, where it can).
+const shadowSheets = new Map(); // shadow root → the sheet given to it
+function coverShadow(shadow) {
+  if (shadowSheets.has(shadow) || typeof CSSStyleSheet !== "function") {
+    return;
+  }
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(NO_IMAGES_CSS);
+    shadow.adoptedStyleSheets = [...shadow.adoptedStyleSheets, sheet];
+    shadowSheets.set(shadow, sheet);
+  } catch (error) {
+    // Not allowed here (an older browser): the user sheet covers it.
+  }
+}
+function uncoverShadows() {
+  for (const [shadow, sheet] of shadowSheets) {
+    try {
+      shadow.adoptedStyleSheets = shadow.adoptedStyleSheets.filter((s) => s !== sheet);
+    } catch (error) {
+      // gone with its page part
+    }
+  }
+  shadowSheets.clear();
+}
+
+setInterval(() => {
+  if (noImages && !pseudoRunning && Date.now() - pseudoScannedAt >= pseudoRescanAfter) {
+    pseudoRescanAfter = Math.min(2 * pseudoRescanAfter, 10000);
+    scanPseudoImages(document);
+  }
+}, 500);
 
 // no-video: nothing plays. A video that starts is stopped and muted at
 // once (also inside shadow roots, which the page's events don't leave), and

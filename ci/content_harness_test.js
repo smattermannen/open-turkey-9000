@@ -1,0 +1,148 @@
+// Runs the extension's page script (match.js, social.js, content.js) in a
+// real Chromium page, with the extension APIs it uses stubbed, so what it
+// does to a page can be checked without installing KC9K. Needs Node and
+// Playwright (the cloud containers have both; the test laptop doesn't):
+//
+//   node ci/content_harness_test.js
+//
+// §3.9 no-images covers every image, animated GIFs included: also pictures a
+// style sheet draws as content (::before/::after { content: url(…) }, or an
+// element's own content), in shadow roots and in content added later; a
+// ::before with text keeps it.
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const { chromium } = require("playwright");
+
+const FILES = path.join(__dirname, "../internal/webext/files");
+const GIF = Buffer.from("R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==", "base64");
+let failures = 0;
+function check(name, ok, detail) {
+  console.log((ok ? "ok   " : "FAIL ") + name + (ok || detail === undefined ? "" : ": " + JSON.stringify(detail)));
+  failures += ok ? 0 : 1;
+}
+
+const PAGE = `<!doctype html><title>Pictures</title>
+<style>
+  .a::before { content: url(/x.gif); }
+  .b::after { content: url(/x.gif) !important; }
+  .c { content: url(/x.gif); }
+  .set::before { content: image-set(url(/x.gif) 1x); }
+  .t::before { content: "kept text"; }
+</style>
+<p>Some text so the page has a body.</p>
+<div class="a" id="a"></div><div class="b" id="b"></div><div class="c" id="c"></div>
+<div class="set" id="set"></div><div class="t" id="t"></div><div id="host"></div>
+<script>
+  const root = document.getElementById("host").attachShadow({ mode: "open" });
+  root.innerHTML = '<style>.s::before { content: url(/x.gif); }</style><div class="s" id="s"></div><img src="/x.gif">';
+  setTimeout(() => {
+    const late = document.createElement("div");
+    late.className = "a"; late.id = "late";
+    document.body.appendChild(late);
+  }, 300);
+</script>`;
+
+function rules(actions) {
+  return {
+    lists: [{
+      id: 1, block: "b", name: "Pictures", url: ["pictures.example"], title: [], text: [],
+      actions, except: { url: [], title: [], text: [] },
+    }],
+  };
+}
+
+async function main() {
+  const url = "http://pictures.example/page";
+  const browser = await chromium.launch();
+  // One script, as the extension's content scripts share one scope (each
+  // init script here would get its own).
+  const script = ["match.js", "social.js", "content.js"].map((f) => fs.readFileSync(path.join(FILES, f), "utf8")).join("\n;\n");
+
+  async function open(page) {
+    const p = await browser.newPage();
+    // The site, served here: the page and its picture.
+    await p.route("http://pictures.example/**", (route) => route.request().url().endsWith("/x.gif")
+      ? route.fulfill({ status: 200, contentType: "image/gif", body: GIF })
+      : route.fulfill({ status: 200, contentType: "text/html", body: PAGE }));
+    // What the extension gives a page script: the rules in storage, and a
+    // background script that answers every message with nothing.
+    await p.addInitScript((stored) => {
+      const listeners = { addListener() {} };
+      window.browser = {
+        storage: { local: { get: async () => ({ page: stored }) }, onChanged: listeners },
+        runtime: { sendMessage: async () => undefined, onMessage: listeners },
+      };
+    }, page);
+    await p.addInitScript(script);
+    p.on("pageerror", (error) => check("no page script error", false, error.message));
+    await p.goto(url);
+    await p.waitForTimeout(1500); // the late element, idle-time scans
+    return p;
+  }
+
+  const content = (p, selector, pseudo, inShadow) => p.evaluate(([sel, ps, sh]) => {
+    const root = sh ? document.getElementById("host").shadowRoot : document;
+    const el = root.querySelector(sel);
+    return el ? getComputedStyle(el, ps).content : "missing";
+  }, [selector, pseudo, inShadow]);
+
+  const p = await open(rules([{ action: "no-images", distinct: 1, hits: 1 }]));
+  check("::before picture emptied", await content(p, "#a", "::before") === '""', await content(p, "#a", "::before"));
+  check("::after picture emptied, also !important", await content(p, "#b", "::after") === '""', await content(p, "#b", "::after"));
+  check("an element's own content picture emptied", await content(p, "#c", null) === "normal", await content(p, "#c", null));
+  check("image-set() emptied", await content(p, "#set", "::before") === '""', await content(p, "#set", "::before"));
+  check("::before text kept", await content(p, "#t", "::before") === '"kept text"', await content(p, "#t", "::before"));
+  check("in a shadow root", await content(p, "#s", "::before", true) === '""', await content(p, "#s", "::before", true));
+  check("added later", await content(p, "#late", "::before") === '""', await content(p, "#late", "::before"));
+  check("an image in a shadow root hidden", await p.evaluate(() =>
+    getComputedStyle(document.getElementById("host").shadowRoot.querySelector("img")).visibility) === "hidden");
+  await p.close();
+
+  // Principle 9: a big page is looked at in small pieces (no long task,
+  // over 50 ms, while it is scanned), and the picture at its end is found.
+  const big = await browser.newPage();
+  await big.route("http://pictures.example/**", (route) => route.request().url().endsWith("/x.gif")
+    ? route.fulfill({ status: 200, contentType: "image/gif", body: GIF })
+    : route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Big</title>" +
+      "<style>.a::before { content: url(/x.gif); }</style>" +
+      "<div>" + "<span>word</span>".repeat(20000) + "</div><div class=\"a\" id=\"a\"></div>" }));
+  await big.addInitScript(() => {
+    window.longTasks = [];
+    new PerformanceObserver((list) => window.longTasks.push(...list.getEntries().map((e) => e.duration)))
+      .observe({ entryTypes: ["longtask"] });
+  });
+  await big.addInitScript((stored) => {
+    const listeners = { addListener() {} };
+    window.browser = {
+      storage: { local: { get: async () => ({ page: stored }) }, onChanged: listeners },
+      runtime: { sendMessage: async () => undefined, onMessage: listeners },
+    };
+  }, rules([{ action: "no-images", distinct: 1, hits: 1 }]));
+  await big.addInitScript(script);
+  await big.goto("http://pictures.example/big");
+  await big.waitForFunction(() => document.getElementById("a") &&
+    getComputedStyle(document.getElementById("a"), "::before").content === '""', null, { timeout: 15000 })
+    .then(() => check("a 20,000-element page scanned to its end", true),
+      () => check("a 20,000-element page scanned to its end", false));
+  const long = await big.evaluate(() => window.longTasks);
+  // The page's own parsing may be one long task; the scan adds none.
+  check("no long task from the scan", long.length <= 1, long);
+  await big.close();
+
+  // Without no-images nothing is touched.
+  const plain = await open(rules([{ action: "greyscale", distinct: 1, hits: 1 }]));
+  check("other looks leave pictures alone", (await content(plain, "#a", "::before")).includes("url("),
+    await content(plain, "#a", "::before"));
+  check("and mark nothing", await plain.evaluate(() => document.querySelectorAll("[data-kc9k-noimg]").length) === 0);
+  await plain.close();
+
+  await browser.close();
+  console.log(failures ? `FAILED: ${failures}` : "all passed");
+  process.exit(failures ? 1 : 0);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

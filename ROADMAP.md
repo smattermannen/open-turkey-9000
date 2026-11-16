@@ -21,10 +21,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     text and from an address list: GIFs as `<img>`, `<picture>`, inline
     `background-image … !important`, `<input type=image>`, inside a shadow
     root and inside a frame are all hidden. One gap found: a GIF drawn by a
-    pseudo-element (`::before { content: url(x.gif) }`) still shows; no CSS
-    selector can pick only image content, so it needs an idle-time scan of
-    pseudo-elements on no-images pages. Not built. Confirm the owner's case
-    on the laptop (which site?). S
+    pseudo-element (`::before { content: url(x.gif) }`) still showed. Fixed
+    in 1.22.0: on no-images pages each element's `::before`, `::after` and
+    own `content` is looked at in idle time (8 ms pieces; shadow roots, added
+    content, rescans after 1, 2, 4 s then every 10 s), marked
+    (`data-kc9k-noimg`) and emptied by both sheets; shadow roots get the
+    no-images rules as an adopted sheet. `ci/content_harness_test.js`
+    (Chromium, page script with stubbed APIs: url(), image-set(), own
+    content, !important, shadow root, added later, text kept, a
+    20,000-element page without long tasks) passes. Not run in LibreWolf
+    yet; confirm the owner's case on the laptop (which site?). S
   - [ ] Looks from page text (greyscale, no-images, no-video) unreliable
     and lifted for a moment on every click inside a site (§3.9; owner
     2026-11-15). Causes found: `render` forgot the page's looks on a new

@@ -87,10 +87,12 @@ type blockExtras struct {
 	Pomodoro      *pomodoroExport `json:"pomodoro,omitempty"`
 	Breaks        *breaksExport   `json:"breaks,omitempty"`
 	Autostarts    []db.Autostart  `json:"autostarts,omitempty"` // §3.6
-	// Triggers: what the block's apps and titles do, and (backups only)
-	// each place rule, as "place:<name>" (owner, 2026-11-16); left out:
-	// the group's default.
+	// Triggers: what the block's apps and titles do (owner, 2026-11-16);
+	// left out: the group's default. Older files may have "place:<name>"
+	// keys: ignored (a place rule has no actions).
 	Triggers map[string][]db.TriggerAction `json:"triggers,omitempty"`
+	// Automation (§3.6): enabled by default, both; left out: neither.
+	Automation *db.AutomationSettings `json:"automation,omitempty"`
 }
 
 type projectBlock struct {
@@ -236,6 +238,11 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	}
 	for _, a := range rules {
 		out.Autostarts = append(out.Autostarts, db.Autostart{Kind: a.Kind, At: a.At, Days: a.Days, Minute: a.Minute})
+	}
+	if a, err := enforce.AutomationOf(database, name); err != nil {
+		return out, err
+	} else if a.DefaultOn || a.NeedBoth {
+		out.Automation = &db.AutomationSettings{DefaultOn: a.DefaultOn, NeedBoth: a.NeedBoth}
 	}
 	out.Triggers = map[string][]db.TriggerAction{}
 	for _, group := range []string{db.TriggerApps, db.TriggerTitles} {
@@ -825,9 +832,18 @@ With --dry-run, says what would happen and changes nothing.`,
 					fmt.Printf("Block '%s': the place '%s' isn't in the file or here, so its rule is left out.\n", name, place)
 					continue
 				}
-				say("turn block '%s' on at the place '%s'", name, place)
+				say("let the place '%s' switch block '%s'", place, name)
 				if !dry {
 					if err := database.SetPlaceRule(name, id, true); err != nil {
+						return err
+					}
+				}
+			}
+			if a := c.in.Automation; a != nil {
+				say("block '%s': %s by default, switching needs %s", name, map[bool]string{true: "enabled", false: "disabled"}[a.DefaultOn],
+					map[bool]string{true: "both", false: "either"}[a.NeedBoth])
+				if !dry {
+					if err := database.SetAutomation(name, *a); err != nil {
 						return err
 					}
 				}

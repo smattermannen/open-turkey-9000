@@ -126,6 +126,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migratePlaceTriggers(conn); err != nil {
 		return err
 	}
+	if err := migrateAutomation(conn); err != nil {
+		return err
+	}
 	return migrateMonkMode(conn)
 }
 

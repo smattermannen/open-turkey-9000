@@ -9,6 +9,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -19,7 +20,7 @@ import (
 
 var placeCmd = &cobra.Command{
 	Use:   "place",
-	Short: "Places, known by their Wi-Fi networks, where blocks turn on",
+	Short: "Places, known by their Wi-Fi networks, that switch blocks",
 	Long: `A place is the set of Wi-Fi networks in range when you save it: your own and
 the neighbours'. The computer is at the place when enough of them are in
 range again: two unless you choose another number ('kc9k place need'). A block with a place rule is enabled while the computer is there and
@@ -172,7 +173,7 @@ func setPlaceNeed(database *db.DB, p db.Place, need int, fresh bool) error {
 
 var placeRuleCmd = &cobra.Command{
 	Use:   "rule [block] [place] [on|off]",
-	Short: "Turn a block on while the computer is at a place",
+	Short: "Let a place switch a block: on, or off when it is enabled by default",
 	Args:  cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if args[2] != "on" && args[2] != "off" {
@@ -186,20 +187,36 @@ var placeRuleCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		// A rule only says where the block is enabled; it switches nothing
-		// on, so a block may get one before it has anything to enforce.
-		// On makes the block stricter; off weakens it (refused while it is
-		// locked: with a schedule lock, also while the computer is there).
-		if err := ensureEditable(database, block, on); err != nil {
+		// A rule switches nothing on (R-SCHED-1), so a block may get one
+		// before it has anything to enforce. A change that lifts the block
+		// somewhere it is enabled now weakens it, refused while it is locked
+		// (with a schedule lock, also while the computer is there): a place
+		// that turns off a block enabled by default, the first place of a
+		// continuous block (enabled only there then), or removing a place
+		// that turns it on (§3.6).
+		before, err := enforce.AutomationOf(database, block)
+		if err != nil {
+			return err
+		}
+		after := before
+		if on {
+			after.Places = append(slices.Clone(before.Places), p.ID)
+		} else {
+			after.Places = slices.DeleteFunc(slices.Clone(before.Places), func(id int) bool { return id == p.ID })
+		}
+		if err := ensureEditable(database, block, automationStrengthens(database, block, before, after)); err != nil {
 			return err
 		}
 		if err := database.SetPlaceRule(block, p.ID, on); err != nil {
 			return err
 		}
-		if on {
-			fmt.Printf("Block '%s' is on while the computer is at '%s'.\n", block, p.Name)
-		} else {
-			fmt.Printf("Block '%s' no longer turns on at '%s'.\n", block, p.Name)
+		switch {
+		case on && before.DefaultOn:
+			fmt.Printf("Block '%s' is lifted while the computer is at '%s' (it is enabled by default).\n", block, p.Name)
+		case on:
+			fmt.Printf("Block '%s' is enabled while the computer is at '%s' (it is disabled by default).\n", block, p.Name)
+		default:
+			fmt.Printf("'%s' no longer switches block '%s'.\n", p.Name, block)
 		}
 		return nil
 	}),

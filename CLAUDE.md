@@ -150,9 +150,25 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   clock: DST-skipped windows shrink/vanish, repeated hour covered twice;
   durations count real hours. Active vs enabled (§3.3): `enforce.enabledBlocks`
   drops active blocks lifted by breaks/pauses and by `scheduleLifted`
-  (windows, place rules) and open allowance sessions; the daemon never
-  switches blocks on or off (`reconcileQuotas` neither). Freeze schedules:
+  (automation) and open allowance sessions; the daemon never switches
+  blocks on or off (`reconcileQuotas` neither). Freeze schedules:
   `db.FreezeSchedule.LockLead`; daemon `reconcileFreezeSchedules`.
+- **Automation** (§3.6, owner 2026-11-16; `schedule/automation.go`,
+  `db/automation.go`, `enforce/automation.go`, `cli/automation.go`):
+  `schedule.Automation` (windows, place ids, `DefaultOn`, `NeedBoth`):
+  `Enabled(inWindow, atPlace)`; with no network seen a place counts as
+  what keeps the block enabled (`UnknownPlace`). Table `automation`
+  (default, both); a block's windows' `allow` follows the default
+  (`SetAutomation`), so with windows they decide (`AutomationOf`).
+  `scheduleLifted` and `ScheduleActiveNow` (schedule lock holds) use it.
+  Every change of windows, place rules or settings goes through
+  `automationStrengthens`: free only when `AutomationWeakens` finds no
+  time of the week and location where the block goes from enabled to
+  lifted, and it doesn't leave a schedule-locked block continuous. `kc9k
+  automation B [default enabled|disabled | needs both|either]`; GUI
+  Automation section atop Schedule & places (`update_automation`,
+  `window_flags`: new windows follow the default);
+  `ci/gui_automation_smoke.py`, `TestAutomationCommand`.
 - **Locks** (`internal/cli/`): `blockHold` decides lock state (text, timer,
   password, restart, delay, schedule lock `db/schedulelock.go`). Layered
   (R-LOCK-6/7, `db/layers.go`, `cli/layers.go`): `LockExtras.Order` from
@@ -378,9 +394,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `checkPlaylistVideo`.
 - **Places** (`db/places.go`, `enforce/places.go`, `cli/places.go`): BSSIDs
   from `nmcli` (`ScanWifi`); `AtPlace` needs `Place.Needed()` in range
-  (`places.need`, default 2, `place need P N`, `place add --need`); empty
-  scan = there. `PlaceBlocks` feeds `reconcileSchedulesAt`, `ScheduleActiveNow`;
-  `keepWifiOn`.
+  (`places.need`, default 2, `place need P N`, `place add --need`);
+  `placesHere` (none seen: unknown, see Automation); `keepWifiOn`.
 - **Test mode** (`db/testmode.go`): lists go out `test: true`; extension
   shows `kc9kTestReport`, skips them in `kc9kListMatches`.
 - **Statistics**: foreground app time (daemon) and site time (extension);
@@ -426,8 +441,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   files: one entry per line, `#` comments (`block export-list|import-list
   B apps|titles|blocked|exceptions`). Remove block: inactive and unlocked.
 - **Schedules**: same-day windows in 5-min steps, `--to 24:00` = midnight;
-  overnight = two windows; overlap refused; a block's windows all block or
-  all `--allow`. Numbered per block 1..n, renumbered on removal. Schedule
+  overnight = two windows; overlap refused; a block's windows follow its
+  default (`--allow` on an enabled-by-default block; on a continuous block
+  it sets the default). Numbered per block 1..n, renumbered on removal. Schedule
   lock lead: longer always, shorter/off weakens. Old queued edits:
   `kc9k pending`, `pending cancel N`. Only the user switches blocks on/off;
   windows and place rules only lift an active block (a lock keeps it on, not
@@ -465,11 +481,13 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   refused `stop` keeps the recording.
 - **Places**: re-adding a name adds the BSSIDs now seen; needs at most what
   the place knows; more needed weakens its blocks, fewer is free. A rule
-  can go on any block (it switches nothing on). With a schedule lock, a
-  place-ruled block is locked while there; rule and place can't be removed
-  then. GUI: "Save where I am now as…" (ticked: turn the block on there),
-  networks needed per place (`ci/gui_places_smoke.py`, fake `nmcli`). No networks seen = at every ruled place,
-  and Wi-Fi is switched back on.
+  can go on any block (it switches nothing on); adding or removing one is
+  gated like any automation change. With a schedule lock, a block is
+  locked while its automation has it enabled; then nothing that lifts it
+  can be removed. GUI: "Save where I am now as…" (ticked: turn the block
+  on there), networks needed per place (`ci/gui_places_smoke.py`, fake
+  `nmcli`). No networks seen: what keeps each block enabled; Wi-Fi is
+  switched back on.
 - **Allowance** (`kc9k allowance set|start|end|remove`; `--per
   day|week|month|rolling|window`, `--refill HH:MM`, `--sessions N`; flags
   not given keep what it has): use = block's app focused, or its site

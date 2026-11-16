@@ -559,9 +559,9 @@ def block_summary(block):
     if block["on_break"]:
         parts.append("on a break")
     if block["scheduled"]:
-        parts.append("scheduled")
+        parts.append("automated")  # §3.3: windows or places switch it
     if block.get("lifted"):
-        parts.append("lifted by its schedule now")
+        parts.append("lifted by its automation now")
     if block.get("today_windows"):
         parts.append("today: " + ", ".join(block["today_windows"]))
     if block["quota_limit"]:
@@ -5575,10 +5575,42 @@ class Window(Gtk.ApplicationWindow):
         tabs.append_page(apps_scroll, Gtk.Label(label="Apps"))
 
         schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
+        # §3.6 Automation (owner, 2026-11-16): the block's windows and places
+        # switch it from its default; with both, both or either.
+        self.auto_summary = Gtk.Label(xalign=0, wrap=True)
+        self.auto_buttons = {}
+
+        def choice(pairs, setting):
+            row, group = Gtk.Box(), None
+            row.get_style_context().add_class("linked")
+            for value, label in pairs:
+                button = Gtk.RadioButton.new_with_label_from_widget(group, label)
+                button.set_mode(False)  # drawn as a toggle button
+                group = group or button
+                button.connect("toggled", self.set_automation, setting, value)
+                row.pack_start(button, False, False, 0)
+                self.auto_buttons[(setting, value)] = button
+            return row
+
+        default_row = choice((("disabled", "Disabled by default"), ("enabled", "Enabled by default")), "default")
+        self.auto_need_row = Gtk.Box(spacing=8)
+        self.auto_need_row.pack_start(Gtk.Label(label="With windows and places:"), False, False, 0)
+        self.auto_need_row.pack_start(choice((("either", "Either is enough"), ("both", "Both at once")), "needs"),
+                                      False, False, 0)
+        self.auto_need_row.set_no_show_all(True)
+        schedule.pack_start(section(
+            "Automation", self.auto_summary, default_row, self.auto_need_row,
+            help="While the block is on, its windows (below) and its places (further down; as many as "
+                 "you like) switch it by themselves. Disabled by default: they turn it on, and it is "
+                 "lifted otherwise. Enabled by default: they turn it off, and it is enabled otherwise. "
+                 "With both windows and places, switching needs either one, or both at once. A "
+                 "block with neither is continuous: enabled whenever it is on. A change that lifts a "
+                 "locked block when it is enabled now is refused; one that only adds enabled time is "
+                 "always allowed."), False, False, 0)
         self.calendar = WeekCalendar(self.create_window_from_calendar, self.edit_window_from_calendar,
                                      self.move_window_from_calendar)
         sched_intro = Gtk.Box(spacing=6)
-        sched_intro.pack_start(dim("When the block is enabled. Drag down a day to add a window."), False, False, 0)
+        sched_intro.pack_start(dim("Its windows. Drag down a day to add one."), False, False, 0)
         sched_intro.pack_start(help_button(
             "Drag down a day to add a window; click one to edit or remove it; drag it to move it. "
             "Filled: the block is enabled. Outlined: an allow window, when it is lifted. Other "
@@ -5606,7 +5638,8 @@ class Window(Gtk.ApplicationWindow):
         for label, days, start, end in SCHEDULE_PRESETS:
             button = Gtk.Button(label=label, tooltip_text=f"{days} {start}-{end}")
             button.connect("clicked", lambda _b, d=days, s=start, e=end: self.selected and self.run(
-                ["schedule", "add", self.selected, "--days", d, "--from", s, "--to", e], then=self.queued_note))
+                ["schedule", "add", self.selected, "--days", d, "--from", s, "--to", e, *self.window_flags()],
+                then=self.queued_note))
             preset_row.pack_start(button, False, False, 0)
         self.schedule_total = dim("")
         preset_row.pack_end(self.schedule_total, False, False, 0)
@@ -5982,6 +6015,7 @@ class Window(Gtk.ApplicationWindow):
         self.app_triggers.set_actions(block["name"], triggers.get("apps", [{"name": "close"}]))
         self.title_triggers.set_actions(block["name"], triggers.get("titles", [{"name": "close"}]))
         self.schedules.set_items(block["schedules"])
+        self.update_automation(block)
         self.autostarts.set_items(block.get("autostarts") or [])
         others = [w for other in self.state.get("blocks", []) if other["name"] != block["name"]
                   for w in other.get("schedule_windows") or [] if not w.get("allow")]
@@ -6530,7 +6564,7 @@ class Window(Gtk.ApplicationWindow):
             self.message("Enter days, start and end, for example: weekdays 09:00 17:00")
             return
         self.run(["schedule", "add", self.selected, "--days", values[0],
-                  "--from", values[1], "--to", values[2]])
+                  "--from", values[1], "--to", values[2], *self.window_flags()])
 
     def create_window_from_calendar(self, column, start, end):
         if not self.selected:
@@ -6539,7 +6573,7 @@ class Window(Gtk.ApplicationWindow):
         if self.confirm(f"Add {day.capitalize()} {show_clock(start)}–{show_clock(end, True)} to {self.selected}?",
                         "While the block is on, it is enabled then. To repeat it on other days, type "
                         "them in the list below, e.g. weekdays " + frm + " " + to + ".", "Add"):
-            self.run(["schedule", "add", self.selected, "--days", day, "--from", frm, "--to", to])
+            self.run(["schedule", "add", self.selected, "--days", day, "--from", frm, "--to", to, *self.window_flags()])
 
     def remove_window_from_calendar(self, index):
         block = self.blocks.get(self.selected)
@@ -6549,6 +6583,38 @@ class Window(Gtk.ApplicationWindow):
                         "With a schedule lock, this can't be done during the window or its lead time.",
                         "Remove", destructive=True):
             self.run(["schedule", "remove", self.selected, str(index + 1)])
+
+    def set_automation(self, button, setting, value):
+        """§3.6: changes the block's default or its both/either; a refused
+        change goes back (update_automation shows the state)."""
+        if self.updating or not button.get_active() or not self.selected:
+            return
+        self.run(["automation", self.selected, setting, value])
+
+    def update_automation(self, block):
+        """Shows what switches the block (§3.6)."""
+        settings = block.get("automation") or {}
+        windows, places = bool(block.get("schedules")), bool(block.get("places"))
+        if block.get("continuous", not (windows or places)):
+            text = ("Continuous: enabled whenever it is on. Add windows or places below to switch it "
+                    "by itself.")
+        else:
+            by = " and ".join(part for part, has in (("its windows", windows), ("its places", places)) if has)
+            text = (f"Automated: {by} turn it {'off' if settings.get('default_on') else 'on'}; "
+                    f"it is {'enabled' if settings.get('default_on') else 'lifted'} otherwise.")
+        self.auto_summary.set_text(text)
+        was, self.updating = self.updating, True
+        self.auto_buttons[("default", "enabled" if settings.get("default_on") else "disabled")].set_active(True)
+        self.auto_buttons[("needs", "both" if settings.get("need_both") else "either")].set_active(True)
+        self.updating = was
+        self.auto_need_row.set_visible(windows and places)
+        if windows and places:
+            self.auto_need_row.show_all()
+
+    def window_flags(self):
+        """§3.6: a window follows its block's default: on a block enabled by
+        default it turns the block off (an allow window)."""
+        return ["--allow"] if ((self.blocks.get(self.selected) or {}).get("automation") or {}).get("default_on") else []
 
     def replace_window(self, index, days, start, end, allow=False):
         """Changes a window: removes it, then adds the new one (§4.5; a

@@ -28,15 +28,24 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     ignored); opening drops stored place sets (`migratePlaceTriggers`,
     `TestPlaceTriggersDropped`, `TestPlaceRuleEnables`,
     `ci/gui_trigger_smoke.py`).
-  - [ ] Automation (§3.6 Place rule, Automation; R-SCHED-1). Built: any
-    number of places per block; block windows (= disabled by default)
-    and allow windows (= enabled by default) for the schedule; places
-    only turn a block on; schedule and places combine as "either"
-    (`scheduleLifted`: enabled in a window or at a place). Not built: a
-    block setting Enabled by default / Disabled by default for schedule
-    and places alike (enabled by default: arriving at a place turns it
-    off), the both/either choice, their weakening rules (towards more
-    enabled time is free), CLI, GUI, projects. M
+  - [x] Automation (§3.6 Place rule, Automation; R-SCHED-1; built
+    2026-11-16): Enabled by default / Disabled by default for windows
+    and places alike, both/either, any number of places; with no network
+    seen a place counts as what keeps the block enabled (switching Wi-Fi
+    off lifts nothing). `kc9k automation`, GUI Automation section atop
+    Schedule & places, projects (`automation`), gui-state. Every change
+    of windows, places or settings is gated by `AutomationWeakens`
+    (enabled→lifted at any time and place weakens). That closed a lock
+    bypass: a first place rule on a locked continuous block (it was taken
+    as strengthening) made it enabled only there; and it fixed two
+    mistakes: a first window on a place-ruled block under "both" counted
+    as strengthening, the last allow window couldn't be removed from a
+    locked block though that makes it continuous (still refused when it
+    has a schedule lock, which would never hold again). Blocks with allow
+    windows and place rules (the places turned them on; now off, as the
+    windows do): Unchecked whether any exist. `TestAutomationEnabled`,
+    `TestAutomationWeakens`, `TestAutomationCommand`,
+    `ci/gui_automation_smoke.py`.
   - [ ] Block list (§4.2, R-GUI-3): one card per block with its name
     (opens the block), on/off switch, "Continuous block" or "Automated
     block" (opens the automation view: schedule and places), breaks ("No

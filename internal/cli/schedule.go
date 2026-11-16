@@ -23,11 +23,12 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 )
@@ -85,24 +86,49 @@ var scheduleAddCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		// §3.6: what a window does follows the block's default; on a block
+		// without windows or places, --allow sets it (enabled by default).
+		before, err := enforce.AutomationOf(database, name)
+		if err != nil {
+			return err
+		}
+		if before.Continuous() {
+			before.DefaultOn = allow
+		} else if allow != before.DefaultOn {
+			if before.DefaultOn {
+				return fmt.Errorf("'%s' is enabled by default: its windows turn it off, so add them with --allow "+
+					"('kc9k automation %s default disabled' makes its windows turn it on)", name, name)
+			}
+			return fmt.Errorf("'%s' is disabled by default: its windows turn it on, so --allow doesn't fit "+
+				"('kc9k automation %s default enabled' makes its windows turn it off)", name, name)
+		}
+		w.Allow = before.DefaultOn
 		for i, s := range schedules {
-			if s.Allow == w.Allow && s.Window().Overlaps(w) {
+			if s.Window().Overlaps(w) {
 				return fmt.Errorf("that window overlaps schedule %d (%s); a block's windows never overlap", i+1, s.Window())
 			}
 		}
-		// An allow window opens a gap in the block: a weakening, refused
-		// while the block is locked (R-LOCK-1). A block window adds enabled
-		// time to a scheduled block, but the first one makes a continuous
-		// block (enabled always) a scheduled one, enabled only in that
-		// window: a weakening too.
-		if allow || !scheduledBlock(database, name, schedules) {
-			if err := ensureEditable(database, name, false); err != nil {
-				return err
-			}
+		// Adding enabled time is free; anything that lifts the block
+		// somewhere it is enabled now weakens it (R-LOCK-1): a window that
+		// turns it off, or the first one of a continuous block.
+		after := before
+		after.Windows = append(slices.Clone(before.Windows), w)
+		if err := ensureEditable(database, name, automationStrengthens(database, name, before, after)); err != nil {
+			return err
 		}
 
 		if err := database.AddSchedule(name, w); err != nil {
 			return err
+		}
+		if len(schedules) == 0 {
+			settings, err := database.Automation(name)
+			if err == nil {
+				settings.DefaultOn = w.Allow
+				err = database.SetAutomation(name, settings)
+			}
+			if err != nil {
+				return err
+			}
 		}
 		fmt.Printf("Schedule %d added to '%s': %s\n", len(schedules)+1, name, w)
 		if allow && len(schedules) == 0 {
@@ -160,10 +186,10 @@ var scheduleRemoveCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		// Removing a block window, or the last allow window, weakens the
-		// block: refused while it is locked (a schedule lock included, from
-		// its lead time before a window). Removing one of several allow
-		// windows only makes it stricter.
+		// Removing a window that turns the block on weakens it, so does one
+		// that turns it off when that leaves places alone to decide less
+		// often; refused while it is locked (a schedule lock included, from
+		// its lead time before a window). The rest only adds enabled time.
 		schedules, err := database.ListSchedules(name)
 		if err != nil {
 			return err
@@ -171,10 +197,14 @@ var scheduleRemoveCmd = &cobra.Command{
 		if num < 1 || num > len(schedules) {
 			return fmt.Errorf("schedule %d not found in block '%s'", num, name)
 		}
-		if !schedules[num-1].Allow || len(schedules) == 1 {
-			if err := ensureEditable(database, name, false); err != nil {
-				return err
-			}
+		before, err := enforce.AutomationOf(database, name)
+		if err != nil {
+			return err
+		}
+		after := before
+		after.Windows = slices.Delete(slices.Clone(before.Windows), num-1, num)
+		if err := ensureEditable(database, name, automationStrengthens(database, name, before, after)); err != nil {
+			return err
 		}
 
 		if err := database.RemoveSchedule(name, num); err != nil {
@@ -321,27 +351,4 @@ func init() {
 	scheduleCmd.AddCommand(scheduleListCmd)
 	scheduleCmd.AddCommand(scheduleRemoveCmd)
 	rootCmd.AddCommand(scheduleCmd)
-}
-
-// scheduledBlock reports whether a block is scheduled (§3.3): enabled only
-// in its block windows or at its places, so another block window adds
-// enabled time. A block without either is continuous.
-func scheduledBlock(database *db.DB, name string, schedules []db.Schedule) bool {
-	for _, s := range schedules {
-		if !s.Allow {
-			return true
-		}
-	}
-	places, err := database.Places()
-	if err != nil {
-		return false
-	}
-	for _, p := range places {
-		for _, b := range p.Blocks {
-			if strings.EqualFold(b, name) {
-				return true
-			}
-		}
-	}
-	return false
 }

@@ -98,6 +98,14 @@ func seenNetworks(now time.Time) []db.Network {
 	return seen
 }
 
+// ForgetSeenNetworks drops the networks read last, so that the next look
+// reads them again (tests).
+func ForgetSeenNetworks() {
+	placeMu.Lock()
+	placeAt = time.Time{}
+	placeMu.Unlock()
+}
+
 // PlaceBlocks returns the blocks that a place rule turns on right now.
 func PlaceBlocks(d *db.DB, now time.Time) (map[string]bool, error) {
 	places, err := d.Places()

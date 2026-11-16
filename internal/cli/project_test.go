@@ -153,6 +153,7 @@ func TestProjectBackupAndShare(t *testing.T) {
 	mustRun(t, "block", "add-app", "b", "steam")
 	mustRun(t, "block", "trigger", "b", "apps", "logout", "on", "--for", "30m")
 	mustRun(t, "place", "need", "home", "1")
+	mustRun(t, "automation", "b", "default", "enabled") // §3.6: travels too
 	backup, share := capture(t, "project", "export"), capture(t, "project", "export", "--share")
 	if !strings.Contains(backup, "AA:AA:AA:AA:AA:01") || strings.Contains(share, "AA:AA:AA:AA:AA:01") || strings.Contains(share, `"home"`) {
 		t.Fatalf("places: backup %v, share %v", strings.Contains(backup, "AA:AA"), strings.Contains(share, "AA:AA"))
@@ -177,6 +178,9 @@ func TestProjectBackupAndShare(t *testing.T) {
 		}
 		if got, _ := fresh.TriggerActions("b", db.TriggerApps); len(got) != 2 || got[1] != (db.TriggerAction{Name: "logout", Minutes: 30}) {
 			t.Errorf("%s: apps' actions = %+v", name, got)
+		}
+		if a, _ := fresh.Automation("b"); !a.DefaultOn {
+			t.Errorf("%s: enabled by default didn't travel", name)
 		}
 		p, err := fresh.GetPlace("home")
 		if name == "backup" && (err != nil || len(p.Networks) != 2 || len(p.Blocks) != 1 || p.Needed() != 1) {

@@ -588,20 +588,24 @@ func blockLockedNow(d *db.DB, detail *db.BlockDetail, trusted int64) bool {
 	return BlockLocked(detail, extras, trusted, bootID)
 }
 
-// ScheduleActiveNow reports whether a block's schedule enforces it now (see
-// schedule.Enforced). The CLI uses it to refuse stopping/unlocking a scheduled
-// block while that holds.
+// ScheduleActiveNow reports whether a block's automation has it enabled now
+// (§3.6): its schedule lock holds then, and stopping or unlocking it is
+// refused. False for a continuous block.
 func ScheduleActiveNow(d *db.DB, blockName string, now time.Time) (bool, error) {
-	schedules, err := d.ListSchedules(blockName)
-	if err != nil {
+	a, err := AutomationOf(d, blockName)
+	if err != nil || a.Continuous() {
 		return false, err
 	}
-	if schedule.Enforced(db.Windows(schedules), now) {
-		return true, nil
+	var at map[int]bool
+	unknown := false
+	if len(a.Places) > 0 {
+		places, err := d.Places()
+		if err != nil {
+			return false, err
+		}
+		at, unknown = placesHere(now, places)
 	}
-	// A place rule holds its block the same way while the computer is there.
-	atPlace, err := PlaceBlocks(d, now)
-	return atPlace[blockName], err
+	return automationEnabled(a, now, at, unknown), nil
 }
 
 // ScheduleFrozen reports whether a block's schedule enforces it now or at any

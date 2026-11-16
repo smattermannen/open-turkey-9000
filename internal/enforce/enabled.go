@@ -2,6 +2,8 @@ package enforce
 
 import (
 	"log"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -27,41 +29,24 @@ func enabledBlocks(d *db.DB, active []db.ActiveBlockDetail, trusted int64) []db.
 	return out
 }
 
-// scheduleLifted returns the blocks their windows or place rules lift now:
-// a scheduled block (block windows or a place rule) outside its windows
-// and away from its places, a continuous block in an allow window. Blocks
-// without windows or place rules are never in it. On a read error nothing
-// is lifted.
+// scheduleLifted returns the blocks their automation lifts now (§3.6): a
+// block disabled by default that its windows and places don't switch on,
+// one enabled by default that they switch off. Continuous blocks are never
+// in it. On a read error nothing is lifted.
 func scheduleLifted(d *db.DB, now time.Time) map[string]bool {
 	lifted := map[string]bool{}
-	all, err := d.AllSchedules()
+	autos, places, err := allAutomations(d)
 	if err != nil {
-		log.Printf("schedule: %v", err)
+		log.Printf("automation: %v", err)
 		return lifted
 	}
-	windows := map[string][]schedule.Window{}
-	for _, s := range all {
-		windows[s.BlockName] = append(windows[s.BlockName], s.Window())
+	var at map[int]bool
+	unknown := false
+	if slices.ContainsFunc(slices.Collect(maps.Values(autos)), func(a schedule.Automation) bool { return len(a.Places) > 0 }) {
+		at, unknown = placesHere(now, places)
 	}
-	ruled, err := PlaceRuled(d)
-	if err != nil {
-		log.Printf("places: %v", err)
-		return lifted
-	}
-	atPlace := map[string]bool{}
-	if len(ruled) > 0 {
-		if atPlace, err = PlaceBlocks(d, now); err != nil {
-			log.Printf("places: %v", err)
-			return map[string]bool{}
-		}
-	}
-	for name := range ruled {
-		if _, ok := windows[name]; !ok {
-			windows[name] = nil
-		}
-	}
-	for name, ws := range windows {
-		if !schedule.Enforced(ws, now) && !atPlace[name] {
+	for name, a := range autos {
+		if !a.Continuous() && !automationEnabled(a, now, at, unknown) {
 			lifted[name] = true
 		}
 	}

@@ -42,7 +42,7 @@ var draftRefused = map[string]int{
 	"schedule add": 1, "schedule remove": 1, "schedule break": 2, "schedule lock": 2,
 	"autostart": 2, "pomodoro set": 1, "pomodoro off": 1,
 	"break reward": 2, "break text": 2, "break delay": 2, "break start": 1, "break end": 1, "break request": 1,
-	"social": 2, "place rule": 1, "block users": 2, "block trigger": 2,
+	"social": 2, "place rule": 1, "block users": 2, "block trigger": 2, "automation": 3,
 }
 
 // refuseDraftEdit refuses a command of draftRefused on a draft, naming the

@@ -1,5 +1,6 @@
-// quota.go — Daily quotas: a block stays on, and a limited number of minutes
-// per day can be spent with it open.
+// quota.go — Allowances (§3.6): time a block may be used per period, spent
+// in sessions that lift it. An allowance protects nothing by itself
+// (R-LOCK-1): only locks do.
 package cli
 
 import (
@@ -16,18 +17,24 @@ import (
 var quotaCmd = &cobra.Command{
 	Use:     "allowance",
 	Aliases: []string{"quota"},
-	Short:   "Manage daily allowances",
-	Long: `Give a block a daily allowance. The block stays on all the time, and
-'allowance start' opens it until the session ends or the minutes run out. All time
-in an open session is spent only while the block is in use: one of its apps
-is in front, or one of its websites is in the focused tab (not while you are
-idle) or plays sound or video, even muted (address and title lists; page
-text lists don't count). While a session has websites, browsers without the
-extension are closed. Without LibreWolf the extension can't see tabs, so a
-session with websites spends all its time. Unused time is not saved, and the
-allowance refills at midnight.
+	Short:   "Manage allowances: time a block may be used per period",
+	Long: `Give a block an allowance: time it may be used per period (a day unless
+--per week, month, rolling for the last 24 hours, or window for each opening
+of a block window), refilled at midnight or at --refill HH:MM. 'allowance
+start' opens a session that lifts the block until it ends or the time runs
+out. Time in a session is spent only while the block is in use: one of its
+apps is in front, or one of its websites is in the focused tab (not while
+you are idle) or plays sound or video, even muted (address and title lists;
+page text lists don't count). While a session has websites, browsers
+without the extension are closed; without a supported browser the extension
+can't see tabs, so a session with websites spends all its time. Unused time
+is not saved. A lock, an open block window or a Pomodoro work period closes
+a session.
 
-Lowering an allowance applies at once. Raising or removing it applies at midnight.`,
+Setting an allowance switches the block on. An allowance protects nothing by
+itself (R-LOCK-1): while the block is unlocked, every change applies at
+once. While it is locked, an allowance can only get less time or fewer
+sessions; removing it is always allowed.`,
 }
 
 // currentQuota loads a block's quota, advanced to now.
@@ -64,7 +71,7 @@ func ensureBlockActive(database *db.DB, name string, want bool) error {
 
 var quotaSetCmd = &cobra.Command{
 	Use:   "set [block] [duration]",
-	Short: "Set a block's allowance (e.g. 30m; per day unless --per week|month; --refill HH:MM)",
+	Short: "Set a block's allowance (e.g. 30m; per day unless --per; --refill HH:MM)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
@@ -78,9 +85,6 @@ var quotaSetCmd = &cobra.Command{
 		}
 		if per != "" && per != "week" && per != "month" && per != "rolling" && per != "window" {
 			return fmt.Errorf("--per is day, week, month, rolling (the last 24 hours) or window (each opening of a block window)")
-		}
-		if err := quota.ValidateFor(d, per); err != nil {
-			return err
 		}
 		maxSessions, _ := cmd.Flags().GetInt("sessions")
 		if maxSessions < 0 || maxSessions > 100 {
@@ -99,59 +103,50 @@ var quotaSetCmd = &cobra.Command{
 			return err
 		}
 		defer database.Close()
-		if err := requireSettingsPassword(database); err != nil {
-			return err
-		}
 
 		now := time.Now()
 		existing, err := database.GetQuota(name)
 		if err != nil {
 			return err
 		}
-		var s quota.State
-		// R-LOCK-1: an allowance lifts its block during sessions, so a new
-		// one, or more time, weakens the block: refused while it is locked
-		// (it used to be taken, and only applied at the next refill). An
-		// allowance alone doesn't refuse it: raising waits for the refill.
-		if existing == nil || limit > existing.Limit || (existing.PendingLimit != quota.NoPending && limit > existing.PendingLimit) {
-			hold, err := blockHold(database, name, now)
-			if err != nil {
-				return err
+		if existing != nil {
+			// Flags not given keep what the allowance has.
+			if !cmd.Flags().Changed("per") {
+				per = existing.Period
 			}
-			if hold.lockedBesidesAllowance() {
-				return refused(database, name, fmt.Errorf("block '%s' is locked; a new or longer allowance weakens it (%s)", name, strengtheningEdits))
+			if !cmd.Flags().Changed("refill") {
+				refill = existing.Refill
+			}
+			if !cmd.Flags().Changed("sessions") {
+				maxSessions = existing.MaxSessions
 			}
 		}
+		if err := quota.ValidateFor(d, per); err != nil {
+			return err
+		}
+		// R-LOCK-1: an allowance lifts its block during sessions, so a new
+		// one, more time, more sessions (or no limit), or another period or
+		// refill time (which can give time back) weakens the block: it needs
+		// the settings password and is refused while the block is locked.
+		// Less time or fewer sessions is always free.
+		weakens := existing == nil || limit > existing.Limit || existing.Period != per || existing.Refill != refill ||
+			(maxSessions != existing.MaxSessions && (maxSessions == 0 || (existing.MaxSessions != 0 && maxSessions > existing.MaxSessions)))
+		if weakens {
+			if err := ensureEditable(database, name, false); err != nil {
+				return err
+			}
+		}
+		var s quota.State
 		if existing == nil {
 			s = quota.New(limit, now.Unix(), "")
 			s.Period, s.Refill, s.MaxSessions = per, refill, maxSessions
 			s.Day = enforce.QuotaPeriod(database, name, s, now)
 		} else {
-			if cmd.Flags().Changed("sessions") && existing.MaxSessions != maxSessions {
-				// More sessions, or none limit, weakens (§3.6).
-				if maxSessions == 0 || (existing.MaxSessions != 0 && maxSessions > existing.MaxSessions) {
-					if err := ensureEditable(database, name, false); err != nil {
-						return err
-					}
-				}
-				existing.MaxSessions = maxSessions
-			}
-			if existing.Period != per || existing.Refill != refill {
-				// Another period or refill time can give time back: it
-				// weakens, refused while the block is locked.
-				if err := ensureEditable(database, name, false); err != nil {
-					return err
-				}
-				existing.Period, existing.Refill = per, refill
-			}
+			existing.Period, existing.Refill, existing.MaxSessions = per, refill, maxSessions
 			s = existing.Step(now.Unix(), enforce.QuotaPeriod(database, name, *existing, now)).SetLimit(limit)
 		}
 		if err := database.SaveQuota(name, s); err != nil {
 			return err
-		}
-		if s.PendingLimit == limit {
-			fmt.Printf("Allowance of '%s' becomes %s when it next refills\n", name, d)
-			return nil
 		}
 
 		detail, err := database.GetBlock(name)
@@ -173,7 +168,7 @@ var quotaSetCmd = &cobra.Command{
 
 var quotaRemoveCmd = &cobra.Command{
 	Use:   "remove [block]",
-	Short: "Remove a block's allowance when it next refills",
+	Short: "Remove a block's allowance (always allowed: without sessions the block is stricter)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		database, err := openDB()
@@ -181,19 +176,22 @@ var quotaRemoveCmd = &cobra.Command{
 			return err
 		}
 		defer database.Close()
-		if err := requireSettingsPassword(database); err != nil {
-			return err
-		}
-
-		s, err := currentQuota(database, args[0], time.Now())
+		s, err := database.GetQuota(args[0])
 		if err != nil {
 			return err
 		}
-		s.PendingLimit = 0
-		if err := database.SaveQuota(args[0], s); err != nil {
+		if s == nil {
+			return fmt.Errorf("block '%s' has no allowance", args[0])
+		}
+		// No more sessions, and an open one ends: that only strengthens the
+		// block. Whether it is switched on stays as it is (§3.3).
+		if err := database.DeleteQuota(args[0]); err != nil {
 			return err
 		}
-		fmt.Printf("Allowance of '%s' will be removed at midnight\n", args[0])
+		if err := enforce.ApplyFromDB(database); err != nil {
+			return err
+		}
+		fmt.Printf("Allowance of '%s' removed\n", args[0])
 		return nil
 	},
 }
@@ -221,14 +219,13 @@ var quotaStartCmd = &cobra.Command{
 			return fmt.Errorf("block '%s' already has an open session", name)
 		}
 		if s.Remaining() == 0 {
-			return fmt.Errorf("today's allowance for '%s' is spent", name)
+			return fmt.Errorf("the allowance of '%s' is spent for this period", name)
 		}
 		hold, err := blockHold(database, name, now)
 		if err != nil {
 			return err
 		}
-		if hold.active && (hold.charLocked || hold.timeLocked() || hold.scheduledNow ||
-			hold.passwordHash != "" || hold.restartLocked || hold.extras.Delay > 0 || len(hold.layers) > 0) {
+		if hold.held() {
 			return fmt.Errorf("block '%s' is locked or in a scheduled window, so its allowance can't be used now", name)
 		}
 		if enforce.PomodoroWorking(database, name) {
@@ -260,7 +257,7 @@ var quotaStartCmd = &cobra.Command{
 		if err := enforce.ApplyFromDB(database); err != nil {
 			return err
 		}
-		fmt.Printf("Block '%s' is open; %d minutes left today\n", name, s.Remaining()/60)
+		fmt.Printf("Block '%s' is open; %d minutes left in this period\n", name, s.Remaining()/60)
 		return nil
 	},
 }
@@ -294,7 +291,7 @@ var quotaEndCmd = &cobra.Command{
 		if err := enforce.ApplyFromDB(database); err != nil {
 			return err
 		}
-		fmt.Printf("Block '%s' is on again; %d minutes left today\n", name, s.Remaining()/60)
+		fmt.Printf("Block '%s' is on again; %d minutes left in this period\n", name, s.Remaining()/60)
 		return nil
 	},
 }

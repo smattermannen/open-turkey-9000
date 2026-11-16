@@ -157,14 +157,12 @@ func (s State) Remaining() int64 {
 	return s.Limit - s.Used
 }
 
-// SetLimit applies a new limit: a lower one now, a higher one at midnight, so
-// a quota can't be raised on impulse.
+// SetLimit applies a new limit at once (R-LOCK-1: an unlocked block is
+// edited freely at once; a locked one never gets a higher limit, which the
+// CLI refuses). PendingLimit only holds a change older versions queued for
+// the next refill.
 func (s State) SetLimit(limit int64) State {
-	if limit <= s.Limit {
-		s.Limit, s.PendingLimit = limit, NoPending
-	} else {
-		s.PendingLimit = limit
-	}
+	s.Limit, s.PendingLimit = limit, NoPending
 	return s
 }
 

@@ -98,8 +98,9 @@ func noteQuotaApps(d *db.DB, foreground []string, seconds int64) {
 	}
 }
 
-// reconcileQuotas spends open sessions and keeps each quota block on, except
-// during a session. A lock or an enforcing schedule always beats a session.
+// reconcileQuotas spends open sessions and closes those a lock, an open
+// block window or a Pomodoro work period beats. It never switches a block
+// on or off (§3.3): a session only lifts its block.
 func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 	names, err := d.QuotaBlocks()
 	if err != nil {
@@ -136,14 +137,9 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		boot, _ := db.BootID()
 		locked := BlockLocked(detail, extras, trusted, boot)
 
-		if s.Limit == 0 {
+		if s.Limit == 0 { // a removal older versions queued for the refill
 			if err := d.DeleteQuota(name); err != nil {
 				log.Printf("daemon: allowance: %v", err)
-			}
-			if detail.Active && detail.Scheduled && !locked {
-				if err := d.DeactivateBlock(name); err != nil {
-					log.Printf("daemon: allowance: %v", err)
-				}
 			}
 			continue
 		}
@@ -163,16 +159,6 @@ func reconcileQuotas(d *db.DB, now time.Time, trusted int64) error {
 		}
 		if !saved {
 			addQuotaUse(name, spent) // the CLI changed it; spend this next cycle
-			continue
-		}
-
-		// An allowance keeps its block on; an open session only lifts it
-		// (enabledBlocks, §3.3). Blocks older code switched off during a
-		// session are switched on again.
-		if !detail.Active {
-			if err := d.ActivateBlock(name, false, 0, 0, true); err != nil {
-				log.Printf("daemon: allowance: %v", err)
-			}
 		}
 	}
 	return nil

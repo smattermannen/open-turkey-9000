@@ -38,9 +38,9 @@ def ot(*args):
 
 
 def cleanup():
-    # A quota can only be removed at midnight, and keeps its block on until
-    # then; the block 'quotatest' only blocks addresses with "kc9kquota", so
-    # it stays (and is reused by the next run) until it can be removed.
+    # An allowance is removed at once (R-LOCK-1, 2026-11-16); the block
+    # 'quotatest' only blocks addresses with "kc9kquota". Older versions kept
+    # it until midnight, so a leftover one is reused by the next run.
     for args in (("quota", "end", "quotatest"), ("quota", "remove", "quotatest"),
                  ("stop", "quotatest"), ("block", "remove", "quotatest")):
         subprocess.run(["kc9k", *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

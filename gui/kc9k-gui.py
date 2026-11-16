@@ -4990,7 +4990,7 @@ class Window(Gtk.ApplicationWindow):
         self.quota_start.connect("clicked", self.start_quota)
         self.quota_end = Gtk.Button(label="End session")
         self.quota_end.connect("clicked", self.end_quota)
-        self.quota_remove = Gtk.Button(label="Remove at next refill")
+        self.quota_remove = Gtk.Button(label="Remove")
         self.quota_remove.connect("clicked", self.remove_quota)
         quota_row.pack_start(self.quota_set, False, False, 0)
         # The session buttons get their own row, so the page fits a narrow screen.
@@ -4999,10 +4999,11 @@ class Window(Gtk.ApplicationWindow):
             session_row.pack_start(button, False, False, 0)
         self.quota_label = dim("")
         box.pack_start(section(
-            "Daily allowance",
-            dim("The block stays on, except during sessions you open, until the day's minutes are "
-                "spent. A session only spends time while the block is in use: its app in front, "
-                "its site in the focused tab, or playing sound or video."),
+            "Allowance",
+            dim("Sessions you open lift the block until the period's time is spent. A session only "
+                "spends time while the block is in use: its app in front, its site in the focused "
+                "tab, or playing sound or video. An allowance protects nothing by itself: changes "
+                "apply at once until the block is locked; then it only takes less time."),
             quota_row, session_row, self.quota_label), False, False, 0)
 
         pomodoro_row = Gtk.Box(spacing=6)

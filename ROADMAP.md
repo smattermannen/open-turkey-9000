@@ -156,6 +156,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     (`TestSettingsLine`).
   - [x] A scratch database (`KC9K_DB`, GUI smoke tests) set hotkeys on the
     real desktop, clobbering KC9K's own; now it never does.
+  - [x] An allowance protected its block like a lock (R-LOCK-1, R-LOCK-10;
+    found 2026-11-16): a block with an allowance and no lock couldn't be
+    switched off, weakened or uninstalled, the daemon switched it back on,
+    and raising or removing the allowance waited for the next refill (for a
+    rolling allowance a raise never came). Now an allowance protects
+    nothing by itself: unlocked, every change applies at once; locked, it
+    only takes less time or fewer sessions; removing it is always free and
+    leaves the block on; the daemon never switches it. `allowance set`
+    flags not given keep the allowance's (a weekly allowance stayed weekly
+    only if --per was repeated). `TestAllowanceProtectsNothing`.
   - [x] Words SPEC §3.14 avoids, in messages and help (found 2026-11-16):
     the default list "Page words" is now "Rendered terms on page" (renamed
     once in every block, `migrateWordsListName`); `block add-term` /
@@ -235,7 +245,8 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
 Script-tested, never by a person. Script what can be into `ci/`.
 
 - [ ] Notification before an allowance session ends. (Not tried overnight:
-  a test allowance can only be removed at midnight, leaving its block on.)
+  a test allowance could only be removed at midnight, leaving its block on;
+  since 2026-11-16 it is removed at once, so this can be scripted.)
 - [ ] Scheduled Frozen Chicken in logout/shutdown modes.
 - [ ] Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
 - [ ] Shutdown mode and `kc9k.nofreeze`; measure fast relock.

@@ -195,8 +195,13 @@ func TestAllowancePeriod(t *testing.T) {
 	if q == nil || q.Period != "week" || q.Refill != 240 || q.Limit != 5*3600 {
 		t.Fatalf("quota = %+v", q)
 	}
-	if err := runCLI(t, "allowance", "set", "b", "30h"); err == nil {
+	if err := runCLI(t, "allowance", "set", "b", "30h", "--per", "day"); err == nil {
 		t.Error("30h per day accepted")
+	}
+	// Flags not given keep what the allowance has.
+	mustRun(t, "allowance", "set", "b", "4h")
+	if q, _ := d.GetQuota("b"); q == nil || q.Period != "week" || q.Refill != 240 || q.Limit != 4*3600 {
+		t.Fatalf("after a change of time only: %+v", q)
 	}
 	mustRun(t, "start", "b", "--for", "1h", "--yes")
 	if err := runCLI(t, "allowance", "set", "b", "5h", "--per", "month", "--refill", "04:00"); err == nil {
@@ -549,5 +554,50 @@ func TestDraftBlockPassword(t *testing.T) {
 	}
 	if hash, _ := d.BlockViewPassword("p (draft)"); hash == "" {
 		t.Error("the draft lost the block password")
+	}
+}
+
+// R-LOCK-1, R-LOCK-10: an allowance protects nothing by itself. On an
+// unlocked block every change applies at once (a raise and a removal used
+// to wait for the next refill, and for a rolling allowance a raise never
+// came); the block can be switched off; uninstalling isn't refused for it.
+// While locked, only less time or fewer sessions, and removing it.
+func TestAllowanceProtectsNothing(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "allowance", "set", "b", "30m", "--per", "rolling")
+	mustRun(t, "allowance", "set", "b", "2h")
+	if q, _ := d.GetQuota("b"); q == nil || q.Limit != 2*3600 || q.Period != "rolling" {
+		t.Fatalf("a raise on an unlocked block: %+v", q)
+	}
+	mustRun(t, "block", "add", "b", "example.com")
+	mustRun(t, "block", "remove-entry", "b", "reddit.com") // weakening, unlocked: free
+	mustRun(t, "stop", "b")
+	if b, _ := d.GetBlock("b"); b.Active {
+		t.Fatal("an allowance kept an unlocked block on")
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	mustRun(t, "allowance", "set", "b", "1h", "--sessions", "2")
+	if q, _ := d.GetQuota("b"); q == nil || q.Limit != 3600 || q.MaxSessions != 2 {
+		t.Errorf("less time and a session limit on a locked block: %+v", q)
+	}
+	for _, args := range [][]string{
+		{"allowance", "set", "b", "3h"},
+		{"allowance", "set", "b", "1h", "--per", "day"},
+		{"allowance", "set", "b", "1h", "--sessions", "0"},
+		{"allowance", "set", "b", "1h", "--sessions", "3"},
+	} {
+		if err := runCLI(t, args...); err == nil {
+			t.Errorf("%v: weakened a locked block", args)
+		}
+	}
+	mustRun(t, "allowance", "remove", "b")
+	if q, _ := d.GetQuota("b"); q != nil {
+		t.Errorf("removed while locked, at once: %+v", q)
+	}
+	if b, _ := d.GetBlock("b"); !b.Active {
+		t.Error("removing the allowance switched the block off")
 	}
 }

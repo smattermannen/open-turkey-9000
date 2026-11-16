@@ -485,9 +485,6 @@ var stopCmd = &cobra.Command{
 		if !hold.active {
 			return fmt.Errorf("block '%s' is not active", blockName)
 		}
-		if hold.quota {
-			return fmt.Errorf("block '%s' has an allowance and stays on. Use 'kc9k allowance start %s'", blockName, blockName)
-		}
 		if hold.scheduledNow {
 			return refused(database, blockName, fmt.Errorf("block '%s' is in a scheduled window and can't be stopped until it closes", blockName))
 		}
@@ -880,7 +877,6 @@ type holdState struct {
 	scheduleFrozen bool
 	scheduleLock   bool
 	scheduleLead   int  // minutes
-	quota          bool // a daily quota keeps the block on
 	extras         db.LockExtras
 	passwordHash   string
 	restartLocked  bool
@@ -896,15 +892,11 @@ func (h holdState) until() string {
 	return time.Unix(h.lockedUntil, 0).Format("2006-01-02 15:04")
 }
 
-// held reports whether the block currently can't be freely removed/edited.
+// held reports whether the block is locked now, so it can't be weakened,
+// switched off or deleted: a lock on it, or its schedule lock. Only locks
+// protect a block (R-LOCK-1): an allowance, a schedule or a place rule
+// alone don't.
 func (h holdState) held() bool {
-	return h.quota || h.lockedBesidesAllowance()
-}
-
-// lockedBesidesAllowance is held() without the allowance itself: a lock or
-// schedule lock, which a new or longer allowance must wait for (R-LOCK-1).
-// The allowance alone only delays raising it to its next refill.
-func (h holdState) lockedBesidesAllowance() bool {
 	return h.scheduleFrozen || h.active && (h.charLocked || h.timeLocked() || h.scheduledNow ||
 		h.passwordHash != "" || h.restartLocked || h.extras.Delay > 0 || len(h.layers) > 0)
 }
@@ -964,11 +956,6 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 		}
 		h.restartLocked = db.LayerOn(db.LayerRestart, detail, h.extras, trusted, boot)
 	}
-	q, err := database.GetQuota(name)
-	if err != nil {
-		return holdState{}, err
-	}
-	h.quota = q != nil
 	if h.scheduleLock {
 		frozen, err := enforce.ScheduleFrozen(database, name, now, time.Duration(h.scheduleLead)*time.Minute)
 		if err != nil {

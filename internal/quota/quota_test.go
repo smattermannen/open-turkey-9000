@@ -43,15 +43,23 @@ func TestSessionEnd(t *testing.T) {
 	}
 }
 
+// R-LOCK-1: an unlocked block is edited freely at once, so a raise applies
+// at once (the CLI refuses it on a locked block). A raise older versions
+// queued still applies at the next period.
 func TestNewDay(t *testing.T) {
 	s := New(60, 100, "d1").SetLimit(120)
-	if s.Limit != 60 {
-		t.Fatal("a raise must wait for midnight")
+	if s.Limit != 120 || s.PendingLimit != NoPending {
+		t.Fatalf("a raise applies at once: %+v", s)
 	}
 	s.Used, s.Open = 30, true
 	s = s.Step(110, "d2")
-	if s.Used != 0 || s.Open || s.Limit != 120 || s.PendingLimit != NoPending {
+	if s.Used != 0 || s.Open || s.Limit != 120 {
 		t.Fatalf("new day: %+v", s)
+	}
+	old := New(60, 100, "d1")
+	old.PendingLimit = 120
+	if old = old.Step(110, "d2"); old.Limit != 120 || old.PendingLimit != NoPending {
+		t.Fatalf("a queued raise at the new day: %+v", old)
 	}
 }
 

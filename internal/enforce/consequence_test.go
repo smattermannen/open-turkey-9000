@@ -538,20 +538,32 @@ func TestListLogoutAnnounced(t *testing.T) {
 // §3.3: an open allowance session lifts its block; the block stays on.
 func TestAllowanceSessionLifts(t *testing.T) {
 	d := testDB(t)
-	if err := d.CreateBlock("games"); err != nil {
+	for _, name := range []string{"games", "off"} {
+		if err := d.CreateBlock(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.ActivateBlock("games", false, 0, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
 	s := quota.New(600, now.Unix(), quota.DayOf(now))
 	s.Open = true
-	if err := d.SaveQuota("games", s); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"games", "off"} {
+		if err := d.SaveQuota(name, s); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := reconcileQuotas(d, now, now.Unix()); err != nil {
 		t.Fatal(err)
 	}
+	// §3.3: a session only lifts its block; the daemon never switches a
+	// block on or off.
 	if b, _ := d.GetBlock("games"); !b.Active {
 		t.Fatal("an allowance block is off during its session")
+	}
+	if b, _ := d.GetBlock("off"); b.Active {
+		t.Fatal("the daemon switched an allowance block on")
 	}
 	active, _ := d.GetActiveBlocks()
 	if got := enabledBlocks(d, active, now.Unix()); len(got) != 0 {

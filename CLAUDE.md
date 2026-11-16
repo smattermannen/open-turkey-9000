@@ -144,7 +144,7 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   durations count real hours. Active vs enabled (§3.3): `enforce.enabledBlocks`
   drops active blocks lifted by breaks/pauses and by `scheduleLifted`
   (windows, place rules) and open allowance sessions; the daemon never
-  switches blocks off (`reconcileQuotas` keeps allowance blocks on). Freeze schedules:
+  switches blocks on or off (`reconcileQuotas` neither). Freeze schedules:
   `db.FreezeSchedule.LockLead`; daemon `reconcileFreezeSchedules`.
 - **Locks** (`internal/cli/`): `blockHold` decides lock state (text, timer,
   password, restart, delay, schedule lock `db/schedulelock.go`). Layered
@@ -415,11 +415,15 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   the place knows only one. A place-ruled block is held while there; rule
   and place can't be removed then. No networks seen = at every ruled place,
   and Wi-Fi is switched back on.
-- **Allowance** (`kc9k allowance set|start|end|remove`, daily): use = block's
-  app focused, or its site (address/title lists, not text) in the focused
-  tab with input < 3 min, or playing (even muted) in any tab. Session with
-  websites closes extension-less browsers. Lowering applies at once; raising
-  or removing at midnight. A lock or window closes a session. Day follows
+- **Allowance** (`kc9k allowance set|start|end|remove`; `--per
+  day|week|month|rolling|window`, `--refill HH:MM`, `--sessions N`; flags
+  not given keep what it has): use = block's app focused, or its site
+  (address/title lists, not text) in the focused tab with input < 3 min, or
+  playing (even muted) in any tab. Session with websites closes
+  extension-less browsers. Protects nothing by itself (R-LOCK-1, `held`):
+  unlocked, every change at once; locked, only less time or fewer sessions;
+  removing always free. `set` switches the block on; nothing else switches
+  it. A lock, window or Pomodoro work period closes a session. Day follows
   the system clock.
 - **Locks**: flags `--for`, `--until`, `--lock` (`--text-lock`),
   `--password-stdin`, `--restart`, `--delay`, `--range "DAYS HH:MM-HH:MM"`
@@ -503,8 +507,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   app closed) and advance minutes (default 5; each advance once); windows
   only of blocks that are on; scheduled freeze always (5 and 1 min).
 - **Settings password**: needed for weakening, `stop`, `unlock`, schedules,
-  allowances, browser settings off, strict off, no-escape, uninstall. Free:
-  reading, starting, adding entries, actions on, opening a session. GUI
+  a new or larger allowance, browser settings off, strict off, no-escape,
+  uninstall. Free: reading, starting, adding entries, actions on, opening a
+  session, less allowance or removing it. GUI
   remembers it until closed. Lost: `kc9k-bin recover` as root in a recovery boot
   (not with no-escape) removes it and password locks;
   devmaster `master` clears it.

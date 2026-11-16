@@ -53,15 +53,26 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - Browser tests: `GECKOWEBDRIVER=~/.local/share/kc9k-browsertest
   ~/.local/share/kc9k-browsertest/venv/bin/python ci/<name>.py`
   (`browser_test`, `extras_test`, `actions_test`, `quota_test`,
-  `download_test`). No Node
+  `download_test`, `flash_test`: R-PAGE-1, records per animation frame
+  whether a blocked word was painted). No Node
   there: `cjs ci/match_test_cjs.js`.
 - GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
   `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
   never `show()`. `KC9K_DB` never applies layers. Examples:
-  `ci/gui_phrase_smoke.py`, `ci/gui_circadian_smoke.py` (`xvfb-run -a`).
+  `ci/gui_phrase_smoke.py`, `ci/gui_phrase_edit_smoke.py`,
+  `ci/gui_duration_smoke.py`, `ci/gui_circadian_smoke.py` (`xvfb-run -a`).
+- Weakening audit: `cli/weakening_audit_test.go` tries every command that
+  could weaken a locked block; add a new weakening command there.
 - Browser policy stops many pages before the extension sees the request; it
   then learns from the tab every 3 s. Request-dependent features need a
   fallback (`trail` in `background.js`).
+- No flashing (R-PAGE-1, `content.js`): while a list could still act on the
+  top page by its title or text (`mayActByText`), it stays at opacity 0
+  (`hidePage`) until judged and settled (`SETTLE_MS` after DOMContentLoaded
+  or an address change seen in the MutationObserver), never over
+  `HIDE_CAP_MS`. Don't hide with `visibility`: `innerText` skips it.
+- State the Chrome service worker must keep across restarts goes in
+  `storage.session` (e.g. `kc9kDownloadPages`).
 - LibreWolf's policy file is rewritten only by the daemon (Firefox's at once
   by the CLI): wait ~12 s before starting a browser after a change.
 
@@ -321,7 +332,15 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Statistics**: foreground app time (daemon) and site time (extension);
   not counted when locked or after 2 min idle; kept a year.
 - **GUI** (`gui/kc9k-gui.py`, GTK 3): reads `kc9k gui-state`,
-  `kc9k stats --json`; every change runs a `kc9k` command.
+  `kc9k stats --json`; every change runs a `kc9k` command. Design layer
+  (R-GUI-3, `APP_CSS`): `page_header`, `section` (a card; `help=` puts
+  long text behind a ? popover), `card`, `pill`/`block_pills`,
+  `flow_row` (wraps a row so the window fits 1000 px). Inputs (R-GUI-1/2):
+  `DurationField` (typed `2d 4h`, says why when wrong, never clamps),
+  `NumberField`, `TimerLockField` (none / for / until a calendar date),
+  `LockPicker` (every lock kind; `lock_dialog` reads it before closing).
+  CLI side: `cli/duration.go` (`parseUserDuration` with d/w,
+  `humanDuration`, `untilToday` with dates).
 - **DB** (`internal/db/`): SQLite `/var/lib/kc9k/kc9k.db`, WAL, busy_timeout
   and foreign_keys per connection via `_pragma`. `KC9K_DB` overrides (tests
   only). `db.go`, `features.go` (schedules, time locks, upgrades),

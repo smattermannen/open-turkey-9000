@@ -584,6 +584,17 @@ def theme_colors(widget):
     return accent, text, (fg.red, fg.green, fg.blue, 0.62), (fg.red, fg.green, fg.blue, 0.12)
 
 
+def rounded_rect(cr, x, y, width, height, radius=4):
+    """A rectangle with all four corners rounded."""
+    radius = max(min(radius, width / 2, height / 2), 0)
+    cr.new_sub_path()
+    cr.arc(x + width - radius, y + radius, radius, -0.5 * math.pi, 0)
+    cr.arc(x + width - radius, y + height - radius, radius, 0, 0.5 * math.pi)
+    cr.arc(x + radius, y + height - radius, radius, 0.5 * math.pi, math.pi)
+    cr.arc(x + radius, y + radius, radius, math.pi, 1.5 * math.pi)
+    cr.close_path()
+
+
 def rounded_top_bar(cr, x, y, width, height, radius=4):
     """A bar with rounded data end (top) and a flat baseline."""
     radius = min(radius, width / 2, height)
@@ -3059,6 +3070,7 @@ class ClipEditor(Gtk.DrawingArea):
         self.lane = lane
         self.points = [dict(p) for p in lane["points"]]
         self.minute = 0.0
+        self.playhead = None  # the minute "Play the day" shows, while it plays
         self.active = False  # the clip is on, and so is the circadian rhythm
         self.on_change, self.on_preview = on_change, on_preview
         self.drag = None  # ("point", index) or ("tension", index, start y, start tension)
@@ -3213,6 +3225,14 @@ class ClipEditor(Gtk.DrawingArea):
         cr.move_to(now_x, y)
         cr.line_to(now_x, y + h + 9)
         cr.stroke()
+        # The minute "Play the day" shows.
+        if self.playhead is not None:
+            play_x = round(self.x_of(self.playhead)) + 0.5
+            cr.set_line_width(2)
+            cr.set_source_rgba(accent[0], accent[1], accent[2], 1)
+            cr.move_to(play_x, y)
+            cr.line_to(play_x, y + h + 9)
+            cr.stroke()
 
         # The points.
         for index, point in enumerate(self.points):
@@ -3359,12 +3379,262 @@ class ClipEditor(Gtk.DrawingArea):
         self.on_change(self)
 
 
+def hm_text(minutes):
+    """Minutes after midnight as HH:MM (00:00 for midnight at either end)."""
+    minutes = int(round(minutes)) % 1440
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def hm_minutes(text):
+    """HH:MM as minutes after midnight, or None."""
+    try:
+        hours, minutes = (int(part) for part in text.split(":"))
+    except (ValueError, AttributeError):
+        return None
+    return hours * 60 + minutes if 0 <= hours <= 24 and 0 <= minutes < 60 else None
+
+
+class WallpaperTimeline(Gtk.DrawingArea):
+    """Wallpapers on a 24-hour timeline (§4.10; owner, 2026-11-16), like
+    clips in a video editor: one lane per picture, its bar from its start to
+    its end (past midnight it wraps round). Drag a bar to move it, an edge
+    to change its start or end (5-minute steps; Shift: to the minute);
+    on_change(index, from, to) gets the new times, in minutes. Where
+    pictures overlap the one that started last shows: what is covered is
+    drawn faint."""
+
+    LEFT, RIGHT, TOP, LANE, GAP, BOTTOM = 14, 14, 22, 44, 6, 6
+    EDGE = 8
+
+    def __init__(self, on_change):
+        super().__init__()
+        self.on_change = on_change
+        self.items = []  # [{"index", "name", "from", "to", "pixbuf"}], minutes
+        self.thumbs = {}  # path -> pixbuf or None
+        self.minute_now = 0.0
+        self.drag = None  # [item, part ("move", "from" or "to"), x at press, from, to]
+        self.hover = None
+        self.set_has_tooltip(True)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK | POINTER_EVENTS)
+        self.connect("draw", self.draw)
+        self.connect("button-press-event", self.pressed)
+        self.connect("button-release-event", self.released)
+        self.connect("motion-notify-event", self.motion)
+        self.connect("query-tooltip", self.tooltip)
+
+    def thumb(self, path):
+        if path not in self.thumbs:
+            from gi.repository import GdkPixbuf
+            try:
+                self.thumbs[path] = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 56, self.LANE - 8, True)
+            except GLib.Error:
+                self.thumbs[path] = None
+        return self.thumbs[path]
+
+    def set_wallpapers(self, wallpapers, minute_now):
+        if self.drag is not None:
+            return
+        self.items = []
+        for picture in wallpapers:
+            start, end = hm_minutes(picture["from"]), hm_minutes(picture["to"])
+            if start is None or end is None:
+                continue
+            self.items.append({"index": picture["index"], "name": picture["name"], "from": start % 1440,
+                               "to": end % 1440, "pixbuf": self.thumb(picture.get("path", ""))})
+        self.minute_now = minute_now
+        self.set_size_request(-1, self.TOP + max(len(self.items), 1) * (self.LANE + self.GAP) + self.BOTTOM)
+        self.queue_draw()
+
+    # Geometry
+    def span(self):
+        return self.LEFT, max(self.get_allocated_width() - self.LEFT - self.RIGHT, 1)
+
+    def x_of(self, minute):
+        left, width = self.span()
+        return left + width * minute / 1440
+
+    def minute_at(self, x):
+        left, width = self.span()
+        return min(max((x - left) / width * 1440, 0), 1440)
+
+    def lane_top(self, i):
+        return self.TOP + i * (self.LANE + self.GAP)
+
+    @staticmethod
+    def segments(item):
+        start, end = item["from"], item["to"]
+        if start < end:
+            return [(start, end)]
+        if start > end:
+            return [(start, 1440), (0, end)]
+        return [(0, 1440)]
+
+    def shown_by(self, minute):
+        """The item whose picture is the wallpaper at minute: of those
+        covering it, the one that started last before it."""
+        best, best_age = None, None
+        for item in self.items:
+            if any(a <= minute < b for a, b in self.segments(item)):
+                age = (minute - item["from"]) % 1440
+                if best_age is None or age < best_age:
+                    best, best_age = item, age
+        return best
+
+    def hit(self, x, y):
+        """(item, part) under the pointer: part "from", "to" or "move"."""
+        for i, item in enumerate(self.items):
+            top = self.lane_top(i)
+            if not top <= y <= top + self.LANE:
+                continue
+            for a, b in self.segments(item):
+                xa, xb = self.x_of(a), self.x_of(b)
+                if a == item["from"] and abs(x - xa) <= self.EDGE:
+                    return item, "from"
+                if b == item["to"] and abs(x - xb) <= self.EDGE:
+                    return item, "to"
+                if xa <= x <= xb:
+                    return item, "move"
+        return None, None
+
+    # Drawing
+    def draw(self, _widget, cr):
+        accent, text, soft, faint = theme_colors(self)
+        left, width = self.span()
+        height = self.get_allocated_height()
+        layout = self.create_pango_layout("")
+        layout.set_font_description(Pango.FontDescription("Sans 8"))
+        # Hours: a hairline each hour, a label every three.
+        for hour in range(25):
+            x = round(self.x_of(hour * 60)) + 0.5
+            cr.set_source_rgba(*faint)
+            cr.set_line_width(1)
+            cr.move_to(x, self.TOP - 4)
+            cr.line_to(x, height - self.BOTTOM)
+            cr.stroke()
+            if hour % 3 == 0 and hour < 24:
+                layout.set_text(clock_text(hour * 60), -1)
+                w, _h = layout.get_pixel_size()
+                cr.set_source_rgba(*soft)
+                cr.move_to(min(max(x - w / 2, 0), self.get_allocated_width() - w), 2)
+                PangoCairo.show_layout(cr, layout)
+        # The bars: solid where the picture shows, faint where a later one covers it.
+        for i, item in enumerate(self.items):
+            top = self.lane_top(i)
+            for a, b in self.segments(item):
+                xa, xb = self.x_of(a), self.x_of(b)
+                rounded_rect(cr, xa + 1, top, max(xb - xa - 2, 2), self.LANE, 5)
+                cr.set_source_rgba(accent[0], accent[1], accent[2], 0.28)
+                cr.fill()
+                minute = a
+                while minute < b:
+                    run_end = min(b, minute + 5)
+                    if self.shown_by(minute) is item:
+                        cr.rectangle(self.x_of(minute), top, self.x_of(run_end) - self.x_of(minute), self.LANE)
+                    minute = run_end
+                cr.save()
+                rounded_rect(cr, xa + 1, top, max(xb - xa - 2, 2), self.LANE, 5)
+                cr.clip()
+                cr.set_source_rgba(accent[0], accent[1], accent[2], 0.9)
+                for minute in range(int(a), int(b), 5):
+                    if self.shown_by(minute) is item:
+                        cr.rectangle(self.x_of(minute), top, self.x_of(min(minute + 5, b)) - self.x_of(minute) + 0.5,
+                                     self.LANE)
+                cr.fill()
+                # The picture and its name inside the bar, where they fit.
+                inner = xa + 6
+                if item["pixbuf"] is not None and xb - xa > item["pixbuf"].get_width() + 12:
+                    Gdk.cairo_set_source_pixbuf(cr, item["pixbuf"], inner, top + 4)
+                    cr.paint()
+                    inner += item["pixbuf"].get_width() + 6
+                label = f"{item['name']}  {hm_text(item['from'])}–{hm_text(item['to'])}"
+                layout.set_text(label, -1)
+                w, h = layout.get_pixel_size()
+                if inner + w < xb - 4:
+                    cr.set_source_rgba(1, 1, 1, 1)
+                    cr.move_to(inner, top + (self.LANE - h) / 2)
+                    PangoCairo.show_layout(cr, layout)
+                # Grips at the ends.
+                for edge, where in ((a, "from"), (b, "to")):
+                    if (where == "from" and edge == item["from"]) or (where == "to" and edge == item["to"]):
+                        gx = self.x_of(edge) + (3 if where == "from" else -5)
+                        cr.set_source_rgba(1, 1, 1, 0.8 if self.hover == (item["index"], where) else 0.45)
+                        rounded_rect(cr, gx, top + self.LANE / 2 - 8, 2, 16, 1)
+                        cr.fill()
+                cr.restore()
+        # Now.
+        x = round(self.x_of(self.minute_now)) + 0.5
+        cr.set_source_rgba(text[0], text[1], text[2], 0.7)
+        cr.set_line_width(1)
+        cr.move_to(x, self.TOP - 4)
+        cr.line_to(x, height - self.BOTTOM)
+        cr.stroke()
+        return False
+
+    # Pointer
+    def snap(self, minute, event):
+        step = 1 if event.state & Gdk.ModifierType.SHIFT_MASK else 5
+        return int(round(minute / step) * step) % 1440
+
+    def pressed(self, _widget, event):
+        if event.button != 1:
+            return False
+        item, part = self.hit(event.x, event.y)
+        if item is not None:
+            self.drag = [item, part, event.x, item["from"], item["to"]]
+        return True
+
+    def motion(self, _widget, event):
+        if self.drag is None:
+            item, part = self.hit(event.x, event.y)
+            hover = (item["index"], part) if item else None
+            if hover != self.hover:
+                self.hover = hover
+                cursor = {"from": "ew-resize", "to": "ew-resize", "move": "grab"}.get(part, "default")
+                window = self.get_window()
+                if window is not None:
+                    window.set_cursor(Gdk.Cursor.new_from_name(self.get_display(), cursor))
+                self.queue_draw()
+            return False
+        item, part, x0, start, end = self.drag
+        delta = self.minute_at(event.x) - self.minute_at(x0)
+        if part == "move":
+            shift = self.snap(delta, event) if abs(delta) >= 1 else 0
+            item["from"], item["to"] = (start + shift) % 1440, (end + shift) % 1440
+        else:
+            minute = self.snap(self.minute_at(event.x), event)
+            other = end if part == "from" else start
+            if minute != other:
+                item[part] = minute
+        self.queue_draw()
+        return True
+
+    def released(self, _widget, event):
+        if event.button != 1 or self.drag is None:
+            return False
+        item, _part, _x0, start, end = self.drag
+        self.drag = None
+        if (item["from"], item["to"]) != (start, end):
+            self.on_change(item["index"], item["from"], item["to"])
+        return True
+
+    def tooltip(self, _widget, x, y, _keyboard, tooltip):
+        item, part = self.hit(x, y)
+        if item is None:
+            return False
+        what = {"from": "Drag to change when it starts", "to": "Drag to change when it ends",
+                "move": "Drag to move it"}[part]
+        tooltip.set_text(f"{item['name']}: {hm_text(item['from'])} to {hm_text(item['to'])}. {what} "
+                         "(Shift: to the minute).")
+        return True
+
+
 class CircadianPage(Gtk.ScrolledWindow):
     """Settings that follow the time of day (§4.10). Reads 'kc9k circadian
     show --json'; every change runs a 'kc9k circadian' command. Nothing here
     can be locked."""
 
     PREVIEW_MS = 300
+    PLAY_SECONDS = 15
 
     def __init__(self, window):
         super().__init__(hscrollbar_policy=Gtk.PolicyType.NEVER)
@@ -3385,6 +3655,13 @@ class CircadianPage(Gtk.ScrolledWindow):
         self.master = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.master.connect("state-set", self.switch_master)
         top.pack_end(self.master, False, False, 0)
+        # §4.10 preview (owner, 2026-11-16): the next 24 hours in seconds.
+        self.play = Gtk.Button(label="Play the day", valign=Gtk.Align.CENTER)
+        self.play.set_tooltip_text(f"Shows the next 24 hours on the screen in {self.PLAY_SECONDS} seconds "
+                                   "(brightness, colour, wallpaper, dark mode), then goes back to now")
+        self.play.connect("clicked", self.play_day)
+        top.pack_end(self.play, False, False, 0)
+        self.playing = False
         box.pack_start(top, False, False, 0)
         box.pack_start(dim(
             "The screen, the wallpaper and dark mode follow the time of day: cues for the body "
@@ -3413,12 +3690,15 @@ class CircadianPage(Gtk.ScrolledWindow):
         clips.pack_start(self.clips_box, False, False, 0)
 
         self.wallpapers = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.wallpaper_timeline = WallpaperTimeline(self.wallpaper_moved)
         add_wallpaper = Gtk.Button(label="Add a wallpaper…", halign=Gtk.Align.START)
         add_wallpaper.connect("clicked", self.add_wallpaper)
         box.pack_start(section("Wallpapers", dim(
-            "Each picture is the wallpaper between its two times. Where times overlap, the one "
-            "that started last shows. A wallpaper you pick yourself stays until the next one starts."),
-            self.wallpapers, add_wallpaper), False, False, 0)
+            "Each picture is the wallpaper between its two times. Drag a bar to move it, or an end "
+            "to change when it starts or stops (Shift: to the minute). Where times overlap, the "
+            "one that started last shows; what it covers is faint. A wallpaper you pick yourself "
+            "stays until the next one starts."),
+            self.wallpaper_timeline, self.wallpapers, add_wallpaper), False, False, 0)
 
         self.dark_radios = {}
         dark_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -3610,8 +3890,15 @@ class CircadianPage(Gtk.ScrolledWindow):
             bar.show_all()
         self.warnings.set_visible(bool(notes))
 
+    def wallpaper_moved(self, index, start, end):
+        """A bar dragged on the timeline: the picture's new times."""
+        self.window.run(["circadian", "wallpaper", "time", str(index), hm_text(start), hm_text(end)])
+
     def fill_wallpapers(self, wallpapers):
         from gi.repository import GdkPixbuf
+        now = datetime.datetime.now()
+        self.wallpaper_timeline.set_wallpapers(wallpapers, now.hour * 60 + now.minute)
+        self.wallpaper_timeline.set_visible(bool(wallpapers))
         for child in self.wallpapers.get_children():
             self.wallpapers.remove(child)
         for picture in wallpapers:
@@ -3674,12 +3961,12 @@ class CircadianPage(Gtk.ScrolledWindow):
                                         ok_label="Replace"):
             self.window.run(["circadian", "preset", name])
 
-    def background(self, args, then=None):
+    def background(self, args, then=None, timeout=30):
         """Runs a command without greying the window out (a drag goes on)."""
         passwords = list(self.window.access_passwords)
 
         def work():
-            ok, output = cli_with_access(passwords, args, timeout=30)
+            ok, output = cli_with_access(passwords, args, timeout=timeout)
             GLib.idle_add(done, ok, output)
 
         def done(ok, output):
@@ -3688,6 +3975,42 @@ class CircadianPage(Gtk.ScrolledWindow):
             return False
 
         threading.Thread(target=work, daemon=True).start()
+
+    def play_day(self, _button):
+        """Plays the next 24 hours on the screen ('kc9k circadian play') while
+        a playhead runs over the clips; then everything is back to now."""
+        if not self.view or not self.view.get("on"):
+            self.window.message("Switch the circadian rhythm on to play the day.", Gtk.MessageType.INFO)
+            return
+        now = datetime.datetime.now()
+        start, started = now.hour * 60 + now.minute + now.second / 60, GLib.get_monotonic_time()
+        self.playing = True
+        self.play.set_sensitive(False)
+        self.play.set_label("Playing…")
+
+        def tick():
+            if not self.playing:
+                return False
+            done = min((GLib.get_monotonic_time() - started) / 1e6 / self.PLAY_SECONDS, 1)
+            for editor in self.editors.values():
+                editor.playhead = (start + 1440 * done) % 1440
+                editor.queue_draw()
+            return True
+
+        def finished(ok, output):
+            self.playing = False
+            for editor in self.editors.values():
+                editor.playhead = None
+                editor.queue_draw()
+            self.play.set_sensitive(True)
+            self.play.set_label("Play the day")
+            if not ok:
+                self.window.message(output or "The day couldn't be played.")
+            self.refresh(force=True)
+
+        GLib.timeout_add(100, tick)
+        self.background(["circadian", "play", "--seconds", str(self.PLAY_SECONDS)], finished,
+                        timeout=self.PLAY_SECONDS + 45)
 
     def clip_changed(self, editor, preview_over=False):
         """Stores a clip's points after an edit."""
@@ -6996,14 +7319,6 @@ class Window(Gtk.ApplicationWindow):
                 "asks a DNS server for them. By default that is the server the computer already "
                 "uses, so nobody new learns which sites are blocked."),
             dns_row), False, False, 0)
-
-        circadian = Gtk.Button(label="Open Circadian Rhythm", halign=Gtk.Align.START)
-        circadian.connect("clicked", lambda _b: self.stack.set_visible_child_name("circadian"))
-        box.pack_start(section(
-            "Circadian rhythm",
-            dim("Brightness, colour temperature, wallpapers and dark mode by time of day. They "
-                "have their own page."),
-            circadian), False, False, 0)
 
         self.strict_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.strict_switch.connect("state-set", self.toggle_strict)

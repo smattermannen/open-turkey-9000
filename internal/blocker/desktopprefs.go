@@ -214,3 +214,57 @@ func TurnOffNightLight() error {
 	}
 	return firstErr
 }
+
+// DesktopLook is what a circadian preview may change on the desktop, per
+// user and "schema key", as gsettings prints it, so it can be put back
+// exactly: wallpaper, colour scheme and themes.
+type DesktopLook map[string]map[string]string
+
+// lookKeys are the keys a DesktopLook holds.
+var lookKeys = []struct{ schema, key string }{
+	{"org.cinnamon.desktop.background", "picture-uri"},
+	{"org.gnome.desktop.background", "picture-uri"},
+	{"org.gnome.desktop.background", "picture-uri-dark"},
+	{"org.mate.background", "picture-filename"},
+	{"org.x.apps.portal", "color-scheme"},
+	{"org.gnome.desktop.interface", "color-scheme"},
+	{"org.cinnamon.desktop.interface", "gtk-theme"},
+	{"org.gnome.desktop.interface", "gtk-theme"},
+	{"org.cinnamon.theme", "name"},
+}
+
+// ReadDesktopLook reads every desktop user's DesktopLook.
+func ReadDesktopLook() DesktopLook {
+	look := DesktopLook{}
+	for _, u := range desktopPrefsUsers() {
+		values := map[string]string{}
+		for _, k := range lookKeys {
+			if !hasKey(u, k.schema, k.key) {
+				continue
+			}
+			if value, err := gsettings(u, "get", k.schema, k.key); err == nil {
+				values[k.schema+" "+k.key] = value
+			}
+		}
+		look[u.Username] = values
+	}
+	return look
+}
+
+// RestoreDesktopLook puts back what ReadDesktopLook read, where it differs
+// now.
+func RestoreDesktopLook(look DesktopLook) error {
+	var firstErr error
+	for _, u := range desktopPrefsUsers() {
+		for key, value := range look[u.Username] {
+			schema, name, _ := strings.Cut(key, " ")
+			if now, err := gsettings(u, "get", schema, name); err == nil && now == value {
+				continue
+			}
+			if _, err := gsettings(u, "set", schema, name, value); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}

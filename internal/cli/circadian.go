@@ -440,6 +440,28 @@ var circadianPreviewCmd = &cobra.Command{
 	}),
 }
 
+var circadianPlayCmd = &cobra.Command{
+	Use:   "play",
+	Short: "Play the next 24 hours on the screen in a few seconds, then go back to now",
+	Long: `Shows the next 24 hours on the screen in --seconds (15 unless given): the
+brightness and colour clips that are on and not paused, the wallpapers and
+dark mode at their times. Afterwards the clips carry on from now, and the
+wallpaper, dark mode and themes are put back exactly as they were.`,
+	Args: cobra.NoArgs,
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		seconds, _ := cmd.Flags().GetFloat64("seconds")
+		if seconds < 3 || seconds > 120 || math.IsNaN(seconds) {
+			return fmt.Errorf("--seconds is from 3 to 120")
+		}
+		length := time.Duration(seconds * float64(time.Second))
+		if err := enforce.PlayCircadian(database, length, circadianNow(), nil); err != nil {
+			return err
+		}
+		fmt.Println("Played the next 24 hours; the screen is back to now.")
+		return nil
+	}),
+}
+
 var circadianResumeCmd = &cobra.Command{
 	Use:   "resume [clip]",
 	Short: "End the pause after a change by hand (of one clip, or of all)",
@@ -703,8 +725,10 @@ func init() {
 	circadianLaneCmd.Flags().String("points", "", "the clip's points: \"HH:MM=VALUE[~TENSION] …\"")
 	circadianPointAddCmd.Flags().Float64("tension", 0, "bend of the curve to the next point, -1 to 1")
 	circadianPreviewCmd.Flags().Bool("end", false, "the preview is over")
+	circadianPlayCmd.Flags().Float64("seconds", 15, "How long the 24 hours take")
 	circadianPointCmd.AddCommand(circadianPointAddCmd, circadianPointRemoveCmd)
 	circadianWallpaperCmd.AddCommand(circadianWallpaperAddCmd, circadianWallpaperTimeCmd, circadianWallpaperRemoveCmd)
+	circadianCmd.AddCommand(circadianPlayCmd)
 	circadianCmd.AddCommand(circadianShowCmd, circadianSwitch(true), circadianSwitch(false), circadianLaneCmd,
 		circadianPointCmd, circadianPresetCmd, circadianPreviewCmd, circadianResumeCmd, circadianWallpaperCmd,
 		circadianDarkCmd, circadianDarkPagesCmd, circadianExemptCmd, circadianNightLightCmd)

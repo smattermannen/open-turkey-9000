@@ -314,7 +314,12 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   pause a clip (`PauseBacklight`, `PauseExternal`, `PauseGamma`; brightness
   and kelvin share one gamma ramp), except right after start. Wallpaper and
   dark mode applied once per key change (`WallpaperKey`, `DarkKey`).
-  `PreviewCircadian` drives hardware; engine adopts it. Hardware vars
+  `PreviewCircadian` drives hardware; engine adopts it. `circadian play`
+  (`PlayCircadian`: 24 h as previews in `--seconds`, wallpaper/dark mode at
+  their times, `ReadDesktopLook`/`RestoreDesktopLook` put the desktop back;
+  GUI "Play the day" with a playhead). GUI wallpapers: `WallpaperTimeline`
+  (drag bar/ends, 5-min steps, Shift minutes; covered parts faint). No
+  Circadian section in Settings. Hardware vars
   `circadian*` (`fakeCircadian`); `KC9K_DB` → `circadianDry`. Wallpapers in
   `<db dir>/wallpapers` (0644). `rules.dark` (`CircadianDarkRule`) →
   `darkPage`. `circadian.Shape` mirrored by GUI `clip_shape`.

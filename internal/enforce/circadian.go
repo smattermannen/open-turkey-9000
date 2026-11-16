@@ -110,6 +110,9 @@ var (
 	circadianSetWallpaper = blocker.SetWallpaper
 	circadianSetDark      = blocker.SetDarkMode
 	circadianNightLight   = blocker.NightLightOn
+	circadianReadLook     = blocker.ReadDesktopLook
+	circadianRestoreLook  = blocker.RestoreDesktopLook
+	circadianSleep        = time.Sleep
 )
 
 func externalLevel(s blocker.ExternalScreen) circadianLevel {
@@ -812,4 +815,99 @@ func CircadianDarkRule(d *db.DB, now time.Time) *DarkRule {
 	rule.On = decided && dark
 	rule.FollowSystem = !decided
 	return rule
+}
+
+// PlayFrame is how long one step of PlayCircadian shows.
+const PlayFrame = 100 * time.Millisecond
+
+// PlayCircadian plays the next 24 hours on the screens in length (§4.10
+// preview; owner, 2026-11-16: "Play the day"): the clips that are on and
+// not paused (as previews, so the engine stays away), the wallpaper and
+// dark mode at their times. Afterwards the clips carry on from now and the
+// wallpaper, dark mode and themes are put back exactly as they were.
+// frame, when given, is told each minute of the day shown.
+func PlayCircadian(d *db.DB, length time.Duration, now time.Time, frame func(minute float64)) error {
+	cfg := CircadianConfig(d)
+	if !cfg.On {
+		return fmt.Errorf("circadian rhythm is off: switch it on to play the day")
+	}
+	pauses := CircadianPauses(d, now)
+	var lanes []string
+	for _, info := range circadian.Lanes {
+		if l := cfg.Lanes[info.Name]; l != nil && l.On && LanePausedUntil(pauses, info.Name) == 0 {
+			lanes = append(lanes, info.Name)
+		}
+	}
+	desktop := len(cfg.Wallpapers) > 0 || cfg.Dark.Mode != circadian.DarkSystem
+	if len(lanes) == 0 && !desktop {
+		return fmt.Errorf("nothing to play: every clip is off or paused, and no wallpaper or dark mode is set")
+	}
+	var look blocker.DesktopLook
+	if desktop && !circadianDry() {
+		look = circadianReadLook()
+	}
+	defer func() {
+		for _, lane := range lanes {
+			_ = PreviewCircadian(d, lane, 0, true, time.Now())
+		}
+		if look != nil {
+			if err := circadianRestoreLook(look); err != nil {
+				log.Printf("circadian: putting the desktop back after playing the day: %v", err)
+			}
+		}
+	}()
+	frames := max(int(length/PlayFrame), 1)
+	start := circadian.MinuteOfDay(now)
+	wallpaper, dark := "\x00", "\x00"
+	external := circadianExternalKnown(d)
+	for i := 0; i <= frames; i++ {
+		minute := math.Mod(start+1440*float64(i)/float64(frames), 1440)
+		if frame != nil {
+			frame(minute)
+		}
+		values := map[string]float64{}
+		until := time.Now().Add(PreviewHold).Unix()
+		for _, lane := range lanes {
+			if v, ok := cfg.Lanes[lane].ValueAt(minute); ok {
+				values[lane] = v
+				writeJSONSetting(d, settingCircadianPreview+"."+lane, CircadianPreview{Lane: lane, Value: v, Until: until})
+			}
+		}
+		if !circadianDry() {
+			if v, ok := values[circadian.LaneBacklight]; ok {
+				for _, b := range circadianBacklights() {
+					_ = b.Set(blocker.PercentToRaw(v, b.Max))
+				}
+				if i%10 == 0 { // ddcutil is slow: about once a second
+					for _, b := range external {
+						_ = b.Set(blocker.PercentToRaw(v, b.Max))
+					}
+				}
+			}
+			_, kOK := values[circadian.LaneKelvin]
+			_, sOK := values[circadian.LaneSoftware]
+			if kOK || sOK {
+				kelvin, brightness, _ := gammaTarget(cfg, minute)
+				if _, err := circadianSetGamma(rampFor(kelvin, brightness)); err != nil && i == 0 {
+					log.Printf("circadian: playing the day: %v", err)
+				}
+			}
+			if key, image := WallpaperKey(cfg, minute); key != wallpaper {
+				wallpaper = key
+				if image != "" {
+					_, _ = circadianSetWallpaper(filepath.Join(WallpapersDir(), image))
+				}
+			}
+			if key := DarkKey(cfg, minute); key != dark {
+				dark = key
+				if key != "" {
+					_, _ = circadianSetDark(key == "dark")
+				}
+			}
+		}
+		if i < frames {
+			circadianSleep(length / time.Duration(frames))
+		}
+	}
+	return nil
 }

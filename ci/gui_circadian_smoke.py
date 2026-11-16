@@ -167,6 +167,73 @@ check(len(page.warnings.get_children()) == 1 and page.warnings.get_visible(), "a
 check("paused until" in page.lane_values["kelvin"].get_text(), "and marked on the clip")
 win.run(["circadian", "resume", "kelvin"]); settle()
 check(not show()["lanes"][2]["paused_until"] and not page.warnings.get_children(), "Resume ends the pause")
+# Owner, 2026-11-16: no Circadian section in Settings (it has its own page).
+def labels(root):
+    out = [root.get_text()] if isinstance(root, Gtk.Label) else []
+    if isinstance(root, Gtk.Container):
+        for child in root.get_children():
+            out += labels(child)
+    return out
+check("Circadian rhythm" not in labels(win.stack.get_child_by_name("settings")), "Settings has no Circadian section")
+
+# The wallpaper timeline: drag an end, then the whole bar (a minute a pixel).
+page.background = real_background
+r = cli("circadian", "wallpaper", "add", PNG, "06:00", "12:00"); assert r.returncode == 0, r.stderr
+reread()
+tl = page.wallpaper_timeline
+tl.get_allocated_width = lambda: 1440 + tl.LEFT + tl.RIGHT
+check(len(tl.items) == 1 and (tl.items[0]["from"], tl.items[0]["to"]) == (360, 720), "the bar: %s" % tl.items[:1])
+y = tl.lane_top(0) + tl.LANE / 2
+def mouse(x, shift=False):
+    return types.SimpleNamespace(x=x, y=y, button=1, state=Gdk.ModifierType.SHIFT_MASK if shift else 0)
+check(tl.hit(tl.x_of(720), y)[1] == "to" and tl.hit(tl.x_of(500), y)[1] == "move", "ends and body are grabbed")
+tl.pressed(tl, mouse(tl.x_of(720))); tl.motion(tl, mouse(tl.x_of(902))); tl.released(tl, mouse(tl.x_of(902)))
+settle()
+check(show()["wallpapers"][0]["to"] == "15:00", "end dragged to 15:00 (5-minute steps): %s" % show()["wallpapers"][0])
+tl.pressed(tl, mouse(tl.x_of(500))); tl.motion(tl, mouse(tl.x_of(1100), shift=True))
+tl.released(tl, mouse(tl.x_of(1100), shift=True))
+settle()
+w = show()["wallpapers"][0]
+check((w["from"], w["to"]) == ("16:00", "01:00"), "moved by 10 hours, past midnight: %s" % w)
+check(len(tl.segments(tl.items[0])) == 2, "a bar past midnight is two pieces: %s" % tl.segments(tl.items[0]))
+check(tl.hit(tl.x_of(960), y)[1] == "from" and tl.hit(tl.x_of(60), y)[1] == "to", "its ends are grabbed on both pieces")
+tl.pressed(tl, mouse(tl.x_of(960))); tl.motion(tl, mouse(tl.x_of(1431))); tl.released(tl, mouse(tl.x_of(1431)))
+settle()
+w = show()["wallpapers"][0]
+check((w["from"], w["to"]) == ("23:50", "01:00"), "start dragged to 23:50: %s" % w)
+tl.pressed(tl, mouse(tl.x_of(60))); tl.motion(tl, mouse(tl.x_of(1430))); tl.released(tl, mouse(tl.x_of(1430)))
+settle()
+w = show()["wallpapers"][0]
+check((w["from"], w["to"]) == ("23:50", "01:00"), "an end can't be dragged onto the start: %s" % w)
+
+# The timeline draws: two pictures, one covering part of the other.
+r = cli("circadian", "wallpaper", "add", PNG, "10:00", "20:00"); assert r.returncode == 0, r.stderr
+reread()
+tl = page.wallpaper_timeline
+tl.get_allocated_width = lambda: 900
+surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 900, tl.get_size_request()[1])
+cr = cairo.Context(surface)
+tl.get_allocated_height = lambda: tl.get_size_request()[1]
+try:
+    tl.draw(tl, cr)
+    drawn = True
+except Exception as error:  # noqa: BLE001
+    drawn = False
+    print(error)
+check(drawn and len(tl.items) == 2, "the timeline draws two pictures")
+if os.environ.get("KC9K_SHOT"):
+    surface.write_to_png(os.environ["KC9K_SHOT"])
+
+# Play the day (owner, 2026-11-16): the button plays, a playhead runs, then all is back.
+page.PLAY_SECONDS = 3
+page.play.clicked()
+check(not page.play.get_sensitive() and page.play.get_label() == "Playing…", "playing")
+pump(lambda: any(e.playhead is not None for e in page.editors.values()), secs=5)
+check(True, "a playhead runs over the clips")
+pump(lambda: page.play.get_sensitive(), secs=40)
+check(page.play.get_label() == "Play the day" and all(e.playhead is None for e in page.editors.values()),
+      "after playing: the button and the clips are back")
+
 page.master.set_active(False); settle()
 check(not show()["on"], "master switch off")
 print("\n%d failed" % len(fails) if fails else "\nall passed")

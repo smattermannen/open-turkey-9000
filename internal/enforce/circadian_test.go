@@ -601,3 +601,71 @@ func TestCircadianDarkRule(t *testing.T) {
 		t.Errorf("system: %+v", r)
 	}
 }
+
+// §4.10 preview (owner, 2026-11-16: "Play the day"): the next 24 hours
+// shown in a few seconds, the clips as previews (the engine stays away),
+// the wallpaper and dark mode at their times; afterwards the previews end,
+// the engine carries on from now and the desktop's look is put back.
+func TestPlayCircadian(t *testing.T) {
+	d, f := testDB(t), fakeCircadian(t)
+	lanes := map[string][]circadian.Point{}
+	for k, v := range testBacklight {
+		lanes[k] = v
+	}
+	for k, v := range testGamma {
+		lanes[k] = v
+	}
+	circadianWith(t, d, lanes, func(c *circadian.Config) {
+		c.Wallpapers = []circadian.Wallpaper{{Image: "day.jpg", From: 8 * 60, To: 18 * 60},
+			{Image: "night.jpg", From: 22 * 60, To: 6 * 60}}
+		c.Dark = circadian.Dark{Mode: circadian.DarkScheduled, LightFrom: 7 * 60, LightTo: 20 * 60}
+	})
+	oldSleep, oldRead, oldRestore := circadianSleep, circadianReadLook, circadianRestoreLook
+	t.Cleanup(func() { circadianSleep, circadianReadLook, circadianRestoreLook = oldSleep, oldRead, oldRestore })
+	slept := time.Duration(0)
+	circadianSleep = func(d time.Duration) { slept += d }
+	restored := false
+	circadianReadLook = func() blocker.DesktopLook { return blocker.DesktopLook{"me": {"k": "'before'"}} }
+	circadianRestoreLook = func(l blocker.DesktopLook) error { restored = l["me"]["k"] == "'before'"; return nil }
+
+	var minutes []float64
+	var backlights []int
+	start := at(9, 0, 0)
+	if err := PlayCircadian(d, 15*time.Second, start, func(m float64) {
+		minutes = append(minutes, m)
+		backlights = append(backlights, f.backlight)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(minutes) != 151 || minutes[0] != 9*60 || slept < 14*time.Second || slept > 16*time.Second {
+		t.Errorf("frames %d from %v, slept %v", len(minutes), minutes[0], slept)
+	}
+	// The whole day went by: noon's 80 % and the evening's 40 %.
+	high, low := 0, 1000
+	for _, b := range backlights {
+		high, low = max(high, b), min(low, b)
+	}
+	if high < 790 || low > 410 {
+		t.Errorf("backlight went from %d to %d", low, high)
+	}
+	if len(f.wallpapers) < 2 || !strings.HasSuffix(f.wallpapers[0], "day.jpg") || !strings.HasSuffix(f.wallpapers[1], "night.jpg") {
+		t.Errorf("wallpapers %v", f.wallpapers)
+	}
+	if len(f.darks) < 2 {
+		t.Errorf("dark mode %v", f.darks)
+	}
+	if !restored {
+		t.Error("the desktop's look wasn't put back")
+	}
+	running, _ := previews(d, time.Now())
+	if len(running) != 0 {
+		t.Errorf("previews still running: %v", running)
+	}
+	// Off, or nothing to play: said.
+	c := CircadianConfig(d)
+	c.On = false
+	_ = SetCircadianConfig(d, c)
+	if err := PlayCircadian(d, time.Second, start, nil); err == nil || !strings.Contains(err.Error(), "off") {
+		t.Errorf("off: %v", err)
+	}
+}

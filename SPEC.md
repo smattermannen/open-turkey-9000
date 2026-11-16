@@ -367,7 +367,10 @@ GUI and CLI offer the same functions.
     - automation clips (one set for all days) for backlight %, software
       brightness %, colour temperature K; add/move/remove points, bend the
       curve between points; presets;
-    - wallpapers: picture plus times; no fixed periods;
+    - wallpapers: picture plus times, on a timeline like a video editor's
+      (drag a bar to move it, an end to change it); no fixed periods;
+    - *Play the day*: the next 24 hours shown on the screen in about 15
+      seconds, then everything is back to now;
     - dark mode = system dark mode: system default, always light, always
       dark, or light between two times;
     - dark pages follow dark mode, with exempt sites;
@@ -497,6 +500,7 @@ Decisions not already written into §1–5:
 - 2026-11-16: The user picks how many of a place's networks must be in range; a place rule can be given to any block.
 - 2026-11-16: One Import button: KC9K tells phrases, rendered terms and sites (hosts files, adblock rules) apart by their layout.
 - 2026-11-16: YouTube playlists let through belong to the exception list, not the social presets.
+- 2026-11-16: Circadian rhythm: its own page only (not in Settings); wallpapers on a draggable timeline; Play the day preview.
 
 ## 7. Open decisions
 

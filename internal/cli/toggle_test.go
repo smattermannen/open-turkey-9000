@@ -609,6 +609,51 @@ func TestBlockDraft(t *testing.T) {
 	}
 }
 
+// §4.3: a draft holds its lists, apps and window titles and never runs.
+// Found 2026-11-16 by clicking every GUI button: an allowance set on a
+// draft switched it on, and then neither Save nor Cancel could remove it.
+// What a draft doesn't hold is refused on it, naming the block instead.
+func TestDraftNeverRuns(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "allowance", "set", "b", "30m", "--per", "day") // switches b on
+	mustRun(t, "block", "draft", "b")
+	draft := "b (draft)"
+	if err := d.ActivateBlock(draft, false, 0, 0, false); err == nil {
+		t.Error("a draft was switched on")
+	}
+	for _, args := range [][]string{
+		{"allowance", "set", draft, "30m"}, {"schedule", "add", draft, "--days", "mon", "--from", "09:00", "--to", "10:00"},
+		{"autostart", draft, "add", "at 08:00"}, {"pomodoro", "set", draft, "25m", "5m"}, {"social", draft, "youtube:shorts", "on"},
+		{"phrase-set", "create", draft, "talk"}, {"block", "trigger", draft, "apps", "logout", "on"},
+		{"break", "reward", draft, "10m", "--per", "1h"}, {"bypass", "set", "--count", "3", "--within", "10m", "--then", "warning", "--block", draft},
+	} {
+		err := runCLI(t, args...)
+		if err == nil || !strings.Contains(err.Error(), "change this on 'b' itself") {
+			t.Errorf("%v on a draft: %v", args, err)
+		}
+	}
+	if active, _ := d.IsBlockActive(draft); active {
+		t.Fatal("the draft is on")
+	}
+	mustRun(t, "block", "add", draft, "tiktok.com") // what a draft holds
+	mustRun(t, "block", "add-app", draft, "steam")
+	mustRun(t, "block", "draft", "b", "save")
+	if _, err := d.GetBlock(draft); err == nil {
+		t.Error("the draft stayed after save")
+	}
+	b, _ := d.GetBlock("b")
+	if blocked, _ := b.Lists.Find(db.DefaultBlockedList); !slices.Contains(blocked.Entries, "tiktok.com") {
+		t.Errorf("not saved: %v", blocked.Entries)
+	}
+	mustRun(t, "block", "draft", "b")
+	mustRun(t, "block", "draft", "b", "cancel")
+	// The commands still work on the block itself.
+	mustRun(t, "schedule", "add", "b", "--days", "mon", "--from", "09:00", "--to", "10:00")
+}
+
 // §3.11 with §4.3: a draft of a password-protected block needs the block
 // password and keeps it.
 func TestDraftBlockPassword(t *testing.T) {

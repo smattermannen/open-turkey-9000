@@ -25,12 +25,52 @@ import (
 // draftName is the name of block's draft.
 func draftName(block string) string { return block + " (draft)" }
 
-const settingDraftOf = "draft-of." // + draft name → its block
+const settingDraftOf = db.SettingDraftOf // + draft name → its block
 
 // draftOf returns the block a block is the draft of, or "".
 func draftOf(database *db.DB, name string) string {
-	v, _ := database.GetSetting(settingDraftOf + name)
-	return v
+	return database.DraftOf(name)
+}
+
+// draftRefused lists the commands that change what a draft doesn't hold
+// (§4.3: a draft holds its website lists, apps and window titles; saving
+// carries only those), with how many arguments they take before they change
+// anything (fewer only show). On a draft such a change would be lost at
+// save, or (an allowance, an autostart) switch the draft on: refused.
+var draftRefused = map[string]int{
+	"allowance set": 1, "allowance start": 1, "allowance end": 1, "allowance remove": 1,
+	"schedule add": 1, "schedule remove": 1, "schedule break": 2, "schedule lock": 2,
+	"autostart": 2, "pomodoro set": 1, "pomodoro off": 1,
+	"break reward": 2, "break text": 2, "break delay": 2, "break start": 1, "break end": 1, "break request": 1,
+	"social": 2, "place rule": 1, "block users": 2, "block trigger": 2,
+	"phrase-set create": 2, "phrase-set add": 2, "phrase-set import": 2, "phrase-set remove": 2,
+	"phrase-set change": 2, "phrase-set scope": 2, "phrase-set action": 2, "phrase-set threshold": 2,
+	"phrase-set test": 2, "phrase-set rename": 2, "phrase-set delete": 2,
+}
+
+// refuseDraftEdit refuses a command of draftRefused on a draft, naming the
+// block to change instead.
+func refuseDraftEdit(cmd *cobra.Command, args []string) error {
+	path := strings.TrimPrefix(cmd.CommandPath(), rootCmd.Name()+" ")
+	block := ""
+	if n, ok := draftRefused[path]; ok && len(args) >= n && len(args) > 0 {
+		block = args[0]
+	} else if path == "bypass set" {
+		block, _ = cmd.Flags().GetString("block")
+	}
+	if block == "" {
+		return nil
+	}
+	database, err := openDB()
+	if err != nil {
+		return nil // the command says why
+	}
+	defer database.Close()
+	if of := draftOf(database, block); of != "" {
+		return fmt.Errorf("'%s' is a draft of '%s': a draft holds only its website lists, apps and window titles "+
+			"until it is saved, so change this on '%s' itself", block, of, of)
+	}
+	return nil
 }
 
 var blockDraftCmd = &cobra.Command{

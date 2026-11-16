@@ -460,7 +460,10 @@ func init() {
 	_ = rootCmd.PersistentFlags().MarkHidden("settings-line")
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		readSettingsLine(cmd)
-		return accessGate(cmd, args)
+		if err := accessGate(cmd, args); err != nil {
+			return err
+		}
+		return refuseDraftEdit(cmd, args)
 	}
 	for _, c := range []*cobra.Command{accessSetCmd, accessRemoveCmd} {
 		c.Flags().Bool("all", false, "Every area")

@@ -78,8 +78,8 @@ func runAutostarts(d *db.DB, now time.Time) {
 		case db.AutostartAt:
 			_ = d.SetAutostartFired(a.ID, now.Format("2006-01-02"))
 		}
-		if active, err := d.IsBlockActive(a.Block); err != nil || active {
-			continue
+		if active, err := d.IsBlockActive(a.Block); err != nil || active || d.DraftOf(a.Block) != "" {
+			continue // on already, or a draft (§4.3: never runs)
 		}
 		if err := d.ActivateBlock(a.Block, false, 0, 0, false); err != nil {
 			log.Printf("autostart: %v", err)

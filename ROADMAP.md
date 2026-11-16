@@ -169,6 +169,29 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     still to come, older than the year kept), the chosen range shows on a
     button that changes it. `ci/gui_stats_smoke.py` (draws the chart and
     reads its pixels), `TestStatsFilters`, `TestStatsRange`.
+  - [x] Every button clicked (owner, 2026-11-16: "make sure that every
+    function actually works in the GUI"): `ci/gui_click_everything_smoke.py`
+    clicks each visible, usable button and switch on every page, block tab
+    and ⋯ menu, and the Overview's Start menu (dialogs answered Cancel);
+    no handler may raise, no command may be one the CLI can't read; the
+    messages are printed for review. First run: ~700 clicks, no exception.
+    It found: a draft could be switched on (an allowance set on it, or an
+    autostart), after which neither Save nor Cancel could remove it ("it is
+    active"), and its schedule, places, allowance, breaks, bypass
+    prevention, social media, phrase sets and app/window actions were
+    editable though Save drops them. Now no draft ever runs
+    (`db.ActivateBlock` refuses, autostart skips it), commands for what a
+    draft doesn't hold refuse it and name the block (`refuseDraftEdit`,
+    `TestDraftNeverRuns`), and the GUI shows a draft only its Websites
+    (without phrase sets) and Apps (without actions) tabs, saying the rest
+    is changed on the block itself. Settings: Lock…/Unlock… beside each
+    browser setting's and strict mode's switch (not on a line of their
+    own); the access passwords text named old pages (Dashboard, Device
+    Blocks); "Turn off…" bypass prevention showed while it was off.
+  - [ ] Phrase sets in drafts (§4.3 "nothing applies until Save"): a draft
+    holds website lists, apps and window titles; phrase sets are edited on
+    the block itself. Copy them into the draft and replay their changes on
+    save (each through its gate, as lists). M
   - [x] Rows of controls one per line (R-GUI-3; found 2026-11-16 on
     screenshots): `flow_row` used GTK 3's FlowBox, which asks only for its
     widest child's width, so every wrapped row (Statistics controls, the

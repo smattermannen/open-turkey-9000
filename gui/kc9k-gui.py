@@ -4,8 +4,8 @@
 All changes go through the kc9k command, so the interface follows the
 same lock rules as the terminal and needs no privileges of its own.
 
-Pages: Dashboard, Blocks, Device Blocks (whole-computer locks),
-Statistics and Settings.
+Pages: Overview, Blocks, Clusters, Frozen Chicken (whole-computer locks),
+Statistics, Circadian rhythm and Settings.
 """
 import datetime
 import json
@@ -5504,10 +5504,14 @@ class Window(Gtk.ApplicationWindow):
             new.connect("clicked", self.create_list, kind)
             head.pack_end(new, False, False, 0)
             websites.pack_start(head, False, False, 0)
+            section_parts = [head]
             if detail:
-                websites.pack_start(dim(detail), False, False, 0)
+                section_parts.append(dim(detail))
+                websites.pack_start(section_parts[-1], False, False, 0)
             self.list_boxes[kind] = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
             websites.pack_start(self.list_boxes[kind], False, False, 0)
+            if kind == "phrases":
+                self.phrase_section = section_parts + [self.list_boxes[kind]]
         tabs.append_page(websites, Gtk.Label(label="Websites"))
 
         apps = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=12)
@@ -5691,6 +5695,7 @@ class Window(Gtk.ApplicationWindow):
         change.connect("clicked", self.change_block_nepsis)
         off = Gtk.Button(label="Turn off…")
         off.connect("clicked", self.nepsis_off, lambda: self.selected)
+        self.block_nepsis_off_button = off
         row.pack_start(change, False, False, 0)
         row.pack_start(off, False, False, 0)
         nepsis.pack_start(row, False, False, 0)
@@ -5942,12 +5947,21 @@ class Window(Gtk.ApplicationWindow):
         self.status_label.set_text(block_summary(block))
         users = block.get("users") or []
         self.users_button.set_label("Users: " + (", ".join(users) if users else "all"))
-        self.users_button.set_visible(len(self.state.get("accounts") or []) > 1 or bool(users))
+        self.users_button.set_visible((len(self.state.get("accounts") or []) > 1 or bool(users))
+                                      and not block.get("draft_of"))
         self.hidden_bar.set_visible(bool(block.get("hidden")))
         drafting = block.get("draft_of")
         self.draft_bar.set_visible(bool(drafting))
-        self.draft_label.set_text(f"Editing a draft of {drafting}: nothing applies until you save. "
-                                  "Schedules, allowance and other settings still apply at once." if drafting else "")
+        # §4.3: a draft holds its website lists, apps and window titles; the
+        # rest is changed on the block itself (the CLI refuses it here).
+        self.draft_label.set_text(f"Editing a draft of {drafting}: its website lists, apps and window titles "
+                                  f"change only when you save. Everything else is changed on {drafting} itself: "
+                                  "save or cancel to get back to it." if drafting else "")
+        for widget in self.phrase_section + [self.app_triggers, self.title_triggers]:
+            widget.set_visible(not drafting)
+        for number in range(self.block_tabs.get_n_pages()):
+            tab = self.block_tabs.get_nth_page(number)
+            tab.set_visible(not drafting or self.block_tabs.get_tab_label_text(tab) in ("Websites", "Apps"))
         self.draft_button.set_visible(not drafting and not block.get("draft"))
         for button in (self.start_button, self.stop_button, self.unlock_button):
             if drafting:
@@ -6047,6 +6061,7 @@ class Window(Gtk.ApplicationWindow):
             + (" · session open" if block["quota_open"] else "") if limit else "No allowance set.")
         self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
                                                          if block["active"] else None))
+        self.block_nepsis_off_button.set_visible(bool((block.get("nepsis") or {}).get("steps")))
 
     def update_lists(self, lists, phrase_sets=()):
         """Shows the selected block's lists and phrase sets, keeping the cards
@@ -7135,7 +7150,7 @@ class Window(Gtk.ApplicationWindow):
         except OSError as error:
             self.message(str(error))
 
-    # Device Blocks -------------------------------------------------------
+    # Frozen Chicken ------------------------------------------------------
     def build_device(self):
         scroll, box = page_box()
         page_header(box, "Frozen Chicken", "Lock the whole computer for a while: the screen, your "
@@ -7877,12 +7892,11 @@ class Window(Gtk.ApplicationWindow):
         self.no_escape_switch.connect("state-set", self.toggle_no_escape)
         box.pack_start(section(
             "Device protection",
-            self.switch_row(self.strict_switch, "Strict mode: take away sudo and pkexec during locks",
-                            "While a block or setting is locked or Frozen Chicken runs, no user "
-                            "can get administrator rights, so the blocks can't be undone from a "
-                            "terminal. Rights return when the lock ends. Strict mode itself can "
-                            "be turned off at any time unless you lock it."),
-            self.setting_lock_line("strict", "Strict mode"),
+            self.locked_switch_row(self.strict_switch, "strict", "Strict mode: take away sudo and pkexec during locks",
+                                   "While a block or setting is locked or Frozen Chicken runs, no user "
+                                   "can get administrator rights, so the blocks can't be undone from a "
+                                   "terminal. Rights return when the lock ends. Strict mode itself can "
+                                   "be turned off at any time unless you lock it."),
             self.strict_exempt_list(),
             self.switch_row(self.no_escape_switch, "No-escape: close the ways out through the boot menu",
                             "Sets a random boot menu password that nobody knows and hides the "
@@ -7942,7 +7956,7 @@ class Window(Gtk.ApplicationWindow):
             self.password_status, password_row, self.password_locks,
             Gtk.Label(label="Access passwords", xalign=0, margin_top=6),
             dim("Optional passwords to open Killer Chicken 9000 and each of its pages: "
-                "Dashboard, Blocks, Device Blocks, Statistics and Settings. Use the same one "
+                f"{', '.join(AREA_TITLES[a] for a in AREAS[1:-1])} and {AREA_TITLES[AREAS[-1]]}. Use the same one "
                 "for several, or a different one for each. A locked page shows nothing until "
                 "its password is given; the Lock button at the top locks them again. "
                 "Changing or removing one asks for the one it has."),
@@ -7954,6 +7968,7 @@ class Window(Gtk.ApplicationWindow):
         change.connect("clicked", self.change_global_nepsis)
         off = Gtk.Button(label="Turn off…")
         off.connect("clicked", self.nepsis_off)
+        self.nepsis_off_button = off
         nepsis_row.pack_start(change, False, False, 0)
         nepsis_row.pack_start(off, False, False, 0)
         box.pack_start(section(
@@ -8167,6 +8182,7 @@ class Window(Gtk.ApplicationWindow):
         if lock.get("lock_seconds"):
             text += f" Locked for {fmt_seconds(lock['lock_seconds'])}."
         self.nepsis_label.set_text(text)
+        self.nepsis_off_button.set_visible(bool((self.state.get("nepsis") or {}).get("steps")))
         for name, switch in self.browser_switches.items():
             set_switch(switch, self.state["browser"].get(name, False))
         notices = self.state.get("notifications") or {}
@@ -8277,15 +8293,22 @@ class Window(Gtk.ApplicationWindow):
         switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         switch.connect("state-set", self.toggle_browser, name)
         self.browser_switches[name] = switch
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        box.pack_start(self.switch_row(switch, title, detail), False, False, 0)
-        box.pack_start(self.setting_lock_line(name, title), False, False, 0)
-        return box
+        return self.locked_switch_row(switch, name, title, detail)
 
-    def setting_lock_line(self, name, title):
-        """A setting lock's state with Lock… and Unlock… (browser settings,
-        block unsupported browsers, strict mode)."""
-        line = Gtk.Box(spacing=8)
+    def locked_switch_row(self, switch, name, title, detail):
+        """A setting's row with its switch, Lock… and Unlock… beside it and
+        the lock's state under its description (browser settings, strict
+        mode)."""
+        row = self.switch_row(switch, title, detail)
+        status, lock, unlock = self.setting_lock_parts(name, title)
+        row.get_children()[0].pack_start(status, False, False, 0)
+        for button in (unlock, lock):
+            button.set_valign(Gtk.Align.CENTER)
+            row.pack_end(button, False, False, 0)
+        return row
+
+    def setting_lock_parts(self, name, title):
+        """A setting lock's state, Lock… and Unlock…"""
         status = dim("", wrap=False)
         status.set_no_show_all(True)
         lock = Gtk.Button(label="Lock…")
@@ -8293,10 +8316,18 @@ class Window(Gtk.ApplicationWindow):
         unlock = Gtk.Button(label="Unlock…")
         unlock.set_no_show_all(True)
         unlock.connect("clicked", self.unlock_setting, name, title)
+        self.setting_locks[name] = (status, unlock)
+        return status, lock, unlock
+
+    def setting_lock_line(self, name, title):
+        """A setting lock's state with Lock… and Unlock… on a line of their
+        own (block unsupported browsers, whose switch is in the tamper
+        protection window)."""
+        line = Gtk.Box(spacing=8)
+        status, lock, unlock = self.setting_lock_parts(name, title)
         line.pack_start(status, False, False, 0)
         line.pack_end(unlock, False, False, 0)
         line.pack_end(lock, False, False, 0)
-        self.setting_locks[name] = (status, unlock)
         return line
 
     def lock_setting(self, _button, name, title):

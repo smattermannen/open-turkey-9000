@@ -507,6 +507,15 @@ func (d *DB) RemoveBlock(name string) error {
 // Block activation and deactivation
 // --------------------------------------------------------------------------
 
+// SettingDraftOf + a draft's name holds the block it is a draft of (§4.3).
+const SettingDraftOf = "draft-of."
+
+// DraftOf names the block a draft belongs to ("" for a block that isn't one).
+func (d *DB) DraftOf(name string) string {
+	of, _ := d.GetSetting(SettingDraftOf + name)
+	return of
+}
+
 // ActivateBlock marks a block as active. This makes the sites and apps in
 // that block start being blocked by the daemon.
 //
@@ -522,6 +531,11 @@ func (d *DB) ActivateBlock(name string, locked bool, lockChars int, lockedUntil 
 	blockID, err := d.getBlockID(name)
 	if err != nil {
 		return err
+	}
+	// §4.3: a draft never runs, whatever would switch it on (start, an
+	// allowance, an autostart).
+	if of := d.DraftOf(name); of != "" {
+		return fmt.Errorf("'%s' is a draft of '%s' and never runs: save it with 'kc9k block draft %s save'", name, of, of)
 	}
 
 	_, err = d.conn.Exec(

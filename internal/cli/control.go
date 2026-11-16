@@ -876,7 +876,7 @@ type holdState struct {
 	// now or opens within its lead time, whether or not the block is active.
 	scheduleFrozen bool
 	scheduleLock   bool
-	scheduleLead   int  // minutes
+	scheduleLead   int // minutes
 	extras         db.LockExtras
 	passwordHash   string
 	restartLocked  bool

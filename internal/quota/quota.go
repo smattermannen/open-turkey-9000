@@ -145,7 +145,6 @@ func New(limit, now int64, day string) State {
 	return State{Limit: limit, Day: day, LastTick: now, PendingLimit: NoPending}
 }
 
-
 // DayOf returns the local calendar day that a quota belongs to.
 func DayOf(t time.Time) string { return t.Format("2006-01-02") }
 

@@ -539,7 +539,7 @@ var guiStateCmd = &cobra.Command{
 				gs := guiPhraseSet{ID: s.ID, Name: s.Name, Where: append([]string{}, s.Where.List()...),
 					Actions: append([]db.ListAction{}, s.Actions...), Test: s.Test, Phrases: []guiPhrase{}}
 				for _, p := range s.Phrases {
-					gs.Phrases = append(gs.Phrases, guiPhrase{Phrase: p, Text: p.String()})
+					gs.Phrases = append(gs.Phrases, guiPhrase{Phrase: p, Text: p.Key()})
 				}
 				g.PhraseSets = append(g.PhraseSets, gs)
 			}

@@ -72,23 +72,6 @@ func (p Phrase) Normalize() Phrase {
 	return out
 }
 
-// Canonical is the phrase's one stored form: normalized terms, and the
-// default length written as 0, so "[a] [b]" and "[a] [b] :2" are the same
-// phrase (they read the same, and one must find the other to change or
-// remove it).
-func (p Phrase) Canonical() Phrase {
-	n := p.Normalize()
-	if n.Length == n.MinLength() {
-		n.Length = 0
-	}
-	return n
-}
-
-// Same reports whether two phrases are one: equal canonical forms.
-func (p Phrase) Same(q Phrase) bool {
-	return p.Canonical().String() == q.Canonical().String()
-}
-
 // Necessary counts the necessary word sets.
 func (p Phrase) Necessary() int {
 	n := 0
@@ -346,7 +329,7 @@ func (d *DB) fillPhraseSet(s *PhraseSet) error {
 		}
 		// One phrase stored twice (a default length written out once and
 		// once not) is shown and matched once.
-		if key := p.Canonical().String(); !seen[key] {
+		if key := p.Key(); !seen[key] {
 			seen[key] = true
 			s.Phrases = append(s.Phrases, p.Canonical())
 		}
@@ -478,7 +461,7 @@ func (d *DB) SetPhraseSetThreshold(id int, action string, n int) error {
 // AddPhrase adds a phrase to a set, unless it has it already; it reports
 // whether it was new.
 func (d *DB) AddPhrase(id int, p Phrase) (bool, error) {
-	p = p.Canonical()
+	p = p.Normalize()
 	if err := p.Check(); err != nil {
 		return false, err
 	}
@@ -486,53 +469,84 @@ func (d *DB) AddPhrase(id int, p Phrase) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	stored, err := d.storedPhrases(id)
-	if err != nil {
+	if same, err := phraseRows(d.conn, id, p); err != nil || len(same) > 0 {
 		return false, err
-	}
-	for _, q := range stored {
-		if q.phrase.Same(p) {
-			return false, nil
-		}
 	}
 	_, err = d.conn.Exec("INSERT INTO phrases (set_id, spec) VALUES (?, ?)", id, string(raw))
 	return err == nil, err
 }
 
-// storedPhrase is a row of a phrase set.
-type storedPhrase struct {
-	rowID  int64
-	phrase Phrase
+// Key is what makes two phrases the same phrase: normalized, with the
+// default length spelled the same way. Phrases stored by older versions
+// (migrated combinations, imports) may differ from their typed form only
+// in case, spacing or a spelled-out default length.
+func (p Phrase) Key() string {
+	p = p.Normalize()
+	if p.Length == p.MinLength() {
+		p.Length = 0
+	}
+	return p.String()
 }
 
-// storedPhrases reads a set's phrase rows as stored (older rows may hold
-// a default length written out, or a phrase today's rules refuse).
-func (d *DB) storedPhrases(id int) ([]storedPhrase, error) {
-	rows, err := d.conn.Query("SELECT id, spec FROM phrases WHERE set_id = ? ORDER BY id", id)
+// Canonical is the phrase in its one stored form (Key's phrase): normalized,
+// the default length written as 0.
+func (p Phrase) Canonical() Phrase {
+	n := p.Normalize()
+	if n.Length == n.MinLength() {
+		n.Length = 0
+	}
+	return n
+}
+
+// Same reports whether two phrases are one (equal keys).
+func (p Phrase) Same(q Phrase) bool {
+	return p.Key() == q.Key()
+}
+
+// phraseRows returns the ids of a set's stored phrases that are p.
+func phraseRows(q interface {
+	Query(string, ...any) (*sql.Rows, error)
+}, id int, p Phrase) ([]int64, error) {
+	rows, err := q.Query("SELECT id, spec FROM phrases WHERE set_id = ? ORDER BY id", id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []storedPhrase
+	key := p.Key()
+	var out []int64
 	for rows.Next() {
-		var row storedPhrase
-		var spec string
-		if err := rows.Scan(&row.rowID, &spec); err != nil {
+		var rowID int64
+		var raw string
+		if err := rows.Scan(&rowID, &raw); err != nil {
 			return nil, err
 		}
-		if json.Unmarshal([]byte(spec), &row.phrase) != nil {
-			continue
+		var stored Phrase
+		if json.Unmarshal([]byte(raw), &stored) == nil && stored.Key() == key {
+			out = append(out, rowID)
 		}
-		out = append(out, row)
 	}
 	return out, rows.Err()
 }
 
-// ReplacePhrase changes a phrase in place, keeping its spot in the set: the
-// first row holding old gets p, other copies of old go. When the set
-// already has p elsewhere, old just goes. It reports whether old was there.
+// RemovePhrase removes a phrase from a set; it reports whether it was there.
+func (d *DB) RemovePhrase(id int, p Phrase) (bool, error) {
+	ids, err := phraseRows(d.conn, id, p)
+	if err != nil {
+		return false, err
+	}
+	for _, rowID := range ids {
+		if _, err := d.conn.Exec("DELETE FROM phrases WHERE id = ?", rowID); err != nil {
+			return false, err
+		}
+	}
+	return len(ids) > 0, nil
+}
+
+// ReplacePhrase changes a phrase of a set in place (it keeps its place in
+// the list); if the set already has the new one, the old one just goes. It
+// reports whether the old one was there.
 func (d *DB) ReplacePhrase(id int, old, p Phrase) (bool, error) {
-	p = p.Canonical()
+	p = p.Normalize()
 	if err := p.Check(); err != nil {
 		return false, err
 	}
@@ -540,47 +554,61 @@ func (d *DB) ReplacePhrase(id int, old, p Phrase) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	stored, err := d.storedPhrases(id)
+	tx, err := d.conn.Begin()
 	if err != nil {
 		return false, err
 	}
-	has := slices.ContainsFunc(stored, func(q storedPhrase) bool { return q.phrase.Same(p) && !q.phrase.Same(old) })
-	found := false
-	for _, q := range stored {
-		if !q.phrase.Same(old) {
-			continue
-		}
-		if !found && !has {
-			_, err = d.conn.Exec("UPDATE phrases SET spec = ? WHERE id = ?", string(raw), q.rowID)
-		} else {
-			_, err = d.conn.Exec("DELETE FROM phrases WHERE id = ?", q.rowID)
-		}
-		if err != nil {
-			return found, err
-		}
-		found = true
+	defer tx.Rollback()
+	olds, err := phraseRows(tx, id, old)
+	if err != nil || len(olds) == 0 {
+		return false, err
 	}
-	return found, nil
+	news, err := phraseRows(tx, id, p)
+	if err != nil {
+		return false, err
+	}
+	// The first old row becomes the new phrase, unless the set has it
+	// already; other copies of the old one go.
+	drop := olds[1:]
+	if len(news) > 0 {
+		drop = olds
+	} else if _, err := tx.Exec("UPDATE phrases SET spec = ? WHERE id = ?", string(raw), olds[0]); err != nil {
+		return false, err
+	}
+	for _, rowID := range drop {
+		if _, err := tx.Exec("DELETE FROM phrases WHERE id = ?", rowID); err != nil {
+			return false, err
+		}
+	}
+	return true, tx.Commit()
 }
 
-// RemovePhrase removes a phrase from a set, matched by its canonical form
-// (every copy of it); it reports whether it was there.
-func (d *DB) RemovePhrase(id int, p Phrase) (bool, error) {
-	stored, err := d.storedPhrases(id)
-	if err != nil {
-		return false, err
+// Widens reports whether p matches everything old matches: the same word
+// sets, each just as necessary and holding at least old's terms, and the
+// same phrase length (R-WEAK-5: such a change is not weakening).
+func (p Phrase) Widens(old Phrase) bool {
+	p, old = p.Normalize(), old.Normalize()
+	if len(p.Sets) != len(old.Sets) || p.effectiveLength() != old.effectiveLength() {
+		return false
 	}
-	removed := false
-	for _, q := range stored {
-		if !q.phrase.Same(p) {
-			continue
+	for i, s := range old.Sets {
+		if s.Necessary != p.Sets[i].Necessary {
+			return false
 		}
-		if _, err := d.conn.Exec("DELETE FROM phrases WHERE id = ?", q.rowID); err != nil {
-			return removed, err
+		for _, t := range s.Terms {
+			if !slices.Contains(p.Sets[i].Terms, t) {
+				return false
+			}
 		}
-		removed = true
 	}
-	return removed, nil
+	return true
+}
+
+func (p Phrase) effectiveLength() int {
+	if p.Length == 0 {
+		return p.MinLength()
+	}
+	return p.Length
 }
 
 // AddPhraseSet adds a whole phrase set to a block (from an import or a
@@ -626,7 +654,7 @@ func (d *DB) AddPhraseSet(block string, s PhraseSet) error {
 	}
 	seen := map[string]bool{}
 	for _, p := range s.Phrases {
-		p = p.Canonical()
+		p = p.Normalize()
 		if err := p.Check(); err != nil {
 			return fmt.Errorf("%s: %w", p, err)
 		}

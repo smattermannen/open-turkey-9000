@@ -41,8 +41,10 @@ from gi.repository import Gtk, GLib  # noqa: E402
 app = gui.App(); app.set_application_id("io.test.kc9kphraseedit"); app.register(None)
 win = gui.Window(app)
 win.extension_asked = True
-fails, msgs = [], []
+fails, msgs, asked = [], [], []
 win.message = lambda text, *a, **k: msgs.append(text)
+# Cancel asks before dropping unsaved work: answer yes, and count the asks.
+win.confirm = lambda *a, **k: asked.append(a[0] if a else "") or True
 
 
 def check(ok, what):
@@ -122,11 +124,12 @@ check(not msgs, "no error: %s" % msgs)
 c = card(); c.edit_phrase(None)
 fill([("Red", True), ("car", True)])
 check(not c.save_phrase.get_sensitive(), "a phrase the set has can't be added again")
-# And a new one: added, the editor is cleared for the next.
+# And a new one: added, and it stays loaded for more changes.
 fill([("blue", True), ("car", True)])
 c.commit_phrase(); settle()
-check("[blue] [car]" in phrases() and card().editor.get_text() == "" and card().save_phrase.get_label() == "Add phrase",
-      "added, editor cleared: %s" % card().editor.get_text())
+check("[blue] [car]" in phrases() and card().editing and card().editing["text"] == "[blue] [car]"
+      and card().save_phrase.get_label() == "Save changes",
+      "added, then loaded: %s" % (card().editing and card().editing["text"]))
 
 # 5. A refresh while typing keeps the card, the loaded phrase and the text.
 c = card(); c.edit_phrase("[blue] [car]")
@@ -174,15 +177,21 @@ check(ed.length.get_value_as_int() == 3 and ed.get_text() == "[a] [b] [c]", "and
 fill([("a", True), ("", True)])
 check(ed.get_text() == "" and "at least one term" in ed.preview.get_text(), "an empty word set explained: " + ed.preview.get_text())
 
-# 8. Locked block: a change adds the new phrase, keeps the old, says why.
+# 8. Locked block: a change that drops terms is refused whole and said;
+# one that only adds terms is free (R-WEAK-5).
 r = cli("start", "b", "--lock", "--lock-chars", "5", "--yes"); check(r.returncode == 0, "locked: " + r.stderr)
 settle()
+msgs.clear()
 c = card(); c.edit_phrase("[red] [car]")
 fill([("red", True), ("truck", True)])
 c.commit_phrase(); settle()
-check("[red] [car]" in phrases() and "[red] [truck]" in phrases(), "locked: old kept, new added: %s" % phrases())
-check(msgs and "stays" in msgs[-1], "locked: the message says the old one stays: %s" % msgs[-1:])
-check(card().editing and card().editing["text"] == "[red] [truck]", "locked: editing goes on with the new phrase")
+check("[red] [car]" in phrases() and "[red] [truck]" not in phrases(), "locked: refused whole: %s" % phrases())
+check(msgs and "locked" in msgs[-1], "locked: the refusal is shown: %s" % msgs[-1:])
+check(card().editing and card().editing["text"] == "[red] [car]" and card().editor.get_text() == "[red] [truck]",
+      "locked: the edit stays in the editor")
+fill([("red", True), ("car, truck", True)])
+card().commit_phrase(); settle()
+check("[red] [car, truck]" in phrases() and "[red] [car]" not in phrases(), "locked: adding terms is free: %s" % phrases())
 
 # 9. Export and import: the same phrases come back.
 out = cli("phrase-set", "export", "b", "Grandpa words").stdout

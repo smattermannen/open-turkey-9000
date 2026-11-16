@@ -26,6 +26,8 @@ from gi.repository import Gtk, GLib
 app = gui.App(); app.set_application_id("io.test.kc9ksmoke"); app.register(None)
 win = gui.Window(app)
 win.extension_asked = True  # no install dialog in a test
+asked = []
+win.confirm = lambda text, *a, **k: asked.append(text) or True
 def pump(cond, secs=15):
     end = time.time() + secs
     while time.time() < end and not cond():
@@ -52,8 +54,11 @@ rows = d.rows.get_children()
 check(all(r.check.get_sensitive() for r in rows), "every set can be optional")
 rows[2].check.set_active(True)
 check(d.get_text() == "[big-] [-gorilla] [x]", "all necessary: length is the default: " + d.get_text())
+check(card.cancel_phrase.get_label() == "Cancel" and card.delete_phrase.get_visible(), "Cancel and Delete phrase while changing")
 card.edit_phrase(None)
+check(asked and asked[-1].startswith("Drop the unsaved"), "Cancel asks before dropping changes")
 check(d.get_text() == "" and not card.save_phrase.get_sensitive() and card.save_phrase.get_label() == "Add phrase", "cleared editor can't be saved")
+check(not card.delete_phrase.get_visible(), "no Delete phrase for a new phrase")
 rows = d.rows.get_children(); rows[0].entry.set_text("red"); rows[1].entry.set_text("car, truck")
 d.add_row(); d.rows.get_children()[2].entry.set_text("big"); d.rows.get_children()[2].check.set_active(False)
 check(d.get_text() == "[red] [car, truck] [big]?", "built phrase: " + d.get_text())
@@ -87,6 +92,33 @@ card = win.list_cards[-s["id"]]
 card.test_check.set_active(True); settle()
 out = cli("phrase-set", "show", "b", "Grandpa").stdout
 check("block (2)" in out and "greyscale (1)" in out and "url, title, text" in out and "test mode" in out, "show after card edits: " + out.splitlines()[0])
+# The owner's report: seven word sets, one set's terms copied into another,
+# saved, then Save clicked again at once: one change, no error, no copy.
+seven = "[a, b] [c, d] [e] [f] [g]? [h] [i]"
+r = cli("phrase-set", "add", "b", "Grandpa", seven); assert r.returncode == 0, r.stderr
+settle(); card = win.list_cards[-s["id"]]
+asked.clear(); card.edit_phrase(seven)
+check(not asked, "loading into an untouched editor asks nothing")
+rows = card.editor.rows.get_children()
+rows[1].entry.set_text(rows[1].entry.get_text() + ", " + rows[0].entry.get_text())
+msgs = []
+win.message = lambda text, *a, **k: msgs.append(text)
+card.commit_phrase(); card.commit_phrase()
+check(not card.save_phrase.get_sensitive(), "Save is off while saving")
+pump(lambda: win.get_sensitive() and not win.busy)
+for _ in range(50): GLib.MainContext.default().iteration(False)
+card = win.list_cards[-s["id"]]
+texts = [p["text"] for p in json.loads(cli("gui-state").stdout)["blocks"][0]["phrase_sets"][0]["phrases"]]
+copied = "[a, b] [c, d, a, b] [e] [f] [g]? [h] [i]"
+check(copied in texts and seven not in texts and len(texts) == 4, "changed in place: %s" % texts)
+check(not msgs, "no error: %s" % msgs)
+check(card.editing and card.editing["text"] == copied and card.save_phrase.get_label() == "Save changes"
+      and not card.save_phrase.get_sensitive(), "keeps editing the saved phrase")
+check([r[0] for r in card.entries.store] == texts, "list shows the change: %s" % [r[0] for r in card.entries.store])
+# Delete phrase removes the loaded one.
+card.remove_loaded(); settle(); card = win.list_cards[-s["id"]]
+texts = [p["text"] for p in json.loads(cli("gui-state").stdout)["blocks"][0]["phrase_sets"][0]["phrases"]]
+check(copied not in texts and len(texts) == 3 and card.editing is None, "Delete phrase: %s" % texts)
 # A one-ended bridge from the card is refused, with a message.
 msgs = []
 win.message = lambda text, *a, **k: msgs.append(text)

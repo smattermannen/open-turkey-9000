@@ -120,13 +120,16 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 	if s, _ := d.ListSchedules("b"); len(s) != 0 {
 		t.Errorf("a window was added: %+v", s)
 	}
-	// A phrase change keeps the old phrase (removing weakens) and adds the
-	// new one (stricter): never a lost phrase.
+	// A phrase change that doesn't only add terms is refused whole on a
+	// locked block (R-WEAK-5); one that only adds terms is free.
 	if err := runCLI(t, "phrase-set", "change", "b", "P", "[eat] [grandpa]", "[eat] [grandma]"); err == nil {
-		t.Error("a phrase change on a locked block said nothing about the old phrase staying")
+		t.Error("a weakening phrase change on a locked block was taken")
 	}
-	if s, _ := d.FindPhraseSet("b", "P"); len(s.Phrases) != 2 {
-		t.Errorf("after a change on a locked block: %v", s.Phrases)
+	if s, _ := d.FindPhraseSet("b", "P"); len(s.Phrases) != 1 || s.Phrases[0].String() != "[eat] [grandpa]" {
+		t.Errorf("after a refused change on a locked block: %v", s.Phrases)
+	}
+	if err := runCLI(t, "phrase-set", "change", "b", "P", "[eat] [grandpa]", "[eat] [grandpa, grandma]"); err != nil {
+		t.Errorf("a change that only adds terms was refused on a locked block: %v", err)
 	}
 
 	// Strengthening still works while locked (R-WEAK-1).

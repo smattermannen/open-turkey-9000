@@ -348,8 +348,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   windows and place rules only lift an active block (a lock keeps it on, not
   enabled). The 2026-11-15 upgrade switched on every inactive block with
   windows or place rules once (`migrateScheduledSwitchOn`).
-- **Starting on an active block** only strengthens: longer `--lock-chars`,
-  later `--for/--until`; shorter/earlier refused. A challenge longer than the
+- **Starting on an active block** only strengthens: any lock kind can be
+  added, last in the unlock order (a duration timer or restart lock waits
+  behind locks on); longer `--lock-chars`, later `--for/--until`, longer
+  `--delay`; shorter/earlier, another password, another range or text-lock
+  kind refused. A challenge longer than the
   terminal is paged (Enter per page), accuracy over all.
 - **Strengthening allowed while locked**: add apps/titles/blacklist entries,
   `list create`, blacklist scope/action on, lower threshold/hits, remove

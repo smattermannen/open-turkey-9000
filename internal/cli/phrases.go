@@ -215,10 +215,11 @@ var phraseSetRemoveCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("%q: %w", text, err)
 			}
-			if !slices.ContainsFunc(s.Phrases, p.Same) {
+			stored, ok := storedPhrase(s, p)
+			if !ok {
 				return fmt.Errorf("'%s' has no phrase %s", s.Name, p)
 			}
-			phrases = append(phrases, p)
+			phrases = append(phrases, stored)
 		}
 		if err := ensureEditable(database, args[0], false); err != nil {
 			return err
@@ -233,54 +234,53 @@ var phraseSetRemoveCmd = &cobra.Command{
 	}),
 }
 
+// storedPhrase finds a set's phrase as it is stored: older versions may
+// have stored it in other case or spacing, or with its default length
+// spelled out, so phrases are compared by Key.
+func storedPhrase(s db.PhraseSet, p db.Phrase) (db.Phrase, bool) {
+	i := slices.IndexFunc(s.Phrases, func(q db.Phrase) bool { return q.Key() == p.Key() })
+	if i < 0 {
+		return db.Phrase{}, false
+	}
+	return s.Phrases[i], true
+}
+
 var phraseSetChangeCmd = &cobra.Command{
 	Use:     "change <block> <set> <old phrase> <new phrase>",
 	Aliases: []string{"edit"},
-	Short:   "Change a phrase: the new one is added, then the old one removed (removing weakens)",
-	Long: `Changes a phrase in one step (R-WEAK-5: an edit is remove + add). The new
-phrase is added, which is always allowed; the old one is then removed,
-which weakens the block and is refused while it is locked: the old phrase
-then stays beside the new one. A change of letter case or spacing only
-changes nothing.`,
-	Args: cobra.ExactArgs(4),
+	Short:   "Change a phrase in one step (weakens the block unless the new one only adds terms)",
+	Args:    cobra.ExactArgs(4),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		block := args[0]
-		s, err := phraseSetArgs(database, block, args[1])
+		s, err := phraseSetArgs(database, args[0], args[1])
 		if err != nil {
 			return err
 		}
+		// The old phrase is read loosely: one stored by an older version that
+		// today's rules refuse can still be changed into a usable one.
 		old, err := db.ParsePhraseLoose(args[2])
 		if err != nil {
 			return fmt.Errorf("%q: %w", args[2], err)
 		}
-		if !slices.ContainsFunc(s.Phrases, old.Same) {
-			return fmt.Errorf("'%s' has no phrase %s", s.Name, old)
-		}
-		changed, err := db.ParsePhrase(args[3])
+		p, err := db.ParsePhrase(args[3])
 		if err != nil {
 			return fmt.Errorf("%q: %w", args[3], err)
 		}
-		if changed.Same(old) {
-			fmt.Printf("Unchanged: %s\n", changed.Canonical())
+		stored, ok := storedPhrase(s, old)
+		if !ok {
+			return fmt.Errorf("'%s' has no phrase %s", s.Name, old)
+		}
+		if p.Key() == stored.Key() {
+			fmt.Println("No change.")
 			return nil
 		}
-		if err := ensureEditable(database, block, false); err != nil {
-			// Removing weakens: only the new phrase is added (stricter).
-			if err2 := ensureEditable(database, block, true); err2 != nil {
-				return err2
-			}
-			if _, err2 := database.AddPhrase(s.ID, changed); err2 != nil {
-				return err2
-			}
-			reapplyIfActive(database, block)
-			return fmt.Errorf("added %s, but the old phrase %s stays: %w", changed.Canonical(), old, err)
-		}
-		// In place: the phrase keeps its spot in the set.
-		if _, err := database.ReplacePhrase(s.ID, old, changed); err != nil {
+		if err := ensureEditable(database, args[0], p.Widens(stored)); err != nil {
 			return err
 		}
-		fmt.Printf("Changed %s to %s in '%s' of '%s'.\n", old, changed.Canonical(), s.Name, block)
-		return settle(database, block)
+		if _, err := database.ReplacePhrase(s.ID, stored, p); err != nil {
+			return err
+		}
+		fmt.Printf("Changed in '%s' of '%s': %s\n", s.Name, args[0], p)
+		return settle(database, args[0])
 	}),
 }
 

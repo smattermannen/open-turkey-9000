@@ -60,24 +60,32 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     (Strict lockdown's polkit rule also blocks the backlight helper and
     colord, which breaks the same controls while strict mode is on; fix
     done.)
-  - [ ] Phrase editor: "Save changes" sometimes becomes "Add phrase"
-    (copies), and saving sometimes says the set has no such phrase (§4.3).
-    Causes found: (1) a phrase stored with its default length written out
-    (`[a] [b] :2`, older rows) reads `[a] [b]`, but removing `[a] [b]`
-    matched the stored JSON, removed nothing and still printed "Removed",
-    so a change left a copy; (2) a change of letter case only added
-    nothing (already there) and then removed the phrase: lost; (3) a stored
-    phrase today's rules refuse couldn't be removed (removal parsed
-    strictly); (4) after a change the card kept the removed phrase. Fixed:
-    phrases compare by canonical form (`Phrase.Canonical`/`Same`; stored
-    canonical; listed once); removal reads loosely
-    (`ParsePhraseLoose`); `kc9k phrase-set change B S OLD NEW` changes in
-    place in one step (locked: the new one is added, the old one stays,
-    and it says so); the GUI uses it, compares ignoring case and spacing,
-    won't add a phrase the set has, clears the editor after adding, keeps
-    the edit through refreshes and renames. Tests: `TestPhraseChange`,
-    `TestStoredPhrasesFoundByCanonicalForm`, `ci/gui_phrase_edit_smoke.py`.
-    Confirm on the laptop.
+  - [ ] Phrase editor: saving a change said the set has no such phrase
+    (owner, again after the first fix: set 2's terms pasted into set 1 of a
+    7-set phrase). Causes: phrases stored by older versions (migrated
+    combinations, imports) differ from their shown form in case, spacing or
+    a spelled-out default length, and remove compared exact forms; the GUI
+    skipped the refresh after a command while one was running, so Save stayed
+    on with a stale phrase. Fixed: phrases compared by `db.Phrase.Key`
+    (gui-state shows it), `phrase-set change` replaces in place in one step
+    (free when it only adds terms, R-WEAK-5), GUI refreshes again after a
+    stale read and keeps Save off until it lands. Editor buttons: Clear →
+    Cancel (asks before dropping unsaved work, also on double-click),
+    Delete phrase while a saved one is loaded. `ci/gui_phrase_smoke.py`
+    passes here. Merged 2026-11-16 with the overnight session's fix of the
+    same bug: a phrase stored in a form today's rules refuse can still be
+    changed or removed (`ParsePhraseLoose`), one phrase stored twice is
+    listed once, the GUI compares ignoring spacing as well as case and
+    keeps Add off for a phrase the set has; `TestPhraseChange`,
+    `TestPhraseChangeOldRefusedForm`, `TestStoredPhrasesFoundByCanonicalForm`,
+    `ci/gui_phrase_edit_smoke.py` (edit twice in a row, case-only edits,
+    old stored rows, refresh and rename mid-edit, unicode, 100 word sets,
+    locked block, export/import). Confirm on the laptop.
+  - [ ] Locking an enabled block refused password, restart, delay, range
+    and word/own-text locks ("already active; … are set when it starts"),
+    against R-LOCK-7. Fixed: `strengthenLocks` adds every kind last in the
+    order given (`TestLockActiveBlock`). The GUI's lock dialog offers every
+    kind on a running block too (merged 2026-11-16); confirm on the laptop.
   - [ ] Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
   - [x] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
     none allowed; length ≥ 2. Built in `db.Phrase`, `match.js`, GUI.

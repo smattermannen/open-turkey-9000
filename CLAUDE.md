@@ -408,7 +408,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   in one), `SERIES_LIGHT`/`SERIES_DARK`; the dashboard reads `stats_rows`
   (unfiltered), the page `stats_page_rows`. `ci/gui_stats_smoke.py`.
 - **GUI** (`gui/kc9k-gui.py`, GTK 3): reads `kc9k gui-state`,
-  `kc9k stats --json`; every change runs a `kc9k` command. Design layer
+  `kc9k stats --json`; every change runs a `kc9k` command. Blocks page
+  (§4.2): `blocks_stack` "cards" (`update_block_cards`, `block_card`:
+  name, switch, Continuous/Automated, `breaks_words`, `lock_words`) and
+  "detail" (the block, `open_block(name, tab)`); `ci/gui_cards_smoke.py`. Design layer
   (R-GUI-3, `APP_CSS`): `page_header`, `section` (a card; `help=` puts
   long text behind a ? popover), `card`, `pill`/`block_pills`,
   `flow_row` (a row into a `WrapBox`: laid out like words, natural widths,

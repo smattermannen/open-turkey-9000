@@ -527,6 +527,37 @@ NOTICE_KINDS = (
 )
 
 
+def breaks_words(block):
+    """What breaks a block allows, in short (§4.2 block list)."""
+    parts = []
+    if block.get("break_allowance"):
+        per = block.get("break_per") or 3600
+        every = "hour" if per == 3600 else f"{per // 3600} hours" if per % 3600 == 0 else fmt_seconds(per)
+        parts.append(f"{fmt_seconds(block['break_allowance'])} every {every}")
+    if block.get("relock"):
+        parts.append("on unlocking")
+    if block.get("delay_break"):
+        parts.append("after a wait")
+    if block.get("pomodoro_on"):
+        parts.append("Pomodoro")
+    if block.get("quota_limit"):
+        parts.append("allowance")
+    return "Breaks: " + ", ".join(parts) if parts else "No breaks"
+
+
+def lock_words(block):
+    """A block's lock state, in short (§4.2 block list)."""
+    if not block.get("held"):
+        return "Unlocked"
+    if block.get("lock_seconds"):
+        return f"Locked, {fmt_seconds(block['lock_seconds'])} left"
+    for key, words in (("char_locked", "text lock"), ("password_locked", "password"),
+                       ("restart_locked", "until restart"), ("range_lock", "range lock")):
+        if block.get(key):
+            return f"Locked: {words}"
+    return "Locked"
+
+
 def block_summary(block):
     """One line describing a block's state and locks."""
     # §3.3: active (switched on) and enabled (enforcing now) or lifted.
@@ -4462,6 +4493,7 @@ class Window(Gtk.ApplicationWindow):
         self.settings_password = None  # remembered for this session once given
         self.access_passwords = []  # access passwords given, until closed or locked
         self.block_passwords = {}  # §3.11: block passwords typed, until closed
+        self.card_switches = {}  # §4.2: the block list's on/off switches, by block
         self.access = {}  # area -> "none", "open" or "locked"
         self.covers = {}  # page name -> (stack, cover text, entry, title)
         self.last_input = GLib.get_monotonic_time()  # for locking again when idle
@@ -4524,6 +4556,9 @@ class Window(Gtk.ApplicationWindow):
             self.nav.add(row)
             self.nav_rows[name] = row
         self.nav.connect("row-selected", lambda _list, row: row and self.stack.set_visible_child_name(row.page))
+        # §4.2: Blocks in the sidebar opens the block list, also from a block.
+        self.nav.connect("row-activated", lambda _list, row: row.page == "blocks" and hasattr(self, "blocks_stack")
+                         and self.blocks_stack.set_visible_child_name("cards"))
         self.stack.connect("notify::visible-child-name", self.page_changed)
         self.nav.select_row(self.nav_rows["dashboard"])
 
@@ -5356,6 +5391,7 @@ class Window(Gtk.ApplicationWindow):
 
     def open_block_from_dashboard(self, _box, row):
         self.selected = row.block_name
+        self.blocks_stack.set_visible_child_name("detail")
         self.stack.set_visible_child_name("blocks")
         self.state_json = None
         self.refresh()
@@ -5403,6 +5439,10 @@ class Window(Gtk.ApplicationWindow):
         detail_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
         detail_scroll.add(self.detail)
         paned.pack2(detail_scroll, True, False)
+        back = Gtk.Button(label="← All blocks", halign=Gtk.Align.START, relief=Gtk.ReliefStyle.NONE)
+        back.get_style_context().add_class("kc9k-link")
+        back.connect("clicked", lambda _b: self.blocks_stack.set_visible_child_name("cards"))
+        self.detail.pack_start(back, False, False, 0)
         self.title_label = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
         self.title_label.get_style_context().add_class("kc9k-page-title")
         self.status_pills = Gtk.Box(spacing=6)
@@ -5758,7 +5798,115 @@ class Window(Gtk.ApplicationWindow):
         social.pack_start(dim("YouTube playlists let through are with the block's exceptions, on the "
                               "Websites tab."), False, False, 0)
         tabs.append_page(social_scroll, Gtk.Label(label="Social media"))
-        return paned
+        # §4.2 (owner, 2026-11-16): the page opens on the block list, one
+        # card per block; a card opens its block here.
+        self.blocks_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
+        self.blocks_stack.add_named(self.build_block_cards(), "cards")
+        self.blocks_stack.add_named(paned, "detail")
+        return self.blocks_stack
+
+    def build_block_cards(self):
+        scroll, box = page_box()
+        page_header(box, "Blocks", "What each block blocks, what switches it, its breaks and its locks.")
+        self.block_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.block_cards_shown = None
+        box.pack_start(self.block_cards, False, False, 0)
+        new = Gtk.Button(label="New block…", halign=Gtk.Align.START)
+        new.get_style_context().add_class("suggested-action")
+        new.connect("clicked", self.create_block)
+        box.pack_start(new, False, False, 0)
+        return scroll
+
+    def update_block_cards(self):
+        """One card per block (drafts stay with their block): its name, an
+        on/off switch, continuous or automated, its breaks, its locks."""
+        blocks = [b for b in self.state.get("blocks", []) if not b.get("draft_of")]
+        shown = [(b["name"], b["active"], b.get("held"), b.get("continuous"), breaks_words(b), lock_words(b),
+                  b.get("enabled")) for b in blocks]
+        if shown == self.block_cards_shown:
+            return
+        self.block_cards_shown = shown
+        for child in self.block_cards.get_children():
+            self.block_cards.remove(child)
+        for b in blocks:
+            self.block_cards.pack_start(self.block_card(b), False, False, 0)
+        if not blocks:
+            self.block_cards.pack_start(dim("No blocks yet. A block holds what to block, when, and how it holds."),
+                                        False, False, 0)
+        self.block_cards.show_all()
+
+    def block_card(self, block):
+        name = block["name"]
+
+        def link(text, icon, tooltip, action):
+            button = Gtk.Button(relief=Gtk.ReliefStyle.NONE, tooltip_text=tooltip)
+            button.get_style_context().add_class("kc9k-link")
+            inner = Gtk.Box(spacing=6)
+            inner.pack_start(Gtk.Label(label=text), False, False, 0)
+            inner.pack_start(Gtk.Image.new_from_icon_name(icon, Gtk.IconSize.MENU), False, False, 0)
+            button.add(inner)
+            button.connect("clicked", lambda _b: action())
+            return button
+
+        title = Gtk.Button(label=name, relief=Gtk.ReliefStyle.NONE, halign=Gtk.Align.START,
+                           tooltip_text="Open the block")
+        title.get_style_context().add_class("kc9k-card-name")
+        title.connect("clicked", lambda _b: self.open_block(name))
+        switch = Gtk.Switch(active=block["active"], valign=Gtk.Align.CENTER)
+        switch.set_tooltip_text("Locked: it can't be switched off" if block.get("held") else
+                                "Switch the block off" if block["active"] else "Switch the block on (without locks)")
+        switch.set_sensitive(not (block["active"] and block.get("held")))
+        switch.connect("state-set", self.toggle_block_card, name)
+        self.card_switches[name] = switch
+        state = Gtk.Label(label=("On" if block.get("enabled") else "On, lifted now") if block["active"] else "Off")
+        state.get_style_context().add_class("dim-label")
+        top = Gtk.Box(spacing=10)
+        top.pack_start(title, False, False, 0)
+        top.pack_end(switch, False, False, 0)
+        top.pack_end(state, False, False, 0)
+        automated = not block.get("continuous", True)
+        links = Gtk.Box(spacing=8)
+        links.pack_start(link("Automated block" if automated else "Continuous block",
+                              "alarm-symbolic" if automated else "media-playlist-repeat-symbolic",
+                              "What switches it by itself: schedule and places",
+                              lambda: self.open_block(name, "Schedule & places")), False, False, 0)
+        links.set_center_widget(link(breaks_words(block), "preferences-system-time-symbolic", "Its breaks",
+                                     lambda: self.open_block(name, "Breaks & allowance")))
+        links.pack_end(link(lock_words(block), "changes-prevent-symbolic" if block.get("held") else
+                            "changes-allow-symbolic", "Unlock it" if block.get("held") else "Add locks",
+                            lambda: self.card_locks(name)), False, False, 0)
+        box = card(top, links, spacing=6)
+        if not block["active"]:
+            box.get_style_context().add_class("kc9k-block-off")
+        return box
+
+    def open_block(self, name, tab=None):
+        """Opens a block on the Blocks page, at a tab when given."""
+        self.selected = self.blocks.get(name, {}).get("draft") or name
+        self.blocks_stack.set_visible_child_name("detail")
+        self.stack.set_visible_child_name("blocks")
+        self.update_block_list()
+        if tab is not None:
+            for number in range(self.block_tabs.get_n_pages()):
+                if self.block_tabs.get_tab_label_text(self.block_tabs.get_nth_page(number)) == tab:
+                    self.block_tabs.set_current_page(number)
+
+    def toggle_block_card(self, switch, wanted, name):
+        """On: switched on without locks; off: switched off (refused while
+        locked, and the switch goes back)."""
+        if self.updating:
+            return False
+        self.selected = name
+        self.block_cards_shown = None  # redrawn from the state after it, refused or not
+        self.run(["start", name] if wanted else ["stop", name])
+        return True  # the switch follows the state after the command
+
+    def card_locks(self, name):
+        """Locked: the unlock flow; else the start/add-locks dialog. On the
+        block itself, never its draft (§4.3: a draft never runs)."""
+        self.selected = name
+        block = self.blocks.get(name) or {}
+        (self.unlock_block if block.get("held") else self.start_block)(None)
 
     def build_quota_tab(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, margin=12)
@@ -5930,6 +6078,7 @@ class Window(Gtk.ApplicationWindow):
         for row in self.block_list.get_children():
             if row.block_name == shown:
                 self.block_list.select_row(row)
+        self.update_block_cards()
         self.show_block()
 
     def block_selected(self, _box, row):
@@ -6241,6 +6390,7 @@ class Window(Gtk.ApplicationWindow):
         name = self.ask_text("New block", "A short name, such as social-media.")
         if name:
             self.selected = name
+            self.blocks_stack.set_visible_child_name("detail")
             self.stack.set_visible_child_name("blocks")
             self.run(["block", "create", name] + (["--template", template] if template else []))
 
@@ -8686,6 +8836,13 @@ button.kc9k-chip { padding: 2px 10px; min-height: 0; border-radius: 999px; font-
 .kc9k-card.kc9k-tight { padding: 4px 0; }
 .kc9k-card.kc9k-hero { padding: 18px 20px; }
 .kc9k-card.kc9k-clickable:hover { border-color: alpha(@theme_selected_bg_color, 0.7); }
+
+/* The block list (SPEC 4.2): one card per block, its parts as links. */
+button.kc9k-link { padding: 2px 6px; min-height: 0; border-radius: 6px; font-weight: 600;
+  color: @theme_selected_bg_color; }
+button.kc9k-link:hover { background-color: alpha(@theme_selected_bg_color, 0.10); }
+button.kc9k-card-name { padding: 0 4px; min-height: 0; font-size: 1.3em; font-weight: 800; }
+.kc9k-card.kc9k-block-off { background-color: alpha(@theme_base_color, 0.6); }
 
 /* Status pills: what is on, what is locked. */
 .kc9k-pill { border-radius: 999px; padding: 2px 10px; font-weight: bold; font-size: 0.85em; }

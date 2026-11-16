@@ -17,7 +17,8 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
 
 ### 0.1 Code contradicting `SPEC.md`
 
-- [ ] **Owner 2026-11-16: automation and the block list (TOP PRIORITY).**
+- [x] **Owner 2026-11-16: automation and the block list (TOP PRIORITY).**
+  Built the same day; on the laptop: Unchecked.
   - [x] Place rules have no actions (§3.6 Place rule, §3.9 Action,
     R-SCHED-1). A place only enables or lifts an active block. Built by
     mistake the same day (it should have been questioned: a place already
@@ -46,10 +47,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     windows do): Unchecked whether any exist. `TestAutomationEnabled`,
     `TestAutomationWeakens`, `TestAutomationCommand`,
     `ci/gui_automation_smoke.py`.
-  - [ ] Block list (§4.2, R-GUI-3): one card per block with its name
-    (opens the block), on/off switch, "Continuous block" or "Automated
-    block" (opens the automation view: schedule and places), breaks ("No
-    breaks" or what it allows) and locked/unlocked; modern and sleek. M
+  - [x] Block list (§4.2, R-GUI-3; built 2026-11-16): the Blocks page
+    opens on one card per block: its name (opens the block), an on/off
+    switch (on: started without locks; off: stopped; greyed out while
+    locked), "Continuous block" or "Automated block" (opens Schedule &
+    places with the Automation section), its breaks ("No breaks" or
+    "Breaks: 10 min every hour, Pomodoro…"; opens Breaks & allowance) and
+    "Unlocked" / "Locked, 2 h left" (Add locks or Unlock). "← All blocks"
+    and Blocks in the sidebar come back to the list; the Overview and New
+    block open the block itself. `ci/gui_cards_smoke.py`. On a real screen:
+    Unchecked (screenshots in Xvfb only).
 
 - [ ] **Owner report 2026-11-15** (real use on the laptop; top priority).
   Status per item; check against the latest build before calling it fixed.

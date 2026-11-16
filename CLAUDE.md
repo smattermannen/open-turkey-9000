@@ -58,9 +58,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   there: `cjs ci/match_test_cjs.js`.
 - GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
   `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
-  never `show()`. `KC9K_DB` never applies layers. Examples:
-  `ci/gui_phrase_smoke.py`, `ci/gui_phrase_edit_smoke.py`,
-  `ci/gui_duration_smoke.py`, `ci/gui_circadian_smoke.py` (`xvfb-run -a`).
+  never `show()`. `KC9K_DB` never applies layers nor sets desktop hotkeys.
+  As a normal user (as root `KC9K_DB` is ignored: they would use the real
+  DB). Examples: `ci/gui_phrase_smoke.py`, `ci/gui_phrase_edit_smoke.py`,
+  `ci/gui_duration_smoke.py`, `ci/gui_hotkey_smoke.py`,
+  `ci/gui_circadian_smoke.py` (`xvfb-run -a`).
 - Weakening audit: `cli/weakening_audit_test.go` tries every command that
   could weaken a locked block; add a new weakening command there.
 - Browser policy stops many pages before the extension sees the request; it
@@ -126,7 +128,12 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
     (`enforceTitles`). Browsers left to the extension.
   - `polite.go`: `polite-close` asks windows to close, kills a cycle later.
   - `hotkeys.go`: Cinnamon/GNOME dconf keybindings `kc9k<id>` →
-    `kc9k hotkey run <id>` (starts in-process with preset `--for`; settings password asked at `hotkey add`).
+    `kc9k hotkey run <id>`: starts in-process with the hotkey's lock flags
+    (`hotkeys.lock_args`, start's flags in unlock order, `cli/lockflags.go`:
+    `addStartLockFlags`, `parseLockFlags`, `parseLockArgs`; old rows only
+    `lock_for`, `Hotkey.Args`); a password lock's hash is taken at `hotkey
+    add` (`presetPasswordHash` at the press; never in gui-state, backups
+    `hotkey_password_hashes`); settings password asked at `hotkey add`.
 - **Enforce** (`internal/enforce/`): active blocks → layer inputs (unioned).
   `Apply` (CLI, on change) and `Tick` (daemon: due queued edits, schedule
   reconciliation, drift reapply). Single source of truth.
@@ -268,8 +275,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `requireSettingsPassword` in `gateEdit`, `ensureEditable`, stop/unlock,
   settings off, strict off, no-escape, prepare-uninstall;
   `requireLockPassword` only with `password locks on`. Passwords one per
-  line via `stdinLines` (settings password first). GUI retries once after
-  asking.
+  line via `stdinLines` (settings password first). The GUI sends the one it
+  remembers with hidden `--settings-line` (`readSettingsLine`: read whether
+  needed or not, so it is never taken for a lock's password). GUI retries
+  once after asking.
 - **No weakening** (`cli/noweakening.go`, R-WEAK-4):
   `refuseSettingWeakening` in every setting's weakening path. Strict mode's
   lock `enforce.StrictLockName` counts in `AnySettingLocked` but doesn't
@@ -475,8 +484,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   tripping on fewer events over longer windows with ≥ actions, more steps
   at the end; free. Global lockable (`--for`).
 - **Hotkeys**: `ctrl|alt|shift|super+key`, F1–F24 alone; shown as
-  "KC9K: …" in keyboard settings; notification on press; on an active block
-  only extends the lock. Older hotkeys ask at each press.
+  "KC9K: …" in keyboard settings; notification on press; any lock `start`
+  takes, no upper limit; on an active block a press only adds or extends
+  locks, as `start`. Older hotkeys ask at each press. GUI: Add hotkey…
+  dialog (`HotkeyFields`: keys checked as typed, block chooser; the
+  `LockPicker`).
 - **Notifications** (`notify-send`, `enforce/notices.go`, `kc9k notifications`):
   user picks kinds (window start/end, timer lock end, Pomodoro, allowance,
   app closed) and advance minutes (default 5; each advance once); windows

@@ -87,20 +87,12 @@ delay lock. Locks can never be shortened, replaced or removed this way.`,
 			}
 		}
 
-		usePassword, _ := cmd.Flags().GetBool("password-stdin")
-		useRestart, _ := cmd.Flags().GetBool("restart")
-		delaySpec, _ := cmd.Flags().GetString("delay")
-		var extras db.LockExtras
-		if delaySpec != "" {
-			d, err := parseUserDuration(delaySpec)
-			if err != nil {
-				return fmt.Errorf("invalid --delay duration %q: %w", delaySpec, err)
-			}
-			if d < time.Minute || d > 40*24*time.Hour {
-				return fmt.Errorf("--delay must be between 1 minute and 40 days")
-			}
-			extras.Delay = int64(d.Seconds())
+		req, err := parseLockFlags(cmd, time.Now())
+		if err != nil {
+			return err
 		}
+		usePassword, useRestart, useLock, style, lockChars := req.password, req.restart, req.text, req.style, req.chars
+		extras := req.extras
 		if useRestart {
 			boot, err := db.BootID()
 			if err != nil {
@@ -109,70 +101,21 @@ delay lock. Locks can never be shortened, replaced or removed this way.`,
 			extras.RestartBoot = boot
 		}
 		if usePassword {
-			password, err := readPasswordStdin("Block password")
-			if err != nil {
-				return err
+			if presetPasswordHash != "" {
+				extras.PasswordHash = presetPasswordHash // a hotkey's, given when it was added
+			} else {
+				password, err := readPasswordStdin("Block password")
+				if err != nil {
+					return err
+				}
+				if extras.PasswordHash, err = db.HashPassword(password); err != nil {
+					return err
+				}
 			}
-			if extras.PasswordHash, err = db.HashPassword(password); err != nil {
-				return err
-			}
 		}
-		useLock, style, lockChars, err := textLockRequested(cmd)
-		if err != nil {
-			return err
-		}
-		extras.Style = style
-		if spec, _ := cmd.Flags().GetString("relock"); spec != "" {
-			d, err := parseUserDuration(spec)
-			if err != nil || d < time.Minute || d > 30*24*time.Hour {
-				return fmt.Errorf("invalid --relock %q (1m to 720h)", spec)
-			}
-			extras.Relock = int64(d / time.Second)
-		}
-		if spec, _ := cmd.Flags().GetString("range"); spec != "" {
-			if extras.RangeDays, extras.RangeFrom, extras.RangeTo, err = parseRange(spec); err != nil {
-				return err
-			}
-			extras.RangeInvert, _ = cmd.Flags().GetBool("range-invert")
-		} else if cmd.Flags().Changed("range-invert") {
-			return fmt.Errorf("--range-invert goes with --range")
-		}
-		hasExtras := usePassword || useRestart || delaySpec != "" || style != "" || extras.Relock > 0 || extras.RangeDays != 0
-
-		forDur, err := cmd.Flags().GetString("for")
-		if err != nil {
-			return err
-		}
-		untilClock, err := cmd.Flags().GetString("until")
-		if err != nil {
-			return err
-		}
-
-		if forDur != "" && untilClock != "" {
-			return fmt.Errorf("use only one of --for or --until")
-		}
-
-		// Compute the time-lock expiry (0 = none).
-		var lockedUntil, forSeconds int64
-		now := time.Now()
-		switch {
-		case forDur != "":
-			d, err := parseUserDuration(forDur)
-			if err != nil {
-				return fmt.Errorf("invalid --for duration %q: %w", forDur, err)
-			}
-			if d <= 0 {
-				return fmt.Errorf("--for duration must be positive")
-			}
-			lockedUntil = now.Add(d).Unix()
-			forSeconds = int64(d / time.Second)
-		case untilClock != "":
-			t, err := untilToday(now, untilClock)
-			if err != nil {
-				return err
-			}
-			lockedUntil = t.Unix()
-		}
+		hasExtras := usePassword || useRestart || extras.Delay > 0 || style != "" || extras.Relock > 0 || extras.RangeDays != 0
+		lockedUntil, forSeconds := req.until, req.forSeconds
+		now := req.now
 
 		database, err := openDB()
 		if err != nil {
@@ -310,9 +253,13 @@ func startLocks(name string, kinds []string, style string, chars int, until, tru
 	return locks
 }
 
+// presetPasswordHash, when set, is the password lock's hash a start uses
+// instead of reading a password: a hotkey's, given when it was added.
+var presetPasswordHash string
+
 // startLockRequested reports whether a start asks for any kind of lock.
 func startLockRequested(cmd *cobra.Command) bool {
-	for _, f := range []string{"lock", "lock-chars", "for", "until", "password-stdin", "restart", "delay", "text-lock", "lock-words", "lock-text", "relock", "range", "range-invert"} {
+	for _, f := range lockFlagNames {
 		if cmd.Flags().Changed(f) {
 			return true
 		}
@@ -1025,20 +972,8 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 }
 
 func init() {
-	startCmd.Flags().Bool("lock", false, "Lock the block (requires a challenge to deactivate)")
-	startCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
-	addTextLockFlags(startCmd)
-	startCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
-	startCmd.Flags().Bool("restart", false, "Restart lock: keep the block on until the computer restarts")
-	startCmd.Flags().String("delay", "", "Delay lock: unlocking takes this long (1m to 960h)")
+	addStartLockFlags(startCmd)
 	addYesFlag(startCmd)
-	startCmd.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m)")
-	startCmd.Flags().String("for", "", "Timer lock: keep the block un-removable for this duration (e.g. 90m, 2h, 3d, 1w)")
-	startCmd.Flags().String("until", "", "Timer lock: keep the block un-removable until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
-
-	startCmd.Flags().String("range", "", `Range lock: locked at these times, e.g. "mon-fri 09:00-17:00" (22:00-06:00 runs past midnight)`)
-	startCmd.Flags().Bool("range-invert", false, "Range lock: locked outside those times instead")
-	trackLockFlagOrder(startCmd) // after every lock flag is defined
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)
 	rootCmd.AddCommand(unlockCmd)

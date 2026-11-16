@@ -22,6 +22,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -55,9 +56,11 @@ func requireSettingsPassword(database *db.DB) error {
 	if err != nil || hash == "" {
 		return err
 	}
-	password, err := readPasswordStdin("Settings password")
-	if err != nil {
-		return fmt.Errorf("this change needs the settings password")
+	password := givenSettingsPassword
+	if password == "" {
+		if password, err = readPasswordStdin("Settings password"); err != nil {
+			return fmt.Errorf("this change needs the settings password")
+		}
 	}
 	if !db.CheckPassword(hash, password) {
 		time.Sleep(time.Second) // slow down guessing
@@ -65,6 +68,23 @@ func requireSettingsPassword(database *db.DB) error {
 	}
 	settingsPasswordChecked = true
 	return nil
+}
+
+// givenSettingsPassword is the settings password the GUI gave ahead of the
+// other passwords (--settings-line), read whether the command needs it or
+// not: otherwise a command that doesn't need it would take it for the next
+// password it reads (a password lock's, say).
+var givenSettingsPassword string
+
+// readSettingsLine reads the line --settings-line announces, after the
+// access passwords.
+func readSettingsLine(cmd *cobra.Command) {
+	if on, _ := cmd.Root().PersistentFlags().GetBool("settings-line"); !on || givenSettingsPassword != "" {
+		return
+	}
+	readAccessLines(cmd)
+	line, _ := stdinLines.ReadString('\n')
+	givenSettingsPassword = strings.TrimRight(line, "\r\n")
 }
 
 // requireLockPassword asks for the settings password before a lock is set,

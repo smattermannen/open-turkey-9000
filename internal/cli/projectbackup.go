@@ -36,7 +36,8 @@ type backupExtras struct {
 	PasswordForLocks bool              `json:"settings_password_for_locks,omitempty"`
 	AccessPasswords  map[string]string `json:"access_password_hashes,omitempty"`
 	Hotkeys          []db.Hotkey       `json:"hotkeys,omitempty"`
-	BlockPasswords   map[string]string `json:"block_password_hashes,omitempty"` // §3.11, by block
+	HotkeyPasswords  map[string]string `json:"hotkey_password_hashes,omitempty"` // password locks, by keys
+	BlockPasswords   map[string]string `json:"block_password_hashes,omitempty"`  // §3.11, by block
 	Statistics       []db.UsageRow     `json:"statistics,omitempty"`
 }
 
@@ -108,8 +109,12 @@ func exportBackupExtras(database *db.DB) (*backupExtras, error) {
 	if out.Hotkeys, err = database.Hotkeys(); err != nil {
 		return nil, err
 	}
-	for i := range out.Hotkeys {
+	out.HotkeyPasswords = map[string]string{}
+	for i, h := range out.Hotkeys {
 		out.Hotkeys[i].ID = 0
+		if h.PasswordHash != "" {
+			out.HotkeyPasswords[h.Keys] = h.PasswordHash
+		}
 	}
 	if out.Statistics, err = database.UsageSince(""); err != nil {
 		return nil, err
@@ -146,8 +151,16 @@ func (b *backupExtras) backupLocks(renamed map[string]string, database *db.DB, t
 		out = append(out, lockToSet{settingTarget(l.Name), "setting lock", strings.Join(l.Layers(), " → ")})
 	}
 	for _, h := range b.Hotkeys {
-		if h.LockFor != "" && h.NoConfirm {
-			out = append(out, lockToSet{"block '" + h.Block + "'", "timer lock, set at each press of " + h.Keys + " without asking", h.LockFor})
+		if !h.NoConfirm || len(h.Args()) == 0 {
+			continue // no locks, or the press asks
+		}
+		req, err := parseLockArgs(h.Args(), time.Now())
+		if err != nil {
+			continue // left out at import
+		}
+		for _, l := range pressLocks(h.Block, req) {
+			l.Kind += ", set at each press of " + h.Keys + " without asking"
+			out = append(out, l)
 		}
 	}
 	return out
@@ -286,7 +299,14 @@ func importBackupExtras(database *db.DB, b *backupExtras, renamed map[string]str
 			fmt.Printf("The hotkey %s starts '%s', which isn't here: left out.\n", h.Keys, h.Block)
 			continue
 		}
-		say("add the hotkey %s (start %s%s)", h.Keys, h.Block, lockText(h.LockFor))
+		if len(h.Args()) > 0 {
+			if _, err := parseLockArgs(h.Args(), time.Now()); err != nil {
+				fmt.Printf("The hotkey %s has locks that can't be read (%v): left out.\n", h.Keys, err)
+				continue
+			}
+		}
+		h.PasswordHash = b.HotkeyPasswords[h.Keys]
+		say("add the hotkey %s (start %s%s)", h.Keys, h.Block, hotkeyLockText(h))
 		if !dry {
 			if _, err := database.AddHotkey(h); err != nil {
 				return err

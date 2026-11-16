@@ -140,6 +140,22 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     ("69 days 10 h", not "1666 h 40 min"). Left: Settings, Breaks tab,
     Circadian, list cards. L
   - Strict lockdown polkit now allows the backlight helper and colord.
+  - [x] Hotkey locks (§3.4 timer lock "no upper limit", §3.13, R-GUI-2;
+    found 2026-11-16): a hotkey's timer lock was capped at 24 hours and the
+    GUI took it as typed text ("ctrl+alt+s study 1h", no calendar, block
+    names with spaces broke). Now a hotkey takes every lock `start` takes,
+    in the same unlock order, no cap (`hotkey add K B --lock --for 2h …`;
+    a password lock's password is given when it is added); the GUI's Add
+    hotkey… dialog has keys checked as typed, a block chooser and the
+    usual lock picker. `cli/hotkeys_test.go`, `ci/gui_hotkey_smoke.py`.
+  - [x] GUI gave a password lock the settings password (R-LOCK-12, §3.11;
+    found 2026-11-16): with a settings password remembered and `password
+    locks` off, the GUI's start with a password lock sent the settings
+    password first and the CLI took it as the lock's. Now sent with
+    `--settings-line` and always read as the settings password
+    (`TestSettingsLine`).
+  - [x] A scratch database (`KC9K_DB`, GUI smoke tests) set hotkeys on the
+    real desktop, clobbering KC9K's own; now it never does.
 
 - [x] **Lock-bypass audit 2026-11-15** (R-LOCK-1, §3.5): every command
   that could weaken a block tried on a locked block that has something of

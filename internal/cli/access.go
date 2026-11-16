@@ -456,7 +456,12 @@ var accessRemoveCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().Int("access-lines", 0, "Internal: this many access passwords come first on standard input")
 	_ = rootCmd.PersistentFlags().MarkHidden("access-lines")
-	rootCmd.PersistentPreRunE = accessGate
+	rootCmd.PersistentFlags().Bool("settings-line", false, "Internal: the settings password comes next on standard input, after the access passwords")
+	_ = rootCmd.PersistentFlags().MarkHidden("settings-line")
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		readSettingsLine(cmd)
+		return accessGate(cmd, args)
+	}
 	for _, c := range []*cobra.Command{accessSetCmd, accessRemoveCmd} {
 		c.Flags().Bool("all", false, "Every area")
 	}

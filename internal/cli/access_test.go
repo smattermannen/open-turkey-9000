@@ -17,12 +17,14 @@ import (
 func runWith(t *testing.T, access int, lines []string, args ...string) error {
 	t.Helper()
 	stdinLines = bufio.NewReader(strings.NewReader(strings.Join(lines, "\n") + "\n"))
-	accessGiven, accessLinesRed, settingsPasswordChecked = nil, false, false
+	accessGiven, accessLinesRed, settingsPasswordChecked, givenSettingsPassword = nil, false, false, ""
 	if access > 0 {
 		args = append([]string{"--access-lines", strconv.Itoa(access)}, args...)
 	}
 	err := runCLI(t, args...)
 	_ = rootCmd.PersistentFlags().Set("access-lines", "0")
+	_ = rootCmd.PersistentFlags().Set("settings-line", "false")
+	givenSettingsPassword = ""
 	return err
 }
 
@@ -32,7 +34,7 @@ func notTerminal(t *testing.T) {
 	t.Cleanup(func() {
 		isTerminalInput = old
 		stdinLines = bufio.NewReader(os.Stdin)
-		accessGiven, accessLinesRed, settingsPasswordChecked = nil, false, false
+		accessGiven, accessLinesRed, settingsPasswordChecked, givenSettingsPassword = nil, false, false, ""
 	})
 }
 
@@ -176,5 +178,34 @@ func TestGuiStateHidesLockedPages(t *testing.T) {
 	}
 	if s = guiStateWith(t, "omega4", "alpha1"); len(s.Blocks) != 1 || s.Access[areaStats] != "none" {
 		t.Errorf("app open: %d blocks, access %v", len(s.Blocks), s.Access)
+	}
+}
+
+// The GUI gives the settings password it remembers ahead of every other
+// password, announced with --settings-line. A command that doesn't need it
+// still reads it, so a password lock gets the password meant for it (it
+// used to get the settings password).
+func TestSettingsLine(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	blockWithSite(t)
+	if err := runWith(t, 0, []string{"secret1"}, "password", "set"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, []string{"secret1", "partner"}, "--settings-line", "start", "b", "--password-stdin", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if e, _ := d.GetLockExtras("b"); !db.CheckPassword(e.PasswordHash, "partner") {
+		t.Fatal("the password lock didn't get the password meant for it")
+	}
+	// A command that needs it takes it from that line too.
+	if err := runWith(t, 0, []string{"secret1", "partner"}, "--settings-line", "unlock", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, []string{"wrong1"}, "--settings-line", "stop", "b"); err == nil || !strings.Contains(err.Error(), "wrong settings password") {
+		t.Fatalf("stop with a wrong settings line: %v", err)
+	}
+	if err := runWith(t, 0, []string{"secret1"}, "--settings-line", "stop", "b"); err != nil {
+		t.Fatal(err)
 	}
 }

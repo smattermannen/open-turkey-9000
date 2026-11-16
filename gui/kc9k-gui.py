@@ -694,6 +694,37 @@ def mark_problem(widget, problem):
         context.remove_class("error")
 
 
+HOTKEY_MODIFIERS = {"ctrl": "ctrl", "control": "ctrl", "primary": "ctrl", "alt": "alt", "shift": "shift",
+                    "super": "super", "win": "super", "meta": "super"}
+
+
+def hotkey_problem(text):
+    """Why keys typed like ctrl+alt+s can't be a hotkey, or None: the rules
+    of the CLI's blocker.ParseAccel, checked where they are typed."""
+    parts = text.strip().split("+")
+    key = parts[-1].strip()
+    if not key:
+        return "Type keys such as ctrl+alt+s or super+F9."
+    mods = []
+    for part in parts[:-1]:
+        mod = HOTKEY_MODIFIERS.get(part.strip().lower())
+        if not mod:
+            return f"“{part.strip()}” isn't a modifier: use ctrl, alt, shift or super."
+        mods.append(mod)
+    if not re.fullmatch(r"[A-Za-z0-9_]+", key):
+        return f"“{key}” isn't a key."
+    if not mods and not re.fullmatch(r"F([1-9]|1[0-9]|2[0-4])", key.upper()):
+        return "Add ctrl, alt, shift or super: only F1 to F24 work alone."
+    return None
+
+
+def hotkey_words(accel):
+    """A GTK accelerator such as <Primary><Alt>s as ctrl+alt+s."""
+    for tag, word in (("<Primary>", "ctrl+"), ("<Alt>", "alt+"), ("<Shift>", "shift+"), ("<Super>", "super+")):
+        accel = accel.replace(tag, word)
+    return accel
+
+
 class CheckedField(Gtk.Box):
     """A typed value with a line under it that reads it back or says what
     is wrong. Subclasses give read(); value is None while it is wrong."""
@@ -1353,6 +1384,51 @@ class LockPicker(Gtk.Box):
         return out
 
 
+class HotkeyFields(Gtk.Grid):
+    """A new hotkey's keys and the block it starts, checked as they are
+    typed (R-GUI-3). values is (keys, block), kept current, so it can be
+    read after the dialog is gone."""
+
+    def __init__(self, blocks, selected=None):
+        super().__init__(column_spacing=16, row_spacing=6)
+        self.callbacks = []
+        for row, text in enumerate(("Keys", "Starts")):
+            title = Gtk.Label(label=text, xalign=0)
+            title.get_style_context().add_class("kc9k-field-label")
+            self.attach(title, 0, row * 2, 1, 1)
+        self.keys = Gtk.Entry(placeholder_text="ctrl+alt+s", width_chars=18, activates_default=True)
+        self.keys.connect("changed", self.changed)
+        self.attach(self.keys, 1, 0, 1, 1)
+        self.note = Gtk.Label(xalign=0, wrap=True)
+        self.note.get_style_context().add_class("kc9k-note")
+        self.attach(self.note, 1, 1, 1, 1)
+        self.block = Gtk.ComboBoxText()
+        for name in blocks:
+            self.block.append(name, name)
+        self.block.set_active_id(selected if selected in blocks else blocks[0])
+        self.block.connect("changed", self.changed)
+        self.attach(self.block, 1, 2, 1, 1)
+        self.values = ("", "")
+        self.changed()
+
+    def on_change(self, callback):
+        self.callbacks.append(callback)
+
+    def problem(self):
+        return hotkey_problem(self.keys.get_text())
+
+    def changed(self, *_args):
+        self.values = (self.keys.get_text().strip(), self.block.get_active_id() or "")
+        typed = bool(self.keys.get_text().strip())
+        problem = self.problem()
+        mark_problem(self.keys, problem if typed else None)
+        mark_problem(self.note, problem if typed else None)
+        self.note.set_text(problem if typed and problem else
+                           "ctrl, alt, shift or super with a key; F1 to F24 also work alone.")
+        for callback in self.callbacks:
+            callback(self)
+
+
 # Widgets -----------------------------------------------------------------
 
 def installed_apps():
@@ -1593,7 +1669,7 @@ class EditableList(Gtk.Box):
         self.stack.add_named(scroll, "list")
         self.pack_start(self.stack, True, True, 0)
 
-        row = Gtk.Box(spacing=6)
+        row = self.button_row = Gtk.Box(spacing=6)
         self.entry = Gtk.Entry(placeholder_text=placeholder)
         self.entry.connect("activate", self._add)
         add = Gtk.Button(label="Add")
@@ -3735,13 +3811,16 @@ class Window(Gtk.ApplicationWindow):
         never read it. A command that needs it and doesn't have it fails,
         and finished() asks for it and runs the command again."""
         self.set_sensitive(False)
-        stdin = secret
+        stdin, cli_args = secret, args
         if self.settings_password and self.state and self.state.get("settings_password"):
+            # --settings-line: the CLI reads it whether it needs it or not,
+            # so it is never taken for the next password (a lock's).
             stdin = self.settings_password + "\n" + (secret or "")
+            cli_args = ["--settings-line", *args]
         passwords = list(self.access_passwords)
 
         def work():
-            ok, output = cli_with_access(passwords, args, stdin, timeout)
+            ok, output = cli_with_access(passwords, cli_args, stdin, timeout)
             GLib.idle_add(self.finished, ok, output, then, (args, secret, timeout))
 
         threading.Thread(target=work, daemon=True).start()
@@ -5384,11 +5463,12 @@ class Window(Gtk.ApplicationWindow):
         if self.selected and name:
             self.run(["block", "duplicate", self.selected, name])
 
-    def lock_dialog(self, title, intro, button, picker):
+    def lock_dialog(self, title, intro, button, picker, extra=None):
         """A dialog around a LockPicker; None when cancelled, else what it
         asks for, read before the dialog goes: (locks as (flags, words),
-        re-lock flags, password). The button waits until every field reads
-        right."""
+        re-lock flags, password). extra, when given, is more fields above
+        the locks (on_change, problem()). The button waits until every
+        field reads right."""
         dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         ok = dialog.add_button(button, Gtk.ResponseType.OK)
@@ -5399,10 +5479,18 @@ class Window(Gtk.ApplicationWindow):
         for side in ("start", "end", "top", "bottom"):
             getattr(box, f"set_margin_{side}")(18)
         box.pack_start(dim(intro), False, False, 0)
+        if extra is not None:
+            box.pack_start(extra, False, False, 0)
         box.pack_start(picker, False, False, 0)
-        picker.on_change(lambda p: ok.set_sensitive(p.is_valid()))
-        ok.set_sensitive(picker.is_valid())
-        self.lock_picker = picker  # for tests
+
+        def update(*_args):
+            ok.set_sensitive(picker.is_valid() and (extra is None or extra.problem() is None))
+
+        picker.on_change(update)
+        if extra is not None:
+            extra.on_change(update)
+        update()
+        self.lock_picker, self.lock_extra = picker, extra  # for tests
         dialog.show_all()
         answer = dialog.run()
         chosen = (picker.chosen(), picker.relock_flags(), picker.secret()) if picker.is_valid() else None
@@ -6798,13 +6886,16 @@ class Window(Gtk.ApplicationWindow):
 
         self.hotkey_ids = []
         self.hotkeys = EditableList(
-            "Hotkeys", "ctrl+alt+s  study  1h", self.add_hotkey,
+            "Hotkeys", "", None,
             lambda _value, number: self.run(["hotkey", "remove", str(self.hotkey_ids[number - 1])]),
-            help_text="Keys, a block, and optionally how long to lock it: pressing ctrl+alt+s "
-                      "then starts 'study' locked for an hour. Use ctrl, alt, shift or super with "
-                      "a key; F1 to F24 also work alone. A lock needs the settings password when "
-                      "you add the hotkey. Pressing it asks you to confirm the lock, unless you chose "
+            entry=False,
+            help_text="A key combination that starts a block, optionally with locks: any lock a "
+                      "start can set. Pressing it asks you to confirm the locks, unless you chose "
                       "Run without confirmation when adding it.")
+        add_hotkey = Gtk.Button(label="Add hotkey…")
+        add_hotkey.connect("clicked", self.add_hotkey)
+        self.hotkeys.button_row.pack_start(add_hotkey, False, False, 0)
+        self.hotkeys.button_row.reorder_child(add_hotkey, 0)
         box.pack_start(self.hotkeys, False, False, 0)
 
         project_row = Gtk.Box(spacing=6)
@@ -6816,9 +6907,9 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(section(
             "Project",
             dim("Save every block, cluster and setting to one file. A backup also holds your "
-                "places (the Wi-Fi networks they are known by); a file to share leaves them out. "
-                "Running locks, passwords, hotkeys and statistics are never in it. Importing shows "
-                "what it adds first, only adds, and gives a block whose name is taken a new name."),
+                "places (the Wi-Fi networks they are known by), running locks, passwords (as hashes), "
+                "hotkeys and statistics; a file to share leaves them out. Importing shows what it "
+                "adds first, only adds, and gives a block whose name is taken a new name."),
             project_row), False, False, 0)
 
         self.option_switches = {}
@@ -6936,23 +7027,44 @@ class Window(Gtk.ApplicationWindow):
     def setting_locked(self, name):
         return bool(describe_setting_lock(self.setting_lock_info(name)))
 
-    def add_hotkey(self, values):
-        if len(values) not in (2, 3):
-            self.message("Enter keys, a block and optionally a lock: ctrl+alt+s study 1h",
-                         Gtk.MessageType.INFO)
+    def add_hotkey(self, _button=None):
+        """A new hotkey: its keys, the block it starts and its locks, in the
+        lock picker every start uses (§3.13, R-GUI-2). The locks are
+        confirmed now (R-LOCK-12); pressing asks again unless Run without
+        confirmation is ticked."""
+        blocks = sorted(name for name, b in self.blocks.items() if not b.get("draft_of"))
+        if not blocks:
+            self.message("Make a block first: a hotkey starts one.", Gtk.MessageType.INFO)
             return
-        args = ["hotkey", "add", values[0], values[1]]
-        if len(values) == 3:
-            # R-LOCK-12: a hotkey's lock is confirmed once, when it is added.
-            if not self.confirm_lock([f"block '{values[1]}': timer lock, set each time {values[0]} "
-                                      f"is pressed, {values[2]} from the press"],
-                                     option="Run without confirmation (pressing the hotkey then "
-                                            "locks without asking again)"):
+        fields = HotkeyFields(blocks, self.selected)
+        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS)
+        asked = self.lock_dialog(
+            "Add a hotkey", "Pressing the keys starts the block with these locks (none: it just "
+            "starts). On a block that is already on, a press only adds or extends locks.",
+            "Add", picker, extra=fields)
+        if asked is None:
+            return
+        keys, block = fields.values
+        chosen, relock_flags, secret = asked
+        if len(chosen) > 1:
+            chosen = self.choose_lock_order(chosen)
+            if chosen is None:
                 return
-            args += ["--for", values[2], "--yes"]
+        args = ["hotkey", "add", keys, block]
+        locks = []
+        for i, (flags, text) in enumerate(chosen):
+            args += flags
+            order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
+            locks.append(f"block '{block}': {order}{text}, set each time {keys} is pressed")
+        args += relock_flags
+        if locks:
+            if not self.confirm_lock(locks, option="Run without confirmation (pressing the hotkey then "
+                                                    "locks without asking again)"):
+                return
+            args.append("--yes")
             if self.lock_option:
                 args.append("--no-confirm")
-        self.run(args)
+        self.run(args, secret + "\n" if secret else None)
 
     def set_settings_password(self, _button):
         new = self.ask_text("New settings password", "At least 4 characters.", password=True)
@@ -7035,7 +7147,8 @@ class Window(Gtk.ApplicationWindow):
         hotkeys = self.state.get("hotkeys") or []
         self.hotkey_ids = [h["id"] for h in hotkeys]
         self.hotkeys.set_items([
-            f"{h['keys']}  starts {h['block']}" + (f", locked for {h['lock_for']}" if h["lock_for"] else "")
+            f"{hotkey_words(h['keys'])}  starts {h['block']}" + (f" with {h['lock']}" if h.get("lock") else "")
+            + (" (runs without confirmation)" if h.get("no_confirm") else "")
             for h in hotkeys])
 
     def update_browsers(self):

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -176,6 +177,14 @@ type guiBlock struct {
 }
 
 // guiSettingLock is a browser setting's locks for the interface.
+// guiHotkey is a hotkey with its locks in words: Lock lists them in unlock
+// order ("" without locks), Kinds names them briefly.
+type guiHotkey struct {
+	db.Hotkey
+	Lock  string `json:"lock"`
+	Kinds string `json:"kinds"`
+}
+
 type guiSettingLock struct {
 	Seconds      int64    `json:"lock_seconds"`
 	CharLocked   bool     `json:"char_locked"`
@@ -251,7 +260,7 @@ type guiState struct {
 	Browser          map[string]bool           `json:"browser"`
 	BrowserLocks     map[string]guiSettingLock `json:"browser_locks"`
 	Blocks           []guiBlock                `json:"blocks"`
-	Hotkeys          []db.Hotkey               `json:"hotkeys"`
+	Hotkeys          []guiHotkey               `json:"hotkeys"`
 	Nepsis           db.Nepsis                 `json:"nepsis"`
 	NepsisCount      int                       `json:"nepsis_count"`
 	NepsisLock       guiSettingLock            `json:"nepsis_lock"`
@@ -618,8 +627,13 @@ var guiStateCmd = &cobra.Command{
 			state.Blocks = append(state.Blocks, g)
 		}
 
-		if state.Hotkeys, err = database.Hotkeys(); err != nil {
+		hotkeys, err := database.Hotkeys()
+		if err != nil {
 			return err
+		}
+		state.Hotkeys = []guiHotkey{}
+		for _, h := range hotkeys {
+			state.Hotkeys = append(state.Hotkeys, guiHotkey{h, strings.TrimPrefix(hotkeyLockText(h), " with "), hotkeyKinds(h)})
 		}
 
 		state.SocialPresets = db.SocialPresets

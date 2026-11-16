@@ -20,12 +20,22 @@ class H(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/octet-stream")
             self.send_header("Content-Disposition", "attachment; filename=kc9k-%s.bin" % self.path[5:].strip("?") )
             self.end_headers(); self.wfile.write(b"x" * 1000); return
-        word = "kcninedownload" if self.path.startswith("/bad") else "harmless"
-        body = f"<title>t</title><p>A page about {word}.</p><a id=l href='/file?{self.path[1:4]}'>get</a>".encode()
+        word = "kcninedownload" if self.path.startswith(("/bad", "/cdn", "/blob")) else "harmless"
+        tag = self.path[1:5].strip("?/")
+        # /cdn: the file comes from another host (a CDN), so the browser
+        # sends only the page's origin as referrer; /blob: the page makes
+        # the file itself (no address of its own).
+        href = (OTHER + f"/file?{tag}") if self.path.startswith("/cdn") else f"/file?{tag}"
+        link = (f"<a id=l href='#' onclick=\"const a=document.createElement('a');"
+                f"a.href=URL.createObjectURL(new Blob(['x'.repeat(1000)],{{type:'application/octet-stream'}}));"
+                f"a.download='kc9k-{tag}.bin';document.body.appendChild(a);a.click();return false;\">get</a>"
+                if self.path.startswith("/blob") else f"<a id=l href='{href}'>get</a>")
+        body = f"<title>t</title><p>A page about {word}.</p>{link}".encode()
         self.send_response(200); self.send_header("Content-Type", "text/html"); self.end_headers(); self.wfile.write(body)
 srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 base = "http://127.0.0.1:%d" % srv.server_address[1]
+OTHER = "http://localhost:%d" % srv.server_address[1]
 dl = tempfile.mkdtemp(prefix="kc9kdl-")
 o = Options(); o.binary_location = "/usr/bin/librewolf"; o.add_argument("-headless")
 for k, v in {"browser.download.folderList": 2, "browser.download.dir": dl, "browser.download.useDownloadDir": True,
@@ -45,7 +55,7 @@ got = []
 d = webdriver.Firefox(options=o, service=s); d.set_page_load_timeout(30)
 try:
     time.sleep(10)
-    for page in ("ok", "bad"):
+    for page in ("ok", "bad", "cdn", "blob"):
         d.get(base + "/" + page); time.sleep(4)
         d.find_element(By.ID, "l").click(); time.sleep(5)
     got = sorted(os.listdir(dl))
@@ -55,6 +65,11 @@ finally:
     subprocess.run(["kc9k", "stop", "dltest"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.run(["kc9k", "block", "remove", "dltest"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.run(["sudo", "rm", "-f", "/var/lib/kc9k/allow-remote-control"])
-ok = got == ["kc9k-ok.bin"]
-print(("PASS" if ok else "FAIL") + ": no-downloads cancels the matching page's download only")
-sys.exit(0 if ok else 1)
+failures = 0
+for name, want in (("ok", True), ("bad", False), ("cdn", False), ("blob", False)):
+    passed = (f"kc9k-{name}.bin" in got) == want
+    failures += 0 if passed else 1
+    print(("PASS" if passed else "FAIL") + f": {name}: " + ("downloads" if want else "cancelled") +
+          {"ok": " (page without the word)", "bad": " (same site)", "cdn": " (file from another host)",
+           "blob": " (file made by the page)"}[name])
+sys.exit(1 if failures else 0)

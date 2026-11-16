@@ -17,8 +17,14 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
 - [ ] **Owner report 2026-11-15** (real use on the laptop; top priority).
   Status per item; check against the latest build before calling it fixed.
   - [ ] `no-images` doesn't hide GIFs (§3.9 Look actions: animated GIFs
-    included). Likely the same causes as the next item; confirm on the
-    laptop. S
+    included). Checked 2026-11-16 in LibreWolf (cloud container), from page
+    text and from an address list: GIFs as `<img>`, `<picture>`, inline
+    `background-image … !important`, `<input type=image>`, inside a shadow
+    root and inside a frame are all hidden. One gap found: a GIF drawn by a
+    pseudo-element (`::before { content: url(x.gif) }`) still shows; no CSS
+    selector can pick only image content, so it needs an idle-time scan of
+    pseudo-elements on no-images pages. Not built. Confirm the owner's case
+    on the laptop (which site?). S
   - [ ] Looks from page text (greyscale, no-images, no-video) unreliable
     and lifted for a moment on every click inside a site (§3.9; owner
     2026-11-15). Causes found: `render` forgot the page's looks on a new
@@ -34,9 +40,14 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-15.
     roots included; bfcache pages read again. Extension 1.19.0. Not run in
     a browser here; confirm on the laptop (`ci/extras_test.py`,
     `ci/browser_test.py`). S
-  - [ ] `no-downloads` doesn't block downloads (§3.9). `ci/download_test.py`
-    passes, so the real path differs (browser? download started from a
-    link/blob, policy-blocked page?). Unchecked which browser. S
+  - [ ] `no-downloads` doesn't block downloads (§3.9). Checked 2026-11-16
+    in LibreWolf: a link on the page, a file from another host (only the
+    origin as referrer) and a file the page makes itself (`blob:`) are all
+    cancelled (`ci/download_test.py`, four cases). Likely cause in Chrome:
+    its service worker is stopped after a while idle and forgot which pages
+    forbid downloads (each page reports once). Fixed in 1.21.0: the pages
+    are kept in session storage; a download that finishes before it can be
+    cancelled has its file removed. Unchecked in Chrome (not run here). S
   - [ ] Desktop brightness slider gone from the menu; blue-light filter
     toggles on and off; desktop night light turns itself off while its
     switch shows on, **also with circadian off and strict mode off** (§4.10

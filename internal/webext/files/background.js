@@ -1202,6 +1202,20 @@ setInterval(reportQuota, QUOTA_REPORT_MS);
 // (its referrer, by address or by the hits its text reported) or its own
 // address has a list with the no-downloads action.
 const downloadPages = new Map(); // page address -> actions its text matched
+// Kept in session storage too: Chrome stops this service worker after a
+// while without events, and a page reports its hits only once, so a
+// download after that would otherwise go through.
+const DOWNLOAD_PAGES_KEY = "kc9kDownloadPages";
+const downloadStore = (browser.storage && browser.storage.session) || null;
+const downloadPagesLoaded = downloadStore
+  ? downloadStore.get(DOWNLOAD_PAGES_KEY).then((stored) => {
+    for (const url of (stored && stored[DOWNLOAD_PAGES_KEY]) || []) {
+      if (typeof url === "string") {
+        downloadPages.set(url, true);
+      }
+    }
+  }).catch(() => {})
+  : Promise.resolve();
 function noteDownloadPage(url, actions) {
   if (typeof url !== "string" || !Array.isArray(actions) || !actions.includes("no-downloads")) {
     return;
@@ -1209,6 +1223,9 @@ function noteDownloadPage(url, actions) {
   downloadPages.set(url, true);
   if (downloadPages.size > 200) {
     downloadPages.delete(downloadPages.keys().next().value);
+  }
+  if (downloadStore) {
+    downloadStore.set({ [DOWNLOAD_PAGES_KEY]: Array.from(downloadPages.keys()) }).catch(() => {});
   }
 }
 function downloadBlocked(item) {
@@ -1224,8 +1241,16 @@ function downloadBlocked(item) {
 }
 if (browser.downloads && browser.downloads.onCreated) {
   browser.downloads.onCreated.addListener((item) => {
-    if (downloadBlocked(item)) {
-      browser.downloads.cancel(item.id).then(() => browser.downloads.erase({ id: item.id })).catch(() => {});
-    }
+    downloadPagesLoaded.then(() => {
+      if (!downloadBlocked(item)) {
+        return;
+      }
+      // A small file may be done before it can be cancelled: then its file
+      // goes instead.
+      browser.downloads.cancel(item.id)
+        .catch(() => browser.downloads.removeFile(item.id))
+        .then(() => browser.downloads.erase({ id: item.id }))
+        .catch(() => {});
+    });
   });
 }

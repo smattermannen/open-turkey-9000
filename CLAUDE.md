@@ -459,7 +459,12 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Pomodoro** (`pomodoro set B W R [--long D --every N]`, `off` free;
   refused while locked): locks stay; work periods close allowance sessions.
 - **Breaks**: reward earned while block on and computer in use (input < 3
-  min, screen unlocked), saved up to one reward. A break lifts a locked
+  min, screen unlocked); `--keep one` (up to one reward), `window|day|week|
+  month` (accumulates until it ends) or a length ≥ 1 h, no upper limit
+  (`Breaks.Keep` = seconds; each hour's part in `Chunks` expires that long
+  after its hour; a break takes the oldest, `break end` gives back the
+  newest it took, `OnBreak`). No cap on the amount. Period ↔ length counts
+  as weakening (`KeepLooser`). A break lifts a locked
   block; it returns with locks; edits stay refused. More breaks weaken
   (refused while locked); fewer always free.
 - **Window titles**: case-insensitive substring; X11 only (Wayland: XWayland

@@ -203,6 +203,20 @@ answering(ladder)
 win.change_global_nepsis(None); settle()
 check("2099" in cli("bypass").stdout, "global ladder locked until 2099: " + cli("bypass").stdout[:300])
 Gtk.Dialog.run = real_run
+
+# §3.6 reward kept for a time the user picks, with no upper limit.
+cli("block", "create", "e"); cli("block", "add", "e", "example.com")
+settle()
+win.selected = "e"
+win.reward_keep.set_active_id("time")
+check(win.reward_keep_time.get_visible(), "the kept-for field shows with 'for a time'")
+win.reward_keep_time.set_text("400d")
+check(win.reward_keep_time.is_valid(), "400 days is fine: no upper limit")
+win.set_allowance(None); settle()
+e = next(x for x in state()["blocks"] if x["name"] == "e")
+check(e.get("break_keep") == str(400 * 86400), "reward kept 400 days: %s" % e.get("break_keep"))
+win.reward_keep_time.set_text("30m")
+check(not win.reward_keep_time.is_valid(), "under an hour is refused where it is typed")
 check(not msgs, "no errors shown: " + "; ".join(msgs))
 
 win.destroy()

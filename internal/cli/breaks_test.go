@@ -22,10 +22,10 @@ func TestBreakAllowance(t *testing.T) {
 		t.Fatalf("breaks = %+v", k)
 	}
 	// Half an hour of blocking earns five minutes; it stops at one allowance.
-	if got := k.Earn(1800).Balance(); got != 300 {
+	if got := k.Earn(1800, 0).Balance(); got != 300 {
 		t.Errorf("earned %d s in half an hour; want 300", got)
 	}
-	if got := k.Earn(100000).Balance(); got != 600 {
+	if got := k.Earn(100000, 0).Balance(); got != 600 {
 		t.Errorf("earned %d s; want it capped at 600", got)
 	}
 
@@ -35,7 +35,7 @@ func TestBreakAllowance(t *testing.T) {
 	if err := runCLI(t, "break", "start", "b"); err == nil || !strings.Contains(err.Error(), "less than a minute") {
 		t.Errorf("a break with nothing earned: %v", err)
 	}
-	if err := d.SetBreaks("b", k.Earn(1800)); err != nil {
+	if err := d.SetBreaks("b", k.Earn(1800, 0)); err != nil {
 		t.Fatal(err)
 	}
 	if err := runCLI(t, "break", "start", "b", "8m"); err == nil {
@@ -140,5 +140,60 @@ func TestRelockUnlock(t *testing.T) {
 	extras, _ := d.GetLockExtras("b")
 	if detail, _ = d.GetBlock("b"); !detail.Active || extras.PasswordHash != "" {
 		t.Errorf("unlocking during the break: active %v, password lock left %v; want on and unlocked", detail.Active, extras.PasswordHash != "")
+	}
+}
+
+// §3.6 reward kept for a length the user picks, with no upper limit
+// (owner, 2026-11-16); a longer length, or a change between a period and a
+// length, weakens; a shorter one is free while locked.
+func TestRewardKeepLength(t *testing.T) {
+	d := testDB(t)
+	blockWithSite(t)
+	mustRun(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "400d")
+	if k, _ := d.GetBreaks("b"); k.Keep != "34560000" {
+		t.Fatalf("keep = %q", k.Keep)
+	}
+	for _, bad := range []string{"30m", "soon", "-1d"} {
+		if err := runCLI(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", bad); err == nil {
+			t.Errorf("--keep %s accepted", bad)
+		}
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "500d"); err == nil {
+		t.Error("a longer keep was taken while locked")
+	}
+	if err := runCLI(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "month"); err == nil {
+		t.Error("a period instead of a length was taken while locked")
+	}
+	mustRun(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "2d")
+	if k, _ := d.GetBreaks("b"); k.Keep != "172800" {
+		t.Errorf("shorter keep while locked: %q", k.Keep)
+	}
+	mustRun(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "one")
+	if k, _ := d.GetBreaks("b"); k.Keep != "" {
+		t.Errorf("one: %q", k.Keep)
+	}
+}
+
+// A saved-up reward has no cap: a break can take all of it, also more than
+// four hours, and ending it early gives the rest back.
+func TestRewardBreakBeyondFourHours(t *testing.T) {
+	d := testDB(t)
+	blockWithSite(t)
+	mustRun(t, "break", "reward", "b", "10m", "--per", "1h", "--keep", "30d")
+	mustRun(t, "start", "b")
+	trusted := mustTrusted(t, d)
+	k, _ := d.GetBreaks("b")
+	k = k.Earn(48*3600, trusted) // two days of blocking: 8 hours of break
+	if err := d.SetBreaks("b", k); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "break", "start", "b", "6h")
+	if until, _ := d.PausedUntil("b"); until < trusted+6*3600-5 {
+		t.Errorf("a six-hour break: until %d, now %d", until, trusted)
+	}
+	mustRun(t, "break", "end", "b")
+	if k, _ := d.GetBreaks("b"); k.Balance() < 8*3600-60 {
+		t.Errorf("after ending the break at once: %d s left", k.Balance())
 	}
 }

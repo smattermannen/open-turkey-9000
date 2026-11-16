@@ -103,18 +103,75 @@ func TestRangeLock(t *testing.T) {
 // empties when the period ends; a longer period is looser.
 func TestRewardKeep(t *testing.T) {
 	one := Breaks{Allowance: 600, Per: 3600}
-	if got := one.Earn(3600 * 3); got.BalanceMs != 600*1000 {
+	if got := one.Earn(3600*3, 0); got.BalanceMs != 600*1000 {
 		t.Errorf("one: balance %d", got.BalanceMs)
 	}
 	day := Breaks{Allowance: 600, Per: 3600, Keep: "day", Period: "2026-11-16"}
-	day = day.Earn(3600 * 3)
+	day = day.Earn(3600*3, 0)
 	if day.BalanceMs != 1800*1000 {
 		t.Errorf("day: balance %d", day.BalanceMs)
 	}
-	if day.Expire("2026-11-16").BalanceMs != 1800*1000 || day.Expire("2026-11-17").BalanceMs != 0 {
+	if day.Expire("2026-11-16", 0).BalanceMs != 1800*1000 || day.Expire("2026-11-17", 0).BalanceMs != 0 {
 		t.Error("expiry")
 	}
 	if !day.LooserThan(one) || (Breaks{Allowance: 600, Per: 3600, Keep: "day"}).LooserThan(Breaks{Allowance: 600, Per: 3600, Keep: "week"}) {
 		t.Error("looser order")
+	}
+}
+
+// §3.6 reward kept for a length (owner, 2026-11-16): each hour's part is
+// kept that long after it was earned, with no upper limit on the length or
+// the amount; a break takes the oldest first, and ending it early gives
+// back the newest of what it took, at its own age.
+func TestRewardKeptForALength(t *testing.T) {
+	const hour = 3600
+	h0 := int64(1000 * hour)
+	k := Breaks{Allowance: 600, Per: 3600, Keep: "86400"}
+	k = k.Earn(3*hour, h0)      // 30 minutes in hour 1000
+	k = k.Earn(hour, h0+5*hour) // 10 minutes in hour 1005
+	if k.Balance() != 2400 || k.Chunks != "[[1000,1800000],[1005,600000]]" {
+		t.Fatalf("earned: %d s, %s", k.Balance(), k.Chunks)
+	}
+	if got := k.Expire("", h0+hour+86400-1); got.Balance() != 2400 {
+		t.Errorf("kept a day after its hour: %d", got.Balance())
+	}
+	if got := k.Expire("", h0+hour+86400); got.Balance() != 600 || got.Chunks != "[[1005,600000]]" {
+		t.Errorf("expired a day after its hour: %d, %s", got.Balance(), got.Chunks)
+	}
+	if got := k.Earn(100*86400, h0); got.Balance() != 2400+100*24*600 {
+		t.Errorf("no cap on the amount: %d", got.Balance())
+	}
+	taken := k.Take(2000 * 1000)
+	if taken.Balance() != 400 || taken.Chunks != "[[1005,400000]]" || taken.OnBreak != "[[1000,1800000],[1005,200000]]" {
+		t.Errorf("take: %d, %s, on break %s", taken.Balance(), taken.Chunks, taken.OnBreak)
+	}
+	back := taken.GiveBack(1000 * 1000)
+	if back.Balance() != 1400 || back.Chunks != "[[1000,800000],[1005,600000]]" || back.OnBreak != "" {
+		t.Errorf("give back: %d, %s, on break %s", back.Balance(), back.Chunks, back.OnBreak)
+	}
+	// Switching to a length keeps what is saved, as earned now.
+	one := Breaks{Allowance: 600, Per: 3600, BalanceMs: 600 * 1000}
+	if got := one.WithKeep("86400", "", h0); got.Chunks != "[[1000,600000]]" || got.Balance() != 600 {
+		t.Errorf("to a length: %+v", got)
+	}
+	if got := k.WithKeep("", "", h0); got.Balance() != 600 || got.Chunks != "" {
+		t.Errorf("back to one: %+v", got)
+	}
+	if got := k.WithKeep("week", "2026-W47", h0); got.Balance() != 2400 || got.Period != "2026-W47" || got.Chunks != "" {
+		t.Errorf("to a week: %+v", got)
+	}
+	for _, c := range []struct {
+		keep, old string
+		looser    bool
+	}{
+		{"86400", "3600", true}, {"3600", "86400", false}, {"86400", "week", true}, {"week", "86400", true},
+		{"", "86400", false}, {"86400", "", true}, {"week", "day", true}, {"day", "week", false}, {"week", "week", false},
+	} {
+		if got := KeepLooser(c.keep, c.old); got != c.looser {
+			t.Errorf("KeepLooser(%q, %q) = %v", c.keep, c.old, got)
+		}
+	}
+	if ValidKeep("1800") || !ValidKeep("3600") || !ValidKeep("month") || ValidKeep("year") {
+		t.Error("ValidKeep")
 	}
 }

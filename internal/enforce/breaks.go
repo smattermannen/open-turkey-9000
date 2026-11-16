@@ -34,14 +34,14 @@ func earnBreaks(d *db.DB, enforced []db.ActiveBlockDetail, trusted int64) {
 			log.Printf("breaks: %v", err)
 			continue
 		}
-		expired := k.Expire(RewardPeriod(d, b.BlockName, k.Keep, time.Unix(trusted, 0)))
+		expired := k.Expire(RewardPeriod(d, b.BlockName, k.Keep, time.Unix(trusted, 0)), trusted)
 		if expired != k {
 			if err := d.SetBreaks(b.BlockName, expired); err != nil {
 				log.Printf("breaks: %v", err)
 			}
 			k = expired
 		}
-		earned := k.Earn(elapsed)
+		earned := k.Earn(elapsed, trusted)
 		if earned == k {
 			continue
 		}

@@ -169,7 +169,7 @@ tamper protection settings can't be turned off.
 | **Break** | Lifts an enabled block for a while. One per continuous block, or one per block window. |
 | **Pomodoro** | Work (enabled) and rest (lifted) alternate, work first; optional long rest every N rounds. |
 | **Allowance** | N minutes of use per period (rolling 24 h, window, day, week, month; refill time), then enabled. |
-| **Reward** | Rest time earned by working (blocked, computer in use); accumulates, expires per window/day/week/month. |
+| **Reward** | Rest time earned by working (blocked, computer in use); saved up to one break, or accumulates until the window/day/week/month ends, or each part is kept for a time the user picks (no upper limit). |
 | **Text break** | Preset break after typing a challenge; block stays locked. |
 | **Delay break** | Preset break after a countdown; block stays locked. |
 | **Session limit** | N openings per period; a session ends 3 min after switching away. |
@@ -491,6 +491,7 @@ Decisions not already written into §1–5:
 - 2026-11-15: Lists and phrase sets may have no action.
 - 2026-11-15: Durations in days, hours and minutes, never minutes only, never silently changed (R-GUI-1); timer locks also by calendar date (R-GUI-2); the GUI is redesigned to be beautiful, intelligent and intuitive (R-GUI-3); no flashing (R-PAGE-1).
 - 2026-11-16: Restart locks on any block, scheduled ones too: the user decides how their locks work.
+- 2026-11-16: Reward can also be kept for a time the user picks, with no upper limit (on the time or the amount saved).
 
 ## 7. Open decisions
 

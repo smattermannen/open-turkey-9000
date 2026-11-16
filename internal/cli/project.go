@@ -989,9 +989,10 @@ func projectMonk(in projectExport) string {
 	return ""
 }
 
-// rewardKeep keeps a known reward period from a file, else one break.
+// rewardKeep keeps a known way to keep reward from a file (a period, or a
+// length in seconds), else one break.
 func rewardKeep(keep string) string {
-	if slices.Contains(db.RewardKeeps, keep) {
+	if db.ValidKeep(keep) {
 		return keep
 	}
 	return ""

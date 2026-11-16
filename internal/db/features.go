@@ -63,6 +63,8 @@ func upgradeSchema(conn *sql.DB) error {
 		{"block_breaks", "delay_at", "INTEGER NOT NULL DEFAULT 0"},
 		{"block_breaks", "keep", "TEXT NOT NULL DEFAULT ''"},
 		{"block_breaks", "period", "TEXT NOT NULL DEFAULT ''"},
+		{"block_breaks", "chunks", "TEXT NOT NULL DEFAULT ''"},
+		{"block_breaks", "on_break", "TEXT NOT NULL DEFAULT ''"},
 		{"quotas", "period", "TEXT NOT NULL DEFAULT ''"},
 		{"quotas", "refill", "INTEGER NOT NULL DEFAULT 0"},
 		{"quotas", "max_sessions", "INTEGER NOT NULL DEFAULT 0"},

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -58,7 +59,7 @@ held. Allowing fewer, or none, is always possible.`,
 			any = true
 			fmt.Printf("%s:\n", b.Name)
 			if k.Allowance > 0 {
-				fmt.Printf("  allowance: %s per %s of blocking; %s earned\n", seconds(k.Allowance), seconds(k.Per), seconds(k.Balance()))
+				fmt.Printf("  reward: %s per %s of blocking, %s; %s earned\n", seconds(k.Allowance), seconds(k.Per), keepWords(k.Keep), seconds(k.Balance()))
 			}
 			if k.Relock > 0 {
 				fmt.Printf("  unlocking gives a break of %s\n", seconds(k.Relock))
@@ -75,6 +76,34 @@ held. Allowing fewer, or none, is always possible.`,
 }
 
 func seconds(n int64) time.Duration { return time.Duration(n) * time.Second }
+
+// parseKeep reads --keep: one, a period (window, day, week, month) or a
+// length of at least an hour (e.g. 10d), with no upper limit (§3.6).
+func parseKeep(text string) (string, error) {
+	text = strings.ToLower(strings.TrimSpace(text))
+	switch {
+	case text == "one" || text == "":
+		return "", nil
+	case slices.Contains(db.RewardKeeps, text):
+		return text, nil
+	}
+	d, err := parseUserDuration(text)
+	if err != nil || d < time.Hour {
+		return "", fmt.Errorf("--keep is one, window, day, week, month, or a time of at least 1h (such as 10d)")
+	}
+	return strconv.FormatInt(int64(d/time.Second), 10), nil
+}
+
+// keepWords says how a reward is kept.
+func keepWords(keep string) string {
+	switch {
+	case keep == "":
+		return "saved up to one break"
+	case db.KeepSeconds(keep) > 0:
+		return "each part kept for " + humanDuration(seconds(db.KeepSeconds(keep))) + " after it is earned"
+	}
+	return "kept until the " + keep + " ends"
+}
 
 // parseBreak parses a break length.
 func parseBreak(text string, max int64) (int64, error) {
@@ -121,14 +150,15 @@ var breakAllowanceCmd = &cobra.Command{
 				return fmt.Errorf("the break must be shorter than the time it is earned over")
 			}
 			if cmd.Flags().Changed("keep") {
-				keep, _ := cmd.Flags().GetString("keep")
-				if keep == "one" {
-					keep = ""
+				keep, err := parseKeep(cmd.Flag("keep").Value.String())
+				if err != nil {
+					return err
 				}
-				if keep != "" && !slices.Contains(db.RewardKeeps, keep) {
-					return fmt.Errorf("--keep is one, window, day, week or month")
+				trusted, err := database.TrustedNow(time.Now())
+				if err != nil {
+					return err
 				}
-				k.Keep = keep
+				k = k.WithKeep(keep, enforce.RewardPeriod(database, args[0], keep, time.Unix(trusted, 0)), trusted)
 			}
 			if k.Keep == "" {
 				k.BalanceMs = min(k.BalanceMs, k.Allowance*1000)
@@ -140,11 +170,7 @@ var breakAllowanceCmd = &cobra.Command{
 		if k.Allowance == 0 {
 			fmt.Printf("Block '%s' has no reward.\n", args[0])
 		} else {
-			keep := "saved up to one break"
-			if k.Keep != "" {
-				keep = "kept until the " + k.Keep + " ends"
-			}
-			fmt.Printf("Block '%s' earns %s of break per %s of blocking, %s.\n", args[0], seconds(k.Allowance), seconds(k.Per), keep)
+			fmt.Printf("Block '%s' earns %s of break per %s of blocking, %s.\n", args[0], seconds(k.Allowance), seconds(k.Per), keepWords(k.Keep))
 		}
 		return nil
 	}),
@@ -283,10 +309,11 @@ var breakStartCmd = &cobra.Command{
 		if until, _ := database.PausedUntil(name); until > trusted {
 			return fmt.Errorf("block '%s' is already on a break for %s more", name, seconds(until-trusted))
 		}
-		k = k.Expire(enforce.RewardPeriod(database, name, k.Keep, time.Unix(trusted, 0)))
+		k = k.Expire(enforce.RewardPeriod(database, name, k.Keep, time.Unix(trusted, 0)), trusted)
 		take := k.Balance()
 		if len(args) == 2 {
-			want, err := parseBreak(args[1], db.MaxBreakSeconds)
+			// Any part of what is earned: a saved-up reward has no limit.
+			want, err := parseBreak(args[1], 100*365*86400)
 			if err != nil {
 				return err
 			}
@@ -298,7 +325,7 @@ var breakStartCmd = &cobra.Command{
 		if take < 60 {
 			return fmt.Errorf("less than a minute of break is earned so far (%s per %s of blocking)", seconds(k.Allowance), seconds(k.Per))
 		}
-		k.BalanceMs -= take * 1000
+		k = k.Take(take * 1000)
 		if err := database.SetBreaks(name, k); err != nil {
 			return err
 		}
@@ -335,7 +362,7 @@ var breakEndCmd = &cobra.Command{
 			return err
 		}
 		if k.Allowance > 0 {
-			k.BalanceMs = min(k.BalanceMs+(until-trusted)*1000, k.Allowance*1000)
+			k = k.GiveBack((until - trusted) * 1000)
 			if err := database.SetBreaks(name, k); err != nil {
 				return err
 			}
@@ -353,7 +380,7 @@ var breakEndCmd = &cobra.Command{
 
 func init() {
 	breakAllowanceCmd.Flags().String("per", "1h", "The stretch of blocking the break is earned over")
-	breakAllowanceCmd.Flags().String("keep", "one", "How reward is kept: one (up to one break), or accumulating until the window, day, week or month ends")
+	breakAllowanceCmd.Flags().String("keep", "one", "How reward is kept: one (up to one break); accumulating until the window, day, week or month ends; or each part for a time after it is earned (at least 1h, no upper limit, e.g. 10d)")
 	breakCmd.AddCommand(breakAllowanceCmd, breakRelockCmd, breakDelayCmd, breakRequestCmd, breakStartCmd, breakEndCmd)
 	rootCmd.AddCommand(breakCmd)
 }

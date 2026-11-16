@@ -111,9 +111,14 @@ func describeAutomation(database *db.DB, name string, a schedule.Automation) str
 		return fmt.Sprintf("'%s' is continuous: enabled whenever it is on (no windows, no places; %s by default "+
 			"once it has some).", name, def)
 	}
-	what := "turn it on (disabled by default)"
+	// One window or one place turns it; more turn it.
+	verb := "turn"
+	if len(a.Windows)+len(a.Places) == 1 {
+		verb = "turns"
+	}
+	what := verb + " it on (disabled by default)"
 	if a.DefaultOn {
-		what = "turn it off (enabled by default)"
+		what = verb + " it off (enabled by default)"
 	}
 	var by []string
 	if n := len(a.Windows); n > 0 {

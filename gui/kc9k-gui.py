@@ -5637,6 +5637,10 @@ class Window(Gtk.ApplicationWindow):
         self.auto_need_row.pack_start(Gtk.Label(label="With windows and places:"), False, False, 0)
         self.auto_need_row.pack_start(choice((("either", "Either is enough"), ("both", "Both at once")), "needs"),
                                       False, False, 0)
+        # Its contents shown once; the row comes and goes (show_all does
+        # nothing on a no-show-all widget, so it can't show them later).
+        for child in self.auto_need_row.get_children():
+            child.show_all()
         self.auto_need_row.set_no_show_all(True)
         schedule.pack_start(section(
             "Automation", self.auto_summary, default_row, self.auto_need_row,
@@ -6758,8 +6762,6 @@ class Window(Gtk.ApplicationWindow):
         self.auto_buttons[("needs", "both" if settings.get("need_both") else "either")].set_active(True)
         self.updating = was
         self.auto_need_row.set_visible(windows and places)
-        if windows and places:
-            self.auto_need_row.show_all()
 
     def window_flags(self):
         """§3.6: a window follows its block's default: on a block enabled by

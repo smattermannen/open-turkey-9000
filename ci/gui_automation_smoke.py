@@ -90,7 +90,9 @@ check("its places turn it off" in win.auto_summary.get_text(), "the summary foll
 win.create_window_from_calendar(0, 9 * 60, 10 * 60); settle()
 windows = state()["schedule_windows"]
 check(len(windows) == 1 and windows[0]["allow"], "the new window turns it off too: %s; %s" % (windows, msgs))
-check(win.auto_need_row.get_visible(), "both/either shows with windows and places")
+both = win.auto_buttons[("needs", "both")]
+check(all(w.get_visible() for w in (win.auto_need_row, both, both.get_parent())),
+      "both/either shows with windows and places, buttons and all")
 win.auto_buttons[("needs", "both")].set_active(True); settle()
 check(state()["automation"]["need_both"], "Both at once clicked")
 

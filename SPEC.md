@@ -122,7 +122,7 @@ After publishing: Windows support.
 | **Disabled** | Not enforcing now. | Inactive |
 | **Lifted** | Active but disabled (its automation says off, break, pause, Pomodoro rest, allowance time). | Inactive |
 | **Continuous** | Type: no schedule and no place rules: enabled whenever active (breaks, pauses, Pomodoro rest and allowance time still lift it). | Automated |
-| **Automated** | Type: has a schedule and/or place rules, which enable and lift it while active (§3.6 Automation). | Scheduled |
+| **Automated** | Type: has a schedule and/or places, which switch it from its default (enabled or disabled) while active (§3.6 Automation). | Scheduled |
 | **Locked** | At least one lock on; can't be weakened. | Active |
 
 Enforcing ends by schedule or switch-off. A lock never ends or starts a block.
@@ -165,8 +165,8 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Block window** | Weekly time an automated block is enabled (the schedule says on). 5-minute steps; a block's windows never overlap; all block windows or all allow windows. |
-| **Allow window** | Weekly time an automated block is lifted (the schedule says off). |
+| **Block window** | Weekly time in the schedule of a block **disabled by default**: it enables the block. 5-minute steps; a block's windows never overlap. |
+| **Allow window** | Weekly time in the schedule of a block **enabled by default**: it lifts the block. |
 | **Break** | Lifts an enabled block for a while. One per continuous block, or one per block window. |
 | **Pomodoro** | Work (enabled) and rest (lifted) alternate, work first; optional long rest every N rounds. |
 | **Allowance** | N minutes of use per period (rolling 24 h, window, day, week, month; refill time), then enabled. |
@@ -177,8 +177,8 @@ tamper protection settings can't be turned off.
 | **Pause** | One-off lift until a set time. |
 | **Autostart** | Switches a block on: once, time of day on set days, sign-in/wake, or next block window. |
 | **Place** | A set of Wi-Fi access points (no GPS). The computer is there when as many of them as the user chooses (default 2) are in range. |
-| **Place rule** | A place that switches a block: **on at** (an on-switch: the places say on there, off elsewhere) or **off at** (an off-switch: off there, on elsewhere). A block may have several; all on-at or all off-at. A place rule has **no actions of its own**: it only enables or lifts its block. |
-| **Automation** | What enables and lifts an active block by itself: its schedule and its place rules. With only one, that one decides. With both, the user picks **both** (enabled only when the schedule and the places both say on; either saying off lifts it) or **either** (one saying on enables it; lifted only when both say off). Default: either. Without either one the block is continuous. |
+| **Place rule** | A place in a block's automation; a block may have **any number**. Arriving there switches the block as its default says (enabled by default: off; disabled by default: on). A place rule has **no actions of its own**. |
+| **Automation** | What switches an active block by itself: its schedule and its places. The user sets the block **Enabled by default** (a window or a place turns it off) or **Disabled by default** (a window or a place turns it on). With both a schedule and places, the user sets whether switching needs **both** (in a window and at a place at once) or **either** (one is enough). Without a schedule or places the block is continuous. |
 
 ### 3.7 Use
 
@@ -328,9 +328,8 @@ GUI and CLI offer the same functions.
 - **4.5 Automation** (schedules and places, §3.6): weekly grid; drag to
   add/move, click to edit; 15-min grid, 5-min times; copy to days; similar
   windows edited together; other blocks greyed; break per window; allow
-  windows. Place rules: on at / off at, several places per block. With
-  both, both or either (phrased by the places' kind: "on at these places
-  only during the schedule" or "…or during the schedule").
+  windows. Enabled by default / Disabled by default; places, any number
+  per block; with a schedule and places, both or either.
 - **4.6 Locks**: all of §3.4, alone or layered, on blocks, browser settings
   and settings (global ladder too). Layer order fixed while locked; new lock
   goes last. Timer locks always extendable; set for a duration or until a
@@ -437,7 +436,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-WEAK-5** Editing an entry is remove + add: weakening unless the new entry clearly matches more.
 
 **Schedules and breaks**
-- **R-SCHED-1** An active automated block is enabled when its automation says on (§3.6: schedule, places, both or either); an inactive block never. Automation never switches a block on or off, and never acts by itself (no actions of its own).
+- **R-SCHED-1** An active automated block is in its default state (enabled or disabled) unless its automation switches it (§3.6: a window, a place; both or either); an inactive block is never enabled. Automation never switches a block on or off (active/inactive), and has no actions of its own.
 - **R-SCHED-2** A block's windows never overlap.
 - **R-SCHED-3** Pomodoro starts with work; its rhythm restarts each time the block is enabled.
 - **R-BREAK-1** Allowance counts only use.
@@ -513,7 +512,7 @@ Decisions not already written into §1–5:
 - 2026-11-16: YouTube playlists let through belong to the exception list, not the social presets.
 - 2026-11-16: Circadian rhythm: its own page only (not in Settings); wallpapers on a draggable timeline; Play the day preview.
 - 2026-11-16: Any trigger to any action: a block's apps and window titles each get one action set (close by default, and consequences).
-- 2026-11-16 (later): A place rule only enables or lifts its block; it has no actions (withdrawn from the decision above). Place rules are on-switches or off-switches, several per block. Schedule and places together: the user picks both or either (default either). Blocks are continuous or automated; the block list shows name, on/off switch, Continuous/Automated block (opens the automation view), breaks and lock state. Android is on hold until the Linux project is finished.
+- 2026-11-16 (later): A place rule only enables or lifts its block; it has no actions (withdrawn from the decision above). An automated block is Enabled by default (its windows and places turn it off) or Disabled by default (they turn it on); any number of places per block; with a schedule and places, the user picks whether switching needs both or either. Blocks are continuous or automated; the block list shows name, on/off switch, Continuous/Automated block (opens the automation view), breaks and lock state. Android is on hold until the Linux project is finished.
 
 ## 7. Open decisions
 

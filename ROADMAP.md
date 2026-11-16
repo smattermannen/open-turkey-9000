@@ -26,13 +26,15 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     `placeEnables` (`enforce/trigger.go`), `block trigger B place:NAME`,
     the GUI's "Actions…" for a place rule, projects' place keys. Remove it
     all; stored place action sets are dropped on open. S
-  - [ ] Automation (§3.6 Place rule, Automation; R-SCHED-1). Built: place
-    rules are on-switches only, and schedule and places combine as
-    "either" (`scheduleLifted`: enabled in a window or at a place). Not
-    built: off-at place rules (lifted at those places, enabled
-    elsewhere; all of a block's rules one kind), the both/either choice
-    (default either), its weakening rules (towards more enabled time is
-    free), CLI, GUI, projects. M
+  - [ ] Automation (§3.6 Place rule, Automation; R-SCHED-1). Built: any
+    number of places per block; block windows (= disabled by default)
+    and allow windows (= enabled by default) for the schedule; places
+    only turn a block on; schedule and places combine as "either"
+    (`scheduleLifted`: enabled in a window or at a place). Not built: a
+    block setting Enabled by default / Disabled by default for schedule
+    and places alike (enabled by default: arriving at a place turns it
+    off), the both/either choice, their weakening rules (towards more
+    enabled time is free), CLI, GUI, projects. M
   - [ ] Block list (§4.2, R-GUI-3): one card per block with its name
     (opens the block), on/off switch, "Continuous block" or "Automated
     block" (opens the automation view: schedule and places), breaks ("No

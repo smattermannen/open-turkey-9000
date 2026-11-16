@@ -165,7 +165,11 @@ func phraseAdd(database *db.DB, block, set string, texts []string) error {
 	if err := reapplyIfActive(database, block); err != nil {
 		return err
 	}
-	fmt.Printf("%d phrases added to '%s' of '%s'.\n", added, s.Name, block)
+	noun := "phrases"
+	if added == 1 {
+		noun = "phrase"
+	}
+	fmt.Printf("%d %s added to '%s' of '%s'.\n", added, noun, s.Name, block)
 	return nil
 }
 
@@ -188,13 +192,24 @@ var phraseSetExportCmd = &cobra.Command{
 var phraseSetImportCmd = &cobra.Command{
 	Use:   "import <block> <set> <file>",
 	Short: "Add phrases from a text file with one phrase per line",
-	Args:  cobra.ExactArgs(3),
+	Long: `Adds a file's phrases ("[eat, nice] [hello, grandpa]", one per line, #
+comments) to a phrase set. Lines that are entries (sites, rendered terms)
+are left out and named: they go in a list. In the interface, Import… on a
+phrase set takes a file of rendered terms too: they become one word set.`,
+	Args: cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		texts, err := readEntryFile(args[2])
+		f, err := readEntries(args[2])
 		if err != nil {
 			return err
 		}
-		return phraseAdd(database, args[0], args[1], texts)
+		if len(f.Phrases) == 0 {
+			return fmt.Errorf("%s holds %s, no phrases; entries go in a list ('kc9k list import')", args[2], describeEntryFile(f))
+		}
+		if err := phraseAdd(database, args[0], args[1], f.Phrases); err != nil {
+			return err
+		}
+		noteLeftOut(f, true)
+		return nil
 	}),
 }
 

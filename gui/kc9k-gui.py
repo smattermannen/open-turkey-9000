@@ -2072,6 +2072,18 @@ def phrase_key(text):
     return " ".join((text or "").lower().replace(",", ", ").split())
 
 
+def describe_found(found):
+    """What a file to import holds, from `kc9k list read`: '3 phrases, 2 sites'."""
+    parts = []
+    for key, one, many in (("phrases", "phrase", "phrases"), ("sites", "site", "sites"),
+                           ("terms", "rendered term", "rendered terms"),
+                           ("skipped", "line KC9K can't use", "lines KC9K can't use")):
+        n = len(found.get(key) or [])
+        if n:
+            parts.append(f"{n} {one if n == 1 else many}")
+    return ", ".join(parts) or "nothing"
+
+
 def word_set_terms(lines):
     """Terms for one word set from lines (one term each): # comments,
     blanks and duplicates dropped; brackets and commas can't be in a term."""
@@ -2090,7 +2102,7 @@ class PhraseEditor(Gtk.Box):
     sets, each ticked necessary or optional, and the phrase length;
     get_text() gives the typed form. on_change(text) follows every edit."""
 
-    def __init__(self, initial=None, on_change=None, import_terms=None):
+    def __init__(self, initial=None, on_change=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_change = on_change
         self.loading = False
@@ -2108,13 +2120,6 @@ class PhraseEditor(Gtk.Box):
         self.add_set.connect("clicked", lambda _b: self.add_row())
         set_buttons = Gtk.Box(spacing=6)
         set_buttons.pack_start(self.add_set, False, False, 0)
-        if import_terms:
-            # Mode 1: a plain term list (one per line) becomes one word set.
-            imp = Gtk.Button(label="Import word set…")
-            imp.set_tooltip_text("Make one word set from a text file with one term per line, "
-                                 "or from a list in Killer Chicken 9000")
-            imp.connect("clicked", lambda _b: self.add_imported(import_terms()))
-            set_buttons.pack_start(imp, False, False, 0)
         self.pack_start(set_buttons, False, False, 0)
         length_row = Gtk.Box(spacing=8)
         length_row.pack_start(Gtk.Label(label="Phrase length (terms a match needs):"), False, False, 0)
@@ -2289,7 +2294,7 @@ class PhraseSetCard(ListCard):
 
         self.entries = EditableList(
             "", "", self.add_entries, self.remove_entry,
-            lambda: window.import_list(["phrase-set", "import", window.selected, self.data["name"]]),
+            lambda: window.import_into_phrase_set(self),
             lambda: window.export_list(["phrase-set", "export", window.selected, self.data["name"]]),
             search=True, hidden=True, on_activate=self.edit_phrase,
             split=lambda text: [text.strip()] if text.strip() else [], entry=False, multi=True)
@@ -2300,7 +2305,7 @@ class PhraseSetCard(ListCard):
         self.editing = None  # the phrase loaded for a change, or None for a new one
         self.editor_title = Gtk.Label(xalign=0)
         box.pack_start(self.editor_title, False, False, 0)
-        self.editor = PhraseEditor(on_change=self.editor_changed, import_terms=window.import_terms)
+        self.editor = PhraseEditor(on_change=self.editor_changed)
         box.pack_start(self.editor, False, False, 0)
         buttons = Gtk.Box(spacing=6)
         self.save_phrase = Gtk.Button(label="Add phrase")
@@ -5892,23 +5897,40 @@ class Window(Gtk.ApplicationWindow):
         if not self.selected:
             return
         if command[:2] == ["list", "import"]:
-            dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
-                                       buttons=Gtk.ButtonsType.NONE, text="Import into this list",
-                                       secondary_text="From a text file with one entry per line, or from "
-                                                      "other lists and clusters in Killer Chicken 9000.")
-            dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-            dialog.add_button("From KC9K…", 2)
-            dialog.add_button("From file…", Gtk.ResponseType.OK)
-            answer = dialog.run()
-            dialog.destroy()
-            if answer == 2:
+            answer = self.ask_import_source(
+                "Import into this list", "From a text file with one entry per line (a hosts file and "
+                "adblock rules are read too), or from other lists and clusters in Killer Chicken 9000.")
+            if answer == "kc9k":
                 self.import_from_kc9k(command[2], command[3])
                 return
-            if answer != Gtk.ResponseType.OK:
+            if answer != "file":
                 return
         path = self.choose_file("Import list", Gtk.FileChooserAction.OPEN, "Import")
-        if path:
+        if not path:
+            return
+        if command[:2] != ["list", "import"]:
             self.run(command + [path], then=self.queued_note)
+            return
+        # §4.3: KC9K reads the file's layout; phrases in it go to a phrase set.
+        found = self.read_import_file(path)
+        if found is None:
+            return
+        block, steps = command[2], []
+        if found["phrases"]:
+            target = self.choose_phrase_set(block, len(found["phrases"]))
+            if target:
+                name, new = target
+                if new:
+                    steps.append(["phrase-set", "create", block, name])
+                steps.append(["phrase-set", "import", block, name, path])
+        if found["entries"]:
+            steps.append(command + [path])
+        if not steps:
+            if not found["phrases"]:
+                self.message("Nothing in that file can go in a list: " + describe_found(found) + ".",
+                             Gtk.MessageType.INFO)
+            return
+        self.run_steps(steps, routed_phrases=bool(found["phrases"]))
 
     def import_from_kc9k(self, block, list_name):
         """Ticks other blocks' lists and clusters to copy into a list."""
@@ -5949,31 +5971,128 @@ class Window(Gtk.ApplicationWindow):
 
         next_copy()
 
-    def import_terms(self):
-        """Mode 1 of phrase import: terms for one word set, from a text file
-        (one term per line, # comments) or from a list in KC9K."""
+    def ask_import_source(self, title, detail):
+        """From a file or from KC9K: "file", "kc9k" or None."""
         dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
-                                   buttons=Gtk.ButtonsType.NONE, text="Import a word set",
-                                   secondary_text="Every term becomes part of one word set: "
-                                                  "[term 1, term 2, term 3].")
+                                   buttons=Gtk.ButtonsType.NONE, text=title, secondary_text=detail)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         dialog.add_button("From KC9K…", 2)
         dialog.add_button("From file…", Gtk.ResponseType.OK)
         answer = dialog.run()
         dialog.destroy()
-        if answer == Gtk.ResponseType.OK:
-            path = self.choose_file("Import a word set", Gtk.FileChooserAction.OPEN, "Import")
-            if not path:
-                return []
-            try:
-                with open(path, encoding="utf-8") as file:
-                    lines = file.read().splitlines()
-            except (OSError, UnicodeDecodeError) as error:
-                self.message(str(error))
-                return []
-            return word_set_terms(lines)
-        if answer != 2:
-            return []
+        return {Gtk.ResponseType.OK: "file", 2: "kc9k"}.get(answer)
+
+    def read_import_file(self, path):
+        """What a file to import holds, as KC9K reads it (§4.3): phrases,
+        entries (sites and rendered terms), what it can't use. None after
+        saying why it can't be read."""
+        ok, output = cli_with_access(self.access_passwords, ["list", "read", path])
+        if not ok:
+            self.message(output)
+            return None
+        try:
+            return json.loads(output)
+        except ValueError:
+            self.message(output)
+            return None
+
+    def run_steps(self, steps, routed_phrases=False):
+        """Runs commands one after another; then says what they did, once."""
+        said = []
+
+        def next_step(output=None):
+            if output:
+                said.extend(line for line in output.splitlines()
+                            if not (routed_phrases and line.startswith("Left out") and " phrase" in line))
+            if steps:
+                self.run(steps.pop(0), then=next_step)
+            elif said:
+                self.message("\n".join(said), Gtk.MessageType.INFO)
+
+        next_step()
+
+    def choose_phrase_set(self, block, count):
+        """Where the phrases of an imported file go: one of the block's
+        phrase sets or a new one, as (name, new); None leaves them out."""
+        names = [p["name"] for p in self.blocks.get(block, {}).get("phrase_sets") or []]
+        dialog = Gtk.Dialog(title="Phrases in the file", transient_for=self, modal=True)
+        dialog.add_button("Leave them out", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Add them", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(12)
+        box.pack_start(dim(f"{count} {'line is a phrase' if count == 1 else 'lines are phrases'} "
+                           "([a, b] [c]): a list can't hold phrases. Add them to a phrase set of "
+                           f"'{block}':"), False, False, 0)
+        combo = Gtk.ComboBoxText()
+        for name in names:
+            combo.append(name, name)
+        combo.append("", "A new phrase set:")
+        combo.set_active(0)
+        new_name = Gtk.Entry(text="Imported phrases", sensitive=not names)
+        combo.connect("changed", lambda c: new_name.set_sensitive(c.get_active_id() == ""))
+        box.pack_start(combo, False, False, 0)
+        box.pack_start(new_name, False, False, 0)
+        self.phrase_target = (dialog, combo, new_name)  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        chosen, typed = combo.get_active_id(), new_name.get_text().strip()
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK:
+            return None
+        if chosen:
+            return chosen, False
+        return (typed, typed.lower() not in (n.lower() for n in names)) if typed else None
+
+    def import_into_phrase_set(self, card):
+        """§4.3, one Import for a phrase set (owner, 2026-11-16): KC9K reads
+        the file's layout. Phrases ([eat, nice] [hello, grandpa]) go into
+        the set; rendered terms, one per line, become one word set in the
+        phrase editor below ([term 1, term 2, …]); a list of sites can go
+        to the block's Blocked list. From KC9K: other lists' and clusters'
+        entries as one word set."""
+        if not self.selected:
+            return
+        block, name = self.selected, card.data["name"]
+        answer = self.ask_import_source(
+            "Import into this phrase set",
+            "From a text file, one per line: phrases such as [eat, nice] [hello, grandpa] are added to "
+            "the set; rendered terms become one word set in the phrase editor. Or from lists and "
+            "clusters in Killer Chicken 9000: their entries become one word set.")
+        if answer == "kc9k":
+            terms = self.pick_kc9k_terms()
+            if terms:
+                card.editor.add_imported(terms)
+                self.message(f"{len(terms)} rendered terms are now a word set in the phrase editor of "
+                             f"'{name}'. Fill the other word set and click Add phrase.", Gtk.MessageType.INFO)
+            return
+        if answer != "file":
+            return
+        path = self.choose_file("Import into a phrase set", Gtk.FileChooserAction.OPEN, "Import")
+        if not path:
+            return
+        found = self.read_import_file(path)
+        if found is None:
+            return
+        if found["phrases"]:
+            self.run_steps([["phrase-set", "import", block, name, path]])
+        elif found["terms"]:
+            card.editor.add_imported(word_set_terms(found["terms"]))
+            note = f" ({len(found['sites'])} sites in the file were left out)" if found["sites"] else ""
+            self.message(f"{len(found['terms'])} rendered terms are now a word set in the phrase editor of "
+                         f"'{name}'{note}. Fill the other word set and click Add phrase.", Gtk.MessageType.INFO)
+        elif found["sites"]:
+            if self.confirm("The file lists sites",
+                            f"It lists {len(found['sites'])} sites, which belong in a list, not in a phrase "
+                            f"set. Add them to the list 'Blocked' of '{block}'?", "Add to Blocked"):
+                self.run_steps([["list", "import", block, "Blocked", path]])
+        else:
+            self.message("Nothing in that file can be imported: " + describe_found(found) + ".",
+                         Gtk.MessageType.INFO)
+
+    def pick_kc9k_terms(self):
+        """Entries of lists and clusters in KC9K, ticked, for one word set."""
         sources = []
         for other in (self.state or {}).get("blocks") or []:
             if other.get("hidden"):
@@ -5998,6 +6117,7 @@ class Window(Gtk.ApplicationWindow):
             check = Gtk.CheckButton(label=label)
             box.pack_start(check, False, False, 0)
             checks.append((check, entries))
+        self.term_sources = checks  # for tests
         dialog.show_all()
         answer = dialog.run()
         chosen = [e for check, entries in checks if check.get_active() for e in entries]

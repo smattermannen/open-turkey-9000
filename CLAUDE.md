@@ -227,6 +227,13 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `db.MaxWordSets` (100). Files:
   `cli/phraseexport.go`; `db.AddPhraseSet`. Phrase clusters (`phrases`
   set): `cluster copy` → phrase set, `cluster save` from one; no recording.
+- **Import files** (`cli/entryfile.go`, §4.3): `readEntries` sorts lines
+  into phrases, sites (hosts files, adblock `||x^` read as sites), rendered
+  terms, unusable; `list import`, `block import-list`, `phrase-set import`,
+  `cluster import` take what fits and name the rest (`noteLeftOut`).
+  Hidden `kc9k list read FILE` (JSON) lets the GUI's one Import route a
+  file (`import_into_phrase_set`, `choose_phrase_set`;
+  `ci/gui_import_smoke.py`).
 - **Clusters** (`db/clusters.go`, `cli/clusters.go`): lists outside blocks,
   never enforced. `cluster copy` goes through `listAdd` (gating applies).
 - **Link recording** (`db/recording.go`, `enforce/recording.go`,

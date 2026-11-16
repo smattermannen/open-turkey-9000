@@ -817,18 +817,48 @@ var listExportCmd = &cobra.Command{
 var listImportCmd = &cobra.Command{
 	Use:   "import [block] [list] [file]",
 	Short: "Add entries from a text file with one entry per line",
-	Args:  cobra.ExactArgs(3),
+	Long: `Adds a file's entries to a list: one per line, # starts a comment. Hosts
+files ("0.0.0.0 example.com") and adblock rules ("||example.com^") are
+read as the sites they name. Phrases ("[a, b] [c]") belong in a phrase set
+('kc9k phrase-set import'): they are left out and named.`,
+	Args: cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		entries, err := readEntryFile(args[2])
+		f, err := readEntries(args[2])
 		if err != nil {
 			return err
 		}
-		if err := listAdd(cmd, database, args[0], args[1], entries); err != nil {
+		if len(f.Entries) == 0 {
+			return fmt.Errorf("%s holds %s, no entries for a list; phrases go in a phrase set ('kc9k phrase-set import')", args[2], describeEntryFile(f))
+		}
+		if err := listAdd(cmd, database, args[0], args[1], f.Entries); err != nil {
 			return err
 		}
-		fmt.Printf("Imported %d entries into '%s' of '%s'.\n", len(entries), args[1], args[0])
+		fmt.Printf("Imported %d %s into '%s' of '%s'.\n", len(f.Entries), plural(len(f.Entries), "entry", "entries"), args[1], args[0])
+		noteLeftOut(f, false)
 		return nil
 	}),
+}
+
+// plural picks the word for n things.
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// noteLeftOut names what an import didn't take: phrases (into a list) or
+// entries (into a phrase set), and lines KC9K can't use.
+func noteLeftOut(f entryFile, phrases bool) {
+	if !phrases && len(f.Phrases) > 0 {
+		fmt.Printf("Left out %d %s (they go in a phrase set: 'kc9k phrase-set import').\n", len(f.Phrases), plural(len(f.Phrases), "phrase", "phrases"))
+	}
+	if phrases && len(f.Entries) > 0 {
+		fmt.Printf("Left out %d %s that %s phrases (they go in a list: 'kc9k list import').\n", len(f.Entries), plural(len(f.Entries), "entry", "entries"), plural(len(f.Entries), "isn't", "aren't"))
+	}
+	if len(f.Skipped) > 0 {
+		fmt.Printf("Left out %d %s KC9K can't use, such as %q.\n", len(f.Skipped), plural(len(f.Skipped), "line", "lines"), f.Skipped[0])
+	}
 }
 
 func init() {

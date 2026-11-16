@@ -183,7 +183,20 @@ var blockImportListCmd = &cobra.Command{
 	Short: "Add entries from a text file with one entry per line",
 	Args:  cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		entries, err := readEntryFile(args[2])
+		var entries []string
+		var err error
+		if args[1] == listApps || args[1] == listTitles {
+			entries, err = readEntryFile(args[2])
+		} else {
+			var f entryFile
+			if f, err = readEntries(args[2]); err == nil {
+				if entries = f.Entries; len(entries) == 0 {
+					err = fmt.Errorf("%s holds %s, no entries for a list", args[2], describeEntryFile(f))
+				} else {
+					defer noteLeftOut(f, false)
+				}
+			}
+		}
 		if err != nil {
 			return err
 		}

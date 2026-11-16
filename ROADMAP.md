@@ -107,9 +107,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
   - [x] Lists and phrase sets may have no action (§3.9, changed
     2026-11-15). Built: the last action can be turned off; no-action rules
     reach the extension with no actions and do nothing.
-  - [ ] Phrase import mode 1 (term list → one word set) and mode 2 (phrase
-    format) in the GUI (§4.3). Built: editor "Import word set…" (file or
-    KC9K list), phrase set card Import/Export. Confirm on the laptop.
+  - [x] One Import (§4.3; owner, 2026-11-16: the GUI forced mode 1 or 2
+    by which Import was clicked). KC9K reads a file's layout (`kc9k list
+    read`, `cli/entryfile.go`): a phrase set's Import adds phrases, makes
+    rendered terms one word set in its editor, offers sites to Blocked; a
+    list's Import sends phrases to a phrase set of the user's choice. List
+    import used to store phrase lines, hosts-file lines (`0.0.0.0
+    example.com`) and adblock rules (`||example.com^`) as rendered terms:
+    now they are phrases and sites. `TestClassifyEntryLines`,
+    `TestImportLayouts`, `ci/gui_import_smoke.py` (clicks the Import
+    buttons).
   - [ ] Statistics bar chart: one colour per site/app over time (§4.9). Not
     built. M
   - [x] Durations (R-GUI-1): `DurationField` (days, hours, minutes or

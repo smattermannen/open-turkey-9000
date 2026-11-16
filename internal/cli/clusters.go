@@ -454,7 +454,7 @@ making it if there is none by that name. A new cluster looks where --url,
 'kc9k cluster export'), or else at addresses.`,
 	Args: cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		entries, err := readEntryFile(args[1])
+		f, err := readEntries(args[1])
 		if err != nil {
 			return err
 		}
@@ -478,6 +478,17 @@ making it if there is none by that name. A new cluster looks where --url,
 				}
 			}
 		}
+		if !exists && !flagged && len(f.Entries) == 0 && len(f.Phrases) > 0 {
+			phrases = true // a file of phrases makes a phrase cluster
+		}
+		entries := f.Entries
+		if phrases {
+			entries = f.Phrases
+		}
+		if len(entries) == 0 {
+			return fmt.Errorf("%s holds %s, none for this cluster", args[1], describeEntryFile(f))
+		}
+		defer noteLeftOut(f, phrases)
 		if phrases && !where.Any() {
 			where.Text = true
 		}

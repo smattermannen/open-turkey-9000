@@ -301,10 +301,12 @@ GUI and CLI offer the same functions.
   - Import *From KC9K* (other blocks' lists/phrase sets, clusters; several)
     or *From file* (`.txt`, one entry per line); also *Whole internet* and
     *All searches containing…*. Export list/phrase set to `.txt`.
-  - Phrase import/export: mode 1 imports a term list (file with one term
-    per line, or a list in KC9K) into **one** word set: `[term 1, term 2,
-    term 3]`; mode 2 exports and imports phrases in phrase format
-    (`[a, b] [c]`), one per line.
+  - Import: one button; KC9K reads the file's layout itself. Phrases
+    (`[a, b] [c]`, one per line) go into a phrase set; rendered terms (one
+    per line, or a list in KC9K) become **one** word set: `[term 1, term
+    2, term 3]`; sites, also from hosts files (`0.0.0.0 example.com`) and
+    adblock rules (`||example.com^`), go into a list. Phrase sets export
+    in phrase format, one per line.
   - Lists: create (kind; scope boxes), rename, delete, scope, actions,
     threshold, hit count, rate, test mode. Block password.
   - Phrase sets: create (unnamed gets a name), rename, delete, scope,
@@ -493,6 +495,7 @@ Decisions not already written into §1–5:
 - 2026-11-16: Restart locks on any block, scheduled ones too: the user decides how their locks work.
 - 2026-11-16: Reward can also be kept for a time the user picks, with no upper limit (on the time or the amount saved).
 - 2026-11-16: The user picks how many of a place's networks must be in range; a place rule can be given to any block.
+- 2026-11-16: One Import button: KC9K tells phrases, rendered terms and sites (hosts files, adblock rules) apart by their layout.
 
 ## 7. Open decisions
 

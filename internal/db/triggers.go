@@ -1,15 +1,15 @@
-// triggers.go — what a block's apps, its window titles and each of its
-// place rules do when they fire (owner, 2026-11-16; §1 "any trigger to any
-// action"): one action set per group, like a list's actions. Without a
-// stored set a group does what it always did: apps and titles are closed, a
-// place rule enables its block there.
+// triggers.go — what a block's apps and its window titles do when they fire
+// (owner, 2026-11-16; §1 "any trigger to any action"): one action set per
+// group, like a list's actions. Without a stored set a group does what it
+// always did: apps and windows are closed. A place rule has no actions: it
+// only enables or lifts its block (§3.6).
 package db
 
 import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strconv"
+	"slices"
 	"strings"
 )
 
@@ -21,18 +21,13 @@ const triggerActionsSchema = `CREATE TABLE IF NOT EXISTS trigger_actions (
     FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
 );`
 
-// The trigger groups, and their own actions.
+// The trigger groups, and their own action.
 const (
 	TriggerApps   = "apps"
 	TriggerTitles = "titles"
-	// A place rule's group is PlaceTrigger(place id).
 
-	TriggerClose  = "close"  // apps and titles: close the program or the window
-	TriggerEnable = "enable" // a place rule: the block is enabled while there
+	TriggerClose = "close" // close the program or the window
 )
-
-// PlaceTrigger names the trigger group of a place rule.
-func PlaceTrigger(placeID int) string { return "place:" + strconv.Itoa(placeID) }
 
 // TriggerConsequences are the device actions every trigger group can take.
 var TriggerConsequences = []string{ConsequenceCloseBrowser, ConsequenceLockScreen, ConsequenceLogout,
@@ -44,55 +39,24 @@ type TriggerAction struct {
 	Minutes int    `json:"minutes,omitempty"`
 }
 
-// IsPlaceTrigger reports whether a group is a place rule's.
-func IsPlaceTrigger(group string) bool { return strings.HasPrefix(group, "place:") }
-
 // ValidTriggerGroup reports whether group names a trigger group.
-func ValidTriggerGroup(group string) bool {
-	if group == TriggerApps || group == TriggerTitles {
-		return true
-	}
-	id, err := strconv.Atoi(strings.TrimPrefix(group, "place:"))
-	return IsPlaceTrigger(group) && err == nil && id > 0
-}
+func ValidTriggerGroup(group string) bool { return group == TriggerApps || group == TriggerTitles }
 
 // DefaultTriggerActions is what a group does when the user set nothing.
-func DefaultTriggerActions(group string) []TriggerAction {
-	if IsPlaceTrigger(group) {
-		return []TriggerAction{{Name: TriggerEnable}}
-	}
-	return []TriggerAction{{Name: TriggerClose}}
-}
+func DefaultTriggerActions(string) []TriggerAction { return []TriggerAction{{Name: TriggerClose}} }
 
 // CheckTriggerAction checks an action for a group.
-func CheckTriggerAction(group string, a TriggerAction) error {
-	switch a.Name {
-	case TriggerClose:
-		if IsPlaceTrigger(group) {
-			return fmt.Errorf("a place rule has no %q action (it enables the block: %q)", TriggerClose, TriggerEnable)
+func CheckTriggerAction(_ string, a TriggerAction) error {
+	if a.Name == TriggerClose {
+		if a.Minutes != 0 {
+			return fmt.Errorf("%s takes no duration", a.Name)
 		}
-	case TriggerEnable:
-		if !IsPlaceTrigger(group) {
-			return fmt.Errorf("only a place rule has the %q action", TriggerEnable)
-		}
-	default:
-		known := false
-		for _, c := range TriggerConsequences {
-			known = known || c == a.Name
-		}
-		if !known {
-			own := TriggerClose
-			if IsPlaceTrigger(group) {
-				own = TriggerEnable
-			}
-			return fmt.Errorf("unknown action %q (use %s, %s)", a.Name, own, strings.Join(TriggerConsequences, ", "))
-		}
-		return CheckConsequence(a.Name, a.Minutes)
+		return nil
 	}
-	if a.Minutes != 0 {
-		return fmt.Errorf("%s takes no duration", a.Name)
+	if !slices.Contains(TriggerConsequences, a.Name) {
+		return fmt.Errorf("unknown action %q (use %s, %s)", a.Name, TriggerClose, strings.Join(TriggerConsequences, ", "))
 	}
-	return nil
+	return CheckConsequence(a.Name, a.Minutes)
 }
 
 // FindTriggerAction returns the action of that name in actions.
@@ -146,13 +110,13 @@ func (d *DB) SetTriggerActions(block, group string, actions []TriggerAction) err
 	return nil
 }
 
-// forgetPlaceTriggers drops the action sets of a place's rules.
-func (d *DB) forgetPlaceTriggers(placeID int, blockID int) error {
-	query, args := "DELETE FROM trigger_actions WHERE trigger = ?", []any{PlaceTrigger(placeID)}
-	if blockID > 0 {
-		query += " AND block_id = ?"
-		args = append(args, blockID)
+// migratePlaceTriggers drops the action sets place rules had for a day
+// (2026-11-16: withdrawn, a place rule only enables or lifts its block) and
+// what the daemon noted about arriving.
+func migratePlaceTriggers(conn *sql.DB) error {
+	if _, err := conn.Exec("DELETE FROM trigger_actions WHERE trigger LIKE 'place:%'"); err != nil {
+		return err
 	}
-	_, err := d.conn.Exec(query, args...)
+	_, err := conn.Exec("DELETE FROM settings WHERE key LIKE 'place.here.%'")
 	return err
 }

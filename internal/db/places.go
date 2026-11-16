@@ -178,12 +178,12 @@ func (d *DB) SetPlaceNeed(id, need int) error {
 	return nil
 }
 
-// DeletePlace removes a place, its rules and their actions.
+// DeletePlace removes a place and its rules.
 func (d *DB) DeletePlace(id int) error {
 	if _, err := d.conn.Exec("DELETE FROM places WHERE id = ?", id); err != nil {
 		return fmt.Errorf("failed to remove the place: %w", err)
 	}
-	return d.forgetPlaceTriggers(id, 0)
+	return nil
 }
 
 // SetPlaceRule makes a block be on at a place, or stops that.
@@ -196,9 +196,6 @@ func (d *DB) SetPlaceRule(blockName string, placeID int, on bool) error {
 		_, err = d.conn.Exec("INSERT OR IGNORE INTO place_rules (block_id, place_id) VALUES (?, ?)", blockID, placeID)
 	} else {
 		_, err = d.conn.Exec("DELETE FROM place_rules WHERE block_id = ? AND place_id = ?", blockID, placeID)
-		if err == nil {
-			err = d.forgetPlaceTriggers(placeID, blockID)
-		}
 	}
 	if err != nil {
 		return fmt.Errorf("failed to save the place rule: %w", err)

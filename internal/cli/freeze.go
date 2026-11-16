@@ -4,6 +4,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -68,8 +69,14 @@ Emergency exit: in GRUB, press e on the boot entry and add
 			return err
 		}
 		fmt.Printf("Frozen until %s\n", time.Unix(until, 0).Format("2006-01-02 15:04"))
-		if mode == freeze.ModeLock {
-			return blocker.LockSessions()
+		// The daemon locks the screen again every half second during a
+		// lock freeze, so failing to lock it at once only warns. A test's
+		// database (KC9K_DB) never locks the real screen.
+		if mode == freeze.ModeLock && os.Getenv("KC9K_DB") == "" {
+			if err := blocker.LockSessions(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: the screen couldn't be locked at once (%v); "+
+					"the service locks it within a second.\n", err)
+			}
 		}
 		return nil
 	},
@@ -610,13 +617,6 @@ var guiStateCmd = &cobra.Command{
 			for _, group := range []string{db.TriggerApps, db.TriggerTitles} {
 				if g.Triggers[group], err = database.TriggerActions(b.Name, group); err != nil {
 					return err
-				}
-			}
-			for _, p := range places {
-				if slices.Contains(p.Blocks, b.Name) {
-					if g.Triggers["place:"+p.Name], err = database.TriggerActions(b.Name, db.PlaceTrigger(p.ID)); err != nil {
-						return err
-					}
 				}
 			}
 			g.LoosenDelay, _ = database.LoosenDelay(b.Name)

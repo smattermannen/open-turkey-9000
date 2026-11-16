@@ -1,7 +1,8 @@
 """GUI smoke test: every button. Clicks each visible, usable button on every
 page, every block tab and in every ⋯ menu (popovers), flips each switch, and
-activates each item of the Overview's Start menu, once, with dialogs
-answered Cancel. No click may raise
+activates each item of the Overview's Start menu: once with dialogs answered
+Cancel, then again with them answered OK (or Accept, Yes, Apply) as they
+come, empty fields and no file chosen included. No click may raise
 in its handler, and none may make the GUI send a command the CLI can't read
 (unknown command or flag, wrong arguments). The messages each click shows
 are printed for review. Builds kc9k into a scratch folder, a wrapper with
@@ -55,16 +56,23 @@ win.extension_asked = True
 errors, msgs = [], []
 sys.excepthook = lambda kind, value, tb: errors.append("".join(traceback.format_exception(kind, value, tb)))
 win.message = lambda text, *a, **k: msgs.append(str(text))
-# Every dialog answered Cancel; menus never pop up.
-dialogs = []
+# Every dialog answered Cancel (then OK in the second round); menus never
+# pop up.
+dialogs, answer = [], {"ok": False}
 
 
-def cancel(dialog):
+def respond(dialog):
     dialogs.append(dialog.get_title() or type(dialog).__name__)
+    if answer["ok"]:
+        # As a person can: only a button that isn't greyed out.
+        for response in (Gtk.ResponseType.OK, Gtk.ResponseType.ACCEPT, Gtk.ResponseType.YES, Gtk.ResponseType.APPLY):
+            button = dialog.get_widget_for_response(response)
+            if button is not None and button.get_sensitive():
+                return response
     return Gtk.ResponseType.CANCEL
 
 
-Gtk.Dialog.run = cancel
+Gtk.Dialog.run = respond
 Gtk.Menu.popup_at_widget = Gtk.Menu.popup_at_pointer = lambda *a, **k: None
 fails = []
 
@@ -198,7 +206,11 @@ settle()
 win.state = None; win.state_json = None; win.refresh(); pump(lambda: win.state is not None)
 settle()
 total = 0
-for page_name in ("dashboard", "blocks", "clusters", "device", "stats", "circadian", "settings"):
+for page_name in ("dashboard", "blocks", "clusters", "device", "stats", "circadian", "settings") * 2:
+    if page_name == "dashboard" and total:
+        answer["ok"] = True  # the second round
+        clicked.clear()
+        print("--- every dialog answered OK ---")
     page = win.stack.get_child_by_name(page_name)
     if page is None:
         print("no page", page_name)
@@ -225,7 +237,7 @@ for page_name in ("dashboard", "blocks", "clusters", "device", "stats", "circadi
                 fails.append(f"[dashboard] Start menu {item.get_label()}: raised")
                 print(f"FAIL Start menu {item.get_label()} raised:\n{e}")
 
-check(total > 100, f"clicked {total} buttons")
+check(total > 200, f"clicked {total} buttons")
 check(not errors, f"no handler raised ({len(errors)} did)")
 print("FAILED: %d" % len(fails) if fails else "all passed")
 raise SystemExit(1 if fails else 0)

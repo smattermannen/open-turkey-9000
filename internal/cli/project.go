@@ -238,21 +238,13 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 		out.Autostarts = append(out.Autostarts, db.Autostart{Kind: a.Kind, At: a.At, Days: a.Days, Minute: a.Minute})
 	}
 	out.Triggers = map[string][]db.TriggerAction{}
-	groups := map[string]string{db.TriggerApps: db.TriggerApps, db.TriggerTitles: db.TriggerTitles}
-	if places, err := database.Places(); err == nil {
-		for _, p := range places {
-			if slices.Contains(p.Blocks, name) {
-				groups["place:"+p.Name] = db.PlaceTrigger(p.ID)
-			}
-		}
-	}
-	for key, group := range groups {
+	for _, group := range []string{db.TriggerApps, db.TriggerTitles} {
 		actions, err := database.TriggerActions(name, group)
 		if err != nil {
 			return out, err
 		}
 		if !slices.Equal(actions, db.DefaultTriggerActions(group)) {
-			out.Triggers[key] = actions
+			out.Triggers[group] = actions
 		}
 	}
 	return out, nil
@@ -262,11 +254,8 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 func checkTriggers(in projectBlock) error {
 	for key, actions := range in.Triggers {
 		group := key
-		if place, ok := strings.CutPrefix(key, "place:"); ok {
-			if !slices.Contains(in.Places, place) {
-				return fmt.Errorf("block '%s' has actions for a place it has no rule at (%q)", in.Name, place)
-			}
-			group = db.PlaceTrigger(1) // any place: the checks are the same
+		if strings.HasPrefix(key, "place:") {
+			continue // files of 2026-11-16: place rules had actions for a day; ignored
 		} else if key != db.TriggerApps && key != db.TriggerTitles {
 			return fmt.Errorf("block '%s' has actions for an unknown group %q", in.Name, key)
 		}
@@ -502,11 +491,6 @@ passwords, hotkeys and statistics are never in it.`,
 				return err
 			}
 			pb.Places = blockPlaces[b.Name]
-			for key := range pb.Triggers {
-				if strings.HasPrefix(key, "place:") && share {
-					delete(pb.Triggers, key) // a share has no places
-				}
-			}
 			out.Blocks = append(out.Blocks, pb)
 		}
 		clusters, err := database.ListClusters()
@@ -845,11 +829,6 @@ With --dry-run, says what would happen and changes nothing.`,
 				if !dry {
 					if err := database.SetPlaceRule(name, id, true); err != nil {
 						return err
-					}
-					if actions, ok := c.in.Triggers["place:"+place]; ok {
-						if err := database.SetTriggerActions(name, db.PlaceTrigger(id), actions); err != nil {
-							return err
-						}
 					}
 				}
 			}

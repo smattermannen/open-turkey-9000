@@ -30,16 +30,14 @@ func waitFor(t *testing.T, did *[]string, want string) {
 	}
 }
 
-// Owner, 2026-11-16: a block's apps, window titles and place rules take
-// actions the user picks, one set per group. Without one, apps and titles
-// close and a place rule enables its block, as before.
+// Owner, 2026-11-16: a block's apps and window titles take actions the
+// user picks, one set per group. Without one, they close, as before.
 func TestTriggerActionsStored(t *testing.T) {
 	d := testDB(t)
 	if err := d.CreateBlock("b"); err != nil {
 		t.Fatal(err)
 	}
-	for group, want := range map[string]string{db.TriggerApps: db.TriggerClose, db.TriggerTitles: db.TriggerClose,
-		db.PlaceTrigger(3): db.TriggerEnable} {
+	for group, want := range map[string]string{db.TriggerApps: db.TriggerClose, db.TriggerTitles: db.TriggerClose} {
 		if got, _ := d.TriggerActions("b", group); len(got) != 1 || got[0].Name != want {
 			t.Errorf("%s default = %+v", group, got)
 		}
@@ -60,7 +58,7 @@ func TestTriggerActionsStored(t *testing.T) {
 	for _, bad := range []struct {
 		group string
 		a     db.TriggerAction
-	}{{db.TriggerApps, db.TriggerAction{Name: db.TriggerEnable}}, {db.PlaceTrigger(1), db.TriggerAction{Name: db.TriggerClose}},
+	}{{db.TriggerApps, db.TriggerAction{Name: "enable"}},
 		{db.TriggerApps, db.TriggerAction{Name: db.ConsequenceMonk}}, {db.TriggerApps, db.TriggerAction{Name: "explode"}},
 		{db.TriggerApps, db.TriggerAction{Name: db.TriggerClose, Minutes: 5}}} {
 		if db.CheckTriggerAction(bad.group, bad.a) == nil {
@@ -102,16 +100,12 @@ func TestAppsTrigger(t *testing.T) {
 	}
 }
 
-// A place rule without "enable" doesn't enable its block; arriving at the
-// place fires the rule's other actions, once per arrival (the first look
-// only records where the computer is).
-func TestPlaceTrigger(t *testing.T) {
+// §3.6: a place rule has no actions; at its place it enables its block.
+func TestPlaceRuleEnables(t *testing.T) {
 	d := testDB(t)
-	did := fastConsequences(t)
 	home := []db.Network{{BSSID: "AA:AA:AA:AA:AA:01"}, {BSSID: "AA:AA:AA:AA:AA:02"}}
-	seen := home
 	oldScan := ScanWifi
-	ScanWifi = func(bool) ([]db.Network, error) { return seen, nil }
+	ScanWifi = func(bool) ([]db.Network, error) { return home, nil }
 	t.Cleanup(func() { ScanWifi = oldScan })
 	placeMu.Lock()
 	placeAt = time.Time{}
@@ -126,49 +120,10 @@ func TestPlaceTrigger(t *testing.T) {
 	if err := d.SetPlaceRule("b", p.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.ActivateBlock("b", false, 0, 0, false); err != nil {
-		t.Fatal(err)
+	if on, _ := PlaceBlocks(d, time.Now()); !on["b"] {
+		t.Error("a place rule didn't enable its block there")
 	}
-	now := time.Now()
-	if on, _ := PlaceBlocks(d, now); !on["b"] {
-		t.Fatal("by default a place rule enables its block")
-	}
-	group := db.PlaceTrigger(p.ID)
-	if err := d.SetTriggerActions("b", group, []db.TriggerAction{{Name: db.ConsequenceCloseBrowser}}); err != nil {
-		t.Fatal(err)
-	}
-	if on, _ := PlaceBlocks(d, now); on["b"] {
-		t.Error("a rule without enable enabled the block")
-	}
-	if ruled, _ := PlaceRuled(d); ruled["b"] {
-		t.Error("a rule without enable made the block a scheduled one")
-	}
-	rescan := func(at time.Time) {
-		placeMu.Lock()
-		placeAt = time.Time{}
-		placeMu.Unlock()
-		placeArrivals(d, at)
-	}
-	rescan(now) // first look: only recorded
-	time.Sleep(50 * time.Millisecond)
-	if strings.Contains(joinDid(did), "close-browsers") {
-		t.Fatal("fired on the first look")
-	}
-	seen = []db.Network{{BSSID: "BB:BB:BB:BB:BB:01"}}
-	rescan(now.Add(time.Minute)) // left
-	seen = home
-	rescan(now.Add(2 * time.Minute)) // arrived
-	waitFor(t, did, "close-browsers")
-	rescan(now.Add(4 * time.Minute)) // still there: not again
-	time.Sleep(50 * time.Millisecond)
-	if n := strings.Count(joinDid(did), "close-browsers"); n != 1 {
-		t.Errorf("fired %d times for one arrival", n)
-	}
-	// Removing the rule forgets its actions.
-	if err := d.SetPlaceRule("b", p.ID, false); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := d.TriggerActions("b", group); len(got) != 1 || got[0].Name != db.TriggerEnable {
-		t.Errorf("after removing the rule: %+v", got)
+	if ruled, _ := PlaceRuled(d); !ruled["b"] {
+		t.Error("a place-ruled block isn't automated")
 	}
 }

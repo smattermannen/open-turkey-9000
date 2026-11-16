@@ -18,14 +18,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
 ### 0.1 Code contradicting `SPEC.md`
 
 - [ ] **Owner 2026-11-16: automation and the block list (TOP PRIORITY).**
-  - [ ] Place rules have no actions (§3.6 Place rule, §3.9 Action,
+  - [x] Place rules have no actions (§3.6 Place rule, §3.9 Action,
     R-SCHED-1). A place only enables or lifts an active block. Built by
     mistake the same day (it should have been questioned: a place already
-    means "enabled here" in the active/enabled model): the trigger group
-    `place:<id>` (`db/triggers.go`), `placeArrivals` firing actions and
-    `placeEnables` (`enforce/trigger.go`), `block trigger B place:NAME`,
-    the GUI's "Actions…" for a place rule, projects' place keys. Remove it
-    all; stored place action sets are dropped on open. S
+    means "enabled here" in the active/enabled model). Removed: the
+    trigger group `place:<id>`, `placeArrivals` and `placeEnables`, `block
+    trigger B place:NAME` (says a place rule has no actions), the GUI's
+    "Actions…" for a place rule, projects' place keys (old files' are
+    ignored); opening drops stored place sets (`migratePlaceTriggers`,
+    `TestPlaceTriggersDropped`, `TestPlaceRuleEnables`,
+    `ci/gui_trigger_smoke.py`).
   - [ ] Automation (§3.6 Place rule, Automation; R-SCHED-1). Built: any
     number of places per block; block windows (= disabled by default)
     and allow windows (= enabled by default) for the schedule; places
@@ -134,16 +136,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     2026-11-15). Built: the last action can be turned off; no-action rules
     reach the extension with no actions and do nothing.
   - [x] Any trigger to any action (§1, §3.9; owner, 2026-11-16): a
-    block's apps, its window titles and each place rule have one action
-    set each, like a list's: their own action (close the app / close the
-    window / enable the block at the place, the default, can be
-    unticked) and close-browser, lock-screen, logout, shutdown, monk mode
-    with their times. Apps and windows fire when found (at most once a
-    minute), a place on arrival; logout, shutdown and lock-screen are
+    block's apps and its window titles have one action set each, like a
+    list's: their own action (close the app / close the window, the
+    default, can be unticked) and close-browser, lock-screen, logout,
+    shutdown, monk mode with their times. Apps and windows fire when found
+    (at most once a minute); logout, shutdown and lock-screen are
     announced a minute ahead (R-WARN-1). CLI `block trigger`, GUI
-    checkboxes under Apps and Window titles, "Actions…" for a place rule,
-    projects. `TestTriggerActionsStored`, `TestAppsTrigger`,
-    `TestPlaceTrigger`, `TestBlockTriggerCommand`, the weakening audit,
+    checkboxes under Apps and Window titles, projects. (Place rules had
+    actions too for a day; withdrawn, see the top item.)
+    `TestTriggerActionsStored`, `TestAppsTrigger`, `TestBlockTriggerCommand`,
+    the weakening audit,
     `ci/gui_trigger_smoke.py`. On the laptop: Unchecked. The window title
     help said "in a browser, just that tab"; R-TITLE-1: never browsers.
   - [x] Dark pages from the browser (§4.10; owner, 2026-11-16): the
@@ -201,6 +203,14 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     and ⋯ menu, and the Overview's Start menu (dialogs answered Cancel);
     no handler may raise, no command may be one the CLI can't read; the
     messages are printed for review. First run: ~700 clicks, no exception.
+    A second round answers every dialog OK as a person could (greyed-out
+    buttons aren't pressed), empty fields and no file chosen included: no
+    handler raised; it found OK pressable with nothing chosen in a setting
+    lock's and Add locks' dialogs and with no address for "Open another
+    page" (now greyed out, the reason shown), and Start Frozen Chicken
+    failing with a bare "exit status 1" when the screen couldn't be locked
+    at once (now a warning naming loginctl: the service relocks within a
+    second; a test's database never locks the real screen).
     It found: a draft could be switched on (an allowance set on it, or an
     autostart), after which neither Save nor Cancel could remove it ("it is
     active"), and its schedule, places, allowance, breaks, bypass

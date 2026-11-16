@@ -23,6 +23,9 @@ func KernelCmdline() string {
 // session is harmless, so the daemon calls it every cycle during a freeze.
 func LockSessions() error {
 	err := exec.Command("loginctl", "lock-sessions").Run()
+	if err != nil {
+		err = fmt.Errorf("loginctl lock-sessions: %w", err)
+	}
 	// Cinnamon doesn't react to logind's lock signal, so ask its screensaver
 	// directly, as each logged-in user.
 	cinnamonErr := lockCinnamon()

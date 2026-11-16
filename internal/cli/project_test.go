@@ -148,10 +148,10 @@ func TestProjectBackupAndShare(t *testing.T) {
 	mustRun(t, "place", "rule", "b", "home", "on")
 	mustRun(t, "schedule", "lock", "b", "on", "--lead", "30m", "--yes")
 	mustRun(t, "social", "b", "youtube:no-shorts", "on")
-	// Owner, 2026-11-16: trigger actions travel too (place rules' in backups).
+	// Owner, 2026-11-16: trigger actions travel too (apps and window
+	// titles; a place rule has none).
 	mustRun(t, "block", "add-app", "b", "steam")
 	mustRun(t, "block", "trigger", "b", "apps", "logout", "on", "--for", "30m")
-	mustRun(t, "block", "trigger", "b", "place:home", "close-browser", "on")
 	mustRun(t, "place", "need", "home", "1")
 	backup, share := capture(t, "project", "export"), capture(t, "project", "export", "--share")
 	if !strings.Contains(backup, "AA:AA:AA:AA:AA:01") || strings.Contains(share, "AA:AA:AA:AA:AA:01") || strings.Contains(share, `"home"`) {
@@ -181,11 +181,6 @@ func TestProjectBackupAndShare(t *testing.T) {
 		p, err := fresh.GetPlace("home")
 		if name == "backup" && (err != nil || len(p.Networks) != 2 || len(p.Blocks) != 1 || p.Needed() != 1) {
 			t.Errorf("backup: place = %+v, %v", p, err)
-		}
-		if name == "backup" {
-			if got, _ := fresh.TriggerActions("b", db.PlaceTrigger(p.ID)); len(got) != 2 {
-				t.Errorf("backup: the place rule's actions = %+v", got)
-			}
 		}
 		if name == "share" && err == nil {
 			t.Error("share: a place came along")

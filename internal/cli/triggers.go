@@ -1,11 +1,11 @@
-// triggers.go — kc9k block trigger: what a block's apps, its window titles
-// and each of its place rules do when they fire (owner, 2026-11-16; §1 "any
-// trigger to any action"), one action set per group.
+// triggers.go — kc9k block trigger: what a block's apps and its window
+// titles do when they fire (owner, 2026-11-16; §1 "any trigger to any
+// action"), one action set per group. A place rule has no actions (§3.6).
 //
-//	kc9k block trigger work                              # every group's actions
+//	kc9k block trigger work                              # both groups' actions
 //	kc9k block trigger work apps logout on --for 30m     # running an app logs out
 //	kc9k block trigger work apps close off               # and the app stays open
-//	kc9k block trigger work place:library monk on --for 2h --no-confirm-ok
+//	kc9k block trigger work titles monk on --for 2h --no-confirm-ok
 package cli
 
 import (
@@ -18,27 +18,26 @@ import (
 )
 
 var blockTriggerCmd = &cobra.Command{
-	Use:   "trigger [block] [apps|titles|place:NAME] [action] [on|off]",
-	Short: "What a block's apps, window titles and place rules do when they fire",
-	Long: `A block's apps, its window titles and each of its place rules each have one
-set of actions, like a list's:
+	Use:   "trigger [block] [apps|titles] [action] [on|off]",
+	Short: "What a block's apps and window titles do when they are found",
+	Long: `A block's apps and its window titles each have one set of actions, like a
+list's:
 
   apps      close (the default: the app is closed)
   titles    close (the default: the window is closed)
-  place:N   enable (the default: the block is enabled while at place N)
 
-and for all of them close-browser, lock-screen (--for, required), logout and
+and for both close-browser, lock-screen (--for, required), logout and
 shutdown (--for: that long; without, once), monk (--for, required; add
 --no-confirm-ok: monk mode started this way asks nothing). Logout, shutdown
 and lock-screen are announced a minute ahead. An app or a window fires its
-actions when it is found (at most once a minute), a place when the
-computer arrives there.
+actions when it is found, at most once a minute. A place rule has no
+actions: it only enables or lifts its block.
 
 Turning an action on, or a longer --for, is always allowed; turning one off,
 or a shorter --for, weakens the block. With only the block, prints them.`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 && len(args) != 4 {
-			return fmt.Errorf("give a block, or a block, a group (apps, titles or place:NAME), an action and on or off")
+			return fmt.Errorf("give a block, or a block, a group (apps or titles), an action and on or off")
 		}
 		return nil
 	},
@@ -50,7 +49,7 @@ or a shorter --for, weakens the block. With only the block, prints them.`,
 		if len(args) == 1 {
 			return printTriggers(database, block)
 		}
-		group, label, err := triggerGroup(database, block, args[1])
+		group, label, err := triggerGroup(args[1])
 		if err != nil {
 			return err
 		}
@@ -115,27 +114,17 @@ or a shorter --for, weakens the block. With only the block, prints them.`,
 	}),
 }
 
-// triggerGroup reads a group argument: apps, titles or place:NAME (a place
-// the block has a rule at).
-func triggerGroup(database *db.DB, block, arg string) (group, label string, err error) {
+// triggerGroup reads a group argument: apps or titles.
+func triggerGroup(arg string) (group, label string, err error) {
 	switch lower := strings.ToLower(arg); {
 	case lower == db.TriggerApps:
 		return db.TriggerApps, "Apps", nil
 	case lower == db.TriggerTitles:
 		return db.TriggerTitles, "Window titles", nil
 	case strings.HasPrefix(lower, "place:"):
-		p, err := database.GetPlace(arg[len("place:"):])
-		if err != nil {
-			return "", "", err
-		}
-		for _, b := range p.Blocks {
-			if b == block {
-				return db.PlaceTrigger(p.ID), "The rule at '" + p.Name + "'", nil
-			}
-		}
-		return "", "", fmt.Errorf("block '%s' has no rule at '%s' ('kc9k place rule %s %s on')", block, p.Name, block, p.Name)
+		return "", "", fmt.Errorf("a place rule has no actions: it only enables or lifts its block")
 	}
-	return "", "", fmt.Errorf("%q isn't a group: use apps, titles or place:NAME", arg)
+	return "", "", fmt.Errorf("%q isn't a group: use apps or titles", arg)
 }
 
 func describeTrigger(a db.TriggerAction) string {
@@ -163,21 +152,6 @@ func printTriggers(database *db.DB, block string) error {
 			return err
 		}
 		fmt.Printf("%s: %s\n", g.label, describeTriggers(actions))
-	}
-	places, err := database.Places()
-	if err != nil {
-		return err
-	}
-	for _, p := range places {
-		for _, b := range p.Blocks {
-			if b == block {
-				actions, err := database.TriggerActions(block, db.PlaceTrigger(p.ID))
-				if err != nil {
-					return err
-				}
-				fmt.Printf("place:%s: %s\n", p.Name, describeTriggers(actions))
-			}
-		}
 	}
 	return nil
 }

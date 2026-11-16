@@ -1,6 +1,7 @@
 """GUI smoke test for trigger actions (owner, 2026-11-16: any trigger to
-any action): a block's apps, window titles and place rules each have a set
-of actions, ticked in the GUI; a refused change goes back. Clicks the real
+any action): a block's apps and window titles each have a set of actions,
+ticked in the GUI; a refused change goes back. A place rule has none (§3.6:
+it only enables or lifts its block). Clicks the real
 checkboxes. Builds kc9k into a scratch folder, a wrapper with KC9K_DB =
 scratch file (and a fake nmcli), loads gui/kc9k-gui.py as a module with
 CLI replaced, another application ID, never shows the main window. Needs an
@@ -69,6 +70,14 @@ def triggers():
     return next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == "b")["triggers"]
 
 
+def gui_widgets(root):
+    out = [root]
+    if isinstance(root, Gtk.Container):
+        for child in root.get_children():
+            out += gui_widgets(child)
+    return out
+
+
 def names(group):
     return sorted((a["name"], a.get("minutes", 0)) for a in triggers()[group])
 
@@ -90,26 +99,11 @@ check(("monk", 120) in names("apps"), "monk mode for 2 hours, acknowledged: %s" 
 win.title_triggers.checks["close-browser"].set_active(True); settle()
 check(names("titles") == [("close", 0), ("close-browser", 0)], "titles close the browsers too: %s" % names("titles"))
 
-# A place rule's actions, from On at → Actions…
-win.place_rules.view.get_selection().select_path(Gtk.TreePath.new_from_string("0"))
-real_run = Gtk.Dialog.run
-
-
-def place_dialog(dialog):
-    editor = win.place_trigger_editor
-    check(editor.checks["enable"].get_active(), "the rule enables the block by default")
-    editor.checks["enable"].set_active(False)
-    pump(lambda: win.get_sensitive() and not win.busy)
-    editor.times["lock-screen"].set_text("45m")
-    editor.checks["lock-screen"].set_active(True)
-    pump(lambda: win.get_sensitive() and not win.busy)
-    return Gtk.ResponseType.CLOSE
-
-
-Gtk.Dialog.run = place_dialog
-win.place_rule_actions(None); settle()
-Gtk.Dialog.run = real_run
-check(names("place:home") == [("lock-screen", 45)], "the rule locks the screen on arrival, without enabling: %s" % names("place:home"))
+# §3.6: a place rule has no actions: nothing to tick beside On at, and
+# gui-state sends none.
+labels = [w.get_label() for w in gui_widgets(win.place_rules) if isinstance(w, Gtk.Button)]
+check("Actions…" not in labels and not hasattr(win, "place_rule_actions"), "no actions for a place rule: %s" % labels)
+check(not any(k.startswith("place:") for k in triggers()), "gui-state has no place actions: %s" % list(triggers()))
 
 # Locked: turning an action off is refused and the box goes back.
 r = cli("start", "b", "--for", "1h", "--yes"); assert r.returncode == 0, r.stderr

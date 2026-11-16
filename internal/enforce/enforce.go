@@ -567,7 +567,6 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 	// §3.3): enabledBlocks lifts active blocks outside their windows. Places
 	// still need Wi-Fi on to be seen.
 	keepWifiOn(d)
-	placeArrivals(d, now) // a place rule's actions besides enabling, on arrival
 	return nil
 }
 

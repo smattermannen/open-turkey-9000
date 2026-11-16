@@ -2209,7 +2209,9 @@ class ListCard(Gtk.Frame):
         current = {a["action"]: a for a in self.data["actions"]}.get(name, {})
         if name == "redirect":
             url = window.ask_text("Open another page", "The address to open instead, starting "
-                                  "with https://.", initial=current.get("param", "https://"))
+                                  "with https://.", initial=current.get("param", "https://"),
+                                  problem=lambda text: None if re.fullmatch(r"https?://[^\s/?#]+\S*", text)
+                                  else "An address such as https://example.com.")
             if url:
                 args = ["--url", url]
         elif name == "image":
@@ -3860,9 +3862,10 @@ class WallpaperTimeline(Gtk.DrawingArea):
 
 
 class TriggerEditor(Gtk.Box):
-    """What a trigger group does (owner, 2026-11-16: any trigger to any
-    action): its own action (close the app or window; enable the block at
-    the place) and the consequences, each with its time. Ticking runs
+    """What a block's apps or window titles do when found (owner,
+    2026-11-16: any trigger to any action): their own action (close the
+    app or the window) and the consequences, each with its time. (A place
+    rule has no actions, §3.6.) Ticking runs
     'kc9k block trigger', as does Enter in a time field while its action is
     on. set_actions shows what the state says."""
 
@@ -4653,13 +4656,29 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return answer == Gtk.ResponseType.OK and ticked
 
-    def ask_text(self, title, detail="", password=False, initial=""):
+    def ask_text(self, title, detail="", password=False, initial="", problem=None):
+        """Asks for a line of text; "" when cancelled. problem, when given,
+        says what is wrong with the text (None: nothing): OK waits and the
+        reason shows under the box (R-GUI-1)."""
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, text=title, secondary_text=detail or None,
             message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL)
         entry = Gtk.Entry(activates_default=True, visibility=not password, text=initial)
         dialog.set_default_response(Gtk.ResponseType.OK)
         dialog.get_message_area().pack_start(entry, False, False, 0)
+        if problem is not None:
+            note = Gtk.Label(xalign=0, wrap=True)
+            note.get_style_context().add_class("kc9k-note")
+            dialog.get_message_area().pack_start(note, False, False, 0)
+            ok = dialog.get_widget_for_response(Gtk.ResponseType.OK)
+
+            def check(*_args):
+                why = problem(entry.get_text().strip())
+                note.set_text(why or "")
+                ok.set_sensitive(why is None)
+
+            entry.connect("changed", check)
+            check()
         dialog.show_all()
         answer = dialog.run()
         value = entry.get_text() if password else entry.get_text().strip()
@@ -5663,13 +5682,6 @@ class Window(Gtk.ApplicationWindow):
             if isinstance(child, Gtk.Button) and child.get_label() == "Add":
                 child.set_no_show_all(True)
                 child.hide()
-        # Owner, 2026-11-16: each place rule has its own actions.
-        rule_actions = Gtk.Button(label="Actions…")
-        rule_actions.set_tooltip_text("What happens at the chosen place: the block is enabled there, "
-                                      "and what else you tick, when the computer arrives")
-        rule_actions.connect("clicked", self.place_rule_actions)
-        add_row.pack_start(rule_actions, False, False, 0)
-        add_row.reorder_child(rule_actions, 0)
         places.pack_start(self.place_rules, True, True, 0)
         self.places_label = dim("")
         places.pack_start(self.places_label, False, False, 0)
@@ -6246,12 +6258,12 @@ class Window(Gtk.ApplicationWindow):
         if self.selected and name:
             self.run(["block", "duplicate", self.selected, name])
 
-    def lock_dialog(self, title, intro, button, picker, extra=None):
+    def lock_dialog(self, title, intro, button, picker, extra=None, need_lock=False):
         """A dialog around a LockPicker; None when cancelled, else what it
         asks for, read before the dialog goes: (locks as (flags, words),
         re-lock flags, password). extra, when given, is more fields above
         the locks (on_change, problem()). The button waits until every
-        field reads right."""
+        field reads right, and with need_lock until a lock is chosen."""
         dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         ok = dialog.add_button(button, Gtk.ResponseType.OK)
@@ -6267,7 +6279,8 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(picker, False, False, 0)
 
         def update(*_args):
-            ok.set_sensitive(picker.is_valid() and (extra is None or extra.problem() is None))
+            ok.set_sensitive(picker.is_valid() and (extra is None or extra.problem() is None)
+                             and (not need_lock or bool(picker.chosen())))
 
         picker.on_change(update)
         if extra is not None:
@@ -6294,7 +6307,7 @@ class Window(Gtk.ApplicationWindow):
             "be made stronger: a later timer, a longer text or delay lock." if active else
             "Start without locks to stop any time, or add locks below. Once on, a lock can only "
             "be made stronger.",
-            "Add locks" if active else "Start", picker)
+            "Add locks" if active else "Start", picker, need_lock=active)
         if asked is None:
             return
         chosen, relock_flags, secret = asked
@@ -8333,7 +8346,7 @@ class Window(Gtk.ApplicationWindow):
         asked = self.lock_dialog(
             f"Lock: {title}",
             "The setting is turned on and can't be turned off until the lock ends. Locks can be "
-            "added later, but only made stronger.", "Turn on and lock", picker)
+            "added later, but only made stronger.", "Turn on and lock", picker, need_lock=True)
         if asked is None:
             return
         chosen, relock_flags, secret = asked
@@ -8424,29 +8437,6 @@ class Window(Gtk.ApplicationWindow):
         on = block.get("social") or []
         for name, check in self.social_checks.items():
             check.set_active(name in on)
-
-    def place_rule_actions(self, _button=None, place=None):
-        """The actions of a place rule (the selected one in On at)."""
-        if place is None:
-            chosen = self.place_rules._selected()
-            place = chosen[0][0] if chosen else None
-        if not self.selected or not place:
-            self.message("Choose a place in the list first.", Gtk.MessageType.INFO)
-            return
-        block = self.blocks.get(self.selected) or {}
-        actions = (block.get("triggers") or {}).get("place:" + place, [{"name": "enable"}])
-        dialog = Gtk.Dialog(title=f"At {place}", transient_for=self, modal=True)
-        dialog.add_button("Close", Gtk.ResponseType.CLOSE)
-        box = dialog.get_content_area()
-        box.set_border_width(14)
-        editor = TriggerEditor(self, "place:" + place, "enable", "Enable the block while there",
-                               f"What '{self.selected}' does at '{place}' (the rest when the computer arrives):")
-        editor.set_actions(self.selected, actions)
-        box.pack_start(editor, False, False, 0)
-        self.place_trigger_editor = editor  # for tests
-        dialog.show_all()
-        dialog.run()
-        dialog.destroy()
 
     def place_info(self, name):
         return next((p for p in (self.state or {}).get("places") or [] if p["name"] == name), None)

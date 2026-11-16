@@ -801,10 +801,10 @@ func TestBlockTriggerCommand(t *testing.T) {
 	if err := runCLI(t, "block", "trigger", "b", "titles", "monk", "on", "--for", "1h"); err == nil {
 		t.Error("monk without --no-confirm-ok")
 	}
-	mustRun(t, "block", "trigger", "b", "place:home", "monk", "on", "--for", "2h", "--no-confirm-ok")
-	p, _ := d.GetPlace("home")
-	if got, _ := d.TriggerActions("b", db.PlaceTrigger(p.ID)); len(got) != 2 {
-		t.Errorf("place actions = %+v", got)
+	// §3.6: a place rule has no actions; it only enables or lifts its block.
+	if err := runCLI(t, "block", "trigger", "b", "place:home", "monk", "on", "--for", "2h", "--no-confirm-ok"); err == nil ||
+		!strings.Contains(err.Error(), "no actions") {
+		t.Errorf("a place rule took actions: %v", err)
 	}
 	for _, bad := range [][]string{
 		{"block", "trigger", "b", "apps", "enable", "on"},
@@ -822,8 +822,5 @@ func TestBlockTriggerCommand(t *testing.T) {
 	mustRun(t, "block", "trigger", "b", "titles", "close-browser", "on")       // more: free
 	if err := runCLI(t, "block", "trigger", "b", "apps", "logout", "on", "--for", "10m"); err == nil {
 		t.Error("a shorter logout was taken while locked")
-	}
-	if err := runCLI(t, "block", "trigger", "b", "place:home", "enable", "off"); err == nil {
-		t.Error("the place rule stopped enabling the block while locked")
 	}
 }

@@ -61,8 +61,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   never `show()`. `KC9K_DB` never applies layers nor sets desktop hotkeys.
   As a normal user (as root `KC9K_DB` is ignored: they would use the real
   DB). `ci/gui_click_everything_smoke.py` clicks every button and switch
-  of every page, tab and ⋯ menu (dialogs cancelled; fails on a handler
-  exception or a command the CLI can't read). Examples: `ci/gui_phrase_smoke.py`, `ci/gui_phrase_edit_smoke.py`,
+  of every page, tab and ⋯ menu, once with dialogs cancelled and once
+  answered OK as a person could (a greyed-out button isn't pressed); fails
+  on a handler exception or a command the CLI can't read. Examples: `ci/gui_phrase_smoke.py`, `ci/gui_phrase_edit_smoke.py`,
   `ci/gui_duration_smoke.py`, `ci/gui_hotkey_smoke.py`,
   `ci/gui_circadian_smoke.py` (`xvfb-run -a`).
 - Weakening audit: `cli/weakening_audit_test.go` tries every command that
@@ -255,17 +256,16 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   (`monkDeviceless`). `migrateMonkMode` removed the old block.
 - **Trigger actions** (`db/triggers.go`, `enforce/trigger.go`,
   `cli/triggers.go`; owner 2026-11-16): table `trigger_actions` (block,
-  group `apps`|`titles`|`place:<place id>`, JSON actions); no row = default
-  (`close`; `enable` for a place rule). `kc9k block trigger B GROUP ACTION
-  on|off [--for D]` (group `place:NAME` on the CLI; on/longer free, off/
-  shorter weakens; monk needs `--no-confirm-ok`). Daemon: `appsTrigger`
-  (close or `RunningApps`), titles via `TitleGuard.EnforceWatch` (watch
-  without closing), `placeArrivals` (arrival edge, `place.here.<id>`;
-  first look only records), `placeEnables` in `PlaceBlocks`/`PlaceRuled`;
-  `fireTrigger` ≤ once a minute per block+group → `runAnnounced`. GUI
-  `TriggerEditor` (apps, titles; place rule via On at → Actions…),
-  gui-state `triggers`, projects `triggers` (place keys in backups).
-  `ci/gui_trigger_smoke.py`.
+  group `apps`|`titles`, JSON actions); no row = default (`close`). `kc9k
+  block trigger B apps|titles ACTION on|off [--for D]` (on/longer free,
+  off/shorter weakens; monk needs `--no-confirm-ok`). Daemon:
+  `appsTrigger` (close or `RunningApps`), titles via
+  `TitleGuard.EnforceWatch` (watch without closing); `fireTrigger` ≤ once
+  a minute per block+group → `runAnnounced`. GUI `TriggerEditor`,
+  gui-state `triggers`, projects `triggers`. A place rule has **no
+  actions** (§3.6, owner 2026-11-16: they existed for a day;
+  `migratePlaceTriggers` drops stored `place:` sets, project files' are
+  ignored). `ci/gui_trigger_smoke.py`.
 - **Consequences** (`enforce/consequence.go`): close browsers, lock
   screen/logout/shutdown (via Frozen Chicken, only extended; ≤ once per 10
   min), monk. Device effects via replaceable vars.

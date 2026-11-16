@@ -1,13 +1,12 @@
-// trigger.go — what a block's apps, its window titles and its place rules
-// do when they fire (owner, 2026-11-16; §1 "any trigger to any action"):
-// their own action (close the app or the window; enable the block at the
-// place), and any consequences the user ticked, announced as a list's are
-// (R-WARN-1).
+// trigger.go — what a block's apps and its window titles do when they fire
+// (owner, 2026-11-16; §1 "any trigger to any action"): their own action
+// (close the app or the window) and any consequences the user ticked,
+// announced as a list's are (R-WARN-1). A place rule has no actions: it
+// only enables or lifts its block (§3.6).
 package enforce
 
 import (
 	"log"
-	"strconv"
 	"sync"
 	"time"
 
@@ -47,7 +46,7 @@ func hasTriggerAction(actions []db.TriggerAction, name string) bool {
 func triggerConsequences(actions []db.TriggerAction) []Consequence {
 	var out []Consequence
 	for _, a := range actions {
-		if a.Name != db.TriggerClose && a.Name != db.TriggerEnable {
+		if a.Name != db.TriggerClose {
 			out = append(out, Consequence{Kind: a.Name, Minutes: a.Minutes})
 		}
 	}
@@ -92,59 +91,6 @@ func appsTrigger(d *db.DB, b db.ActiveBlockDetail, now time.Time) {
 	if len(triggerConsequences(actions)) > 0 && len(runningApps(b.Apps)) > 0 {
 		if fireTrigger(d, b.BlockName, db.TriggerApps, actions, why, now) {
 			logEvent(d, db.EventApp, b.BlockName, "")
-		}
-	}
-}
-
-// placeEnables reports whether a block's rule at a place enables it there.
-func placeEnables(d *db.DB, block string, placeID int) bool {
-	return hasTriggerAction(triggerActions(d, block, db.PlaceTrigger(placeID)), db.TriggerEnable)
-}
-
-// placeArrivals fires a place rule's other actions when the computer
-// arrives at the place (networks seen: Wi-Fi off is no arrival), for the
-// blocks that are on. The first look after a start only records where the
-// computer is.
-func placeArrivals(d *db.DB, now time.Time) {
-	places, err := d.Places()
-	if err != nil {
-		return
-	}
-	ruled := false
-	for _, p := range places {
-		ruled = ruled || len(p.Blocks) > 0
-	}
-	if !ruled {
-		return
-	}
-	seen := seenNetworks(now)
-	for _, p := range places {
-		if len(p.Blocks) == 0 {
-			continue
-		}
-		here := len(seen) > 0 && AtPlace(p, seen)
-		key := "place.here." + strconv.Itoa(p.ID)
-		was, _ := d.GetSetting(key)
-		if here == (was == "1") && was != "" {
-			continue
-		}
-		state := "0"
-		if here {
-			state = "1"
-		}
-		if err := d.SetSetting(key, state); err != nil {
-			log.Printf("places: %v", err)
-		}
-		if !here || was == "" {
-			continue
-		}
-		for _, block := range p.Blocks {
-			detail, err := d.GetBlock(block)
-			if err != nil || !detail.Active {
-				continue
-			}
-			group := db.PlaceTrigger(p.ID)
-			fireTrigger(d, block, group, triggerActions(d, block, group), "The computer arrived at '"+p.Name+"'.", now)
 		}
 	}
 }

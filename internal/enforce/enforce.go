@@ -243,7 +243,6 @@ func activeNames(d *db.DB) []string {
 	return names
 }
 
-
 // deferKills makes Apply leave blocked apps to the daemon (see ApplyFromDB).
 // Only set while the apply lock is held.
 var deferKills bool

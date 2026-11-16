@@ -61,7 +61,7 @@ func earnBreaks(d *db.DB, enforced []db.ActiveBlockDetail, trusted int64) {
 
 // RewardPeriod names the period a reward kept for keep belongs to at t:
 // the day, ISO week or month, or the block window it falls in (the day,
-// for a block without windows). "" for a reward saved up to one allowance.
+// for a block without windows). "" for a reward kept up to one break.
 func RewardPeriod(d *db.DB, block, keep string, t time.Time) string {
 	switch keep {
 	case "day":

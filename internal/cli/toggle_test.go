@@ -351,6 +351,51 @@ func TestStatsFilters(t *testing.T) {
 	}
 }
 
+// §4.9: a custom time frame, --from a date --to another, both days
+// counted; --to defaults to today.
+func TestStatsRange(t *testing.T) {
+	d := testDB(t)
+	now := time.Now()
+	day := func(back int) string { return now.AddDate(0, 0, -back).Format("2006-01-02") }
+	_ = d.AddUsage(day(0), db.UsageSite, "today.example", 60)
+	_ = d.AddUsage(day(10), db.UsageSite, "ten.example", 600)
+	_ = d.AddUsage(day(20), db.UsageSite, "twenty.example", 900)
+	_ = d.AddUsage(day(21), db.UsageSite, "before.example", 900)
+	read := func(args ...string) (statsOutput, map[string]bool) {
+		t.Helper()
+		var got statsOutput
+		if err := json.Unmarshal([]byte(capture(t, append([]string{"stats", "--json"}, args...)...)), &got); err != nil {
+			t.Fatal(err)
+		}
+		names := map[string]bool{}
+		for _, r := range got.Rows {
+			names[r.Name] = true
+		}
+		return got, names
+	}
+	got, names := read("--from", day(20), "--to", day(10))
+	if !names["ten.example"] || !names["twenty.example"] || names["today.example"] || names["before.example"] ||
+		got.Since != day(20) || got.Until != day(10) {
+		t.Errorf("--from %s --to %s: %+v", day(20), day(10), got)
+	}
+	if got, names = read("--from", day(10)); !names["ten.example"] || !names["today.example"] || names["twenty.example"] ||
+		got.Until != day(0) {
+		t.Errorf("--from %s: %+v", day(10), got)
+	}
+	if got, _ = read("--days", "3"); got.Since != day(2) || got.Until != day(0) {
+		t.Errorf("--days 3: %+v", got)
+	}
+	if out := capture(t, "stats", "--from", day(20), "--to", day(10)); !strings.Contains(out, "From "+day(20)+" to "+day(10)) {
+		t.Errorf("the text names the time frame:\n%s", out)
+	}
+	for _, args := range [][]string{{"--to", day(1)}, {"--from", day(1), "--to", day(2)}, {"--from", "march"},
+		{"--from", day(3), "--days", "5"}, {"--from", day(3), "--to", "2026-02-30"}} {
+		if err := runWith(t, 0, nil, append([]string{"stats"}, args...)...); err == nil {
+			t.Errorf("stats %v accepted", args)
+		}
+	}
+}
+
 // §3.11, R-ESCAPE-1: from recovery mode, root removes a forgotten settings
 // password and password locks, unless no-escape is on.
 func TestRecover(t *testing.T) {

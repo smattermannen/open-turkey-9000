@@ -16,6 +16,7 @@ import (
 type statsOutput struct {
 	Enabled bool          `json:"enabled"`
 	Since   string        `json:"since"`
+	Until   string        `json:"until"` // the last day included
 	Rows    []db.UsageRow `json:"rows"`
 	Users   []string      `json:"users"` // §4.9: users with statistics
 }
@@ -30,6 +31,7 @@ this computer and is kept for a year.
 
   kc9k stats            totals for the last 7 days
   kc9k stats --days 30  totals for the last 30 days
+  kc9k stats --from 2026-03-01 --to 2026-03-31   totals for March
   kc9k stats off        stop recording (on starts again)
   kc9k stats clear      delete all statistics
   kc9k stats private skip   leave private windows out (count: back in)`,
@@ -74,13 +76,11 @@ this computer and is kept for a year.
 			}
 		}
 
-		days, _ := cmd.Flags().GetInt("days")
-		if days < 1 || days > enforce.StatsKeepDays {
-			return fmt.Errorf("--days must be between 1 and %d", enforce.StatsKeepDays)
+		since, until, err := statsRange(cmd, time.Now())
+		if err != nil {
+			return err
 		}
-		since := enforce.Day(time.Now().AddDate(0, 0, -(days - 1)))
 		var rows []db.UsageRow
-		var err error
 		if who, _ := cmd.Flags().GetString("user"); who != "" {
 			rows, err = database.UserUsageSince(since, who) // §4.9: one user's time
 		} else {
@@ -118,6 +118,9 @@ this computer and is kept for a year.
 		}
 		kept := rows[:0:0]
 		for _, r := range rows {
+			if r.Day > until {
+				continue
+			}
 			if search != "" && !strings.Contains(strings.ToLower(r.Name), strings.ToLower(search)) {
 				continue
 			}
@@ -127,7 +130,7 @@ this computer and is kept for a year.
 			kept = append(kept, r)
 		}
 		rows = kept
-		out := statsOutput{Enabled: enforce.StatsOn(database), Since: since, Rows: rows}
+		out := statsOutput{Enabled: enforce.StatsOn(database), Since: since, Until: until, Rows: rows}
 		if out.Users, err = database.UsageUsers(); err != nil {
 			return err
 		}
@@ -144,7 +147,11 @@ this computer and is kept for a year.
 			fmt.Println("Statistics are off ('kc9k stats on' to record).")
 		}
 		top, _ := cmd.Flags().GetInt("top")
-		fmt.Printf("Since %s:\n", since)
+		if until == enforce.Day(time.Now()) {
+			fmt.Printf("Since %s:\n", since)
+		} else {
+			fmt.Printf("From %s to %s:\n", since, until)
+		}
 		for _, kind := range []struct{ key, title string }{{db.UsageSite, "Websites"}, {db.UsageApp, "Apps"},
 			{db.UsageBlocked, "Times blocked (sites)"}, {db.UsageBlockedBlock, "Times blocked (blocks)"}} {
 			totals := map[string]int64{}
@@ -184,6 +191,39 @@ this computer and is kept for a year.
 	}),
 }
 
+// statsRange reads the time frame (§4.9 presets and custom): --days N back
+// from today, or --from a date to --to (default today). Both days count.
+func statsRange(cmd *cobra.Command, now time.Time) (since, until string, err error) {
+	from, _ := cmd.Flags().GetString("from")
+	to, _ := cmd.Flags().GetString("to")
+	today := enforce.Day(now)
+	if from == "" {
+		if to != "" {
+			return "", "", fmt.Errorf("--to goes with --from")
+		}
+		days, _ := cmd.Flags().GetInt("days")
+		if days < 1 || days > enforce.StatsKeepDays {
+			return "", "", fmt.Errorf("--days must be between 1 and %d", enforce.StatsKeepDays)
+		}
+		return enforce.Day(now.AddDate(0, 0, -(days - 1))), today, nil
+	}
+	if cmd.Flags().Changed("days") {
+		return "", "", fmt.Errorf("give --days or --from, not both")
+	}
+	if to == "" {
+		to = today
+	}
+	for _, day := range []string{from, to} {
+		if _, err := time.ParseInLocation("2006-01-02", day, time.Local); err != nil {
+			return "", "", fmt.Errorf("%q isn't a date like 2026-03-01", day)
+		}
+	}
+	if from > to {
+		return "", "", fmt.Errorf("--from %s is after --to %s", from, to)
+	}
+	return from, to, nil
+}
+
 func formatSpent(seconds int64) string {
 	d := time.Duration(seconds) * time.Second
 	if d < time.Minute {
@@ -197,6 +237,8 @@ func formatSpent(seconds int64) string {
 
 func init() {
 	statsCmd.Flags().Int("days", 7, "How many days back to include, today counted")
+	statsCmd.Flags().String("from", "", "First day to include (YYYY-MM-DD; statistics are kept a year)")
+	statsCmd.Flags().String("to", "", "Last day to include, with --from (YYYY-MM-DD; default today)")
 	statsCmd.Flags().Bool("json", false, "Print the rows as JSON (for the graphical interface)")
 	statsCmd.Flags().String("user", "", "Only this user's time on websites and apps (times blocked are counted for all)")
 	statsCmd.Flags().Bool("users", false, "List the users with statistics")

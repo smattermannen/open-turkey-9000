@@ -22,13 +22,15 @@ import (
 
 var breakCmd = &cobra.Command{
 	Use:   "break",
-	Short: "Breaks a block allows: an allowance you earn, and unlocking as a break",
+	Short: "Breaks a block allows: a reward you earn, and unlocking as a break",
 	Long: `A block can allow breaks, decided before it is locked.
 
-An allowance earns break time while the block is on, for example 10 minutes
-for every hour of blocking, saved up to one allowance. Take it when you
-choose with 'break start'; the block is lifted for that long and comes back
-by itself, locks and all. 'break end' ends a break early and keeps the rest.
+A reward earns break time while the block is on, for example 10 minutes for
+every hour of blocking, kept up to one break, until the window, day, week or
+month ends, or for as long as you choose ('break reward --keep'). Take it
+when you choose with 'break start'; the block is lifted for that long and
+comes back by itself, locks and all. 'break end' ends a break early and
+keeps the rest.
 
 With relock set, unlocking the block (its typing challenge or password)
 doesn't end it: it lifts it for that long, then it is back with its locks.

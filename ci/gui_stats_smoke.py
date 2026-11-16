@@ -1,8 +1,9 @@
 """GUI smoke test for the Statistics page (§4.9): the daily chart stacks the
 top sites in their own colours (the rest as Other), the legend names them,
 Top 5 / Top 10, search and the block filter (behind a block password, §3.11)
-read the rows again, a site keeps its colour while the filters change, and
-the dashboard never sees the page's filters. Draws the chart on an
+read the rows again, a site keeps its colour while the filters change, a
+custom time frame (dialog says why a range is wrong), and the dashboard
+never sees the page's filters or time frame. Draws the chart on an
 off-screen surface and reads its pixels. Builds kc9k into a scratch folder,
 a wrapper with KC9K_DB = scratch file, loads gui/kc9k-gui.py as a module
 with CLI replaced, another application ID, never shows the main window.
@@ -40,6 +41,8 @@ for n in range(7):
     for name, seconds in SITES:
         con.execute("INSERT INTO usage (day, kind, name, seconds) VALUES (?, 'site', ?, ?)", (day, name, seconds))
 con.execute("INSERT INTO usage (day, kind, name, seconds) VALUES (?, 'app', 'steam', 1200)", (today.isoformat(),))
+con.execute("INSERT INTO usage (day, kind, name, seconds) VALUES (?, 'site', 'old.example', 5000)",
+            ((today - datetime.timedelta(days=15)).isoformat(),))
 con.execute("INSERT INTO usage (day, kind, name, seconds) VALUES (?, 'blocked', 'c.example', 3)", (today.isoformat(),))
 con.commit(); con.close()
 
@@ -223,6 +226,53 @@ spin()
 win.kind_apps.set_active(True)
 check(win.top_chart.items == [("steam", 1200)], "apps: steam")
 check(win.tile_count.get_children()[0].get_text() == "Different apps", "the tile says apps")
+
+# A custom time frame (§4.9 "presets/custom"): from one day to another.
+win.kind_sites.set_active(True)
+days_ago = lambda n: today - datetime.timedelta(days=n)  # noqa: E731
+real_run, seen = Gtk.Dialog.run, []
+
+
+def answer_range(first, last, answer=Gtk.ResponseType.OK):
+    def run(dialog):
+        _d, start, end, note, ok = win.range_dialog
+        start.set_day(first)
+        end.set_day(last)
+        seen.append((note.get_text(), ok.get_sensitive()))
+        return answer
+    Gtk.Dialog.run = run
+
+
+answer_range(days_ago(20), days_ago(10))
+win.stats_period.set_active_id("custom")
+pump(lambda: page_names() == {"old.example"})
+spin()
+check(seen[-1] == ("11 days", True), "the dialog counts the days: %s" % seen)
+check(win.top_chart.items == [("old.example", 5000)], "custom: only what is in the time frame")
+check(len(win.daily_chart.days) == 11 and win.daily_chart.days[0][0] == days_ago(20), "the chart covers those days")
+check(win.stats_range_button.get_visible() and win.stats_range_button.get_label() == gui.range_words(days_ago(20), days_ago(10)),
+      "the time frame shows: %s" % win.stats_range_button.get_label())
+win.update_dashboard_stats()
+check(win.dash_top.items and win.dash_top.items[0][0] == "a.example", "the dashboard still shows today")
+
+for first, last, why in ((days_ago(3), days_ago(5), "after the last"), (days_ago(2), today + datetime.timedelta(days=1), "still to come"),
+                         (days_ago(400), days_ago(1), "kept for a year")):
+    answer_range(first, last, Gtk.ResponseType.CANCEL)
+    win.stats_range_button.clicked()
+    check(why in seen[-1][0] and not seen[-1][1], "refused with a reason: %s" % seen[-1][0])
+check(win.stats_range == (days_ago(20), days_ago(10)), "cancelled: the time frame stays")
+
+answer_range(days_ago(6), today)
+win.stats_range_button.clicked()
+pump(lambda: len(page_names()) == 9)
+check(len(win.daily_chart.days) == 7, "changed with the button: the last seven days")
+
+answer_range(days_ago(1), days_ago(0), Gtk.ResponseType.CANCEL)
+win.stats_period.set_active_id("30")
+win.stats_period.set_active_id("custom")
+check(win.stats_period.get_active_id() == "30" and not win.stats_range_button.get_visible(),
+      "Custom… cancelled: back to the period before, no time frame shown")
+Gtk.Dialog.run = real_run
 
 print("FAILED: %d" % len(fails) if fails else "all passed")
 raise SystemExit(1 if fails else 0)

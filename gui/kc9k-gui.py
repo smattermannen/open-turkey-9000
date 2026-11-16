@@ -801,8 +801,10 @@ class DurationField(CheckedField):
     def __init__(self, seconds=0, minimum=60, maximum=None, zero=None, bare=60,
                  presets=(), why_max="", width=12):
         self.minimum, self.maximum, self.zero, self.bare, self.why_max = minimum, maximum, zero, bare, why_max
-        super().__init__(duration_text(seconds) if seconds else "", width,
-                         zero if zero else "e.g. 2h 30m" if bare == 60 else "e.g. 90s",
+        # A meaning too long for the box is said under it; the box says none.
+        self.zero_below = zero is not None and len(zero) > width + 1
+        placeholder = ("none" if self.zero_below else zero) if zero else "e.g. 2h 30m" if bare == 60 else "e.g. 90s"
+        super().__init__(duration_text(seconds) if seconds else "", width, placeholder,
                          [(short_length(p), duration_text(p)) for p in presets])
 
     def read(self, text):
@@ -822,6 +824,8 @@ class DurationField(CheckedField):
 
     def describe(self, value):
         if value == 0 and self.zero is not None:
+            if self.zero_below:
+                return self.zero
             # The placeholder already says it while empty.
             return "" if not self.entry.get_text().strip() else self.zero
         return duration_words(value)
@@ -937,17 +941,88 @@ def top_align(box):
     return box
 
 
+class WrapBox(Gtk.Fixed):
+    """Lays widgets out like words in a line of text (R-GUI-3): each at its
+    natural width, a new line only when the next doesn't fit, none
+    stretched sideways. (GTK 3's FlowBox lines its children up in columns
+    and asks only for its widest child's width.) Hidden widgets take no
+    place. Gtk.Fixed keeps the children, in C: a container written in
+    Python (do_forall) hangs GTK when a destroyed one is finalized."""
+
+    spacing = row_spacing = 6
+
+    def __init__(self, spacing=6, row_spacing=6):
+        super().__init__()
+        self.spacing, self.row_spacing = spacing, row_spacing
+
+    def do_get_request_mode(self):
+        return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
+
+    def shown(self):
+        return [widget for widget in self.get_children() if widget.get_visible()]
+
+    def do_get_preferred_width(self):
+        sizes = [widget.get_preferred_width() for widget in self.shown()]
+        minimum = max((m for m, _n in sizes), default=0)
+        natural = sum(n for _m, n in sizes) + self.spacing * max(len(sizes) - 1, 0)
+        return minimum, max(minimum, natural)
+
+    def do_get_preferred_width_for_height(self, _height):
+        return self.do_get_preferred_width()
+
+    def lines(self, width):
+        """The lines at this width: [[widget, width, height]]."""
+        lines, line, used = [], [], 0
+        for widget in self.shown():
+            minimum, natural = widget.get_preferred_width()
+            cell = min(natural, max(width, minimum))
+            if line and used + self.spacing + cell > width:
+                lines.append(line)
+                line, used = [], 0
+            used += (self.spacing if line else 0) + cell
+            line.append([widget, cell, 0])
+        if line:
+            lines.append(line)
+        for line in lines:
+            for item in line:
+                item[2] = item[0].get_preferred_height_for_width(item[1])[1]
+        return lines
+
+    def height_for(self, width):
+        lines = self.lines(width)
+        return sum(max(h for _w, _c, h in line) for line in lines) + self.row_spacing * max(len(lines) - 1, 0)
+
+    def do_get_preferred_height_for_width(self, width):
+        height = self.height_for(width)
+        return height, height
+
+    def do_get_preferred_height(self):
+        height = self.height_for(self.do_get_preferred_width()[1])
+        return height, height
+
+    def do_size_allocate(self, allocation):
+        self.set_allocation(allocation)
+        y = allocation.y
+        for line in self.lines(allocation.width):
+            line_height = max(h for _w, _c, h in line)
+            x = allocation.x
+            for widget, cell, _h in line:
+                rect = Gdk.Rectangle()
+                rect.x, rect.y, rect.width, rect.height = x, y, cell, line_height
+                widget.size_allocate(rect)
+                x += cell + self.spacing
+            y += line_height + self.row_spacing
+
+
 def flow_row(row):
     """Turns a row of widgets into one that wraps onto more lines when the
-    window is narrow (R-GUI-3: works at 1024 pixels wide), in place."""
-    flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, column_spacing=6, row_spacing=6,
-                       homogeneous=False, max_children_per_line=40, valign=Gtk.Align.START,
-                       halign=Gtk.Align.START)
+    window is narrow (R-GUI-3: works at 1024 pixels wide), in place, with
+    the row's own spacing."""
+    flow = WrapBox(spacing=row.get_spacing() or 6)
+    flow.set_valign(Gtk.Align.START)
     for child in row.get_children():
         row.remove(child)
         flow.add(child)
-    for holder in flow.get_children():
-        holder.set_can_focus(False)
     parent = row.get_parent()
     if parent is not None:
         index = parent.get_children().index(row)
@@ -989,6 +1064,70 @@ def until_words(moment, now=None):
     if days >= 60:
         return f"in {int(days // 30.4)} months"
     return "in " + duration_words(int(seconds) // 60 * 60 or 60)
+
+
+class DateButton(Gtk.MenuButton):
+    """A day: a button showing it that opens a calendar (§4.9 time frame)."""
+
+    def __init__(self, day):
+        super().__init__()
+        self.callbacks = []
+        inner = Gtk.Box(spacing=6)
+        inner.pack_start(Gtk.Image.new_from_icon_name("x-office-calendar-symbolic", Gtk.IconSize.BUTTON),
+                         False, False, 0)
+        self.label = Gtk.Label()
+        inner.pack_start(self.label, False, False, 0)
+        self.add(inner)
+        popover = Gtk.Popover()
+        self.calendar = Gtk.Calendar(margin=8)
+        self.calendar.show()
+        popover.add(self.calendar)
+        self.set_popover(popover)
+        self.day = day
+        self.set_day(day)
+        self.calendar.connect("day-selected", self.picked)
+        self.calendar.connect("day-selected-double-click", lambda *_a: popover.popdown())
+
+    def set_day(self, day):
+        self.calendar.select_month(day.month - 1, day.year)
+        self.calendar.select_day(day.day)
+        self.picked(self.calendar)
+
+    def picked(self, calendar):
+        year, month, day = calendar.get_date()
+        self.day = datetime.date(year, month + 1, day)
+        self.label.set_text(self.day.strftime("%-d %b %Y"))
+        for callback in self.callbacks:
+            callback()
+
+    def on_change(self, callback):
+        self.callbacks.append(callback)
+
+
+def stats_range_problem(first, last, today):
+    """Why a time frame can't be shown (R-GUI-1: say why), or None."""
+    if first > last:
+        return "The first day is after the last."
+    if last > today:
+        return "The last day is still to come: statistics reach today."
+    oldest = today - datetime.timedelta(days=STATS_KEEP_DAYS - 1)
+    if first < oldest:
+        return f"Statistics are kept for a year: the first day can be {oldest.strftime('%-d %b %Y')} at the earliest."
+    return None
+
+
+def range_words(first, last):
+    """A time frame in words: 2 – 16 Nov 2026, 28 Oct – 3 Nov 2026."""
+    if first == last:
+        return first.strftime("%-d %b %Y")
+    if first.year != last.year:
+        return f"{first.strftime('%-d %b %Y')} – {last.strftime('%-d %b %Y')}"
+    if first.month != last.month:
+        return f"{first.strftime('%-d %b')} – {last.strftime('%-d %b %Y')}"
+    return f"{first.day} – {last.strftime('%-d %b %Y')}"
+
+
+STATS_KEEP_DAYS = 365  # enforce.StatsKeepDays
 
 
 class TimerLockField(Gtk.Box):
@@ -1719,7 +1858,7 @@ class EditableList(Gtk.Box):
         self.conceal()
 
     def conceal(self):
-        """Covers the terms again (when the list hides them and has any)."""
+        """Covers the entries again (when the list hides them and has any)."""
         self.revealed = not self.hidden
         self._show_cover()
 
@@ -1731,7 +1870,7 @@ class EditableList(Gtk.Box):
         count = len(self.store)
         covered = not self.revealed and count > 0
         self.cover_label.set_markup(
-            f"<b>{count} {'term' if count == 1 else 'terms'} hidden</b>\n"
+            f"<b>{count} {'entry' if count == 1 else 'entries'} hidden</b>\n"
             "<small>Click to show</small>")
         self.stack.set_visible_child_name("cover" if covered else "list")
         if self.search is not None:
@@ -1743,7 +1882,7 @@ class EditableList(Gtk.Box):
 
     def set_items(self, items, owner=None):
         """Shows items. A different owner (another block, say) covers the
-        terms again."""
+        entries again."""
         if owner != self.owner:
             self.owner = owner
             if self.search is not None:
@@ -5702,8 +5841,9 @@ class Window(Gtk.ApplicationWindow):
             delay_row.pack_start(widget, False, False, 0)
         box.pack_start(section(
             "Breaks",
-            dim("Break time is earned while the block is on and saved up to one allowance. Take "
-                "it when you choose, also while the block is locked; the block comes back by "
+            dim("Break time is earned while the block is on and kept as chosen below: up to one "
+                "break, until the window, day, week or month ends, or for as long as you choose. "
+                "Take it when you choose, also while the block is locked; the block comes back by "
                 "itself. Allowing more breaks weakens the block, so decide before locking it."),
             allowance_row, allowance_buttons, self.break_label,
             dim("With the box below ticked, passing the typing challenge or giving the password "
@@ -7181,8 +7321,14 @@ class Window(Gtk.ApplicationWindow):
         self.stats_period = Gtk.ComboBoxText()
         for days, label in ((1, "Today"), (7, "Last 7 days"), (30, "Last 30 days"), (90, "Last 90 days")):
             self.stats_period.append(str(days), label)
+        self.stats_period.append("custom", "Custom…")  # §4.9: presets and custom
         self.stats_period.set_active_id("7")
-        self.stats_period.connect("changed", lambda _c: self.refresh_stats())
+        self.stats_range, self.stats_last_period = None, "7"
+        self.stats_period.connect("changed", self.stats_period_changed)
+        self.stats_range_button = Gtk.Button()
+        self.stats_range_button.set_tooltip_text("Change the time frame")
+        self.stats_range_button.connect("clicked", lambda _b: self.choose_stats_range() and self.refresh_stats())
+        self.stats_range_button.set_no_show_all(True)
         kinds = Gtk.Box()
         kinds.get_style_context().add_class("linked")
         self.kind_sites = Gtk.RadioButton.new_with_label(None, "Websites")
@@ -7209,14 +7355,23 @@ class Window(Gtk.ApplicationWindow):
         self.stats_block.append("", "All blocks")
         self.stats_block.set_active_id("")
         self.stats_block.connect("changed", lambda c: not self.updating and self.refresh_stats())
-        controls.pack_start(self.stats_period, False, False, 0)
-        controls.pack_start(self.stats_user, False, False, 0)
+        # Two rows (R-GUI-3: each wraps on a narrow window): what time and
+        # whose, what kind; then which. The period, its time frame and the
+        # user chooser stay together (hidden ones leave no gap).
+        when = Gtk.Box(spacing=6)
+        when.pack_start(self.stats_period, False, False, 0)
+        when.pack_start(self.stats_range_button, False, False, 0)
+        when.pack_start(self.stats_user, False, False, 0)
+        controls.pack_start(when, False, False, 0)
         controls.pack_start(kinds, False, False, 0)
-        controls.pack_start(self.stats_top, False, False, 0)
-        controls.pack_start(self.stats_block, False, False, 0)
-        controls.pack_start(self.stats_search, False, False, 0)
+        which = Gtk.Box(spacing=12)
+        which.pack_start(self.stats_top, False, False, 0)
+        which.pack_start(self.stats_block, False, False, 0)
+        which.pack_start(self.stats_search, False, False, 0)
         box.pack_start(controls, False, False, 0)
+        box.pack_start(which, False, False, 0)
         flow_row(controls)
+        flow_row(which)
         self.series_slots = {}  # name -> palette slot: a site keeps its colour
 
         self.stats_off = Gtk.InfoBar(message_type=Gtk.MessageType.INFO)
@@ -7273,17 +7428,89 @@ class Window(Gtk.ApplicationWindow):
         self.update_stats_blocks()
         set_switch(self.stats_private_switch, self.state.get("stats_skip_private", False))
 
+    def stats_frame(self):
+        """The Statistics page's first and last day (§4.9 presets and custom)."""
+        today = datetime.date.today()
+        period = self.stats_period.get_active_id() if hasattr(self, "stats_period") else "7"
+        if period == "custom" and self.stats_range:
+            return self.stats_range
+        days = int(period) if (period or "").isdigit() else 7
+        return today - datetime.timedelta(days=days - 1), today
+
+    def stats_period_changed(self, combo):
+        if self.updating:
+            return
+        if combo.get_active_id() == "custom":
+            if not self.choose_stats_range():
+                was, self.updating = self.updating, True
+                combo.set_active_id(self.stats_last_period)  # cancelled: as before
+                self.updating = was
+                return
+        else:
+            self.stats_last_period = combo.get_active_id()
+        self.stats_range_button.set_visible(combo.get_active_id() == "custom")
+        self.refresh_stats()
+
+    def choose_stats_range(self):
+        """§4.9 custom time frame: from one day to another, within the year
+        statistics are kept. Returns whether one was chosen."""
+        today = datetime.date.today()
+        first, last = self.stats_range or (today - datetime.timedelta(days=29), today)
+        dialog = Gtk.Dialog(title="Time frame", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Show", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        for side in ("start", "end", "top", "bottom"):
+            getattr(box, f"set_margin_{side}")(18)
+        box.pack_start(dim("Statistics are kept for a year."), False, False, 0)
+        grid = Gtk.Grid(column_spacing=10, row_spacing=8)
+        start, end = DateButton(first), DateButton(last)
+        for row, (label, button) in enumerate((("From", start), ("To", end))):
+            grid.attach(Gtk.Label(label=label, xalign=0), 0, row, 1, 1)
+            grid.attach(button, 1, row, 1, 1)
+        box.pack_start(grid, False, False, 0)
+        note = Gtk.Label(xalign=0, wrap=True, max_width_chars=40)
+        note.get_style_context().add_class("kc9k-note")
+        box.pack_start(note, False, False, 0)
+
+        def check():
+            problem = stats_range_problem(start.day, end.day, datetime.date.today())
+            days = (end.day - start.day).days + 1
+            note.set_text(problem or ("1 day" if days == 1 else f"{days} days"))
+            context = note.get_style_context()
+            (context.add_class if problem else context.remove_class)("error")
+            ok.set_sensitive(problem is None)
+
+        start.on_change(check)
+        end.on_change(check)
+        check()
+        self.range_dialog = (dialog, start, end, note, ok)  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        chosen = (start.day, end.day)
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK or stats_range_problem(*chosen, datetime.date.today()):
+            return False
+        self.stats_range = chosen
+        self.stats_range_button.set_label(range_words(*chosen))
+        return True
+
     def refresh_stats(self):
-        days = int(self.stats_period.get_active_id() or 7) if hasattr(self, "stats_period") else 7
-        # The dashboard needs today; ask for at least that.
         if self.locked("stats") and self.locked("dashboard"):
             return True
         passwords = list(self.access_passwords)
         who = self.stats_user.get_active_id() if hasattr(self, "stats_user") else ""
-
-        args = ["stats", "--json", "--days", str(max(days, 1))] + (["--user", who] if who else [])
-        # §4.9: the page's search and block filter; the dashboard always
-        # gets everything, so with a filter on there are two reads.
+        user = ["--user", who] if who else []
+        first, last = self.stats_frame()
+        if hasattr(self, "stats_period") and self.stats_period.get_active_id() == "custom":
+            frame = ["--from", first.isoformat(), "--to", last.isoformat()]
+        else:
+            frame = ["--days", str((last - first).days + 1)]
+        # §4.9: the page's search and block filter. The dashboard needs
+        # today, unfiltered: one read when the page's is that, else two.
         filters, secret = [], None
         if hasattr(self, "stats_search"):
             search = self.stats_search.get_text().strip()
@@ -7295,33 +7522,35 @@ class Window(Gtk.ApplicationWindow):
                 if block in self.block_passwords:
                     secret = self.block_passwords[block] + "\n"
 
+        page_args = ["stats", "--json", *frame, *user, *filters]
+        same = not filters and last == datetime.date.today()
+
         def work():
-            ok, output = cli_with_access(passwords, args)
-            filtered = cli_with_access(passwords, args + filters, secret) if filters and ok else (ok, output)
-            GLib.idle_add(self.apply_stats, ok, output, *filtered)
+            page = cli_with_access(passwords, page_args, secret)
+            dashboard = page if same else cli_with_access(passwords, ["stats", "--json", "--days", "1", *user])
+            GLib.idle_add(self.apply_stats, *dashboard, *page)
 
         threading.Thread(target=work, daemon=True).start()
         return True
 
     def apply_stats(self, ok, output, page_ok=None, page_output=None):
-        """The rows read: output for the dashboard, page_output (the same
-        without filters) for the Statistics page."""
+        """The rows read: output for the dashboard (today at least),
+        page_output for the Statistics page (its time frame and filters)."""
         if not ok:
             return False
         if page_ok is None:
             page_ok, page_output = ok, output
-        if not page_ok and hasattr(self, "stats_block"):
-            if "block password" in (page_output or ""):
-                self.message("That block's sites and apps are behind its block password: open the block "
-                             "and use Show contents… first.", Gtk.MessageType.INFO)
-            else:
-                self.message(page_output or "The statistics could not be read.", Gtk.MessageType.WARNING)
-            self.stats_block.set_active_id("")  # reads again, without it
-            page_output = output
         data = json.loads(output)
         self.stats_rows = data["rows"]
-        self.stats_page_rows = json.loads(page_output)["rows"]
         self.stats_on = data["enabled"]
+        if page_ok:
+            self.stats_page_rows = json.loads(page_output)["rows"]
+        elif "block password" in (page_output or "") and hasattr(self, "stats_block"):
+            self.message("That block's sites and apps are behind its block password: open the block "
+                         "and use Show contents… first.", Gtk.MessageType.INFO)
+            self.stats_block.set_active_id("")  # reads again, without it
+        else:
+            self.message(page_output or "The statistics could not be read.", Gtk.MessageType.WARNING)
         users = [""] + (data.get("users") or [])
         if hasattr(self, "stats_user") and users != getattr(self, "stats_users_shown", [""]):
             chosen = self.stats_user.get_active_id() or ""
@@ -7371,9 +7600,9 @@ class Window(Gtk.ApplicationWindow):
         # §4.9: times blocked are counts, not seconds.
         fmt = fmt_count if kind == "blocked" else fmt_spent
         self.daily_chart.fmt = self.top_chart.fmt = fmt
-        days = int(self.stats_period.get_active_id() or 7)
-        today = datetime.date.today()
-        dates = [today - datetime.timedelta(days=n) for n in range(days - 1, -1, -1)]
+        first, last = self.stats_frame()
+        dates = [first + datetime.timedelta(days=n) for n in range((last - first).days + 1)]
+        days = len(dates)
         per_day = {d.isoformat(): 0 for d in dates}
         by_name = {d.isoformat(): {} for d in dates}
         totals = {}

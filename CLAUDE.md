@@ -378,7 +378,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   shows `kc9kTestReport`, skips them in `kc9kListMatches`.
 - **Statistics**: foreground app time (daemon) and site time (extension);
   not counted when locked or after 2 min idle; kept a year. `stats --json`
-  rows are filtered by `--search`/`--block` (block password, §3.11). GUI:
+  rows are filtered by `--search`/`--block` (block password, §3.11); time
+  frame `--days N` or `--from D [--to D]` (GUI Custom…, `DateButton`,
+  `stats_range_problem`). GUI:
   `DailyChart.set_stacks` (top names stacked bottom up, the rest Other),
   `Legend`, `assign_series` (a name keeps its palette slot, never two shown
   in one), `SERIES_LIGHT`/`SERIES_DARK`; the dashboard reads `stats_rows`
@@ -387,7 +389,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `kc9k stats --json`; every change runs a `kc9k` command. Design layer
   (R-GUI-3, `APP_CSS`): `page_header`, `section` (a card; `help=` puts
   long text behind a ? popover), `card`, `pill`/`block_pills`,
-  `flow_row` (wraps a row so the window fits 1000 px). Inputs (R-GUI-1/2):
+  `flow_row` (a row into a `WrapBox`: laid out like words, natural widths,
+  a new line only when the next doesn't fit; GTK 3's FlowBox put one per
+  line). `WrapBox` is a `Gtk.Fixed` overriding only size vfuncs: never
+  write a container in Python (`do_forall`): GTK calls it on a fresh
+  wrapper when a destroyed one is finalized and spins. Inputs (R-GUI-1/2):
   `DurationField` (typed `2d 4h`, says why when wrong, never clamps),
   `NumberField`, `TimerLockField` (none / for / until a calendar date),
   `LockPicker` (every lock kind; `lock_dialog` reads it before closing).

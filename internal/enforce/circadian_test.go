@@ -18,6 +18,7 @@ type fakeScreen struct {
 	external   int // of 100
 	red, blue  []uint16
 	gammaSets  int
+	gammaReads int
 	noX        bool
 	wallpapers []string
 	darks      []bool
@@ -76,6 +77,7 @@ func fakeCircadian(t *testing.T) *fakeScreen {
 	circadianExternalKnown = func(*db.DB) []circadianLevel { return circadianExternal() }
 	circadianDDC = func() bool { return true }
 	circadianReadGamma = func(want blocker.RampFunc) blocker.GammaReading {
+		f.gammaReads++
 		if f.noX {
 			return blocker.GammaUnknown
 		}
@@ -342,6 +344,64 @@ func TestCircadianGammaRestoredOnceWhenOff(t *testing.T) {
 	NewCircadian(d).Step(at(20, 0, 15))
 	if f.gammaSets != sets {
 		t.Error("restored more than once")
+	}
+}
+
+// §4.10: off, it touches nothing, and the desktop's night light keeps
+// working (owner, 2026-11-15: it turned itself off, also with circadian
+// off). After a restart KC9K knows the ramp it last set: with circadian
+// off it gives plain ramps back only if that one is still on the screens,
+// never over someone else's; on, someone else's pauses the clips instead
+// of being overridden. Off with nothing to give back, nothing is read.
+func TestCircadianGammaAfterRestart(t *testing.T) {
+	off := func(d *db.DB) {
+		c := CircadianConfig(d)
+		c.On = false
+		if err := SetCircadianConfig(d, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Off after a restart, the night light's ramp on the screens: left.
+	d, f := testDB(t), fakeCircadian(t)
+	circadianWith(t, d, testGamma, nil)
+	NewCircadian(d).Step(at(20, 0, 0))
+	f.someoneSetsGamma()
+	f.nightLight = true
+	theirs := append([]uint16{}, f.blue...)
+	off(d)
+	sets := f.gammaSets
+	NewCircadian(d).Step(at(20, 0, 5))
+	if f.gammaSets != sets || !near(f.blue, theirs) {
+		t.Fatal("off after a restart, KC9K reset the night light's ramp")
+	}
+	// Nothing left to give back: nothing is read any more.
+	reads := f.gammaReads
+	e := NewCircadian(d)
+	e.Step(at(20, 0, 10))
+	e.Step(at(20, 0, 15))
+	if f.gammaReads != reads || f.gammaSets != sets {
+		t.Errorf("off: %d reads, %d sets", f.gammaReads-reads, f.gammaSets-sets)
+	}
+
+	// Off after a restart, KC9K's own ramp still on the screens: given back.
+	d2, f2 := testDB(t), fakeCircadian(t)
+	circadianWith(t, d2, testGamma, nil)
+	NewCircadian(d2).Step(at(20, 0, 0))
+	off(d2)
+	NewCircadian(d2).Step(at(20, 0, 5))
+	if !near(f2.blue, plain256()) {
+		t.Error("off after a restart, KC9K's own ramp stayed")
+	}
+
+	// On after a restart, someone else's ramp: the clips pause.
+	d3, f3 := testDB(t), fakeCircadian(t)
+	circadianWith(t, d3, testGamma, nil)
+	NewCircadian(d3).Step(at(20, 0, 0))
+	f3.someoneSetsGamma()
+	theirs = append([]uint16{}, f3.blue...)
+	NewCircadian(d3).Step(at(20, 0, 5))
+	if !near(f3.blue, theirs) || LanePausedUntil(CircadianPauses(d3, at(20, 0, 5)), circadian.LaneKelvin) == 0 {
+		t.Error("on after a restart, someone else's ramp was overridden")
 	}
 }
 

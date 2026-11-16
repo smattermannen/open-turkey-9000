@@ -237,6 +237,11 @@ type circadianApplied struct {
 	Wallpaper string `json:"wallpaper"`
 	Dark      string `json:"dark"`
 	Gamma     bool   `json:"gamma"` // KC9K's ramps are on the screens
+	// The ramp KC9K last set, so that after a restart it tells its own
+	// from someone else's (the desktop's night light): 0 from older
+	// versions, which didn't note it.
+	Kelvin     float64 `json:"kelvin,omitempty"`
+	Brightness float64 `json:"brightness,omitempty"`
 }
 
 // CircadianStatus is what the engine found, for `kc9k circadian show`.
@@ -322,6 +327,7 @@ type Circadian struct {
 	gammaSet        bool // gammaKelvin and gammaBrightness are what the screens were given
 	gammaKelvin     float64
 	gammaBrightness float64
+	gammaStarted    bool // the first look at the ramps since the engine started is done
 
 	previewSeen map[string]CircadianPreview // clip -> the preview already taken over
 
@@ -582,29 +588,49 @@ func (e *Circadian) gamma(cfg circadian.Config, previewed bool, minute float64, 
 		return circadianReadGamma(rampFor(e.gammaKelvin, e.gammaBrightness))
 	}
 	if !on {
-		// Both clips off: give the screens their plain ramps back, once,
-		// unless someone else has set ramps since.
-		reading := circadianReadGamma(nil)
+		// Both clips off (§4.10: off, it touches nothing): KC9K's own ramp,
+		// if it is still on the screens, gives way to plain ones, once.
+		// Someone else's (the desktop's night light) is left alone, also
+		// right after a restart; nothing is read once there is nothing to
+		// give back.
+		reading := blocker.GammaUnknown
 		if applied.Gamma {
+			kelvin, brightness, known := applied.Kelvin, applied.Brightness, applied.Kelvin > 0
 			if e.gammaSet {
-				reading = circadianReadGamma(rampFor(e.gammaKelvin, e.gammaBrightness))
+				kelvin, brightness, known = e.gammaKelvin, e.gammaBrightness, true
+			}
+			if known {
+				reading = circadianReadGamma(rampFor(kelvin, brightness))
+			} else {
+				reading = circadianReadGamma(nil)
 			}
 			if reading == blocker.GammaUnknown {
 				return reading // no screen to restore yet
 			}
-			if reading == blocker.GammaOurs || !e.gammaSet {
+			// An older version's ramp can't be told from someone else's: it
+			// is given back unless the desktop's night light is on.
+			if reading == blocker.GammaOurs || (!known && reading == blocker.GammaOther && !circadianNightLight()) {
 				if _, err := circadianSetGamma(nil); err != nil {
 					log.Printf("circadian: restoring the colours: %v", err)
 				}
 				reading = blocker.GammaIdentity
 			}
-			applied.Gamma = false
+			applied.Gamma, applied.Kelvin, applied.Brightness = false, 0, 0
 		}
 		e.gammaSet = false
 		if _, paused := pauses[PauseGamma]; paused {
 			resume(PauseGamma)
 		}
 		return reading
+	}
+	if !e.gammaStarted {
+		// Right after a restart: what KC9K last set, to tell it from
+		// someone else's ramp (the desktop's night light), which then
+		// pauses the clips instead of being overridden.
+		e.gammaStarted = true
+		if !e.gammaSet && applied.Gamma && applied.Kelvin > 0 {
+			e.gammaSet, e.gammaKelvin, e.gammaBrightness = true, applied.Kelvin, applied.Brightness
+		}
 	}
 
 	var reading blocker.GammaReading
@@ -645,7 +671,7 @@ func (e *Circadian) gamma(cfg circadian.Config, previewed bool, minute float64, 
 		return reading
 	}
 	e.gammaSet, e.gammaKelvin, e.gammaBrightness = true, kelvin, brightness
-	applied.Gamma = true
+	applied.Gamma, applied.Kelvin, applied.Brightness = true, kelvin, brightness
 	return blocker.GammaOurs
 }
 

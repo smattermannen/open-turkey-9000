@@ -58,11 +58,20 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     toggles on and off; desktop night light turns itself off while its
     switch shows on, **also with circadian off and strict mode off** (§4.10
     circadian: must leave the desktop's controls working, off touches
-    nothing). Cause unknown. Suspects: `RunCircadian` still drives the
-    gamma ramp or backlight when off (`gamma()` restore path, `levels`),
-    `circadian nightlight off` run earlier, or something outside KC9K.
-    Next: on the laptop, `kc9k circadian` status, `journalctl -u kc9k |
-    grep circadian`, and whether it stops with the daemon stopped. M
+    nothing). Found 2026-11-16 (code reading): once KC9K had set colours,
+    every daemon restart (tests and upgrades restart it) with circadian or
+    its colour clips off gave the screens plain gamma ramps, also when the
+    ramps on them were the desktop night light's (after a restart it didn't
+    know what it had set): the night light went off while its switch
+    showed on. Fixed: KC9K saves the ramp it set (`circadian.applied`),
+    gives plain ramps back only if that one is still on the screens, and
+    after a restart someone else's ramp pauses the clips instead of being
+    overridden; off with nothing to give back, it doesn't even read the
+    ramps (`TestCircadianGammaAfterRestart`). The backlight is never
+    written while its clip is off (`levels`). Left: the brightness slider
+    gone from the menu with strict mode off is not explained by this;
+    confirm both on the laptop (`kc9k circadian`, `journalctl -u kc9k |
+    grep circadian`, whether it stops with the daemon stopped). M
     (Strict lockdown's polkit rule also blocks the backlight helper and
     colord, which breaks the same controls while strict mode is on; fix
     done.)

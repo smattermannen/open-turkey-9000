@@ -251,6 +251,19 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   all but loopback), restores at end. Device vars (`wifiRadio`, `setLink`,
   `cutFirewall`) faked in `TestMain`; `KC9K_DB` cuts nothing
   (`monkDeviceless`). `migrateMonkMode` removed the old block.
+- **Trigger actions** (`db/triggers.go`, `enforce/trigger.go`,
+  `cli/triggers.go`; owner 2026-11-16): table `trigger_actions` (block,
+  group `apps`|`titles`|`place:<place id>`, JSON actions); no row = default
+  (`close`; `enable` for a place rule). `kc9k block trigger B GROUP ACTION
+  on|off [--for D]` (group `place:NAME` on the CLI; on/longer free, off/
+  shorter weakens; monk needs `--no-confirm-ok`). Daemon: `appsTrigger`
+  (close or `RunningApps`), titles via `TitleGuard.EnforceWatch` (watch
+  without closing), `placeArrivals` (arrival edge, `place.here.<id>`;
+  first look only records), `placeEnables` in `PlaceBlocks`/`PlaceRuled`;
+  `fireTrigger` ≤ once a minute per block+group → `runAnnounced`. GUI
+  `TriggerEditor` (apps, titles; place rule via On at → Actions…),
+  gui-state `triggers`, projects `triggers` (place keys in backups).
+  `ci/gui_trigger_smoke.py`.
 - **Consequences** (`enforce/consequence.go`): close browsers, lock
   screen/logout/shutdown (via Frozen Chicken, only extended; ≤ once per 10
   min), monk. Device effects via replaceable vars.

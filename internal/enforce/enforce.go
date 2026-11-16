@@ -149,7 +149,23 @@ func enforceTitles(d *db.DB, active []db.ActiveBlockDetail, now time.Time) {
 	if !titleGuardBusy.CompareAndSwap(false, true) {
 		return
 	}
-	keywords := activeTitles(active)
+	// Owner, 2026-11-16: a block's window titles close their windows unless
+	// its title actions leave them open; then they are only watched, for
+	// the other actions.
+	var keywords, watch []string
+	titleActions := map[string][]db.TriggerAction{}
+	for _, b := range active {
+		if len(b.Titles) == 0 {
+			continue
+		}
+		actions := triggerActions(d, b.BlockName, db.TriggerTitles)
+		titleActions[b.BlockName] = actions
+		if hasTriggerAction(actions, db.TriggerClose) {
+			keywords = append(keywords, b.Titles...)
+		} else if len(triggerConsequences(actions)) > 0 {
+			watch = append(watch, b.Titles...)
+		}
+	}
 	owners := titleOwners(active)
 	var folders []string
 	for _, b := range active {
@@ -163,10 +179,14 @@ func enforceTitles(d *db.DB, active []db.ActiveBlockDetail, now time.Time) {
 	titleGuard.SetFolders(folders)
 	go func() {
 		defer titleGuardBusy.Store(false)
-		_, asked := titleGuard.Enforce(keywords, now)
-		for _, keyword := range asked {
+		_, asked, seen := titleGuard.EnforceWatch(keywords, watch, now)
+		for _, keyword := range append(asked, seen...) {
 			for _, block := range owners[keyword] {
 				logEvent(d, db.EventTitle, block, keyword)
+				if actions, ok := titleActions[block]; ok {
+					fireTrigger(d, block, db.TriggerTitles, actions,
+						"A window of block '"+block+"' was open ("+keyword+").", now)
+				}
 			}
 		}
 	}()
@@ -223,14 +243,6 @@ func activeNames(d *db.DB) []string {
 	return names
 }
 
-// activeTitles collects the window-title keywords of the active blocks.
-func activeTitles(active []db.ActiveBlockDetail) []string {
-	var out []string
-	for _, b := range active {
-		out = append(out, b.Titles...)
-	}
-	return dedup(out)
-}
 
 // deferKills makes Apply leave blocked apps to the daemon (see ApplyFromDB).
 // Only set while the apply lock is held.
@@ -452,7 +464,7 @@ func Tick(d *db.DB, now time.Time) error {
 	// Kill blocked processes, block by block so each kill is logged as an
 	// event of its block.
 	for _, b := range active {
-		killAppsFor(d, b.Apps, blockUIDs(b), db.EventApp, b.BlockName)
+		appsTrigger(d, b, now) // closes them, unless the apps' actions say otherwise
 	}
 	if guard {
 		killApps(d, ResetGuardApps, db.EventTamper) // installer media guard
@@ -481,9 +493,10 @@ func killApps(d *db.DB, apps []string, kind string, blocks ...string) {
 }
 
 // killAppsFor is killApps for the processes of uids only (nil: everyone).
-func killAppsFor(d *db.DB, apps []string, uids []uint64, kind string, blocks ...string) {
+// It returns how many processes it closed.
+func killAppsFor(d *db.DB, apps []string, uids []uint64, kind string, blocks ...string) int {
 	if len(apps) == 0 {
-		return
+		return 0
 	}
 	killed, err := blocker.KillBlockedFor(apps, uids, kind == db.EventApp && OptionOn(d, OptionPoliteClose), time.Now())
 	if err != nil {
@@ -496,6 +509,7 @@ func killAppsFor(d *db.DB, apps []string, uids []uint64, kind string, blocks ...
 				"Killer Chicken 9000 closed it: it is in a block that is on.")
 		}
 	}
+	return killed
 }
 
 // applyDueEdits applies the queued edits (see db/pending.go) whose time has
@@ -554,6 +568,7 @@ func reconcileSchedulesAt(d *db.DB, now time.Time, trusted int64) error {
 	// §3.3): enabledBlocks lifts active blocks outside their windows. Places
 	// still need Wi-Fi on to be seen.
 	keepWifiOn(d)
+	placeArrivals(d, now) // a place rule's actions besides enabling, on arrival
 	return nil
 }
 

@@ -87,6 +87,10 @@ type blockExtras struct {
 	Pomodoro      *pomodoroExport `json:"pomodoro,omitempty"`
 	Breaks        *breaksExport   `json:"breaks,omitempty"`
 	Autostarts    []db.Autostart  `json:"autostarts,omitempty"` // §3.6
+	// Triggers: what the block's apps and titles do, and (backups only)
+	// each place rule, as "place:<name>" (owner, 2026-11-16); left out:
+	// the group's default.
+	Triggers map[string][]db.TriggerAction `json:"triggers,omitempty"`
 }
 
 type projectBlock struct {
@@ -233,7 +237,46 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	for _, a := range rules {
 		out.Autostarts = append(out.Autostarts, db.Autostart{Kind: a.Kind, At: a.At, Days: a.Days, Minute: a.Minute})
 	}
+	out.Triggers = map[string][]db.TriggerAction{}
+	groups := map[string]string{db.TriggerApps: db.TriggerApps, db.TriggerTitles: db.TriggerTitles}
+	if places, err := database.Places(); err == nil {
+		for _, p := range places {
+			if slices.Contains(p.Blocks, name) {
+				groups["place:"+p.Name] = db.PlaceTrigger(p.ID)
+			}
+		}
+	}
+	for key, group := range groups {
+		actions, err := database.TriggerActions(name, group)
+		if err != nil {
+			return out, err
+		}
+		if !slices.Equal(actions, db.DefaultTriggerActions(group)) {
+			out.Triggers[key] = actions
+		}
+	}
 	return out, nil
+}
+
+// checkTriggers validates a block's trigger actions from a file.
+func checkTriggers(in projectBlock) error {
+	for key, actions := range in.Triggers {
+		group := key
+		if place, ok := strings.CutPrefix(key, "place:"); ok {
+			if !slices.Contains(in.Places, place) {
+				return fmt.Errorf("block '%s' has actions for a place it has no rule at (%q)", in.Name, place)
+			}
+			group = db.PlaceTrigger(1) // any place: the checks are the same
+		} else if key != db.TriggerApps && key != db.TriggerTitles {
+			return fmt.Errorf("block '%s' has actions for an unknown group %q", in.Name, key)
+		}
+		for _, a := range actions {
+			if err := db.CheckTriggerAction(group, a); err != nil {
+				return fmt.Errorf("block '%s', %s: %w", in.Name, key, err)
+			}
+		}
+	}
+	return nil
 }
 
 // checkedBlock is a block from a file, validated and ready to write.
@@ -261,6 +304,9 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 		return out, err
 	}
 	if out.phrases, err = toPhraseSets(in.PhraseSets); err != nil {
+		return out, err
+	}
+	if err := checkTriggers(in); err != nil {
 		return out, err
 	}
 	for _, app := range in.Apps {
@@ -456,6 +502,11 @@ passwords, hotkeys and statistics are never in it.`,
 				return err
 			}
 			pb.Places = blockPlaces[b.Name]
+			for key := range pb.Triggers {
+				if strings.HasPrefix(key, "place:") && share {
+					delete(pb.Triggers, key) // a share has no places
+				}
+			}
 			out.Blocks = append(out.Blocks, pb)
 		}
 		clusters, err := database.ListClusters()
@@ -777,6 +828,13 @@ With --dry-run, says what would happen and changes nothing.`,
 					return fmt.Errorf("block '%s': %w", name, err)
 				}
 			}
+			for _, group := range []string{db.TriggerApps, db.TriggerTitles} {
+				if actions, ok := c.in.Triggers[group]; ok && !dry {
+					if err := database.SetTriggerActions(name, group, actions); err != nil {
+						return err
+					}
+				}
+			}
 			for _, place := range c.in.Places {
 				id, ok := placeIDs[place]
 				if !ok {
@@ -787,6 +845,11 @@ With --dry-run, says what would happen and changes nothing.`,
 				if !dry {
 					if err := database.SetPlaceRule(name, id, true); err != nil {
 						return err
+					}
+					if actions, ok := c.in.Triggers["place:"+place]; ok {
+						if err := database.SetTriggerActions(name, db.PlaceTrigger(id), actions); err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -975,6 +1038,13 @@ func projectMonk(in projectExport) string {
 		return false
 	}
 	for _, b := range in.Blocks {
+		for _, actions := range b.Triggers {
+			for _, a := range actions {
+				if a.Name == db.ConsequenceMonk {
+					return "an app's, window title's or place rule's monk action"
+				}
+			}
+		}
 		for _, l := range b.Lists {
 			if hasMonk(l.Actions) {
 				return "a list's monk action"

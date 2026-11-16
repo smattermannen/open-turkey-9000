@@ -3628,6 +3628,100 @@ class WallpaperTimeline(Gtk.DrawingArea):
         return True
 
 
+class TriggerEditor(Gtk.Box):
+    """What a trigger group does (owner, 2026-11-16: any trigger to any
+    action): its own action (close the app or window; enable the block at
+    the place) and the consequences, each with its time. Ticking runs
+    'kc9k block trigger', as does Enter in a time field while its action is
+    on. set_actions shows what the state says."""
+
+    CONSEQUENCES = (("close-browser", "Close the browsers", None),
+                    ("lock-screen", "Lock the screen for", 30 * 60),
+                    ("logout", "Log out", 0), ("shutdown", "Shut down", 0),
+                    ("monk", "Start monk mode for", 60 * 60))
+
+    def __init__(self, window, group, own, own_label, intro):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.window, self.group, self.own = window, group, own
+        self.block = None
+        self.filling = False
+        self.pack_start(dim(intro), False, False, 0)
+        self.checks, self.times = {}, {}
+        rows = [(own, own_label, None)] + list(self.CONSEQUENCES)
+        for name, label, seconds in rows:
+            row = Gtk.Box(spacing=6)
+            check = Gtk.CheckButton(label=label)
+            check.connect("toggled", self.toggled, name)
+            row.pack_start(check, False, False, 0)
+            self.checks[name] = check
+            if seconds is not None:
+                once = name in ("logout", "shutdown")
+                field = DurationField(seconds, minimum=60, zero="once" if once else None,
+                                      maximum=30 * 86400 if name == "monk" else 86400, width=8)
+                field.entry.connect("activate", lambda _e, n=name: self.time_changed(n))
+                row.pack_start(field, False, False, 0)
+                self.times[name] = field
+            self.pack_start(row, False, False, 0)
+
+    def set_actions(self, block, actions):
+        self.block = block
+        self.filling = True
+        try:
+            have = {a["name"]: a for a in actions or []}
+            for name, check in self.checks.items():
+                check.set_active(name in have)
+                if name in self.times and name in have and not self.times[name].has_focus():
+                    self.times[name].set_seconds(have[name].get("minutes", 0) * 60)
+        finally:
+            self.filling = False
+
+    def command(self, name, on):
+        args = ["block", "trigger", self.block, self.group, name, "on" if on else "off"]
+        field = self.times.get(name)
+        if on and field is not None:
+            if not field.is_valid():
+                self.window.message(f"{self.checks[name].get_label()}: {field.problem}", Gtk.MessageType.INFO)
+                return None
+            if field.value:
+                args += ["--for", field.arg()]
+        if on and name == "monk":
+            if not self.window.acknowledge_no_confirmation("This trigger"):
+                return None
+            args.append("--no-confirm-ok")
+        return args
+
+    def toggled(self, check, name):
+        if self.filling or not self.block:
+            return
+        args = self.command(name, check.get_active())
+        if args is None:
+            self.filling = True
+            check.set_active(not check.get_active())
+            self.filling = False
+            return
+        self.window.run(args)
+        self.reload_later()
+
+    def reload_later(self):
+        """Shows the state again once the command and the refresh are done
+        (a refused change goes back)."""
+        def check():
+            if not self.window.get_sensitive() or getattr(self.window, "busy", False):
+                return True
+            block = self.window.blocks.get(self.block) or {}
+            actions = (block.get("triggers") or {}).get(self.group)
+            if actions is not None:
+                self.set_actions(self.block, actions)
+            return False
+        GLib.timeout_add(150, check)
+
+    def time_changed(self, name):
+        if self.block and self.checks[name].get_active():
+            args = self.command(name, True)
+            if args:
+                self.window.run(args)
+
+
 class CircadianPage(Gtk.ScrolledWindow):
     """Settings that follow the time of day (§4.10). Reads 'kc9k circadian
     show --json'; every change runs a 'kc9k circadian' command. Nothing here
@@ -5213,12 +5307,22 @@ class Window(Gtk.ApplicationWindow):
             lambda value, _num: self.block_cmd("remove-title", [value]),
             lambda: self.import_list(["block", "import-list", self.selected, "titles"]),
             lambda: self.export_list(["block", "export-list", self.selected, "titles"]),
-            help_text="Any app whose window title contains one of these words is closed while "
-                      "the block is on; in a browser, just that tab. Separate words with spaces.",
+            help_text="Any app whose window title contains one of these words is found while the "
+                      "block is on. Browsers are never matched by title: their tabs are judged by "
+                      "the lists (R-TITLE-1). Separate words with spaces.",
             search=True, hidden=True, multi=True)
         apps.set_spacing(14)
+        self.app_triggers = TriggerEditor(self, "apps", "close", "Close the app",
+                                          "When one of these apps runs (logout, shutdown and the lock screen "
+                                          "come with a minute's warning):")
+        apps.pack_start(self.app_triggers, False, False, 0)
         apps.pack_start(self.titles, True, True, 0)
-        tabs.append_page(apps, Gtk.Label(label="Apps"))
+        self.title_triggers = TriggerEditor(self, "titles", "close", "Close the window",
+                                            "When a window with one of these titles is open:")
+        apps.pack_start(self.title_triggers, False, False, 0)
+        apps_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        apps_scroll.add(apps)
+        tabs.append_page(apps_scroll, Gtk.Label(label="Apps"))
 
         schedule = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
         self.calendar = WeekCalendar(self.create_window_from_calendar, self.edit_window_from_calendar,
@@ -5322,8 +5426,19 @@ class Window(Gtk.ApplicationWindow):
             "On at", "", lambda _values: None,
             lambda value, _number: self.selected and self.run(["place", "rule", self.selected, value, "off"]))
         add_row = self.place_rules.entry.get_parent()  # rules are added with the button above
-        add_row.set_no_show_all(True)
-        add_row.hide()
+        self.place_rules.entry.set_no_show_all(True)
+        self.place_rules.entry.hide()
+        for child in add_row.get_children():
+            if isinstance(child, Gtk.Button) and child.get_label() == "Add":
+                child.set_no_show_all(True)
+                child.hide()
+        # Owner, 2026-11-16: each place rule has its own actions.
+        rule_actions = Gtk.Button(label="Actions…")
+        rule_actions.set_tooltip_text("What happens at the chosen place: the block is enabled there, "
+                                      "and what else you tick, when the computer arrives")
+        rule_actions.connect("clicked", self.place_rule_actions)
+        add_row.pack_start(rule_actions, False, False, 0)
+        add_row.reorder_child(rule_actions, 0)
         places.pack_start(self.place_rules, True, True, 0)
         self.places_label = dim("")
         places.pack_start(self.places_label, False, False, 0)
@@ -5608,6 +5723,9 @@ class Window(Gtk.ApplicationWindow):
         self.update_lists(block.get("lists", []), block.get("phrase_sets", []))
         self.apps.set_items(block["apps"], owner=block["name"])
         self.titles.set_items(block.get("titles", []), owner=block["name"])
+        triggers = block.get("triggers") or {}
+        self.app_triggers.set_actions(block["name"], triggers.get("apps", [{"name": "close"}]))
+        self.title_triggers.set_actions(block["name"], triggers.get("titles", [{"name": "close"}]))
         self.schedules.set_items(block["schedules"])
         self.autostarts.set_items(block.get("autostarts") or [])
         others = [w for other in self.state.get("blocks", []) if other["name"] != block["name"]
@@ -7847,6 +7965,29 @@ class Window(Gtk.ApplicationWindow):
         on = block.get("social") or []
         for name, check in self.social_checks.items():
             check.set_active(name in on)
+
+    def place_rule_actions(self, _button=None, place=None):
+        """The actions of a place rule (the selected one in On at)."""
+        if place is None:
+            chosen = self.place_rules._selected()
+            place = chosen[0][0] if chosen else None
+        if not self.selected or not place:
+            self.message("Choose a place in the list first.", Gtk.MessageType.INFO)
+            return
+        block = self.blocks.get(self.selected) or {}
+        actions = (block.get("triggers") or {}).get("place:" + place, [{"name": "enable"}])
+        dialog = Gtk.Dialog(title=f"At {place}", transient_for=self, modal=True)
+        dialog.add_button("Close", Gtk.ResponseType.CLOSE)
+        box = dialog.get_content_area()
+        box.set_border_width(14)
+        editor = TriggerEditor(self, "place:" + place, "enable", "Enable the block while there",
+                               f"What '{self.selected}' does at '{place}' (the rest when the computer arrives):")
+        editor.set_actions(self.selected, actions)
+        box.pack_start(editor, False, False, 0)
+        self.place_trigger_editor = editor  # for tests
+        dialog.show_all()
+        dialog.run()
+        dialog.destroy()
 
     def place_info(self, name):
         return next((p for p in (self.state or {}).get("places") or [] if p["name"] == name), None)

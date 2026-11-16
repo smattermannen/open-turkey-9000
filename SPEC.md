@@ -202,7 +202,7 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Action** | What a blacklist, phrase set, app or title entry does on a match: page action or consequence. A blacklist or phrase set may have no action: it then does nothing (an action can be unticked before another is ticked). |
+| **Action** | What a blacklist or phrase set does on a match, and what a block's apps, its window titles and each place rule do when they fire (one set each): page action or consequence. Apps and window titles close by default, a place rule enables its block there by default; each may untick that and take consequences instead or too (fired when an app or window is found, at most once a minute; on arriving at the place). Any of them may have no action: it then does nothing (an action can be unticked before another is ticked). |
 | **Block page** | Replaces the page, with a motivational message. |
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
 | **Look actions** | Greyscale, no images, no video, mute, dark. Change, don't block; combine. No images covers every image, animated GIFs included. |
@@ -470,7 +470,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 **Device**
 - **R-FREEZE-1** *Allowed apps only*: only listed programs (and system processes) run.
 - **R-FREEZE-2** A running freeze can't end; removing a locked scheduled freeze is refused.
-- **R-WARN-1** Logout, shutdown, and freezes from a list action or schedule are announced 60 s ahead.
+- **R-WARN-1** Logout, shutdown, and freezes from a list action, a trigger's action (apps, titles, place rule) or schedule are announced 60 s ahead.
 - **R-WARN-2** Bypass prevention has no countdown: it notifies at every event and step ("Event triggered, be careful") and acts at once, up to immediate shutdown.
 - **R-STRICT-1** Strict mode is on only if the user turned it on. Turning off is refused only by its own lock and R-WEAK-4.
 - **R-ESCAPE-1** Until no-escape is on, a recovery path exists.
@@ -502,6 +502,7 @@ Decisions not already written into §1–5:
 - 2026-11-16: One Import button: KC9K tells phrases, rendered terms and sites (hosts files, adblock rules) apart by their layout.
 - 2026-11-16: YouTube playlists let through belong to the exception list, not the social presets.
 - 2026-11-16: Circadian rhythm: its own page only (not in Settings); wallpapers on a draggable timeline; Play the day preview.
+- 2026-11-16: Any trigger to any action: a block's apps, window titles and place rules each get one action set (close/enable by default, and consequences).
 
 ## 7. Open decisions
 

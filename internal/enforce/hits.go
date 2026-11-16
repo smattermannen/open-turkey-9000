@@ -32,8 +32,8 @@ import (
 )
 
 // deviceDelay gives the extension time to close the browser cleanly before
-// monk mode starts.
-const deviceDelay = 3 * time.Second
+// monk mode starts. A variable for tests.
+var deviceDelay = 3 * time.Second
 
 // warnDelay is how long a list's logout or shutdown is announced before it
 // happens (R-WARN-1). A variable for tests.

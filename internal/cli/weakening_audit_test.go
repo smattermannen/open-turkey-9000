@@ -38,6 +38,7 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		{"social", "b", "youtube:no-shorts", "on"},
 		{"bypass", "set", "--block", "b", "--count", "3", "--within", "10m", "--then", "warning"},
 		{"autostart", "b", "add", "at", "08:00"},
+		{"block", "trigger", "b", "apps", "logout", "on", "--for", "1h"},
 		{"cluster", "create", "c"},
 		{"cluster", "add", "c", "example.org"},
 	} {
@@ -59,6 +60,10 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		{"block", "remove-site", "b", "reddit.com"},
 		{"block", "remove-app", "b", "steam"},
 		{"block", "remove-title", "b", "YouTube"},
+		{"block", "trigger", "b", "apps", "close", "off"},
+		{"block", "trigger", "b", "titles", "close", "off"},
+		{"block", "trigger", "b", "apps", "logout", "off"},
+		{"block", "trigger", "b", "apps", "logout", "on", "--for", "30m"},
 		{"block", "remove-keyword", "b", "casino"},
 		{"block", "add-exception", "b", "example.com"},
 		{"block", "import-list", "b", "exceptions", exceptions},

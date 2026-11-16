@@ -601,3 +601,52 @@ func TestAllowanceProtectsNothing(t *testing.T) {
 		t.Error("removing the allowance switched the block off")
 	}
 }
+
+// Owner, 2026-11-16: a block's apps, window titles and place rules take
+// the actions the user picks (one set per group); on and longer are free,
+// off and shorter weaken; monk needs the acknowledgement.
+func TestBlockTriggerCommand(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	home := []db.Network{{BSSID: "AA:AA:AA:AA:AA:01"}, {BSSID: "AA:AA:AA:AA:AA:02"}}
+	oldScan := enforce.ScanWifi
+	enforce.ScanWifi = func(bool) ([]db.Network, error) { return home, nil }
+	t.Cleanup(func() { enforce.ScanWifi = oldScan })
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add-app", "b", "steam")
+	mustRun(t, "place", "add", "home")
+	mustRun(t, "place", "rule", "b", "home", "on")
+	mustRun(t, "block", "trigger", "b", "apps", "logout", "on", "--for", "30m")
+	mustRun(t, "block", "trigger", "b", "apps", "close", "off")
+	if got, _ := d.TriggerActions("b", db.TriggerApps); len(got) != 1 || got[0] != (db.TriggerAction{Name: "logout", Minutes: 30}) {
+		t.Errorf("apps = %+v", got)
+	}
+	if err := runCLI(t, "block", "trigger", "b", "titles", "monk", "on", "--for", "1h"); err == nil {
+		t.Error("monk without --no-confirm-ok")
+	}
+	mustRun(t, "block", "trigger", "b", "place:home", "monk", "on", "--for", "2h", "--no-confirm-ok")
+	p, _ := d.GetPlace("home")
+	if got, _ := d.TriggerActions("b", db.PlaceTrigger(p.ID)); len(got) != 2 {
+		t.Errorf("place actions = %+v", got)
+	}
+	for _, bad := range [][]string{
+		{"block", "trigger", "b", "apps", "enable", "on"},
+		{"block", "trigger", "b", "place:home", "close", "on"},
+		{"block", "trigger", "b", "apps", "lock-screen", "on"},
+		{"block", "trigger", "b", "place:nowhere", "logout", "on"},
+		{"block", "trigger", "b", "windows", "logout", "on"},
+	} {
+		if err := runCLI(t, bad...); err == nil {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	mustRun(t, "block", "trigger", "b", "apps", "logout", "on", "--for", "2h") // longer: free
+	mustRun(t, "block", "trigger", "b", "titles", "close-browser", "on")       // more: free
+	if err := runCLI(t, "block", "trigger", "b", "apps", "logout", "on", "--for", "10m"); err == nil {
+		t.Error("a shorter logout was taken while locked")
+	}
+	if err := runCLI(t, "block", "trigger", "b", "place:home", "enable", "off"); err == nil {
+		t.Error("the place rule stopped enabling the block while locked")
+	}
+}

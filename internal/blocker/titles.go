@@ -43,6 +43,7 @@ type TitleGuard struct {
 	folders  []string // folder entries (§3.1): file manager windows showing them close
 	mu       sync.Mutex
 	asked    map[uint32]time.Time // window -> when it was asked to close
+	watched  map[uint32]bool      // windows with a watched keyword, already reported
 	browsers *browserCache
 	sessions func() []titleSession
 }
@@ -51,6 +52,7 @@ type TitleGuard struct {
 func NewTitleGuard() *TitleGuard {
 	return &TitleGuard{
 		asked:    map[uint32]time.Time{},
+		watched:  map[uint32]bool{},
 		browsers: newBrowserCache(),
 		sessions: func() []titleSession {
 			var out []titleSession
@@ -82,13 +84,25 @@ func matchingKeyword(title string, keywords []string) string {
 // how many programs it killed, and the keyword of each window it newly asked
 // to close (so the caller can tell which block stopped something).
 func (g *TitleGuard) Enforce(keywords []string, now time.Time) (int, []string) {
+	killed, asked, _ := g.EnforceWatch(keywords, nil, now)
+	return killed, asked
+}
+
+// EnforceWatch is Enforce, and also reports the keyword of each window
+// whose title contains a watched keyword, once per window, without closing
+// it: a block whose window titles don't close only fire their other actions
+// (owner, 2026-11-16).
+func (g *TitleGuard) EnforceWatch(keywords, watch []string, now time.Time) (int, []string, []string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if len(keywords) == 0 && len(g.folders) == 0 {
-		g.asked = map[uint32]time.Time{}
-		return 0, nil
+	if g.watched == nil {
+		g.watched = map[uint32]bool{}
 	}
-	var newlyAsked []string
+	if len(keywords) == 0 && len(g.folders) == 0 && len(watch) == 0 {
+		g.asked, g.watched = map[uint32]time.Time{}, map[uint32]bool{}
+		return 0, nil, nil
+	}
+	var newlyAsked, newlySeen []string
 	seen := map[uint32]bool{}
 	kill := map[int]uint64{} // process -> the user it must still belong to
 	for _, s := range g.sessions() {
@@ -106,11 +120,23 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) (int, []string) {
 			if keyword == "" && fileManagers[exeName(w.PID)] {
 				keyword = folderWindow(w.Title, g.folders) // §3.1: a window showing a folder entry
 			}
-			if keyword == "" || w.PID <= 1 || !ownedBy(w.PID, s.uid) {
+			watched := ""
+			if keyword == "" {
+				watched = matchingKeyword(w.Title, watch)
+			}
+			if (keyword == "" && watched == "") || w.PID <= 1 || !ownedBy(w.PID, s.uid) {
 				continue
 			}
 			if essentialProcess(w.PID) || g.browsers.guarded(w.PID) {
 				continue // the desktop needs it, or the extension handles tabs
+			}
+			if keyword == "" {
+				seen[w.ID] = true
+				if !g.watched[w.ID] {
+					g.watched[w.ID] = true
+					newlySeen = append(newlySeen, watched)
+				}
+				continue
 			}
 			seen[w.ID] = true
 			first, asked := g.asked[w.ID]
@@ -132,7 +158,12 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) (int, []string) {
 			delete(g.asked, id)
 		}
 	}
-	return killTrees(kill), newlyAsked
+	for id := range g.watched {
+		if !seen[id] {
+			delete(g.watched, id)
+		}
+	}
+	return killTrees(kill), newlyAsked, newlySeen
 }
 
 // killTrees kills each process in roots and everything it started, as long

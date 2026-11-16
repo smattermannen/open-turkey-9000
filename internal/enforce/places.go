@@ -116,7 +116,9 @@ func PlaceBlocks(d *db.DB, now time.Time) (map[string]bool, error) {
 	for _, p := range places {
 		if len(p.Blocks) > 0 && AtPlace(p, seen) {
 			for _, b := range p.Blocks {
-				on[b] = true
+				if placeEnables(d, b, p.ID) {
+					on[b] = true
+				}
 			}
 		}
 	}
@@ -132,7 +134,9 @@ func PlaceRuled(d *db.DB) (map[string]bool, error) {
 	out := map[string]bool{}
 	for _, p := range places {
 		for _, b := range p.Blocks {
-			out[b] = true
+			if placeEnables(d, b, p.ID) {
+				out[b] = true
+			}
 		}
 	}
 	return out, nil

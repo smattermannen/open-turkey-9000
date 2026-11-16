@@ -107,6 +107,19 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
   - [x] Lists and phrase sets may have no action (§3.9, changed
     2026-11-15). Built: the last action can be turned off; no-action rules
     reach the extension with no actions and do nothing.
+  - [x] Any trigger to any action (§1, §3.9; owner, 2026-11-16): a
+    block's apps, its window titles and each place rule have one action
+    set each, like a list's: their own action (close the app / close the
+    window / enable the block at the place, the default, can be
+    unticked) and close-browser, lock-screen, logout, shutdown, monk mode
+    with their times. Apps and windows fire when found (at most once a
+    minute), a place on arrival; logout, shutdown and lock-screen are
+    announced a minute ahead (R-WARN-1). CLI `block trigger`, GUI
+    checkboxes under Apps and Window titles, "Actions…" for a place rule,
+    projects. `TestTriggerActionsStored`, `TestAppsTrigger`,
+    `TestPlaceTrigger`, `TestBlockTriggerCommand`, the weakening audit,
+    `ci/gui_trigger_smoke.py`. On the laptop: Unchecked. The window title
+    help said "in a browser, just that tab"; R-TITLE-1: never browsers.
   - [x] Dark pages from the browser (§4.10; owner, 2026-11-16): the
     toolbar button's popup has "Exempt from dark pages" (or "Show it dark
     again") while dark pages are on; the daemon's `/dark-exempt` keeps

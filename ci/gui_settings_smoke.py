@@ -58,9 +58,11 @@ def titles(page):
 
 settings = titles("settings")
 want = ["Preferences", "No weakening during active locks", "Tamper protection", "Browsers",
-        "Browser settings", "DNS", "Circadian rhythm", "Device protection", "Passwords",
+        "Browser settings", "DNS", "Device protection", "Passwords",
         "Bypass prevention", "Project", "Behaviour settings"]
 check([t for t in settings if t in want] == want, "Settings groups in §4.10 order: " + ", ".join(settings))
+# Owner, 2026-11-16: the circadian rhythm has its own page, not a group here.
+check("Circadian rhythm" not in settings, "no Circadian group in Settings")
 check("Statistics" not in settings, "no Statistics group in Settings")
 device = titles("device")
 # §3.8: the allowed apps list of 'allowed apps only' freezes.

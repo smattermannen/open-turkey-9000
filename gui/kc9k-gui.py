@@ -1123,7 +1123,7 @@ class LockPicker(Gtk.Box):
 
     ALL_KINDS = ("timer", "password", "text", "restart", "delay", "range", "relock")
 
-    def __init__(self, verb="stop", done="stopped", kinds=ALL_KINDS, restart_note=""):
+    def __init__(self, verb="stop", done="stopped", kinds=ALL_KINDS):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.callbacks, self.verb, self.done, self.kinds = [], verb, done, tuple(kinds)
         self.only_chars = "relock" not in self.kinds and "password" not in self.kinds
@@ -1195,9 +1195,7 @@ class LockPicker(Gtk.Box):
         if "restart" in self.kinds:
             label("Restart lock", row, more)
             more.attach(self.restart, 1, row, 1, 1)
-            if restart_note:
-                more.attach(dim(restart_note), 1, row + 1, 1, 1)
-            row += 2
+            row += 1
 
         self.delay = None
         if "delay" in self.kinds:
@@ -5418,8 +5416,7 @@ class Window(Gtk.ApplicationWindow):
         active = block["active"]
         # R-LOCK-7: a running block takes any kind of lock, added after the
         # ones already on; those only get stronger.
-        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS,
-                            restart_note="Continuous blocks only: a scheduled block's windows decide.")
+        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS)
         asked = self.lock_dialog(
             f"Add locks to {block['name']}" if active else f"Start {block['name']}",
             "New locks come after the ones already on, unlocked last. A lock that is on can only "

@@ -178,7 +178,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   Everything goes to the extension as `lists` rules
   (`enforce.BuildRules`; `kc9kListActions` in `match.js`: plain words
   whole, `*` inside words; a list waits if its exceptions need unread page
-  parts). Per action: threshold (distinct entries) and hit count.
+  parts). Per action: threshold (distinct entries), hit count and rate
+  (`list rate`, percent of the page's words, pages ≥ 200 words).
   Strengthening free; else gated (`EditList*` by id). Shortcuts (`block add`,
   `add-exception`, `add-keyword`, `threshold`, `action`) use default lists
   Blocked / Exceptions / Page words (`migrateWebLists`). Old combinations
@@ -297,9 +298,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `ci/circadian_test.py` tests dark pages.
 - **Pauses and breaks** (`db/pauses.go`, `enforce/soon.go`, `db/breaks.go`,
   `cli/breaks.go`): `block_pauses` until trusted time; `pausedFor` checked
-  by `withoutBreaks`. `rules.soon` feeds toolbar badge/popup (`timeLeftFor`,
+  by `enabledBlocks`. `rules.soon` feeds toolbar badge/popup (`timeLeftFor`,
   `popup.js`); `/add` adds the tab's site to Blocked (refused with a blocks
-  access password). Reward (`break allowance`) earned in `earnBreaks`;
+  access password). Reward (`break reward`, alias `allowance`) earned in `earnBreaks`;
   `break text`/`relock` makes `unlock` pause instead (second unlock ends).
 - **Drafts** (`cli/draft.go`, §4.3): `block draft B` = `DuplicateBlock`
   into "B (draft)" (setting `draft-of.<draft>`), never startable;
@@ -526,7 +527,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   here, confirms the locks, starts blocks that come with running locks. Clashing block → `name-2`; existing
   clusters/places kept; browser settings only on; ladder replaced only by a
   stricter one. `--dry-run` lists additions and locks.
-- **Frozen Chicken**: `freeze --for D --mode lock|logout|shutdown --yes`;
+- **Frozen Chicken**: `freeze --for D --mode lock|logout|shutdown|apps --yes`
+  (`apps`: allowed apps only, `freeze apps add|remove`);
   `freeze schedule add --days … --from --to [--mode] [--lock-lead D]`,
   `list`, `remove N`, `lock N on --lead D`. Back-to-back windows run on; a
   longer running freeze is never shortened; ≤ 24 h; time counts while off;

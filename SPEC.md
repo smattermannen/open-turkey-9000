@@ -139,7 +139,7 @@ it has re-lock. Never changes what is blocked.
 | **Range lock** | On between set times on set days (or inverted). | Time range |
 | **Delay lock** | Unlock request starts a countdown (1 min–40 days). | Delay |
 | **Schedule lock** | On during windows, at places, and for a user-chosen lead time before a window; with allow windows: on outside them. | Schedule |
-| **Restart lock** | Unlocked by a restart. Continuous blocks only. | Restart |
+| **Restart lock** | Unlocked by a restart. Any block. | Restart |
 | **Password lock** | Unlocked by a password (e.g. a partner's). | Password |
 | **Re-lock** | Lock option: comes on again a set time after unlocking. | |
 | **Layered sequential locks** | Several locks on a block or setting, unlocked one by one in the user's order. | |
@@ -490,6 +490,7 @@ Decisions not already written into §1–5:
 - 2026-11-15: Phrase word sets are freely necessary or optional, none necessary allowed; phrase length (≥ 2) sets how many terms a match needs (R-PHRASE-1).
 - 2026-11-15: Lists and phrase sets may have no action.
 - 2026-11-15: Durations in days, hours and minutes, never minutes only, never silently changed (R-GUI-1); timer locks also by calendar date (R-GUI-2); the GUI is redesigned to be beautiful, intelligent and intuitive (R-GUI-3); no flashing (R-PAGE-1).
+- 2026-11-16: Restart locks on any block, scheduled ones too: the user decides how their locks work.
 
 ## 7. Open decisions
 

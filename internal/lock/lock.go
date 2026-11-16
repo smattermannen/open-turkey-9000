@@ -47,8 +47,8 @@ import (
 // for an impulse to pass.
 const DefaultLockChars = 300
 
-// MinLockChars and MaxLockChars bound the challenge length, as in Cold
-// Turkey: from a token 10 characters to 5000, about an hour of typing.
+// MinLockChars and MaxLockChars bound the challenge length (§3.4): from 1
+// character to 5000, about an hour of typing.
 const (
 	MinLockChars = 1
 	MaxLockChars = 5000

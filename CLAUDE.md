@@ -350,12 +350,13 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `break text`/`relock` makes `unlock` pause instead (second unlock ends).
 - **Drafts** (`cli/draft.go`, §4.3): `block draft B` = `DuplicateBlock`
   into "B (draft)" (setting `db.SettingDraftOf`), never runs
-  (`db.ActivateBlock` refuses, autostart skips); holds lists, apps and
-  window titles: `saveDraft` replays differences via
-  `listAdd`/`listWhere`/`listAction`… and names refusals; commands for
-  anything else refuse a draft (`draftRefused`, `refuseDraftEdit` in the
-  root PreRun); the GUI shows a draft only Websites (no phrase sets) and
-  Apps (no actions).
+  (`db.ActivateBlock` refuses, autostart skips); holds lists, phrase sets
+  (`CopyPhraseSets`, as stored), apps and window titles: `saveDraft`
+  replays differences via `listAdd`/`listWhere`/`listAction`… and
+  `saveDraftPhraseSets` (each through its gate) and names refusals;
+  commands for anything else refuse a draft (`draftRefused`,
+  `refuseDraftEdit` in the root PreRun); the GUI shows a draft only
+  Websites and Apps (no actions).
 - **Affected users** (`db/users.go`, `cli/blockusers.go`, §3.2):
   `blocks.users`; `enforce.forEveryone` keeps partial blocks out of shared
   layers, `blockUIDs` → `blocker.KillBlockedFor`, `BuildRulesFor(user)`

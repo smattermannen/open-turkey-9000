@@ -86,7 +86,8 @@ func (d *DB) RenameBlock(oldName, newName string) error {
 	return nil
 }
 
-// DuplicateBlock copies a block's lists into a new inactive block.
+// DuplicateBlock copies a block's lists, phrase sets, apps, window titles
+// and bypass prevention into a new inactive block.
 func (d *DB) DuplicateBlock(name, copyName string) error {
 	detail, err := d.GetBlock(name)
 	if err != nil {
@@ -107,6 +108,9 @@ func (d *DB) DuplicateBlock(name, copyName string) error {
 		if err := d.AddTitles(copyName, detail.Titles); err != nil {
 			return err
 		}
+	}
+	if err := d.CopyPhraseSets(name, copyName); err != nil {
+		return err
 	}
 	n, err := d.BlockNepsis(name)
 	if err != nil {

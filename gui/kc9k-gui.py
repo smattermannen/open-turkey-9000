@@ -5504,14 +5504,10 @@ class Window(Gtk.ApplicationWindow):
             new.connect("clicked", self.create_list, kind)
             head.pack_end(new, False, False, 0)
             websites.pack_start(head, False, False, 0)
-            section_parts = [head]
             if detail:
-                section_parts.append(dim(detail))
-                websites.pack_start(section_parts[-1], False, False, 0)
+                websites.pack_start(dim(detail), False, False, 0)
             self.list_boxes[kind] = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
             websites.pack_start(self.list_boxes[kind], False, False, 0)
-            if kind == "phrases":
-                self.phrase_section = section_parts + [self.list_boxes[kind]]
         tabs.append_page(websites, Gtk.Label(label="Websites"))
 
         apps = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=12)
@@ -5952,12 +5948,13 @@ class Window(Gtk.ApplicationWindow):
         self.hidden_bar.set_visible(bool(block.get("hidden")))
         drafting = block.get("draft_of")
         self.draft_bar.set_visible(bool(drafting))
-        # §4.3: a draft holds its website lists, apps and window titles; the
-        # rest is changed on the block itself (the CLI refuses it here).
-        self.draft_label.set_text(f"Editing a draft of {drafting}: its website lists, apps and window titles "
-                                  f"change only when you save. Everything else is changed on {drafting} itself: "
-                                  "save or cancel to get back to it." if drafting else "")
-        for widget in self.phrase_section + [self.app_triggers, self.title_triggers]:
+        # §4.3: a draft holds its website lists, phrase sets, apps and window
+        # titles; the rest is changed on the block itself (the CLI refuses it
+        # here).
+        self.draft_label.set_text(f"Editing a draft of {drafting}: its website lists, phrase sets, apps and "
+                                  f"window titles change only when you save. Everything else is changed on "
+                                  f"{drafting} itself: save or cancel to get back to it." if drafting else "")
+        for widget in (self.app_triggers, self.title_triggers):
             widget.set_visible(not drafting)
         for number in range(self.block_tabs.get_n_pages()):
             tab = self.block_tabs.get_nth_page(number)

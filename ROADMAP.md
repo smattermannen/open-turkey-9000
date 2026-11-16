@@ -182,16 +182,21 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     editable though Save drops them. Now no draft ever runs
     (`db.ActivateBlock` refuses, autostart skips it), commands for what a
     draft doesn't hold refuse it and name the block (`refuseDraftEdit`,
-    `TestDraftNeverRuns`), and the GUI shows a draft only its Websites
-    (without phrase sets) and Apps (without actions) tabs, saying the rest
-    is changed on the block itself. Settings: Lock…/Unlock… beside each
+    `TestDraftNeverRuns`), and the GUI shows a draft only its Websites and
+    Apps (without actions) tabs, saying the rest is changed on the block
+    itself. Settings: Lock…/Unlock… beside each
     browser setting's and strict mode's switch (not on a line of their
     own); the access passwords text named old pages (Dashboard, Device
     Blocks); "Turn off…" bypass prevention showed while it was off.
-  - [ ] Phrase sets in drafts (§4.3 "nothing applies until Save"): a draft
-    holds website lists, apps and window titles; phrase sets are edited on
-    the block itself. Copy them into the draft and replay their changes on
-    save (each through its gate, as lists). M
+  - [x] Phrase sets in drafts (§4.3 "nothing applies until Save"; found
+    2026-11-16): a draft (and a duplicate) didn't copy the block's phrase
+    sets, and saving carried no phrase-set changes. Now `DuplicateBlock`
+    copies them as stored (`CopyPhraseSets`: also phrases in older forms,
+    sets without actions) and `saveDraftPhraseSets` replays each change
+    through its command's gate, stronger steps first: new sets, phrases
+    added, places ticked, actions on or stricter, lower thresholds, test
+    mode off; then phrases removed, places unticked, actions off, test
+    mode on, sets deleted (free when empty). `TestDraftPhraseSets`.
   - [x] Rows of controls one per line (R-GUI-3; found 2026-11-16 on
     screenshots): `flow_row` used GTK 3's FlowBox, which asks only for its
     widest child's width, so every wrapped row (Statistics controls, the
@@ -445,7 +450,7 @@ Only items not simply Built.
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Built | `make deb` (`packaging/build-deb.sh`): same paths as install.sh; postinst sets up sudoers, database folder, service; prerm runs prepare-uninstall, so removal is refused while locked (checked live); postrm removes sudoers. Installed on the laptop as 0.9.0~overnight (devmaster) |
-| §4.3 Draft Save/Cancel | Partial | `block draft B [save|cancel]`, GUI "Edit as draft" with a Save/Cancel bar: a never-enforced copy of the lists, apps and window titles; save applies each difference through its gate, refusing and naming weakening ones on a locked block; needs and keeps the block password; drafts stay out of the block list and projects. Not drafted: phrase sets, schedules, allowance and other settings (apply at once) |
+| §4.3 Draft Save/Cancel | Partial | `block draft B [save|cancel]`, GUI "Edit as draft" with a Save/Cancel bar: a copy of the lists, phrase sets, apps and window titles that never runs; save applies each difference through its gate, refusing and naming weakening ones on a locked block; needs and keeps the block password; drafts stay out of the block list and projects. Not drafted: schedules, places, allowance and the other settings, changed on the block itself (refused on a draft, `draftRefused`) |
 | §4.3 Ctrl+F, multi-select, double-click edit | Built | `EditableList`: Ctrl+F to its search, Ctrl/Shift-click and Ctrl+A in website lists, phrase sets, apps, titles, clusters, exempt folders; Delete/Backspace removes, selection moves on; double-click moves an entry into the box |
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters. "All searches containing…" not built |
 | §4.5 Grid drag-move, copy to days, similar windows | Built | drag a window to move it (time; day for one-day windows); click to edit days (copy to days), times, its break, or remove; a window on several days is edited as one; other blocks' windows greyed |

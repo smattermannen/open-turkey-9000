@@ -33,8 +33,8 @@ func draftOf(database *db.DB, name string) string {
 }
 
 // draftRefused lists the commands that change what a draft doesn't hold
-// (§4.3: a draft holds its website lists, apps and window titles; saving
-// carries only those), with how many arguments they take before they change
+// (§4.3: a draft holds its website lists, phrase sets, apps and window
+// titles; saving carries only those), with how many arguments they take before they change
 // anything (fewer only show). On a draft such a change would be lost at
 // save, or (an allowance, an autostart) switch the draft on: refused.
 var draftRefused = map[string]int{
@@ -43,9 +43,6 @@ var draftRefused = map[string]int{
 	"autostart": 2, "pomodoro set": 1, "pomodoro off": 1,
 	"break reward": 2, "break text": 2, "break delay": 2, "break start": 1, "break end": 1, "break request": 1,
 	"social": 2, "place rule": 1, "block users": 2, "block trigger": 2,
-	"phrase-set create": 2, "phrase-set add": 2, "phrase-set import": 2, "phrase-set remove": 2,
-	"phrase-set change": 2, "phrase-set scope": 2, "phrase-set action": 2, "phrase-set threshold": 2,
-	"phrase-set test": 2, "phrase-set rename": 2, "phrase-set delete": 2,
 }
 
 // refuseDraftEdit refuses a command of draftRefused on a draft, naming the
@@ -67,8 +64,8 @@ func refuseDraftEdit(cmd *cobra.Command, args []string) error {
 	}
 	defer database.Close()
 	if of := draftOf(database, block); of != "" {
-		return fmt.Errorf("'%s' is a draft of '%s': a draft holds only its website lists, apps and window titles "+
-			"until it is saved, so change this on '%s' itself", block, of, of)
+		return fmt.Errorf("'%s' is a draft of '%s': a draft holds only its website lists, phrase sets, apps and "+
+			"window titles until it is saved, so change this on '%s' itself", block, of, of)
 	}
 	return nil
 }
@@ -248,10 +245,123 @@ func saveDraft(cmd *cobra.Command, database *db.DB, block, draft string) ([]stri
 		}
 		try("removing window titles "+strings.Join(remove, ", "), err)
 	}
+	if err := saveDraftPhraseSets(database, block, draft, try); err != nil {
+		return refusedChanges, err
+	}
 	if err := reapplyIfActive(database, block); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 	return refusedChanges, nil
+}
+
+// saveDraftPhraseSets brings the block's phrase sets in line with the
+// draft's, as saveDraft does lists: a set new in the draft is copied in,
+// each other change goes through the same gate as its phrase-set command
+// (stronger steps first), and a set gone from the draft is deleted.
+func saveDraftPhraseSets(database *db.DB, block, draft string, try func(string, error)) error {
+	origSets, err := database.PhraseSets(block)
+	if err != nil {
+		return err
+	}
+	nextSets, err := database.PhraseSets(draft)
+	if err != nil {
+		return err
+	}
+	find := func(sets []db.PhraseSet, name string) (db.PhraseSet, bool) {
+		i := slices.IndexFunc(sets, func(s db.PhraseSet) bool { return strings.EqualFold(s.Name, name) })
+		if i < 0 {
+			return db.PhraseSet{}, false
+		}
+		return sets[i], true
+	}
+	gate := func(strengthens bool, change func() error) error {
+		if err := ensureEditable(database, block, strengthens); err != nil {
+			return err
+		}
+		return change()
+	}
+	for _, n := range nextSets {
+		o, ok := find(origSets, n.Name)
+		if !ok {
+			try("making phrase set "+n.Name, gate(true, func() error { return database.CopyPhraseSet(n.ID, block) }))
+			continue
+		}
+		label := "phrase set " + o.Name
+		// Stronger first: phrases added, places ticked, actions on or
+		// stricter, lower thresholds, test mode off.
+		for _, p := range n.Phrases {
+			if _, has := storedPhrase(o, p); !has {
+				try("adding "+p.String()+" to "+label, gate(true, func() error {
+					_, err := database.AddPhrase(o.ID, p)
+					return err
+				}))
+			}
+		}
+		where := o.Where
+		for _, place := range []string{db.PlaceURL, db.PlaceTitle, db.PlaceText} {
+			if n.Where.Has(place) && !where.Has(place) {
+				next := where.With(place, true)
+				err := gate(true, func() error { return database.SetPhraseSetWhere(o.ID, next) })
+				if try("looking at "+place+" in "+label, err); err == nil {
+					where = next
+				}
+			}
+		}
+		for _, a := range n.Actions {
+			cur, has := o.Action(a.Name)
+			if !has || cur.Param != a.Param || cur.Minutes != a.Minutes {
+				stricter := !has || db.ParamsStricter(a.Name, cur.Param, a.Param, cur.Minutes, a.Minutes)
+				try(a.Name+" in "+label, gate(stricter, func() error {
+					return database.SetPhraseSetAction(o.ID, a.Name, true, a.Param, a.Minutes)
+				}))
+			}
+			// A new action is stricter at any threshold; an old one when
+			// it needs no more phrases than before.
+			if !has && a.Distinct > 1 || has && a.Distinct != cur.Distinct {
+				try("threshold of "+a.Name+" in "+label, gate(!has || a.Distinct <= cur.Distinct, func() error {
+					return database.SetPhraseSetThreshold(o.ID, a.Name, a.Distinct)
+				}))
+			}
+		}
+		if o.Test && !n.Test {
+			try("test mode off in "+label, gate(true, func() error { return database.SetPhraseSetTest(o.ID, false) }))
+		}
+		// Then what weakens: phrases removed, places unticked, actions
+		// off, test mode on.
+		for _, p := range o.Phrases {
+			if _, has := storedPhrase(n, p); !has {
+				try("removing "+p.String()+" from "+label, gate(false, func() error {
+					_, err := database.RemovePhrase(o.ID, p)
+					return err
+				}))
+			}
+		}
+		for _, place := range []string{db.PlaceURL, db.PlaceTitle, db.PlaceText} {
+			if !n.Where.Has(place) && where.Has(place) {
+				next := where.With(place, false)
+				err := gate(false, func() error { return database.SetPhraseSetWhere(o.ID, next) })
+				if try("no longer looking at "+place+" in "+label, err); err == nil {
+					where = next
+				}
+			}
+		}
+		for _, a := range o.Actions {
+			if _, has := n.Action(a.Name); !has {
+				try(a.Name+" off in "+label, gate(false, func() error {
+					return database.SetPhraseSetAction(o.ID, a.Name, false, "", 0)
+				}))
+			}
+		}
+		if !o.Test && n.Test {
+			try("test mode on in "+label, gate(false, func() error { return database.SetPhraseSetTest(o.ID, true) }))
+		}
+	}
+	for _, o := range origSets {
+		if _, ok := find(nextSets, o.Name); !ok {
+			try("deleting phrase set "+o.Name, gate(len(o.Phrases) == 0, func() error { return database.DeletePhraseSet(o.ID) }))
+		}
+	}
+	return nil
 }
 
 func init() {

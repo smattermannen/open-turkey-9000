@@ -627,7 +627,7 @@ func TestDraftNeverRuns(t *testing.T) {
 	for _, args := range [][]string{
 		{"allowance", "set", draft, "30m"}, {"schedule", "add", draft, "--days", "mon", "--from", "09:00", "--to", "10:00"},
 		{"autostart", draft, "add", "at 08:00"}, {"pomodoro", "set", draft, "25m", "5m"}, {"social", draft, "youtube:shorts", "on"},
-		{"phrase-set", "create", draft, "talk"}, {"block", "trigger", draft, "apps", "logout", "on"},
+		{"block", "trigger", draft, "apps", "logout", "on"},
 		{"break", "reward", draft, "10m", "--per", "1h"}, {"bypass", "set", "--count", "3", "--within", "10m", "--then", "warning", "--block", draft},
 	} {
 		err := runCLI(t, args...)
@@ -652,6 +652,66 @@ func TestDraftNeverRuns(t *testing.T) {
 	mustRun(t, "block", "draft", "b", "cancel")
 	// The commands still work on the block itself.
 	mustRun(t, "schedule", "add", "b", "--days", "mon", "--from", "09:00", "--to", "10:00")
+}
+
+// §4.3: a draft holds the block's phrase sets too; saving carries their
+// changes, each through its command's gate, so on a locked block what
+// weakens is refused and named. A duplicate copies them as well.
+func TestDraftPhraseSets(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "phrase-set", "create", "b", "talk")
+	mustRun(t, "phrase-set", "add", "b", "talk", "[eat, nice] [hello]", "[bad] [word]")
+	mustRun(t, "phrase-set", "create", "b", "old")
+	mustRun(t, "block", "duplicate", "b", "copy")
+	if sets, _ := d.PhraseSets("copy"); len(sets) != 2 || len(sets[0].Phrases)+len(sets[1].Phrases) != 2 {
+		t.Errorf("a duplicate's phrase sets: %+v", sets)
+	}
+	mustRun(t, "block", "draft", "b")
+	draft := "b (draft)"
+	mustRun(t, "phrase-set", "add", draft, "talk", "[good] [night]")
+	mustRun(t, "phrase-set", "remove", draft, "talk", "[bad] [word]")
+	mustRun(t, "phrase-set", "scope", draft, "talk", "title", "on")
+	mustRun(t, "phrase-set", "action", draft, "talk", "greyscale", "on")
+	mustRun(t, "phrase-set", "threshold", draft, "talk", "block", "2")
+	mustRun(t, "phrase-set", "create", draft, "new")
+	mustRun(t, "phrase-set", "add", draft, "new", "[x] [y]")
+	mustRun(t, "phrase-set", "delete", draft, "old")
+	if sets, _ := d.PhraseSets("b"); len(sets) != 2 || sets[0].Name != "talk" || len(sets[0].Phrases) != 2 ||
+		sets[0].Where.Title {
+		t.Fatalf("the draft changed the block before save: %+v", sets)
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	err := runCLI(t, "block", "draft", "b", "save")
+	if err == nil || !strings.Contains(err.Error(), "[bad] [word]") || !strings.Contains(err.Error(), "threshold of block") {
+		t.Fatalf("save on a locked block names what weakens: %v", err)
+	}
+	sets, _ := d.PhraseSets("b")
+	byName := map[string]db.PhraseSet{}
+	for _, s := range sets {
+		byName[s.Name] = s
+	}
+	talk := byName["talk"]
+	phrases := []string{}
+	for _, p := range talk.Phrases {
+		phrases = append(phrases, p.String())
+	}
+	_, grey := talk.Action("greyscale")
+	block, _ := talk.Action("block")
+	if !slices.Contains(phrases, "[good] [night]") || !slices.Contains(phrases, "[bad] [word]") ||
+		!talk.Where.Title || !grey || block.Distinct != 1 {
+		t.Errorf("talk after save: %v where %v greyscale %v block %+v", phrases, talk.Where, grey, block)
+	}
+	if n, ok := byName["new"]; !ok || len(n.Phrases) != 1 {
+		t.Errorf("the new set: %+v", byName)
+	}
+	if _, ok := byName["old"]; ok {
+		t.Error("an empty set deleted in the draft stayed (deleting it is free)")
+	}
+	if _, err := d.GetBlock(draft); err == nil {
+		t.Error("the draft stayed after save")
+	}
 }
 
 // §3.11 with §4.3: a draft of a password-protected block needs the block

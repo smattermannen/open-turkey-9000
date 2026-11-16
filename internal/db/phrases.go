@@ -672,3 +672,57 @@ func (d *DB) AddPhraseSet(block string, s PhraseSet) error {
 	}
 	return tx.Commit()
 }
+
+// CopyPhraseSet copies a phrase set as it is stored (scope, test mode,
+// actions, phrases, also ones in older forms today's rules refuse) into a
+// block: a draft or a duplicate (§4.3), or a set a draft added, on save.
+func (d *DB) CopyPhraseSet(setID int, block string) error {
+	blockID, err := d.getBlockID(block)
+	if err != nil {
+		return err
+	}
+	var name string
+	var where Where
+	var test bool
+	if err := d.conn.QueryRow("SELECT name, in_url, in_title, in_text, test FROM phrase_sets WHERE id = ?", setID).
+		Scan(&name, &where.URL, &where.Title, &where.Text, &test); err != nil {
+		return fmt.Errorf("failed to read the phrase set: %w", err)
+	}
+	if d.phraseSetNameTaken(blockID, 0, name) {
+		return fmt.Errorf("the block already has a phrase set named '%s'", name)
+	}
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec("INSERT INTO phrase_sets (block_id, name, in_url, in_title, in_text, test) VALUES (?, ?, ?, ?, ?, ?)",
+		blockID, name, where.URL, where.Title, where.Text, test)
+	if err != nil {
+		return fmt.Errorf("failed to copy the phrase set: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	if _, err := tx.Exec(`INSERT INTO phrase_set_actions (set_id, action, threshold, param, minutes)
+		SELECT ?, action, threshold, param, minutes FROM phrase_set_actions WHERE set_id = ?`, id, setID); err != nil {
+		return fmt.Errorf("failed to copy the phrase set's actions: %w", err)
+	}
+	if _, err := tx.Exec(`INSERT INTO phrases (set_id, spec) SELECT ?, spec FROM phrases WHERE set_id = ? ORDER BY id`,
+		id, setID); err != nil {
+		return fmt.Errorf("failed to copy the phrases: %w", err)
+	}
+	return tx.Commit()
+}
+
+// CopyPhraseSets copies every phrase set of a block into another.
+func (d *DB) CopyPhraseSets(from, to string) error {
+	sets, err := d.PhraseSets(from)
+	if err != nil {
+		return err
+	}
+	for _, s := range sets {
+		if err := d.CopyPhraseSet(s.ID, to); err != nil {
+			return err
+		}
+	}
+	return nil
+}

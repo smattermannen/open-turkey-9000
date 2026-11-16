@@ -97,7 +97,7 @@ func playlistExceptions(id string) []string {
 func socialPlaylist(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail, text string, on bool) error {
 	id, ok := db.PlaylistID(text)
 	if !ok {
-		return fmt.Errorf("%q isn't a playlist's ID or address (it has list=… in it)", text)
+		return fmt.Errorf("%q isn't a playlist: give its address (with list=… in it) or its ID (10 to 64 letters, digits, - or _, such as PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf)", text)
 	}
 	block, preset := detail.Name, db.PlaylistPrefix+id
 	if on {

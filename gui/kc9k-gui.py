@@ -1792,6 +1792,65 @@ class EditableList(Gtk.Box):
         self.on_remove(value, self.store.get_path(child)[0] + 1)
 
 
+DEFAULT_EXCEPTIONS = "Exceptions"  # db.DefaultExceptionsList
+
+
+class PlaylistBox(Gtk.Box):
+    """YouTube playlists a block lets through (§3.2, in its Exceptions):
+    one row per playlist with its Remove button, so the box is as tall as
+    its playlists, and a field to add one."""
+
+    def __init__(self, window):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.window = window
+        head = Gtk.Box(spacing=6)
+        head.pack_start(heading("YouTube playlists let through", "medium"), False, False, 0)
+        head.pack_start(help_button(
+            "For a block that stops YouTube: its page and its videos stay open, every other video "
+            "is blocked. Paste the playlist's address or ID. Removing one weakens the block."),
+            False, False, 0)
+        self.pack_start(head, False, False, 0)
+        self.rows = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.rows.get_style_context().add_class("frame")
+        self.rows.set_no_show_all(True)
+        self.pack_start(self.rows, False, False, 0)
+        add_row = Gtk.Box(spacing=6)
+        self.entry = Gtk.Entry(placeholder_text="Playlist address or ID", width_chars=34)
+        self.entry.connect("activate", self.add)
+        add = Gtk.Button(label="Let through")
+        add.connect("clicked", self.add)
+        add_row.pack_start(self.entry, False, False, 0)
+        add_row.pack_start(add, False, False, 0)
+        self.pack_start(add_row, False, False, 0)
+        self.shown = None
+
+    def set_playlists(self, ids):
+        if ids == self.shown:
+            return
+        self.shown = list(ids)
+        for row in self.rows.get_children():
+            self.rows.remove(row)
+        for playlist in ids:
+            line = Gtk.Box(spacing=6, margin=4)
+            line.pack_start(Gtk.Label(label=playlist, xalign=0, selectable=True), True, True, 0)
+            remove = Gtk.Button(label="Remove", relief=Gtk.ReliefStyle.NONE)
+            remove.connect("clicked", lambda _b, p=playlist: self.remove(p))
+            line.pack_start(remove, False, False, 0)
+            self.rows.add(line)
+        self.rows.set_visible(bool(ids))
+        self.rows.show_all()
+
+    def add(self, *_args):
+        text = self.entry.get_text().strip()
+        if text and self.window.selected:
+            self.entry.set_text("")
+            self.window.run(["social", self.window.selected, "playlist", text, "on"], then=self.window.queued_note)
+
+    def remove(self, playlist):
+        if self.window.selected:
+            self.window.run(["social", self.window.selected, "playlist", playlist, "off"])
+
+
 class ListCard(Gtk.Frame):
     """One website list: where it looks, its actions (blacklists), its
     thresholds for page text, and its entries. Every change runs through
@@ -1896,10 +1955,20 @@ class ListCard(Gtk.Frame):
             lambda: window.export_list(["list", "export", window.selected, self.data["name"]]),
             search=True, hidden=True, multi=True)
         box.pack_start(self.entries, True, True, 0)
+        # §3.2 (owner, 2026-11-16): YouTube playlists let through belong to
+        # the exceptions; the box is as tall as its playlists.
+        self.playlists = None
+        if self.is_exceptions and data["name"] == DEFAULT_EXCEPTIONS:
+            self.playlists = PlaylistBox(window)
+            box.pack_start(self.playlists, False, False, 0)
         self.update(data)
 
     def update(self, data):
         self.data = data
+        if self.playlists is not None:
+            block = self.window.blocks.get(self.window.selected) or {}
+            self.playlists.set_playlists([p.split("=", 1)[1] for p in block.get("social") or []
+                                          if p.startswith("youtube:playlist=")])
         self.filling = True
         try:
             kind = "exceptions" if self.is_exceptions else "blacklist"
@@ -4971,19 +5040,8 @@ class Window(Gtk.ApplicationWindow):
         self.social_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.social_checks = {}
         social.pack_start(self.social_box, False, False, 0)
-        social.pack_start(heading("YouTube playlists", "medium"), False, False, 0)
-        playlist_help = dim(
-            "For a block that stops YouTube: let one playlist through. Its page and its videos "
-            "stay open, every other video is blocked. Paste the playlist's address or ID.")
-        playlist_help.set_max_width_chars(70)
-        social.pack_start(playlist_help, False, False, 0)
-        self.playlist_list = EditableList(
-            "", "Playlist address or ID",
-            lambda values: [self.run(["social", self.selected, "playlist", v, "on"], then=self.queued_note)
-                            for v in values[:1]] if self.selected else None,
-            lambda value, _number: self.run(["social", self.selected, "playlist", value, "off"])
-            if self.selected else None)
-        social.pack_start(self.playlist_list, True, True, 0)
+        social.pack_start(dim("YouTube playlists let through are with the block's exceptions, on the "
+                              "Websites tab."), False, False, 0)
         tabs.append_page(social_scroll, Gtk.Label(label="Social media"))
         return paned
 
@@ -7474,8 +7532,6 @@ class Window(Gtk.ApplicationWindow):
         on = block.get("social") or []
         for name, check in self.social_checks.items():
             check.set_active(name in on)
-        self.playlist_list.set_items(
-            [p.split("=", 1)[1] for p in on if p.startswith("youtube:playlist=")], block["name"])
 
     def place_info(self, name):
         return next((p for p in (self.state or {}).get("places") or [] if p["name"] == name), None)

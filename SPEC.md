@@ -103,12 +103,12 @@ After publishing: Windows support.
 | **Scope** | Boxes *URL*, *title*, *text*. With URL: sites/URL entries match the address (and feed the layers); rendered terms match words in the address. | |
 | **Phrase set** | Named phrases in a block, with scope and actions, like a blacklist. Any number per block. | List |
 | **Blacklist** | Kind: matches get the list's actions. *CT: Websites.* | |
-| **Exception list** | Kind: spares matches from blacklists and phrase sets of its own block only. No phrase exceptions. *CT: Website Exceptions.* | Allowlist block |
+| **Exception list** | Kind: spares matches from blacklists and phrase sets of its own block only; also lets YouTube playlists through. No phrase exceptions. *CT: Website Exceptions.* | Allowlist block |
 | **Allowlist block** | Blacklist `*.*`; only exceptions reachable. | |
 | **Cluster** | List or phrase set in no block: never enforced, freely editable, copied into blocks. | List |
 | **Template** | Ready-made block definition. | Cluster |
 | **Affected users** | Local accounts a block applies to (default all); admin only. | |
-| **Social preset** | Keeps a site but removes a part (YouTube without Shorts, …); also an allowed YouTube playlist. | List |
+| **Social preset** | Keeps a site but removes a part (YouTube without Shorts, …). | List |
 | **Test mode** | Per list/phrase set: report matches instead of acting. | |
 
 ### 3.3 Block states
@@ -314,8 +314,8 @@ GUI and CLI offer the same functions.
     a pop-up): any number of word sets, each necessary/optional, phrase
     length; double-click a phrase to load it. Saving a loaded phrase changes
     it (never adds a copy).
-  - Apps: program, folder, title entry; their actions. Social presets,
-    playlists. The block's own ladder.
+  - Apps: program, folder, title entry; their actions. Social presets.
+    The block's own ladder. YouTube playlists let through: with the exceptions.
 - **4.4 Clusters and recording**: clusters create/edit/copy into block/save
   from block. Link recording; word recording, ranked, cut before saving.
 - **4.5 Schedules**: weekly grid; drag to add/move, click to edit; 15-min
@@ -496,6 +496,7 @@ Decisions not already written into §1–5:
 - 2026-11-16: Reward can also be kept for a time the user picks, with no upper limit (on the time or the amount saved).
 - 2026-11-16: The user picks how many of a place's networks must be in range; a place rule can be given to any block.
 - 2026-11-16: One Import button: KC9K tells phrases, rendered terms and sites (hosts files, adblock rules) apart by their layout.
+- 2026-11-16: YouTube playlists let through belong to the exception list, not the social presets.
 
 ## 7. Open decisions
 

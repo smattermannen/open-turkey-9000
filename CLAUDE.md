@@ -345,7 +345,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Social** (`db/social.go`, `cli/social.go`): `block_social`,
   `BlockDetail.Social`; `rules.social` → `webext/files/social.js`
   (`KC9K_SOCIAL`). Playlist = preset `youtube:playlist=<id>` plus
-  exceptions `youtube.com/playlist?list=<id>`, `youtube.com/watch`;
+  exceptions `youtube.com/playlist?list=<id>`, `youtube.com/watch`; GUI:
+  `PlaylistBox` in the Exceptions card (`ci/gui_playlist_smoke.py`);
   `checkPlaylistVideo`.
 - **Places** (`db/places.go`, `enforce/places.go`, `cli/places.go`): BSSIDs
   from `nmcli` (`ScanWifi`); `AtPlace` needs `Place.Needed()` in range

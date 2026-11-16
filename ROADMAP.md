@@ -107,6 +107,11 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
   - [x] Lists and phrase sets may have no action (§3.9, changed
     2026-11-15). Built: the last action can be turned off; no-action rules
     reach the extension with no actions and do nothing.
+  - [x] YouTube playlists (§3.2; owner, 2026-11-16): a huge box on the
+    Social media tab. Now a box in the Exceptions card, as tall as its
+    playlists (a row each, with Remove). The refusal of a short ID read
+    as if an address were wrong: it now says what an ID and an address
+    look like. `ci/gui_playlist_smoke.py`.
   - [x] One Import (§4.3; owner, 2026-11-16: the GUI forced mode 1 or 2
     by which Import was clicked). KC9K reads a file's layout (`kc9k list
     read`, `cli/entryfile.go`): a phrase set's Import adds phrases, makes

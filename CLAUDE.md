@@ -487,8 +487,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   can go on any block (it switches nothing on); adding or removing one is
   gated like any automation change. With a schedule lock, a block is
   locked while its automation has it enabled; then nothing that lifts it
-  can be removed. GUI: "Save where I am now as…" (ticked: turn the block
-  on there), networks needed per place (`ci/gui_places_smoke.py`, fake
+  can be removed. GUI: "Add this place", "Save where I am now as…"
+  (ticked: add it to the block), networks needed per place (`ci/gui_places_smoke.py`, fake
   `nmcli`). No networks seen: what keeps each block enabled; Wi-Fi is
   switched back on.
 - **Allowance** (`kc9k allowance set|start|end|remove`; `--per

@@ -5712,23 +5712,26 @@ class Window(Gtk.ApplicationWindow):
         schedule_scroll.add(schedule)
         tabs.append_page(schedule_scroll, Gtk.Label(label="Schedule & places"))
 
-        # §3.6 places, under the schedule: both say when the block is enabled.
+        # §3.6 places, under the schedule: both switch the block (Automation).
         places = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         places_head = Gtk.Box(spacing=6)
         places_head.pack_start(heading("Places", "medium"), False, False, 0)
         places_head.pack_start(help_button(
-            "The block is enabled while the computer is at one of these places, and lifted "
-            "elsewhere (it stays switched on). A place is known by the Wi-Fi networks in range "
-            "when you save it (yours and the neighbours'); the computer is there when as many of "
-            "them as you choose are in range again. Only a schedule lock keeps the block from "
-            "being switched off or weakened while there. With Wi-Fi switched off the computer "
-            "counts as being at every place, and Wi-Fi is switched back on."), False, False, 0)
+            "Being at one of these places switches the block as its default says (Automation, "
+            "above): on when it is disabled by default, off when it is enabled by default. A "
+            "block can have as many places as you like. A place is known by the Wi-Fi networks "
+            "in range when you save it (yours and the neighbours'); the computer is there when as "
+            "many of them as you choose are in range again. Only a schedule lock keeps the block "
+            "from being switched off or weakened while its automation has it enabled. With no "
+            "network seen (Wi-Fi off), places count as whatever keeps the block enabled, and "
+            "Wi-Fi is switched back on."), False, False, 0)
         places.pack_start(places_head, False, False, 0)
         pick_row = Gtk.Box(spacing=6)
         self.place_combo = Gtk.ComboBoxText()
         self.place_combo.connect("changed", lambda _c: self.show_place_need())
         pick_row.pack_start(self.place_combo, False, False, 0)
-        place_on = Gtk.Button(label="Turn on at this place")
+        place_on = Gtk.Button(label="Add this place")
+        place_on.set_tooltip_text("Being at it switches the block as its default says")
         place_on.connect("clicked", lambda _b: self.selected and self.place_combo.get_active_text() and self.run(
             ["place", "rule", self.selected, self.place_combo.get_active_text(), "on"]))
         pick_row.pack_start(place_on, False, False, 0)
@@ -5750,7 +5753,7 @@ class Window(Gtk.ApplicationWindow):
         self.place_need_row = need_row
         places.pack_start(need_row, False, False, 0)
         self.place_rules = EditableList(
-            "On at", "", lambda _values: None,
+            "Its places", "", lambda _values: None,
             lambda value, _number: self.selected and self.run(["place", "rule", self.selected, value, "off"]))
         add_row = self.place_rules.entry.get_parent()  # rules are added with the button above
         self.place_rules.entry.set_no_show_all(True)
@@ -8692,7 +8695,7 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(entry, False, False, 0)
         rule = None
         if self.selected:
-            rule = Gtk.CheckButton(label=f"Turn '{self.selected}' on here", active=True)
+            rule = Gtk.CheckButton(label=f"Add it to '{self.selected}' (being here switches it)", active=True)
             box.pack_start(rule, False, False, 0)
         ok.set_sensitive(False)
         entry.connect("changed", lambda e: ok.set_sensitive(bool(e.get_text().strip())))

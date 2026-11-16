@@ -1,7 +1,7 @@
 """GUI smoke test for places (§3.6): saving where the computer is (with a
 fake nmcli that sees chosen networks), turning a block on there (also a
 block with nothing in it yet: owner, 2026-11-16), the networks needed, the
-"On at" list and removing a rule. Builds kc9k into a scratch folder, points
+"Its places" list and removing a rule. Builds kc9k into a scratch folder, points
 a wrapper at a scratch database (KC9K_DB: no layers are applied), loads
 gui/kc9k-gui.py as a module with CLI replaced and another application ID,
 and never shows the main window. Needs an X display; run as a normal user.
@@ -108,7 +108,7 @@ check(win.places_label.get_text().startswith("No places saved yet"), "no places 
 
 def name_home(dialog):
     _d, entry, rule = win.place_dialog
-    check(rule is not None and rule.get_active(), "'Turn study on here' offered and ticked")
+    check(rule is not None and rule.get_active(), "'Add it to study' offered and ticked")
     entry.set_text("home")
 
 
@@ -133,12 +133,12 @@ win.set_place_need(None); settle(); win.show_block()
 check(next(p for p in state()["places"] if p["name"] == "home")["need"] == 3, "need saved as 3")
 check("there when 3 of its 4" in win.places_label.get_text(), win.places_label.get_text())
 
-# 3. "Turn on at this place" for another block, then remove the rule.
+# 3. "Add this place" for another block, then remove the rule.
 win.selected = "games"; win.show_block()
 check(win.place_combo.get_active_text() == "home", "the place list is there for another block")
 win.place_combo.set_active(0)
-button = find_button(win, "Turn on at this place")
-check(button is not None, "the Turn on at this place button is there")
+button = find_button(win, "Add this place")
+check(button is not None, "the Add this place button is there")
 button.clicked(); settle(); win.show_block()
 check([row[0] for row in win.place_rules.store] == ["home"], "games: On at home")
 win.place_rules.on_remove("home", 1); settle(); win.show_block()

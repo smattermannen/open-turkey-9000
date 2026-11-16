@@ -50,8 +50,9 @@ func parseNmcli(out string) []db.Network {
 }
 
 // AtPlace reports whether the networks in range say the computer is at a
-// place: two of its networks are seen (one, if it only knows one). Seeing
-// nothing at all counts as being there.
+// place: as many of its networks as it needs are seen (p.Needed: two unless
+// the user chose otherwise, at most all it knows). Seeing nothing at all
+// counts as being there.
 func AtPlace(p db.Place, seen []db.Network) bool {
 	if len(seen) == 0 {
 		return true
@@ -66,7 +67,7 @@ func AtPlace(p db.Place, seen []db.Network) bool {
 			matches++
 		}
 	}
-	return matches >= min(2, len(p.Networks)) && matches > 0
+	return matches > 0 && matches >= p.Needed()
 }
 
 var (

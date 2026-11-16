@@ -341,8 +341,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   exceptions `youtube.com/playlist?list=<id>`, `youtube.com/watch`;
   `checkPlaylistVideo`.
 - **Places** (`db/places.go`, `enforce/places.go`, `cli/places.go`): BSSIDs
-  from `nmcli` (`ScanWifi`); `AtPlace` needs two in range; empty scan =
-  there. `PlaceBlocks` feeds `reconcileSchedulesAt`, `ScheduleActiveNow`;
+  from `nmcli` (`ScanWifi`); `AtPlace` needs `Place.Needed()` in range
+  (`places.need`, default 2, `place need P N`, `place add --need`); empty
+  scan = there. `PlaceBlocks` feeds `reconcileSchedulesAt`, `ScheduleActiveNow`;
   `keepWifiOn`.
 - **Test mode** (`db/testmode.go`): lists go out `test: true`; extension
   shows `kc9kTestReport`, skips them in `kc9kListMatches`.
@@ -415,9 +416,12 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Recording**: domains without `www.`, pages and frames, private windows
   and blocked pages included; ≤ 2000 sites; one recording at a time; a
   refused `stop` keeps the recording.
-- **Places**: re-adding a name adds the BSSIDs now seen; one BSSID needed if
-  the place knows only one. A place-ruled block is held while there; rule
-  and place can't be removed then. No networks seen = at every ruled place,
+- **Places**: re-adding a name adds the BSSIDs now seen; needs at most what
+  the place knows; more needed weakens its blocks, fewer is free. A rule
+  can go on any block (it switches nothing on). With a schedule lock, a
+  place-ruled block is locked while there; rule and place can't be removed
+  then. GUI: "Save where I am now as…" (ticked: turn the block on there),
+  networks needed per place (`ci/gui_places_smoke.py`, fake `nmcli`). No networks seen = at every ruled place,
   and Wi-Fi is switched back on.
 - **Allowance** (`kc9k allowance set|start|end|remove`; `--per
   day|week|month|rolling|window`, `--refill HH:MM`, `--sessions N`; flags

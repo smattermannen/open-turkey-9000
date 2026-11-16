@@ -171,6 +171,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
     (`TestSettingsLine`).
   - [x] A scratch database (`KC9K_DB`, GUI smoke tests) set hotkeys on the
     real desktop, clobbering KC9K's own; now it never does.
+  - [x] Places couldn't be used (owner, 2026-11-16; §3.6): "Turn on at
+    this place" refused a block with nothing to enforce yet (its lists
+    without actions count as nothing), so a saved place never reached "On
+    at"; the help said a place alone keeps the block from being stopped
+    (only a schedule lock does). Now a rule goes on any block; saving a
+    place turns the selected block on there in the same step (ticked by
+    default); the user picks how many of a place's networks must be in
+    range (default 2; `place need`, GUI field, projects). `TestPlaceNeed`,
+    `ci/gui_places_smoke.py` (fake nmcli: an empty block, both buttons,
+    networks needed, no networks in range).
   - [x] An allowance protected its block like a lock (R-LOCK-1, R-LOCK-10;
     found 2026-11-16): a block with an allowance and no lock couldn't be
     switched off, weakened or uninstalled, the daemon switched it back on,

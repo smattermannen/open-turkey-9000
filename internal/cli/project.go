@@ -106,6 +106,7 @@ type clusterExport struct {
 type placeExport struct {
 	Name     string       `json:"name"`
 	Networks []db.Network `json:"networks"`
+	Need     int          `json:"need,omitempty"` // §3.6, networks needed in range
 }
 
 type projectExport struct {
@@ -436,7 +437,7 @@ passwords, hotkeys and statistics are never in it.`,
 		blockPlaces := map[string][]string{}
 		if !share {
 			for _, p := range places {
-				out.Places = append(out.Places, placeExport{Name: p.Name, Networks: p.Networks})
+				out.Places = append(out.Places, placeExport{Name: p.Name, Networks: p.Networks, Need: p.Need})
 				for _, b := range p.Blocks {
 					blockPlaces[b] = append(blockPlaces[b], p.Name)
 				}
@@ -740,6 +741,11 @@ With --dry-run, says what would happen and changes nothing.`,
 				saved, err := database.GetPlace(p.Name)
 				if err != nil {
 					return err
+				}
+				if p.Need > 0 {
+					if err := database.SetPlaceNeed(saved.ID, min(p.Need, len(saved.Networks))); err != nil {
+						return err
+					}
 				}
 				placeIDs[p.Name] = saved.ID
 			} else {

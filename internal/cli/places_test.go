@@ -20,11 +20,10 @@ func TestPlaces(t *testing.T) {
 
 	mustRun(t, "place", "add", "home")
 	mustRun(t, "block", "create", "b")
-	if err := runCLI(t, "place", "rule", "b", "home", "on"); err == nil {
-		t.Error("an empty block got a place rule")
-	}
-	mustRun(t, "block", "add", "b", "reddit.com")
+	// A rule only says where the block is enabled: a block gets one before
+	// it has anything to enforce (owner, 2026-11-16: it was refused).
 	mustRun(t, "place", "rule", "b", "home", "on")
+	mustRun(t, "block", "add", "b", "reddit.com")
 	mustRun(t, "schedule", "lock", "b", "on", "--yes") // places protect a block only through it (§3.4)
 	p, err := d.GetPlace("home")
 	if err != nil || len(p.Networks) != 3 || len(p.Blocks) != 1 {
@@ -58,5 +57,46 @@ func TestPlaces(t *testing.T) {
 	mustRun(t, "place", "add", "cafe")
 	if p, _ = d.GetPlace("home"); len(p.Networks) != 3 {
 		t.Errorf("home changed: %+v", p.Networks)
+	}
+}
+
+// §3.6 (owner, 2026-11-16): the user picks how many of a place's networks
+// must be in range. Fewer is always allowed; more weakens the blocks on
+// there, refused while one is locked; more than the place knows is refused.
+func TestPlaceNeed(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	home := []db.Network{{BSSID: "AA:AA:AA:AA:AA:01"}, {BSSID: "AA:AA:AA:AA:AA:02"}, {BSSID: "AA:AA:AA:AA:AA:03"},
+		{BSSID: "AA:AA:AA:AA:AA:04"}}
+	oldScan := enforce.ScanWifi
+	enforce.ScanWifi = func(bool) ([]db.Network, error) { return home, nil }
+	t.Cleanup(func() { enforce.ScanWifi = oldScan })
+
+	mustRun(t, "place", "add", "home", "--need", "3")
+	p, _ := d.GetPlace("home")
+	if p.Needed() != 3 || !enforce.AtPlace(p, home[:3]) || enforce.AtPlace(p, home[:2]) {
+		t.Fatalf("need 3: %+v", p)
+	}
+	if err := runCLI(t, "place", "need", "home", "5"); err == nil {
+		t.Error("more networks needed than the place knows")
+	}
+	if err := runCLI(t, "place", "need", "home", "0"); err == nil {
+		t.Error("zero networks needed")
+	}
+	mustRun(t, "place", "need", "home", "1")
+	if p, _ = d.GetPlace("home"); !enforce.AtPlace(p, home[3:]) {
+		t.Error("one network is enough after 'need 1'")
+	}
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "place", "rule", "b", "home", "on")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if err := runCLI(t, "place", "need", "home", "4"); err == nil {
+		t.Error("needing more networks weakened a locked block")
+	}
+	mustRun(t, "place", "need", "home", "1") // the same: free
+	// An old place (no number chosen) needs two, or one if it knows one.
+	if (db.Place{Networks: home}).Needed() != 2 || (db.Place{Networks: home[:1]}).Needed() != 1 {
+		t.Error("default need")
 	}
 }

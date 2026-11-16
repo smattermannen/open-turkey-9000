@@ -64,6 +64,7 @@ func upgradeSchema(conn *sql.DB) error {
 		{"block_breaks", "keep", "TEXT NOT NULL DEFAULT ''"},
 		{"block_breaks", "period", "TEXT NOT NULL DEFAULT ''"},
 		{"block_breaks", "chunks", "TEXT NOT NULL DEFAULT ''"},
+		{"places", "need", "INTEGER NOT NULL DEFAULT 2"},
 		{"block_breaks", "on_break", "TEXT NOT NULL DEFAULT ''"},
 		{"quotas", "period", "TEXT NOT NULL DEFAULT ''"},
 		{"quotas", "refill", "INTEGER NOT NULL DEFAULT 0"},

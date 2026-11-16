@@ -892,6 +892,11 @@ class NumberField(CheckedField):
     def set_value(self, number):
         self.set_text(str(int(number)))
 
+    def set_limits(self, minimum, maximum):
+        """Changes the allowed range and checks the text again."""
+        self.minimum, self.maximum = minimum, maximum
+        self.changed()
+
     def has_focus(self):
         return self.entry.has_focus()
 
@@ -4884,14 +4889,16 @@ class Window(Gtk.ApplicationWindow):
         places_head = Gtk.Box(spacing=6)
         places_head.pack_start(heading("Places", "medium"), False, False, 0)
         places_head.pack_start(help_button(
-            "Turn this block on while the computer is at a place. A place is known by the Wi-Fi "
-            "networks in range when you save it (yours and the neighbours'); the computer is "
-            "there when two of them are in range again. While there, the block can't be stopped "
-            "or weakened. With Wi-Fi switched off the computer counts as being at every place, "
-            "and Wi-Fi is switched back on."), False, False, 0)
+            "The block is enabled while the computer is at one of these places, and lifted "
+            "elsewhere (it stays switched on). A place is known by the Wi-Fi networks in range "
+            "when you save it (yours and the neighbours'); the computer is there when as many of "
+            "them as you choose are in range again. Only a schedule lock keeps the block from "
+            "being switched off or weakened while there. With Wi-Fi switched off the computer "
+            "counts as being at every place, and Wi-Fi is switched back on."), False, False, 0)
         places.pack_start(places_head, False, False, 0)
         pick_row = Gtk.Box(spacing=6)
         self.place_combo = Gtk.ComboBoxText()
+        self.place_combo.connect("changed", lambda _c: self.show_place_need())
         pick_row.pack_start(self.place_combo, False, False, 0)
         place_on = Gtk.Button(label="Turn on at this place")
         place_on.connect("clicked", lambda _b: self.selected and self.place_combo.get_active_text() and self.run(
@@ -4900,7 +4907,20 @@ class Window(Gtk.ApplicationWindow):
         save_place = Gtk.Button(label="Save where I am now as…")
         save_place.connect("clicked", self.save_place)
         pick_row.pack_start(save_place, False, False, 0)
-        places.pack_start(pick_row, False, False, 0)
+        places.pack_start(flow_row(pick_row), False, False, 0)
+        # §3.6: how many of the place's networks must be in range.
+        need_row = Gtk.Box(spacing=6)
+        need_row.pack_start(Gtk.Label(label="There when", valign=Gtk.Align.START, margin_top=6), False, False, 0)
+        self.place_need = NumberField(2, 1, 24, width=4)
+        need_row.pack_start(self.place_need, False, False, 0)
+        self.place_need_of = Gtk.Label(label="of its networks are in range", valign=Gtk.Align.START, margin_top=6)
+        need_row.pack_start(self.place_need_of, False, False, 0)
+        need_save = Gtk.Button(label="Save", valign=Gtk.Align.START)
+        need_save.connect("clicked", self.set_place_need)
+        guard_button(need_save, self.place_need)
+        need_row.pack_start(need_save, False, False, 0)
+        self.place_need_row = need_row
+        places.pack_start(need_row, False, False, 0)
         self.place_rules = EditableList(
             "On at", "", lambda _values: None,
             lambda value, _number: self.selected and self.run(["place", "rule", self.selected, value, "off"]))
@@ -5218,16 +5238,20 @@ class Window(Gtk.ApplicationWindow):
         self.schedule_total.set_text(f"{len(covered) / 60:.0f} of 168 hours a week" if covered else "")
         saved = [p["name"] for p in self.state.get("places") or []]
         if getattr(self, "places_shown", None) != saved:
+            chosen = getattr(self, "place_to_show", None) or self.place_combo.get_active_text()
             self.places_shown = saved
             self.place_combo.remove_all()
             for name in saved:
                 self.place_combo.append_text(name)
             if saved:
-                self.place_combo.set_active(0)
+                self.place_combo.set_active(saved.index(chosen) if chosen in saved else 0)
+        self.place_to_show = None
+        self.show_place_need()
         self.place_rules.set_items(block.get("places") or [], block["name"])
         self.places_label.set_text(
-            "Saved places: " + ", ".join(f"{p['name']} ({p['networks']} networks)" for p in self.state.get("places") or [])
-            if saved else "No places saved yet.")
+            "Saved places: " + ", ".join(f"{p['name']} (there when {p.get('need', 2)} of its {p['networks']} "
+                                         f"networks are in range)" for p in self.state.get("places") or [])
+            if saved else "No places saved yet: save where the computer is now.")
         if not self.schedule_lead.has_focus():
             self.schedule_lock.set_active(block.get("schedule_lock", False))
             self.schedule_lead.set_value(block.get("schedule_lead", 0))
@@ -7333,12 +7357,64 @@ class Window(Gtk.ApplicationWindow):
         self.playlist_list.set_items(
             [p.split("=", 1)[1] for p in on if p.startswith("youtube:playlist=")], block["name"])
 
+    def place_info(self, name):
+        return next((p for p in (self.state or {}).get("places") or [] if p["name"] == name), None)
+
+    def show_place_need(self):
+        """The chosen place's networks needed, in the field beside it."""
+        place = self.place_info(self.place_combo.get_active_text())
+        self.place_need_row.set_visible(place is not None)
+        if place is not None and not self.place_need.entry.has_focus():
+            self.place_need.set_limits(1, max(place["networks"], 1))
+            self.place_need.set_text(str(place.get("need", 2)))
+            self.place_need_of.set_text(f"of its {place['networks']} networks are in range")
+
+    def set_place_need(self, _button):
+        name = self.place_combo.get_active_text()
+        if name and self.fields_ok(("Networks needed", self.place_need)):
+            self.place_to_show = name
+            self.run(["place", "need", name, str(self.place_need.value)])
+
     def save_place(self, _button):
-        name = self.ask_text("Save this place", "A name for where the computer is now, such as home or library. "
-                             "Saving under a name that exists adds the networks seen now.")
-        if name:
-            self.run(["place", "add", name], timeout=60,
-                     then=lambda output: self.message(output, Gtk.MessageType.INFO))
+        """§3.6: saves the Wi-Fi networks in range as a place and, ticked by
+        default, turns the selected block on there too."""
+        dialog = Gtk.Dialog(title="Save this place", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Save", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        for side in ("start", "end", "top", "bottom"):
+            getattr(box, f"set_margin_{side}")(18)
+        box.pack_start(dim("A name for where the computer is now, such as home or library. Saving under a "
+                           "name that exists adds the networks seen now."), False, False, 0)
+        entry = Gtk.Entry(activates_default=True)
+        box.pack_start(entry, False, False, 0)
+        rule = None
+        if self.selected:
+            rule = Gtk.CheckButton(label=f"Turn '{self.selected}' on here", active=True)
+            box.pack_start(rule, False, False, 0)
+        ok.set_sensitive(False)
+        entry.connect("changed", lambda e: ok.set_sensitive(bool(e.get_text().strip())))
+        self.place_dialog = (dialog, entry, rule)  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        name, with_rule = entry.get_text().strip(), bool(rule and rule.get_active())
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK or not name:
+            return
+        block = self.selected
+        self.place_to_show = name
+
+        def saved(output):
+            if with_rule and block:
+                self.run(["place", "rule", block, name, "on"],
+                         then=lambda rule_output: self.message(output + "\n" + rule_output, Gtk.MessageType.INFO))
+            else:
+                self.message(output, Gtk.MessageType.INFO)
+
+        self.run(["place", "add", name], timeout=60, then=saved)
 
     def pick_apps(self, _button):
         if not self.selected:

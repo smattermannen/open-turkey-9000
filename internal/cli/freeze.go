@@ -235,8 +235,10 @@ type guiRecording struct {
 
 // guiPlace is a saved place for the interface.
 type guiPlace struct {
-	Name     string `json:"name"`
-	Networks int    `json:"networks"`
+	Name     string   `json:"name"`
+	Networks int      `json:"networks"`
+	Need     int      `json:"need"`   // networks needed in range (§3.6)
+	Blocks   []string `json:"blocks"` // blocks on there
 }
 
 type guiState struct {
@@ -484,7 +486,11 @@ var guiStateCmd = &cobra.Command{
 		}
 		state.Places = []guiPlace{}
 		for _, p := range places {
-			state.Places = append(state.Places, guiPlace{Name: p.Name, Networks: len(p.Networks)})
+			blocks := p.Blocks
+			if blocks == nil {
+				blocks = []string{}
+			}
+			state.Places = append(state.Places, guiPlace{Name: p.Name, Networks: len(p.Networks), Need: p.Needed(), Blocks: blocks})
 		}
 		lifted := enforce.ScheduleLifted(database, now)
 		enabled := enforce.EnabledNames(database, trusted)

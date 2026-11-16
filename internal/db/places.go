@@ -10,7 +10,8 @@ import (
 
 const placesSchema = `CREATE TABLE IF NOT EXISTS places (
     id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL UNIQUE,
+    need INTEGER NOT NULL DEFAULT 2
 );
 CREATE TABLE IF NOT EXISTS place_networks (
     place_id INTEGER NOT NULL,
@@ -34,11 +35,28 @@ type Network struct {
 }
 
 // Place is a named set of networks, with the blocks that are on there.
+// Need is how many of its networks must be in range for the computer to be
+// there (the user's choice, §3.6; at most all of them).
 type Place struct {
 	ID       int
 	Name     string
 	Networks []Network
 	Blocks   []string
+	Need     int
+}
+
+// DefaultPlaceNeed is how many networks a place needs unless the user
+// chose otherwise.
+const DefaultPlaceNeed = 2
+
+// Needed returns how many networks must be in range for the computer to
+// be at p: its Need, at most all it knows, at least one.
+func (p Place) Needed() int {
+	need := p.Need
+	if need <= 0 {
+		need = DefaultPlaceNeed
+	}
+	return max(1, min(need, len(p.Networks)))
 }
 
 // MaxPlaceNetworks is how many networks a place remembers.
@@ -46,14 +64,14 @@ const MaxPlaceNetworks = 24
 
 // Places returns every place.
 func (d *DB) Places() ([]Place, error) {
-	rows, err := d.conn.Query("SELECT id, name FROM places ORDER BY name")
+	rows, err := d.conn.Query("SELECT id, name, need FROM places ORDER BY name")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read places: %w", err)
 	}
 	var out []Place
 	for rows.Next() {
 		var p Place
-		if err := rows.Scan(&p.ID, &p.Name); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Need); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -150,6 +168,14 @@ func (d *DB) SavePlace(name string, networks []Network) (int, error) {
 		return 0, err
 	}
 	return total, tx.Commit()
+}
+
+// SetPlaceNeed sets how many of a place's networks must be in range.
+func (d *DB) SetPlaceNeed(id, need int) error {
+	if _, err := d.conn.Exec("UPDATE places SET need = ? WHERE id = ?", need, id); err != nil {
+		return fmt.Errorf("failed to save the place: %w", err)
+	}
+	return nil
 }
 
 // DeletePlace removes a place and its rules.

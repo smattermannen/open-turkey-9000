@@ -2,12 +2,14 @@
 //
 //	kc9k place                       # places, and whether you are there now
 //	kc9k place add home              # remember the Wi-Fi networks in range as "home"
+//	kc9k place need home 3           # there when 3 of its networks are in range
 //	kc9k place rule work library on  # block 'work' is on at 'library'
 //	kc9k place remove home
 package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -19,8 +21,8 @@ var placeCmd = &cobra.Command{
 	Use:   "place",
 	Short: "Places, known by their Wi-Fi networks, where blocks turn on",
 	Long: `A place is the set of Wi-Fi networks in range when you save it: your own and
-the neighbours'. The computer is at the place when two of them are in range
-again. A block with a place rule is enabled while the computer is there and
+the neighbours'. The computer is at the place when enough of them are in
+range again: two unless you choose another number ('kc9k place need'). A block with a place rule is enabled while the computer is there and
 lifted elsewhere (it stays switched on). With a schedule lock ('kc9k schedule
 lock'), it is locked while there, as in a block window: it can't be switched
 off or weakened until you leave.
@@ -52,7 +54,7 @@ makes it easier to recognise.`,
 			if err == nil && len(seen) > 0 && enforce.AtPlace(p, seen) {
 				here = " — you are here"
 			}
-			fmt.Printf("%s (%d networks)%s\n", p.Name, len(p.Networks), here)
+			fmt.Printf("%s (needs %d of its %d networks)%s\n", p.Name, p.Needed(), len(p.Networks), here)
 			if len(p.Blocks) > 0 {
 				fmt.Printf("  on here: %s\n", strings.Join(p.Blocks, ", "))
 			}
@@ -66,6 +68,10 @@ var placeAddCmd = &cobra.Command{
 	Short: "Remember the Wi-Fi networks in range now as a place",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		need, _ := cmd.Flags().GetInt("need")
+		if cmd.Flags().Changed("need") && need < 1 {
+			return fmt.Errorf("--need is at least 1")
+		}
 		seen, err := enforce.ScanWifi(true)
 		if err != nil {
 			return fmt.Errorf("Wi-Fi can't be read (is NetworkManager running?): %w", err)
@@ -73,11 +79,23 @@ var placeAddCmd = &cobra.Command{
 		if len(seen) == 0 {
 			return fmt.Errorf("no Wi-Fi network is in range, so this place has nothing to be known by")
 		}
+		existing, _ := database.GetPlace(args[0])
 		total, err := database.SavePlace(args[0], seen)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Place '%s' saved: it is known by %d networks.\n", args[0], total)
+		p, err := database.GetPlace(args[0])
+		if err != nil {
+			return err
+		}
+		if cmd.Flags().Changed("need") {
+			if err := setPlaceNeed(database, p, need, existing.ID == 0); err != nil {
+				return err
+			}
+			p.Need = need
+		}
+		fmt.Printf("Place '%s' saved: it is known by %d networks; the computer is there when %d of them are in range.\n",
+			p.Name, total, p.Needed())
 		if total < 2 {
 			fmt.Println("With a single network it is easy to miss; save it again when more are in range.")
 		}
@@ -108,6 +126,50 @@ var placeRemoveCmd = &cobra.Command{
 	}),
 }
 
+var placeNeedCmd = &cobra.Command{
+	Use:   "need [place] [count]",
+	Short: "How many of a place's networks must be in range for the computer to be there",
+	Long: `The computer is at a place when this many of the networks it was saved with
+are in range (two unless you choose another number; at most all of them).
+Fewer makes the place easier to recognise, so blocks on there are enabled
+more often: always allowed. More makes it harder, so it weakens the blocks
+on there: refused while one of them is locked.`,
+	Args: cobra.ExactArgs(2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		p, err := database.GetPlace(args[0])
+		if err != nil {
+			return err
+		}
+		need, err := strconv.Atoi(args[1])
+		if err != nil || need < 1 {
+			return fmt.Errorf("the count is a number from 1 to %d (the networks '%s' knows)", len(p.Networks), p.Name)
+		}
+		if err := setPlaceNeed(database, p, need, false); err != nil {
+			return err
+		}
+		p.Need = need
+		fmt.Printf("The computer is at '%s' when %d of its %d networks are in range.\n", p.Name, p.Needed(), len(p.Networks))
+		return nil
+	}),
+}
+
+// setPlaceNeed sets how many networks a place needs. More than it knows
+// is refused; more than before weakens the blocks on there (fresh: a place
+// just made has no blocks yet).
+func setPlaceNeed(database *db.DB, p db.Place, need int, fresh bool) error {
+	if need > len(p.Networks) {
+		return fmt.Errorf("'%s' knows only %d networks; save it again where more are in range, or ask for fewer", p.Name, len(p.Networks))
+	}
+	if !fresh && need > p.Needed() {
+		for _, block := range p.Blocks {
+			if err := ensureEditable(database, block, false); err != nil {
+				return err
+			}
+		}
+	}
+	return database.SetPlaceNeed(p.ID, need)
+}
+
 var placeRuleCmd = &cobra.Command{
 	Use:   "rule [block] [place] [on|off]",
 	Short: "Turn a block on while the computer is at a place",
@@ -117,19 +179,17 @@ var placeRuleCmd = &cobra.Command{
 			return fmt.Errorf("usage: kc9k place rule <block> <place> on|off")
 		}
 		block, on := args[0], args[2] == "on"
-		detail, err := database.GetBlock(block)
-		if err != nil {
+		if _, err := database.GetBlock(block); err != nil {
 			return err
 		}
 		p, err := database.GetPlace(args[1])
 		if err != nil {
 			return err
 		}
-		if on && detail.Empty() {
-			return fmt.Errorf("block '%s' has nothing to enforce yet", block)
-		}
-		// On makes the block stricter; off loosens it (and is refused while
-		// the computer is at the place, like a schedule in its window).
+		// A rule only says where the block is enabled; it switches nothing
+		// on, so a block may get one before it has anything to enforce.
+		// On makes the block stricter; off weakens it (refused while it is
+		// locked: with a schedule lock, also while the computer is there).
 		if err := ensureEditable(database, block, on); err != nil {
 			return err
 		}
@@ -159,6 +219,7 @@ func placeNames(places []db.Place, block string) []string {
 }
 
 func init() {
-	placeCmd.AddCommand(placeAddCmd, placeRemoveCmd, placeRuleCmd)
+	placeAddCmd.Flags().Int("need", db.DefaultPlaceNeed, "How many of its networks must be in range for the computer to be there")
+	placeCmd.AddCommand(placeAddCmd, placeRemoveCmd, placeRuleCmd, placeNeedCmd)
 	rootCmd.AddCommand(placeCmd)
 }

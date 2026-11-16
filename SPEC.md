@@ -175,7 +175,7 @@ tamper protection settings can't be turned off.
 | **Session limit** | N openings per period; a session ends 3 min after switching away. |
 | **Pause** | One-off lift until a set time. |
 | **Autostart** | Switches a block on: once, time of day on set days, sign-in/wake, or next block window. |
-| **Place** | A set of Wi-Fi access points (no GPS). |
+| **Place** | A set of Wi-Fi access points (no GPS). The computer is there when as many of them as the user chooses (default 2) are in range. |
 | **Place rule** | A scheduled block is enabled at a place. |
 
 ### 3.7 Use
@@ -492,6 +492,7 @@ Decisions not already written into §1–5:
 - 2026-11-15: Durations in days, hours and minutes, never minutes only, never silently changed (R-GUI-1); timer locks also by calendar date (R-GUI-2); the GUI is redesigned to be beautiful, intelligent and intuitive (R-GUI-3); no flashing (R-PAGE-1).
 - 2026-11-16: Restart locks on any block, scheduled ones too: the user decides how their locks work.
 - 2026-11-16: Reward can also be kept for a time the user picks, with no upper limit (on the time or the amount saved).
+- 2026-11-16: The user picks how many of a place's networks must be in range; a place rule can be given to any block.
 
 ## 7. Open decisions
 

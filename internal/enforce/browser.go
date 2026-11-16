@@ -489,6 +489,7 @@ func ServeRules(d *db.DB) error {
 	mux.HandleFunc("/visit", visitHandler(d))
 	mux.HandleFunc("/words", wordsHandler(d))
 	mux.HandleFunc("/add", addHandler(d))
+	mux.HandleFunc("/dark-exempt", darkExemptHandler(d))
 	mux.HandleFunc("/image/", imageHandler)
 	mux.HandleFunc(chromeUpdatePath, chromeUpdateHandler)
 	mux.HandleFunc("/chrome/", chromeExtensionHandler)

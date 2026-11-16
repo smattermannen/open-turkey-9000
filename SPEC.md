@@ -373,7 +373,8 @@ GUI and CLI offer the same functions.
       seconds, then everything is back to now;
     - dark mode = system dark mode: system default, always light, always
       dark, or light between two times;
-    - dark pages follow dark mode, with exempt sites;
+    - dark pages follow dark mode, with exempt sites; the extension's
+      toolbar button exempts a site (or shows it dark again);
     - not lockable;
     - never overrides the user: never puts a level back; a manual change
       pauses that clip until its next point or resume; a hand-picked

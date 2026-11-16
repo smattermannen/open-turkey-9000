@@ -137,6 +137,46 @@ async function main() {
   check("and mark nothing", await plain.evaluate(() => document.querySelectorAll("[data-kc9k-noimg]").length) === 0);
   await plain.close();
 
+  // The toolbar button's popup (owner, 2026-11-16): "Exempt from dark
+  // pages" when dark pages are on, and back again.
+  const popupHtml = fs.readFileSync(path.join(FILES, "popup.html"), "utf8")
+    .replace('<script src="compat.js"></script>', "")
+    .replace('<script src="popup.js"></script>', "<script>" + fs.readFileSync(path.join(FILES, "popup.js"), "utf8") + "</script>");
+  const pop = await browser.newPage();
+  await pop.route("http://popup.example/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: popupHtml }));
+  await pop.addInitScript(() => {
+    window.sent = [];
+    let exempt = false;
+    window.browser = { runtime: { sendMessage: async (m) => {
+      window.sent.push(m);
+      if (m.type === "popup") {
+        return { up: true, url: "https://news.example.com/x", site: "news.example.com", acting: [], left: [], blocks: [],
+          dark: { exempt } };
+      }
+      if (m.type === "dark-exempt") {
+        exempt = m.exempt;
+        return { ok: true, site: "news.example.com", exempt: m.exempt };
+      }
+      return undefined;
+    } } };
+  });
+  await pop.goto("http://popup.example/popup.html");
+  await pop.waitForSelector("#dark-go");
+  check("the dark pages row shows", await pop.isVisible("#dark-go"));
+  check("its button says Exempt from dark pages", (await pop.textContent("#dark-go")) === "Exempt from dark pages",
+    await pop.textContent("#dark-go"));
+  await pop.click("#dark-go");
+  await pop.waitForFunction(() => document.getElementById("dark-go").textContent === "Show it dark again");
+  const sent = await pop.evaluate(() => window.sent.filter((m) => m.type === "dark-exempt"));
+  check("the click asks for the exemption", sent.length === 1 && sent[0].exempt === true &&
+    sent[0].url === "https://news.example.com/x", sent);
+  check("and says it is done", (await pop.textContent("#dark-result")).includes("left as it is"),
+    await pop.textContent("#dark-result"));
+  await pop.click("#dark-go");
+  await pop.waitForFunction(() => document.getElementById("dark-go").textContent === "Exempt from dark pages");
+  check("and back again", true);
+  await pop.close();
+
   await browser.close();
   console.log(failures ? `FAILED: ${failures}` : "all passed");
   process.exit(failures ? 1 : 0);

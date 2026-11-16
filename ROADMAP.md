@@ -107,6 +107,12 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
   - [x] Lists and phrase sets may have no action (§3.9, changed
     2026-11-15). Built: the last action can be turned off; no-action rules
     reach the extension with no actions and do nothing.
+  - [x] Dark pages from the browser (§4.10; owner, 2026-11-16): the
+    toolbar button's popup has "Exempt from dark pages" (or "Show it dark
+    again") while dark pages are on; the daemon's `/dark-exempt` keeps
+    the list (refused behind an app or settings access password).
+    Extension 1.23.0. `TestDarkExemptHandler`, the popup in
+    `ci/content_harness_test.js`. In LibreWolf/Chrome: Unchecked.
   - [x] Circadian (§4.10; owner, 2026-11-16): the Settings page had a
     Circadian section beside its own page: gone. Wallpapers sit on a
     timeline, one lane each, dragged like clips in a video editor (bar:

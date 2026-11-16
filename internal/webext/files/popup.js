@@ -34,6 +34,7 @@ async function show() {
   if (state.left.length === 0 && state.acting.length === 0) {
     line(status, "No block covers this site right now.", "dim");
   }
+  showDark(state);
   if (state.blocks.length > 0) {
     const select = document.getElementById("block");
     select.textContent = "";
@@ -51,6 +52,34 @@ async function show() {
         : "It couldn't be added.";
     };
   }
+}
+
+// Dark pages (§4.10; owner, 2026-11-16): leave this site as it is, or show
+// it dark again.
+function showDark(state) {
+  const box = document.getElementById("dark");
+  box.hidden = !state.dark;
+  if (!state.dark) {
+    return;
+  }
+  const exempt = state.dark.exempt;
+  document.getElementById("dark-text").textContent = exempt
+    ? "Dark pages leave this site as it is."
+    : "Dark pages show this site dark.";
+  const button = document.getElementById("dark-go");
+  button.textContent = exempt ? "Show it dark again" : "Exempt from dark pages";
+  button.onclick = async () => {
+    button.disabled = true;
+    const answer = await browser.runtime.sendMessage({ type: "dark-exempt", url: state.url, exempt: !exempt });
+    button.disabled = false;
+    document.getElementById("dark-result").textContent = answer && answer.ok
+      ? (answer.exempt ? answer.site + " is left as it is." : answer.site + " is shown dark again.")
+      : "It couldn't be changed (an access password may guard the settings).";
+    if (answer && answer.ok) {
+      state.dark.exempt = answer.exempt;
+      showDark(state);
+    }
+  };
 }
 
 show();

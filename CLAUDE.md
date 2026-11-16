@@ -322,7 +322,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   Circadian section in Settings. Hardware vars
   `circadian*` (`fakeCircadian`); `KC9K_DB` → `circadianDry`. Wallpapers in
   `<db dir>/wallpapers` (0644). `rules.dark` (`CircadianDarkRule`) →
-  `darkPage`. `circadian.Shape` mirrored by GUI `clip_shape`.
+  `darkPage`; the popup's "Exempt from dark pages" → background
+  `darkExempt` → daemon `/dark-exempt` (`darkExemptHandler`, refused
+  behind an app/settings access password). `circadian.Shape` mirrored by
+  GUI `clip_shape`.
   `ci/circadian_test.py` tests dark pages.
 - **Pauses and breaks** (`db/pauses.go`, `enforce/soon.go`, `db/breaks.go`,
   `cli/breaks.go`): `block_pauses` until trusted time; `pausedFor` checked

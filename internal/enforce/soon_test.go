@@ -150,3 +150,43 @@ func TestAddHandler(t *testing.T) {
 		t.Errorf("guarded: %d", code)
 	}
 }
+
+// §4.10 (owner, 2026-11-16): the toolbar button takes a site out of dark
+// pages, or back in; behind an access password on the settings it can't.
+func TestDarkExemptHandler(t *testing.T) {
+	d := testDB(t)
+	post := func(body string, header bool) int {
+		r := httptest.NewRequest(http.MethodPost, "http://"+RulesAddress+"/dark-exempt", bytes.NewBufferString(body))
+		if header {
+			r.Header.Set(ExtensionHeader, "1")
+		}
+		w := httptest.NewRecorder()
+		darkExemptHandler(d)(w, r)
+		return w.Code
+	}
+	exempt := `{"url":"https://www.News.example.com/today","exempt":true}`
+	if code := post(exempt, false); code != http.StatusForbidden {
+		t.Errorf("without the extension header: %d", code)
+	}
+	if code := post(exempt, true); code != http.StatusOK {
+		t.Fatalf("exempt: %d", code)
+	}
+	if c := CircadianConfig(d); !slices.Equal(c.DarkExempt, []string{"news.example.com"}) {
+		t.Errorf("exempt = %v", c.DarkExempt)
+	}
+	if code := post(exempt, true); code != http.StatusOK || len(CircadianConfig(d).DarkExempt) != 1 {
+		t.Errorf("twice: %d, %v", code, CircadianConfig(d).DarkExempt)
+	}
+	if code := post(`{"url":"https://news.example.com/","exempt":false}`, true); code != http.StatusOK || len(CircadianConfig(d).DarkExempt) != 0 {
+		t.Errorf("back in: %d, %v", code, CircadianConfig(d).DarkExempt)
+	}
+	if code := post(`{"url":"file:///etc/passwd","exempt":true}`, true); code != http.StatusForbidden {
+		t.Errorf("a file: %d", code)
+	}
+	if err := d.SetSetting(db.AccessPasswordSetting+"settings", "x:y"); err != nil {
+		t.Fatal(err)
+	}
+	if code := post(exempt, true); code != http.StatusForbidden {
+		t.Errorf("guarded: %d", code)
+	}
+}

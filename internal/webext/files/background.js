@@ -824,6 +824,9 @@ function onMessage(message, sender) {
   if (message && message.type === "add-site" && typeof message.block === "string" && typeof message.url === "string") {
     return addSite(message.block, message.url);
   }
+  if (message && message.type === "dark-exempt" && typeof message.url === "string") {
+    return darkExempt(message.url, Boolean(message.exempt));
+  }
   if (message && message.type === "page-words" && sender && sender.tab) {
     pageWords(message, sender.tab);
   }
@@ -842,6 +845,7 @@ let soon = [];
 let blockNames = [];
 let social = [];
 let daemonUp = true;
+let darkRule = null; // dark pages (§4.10): on, follow_system, exempt sites
 
 function apply(rules) {
   showWhy = Boolean(rules.details);
@@ -851,6 +855,7 @@ function apply(rules) {
   }));
   blockNames = rules.blocks || [];
   social = rules.social || [];
+  darkRule = rules.dark || null;
   lists = kc9kCompileLists(rules.lists);
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
@@ -1031,11 +1036,38 @@ async function popupState(message) {
   const acting = url ? kc9kListMatches(lists, page).map((m) => ({
     block: m.list.block, list: m.list.name, actions: m.actions.map((a) => a.action),
   })) : [];
+  // Dark pages (§4.10): the site can be left as it is, or shown dark again.
+  let dark = null;
+  if (url && darkRule && (darkRule.on || darkRule.follow_system)) {
+    const exempt = (darkRule.exempt || []).some((s) => site === s || site.endsWith("." + s));
+    dark = { exempt };
+  }
   return {
     up: daemonUp, url, site, acting,
     left: timeLeftFor(tab).map((l) => ({ block: l.block, kind: l.kind, seconds: l.seconds, text: leftSentence(l) })),
     blocks: blockNames,
+    dark,
   };
+}
+
+// darkExempt asks the daemon to leave a site out of dark pages, or to show
+// it dark again (owner, 2026-11-16: "Exempt from dark pages").
+async function darkExempt(url, exempt) {
+  try {
+    const response = await fetch("http://127.0.0.1:47613/dark-exempt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-KC9K-Extension": "1" },
+      body: JSON.stringify({ url, exempt }),
+    });
+    if (!response.ok) {
+      return { ok: false };
+    }
+    const answer = await response.json();
+    await poll();
+    return { ok: true, site: answer.site, exempt: answer.exempt };
+  } catch (error) {
+    return { ok: false };
+  }
 }
 
 async function addSite(block, url) {

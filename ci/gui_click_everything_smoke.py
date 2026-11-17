@@ -208,7 +208,7 @@ settle()
 total = 0
 # Owner 2026-11-17: Frozen Chicken is a mode, its page part of the Blocks
 # page's mode view; monk mode's view too.
-for page_name in ("dashboard", "blocks", "clusters", "Frozen Chicken", "Monk mode", "stats", "circadian",
+for page_name in ("dashboard", "blocks", "clusters", "Frozen Chicken", "Monk mode", "hotkeys", "stats", "circadian",
                   "settings") * 2:
     if page_name in ("Frozen Chicken", "Monk mode"):
         win.open_mode(page_name)

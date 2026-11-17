@@ -122,8 +122,9 @@ check("password_hash" not in json.dumps(keys), "no password hash in the GUI's st
 check(confirmed and any("set each time ctrl+alt+s is pressed" in line for line in confirmed[-1][0])
       and confirmed[-1][1], "locks confirmed, with Run without confirmation offered: %s" % confirmed[-1:])
 shown = [row[0] for row in win.hotkeys.store]
-check(shown and shown[0].startswith("ctrl+alt+s  starts study with ") and "runs without confirmation" in shown[0],
+check(shown and shown[0].startswith("ctrl+alt+s  starts 'study' with ") and "runs without confirmation" in shown[0],
       "listed as typed: %s" % shown)
+check("hotkeys" in win.nav_rows, "Hotkeys has its own page in the sidebar (§4.13)")
 
 # A hotkey without locks asks nothing.
 confirmed.clear()
@@ -140,7 +141,29 @@ keys = state()["hotkeys"]
 check(len(keys) == 2 and keys[1]["block"] == "work" and not keys[1].get("lock") and not confirmed,
       "a plain hotkey, no confirmation: %s" % keys[1:])
 Gtk.Dialog.run = real_run
-check(not msgs, "no errors shown: " + "; ".join(msgs))
+
+# §3.9 Hotkey actions, §4.13 (owner 2026-11-17): any actions in order, from
+# the Hotkeys page; locks confirmed; saved as a preset and added again.
+confirmed.clear()
+r = cli("mode", "create", "Evening"); assert r.returncode == 0, r.stderr
+settle()
+actions = [({"kind": "start", "target": "work"}, "Start a block work", None),
+           ({"kind": "mode-run", "target": "Evening", "minutes": 60}, "Run Evening, locked, for 1 h", None),
+           ({"kind": "custom", "param": json.dumps([{"open": "https://example.org/plan"}])}, "open https://example.org/plan", None)]
+win.add_hotkey_actions(answer=("ctrl+alt+p", actions, False)); settle()
+keys = state()["hotkeys"]
+added = next((h for h in keys if h["keys"] == "<Primary><Alt>p"), None)
+check(added is not None and len(added.get("actions") or []) == 3 and "runs the mode 'Evening', locked" in added.get("does", ""),
+      "a hotkey of three actions: %s" % added)
+check(confirmed and any("Run Evening, locked" in line for line in confirmed[-1][0]), "its lock confirmed: %s" % confirmed[-1:])
+shown = [row[0] for row in win.hotkeys.store]
+check(any(row.startswith("ctrl+alt+p  starts 'work', then runs the mode 'Evening'") for row in shown), "listed: %s" % shown)
+r = cli("preset", "save", "hotkey", str(added["id"]), "Plan")
+check(r.returncode == 0, "saved as a preset: %s" % r.stderr.strip())
+settle()
+win.use_preset("hotkey", "Plan", target="ctrl+alt+o"); settle()
+check(any(h["keys"] == "<Primary><Alt>o" for h in state()["hotkeys"]), "added again from the preset on other keys")
+check(not [m for m in msgs if m.startswith("Error")], "no errors shown: " + "; ".join(msgs))
 
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")

@@ -151,7 +151,23 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       action dialogs and the mode's view ("When it becomes enabled").
       `TestCustomAction`, `TestModeCustom`, `ci/gui_actions_smoke.py`,
       `ci/match_test.js`. Opening on a real desktop: Unchecked.
-    - [ ] Hotkey actions and the Hotkeys page (§3.9, §4.13).
+    - [x] Hotkey actions and the Hotkeys page (§3.9, §4.13): a hotkey runs
+      its actions in order (`hotkeys.actions`, `db.HotkeyAction`; older
+      hotkeys start their block): start (with start's locks) or stop a
+      block, switch a mode on or off, run a mode locked, monk mode, Frozen
+      Chicken, close the browsers, lock the screen, log out, shut down,
+      custom actions (`kc9k hotkey add KEYS [BLOCK] [locks] --do …
+      --do-json …`). Locks confirmed when added and, unless Run without
+      confirmation, once at each press (one desktop question for all);
+      switching off needs the settings password when added; the press
+      goes through each command's own refusals. Hotkey presets (`preset
+      save hotkey N NAME`, `preset use NAME --keys K`). GUI: Hotkeys page
+      in the sidebar (out of Settings): the list, Add hotkey… (keys, Add
+      action… for each, Run without confirmation), Start a block… (the
+      old quick dialog), Save as preset…; hotkey presets on the Presets
+      page. SPEC's list of hotkey actions lost "pause a block" (there is no
+      pause function). `TestHotkeyActions`, `TestHotkeyPreset`,
+      `ci/gui_hotkey_smoke.py`. On a real keyboard: Unchecked.
     - [ ] Mode wallpapers, the override setting shared with circadian
       rhythm, the wallpaper default, places looked for before sign-in
       (§4.10, R-MODE-5).

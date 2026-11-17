@@ -211,7 +211,7 @@ tamper protection settings can't be turned off.
 | **Action** | What a blacklist or phrase set does on a match, and what a block's apps and its window titles do when they fire (one set each): page action, consequence or custom action. Apps and window titles close by default; each may untick that and take consequences instead or too (fired when an app or window is found, at most once a minute). Any of them may have no action: it then does nothing (an action can be unticked before another is ticked). A place rule has no actions (§3.6). |
 | **Mode action** | Makes a chosen mode run now for a set time, locked for that time, whatever its automation says (R-MODE-4); then it is as it was. Frozen Chicken: also the freeze mode. |
 | **Custom action** | Opens sites, files, folders or programs, or runs a command, as the signed-in user. Offered wherever actions are (lists, phrase sets, apps, window titles, ladder steps), for when a mode becomes enabled, and in hotkeys (R-CUSTOM-1/2). |
-| **Hotkey action** | What a hotkey does, in the order set: switch a block or mode on (with locks) or off, pause a block, Frozen Chicken, every consequence, Mode actions and custom actions. |
+| **Hotkey action** | What a hotkey does, in the order set: switch a block on (with locks) or off, switch a mode on or off, Mode actions (monk mode, Frozen Chicken and modes of blocks, locked), every consequence (close the browsers, lock the screen, log out, shut down) and custom actions. |
 | **Block page** | Replaces the page, with a motivational message. |
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
 | **Look actions** | Greyscale, no images, no video, mute, dark. Change, don't block; combine. No images covers every image, animated GIFs included. |

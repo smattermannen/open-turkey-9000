@@ -659,9 +659,16 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - **Hotkeys**: `ctrl|alt|shift|super+key`, F1–F24 alone; shown as
   "KC9K: …" in keyboard settings; notification on press; any lock `start`
   takes, no upper limit; on an active block a press only adds or extends
-  locks, as `start`. Older hotkeys ask at each press. GUI: Add hotkey…
-  dialog (`HotkeyFields`: keys checked as typed, block chooser; the
-  `LockPicker`).
+  locks, as `start`. Older hotkeys ask at each press. Hotkey actions (owner
+  2026-11-17; `db.HotkeyAction`, column `hotkeys.actions`, `Hotkey.Steps`;
+  `cli/hotkeys.go`: `addHotkey`, `parseHotkeyAction` for `--do`,
+  `runHotkeyAction`, `describeHotkey`): start/stop, mode-on/off,
+  mode-run, monk, freeze, close-browser, lock-screen, logout, shutdown,
+  custom, in order; one desktop confirmation per press for all its locks.
+  GUI: Hotkeys page (`build_hotkeys_page`, `update_hotkeys_page`; area
+  settings): Add hotkey… (`add_hotkey_actions`, `ask_hotkey_action`),
+  Start a block… (`add_hotkey`: `HotkeyFields`, the `LockPicker`), Save as
+  preset….
 - **Notifications** (`notify-send`, `enforce/notices.go`, `kc9k notifications`):
   user picks kinds (window start/end, timer lock end, Pomodoro, allowance,
   app closed) and advance minutes (default 5; each advance once); windows

@@ -242,7 +242,18 @@ func (d *DB) AddSchedule(blockName string, w schedule.Window) error {
 	if err != nil {
 		return fmt.Errorf("failed to add schedule to block '%s': %w", blockName, err)
 	}
-	return nil
+	return d.reclipSchedules(blockName)
+}
+
+// reclipSchedules brings a block's copies of its schedules' windows (§3.6
+// Schedule) up to date after its own windows changed outside
+// SetBlockAutomation, so they still never overlap and cover the rest.
+func (d *DB) reclipSchedules(blockName string) error {
+	spec, err := d.BlockAutomationSpec(blockName)
+	if err != nil || len(spec.Schedules) == 0 {
+		return err
+	}
+	return d.SetBlockAutomation(blockName, spec)
 }
 
 // ListSchedules returns the schedules for one block.
@@ -355,5 +366,5 @@ func (d *DB) RemoveSchedule(blockName string, num int) error {
 	if _, err := d.conn.Exec("DELETE FROM schedules WHERE id = ?", s.ID); err != nil {
 		return fmt.Errorf("failed to remove schedule %d from block '%s': %w", num, blockName, err)
 	}
-	return nil
+	return d.reclipSchedules(blockName)
 }

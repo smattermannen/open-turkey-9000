@@ -172,3 +172,42 @@ func TestModes(t *testing.T) {
 		t.Error("still in a deleted mode")
 	}
 }
+
+// A block's own window added or removed the old way (queued edits from
+// older versions) re-clips its schedules' copies: no overlap, and a
+// removed own window's time is the schedule's again.
+func TestOwnWindowReclips(t *testing.T) {
+	d, _ := openTest(t)
+	if err := d.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := d.CreateSavedSchedule("Evening")
+	_ = d.SetSavedScheduleWindows(id, []schedule.Window{{Days: schedule.Monday, Start: 18 * 60, End: 22 * 60}})
+	if err := d.SetBlockAutomation("b", AutomationSpec{Schedules: []int{id}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddSchedule("b", schedule.Window{Days: schedule.Monday, Start: 20 * 60, End: 23 * 60}); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := d.ListSchedules("b")
+	for i, a := range rows {
+		for _, b := range rows[i+1:] {
+			if a.Window().Overlaps(b.Window()) {
+				t.Errorf("%v overlaps %v", a.Window(), b.Window())
+			}
+		}
+	}
+	own := 0
+	for _, r := range rows {
+		if r.Source == 0 {
+			own = r.Num
+		}
+	}
+	if err := d.RemoveSchedule("b", own); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ = d.ListSchedules("b")
+	if len(rows) != 1 || rows[0].StartMin != 18*60 || rows[0].EndMin != 22*60 || rows[0].Source != id {
+		t.Errorf("after removing the own window: %+v", rows)
+	}
+}

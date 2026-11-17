@@ -139,6 +139,25 @@ func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time, unsupported boo
 	return len(targets)
 }
 
+// RunningSupportedBrowsers returns the supported browsers running now in
+// regular users' sessions (SupportedBrowsers IDs), each with how long its
+// longest-running main process has run.
+func RunningSupportedBrowsers() map[string]time.Duration {
+	uptime := systemUptime()
+	parent, _ := processTree()
+	out := map[string]time.Duration{}
+	for pid := range parent {
+		id := supportedExe(pid)
+		if id == "" || exeName(parent[pid]) == exeName(pid) || !ownedByUser(pid) {
+			continue // not a supported browser, or one of its child processes
+		}
+		if age, ok := processAge(pid, uptime); ok && age >= out[id] {
+			out[id] = age
+		}
+	}
+	return out
+}
+
 // guardedProcess is what the guard knows of a running browser.
 type guardedProcess struct {
 	remote    bool // started for remote control, which isn't allowed

@@ -63,13 +63,115 @@ func unquote(value string) string {
 	return value
 }
 
-// SetWallpaper shows the picture at path as every desktop user's wallpaper.
-// It reports how many users it reached.
-func SetWallpaper(path string) (int, error) {
-	uri := (&url.URL{Scheme: "file", Path: path}).String()
-	reached := 0
-	var firstErr error
+// signedOutPrefsUsers are the people with desktop settings who aren't
+// signed in now (replaceable in tests).
+var signedOutPrefsUsers = signedOutUsers
+
+// signedOutUsers returns the regular users without a session bus who have
+// a desktop settings database: their desktop reads it when they sign in.
+func signedOutUsers() []*user.User {
+	in := map[string]bool{}
 	for _, u := range desktopPrefsUsers() {
+		in[u.Uid] = true
+	}
+	var out []*user.User
+	for _, name := range RegularUsers() {
+		u, err := user.Lookup(name)
+		if err != nil || in[u.Uid] {
+			continue
+		}
+		if info, err := os.Stat(filepath.Join(u.HomeDir, ".config", "dconf", "user")); err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		out = append(out, u)
+	}
+	return out
+}
+
+// gsettingsSignedOut runs gsettings as u, who isn't signed in, on a
+// private session bus of its own (dbus-run-session), so a change reaches
+// u's settings database before u's desktop starts and reads it.
+func gsettingsSignedOut(u *user.User, args ...string) (string, error) {
+	runner, err := exec.LookPath("dbus-run-session")
+	if err != nil {
+		return "", err
+	}
+	path, err := exec.LookPath("gsettings")
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), gsettingsTimeout)
+	defer cancel()
+	session := asUser(u, path)
+	cmd := exec.CommandContext(ctx, runner, append([]string{"--", path}, args...)...)
+	cmd.Env = []string{"HOME=" + u.HomeDir, "USER=" + u.Username, "LOGNAME=" + u.Username, "PATH=/usr/bin:/bin"}
+	cmd.Dir = u.HomeDir
+	cmd.SysProcAttr = session.SysProcAttr
+	out, err := cmd.Output()
+	return strings.TrimSpace(string(out)), err
+}
+
+// prefsTarget is one user a desktop change goes to, signed in or not.
+type prefsTarget struct {
+	*user.User
+	signedOut bool
+}
+
+func (t prefsTarget) run(args ...string) (string, error) {
+	if t.signedOut {
+		return gsettingsSignedOut(t.User, args...)
+	}
+	return gsettings(t.User, args...)
+}
+
+func (t prefsTarget) has(schema, key string) bool { return hasKey(t.User, schema, key) }
+
+// Reach says which desktop users a wallpaper or dark mode change goes to:
+// everyone signed in but those in Skip (user IDs already given it), and
+// with SignedOut also the people who aren't signed in, so their desktop
+// starts with it.
+type Reach struct {
+	Skip      []string
+	SignedOut bool
+}
+
+func (r Reach) targets() []prefsTarget {
+	skip := map[string]bool{}
+	for _, uid := range r.Skip {
+		skip[uid] = true
+	}
+	var out []prefsTarget
+	for _, u := range desktopPrefsUsers() {
+		if !skip[u.Uid] {
+			out = append(out, prefsTarget{User: u})
+		}
+	}
+	if r.SignedOut {
+		for _, u := range signedOutPrefsUsers() {
+			if !skip[u.Uid] {
+				out = append(out, prefsTarget{User: u, signedOut: true})
+			}
+		}
+	}
+	return out
+}
+
+// SignedInUserIDs returns the user IDs of everyone signed in to a desktop.
+func SignedInUserIDs() []string {
+	var out []string
+	for _, u := range desktopPrefsUsers() {
+		out = append(out, u.Uid)
+	}
+	return out
+}
+
+// SetWallpaper shows the picture at path as the wallpaper of the desktop
+// users r reaches. It returns the user IDs it reached.
+func SetWallpaper(path string, r Reach) ([]string, error) {
+	uri := (&url.URL{Scheme: "file", Path: path}).String()
+	var reached []string
+	var firstErr error
+	for _, u := range r.targets() {
 		done := false
 		for _, s := range []struct{ schema, key string }{
 			{"org.cinnamon.desktop.background", "picture-uri"},
@@ -77,14 +179,14 @@ func SetWallpaper(path string) (int, error) {
 			{"org.gnome.desktop.background", "picture-uri-dark"},
 			{"org.mate.background", "picture-filename"},
 		} {
-			if !hasKey(u, s.schema, s.key) {
+			if !u.has(s.schema, s.key) {
 				continue
 			}
 			value := uri
 			if s.key == "picture-filename" {
 				value = path
 			}
-			if _, err := gsettings(u, "set", s.schema, s.key, gvariantString(value)); err != nil {
+			if _, err := u.run("set", s.schema, s.key, gvariantString(value)); err != nil {
 				if firstErr == nil {
 					firstErr = err
 				}
@@ -93,7 +195,7 @@ func SetWallpaper(path string) (int, error) {
 			done = true
 		}
 		if done {
-			reached++
+			reached = append(reached, u.Uid)
 		}
 	}
 	return reached, firstErr
@@ -129,11 +231,12 @@ func themeInstalled(u *user.User, part string) func(string) bool {
 // SetDarkMode turns every desktop user's dark mode on or off: the colour
 // scheme apps read (prefer-dark) and, where the light and dark looks are
 // separate themes (Mint-Y-Aqua and Mint-Y-Dark-Aqua), the theme of apps and
-// of the desktop itself. It reports how many users it reached.
-func SetDarkMode(dark bool) (int, error) {
-	reached := 0
+// of the desktop itself, for the desktop users r reaches. It returns the
+// user IDs it reached.
+func SetDarkMode(dark bool, r Reach) ([]string, error) {
+	var reached []string
 	var firstErr error
-	for _, u := range desktopPrefsUsers() {
+	for _, u := range r.targets() {
 		changed := false
 		note := func(err error) {
 			if err == nil {
@@ -143,13 +246,13 @@ func SetDarkMode(dark bool) (int, error) {
 			}
 		}
 		scheme := map[bool]string{true: "prefer-dark", false: "prefer-light"}[dark]
-		if hasKey(u, "org.x.apps.portal", "color-scheme") {
-			_, err := gsettings(u, "set", "org.x.apps.portal", "color-scheme", gvariantString(scheme))
+		if u.has("org.x.apps.portal", "color-scheme") {
+			_, err := u.run("set", "org.x.apps.portal", "color-scheme", gvariantString(scheme))
 			note(err)
 		}
-		if hasKey(u, "org.gnome.desktop.interface", "color-scheme") {
+		if u.has("org.gnome.desktop.interface", "color-scheme") {
 			gnome := map[bool]string{true: "prefer-dark", false: "default"}[dark]
-			_, err := gsettings(u, "set", "org.gnome.desktop.interface", "color-scheme", gvariantString(gnome))
+			_, err := u.run("set", "org.gnome.desktop.interface", "color-scheme", gvariantString(gnome))
 			note(err)
 		}
 		for _, theme := range []struct{ schema, key, part string }{
@@ -157,25 +260,25 @@ func SetDarkMode(dark bool) (int, error) {
 			{"org.gnome.desktop.interface", "gtk-theme", "gtk-3.0"},
 			{"org.cinnamon.theme", "name", "cinnamon"},
 		} {
-			current, err := gsettings(u, "get", theme.schema, theme.key)
+			current, err := u.run("get", theme.schema, theme.key)
 			if err != nil {
 				continue
 			}
 			current = unquote(current)
 			var want string
 			if dark {
-				want = circadian.DarkTheme(current, themeInstalled(u, theme.part))
+				want = circadian.DarkTheme(current, themeInstalled(u.User, theme.part))
 			} else {
-				want = circadian.LightTheme(current, themeInstalled(u, theme.part))
+				want = circadian.LightTheme(current, themeInstalled(u.User, theme.part))
 			}
 			if want == "" || want == current {
 				continue
 			}
-			_, err = gsettings(u, "set", theme.schema, theme.key, gvariantString(want))
+			_, err = u.run("set", theme.schema, theme.key, gvariantString(want))
 			note(err)
 		}
 		if changed {
-			reached++
+			reached = append(reached, u.Uid)
 		}
 	}
 	return reached, firstErr

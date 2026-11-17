@@ -4985,13 +4985,15 @@ class Window(Gtk.ApplicationWindow):
         """§4.10: the Killer Chicken extension isn't running: offer to
         install a supported browser, or show the Browsers list."""
         none = not any(b.get("installed") for b in (self.state or {}).get("browsers") or [])
+        names = (self.state or {}).get("extension_missing_in") or []
         dialog = Gtk.MessageDialog(
             transient_for=self, modal=True, message_type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.NONE,
             text="The Killer Chicken extension isn't running",
             secondary_text=("No supported browser is installed. LibreWolf runs the extension; installing it "
                             "takes a few minutes." if none else
-                            "Your blocks need it, but no supported browser has checked in lately. Open "
-                            "LibreWolf, Chrome or Chromium, or see which have it under Settings > Browsers."))
+                            f"{' and '.join(names) or 'A supported browser'} has run for a while without it "
+                            "checking in, and your blocks need it. Close and open the browser again, or see "
+                            "under Settings > Browsers which have it."))
         dialog.add_button("Later", Gtk.ResponseType.CANCEL)
         dialog.add_button("Install LibreWolf" if none else "Show browsers", Gtk.ResponseType.OK)
         answer = dialog.run()

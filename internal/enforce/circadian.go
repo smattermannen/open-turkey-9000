@@ -19,6 +19,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -109,6 +110,7 @@ var (
 	circadianSetGamma     = blocker.SetGamma
 	circadianSetWallpaper = blocker.SetWallpaper
 	circadianSetDark      = blocker.SetDarkMode
+	circadianSignedIn     = blocker.SignedInUserIDs
 	circadianNightLight   = blocker.NightLightOn
 	circadianReadLook     = blocker.ReadDesktopLook
 	circadianRestoreLook  = blocker.RestoreDesktopLook
@@ -239,7 +241,11 @@ type CircadianPreview struct {
 type circadianApplied struct {
 	Wallpaper string `json:"wallpaper"`
 	Dark      string `json:"dark"`
-	Gamma     bool   `json:"gamma"` // KC9K's ramps are on the screens
+	// The user IDs each was given to; nil (from older versions): everyone
+	// signed in then.
+	WallpaperUsers []string `json:"wallpaper_users"`
+	DarkUsers      []string `json:"dark_users"`
+	Gamma          bool     `json:"gamma"` // KC9K's ramps are on the screens
 	// The ramp KC9K last set, so that after a restart it tells its own
 	// from someone else's (the desktop's night light): 0 from older
 	// versions, which didn't note it.
@@ -334,12 +340,13 @@ type Circadian struct {
 
 	previewSeen map[string]CircadianPreview // clip -> the preview already taken over
 
-	slowAt     time.Time // the last look at external screens and the night light
-	desktopAt  time.Time // the last wallpaper or dark mode that reached nobody
-	external   []string
-	displays   []string
-	nightLight bool
-	status     string
+	slowAt       time.Time // the last look at external screens and the night light
+	desktopAt    time.Time // the last wallpaper or dark mode that reached nobody
+	desktopUsers []string  // who was signed in then
+	external     []string
+	displays     []string
+	nightLight   bool
+	status       string
 }
 
 // NewCircadian makes an engine for d.
@@ -486,7 +493,7 @@ func (e *Circadian) Step(now time.Time) {
 	before := applied
 	reading := e.gamma(cfg, gammaPreviewed, minute, now, pauses, pause, resume, &applied)
 	e.desktop(cfg, minute, now, &applied)
-	if applied != before {
+	if !sameApplied(applied, before) {
 		writeJSONSetting(e.d, settingCircadianApplied, applied)
 	}
 	if pausesChanged {
@@ -708,37 +715,70 @@ func DarkKey(c circadian.Config, minute float64) string {
 	return "light"
 }
 
+// sameApplied reports whether a and b say the same.
+func sameApplied(a, b circadianApplied) bool {
+	return a.Wallpaper == b.Wallpaper && a.Dark == b.Dark && a.Gamma == b.Gamma && a.Kelvin == b.Kelvin &&
+		a.Brightness == b.Brightness && slices.Equal(a.WallpaperUsers, b.WallpaperUsers) &&
+		(a.WallpaperUsers == nil) == (b.WallpaperUsers == nil) && slices.Equal(a.DarkUsers, b.DarkUsers) &&
+		(a.DarkUsers == nil) == (b.DarkUsers == nil)
+}
+
 // desktop gives the wallpaper and dark mode, each once per change of what
-// should show, so what the user changes by hand afterwards stays.
+// should show, so what the user changes by hand afterwards stays. A change
+// goes to everyone signed in and, into their settings, to the people who
+// aren't, so a desktop that starts later (after a boot, at sign-in) starts
+// with the right one; someone who signs in without having been given it
+// (their settings couldn't be written) gets it at once.
 func (e *Circadian) desktop(cfg circadian.Config, minute float64, now time.Time, applied *circadianApplied) {
-	canTry := e.desktopAt.IsZero() || now.Sub(e.desktopAt) >= circadianRetry
-	if key, image := WallpaperKey(cfg, minute); key != applied.Wallpaper {
+	signedIn := circadianSignedIn()
+	slices.Sort(signedIn)
+	// A failure waits circadianRetry, unless someone signed in or out since.
+	canTry := e.desktopAt.IsZero() || now.Sub(e.desktopAt) >= circadianRetry || !slices.Equal(signedIn, e.desktopUsers)
+	failed := false
+	give := func(key string, done *string, users *[]string, set func(blocker.Reach) ([]string, error), what string) {
 		if key == "" {
-			applied.Wallpaper = ""
-		} else if canTry {
-			if n, err := circadianSetWallpaper(filepath.Join(WallpapersDir(), image)); n > 0 {
-				applied.Wallpaper = key
-			} else {
-				e.desktopAt = now
-				if err != nil {
-					log.Printf("circadian: wallpaper: %v", err)
-				}
-			}
+			*done, *users = "", nil
+			return
 		}
+		if *done != "" && *users == nil {
+			*users = append([]string{}, signedIn...) // from an older version: given to everyone signed in
+		}
+		fresh := key != *done
+		if !fresh && !slices.ContainsFunc(signedIn, func(uid string) bool { return !slices.Contains(*users, uid) }) {
+			return
+		}
+		if !canTry {
+			return
+		}
+		reach := blocker.Reach{SignedOut: true}
+		if !fresh {
+			reach = blocker.Reach{Skip: *users} // only those who signed in since
+		}
+		reached, err := set(reach)
+		if len(reached) == 0 {
+			failed = true
+			if err != nil {
+				log.Printf("circadian: %s: %v", what, err)
+			}
+			return
+		}
+		if fresh {
+			*done, *users = key, nil
+		}
+		merged := append(append([]string{}, *users...), reached...)
+		slices.Sort(merged)
+		*users = slices.Compact(merged)
 	}
-	if key := DarkKey(cfg, minute); key != applied.Dark {
-		if key == "" {
-			applied.Dark = ""
-		} else if canTry {
-			if n, err := circadianSetDark(key == "dark"); n > 0 {
-				applied.Dark = key
-			} else {
-				e.desktopAt = now
-				if err != nil {
-					log.Printf("circadian: dark mode: %v", err)
-				}
-			}
-		}
+	key, image := WallpaperKey(cfg, minute)
+	give(key, &applied.Wallpaper, &applied.WallpaperUsers, func(r blocker.Reach) ([]string, error) {
+		return circadianSetWallpaper(filepath.Join(WallpapersDir(), image), r)
+	}, "wallpaper")
+	dark := DarkKey(cfg, minute)
+	give(dark, &applied.Dark, &applied.DarkUsers, func(r blocker.Reach) ([]string, error) {
+		return circadianSetDark(dark == "dark", r)
+	}, "dark mode")
+	if failed {
+		e.desktopAt, e.desktopUsers = now, signedIn
 	}
 }
 
@@ -895,13 +935,13 @@ func PlayCircadian(d *db.DB, length time.Duration, now time.Time, frame func(min
 			if key, image := WallpaperKey(cfg, minute); key != wallpaper {
 				wallpaper = key
 				if image != "" {
-					_, _ = circadianSetWallpaper(filepath.Join(WallpapersDir(), image))
+					_, _ = circadianSetWallpaper(filepath.Join(WallpapersDir(), image), blocker.Reach{})
 				}
 			}
 			if key := DarkKey(cfg, minute); key != dark {
 				dark = key
 				if key != "" {
-					_, _ = circadianSetDark(key == "dark")
+					_, _ = circadianSetDark(key == "dark", blocker.Reach{})
 				}
 			}
 		}

@@ -3,6 +3,8 @@ package enforce
 import (
 	"math"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +24,9 @@ type fakeScreen struct {
 	noX        bool
 	wallpapers []string
 	darks      []bool
-	users      int
+	users      int      // signed in, as user IDs 1000, 1001…
+	signedOut  []string // not signed in, with desktop settings
+	reached    [][]string
 	nightLight bool
 }
 
@@ -43,6 +47,33 @@ func near(a, b []uint16) bool {
 	return true
 }
 
+func (f *fakeScreen) signedIn() []string {
+	var out []string
+	for i := 0; i < f.users; i++ {
+		out = append(out, strconv.Itoa(1000+i))
+	}
+	return out
+}
+
+// reach is who a desktop change reaches, noted in f.reached.
+func (f *fakeScreen) reach(r blocker.Reach) []string {
+	var out []string
+	for _, uid := range f.signedIn() {
+		if !slices.Contains(r.Skip, uid) {
+			out = append(out, uid)
+		}
+	}
+	if r.SignedOut {
+		for _, uid := range f.signedOut {
+			if !slices.Contains(r.Skip, uid) {
+				out = append(out, uid)
+			}
+		}
+	}
+	f.reached = append(f.reached, out)
+	return out
+}
+
 // someoneSetsGamma is another program (a night light) changing the ramps.
 func (f *fakeScreen) someoneSetsGamma() {
 	f.red, _, f.blue = circadian.Ramp(256, 1234, 0.77)
@@ -56,8 +87,9 @@ func fakeCircadian(t *testing.T) *fakeScreen {
 	dry, backlights, external, ddc := circadianDry, circadianBacklights, circadianExternal, circadianDDC
 	known := circadianExternalKnown
 	readGamma, setGamma := circadianReadGamma, circadianSetGamma
-	setWallpaper, setDark, nightLight := circadianSetWallpaper, circadianSetDark, circadianNightLight
+	setWallpaper, setDark, nightLight, signedIn := circadianSetWallpaper, circadianSetDark, circadianNightLight, circadianSignedIn
 	t.Cleanup(func() {
+		circadianSignedIn = signedIn
 		circadianDry, circadianBacklights, circadianExternal, circadianDDC = dry, backlights, external, ddc
 		circadianExternalKnown = known
 		circadianReadGamma, circadianSetGamma = readGamma, setGamma
@@ -102,13 +134,14 @@ func fakeCircadian(t *testing.T) *fakeScreen {
 		}
 		return 1, nil
 	}
-	circadianSetWallpaper = func(path string) (int, error) {
+	circadianSignedIn = f.signedIn
+	circadianSetWallpaper = func(path string, r blocker.Reach) ([]string, error) {
 		f.wallpapers = append(f.wallpapers, path)
-		return f.users, nil
+		return f.reach(r), nil
 	}
-	circadianSetDark = func(dark bool) (int, error) {
+	circadianSetDark = func(dark bool, r blocker.Reach) ([]string, error) {
 		f.darks = append(f.darks, dark)
-		return f.users, nil
+		return f.reach(r), nil
 	}
 	circadianNightLight = func() bool { return f.nightLight }
 	return f
@@ -474,6 +507,75 @@ func TestCircadianDesktopRetry(t *testing.T) {
 	e.Step(at(9, 2, 0))
 	if len(f.darks) != 2 {
 		t.Errorf("tried %d times", len(f.darks))
+	}
+}
+
+// Owner 2026-11-17: after a boot the desktop showed yesterday's wallpaper
+// until a minute after sign-in. The wallpaper due is written into the
+// settings of people who aren't signed in, so their desktop starts with
+// it; someone signed in later who wasn't given it gets it at once, not a
+// minute later; a hand-picked one stays until the next change.
+func TestCircadianWallpaperBeforeSignIn(t *testing.T) {
+	d, f := testDB(t), fakeCircadian(t)
+	circadianWith(t, d, nil, func(c *circadian.Config) {
+		c.Wallpapers = []circadian.Wallpaper{{Image: "day.jpg", From: 8 * 60, To: 18 * 60}}
+		c.Dark.Mode = circadian.DarkLight
+	})
+	// At boot: nobody signed in; anna (1000) has desktop settings.
+	f.users, f.signedOut = 0, []string{"1000"}
+	e := NewCircadian(d)
+	e.Step(at(9, 0, 0))
+	if len(f.wallpapers) != 1 || !slices.Equal(f.reached[0], []string{"1000"}) {
+		t.Fatalf("wallpaper before sign-in: %v to %v", f.wallpapers, f.reached)
+	}
+	// anna signs in: she has it already, nothing is given again.
+	f.users, f.signedOut = 1, nil
+	e.Step(at(9, 0, 20))
+	if len(f.wallpapers) != 1 || len(f.darks) != 1 {
+		t.Errorf("given again at sign-in: %v, %v", f.wallpapers, f.darks)
+	}
+
+	// A boot where her settings couldn't be written: given at sign-in,
+	// at once although the try at boot reached nobody.
+	d2, f2 := testDB(t), fakeCircadian(t)
+	circadianWith(t, d2, nil, func(c *circadian.Config) {
+		c.Wallpapers = []circadian.Wallpaper{{Image: "day.jpg", From: 8 * 60, To: 18 * 60}}
+	})
+	f2.users = 0
+	e2 := NewCircadian(d2)
+	e2.Step(at(9, 0, 0))
+	f2.users = 1
+	e2.Step(at(9, 0, 10))
+	if len(f2.wallpapers) != 2 || !slices.Equal(f2.reached[1], []string{"1000"}) {
+		t.Fatalf("not given at sign-in: %v to %v", f2.wallpapers, f2.reached)
+	}
+	// Ben signs in too: only he is given it, anna's (maybe hand-picked)
+	// wallpaper stays.
+	f2.users = 2
+	e2.Step(at(9, 5, 0))
+	if len(f2.wallpapers) != 3 || !slices.Equal(f2.reached[2], []string{"1001"}) {
+		t.Errorf("second sign-in: %v to %v", f2.wallpapers, f2.reached)
+	}
+	e2.Step(at(9, 10, 0))
+	if len(f2.wallpapers) != 3 {
+		t.Errorf("given again: %v", f2.wallpapers)
+	}
+}
+
+// State from before 2026-11-17 has no list of users: it counts as given
+// to everyone signed in, so nobody's wallpaper is changed by the upgrade.
+func TestCircadianWallpaperOldState(t *testing.T) {
+	d, f := testDB(t), fakeCircadian(t)
+	circadianWith(t, d, nil, func(c *circadian.Config) {
+		c.Wallpapers = []circadian.Wallpaper{{Image: "day.jpg", From: 8 * 60, To: 18 * 60}}
+	})
+	key, _ := WallpaperKey(CircadianConfig(d), 9*60)
+	if err := d.SetSetting(settingCircadianApplied, `{"wallpaper":"`+key+`","dark":""}`); err != nil {
+		t.Fatal(err)
+	}
+	NewCircadian(d).Step(at(9, 0, 0))
+	if len(f.wallpapers) != 0 {
+		t.Errorf("an upgrade gave the wallpaper again: %v", f.wallpapers)
 	}
 }
 

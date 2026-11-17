@@ -269,32 +269,34 @@ type guiState struct {
 	Chrome        bool     `json:"chrome"` // Google Chrome or Chromium installed
 	Extension     string   `json:"extension_status"`
 	// ExtensionMissing: no supported browser, or the extension is needed
-	// and hasn't checked in lately (§4.10 install dialog).
-	ExtensionMissing bool                      `json:"extension_missing"`
-	SettingsPass     bool                      `json:"settings_password"`
-	FreezeSched      []string                  `json:"freeze_schedules"`
-	Browser          map[string]bool           `json:"browser"`
-	BrowserLocks     map[string]guiSettingLock `json:"browser_locks"`
-	Blocks           []guiBlock                `json:"blocks"`
-	Hotkeys          []guiHotkey               `json:"hotkeys"`
-	Nepsis           db.Nepsis                 `json:"nepsis"`
-	NepsisCount      int                       `json:"nepsis_count"`
-	NepsisLock       guiSettingLock            `json:"nepsis_lock"`
-	StrictLock       guiSettingLock            `json:"strict_lock"`
-	NoWeakening      bool                      `json:"no_weakening"`
-	PasswordLocks    bool                      `json:"password_for_locks"`
-	DNS              string                    `json:"dns"`
-	TamperClock      bool                      `json:"tamper_clock"`
-	FileURLs         bool                      `json:"tamper_file_urls"`
-	TaskManagers     bool                      `json:"tamper_task_managers"`
-	TamperPrivate    bool                      `json:"tamper_private"`
-	Grace            int                       `json:"tamper_grace"`
-	AnythingLocked   bool                      `json:"anything_locked"`           // §4.10: tamper protection can't go off now
-	DesktopWarn      string                    `json:"desktop_warning,omitempty"` // R-DESKTOP-1
-	Notifications    enforce.NoticeOptions     `json:"notifications"`
-	StrictUse        bool                      `json:"strict_use"`
-	StrictExempt     []string                  `json:"strict_exempt"` // §3.8
-	Templates        []string                  `json:"templates"`     // §3.2
+	// and a supported browser runs without it (§4.10 install dialog):
+	// those in ExtensionMissingIn.
+	ExtensionMissing   bool                      `json:"extension_missing"`
+	ExtensionMissingIn []string                  `json:"extension_missing_in"`
+	SettingsPass       bool                      `json:"settings_password"`
+	FreezeSched        []string                  `json:"freeze_schedules"`
+	Browser            map[string]bool           `json:"browser"`
+	BrowserLocks       map[string]guiSettingLock `json:"browser_locks"`
+	Blocks             []guiBlock                `json:"blocks"`
+	Hotkeys            []guiHotkey               `json:"hotkeys"`
+	Nepsis             db.Nepsis                 `json:"nepsis"`
+	NepsisCount        int                       `json:"nepsis_count"`
+	NepsisLock         guiSettingLock            `json:"nepsis_lock"`
+	StrictLock         guiSettingLock            `json:"strict_lock"`
+	NoWeakening        bool                      `json:"no_weakening"`
+	PasswordLocks      bool                      `json:"password_for_locks"`
+	DNS                string                    `json:"dns"`
+	TamperClock        bool                      `json:"tamper_clock"`
+	FileURLs           bool                      `json:"tamper_file_urls"`
+	TaskManagers       bool                      `json:"tamper_task_managers"`
+	TamperPrivate      bool                      `json:"tamper_private"`
+	Grace              int                       `json:"tamper_grace"`
+	AnythingLocked     bool                      `json:"anything_locked"`           // §4.10: tamper protection can't go off now
+	DesktopWarn        string                    `json:"desktop_warning,omitempty"` // R-DESKTOP-1
+	Notifications      enforce.NoticeOptions     `json:"notifications"`
+	StrictUse          bool                      `json:"strict_use"`
+	StrictExempt       []string                  `json:"strict_exempt"` // §3.8
+	Templates          []string                  `json:"templates"`     // §3.2
 	// UnsupportedBrowsers is block unsupported browsers, with its lock;
 	// Browsers the supported browsers (§4.10 Browsers).
 	UnsupportedBrowsers bool           `json:"unsupported_browsers"`
@@ -378,6 +380,10 @@ var guiStateCmd = &cobra.Command{
 		state.Chrome = blocker.ChromeInstalled()
 		state.Extension = extensionStatus(database)
 		state.ExtensionMissing = extensionMissing(database)
+		state.ExtensionMissingIn = []string{}
+		if state.ExtensionMissing && extensionBrowserInstalled() {
+			state.ExtensionMissingIn = browsersWithoutExtension(database)
+		}
 		state.SettingsPass, _ = settingsPasswordSet(database)
 		state.FreezeSched = []string{}
 		if schedules, err := database.ListFreezeSchedules(); err == nil {

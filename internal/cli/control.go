@@ -822,19 +822,46 @@ func extensionStatus(database *db.DB) string {
 	return status + "; no check-in yet (open a supported browser)"
 }
 
-// extensionMissing reports whether the interface should offer to install
-// the extension (§4.10): no supported browser is installed, or the
-// extension is needed and hasn't checked in for 5 minutes.
+// runningSupportedBrowsers is blocker.RunningSupportedBrowsers, replaced in
+// tests.
+var runningSupportedBrowsers = blocker.RunningSupportedBrowsers
+
+// extensionMissing reports whether the interface should say the extension
+// isn't running (§4.10 install dialog): no supported browser is installed,
+// or, while the extension is needed, a supported browser has run longer
+// than the grace (and a minute more, for its check-in to be noted) without
+// its extension checking in since. With no browser open there is nothing
+// to warn about (owner 2026-11-17: it warned at every start, before the
+// browser was opened): the extension runs when a browser does, and a
+// browser without it is closed.
 func extensionMissing(database *db.DB) bool {
-	if !blocker.ExtensionBrowserInstalled() {
+	if !extensionBrowserInstalled() {
 		return true
 	}
 	required, err := enforce.ExtensionRequiredNow(database)
 	if err != nil || !required {
 		return false
 	}
-	last, ok := enforce.LastExtensionCheckIn(database)
-	return !ok || time.Since(last) > 5*time.Minute
+	return len(browsersWithoutExtension(database)) > 0
+}
+
+// browsersWithoutExtension returns the names of the supported browsers
+// running past the grace whose extension hasn't checked in while they ran.
+func browsersWithoutExtension(database *db.DB) []string {
+	late := time.Duration(enforce.ExtensionGraceSeconds(database))*time.Second + time.Minute
+	var out []string
+	running := runningSupportedBrowsers()
+	for _, b := range blocker.SupportedBrowsers {
+		age, running := running[b.ID]
+		if !running || age < late {
+			continue
+		}
+		last, ok := enforce.LastBrowserCheckIn(database, b.ID)
+		if !ok || time.Since(last) > late {
+			out = append(out, b.Name)
+		}
+	}
+	return out
 }
 
 // fmtAgo formats an elapsed time roughly: "12 s", "5 min", "3 h", "2 days".

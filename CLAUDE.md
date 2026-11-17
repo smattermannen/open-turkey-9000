@@ -344,7 +344,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   never in `Tick`; `ddcutil` and night light every 30 s. Foreign levels
   pause a clip (`PauseBacklight`, `PauseExternal`, `PauseGamma`; brightness
   and kelvin share one gamma ramp), except right after start. Wallpaper and
-  dark mode applied once per key change (`WallpaperKey`, `DarkKey`).
+  dark mode applied once per key change (`WallpaperKey`, `DarkKey`), also
+  into signed-out users' dconf (`blocker.Reach`, `dbus-run-session`); who
+  got it is in `circadian.applied` (`WallpaperUsers`), a later sign-in
+  without it gets it at once.
   `PreviewCircadian` drives hardware; engine adopts it. `circadian play`
   (`PlayCircadian`: 24 h as previews in `--seconds`, wallpaper/dark mode at
   their times, `ReadDesktopLook`/`RestoreDesktopLook` put the desktop back;
@@ -514,7 +517,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   [lock flags]`, `tamper unlock unsupported-browsers`; old `browser
   force-librewolf` hidden): own lock as a browser setting's; off refused
   while anything is locked; on refused with no supported browser installed.
-- **Extension guard**: required while an active block has a non-empty
+- **Extension guard**: the GUI's "isn't running" dialog (`extensionMissing`)
+  only with no supported browser, or one running past the grace without a
+  check-in (`browsersWithoutExtension`, `runningSupportedBrowsers`).
+  Required while an active block has a non-empty
   blacklist, web-only/force-search is on, or anything is locked (R-LOCK-9);
   unlocked app-only blocks leave browsers alone. With block unsupported browsers on, always: other browsers
   (Firefox too) close at once, supported ones after 60 s without a check-in.

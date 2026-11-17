@@ -8,7 +8,7 @@ on; write "Unchecked" rather than guess. Order: §0 first, top to bottom,
 then §2.
 
 Status: Built, Partial, Differs (built unlike SPEC), Not built, Unchecked.
-Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
+Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 
 ## 0. Fix what exists
 
@@ -16,6 +16,29 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-16.
 2026-11-16): no Android work; its items below wait.
 
 ### 0.1 Code contradicting `SPEC.md`
+
+- [ ] **Owner report 2026-11-17** (real use on the laptop; top priority).
+  - [x] Wrong wallpaper after a boot (§4.10 circadian wallpapers): at
+    boot nobody is signed in, so the engine's first try reached nobody and
+    the next waited a minute: the desktop started with the last picture
+    given and changed up to a minute after sign-in. Now a wallpaper or dark
+    mode change also goes into the settings of people who aren't signed in
+    (`blocker.Reach`, `gsettings` on a private session bus,
+    `dbus-run-session`), so their desktop starts with it; someone who signs
+    in without having been given it gets it at once (a sign-in ends the
+    minute's wait), and only them: a hand-picked wallpaper stays until the
+    next change. Older saved state counts as given to everyone signed in.
+    `TestCircadianWallpaperBeforeSignIn`, `TestCircadianWallpaperOldState`,
+    `TestReachTargets`; the private bus write checked in a cloud container.
+    On the laptop: Unchecked.
+  - [x] "The Killer Chicken extension isn't running" at every start and now
+    and then while it ran (§4.10 install dialog): the GUI said so whenever
+    no browser had checked in for 5 minutes, so always before the browser
+    was opened. Now only when no supported browser is installed, or, while
+    the extension is needed, a supported browser has run past the grace and
+    a minute more without its extension checking in; the dialog names it
+    (gui-state `extension_missing_in`). `TestExtensionMissing`. On the
+    laptop: Unchecked.
 
 - [x] **Owner 2026-11-16: automation and the block list (TOP PRIORITY).**
   Built the same day; on the laptop: Unchecked.

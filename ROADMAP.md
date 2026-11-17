@@ -389,8 +389,8 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     does is one line ("Does: Block page, Greyscale") with Change actions…
     opening the fourteen tick boxes, so its entries come first.
     Circadian: the page title and a line like every other page, the long
-    explanations behind ?. Left: phrase set cards (still every action
-    shown); the owner's verdict on a real screen. L
+    explanations behind ?. Phrase set cards the same as list cards.
+    Left: the owner's verdict on a real screen. L
   - Strict lockdown polkit now allows the backlight helper and colord.
   - [x] Hotkey locks (§3.4 timer lock "no upper limit", §3.13, R-GUI-2;
     found 2026-11-16): a hotkey's timer lock was capped at 24 hours and the

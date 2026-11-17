@@ -2524,7 +2524,15 @@ class PhraseSetCard(ListCard):
         self.test_check.connect("toggled", self.toggle_test)
         box.pack_start(self.test_check, False, False, 0)
 
-        box.pack_start(Gtk.Label(label="Actions:", xalign=0), False, False, 0)
+        # What it does in a line; every action behind Change actions… (as
+        # a list's card).
+        does = Gtk.Box(spacing=8)
+        does.pack_start(Gtk.Label(label="Does:", valign=Gtk.Align.START), False, False, 0)
+        self.actions_summary = Gtk.Label(xalign=0, wrap=True, valign=Gtk.Align.START)
+        does.pack_start(self.actions_summary, True, True, 0)
+        self.actions_toggle = Gtk.ToggleButton(label="Change actions…", valign=Gtk.Align.START)
+        does.pack_start(self.actions_toggle, False, False, 0)
+        box.pack_start(does, False, False, 0)
         actions = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
                               column_spacing=12, row_spacing=2)
         self.action_checks, self.spins = {}, {}
@@ -2533,7 +2541,10 @@ class PhraseSetCard(ListCard):
             check.connect("toggled", self.toggle_action, name)
             self.action_checks[name] = check
             actions.add(check)
-        box.pack_start(actions, False, False, 0)
+        self.actions_revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self.actions_revealer.add(actions)
+        self.actions_toggle.connect("toggled", lambda t: self.actions_revealer.set_reveal_child(t.get_active()))
+        box.pack_start(self.actions_revealer, False, False, 0)
         self.param_rows = {}
         for name in PARAM_ACTIONS:
             row = Gtk.Box(spacing=8)
@@ -2608,6 +2619,10 @@ class PhraseSetCard(ListCard):
                 check.set_active(name in data["where"])
             self.test_check.set_active(data.get("test", False))
             actions = {a["action"]: a for a in data["actions"]}
+            if getattr(self, "actions_summary", None) is not None:
+                titles = [title for name, title in SITE_ACTIONS if name in actions]
+                self.actions_summary.set_text(", ".join(titles) if titles else
+                                              "Nothing yet: it only finds (tick an action under Change actions…)")
             for name, check in self.action_checks.items():
                 check.set_active(name in actions)
             for name, (row, label) in self.param_rows.items():

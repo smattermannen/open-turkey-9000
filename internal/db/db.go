@@ -291,7 +291,6 @@ func (d *DB) CreateBlock(name string) error {
 	return tx.Commit()
 }
 
-
 // AddApps adds a list of process names to an existing block.
 // The logic is identical to AddSites — we use a transaction for the same reason.
 func (d *DB) AddApps(blockName string, processNames []string) error {

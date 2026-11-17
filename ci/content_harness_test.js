@@ -196,6 +196,48 @@ async function main() {
       () => check("and shown once judged", false));
   await huge.close();
 
+  // R-LIST-4: rendered visible text only (hidden and collapsed text doesn't
+  // count, text far down does), and each frame on its own text: a frame
+  // whose text a list blocks gets the block page; the page around it stays.
+  const textPage = (body) => async (route) => route.fulfill({ status: 200, contentType: "text/html", body });
+  async function judge(top, frames) {
+    const t = await browser.newPage();
+    await t.route("http://text.example/top", textPage(top));
+    await t.route("http://frame.example/**", textPage(frames));
+    await t.addInitScript((stored) => {
+      const listeners = { addListener() {} };
+      window.sent = [];
+      window.browser = {
+        storage: { local: { get: async () => ({ page: stored }) }, onChanged: listeners },
+        runtime: { sendMessage: async (m) => {
+          window.sent.push(m);
+          return m.type === "frame-hits" ? { blocked: "about:blank#kc9k-blocked" } : undefined;
+        }, onMessage: listeners },
+      };
+    }, { lists: [{ id: 3, block: "b", name: "Words", url: [], title: [], text: ["casino"],
+      actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [] } }] });
+    await t.addInitScript(script);
+    await t.goto("http://text.example/top");
+    await t.waitForTimeout(2500);
+    return t;
+  }
+  const sentOf = async (t, type) => (await t.evaluate(() => window.sent)).filter((m) => m.type === type);
+  let t = await judge("<!doctype html><p>Plain words.</p><div style=\"display:none\">casino</div>" +
+    "<details><summary>More</summary>casino</details><p style=\"visibility:hidden\">casino</p>", "");
+  check("hidden and collapsed text isn't read", (await sentOf(t, "page-hits")).length === 0, await sentOf(t, "page-hits"));
+  await t.close();
+  t = await judge("<!doctype html><p>Plain words.</p><div style=\"height:5000px\"></div><p>casino far down</p>", "");
+  check("text far down is read", (await sentOf(t, "page-hits")).length === 1, await sentOf(t, "page-hits"));
+  await t.close();
+  t = await judge("<!doctype html><p>Plain words.</p><iframe src=\"http://frame.example/f\"></iframe>",
+    "<!doctype html><p>Play casino games</p>");
+  check("a frame's text isn't the page's", (await sentOf(t, "page-hits")).length === 0, await sentOf(t, "page-hits"));
+  const frameHits = await t.frames()[1].evaluate(() => window.sent.filter((m) => m.type === "frame-hits")).catch(() => null);
+  const frameUrl = t.frames()[1] ? t.frames()[1].url() : "";
+  check("the frame judges its own text, and gets the block page",
+    frameUrl.includes("kc9k-blocked") || (frameHits && frameHits.length === 1), { frameUrl, frameHits });
+  await t.close();
+
   // Without no-images nothing is touched.
   const plain = await open(rules([{ action: "greyscale", distinct: 1, hits: 1 }]));
   check("other looks leave pictures alone", (await content(plain, "#a", "::before")).includes("url("),

@@ -71,6 +71,11 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - Browser policy stops many pages before the extension sees the request; it
   then learns from the tab every 3 s. Request-dependent features need a
   fallback (`trail` in `background.js`).
+- Judging is resumable (`kc9kListMatchesSteps` and the other `*Steps`
+  generators in `match.js`; `kc9kDrain` runs them to the end): the content
+  script runs it READ_SLICE_MS at a time (`judgeOn`/`judged`; principle 9).
+  Frames judge their own text (`scanFrame`, R-LIST-4) and ask the
+  background (`frame-hits` → `frameHit`) for the block page.
 - No flashing (R-PAGE-1, `content.js`): while a list could still act on the
   top page by its title or text (`mayActByText`), it stays at opacity 0
   (`hidePage`) until judged and settled (`SETTLE_MS` after DOMContentLoaded

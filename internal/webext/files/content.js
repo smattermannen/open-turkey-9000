@@ -375,7 +375,11 @@ function load(page) {
 let judging = null; // { url, lists, steps } while a page is judged
 
 function scanKeywords() {
-  if (window !== window.top || !lists) {
+  if (window !== window.top) {
+    scanFrame();
+    return;
+  }
+  if (!lists) {
     return;
   }
   if (judging) {
@@ -480,6 +484,69 @@ function judged(url, matches) {
     browser.runtime.sendMessage({ type: "page-judged", url }).catch(() => {});
   }
   showWhenJudged(url);
+}
+
+// R-LIST-4: each frame is judged on its own text (the top page's text holds
+// none of its frames'). A frame's matches never act on the tab: what would
+// take a page away gives the frame the block page (the background script
+// decides, from its own rules), its looks show in the frame. No events:
+// embedded frames don't count (R-EVENT-1).
+let frameJudging = null; // { url, lists, steps } while a frame is judged
+let frameBlocked = false;
+
+function scanFrame() {
+  if (!lists || frameBlocked || !/^https?:$/.test(location.protocol) || !document.body || !kc9kReadsPage(lists)) {
+    return;
+  }
+  enterAddress(topUrl()); // as render() keeps it: a frame's looks follow the tab's address
+  if (!frameJudging) {
+    if (!textChanged) {
+      return;
+    }
+    const text = readPageText(document.body);
+    if (text === null) {
+      queueScan(); // the first read isn't finished
+      return;
+    }
+    textChanged = false;
+    frameJudging = { url: location.href, lists,
+      steps: kc9kListMatchesSteps(lists, { url: location.href, title: document.title || "", text }) };
+  }
+  const j = frameJudging;
+  if (j.url !== location.href || j.lists !== lists) {
+    frameJudging = null;
+    textChanged = true;
+    queueScan();
+    return;
+  }
+  const until = performance.now() + READ_SLICE_MS;
+  let r;
+  do {
+    r = j.steps.next();
+  } while (!r.done && performance.now() < until);
+  if (!r.done) {
+    queueScan();
+    return;
+  }
+  frameJudging = null;
+  const matches = r.value;
+  const looksBefore = keywordLooks.size;
+  for (const match of matches) {
+    match.actions.map((a) => a.action).filter((name) => LOOKS.includes(name)).forEach((name) => keywordLooks.add(name));
+  }
+  if (keywordLooks.size !== looksBefore) {
+    render();
+  }
+  if (kc9kTakesAway(kc9kOutcome(matches))) {
+    browser.runtime.sendMessage({ type: "frame-hits", url: j.url,
+      matches: matches.map((m) => ({ id: m.list.id, actions: m.actions.map((a) => a.action) })) })
+      .then((answer) => {
+        if (answer && typeof answer.blocked === "string" && location.href === j.url) {
+          frameBlocked = true;
+          location.replace(answer.blocked);
+        }
+      }).catch(() => {});
+  }
 }
 
 // enterAddress starts over for a new address of the top page: the one place

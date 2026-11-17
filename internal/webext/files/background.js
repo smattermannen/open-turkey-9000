@@ -556,6 +556,29 @@ function mirrorHit(message, sender) {
   }
 }
 
+// frameHit answers a frame's report of the lists its own text matched
+// (R-LIST-4): when they would take a page away, the frame gets the block
+// page; the tab and the rest of the page stay. The lists and actions are
+// taken from this script's own rules, never from the report.
+function frameHit(message, sender) {
+  const tab = sender && sender.tab;
+  if (!tab || !sender.frameId || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
+    return null;
+  }
+  const matches = [];
+  for (const hit of Array.isArray(message.matches) ? message.matches : []) {
+    const list = lists.find((l) => l.id === hit.id);
+    const names = Array.isArray(hit.actions) ? hit.actions : [];
+    if (list && !list.test) {
+      const actions = list.actions.filter((action) => names.includes(action.action));
+      if (actions.length > 0) {
+        matches.push({ list, actions });
+      }
+    }
+  }
+  return kc9kTakesAway(kc9kOutcome(matches)) ? { blocked: blockedPage(message.url).redirectUrl } : null;
+}
+
 // why tells the block page what stopped its page, when the rules allow it.
 function why(sender) {
   const tab = sender && sender.tab;
@@ -795,6 +818,9 @@ function onMessage(message, sender) {
   }
   if (message && message.type === "mirror") {
     mirrorHit(message, sender);
+  }
+  if (message && message.type === "frame-hits") {
+    return Promise.resolve(frameHit(message, sender));
   }
   if (message && message.type === "playlist-violation" && sender && sender.tab && sender.frameId === 0 &&
     typeof message.url === "string" && kc9kPlaylists(social).length > 0) {

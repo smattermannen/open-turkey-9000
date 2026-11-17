@@ -7869,9 +7869,16 @@ class Window(Gtk.ApplicationWindow):
         if command[:2] == ["list", "import"]:
             answer = self.ask_import_source(
                 "Import into this list", "From a text file with one entry per line (a hosts file and "
-                "adblock rules are read too), or from other lists and clusters in Killer Chicken 9000.")
+                "adblock rules are read too), or from other lists and clusters in Killer Chicken 9000; "
+                "or the whole internet, or all searches containing some words.", more=True)
             if answer == "kc9k":
                 self.import_from_kc9k(command[2], command[3])
+                return
+            if answer == "internet":
+                self.import_internet(command[2], command[3])
+                return
+            if answer == "searches":
+                self.import_searches(command[2], command[3])
                 return
             if answer != "file":
                 return
@@ -7941,16 +7948,45 @@ class Window(Gtk.ApplicationWindow):
 
         next_copy()
 
-    def ask_import_source(self, title, detail):
-        """From a file or from KC9K: "file", "kc9k" or None."""
+    def ask_import_source(self, title, detail, more=False):
+        """From a file or from KC9K: "file", "kc9k" or None; with more (a
+        list, §4.3), also "internet" (the whole internet) and "searches"
+        (all searches containing some words)."""
         dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
                                    buttons=Gtk.ButtonsType.NONE, text=title, secondary_text=detail)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        if more:
+            dialog.add_button("Whole internet", 3)
+            dialog.add_button("All searches containing…", 4)
         dialog.add_button("From KC9K…", 2)
         dialog.add_button("From file…", Gtk.ResponseType.OK)
         answer = dialog.run()
         dialog.destroy()
-        return {Gtk.ResponseType.OK: "file", 2: "kc9k"}.get(answer)
+        return {Gtk.ResponseType.OK: "file", 2: "kc9k", 3: "internet", 4: "searches"}.get(answer)
+
+    def import_internet(self, block, name):
+        """§4.3 Whole internet: *.* into the list."""
+        if self.confirm(f"Add the whole internet to {name}?",
+                        "It gets *.*: every site is matched (local files, localhost and the local network "
+                        "stay reachable). In a blacklist, only the block's exceptions are let through.", "Add"):
+            self.run(["list", "add", block, name, "*.*"])
+
+    def import_searches(self, block, name):
+        """§4.3 All searches containing…: the words as rendered terms that
+        look at the address, where a search's words are (R-PHRASE-6)."""
+        text = self.ask_text(
+            "All searches containing…",
+            "Words, separated by commas. A search for one of them is matched by its address (it holds "
+            "the words searched for), and so is any other address with that word in it.",
+            problem=lambda t: None if [w for w in t.split(",") if w.strip()] else "Type at least one word.")
+        words = [w.strip() for w in (text or "").split(",") if w.strip()]
+        if not words:
+            return
+        list_data = next((l for l in (self.blocks.get(block) or {}).get("lists", []) if l["name"] == name), {})
+        steps = [["list", "add", block, name, *words]]
+        if "url" not in (list_data.get("where") or []):
+            steps.append(["list", "scope", block, name, "url", "on"])
+        self.run_steps(steps)
 
     def read_import_file(self, path):
         """What a file to import holds, as KC9K reads it (§4.3): phrases,

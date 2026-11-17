@@ -177,6 +177,22 @@ for _ in range(20):
 texts = [r.entry.get_text() for r in card.editor.rows.get_children()]
 check(any("roulette" in t and "blackjack" in t for t in texts), "From KC9K: a list's entries as a word set: %s" % texts)
 
+# §4.3: the whole internet, and all searches containing some words.
+settle(); win.selected = "b"; win.show_block()
+answers[:] = [3]  # Whole internet (confirm is answered yes)
+list_card("Blocked").entries.file_buttons["Import…"].clicked()
+settle()
+check("*.*" in entries("Blocked"), "Whole internet adds *.*: %s" % entries("Blocked"))
+cli("list", "create", "b", "Searches", "--text")
+settle(); win.selected = "b"; win.show_block()
+win.ask_text = lambda *a, **k: "poker, slot machine"
+answers[:] = [4]  # All searches containing…
+list_card("Searches").entries.file_buttons["Import…"].clicked()
+settle()
+searches = next(l for l in block()["lists"] if l["name"] == "Searches")
+check("poker" in searches["entries"] and "slot machine" in searches["entries"] and "url" in searches["where"],
+      "All searches containing… adds the words and looks at the address: %s" % searches)
+
 Gtk.Dialog.run = real_run
 check(not [m for m in msgs if m.startswith("Error")], "no errors: %s" % msgs)
 win.destroy()

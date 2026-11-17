@@ -8,9 +8,10 @@ import (
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
-// R-MONK-3 (owner 2026-11-17): switched on, monk mode runs while its
-// window is open, to the window's end; switched off or outside its windows
-// it doesn't start.
+// R-MONK-3 (owner 2026-11-17, later): monk mode is switched on and off like
+// any mode: switched on it runs while its window is open (and not outside
+// it), with no windows or places whenever it is on; switched off it doesn't
+// run. None of that is locked: only a run for a set time is (MonkEnd).
 func TestMonkAutomationWindow(t *testing.T) {
 	d := testDB(t)
 	newFake()
@@ -25,9 +26,8 @@ func TestMonkAutomationWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	trusted := now.Unix()
-	runMonkAutomation(d, now, trusted)
-	if until, _ := d.MonkUntil(); until != 0 {
-		t.Fatalf("ran while switched off: %d", until)
+	if MonkAutomationOn(d, now) {
+		t.Fatal("ran while switched off")
 	}
 	if err := d.SetModeActive(m.ID, true); err != nil {
 		t.Fatal(err)
@@ -35,22 +35,27 @@ func TestMonkAutomationWindow(t *testing.T) {
 	if !MonkAutomationOn(d, now) || MonkAutomationOn(d, now.Add(3*time.Hour)) {
 		t.Error("on outside its window, or off in it")
 	}
-	runMonkAutomation(d, now, trusted)
-	if until, _ := d.MonkUntil(); until != trusted+2*3600 {
-		t.Errorf("runs until %d, want the window's end %d", until, trusted+2*3600)
+	if until, _ := d.MonkUntil(); until != 0 || MonkEnd(d, trusted) != 0 {
+		t.Errorf("a switched-on run is locked: until %d", until)
 	}
-	// Without windows or places it never runs (a block's would be continuous).
+	// Without windows or places it runs whenever it is switched on.
 	if err := d.SetModeAutomation(m.ID, db.AutomationSpec{}); err != nil {
 		t.Fatal(err)
 	}
+	if !MonkAutomationOn(d, now) {
+		t.Error("switched on with no automation, it doesn't run")
+	}
+	if err := d.SetModeActive(m.ID, false); err != nil {
+		t.Fatal(err)
+	}
 	if MonkAutomationOn(d, now) {
-		t.Error("continuous monk mode runs")
+		t.Error("switched off, it runs")
 	}
 }
 
-// R-MONK-2/3: while its places decide, monk mode is kept on half a minute
-// at a time, so it ends soon after the computer leaves; the Wi-Fi radio
-// stays on to see where it is, Ethernet and the firewall are cut.
+// R-MONK-2/3: while its places decide, monk mode runs at its place and not
+// away from it; the Wi-Fi radio stays on to see where it is, Ethernet and
+// the firewall are cut.
 func TestMonkAutomationPlace(t *testing.T) {
 	d := testDB(t)
 	n := newFake()
@@ -73,10 +78,8 @@ func TestMonkAutomationPlace(t *testing.T) {
 	}
 	now := time.Now()
 	trusted := trustedNow(t, d)
-	runMonkAutomation(d, now, trusted)
-	until, _ := d.MonkUntil()
-	if until < trusted+25 || until > trusted+35 {
-		t.Fatalf("until %d, now %d", until, trusted)
+	if !MonkAutomationOn(d, now) {
+		t.Fatal("not on at its place")
 	}
 	if !enforceMonk(d, trusted) {
 		t.Fatal("not on")

@@ -201,15 +201,25 @@ func TestModeBlocksShareAutomation(t *testing.T) {
 	}
 }
 
-// §3.8 Monk mode, R-MONK-1–3 (owner 2026-11-17): monk mode run by its
-// automation. Switching it on asks for confirmation; while its window has
-// it on it can't be switched off and its automation can't be weakened;
-// it is never enabled by default and holds no blocks.
+// R-MONK-3 (owner 2026-11-17, later): monk mode is switched on and off like
+// any mode (switching on asks first): with no windows or places it runs
+// until switched off, with them while they have it on; neither is locked,
+// so it can be switched off and its automation changed. Only a run for a set
+// time is locked. It takes no blocks, no allow windows, and is never enabled
+// by default.
 func TestMonkModeAutomation(t *testing.T) {
 	d := testDB(t)
 	notTerminal(t)
-	if err := runCLI(t, "mode", "on", "monk", "--yes"); err == nil {
-		t.Error("switched on with no windows or places")
+	if err := runCLI(t, "mode", "on", "monk"); err == nil {
+		t.Error("switched on without confirmation")
+	}
+	mustRun(t, "mode", "on", "monk", "--yes")
+	if !enforce.MonkAutomationOn(d, time.Now()) {
+		t.Fatal("switched on with no windows or places, it doesn't run")
+	}
+	mustRun(t, "mode", "off", "monk")
+	if enforce.MonkAutomationOn(d, time.Now()) {
+		t.Fatal("switched off, it runs")
 	}
 	mustRun(t, "block", "create", "b")
 	if err := runCLI(t, "mode", "add", "monk", "b"); err == nil {
@@ -218,29 +228,29 @@ func TestMonkModeAutomation(t *testing.T) {
 	if err := runCLI(t, "schedule", "add", "monk", "--allow", "--days", "mon", "--from", "08:00", "--to", "09:00"); err == nil {
 		t.Error("monk mode took an allow window")
 	}
-	mustRun(t, "schedule", "add", "Monk mode", "--days", today(), "--from", "00:00", "--to", "24:00")
+	mustRun(t, "schedule", "add", "Monk mode", "--mode", "--days", today(), "--from", "00:00", "--to", "24:00")
 	if err := runCLI(t, "automation", "monk", "default", "enabled"); err == nil {
 		t.Error("monk mode enabled by default")
-	}
-	if err := runCLI(t, "mode", "on", "monk"); err == nil {
-		t.Error("switched on without confirmation")
 	}
 	mustRun(t, "mode", "on", "monk", "--yes")
 	if !enforce.MonkAutomationOn(d, time.Now()) {
 		t.Fatal("its window doesn't run it")
 	}
-	if err := runCLI(t, "mode", "off", "monk"); err == nil {
-		t.Error("switched off while running")
-	}
-	if err := runCLI(t, "schedule", "remove", "monk", "1"); err == nil {
-		t.Error("its running window removed")
-	}
-	// More time asks for confirmation again.
-	tomorrow := strings.ToLower(time.Now().AddDate(0, 0, 1).Weekday().String()[:3])
-	if err := runCLI(t, "schedule", "add", "monk", "--days", tomorrow, "--from", "00:00", "--to", "01:00"); err == nil {
+	// Not locked: its window can go, and it can be switched off.
+	mustRun(t, "schedule", "remove", "monk", "1")
+	if err := runCLI(t, "schedule", "add", "monk", "--days", today(), "--from", "00:00", "--to", "24:00"); err == nil {
 		t.Error("added monk time without confirmation")
 	}
+	mustRun(t, "schedule", "add", "monk", "--days", today(), "--from", "00:00", "--to", "24:00", "--yes")
+	tomorrow := strings.ToLower(time.Now().AddDate(0, 0, 1).Weekday().String()[:3])
 	mustRun(t, "schedule", "add", "monk", "--days", tomorrow, "--from", "00:00", "--to", "01:00", "--yes")
+	mustRun(t, "mode", "off", "monk")
+	mustRun(t, "mode", "on", "monk", "--yes")
+	// A run for a set time is locked: it can't be switched off.
+	mustRun(t, "monk", "--for", "1h", "--yes")
+	if err := runCLI(t, "mode", "off", "monk"); err == nil || !strings.Contains(err.Error(), "locked") {
+		t.Errorf("switched off while locked: %v", err)
+	}
 	m, _ := d.MonkMode()
 	if len(m.Spec.Own) != 2 || !m.Active || m.Name != db.MonkModeName {
 		t.Errorf("monk mode %+v", m)
@@ -314,5 +324,45 @@ func TestProjectModes(t *testing.T) {
 	}
 	if m, _ := d.GetMode("Evening"); len(m.Blocks) != 4 {
 		t.Errorf("the second import's blocks join the mode: %v", m.Blocks)
+	}
+}
+
+// R-MODE-3 (owner 2026-11-17, later): a mode of blocks is locked by locking
+// its blocks (any lock 'kc9k start' takes), after one confirmation for all;
+// locked, it can't be switched off. Monk mode is locked by a run for a time.
+func TestModeLock(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	for _, b := range []string{"a", "c"} {
+		mustRun(t, "block", "create", b)
+		mustRun(t, "block", "add", b, b+".com")
+	}
+	mustRun(t, "mode", "create", "M")
+	mustRun(t, "mode", "add", "M", "a", "c")
+	if err := runCLI(t, "mode", "lock", "M", "--for", "1h"); err == nil {
+		t.Error("locked without confirmation")
+	}
+	if on, _ := d.IsBlockActive("a"); on {
+		t.Fatal("a block was started before the confirmation")
+	}
+	mustRun(t, "mode", "lock", "M", "--for", "1h", "--lock", "--lock-chars", "20", "--yes")
+	for _, b := range []string{"a", "c"} {
+		hold, err := blockHold(d, b, time.Now())
+		if on, _ := d.IsBlockActive(b); err != nil || !on || !hold.held() {
+			t.Errorf("%s: on %v, held %v (%v)", b, on, hold.held(), err)
+		}
+	}
+	if err := runCLI(t, "mode", "off", "M"); err == nil {
+		t.Error("a locked mode was switched off")
+	}
+	if on, _ := d.IsBlockActive("a"); !on {
+		t.Error("a locked block of the mode went off")
+	}
+	if err := runCLI(t, "mode", "lock", "monk", "--for", "1h", "--yes"); err == nil {
+		t.Error("monk mode took locks of blocks")
+	}
+	mustRun(t, "mode", "create", "Empty")
+	if err := runCLI(t, "mode", "lock", "Empty", "--for", "1h", "--yes"); err == nil {
+		t.Error("an empty mode was locked")
 	}
 }

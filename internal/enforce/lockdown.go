@@ -81,8 +81,9 @@ func BlocksLocked(d *db.DB, now time.Time, trusted int64) (bool, error) {
 	if now.Unix() < until {
 		return true, nil
 	}
-	// Monk mode can't be ended early, so it holds what locks hold.
-	if MonkOn(d, trusted) {
+	// Monk mode run for a set time can't be ended early, so it holds what
+	// locks hold; switched on as a mode it can be switched off.
+	if MonkEnd(d, trusted) > 0 {
 		return true, nil
 	}
 	bootID, err := db.BootID()

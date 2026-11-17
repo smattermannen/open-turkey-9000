@@ -1,26 +1,21 @@
-// modes.go — monk mode run by its automation (§3.8 Monk mode, R-MONK-3;
-// owner 2026-11-17). A mode of blocks needs nothing here: its blocks hold
+// modes.go — monk mode as a mode (§3.8 Monk mode, R-MONK-3; owner
+// 2026-11-17, later). A mode of blocks needs nothing here: its blocks hold
 // copies of its automation (db.SetBlockAutomation) and are enforced as
 // blocks.
 //
-// While monk mode is switched on and its windows and places have it on,
-// the daemon keeps its end (db.SettingMonkUntil) ahead of now: to the end
-// of the window when only windows decide, or half a minute at a time while
-// places do (it ends soon after the computer leaves). Everything else is
-// monk mode as always: the cuts, what it blocks, putting the network back.
+// Monk mode runs while it is switched on and its automation has it on (with
+// no windows or places: whenever it is on), and switching it off ends that,
+// as for any mode. Only a run for a set time (kc9k monk --for, a Mode
+// action: db.SettingMonkUntil) is locked: it holds whatever the switch and
+// the automation say, until its time is over (MonkEnd).
 package enforce
 
 import (
-	"log"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
-
-// monkPlaceStep is how far ahead monk mode's end is kept while places
-// decide whether it runs.
-const monkPlaceStep = 30 * time.Second
 
 // MonkAutomation returns monk mode as a mode and its automation.
 func MonkAutomation(d *db.DB) (db.Mode, schedule.Automation, error) {
@@ -56,14 +51,15 @@ func monkAutomationAt(d *db.DB, a schedule.Automation, now time.Time) bool {
 	return automationEnabled(a, now, at, unknown)
 }
 
-// MonkAutomationOn reports whether monk mode's automation runs it now: it
-// is switched on and its windows and places have it on (R-MONK-3).
+// MonkAutomationOn reports whether monk mode runs as a mode now: it is
+// switched on and its windows and places have it on, or it has none
+// (R-MONK-3). A run for a set time is MonkEnd's.
 func MonkAutomationOn(d *db.DB, now time.Time) bool {
 	m, a, err := MonkAutomation(d)
 	if err != nil || !m.Active {
 		return false
 	}
-	return monkAutomationAt(d, a, now)
+	return a.Continuous() || monkAutomationAt(d, a, now)
 }
 
 // MonkAutomationWith reports whether monk mode, switched on with the
@@ -78,42 +74,4 @@ func MonkAutomationWith(d *db.DB, a schedule.Automation, now time.Time) bool {
 func monkKeepsWifi(d *db.DB) bool {
 	m, a, err := MonkAutomation(d)
 	return err == nil && m.Active && len(a.Places) > 0
-}
-
-// windowsEnd returns when windows-only automation a, which has monk mode
-// on at now, next has it off (at most a week ahead).
-func windowsEnd(a schedule.Automation, now time.Time) time.Time {
-	t := now.Truncate(time.Minute)
-	for i := 0; i < 7*24*60; i++ {
-		t = t.Add(time.Minute)
-		if !a.Enabled(schedule.InAny(a.Windows, t), false) {
-			return t
-		}
-	}
-	return t
-}
-
-// runMonkAutomation is monk mode's automation in the daemon cycle: while
-// it has monk mode on, monk mode's end is kept ahead (it only ever grows).
-func runMonkAutomation(d *db.DB, now time.Time, trusted int64) {
-	m, a, err := MonkAutomation(d)
-	if err != nil || !m.Active || trusted == 0 || !monkAutomationAt(d, a, now) {
-		return
-	}
-	end := now.Add(monkPlaceStep)
-	if len(a.Places) == 0 {
-		end = windowsEnd(a, now)
-	}
-	until := trusted + int64(end.Sub(now).Round(time.Second)/time.Second)
-	before, _ := d.MonkUntil()
-	if until <= before {
-		return
-	}
-	if err := d.ExtendMonk(until); err != nil {
-		log.Printf("monk mode: %v", err)
-		return
-	}
-	if before <= trusted {
-		log.Printf("monk mode: started by its automation")
-	}
 }

@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
@@ -120,9 +119,6 @@ var placeRemoveCmd = &cobra.Command{
 				return err
 			}
 		}
-		if err := monkUsesPlace(database, p.ID); err != nil {
-			return err
-		}
 		if err := database.DeletePlace(p.ID); err != nil {
 			return err
 		}
@@ -170,9 +166,6 @@ func setPlaceNeed(database *db.DB, p db.Place, need int, fresh bool) error {
 			if err := ensureEditable(database, block, false); err != nil {
 				return err
 			}
-		}
-		if err := monkUsesPlace(database, p.ID); err != nil {
-			return err
 		}
 	}
 	return database.SetPlaceNeed(p.ID, need)
@@ -239,20 +232,6 @@ var placeRuleCmd = &cobra.Command{
 		}
 		return nil
 	}),
-}
-
-// monkUsesPlace gates a change that makes monk mode see a place less
-// often (removing it, needing more of its networks): refused while monk
-// mode runs by its automation (R-MONK-3).
-func monkUsesPlace(database *db.DB, id int) error {
-	m, err := database.MonkMode()
-	if err != nil || !m.Active || !slices.Contains(m.Spec.Places, id) {
-		return err
-	}
-	if enforce.MonkAutomationOn(database, time.Now()) {
-		return refused(database, db.MonkModeName, fmt.Errorf("monk mode is running by its automation, which uses this place: until it ends it can only be added to"))
-	}
-	return nil
 }
 
 // placeNames returns the places whose rule turns a block on.

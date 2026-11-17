@@ -202,14 +202,17 @@ win.mode_editor.place_combo.set_active(0)
 win.mode_editor.add_place(None); settle()
 check(mode("Evening")["places"] == ["home"] and "home" in block("games")["places"], "a place for the mode's blocks")
 
-# Monk mode: no switch without windows; a window covering today, switched
-# on (confirmed), it runs.
+# Monk mode (R-MONK-3, owner 2026-11-17 later): switched like any mode. With
+# no windows or places its switch works too (it runs until switched off); a
+# window covering today, switched on (confirmed), it runs; switched off it
+# stops; started for a time it is locked and its switch greyed out.
 win.blocks_stack.set_visible_child_name("cards"); settle()
 monk = mode("Monk mode")
 check(monk["continuous"] and not monk["active"], "monk mode starts with no automation")
 win.open_mode("Monk mode"); settle()
 check(win.mode_editors.get_visible_child() is win.monk_editor and not win.mode_blocks_section.get_visible(),
       "monk mode's view: no blocks, its own editor")
+check(win.mode_switch.get_sensitive(), "its switch works with no windows or places")
 today = datetime.date.today().strftime("%a").lower()
 win.monk_editor.add_window(today, "00:00", "24:00"); settle()
 asked.clear()
@@ -217,8 +220,16 @@ win.toggle_mode_card(None, True, mode("Monk mode")); settle()
 check(asked and "monk mode" in asked[-1], "switching it on asks first: %s" % asked)
 monk = mode("Monk mode")
 check(monk["active"] and monk["running"], "on, its window runs it: %s" % {k: monk[k] for k in ("active", "running")})
+win.toggle_mode_card(None, False, mode("Monk mode")); settle()
+monk = mode("Monk mode")
+check(not monk["active"] and not monk["running"], "switched off while it ran: it stops")
+r = cli("monk", "--for", "1h", "--yes")
+check(r.returncode == 0, "started for a time: %s" % r.stderr.strip())
+win.open_mode("Monk mode"); settle()
+check(not win.mode_switch.get_sensitive() and "Locked" in win.mode_status.get_text(),
+      "locked for its time: the switch is greyed out: %s" % win.mode_status.get_text())
 r = cli("mode", "off", "monk")
-check(r.returncode != 0, "running, it can't be switched off")
+check(r.returncode != 0, "locked, it can't be switched off")
 
 # §4.2 Names (owner 2026-11-17): a block may share a mode's name; the
 # mode's editor changes the mode, not the block of that name.

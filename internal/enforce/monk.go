@@ -8,8 +8,10 @@
 //     Ethernet interface down, the firewall dropping all but loopback. The
 //     daemon puts back whatever is switched on again, every cycle.
 //
-// It ends only when its time does. The network is then put back as it was,
-// also after a restart or a crash (the saved state is in the database).
+// It runs while switched on as a mode (MonkAutomationOn), and for a set
+// time (locked: it ends only when that time does). Then the network is put
+// back as it was, also after a restart or a crash (the saved state is in
+// the database).
 package enforce
 
 import (
@@ -60,9 +62,9 @@ func monkBlock() db.ActiveBlockDetail {
 	}}
 }
 
-// MonkEnd returns the trusted time monk mode ends, 0 when it is off. With
-// trusted 0 (the clock couldn't be read) a monk mode that was started counts
-// as on.
+// MonkEnd returns the trusted time a run of monk mode for a set time ends
+// (it is locked until then), 0 when there is none. With trusted 0 (the
+// clock couldn't be read) a run that was started counts as on.
 func MonkEnd(d *db.DB, trusted int64) int64 {
 	until, err := d.MonkUntil()
 	if err != nil {
@@ -75,8 +77,11 @@ func MonkEnd(d *db.DB, trusted int64) int64 {
 	return 0
 }
 
-// MonkOn reports whether monk mode is running.
-func MonkOn(d *db.DB, trusted int64) bool { return MonkEnd(d, trusted) > 0 }
+// MonkOn reports whether monk mode is running: for a set time, or as a
+// switched-on mode.
+func MonkOn(d *db.DB, trusted int64) bool {
+	return MonkEnd(d, trusted) > 0 || MonkAutomationOn(d, time.Now())
+}
 
 // withMonk adds what monk mode blocks to the blocks being enforced, and
 // the installer media guard's block while it acts (resetguard.go).
@@ -123,7 +128,7 @@ func enforceMonk(d *db.DB, trusted int64) bool {
 		return false
 	}
 	// trusted 0: the clock couldn't be read, so nothing counts as over.
-	if until > 0 && (trusted == 0 || trusted < until) {
+	if until > 0 && (trusted == 0 || trusted < until) || MonkAutomationOn(d, time.Now()) {
 		cutNetwork(d)
 		return true
 	}

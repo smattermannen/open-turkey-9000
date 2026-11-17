@@ -853,9 +853,10 @@ func guiModes(database *db.DB, saved []db.SavedSchedule, modes []db.Mode, places
 			}
 		}
 		if m.Monk {
-			g.Running = m.Active && enforce.MonkAutomationOn(database, now)
+			g.Running = enforce.MonkAutomationOn(database, now)
 			if end := enforce.MonkEnd(database, trusted); end > 0 {
-				g.MonkLeft = end - trusted
+				g.MonkLeft = end - trusted // run for a set time: locked
+				g.Running = true
 			}
 		}
 		out = append(out, g)

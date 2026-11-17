@@ -6609,16 +6609,17 @@ class Window(Gtk.ApplicationWindow):
         switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         blocks = mode.get("blocks") or []
         if mode.get("monk"):
-            switch.set_active(bool(mode.get("active")))
-            running = mode.get("running")
-            switch.set_sensitive(not running and (bool(mode.get("active")) or not mode.get("continuous")))
-            switch.set_tooltip_text("Running: it ends only at its time" if running else
-                                    "Give it windows or places first" if mode.get("continuous") else
-                                    "Let its windows and places run it" if not mode.get("active") else
-                                    "Stop its windows and places from running it")
+            # R-MONK-3 (owner 2026-11-17, later): switched like any mode;
+            # only a run for a set time is locked.
             left = mode.get("monk_left") or 0
-            state_text = (f"Running, {fmt_seconds(left)} left" if left else
-                          "On: runs by itself" if mode.get("active") else "Off")
+            switch.set_active(bool(mode.get("active")) or bool(left))
+            switch.set_sensitive(not left)
+            switch.set_tooltip_text(f"Locked for {fmt_seconds(left)} more: it was started for a time" if left else
+                                    "Switch monk mode off" if mode.get("active") else
+                                    "Switch monk mode on: no websites and no internet while it runs")
+            state_text = (f"Locked, {fmt_seconds(left)} left" if left else
+                          ("Running" if mode.get("running") else "On, waiting for its windows or places")
+                          if mode.get("active") else "Off")
         else:
             on, total = mode.get("on", 0), len(blocks)
             switch.set_active(total > 0 and on == total)
@@ -6685,8 +6686,9 @@ class Window(Gtk.ApplicationWindow):
             return False
         self.block_cards_shown = None
         if mode.get("monk") and wanted:
-            if not self.confirm_lock([f"monk mode, run by its windows and places: no websites and no internet "
-                                      f"then, and it can't be switched off while it runs"]):
+            when = ("while its windows and places have it on" if not mode.get("continuous") else
+                    "until you switch it off")
+            if not self.confirm_lock([f"monk mode, switched on: no websites and no internet {when}"]):
                 return True
             self.run(["mode", "on", mode["name"], "--yes"])
         else:
@@ -6727,6 +6729,13 @@ class Window(Gtk.ApplicationWindow):
         menu.show_all()
         self.mode_menu.set_popup(menu)
         head.pack_end(self.mode_menu, False, False, 0)
+        # R-MODE-3 (owner 2026-11-17, later): a mode of blocks is locked by
+        # locking all its blocks at once.
+        self.mode_lock_button = Gtk.Button(label="Lock…", valign=Gtk.Align.CENTER)
+        self.mode_lock_button.set_tooltip_text("Lock every block of the mode: it then can't be switched off or "
+                                               "weakened until they are unlocked")
+        self.mode_lock_button.connect("clicked", lambda _b: self.lock_mode())
+        head.pack_end(self.mode_lock_button, False, False, 0)
         self.mode_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.mode_switch.connect("state-set", lambda sw, wanted: self.toggle_mode_card(
             sw, wanted, self.find_mode(getattr(self, "shown_mode", None)) or {"name": ""}))
@@ -6754,11 +6763,11 @@ class Window(Gtk.ApplicationWindow):
         self.mode_monk_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.mode_monk_box.pack_start(dim(
             "Every website is blocked and the internet connection is cut (Wi-Fi off, Ethernet down, firewall "
-            "closed). Give it windows or places below and switch it on: it then runs in them by itself, "
-            "and can't be switched off while it runs (it ends at the window's end, or when you leave). "
-            "While its places decide, Wi-Fi stays on to see where you are; the firewall still cuts it."),
-            False, False, 0)
-        monk_now = Gtk.Button(label="Start now for a time…", halign=Gtk.Align.START)
+            "closed). Switch it on like any mode: with windows or places below it runs in them by itself, "
+            "without them until you switch it off. Started for a time it is locked: it can't be switched off "
+            "until then. While its places decide, Wi-Fi stays on to see where you are; the firewall still "
+            "cuts it."), False, False, 0)
+        monk_now = Gtk.Button(label="Run now, locked for a time…", halign=Gtk.Align.START)
         monk_now.connect("clicked", self.monk_mode)
         self.mode_monk_box.pack_start(monk_now, False, False, 0)
         box.pack_start(self.mode_monk_box, False, False, 0)
@@ -6790,23 +6799,24 @@ class Window(Gtk.ApplicationWindow):
         was, self.updating = self.updating, True
         blocks = mode.get("blocks") or []
         if monk:
-            self.mode_switch.set_active(bool(mode.get("active")))
-            self.mode_switch.set_sensitive(not mode.get("running") and
-                                           (bool(mode.get("active")) or not mode.get("continuous")))
+            self.mode_switch.set_active(bool(mode.get("active")) or bool(mode.get("monk_left")))
+            self.mode_switch.set_sensitive(not mode.get("monk_left"))
         else:
             self.mode_switch.set_active(bool(blocks) and mode.get("on", 0) == len(blocks))
             self.mode_switch.set_sensitive(bool(blocks))
         self.updating = was
         self.mode_menu.set_visible(not monk)
+        self.mode_lock_button.set_visible(not monk)
+        self.mode_lock_button.set_sensitive(bool(mode.get("blocks")))
         self.mode_blocks_section.set_visible(not monk)
         self.mode_monk_box.set_visible(monk)
         if monk:
             left = mode.get("monk_left") or 0
             self.mode_status.set_text(
-                (f"Running, {fmt_seconds(left)} left. " if left else "") +
-                ("Switched on: its windows and places run it." if mode.get("active") else
-                 "Switched off: its windows and places don't run it." if not mode.get("continuous") else
-                 "Give it windows or places below, then switch it on."))
+                (f"Locked for {fmt_seconds(left)} more (started for a time). " if left else "") +
+                ("Switched on: it runs until you switch it off." if mode.get("active") and mode.get("continuous") else
+                 "Switched on: its windows and places run it." if mode.get("active") else
+                 "Switched off."))
         else:
             blocks = mode.get("blocks") or []
             self.mode_take_out_button.set_sensitive(bool(blocks))
@@ -6885,6 +6895,35 @@ class Window(Gtk.ApplicationWindow):
         if name:
             self.mode_blocks_shown = None
             self.take_out_of_mode(name)
+
+    def lock_mode(self):
+        """R-MODE-3: locks every block of the shown mode with the chosen
+        locks (any kind), confirmed once (R-LOCK-12)."""
+        mode = self.find_mode(getattr(self, "shown_mode", None)) or {}
+        if not mode.get("blocks") or mode.get("monk"):
+            return
+        picker = LockPicker("switch the mode off", "switched off", LockPicker.ALL_KINDS)
+        asked = self.lock_dialog(
+            f"Lock {mode['name']}",
+            f"Every block in it ({', '.join(mode['blocks'])}) gets these locks, after the ones it has. While "
+            "they are on, the mode can't be switched off or weakened.", "Lock", picker, need_lock=True)
+        if asked is None:
+            return
+        chosen, relock_flags, secret = asked
+        if not chosen:
+            return
+        if len(chosen) > 1:
+            chosen = self.choose_lock_order(chosen)
+            if chosen is None:
+                return
+        args, locks = ["mode", "lock", mode["name"]], []
+        for i, (flags, text) in enumerate(chosen):
+            args += flags
+            order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
+            locks.append(f"mode '{mode['name']}' (each of its blocks): {order}{text}")
+        args += relock_flags
+        if self.confirm_lock(locks):
+            self.run(args + ["--yes"], secret + "\n" if secret else None)
 
     def rename_mode(self):
         mode = getattr(self, "shown_mode", None)

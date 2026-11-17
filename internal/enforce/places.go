@@ -156,7 +156,7 @@ func keepWifiOn(d *db.DB) {
 	}
 	// Monk mode switches the radio off (R-MONK-2) and puts it back itself,
 	// unless its own places need it.
-	if until, err := d.MonkUntil(); (err != nil || until > 0) && !monkPlaces {
+	if until, err := d.MonkUntil(); (err != nil || until > 0 || MonkAutomationOn(d, time.Now())) && !monkPlaces {
 		return
 	}
 	out, err := exec.Command("nmcli", "radio", "wifi").Output()

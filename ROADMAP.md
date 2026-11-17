@@ -74,8 +74,19 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
   - [ ] Step 2:
     - [ ] Frozen Chicken is a mode among the blocks, up to a week; its
       page leaves the sidebar (§3.8, §4.8, R-FREEZE-3).
-    - [ ] Monk mode switched on and off like any mode; locks on modes
-      (§3.8, R-MODE-3, R-MONK-3).
+    - [x] Monk mode switched on and off like any mode (§3.8, R-MONK-3):
+      switched on (confirmed) it runs while its automation has it on, with
+      none until switched off; switched off it stops; its automation is
+      free to change. Only a run for a set time (`kc9k monk --for`) is
+      locked: `monk.until`, the switch greyed out, off refused. The daemon
+      no longer pushes `monk.until` ahead (`runMonkAutomation` gone):
+      `MonkAutomationOn` decides each cycle. `TestMonkModeAutomation`,
+      `TestMonkAutomationWindow`, `TestMonkAutomationPlace`,
+      `ci/gui_modes_smoke.py`.
+    - [x] Locks on modes (R-MODE-3, refined the same day: a mode of blocks
+      through its blocks' locks): `kc9k mode lock M <start's lock flags>`
+      starts every block with them after one confirmation; GUI Lock… in the
+      mode's view. `TestModeLock`.
     - [ ] Automation in the block's menu (greyed out in a mode: "Automated
       by …"); a block keeps its own automation in a mode and gets it back
       when taken out (§4.3, R-MODE-1).

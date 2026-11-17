@@ -42,8 +42,10 @@ interface is brought down and the firewall drops everything except this
 computer's own local traffic. Whatever is switched back on is put back.
 
 Monk mode is a mode, not a block: it has no settings and nothing can be
-added to it. It ends only when its time does, and can't be switched off
-early; a longer time extends a monk mode that is on. When it ends the
+added to it but its automation. Started for a time it is locked: it ends
+only when its time does, and can't be switched off early; a longer time
+extends it. Switched on as a mode ('kc9k mode on monk') it runs while its
+automation has it on and is switched off like any mode. When it ends the
 connection is restored to what it was, also after a restart.
 
 Without arguments, shows whether monk mode is on.`,
@@ -89,9 +91,13 @@ func monkStatus(database *db.DB) string {
 	}
 	until := enforce.MonkEnd(database, trusted)
 	if until == 0 {
+		if enforce.MonkAutomationOn(database, now) {
+			return "Monk mode is on, switched on as a mode: every website is blocked and the internet connection is cut " +
+				"until it is switched off ('kc9k mode off monk') or its automation ends it."
+		}
 		return "Monk mode is off."
 	}
-	return fmt.Sprintf("Monk mode is on until %s: every website is blocked and the internet connection is cut.",
+	return fmt.Sprintf("Monk mode is on, locked until %s: every website is blocked and the internet connection is cut.",
 		now.Add(time.Duration(until-trusted)*time.Second).Format("2006-01-02 15:04"))
 }
 

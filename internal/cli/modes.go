@@ -176,18 +176,22 @@ func gateAutomation(cmd *cobra.Command, database *db.DB, changes map[string]sche
 	if monk == nil || !monk.Active {
 		return nil
 	}
-	if monkLess && enforce.MonkAutomationOn(database, time.Now()) {
-		return refused(database, db.MonkModeName, fmt.Errorf("monk mode is running by its automation: until it ends, its automation can only be added to"))
-	}
+	// R-MONK-3 (owner 2026-11-17, later): switched on as a mode it can be
+	// switched off, so its automation is free to change; more time to run
+	// asks first, as switching it on does.
 	if schedule.AutomationWeakens(monkComparable(monkAfter), monkComparable(monkBefore)) {
 		return confirmLocks(cmd, monkLock(database, monkAfter))
 	}
 	return nil
 }
 
-// monkLock describes monk mode run by an automation, for the confirmation.
+// monkLock describes monk mode switched on, for the confirmation: it cuts
+// the network while it runs.
 func monkLock(database *db.DB, a schedule.Automation) lockToSet {
-	return lockToSet{"monk mode", "run by its automation (the network is cut; it can't be switched off while it runs)",
+	if a.Continuous() {
+		return lockToSet{"monk mode", "switched on (no websites, no internet; switch it off to end it)", "until switched off"}
+	}
+	return lockToSet{"monk mode", "switched on, run by its automation (no websites, no internet while it runs; switch it off to end it)",
 		automationWords(database, a)}
 }
 
@@ -585,27 +589,27 @@ func switchMonk(cmd *cobra.Command, database *db.DB, m db.Mode, on bool) error {
 		return err
 	}
 	a, _ := m.Spec.Automation(all)
+	if !on {
+		if trusted, err := database.TrustedNow(time.Now()); err == nil {
+			if end := enforce.MonkEnd(database, trusted); end > 0 {
+				return refused(database, db.MonkModeName, fmt.Errorf("monk mode is locked for %s more (it was started for a time) and ends only then",
+					humanDuration(time.Duration(end-trusted)*time.Second)))
+			}
+		}
+	}
 	if on == m.Active {
 		fmt.Println(describeTarget(database, autoTarget{Name: m.Name, Mode: &m}))
 		return nil
 	}
+	// R-MONK-3 (owner 2026-11-17, later): switched on and off like any
+	// mode; only a run for a set time is locked.
 	if on {
-		if a.Continuous() {
-			return fmt.Errorf("monk mode has no windows or places to run in: give it some first ('kc9k schedule add monk …', " +
-				"'kc9k place rule monk PLACE on'), or start it for a time ('kc9k monk --for 2h')")
-		}
-		if err := requireLockPassword(database); err != nil {
-			return err
-		}
 		if err := confirmLocks(cmd, monkLock(database, a)); err != nil {
 			return err
 		}
 	} else {
 		if err := requireSettingsPassword(database); err != nil {
 			return err
-		}
-		if enforce.MonkAutomationOn(database, time.Now()) {
-			return refused(database, db.MonkModeName, fmt.Errorf("monk mode is running by its automation and ends only when it does (R-MONK-3)"))
 		}
 	}
 	if err := database.SetModeActive(m.ID, on); err != nil {
@@ -614,6 +618,104 @@ func switchMonk(cmd *cobra.Command, database *db.DB, m db.Mode, on bool) error {
 	m.Active = on
 	fmt.Println(describeTarget(database, autoTarget{Name: m.Name, Mode: &m}))
 	return enforce.ApplyFromDB(database)
+}
+
+var modeLockCmd = &cobra.Command{
+	Use:   "lock [mode]",
+	Short: "Lock a mode: each of its blocks gets the locks (as 'kc9k start' takes them)",
+	Long: `Locks a mode of blocks (R-MODE-3): each of its blocks is started with the
+locks given, as 'kc9k start BLOCK <locks>' would (it only strengthens: on a
+block that is on, new locks go last). A locked mode can't be switched off or
+weakened while its blocks are locked, and they are unlocked as blocks are
+('kc9k unlock BLOCK').
+
+  kc9k mode lock Evening --for 2h --yes
+  kc9k mode lock Work --lock --lock-chars 500 --yes
+
+Monk mode is locked by running it for a time ('kc9k monk --for 2h'), Frozen
+Chicken by freezing ('kc9k freeze --for 2h').`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		database, err := openDB()
+		if err != nil {
+			return err
+		}
+		t, err := resolveTarget(database, args[0], db.KindMode)
+		database.Close()
+		if err != nil {
+			return err
+		}
+		if t.Mode == nil {
+			return fmt.Errorf("'%s' is no mode", args[0])
+		}
+		if t.Mode.Monk {
+			return fmt.Errorf("monk mode is locked by running it for a time: 'kc9k monk --for 2h'")
+		}
+		locks := lockArgs(cmd)
+		if len(locks) == 0 {
+			return fmt.Errorf("give the locks, as 'kc9k start' takes them (--for 2h, --lock, --password-stdin, …)")
+		}
+		return lockMode(cmd, *t.Mode, locks, "")
+	},
+}
+
+// lockMode locks a mode of blocks (R-MODE-3): each of its blocks is started
+// with locks (start's flags, in unlock order), as 'kc9k start' would, after
+// one confirmation for all (R-LOCK-12) unless cmd has --yes. A password lock
+// takes passwordHash, or a password read once from standard input.
+func lockMode(cmd *cobra.Command, m db.Mode, locks []string, passwordHash string) error {
+	if len(m.Blocks) == 0 {
+		return fmt.Errorf("mode '%s' has no blocks to lock", m.Name)
+	}
+	req, err := parseLockArgs(locks, time.Now())
+	if err != nil {
+		return err
+	}
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	err = requireLockPassword(database)
+	database.Close()
+	if err != nil {
+		return err
+	}
+	var items []lockToSet
+	for _, b := range m.Blocks {
+		items = append(items, pressLocks(b, req)...)
+	}
+	if err := confirmLocks(cmd, items...); err != nil {
+		return err
+	}
+	if req.password && passwordHash == "" {
+		password, err := readPasswordStdin("Lock password")
+		if err != nil {
+			return err
+		}
+		if passwordHash, err = db.HashPassword(password); err != nil {
+			return err
+		}
+	}
+	presetPasswordHash = passwordHash
+	defer func() { presetPasswordHash = "" }()
+	var failed []string
+	for _, b := range m.Blocks {
+		if err := startCmd.ParseFlags(locks); err != nil {
+			return err
+		}
+		if err := startCmd.Flags().Set("yes", "true"); err != nil {
+			return err
+		}
+		if err := startCmd.RunE(startCmd, []string{b}); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", b, err)
+			failed = append(failed, b)
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("%s couldn't be locked", quoted(failed))
+	}
+	fmt.Printf("Mode '%s' is locked: %s.\n", m.Name, describeLockList(pressLocks(m.Name, req)))
+	return nil
 }
 
 var modeShowCmd = &cobra.Command{
@@ -639,6 +741,9 @@ var modeShowCmd = &cobra.Command{
 
 func init() {
 	addYesFlag(modeOnCmd, modeAddCmd)
-	modeCmd.AddCommand(modeCreateCmd, modeRenameCmd, modeDeleteCmd, modeAddCmd, modeTakeOutCmd, modeOnCmd, modeOffCmd, modeShowCmd)
+	addStartLockFlags(modeLockCmd)
+	addYesFlag(modeLockCmd)
+	modeCmd.AddCommand(modeCreateCmd, modeRenameCmd, modeDeleteCmd, modeAddCmd, modeTakeOutCmd, modeOnCmd, modeOffCmd,
+		modeLockCmd, modeShowCmd)
 	rootCmd.AddCommand(modeCmd)
 }

@@ -71,7 +71,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       `TestPlaylistException`, `TestPlaylistExceptionsMigrated`,
       `TestPlaylistInEntry`, `ci/gui_playlist_smoke.py`. Playing a video of
       a real playlist: still Unchecked (§0.2).
-  - [ ] Step 2:
+  - [x] Step 2 (built 2026-11-17; on the laptop: Unchecked):
     - [x] Frozen Chicken is a mode among the blocks, up to a week; its
       page leaves the sidebar (§3.8, §4.8, R-FREEZE-3). Its card is next to
       monk mode's (switched on it asks how and until when, `freeze_dialog`

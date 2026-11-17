@@ -288,6 +288,15 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `ci/gui_import_smoke.py`).
 - **Clusters** (`db/clusters.go`, `cli/clusters.go`): lists outside blocks,
   never enforced. `cluster copy` goes through `listAdd` (gating applies).
+- **Presets** (§3.2 Preset, §4.4; owner 2026-11-17; `db/presets.go`,
+  `cli/presets.go`, GUI page "Presets" = page `clusters`): block presets
+  are templates, list and phrase set presets clusters; table `presets`
+  (kind `lists` = `db.ListsPreset`, `automation` = `AutomationSpec`,
+  `schedule` = windows, `hotkey`) for the rest. `kc9k preset save|use|
+  rename|delete` (`--kind`, `--mode`/`--schedule`), use goes through the
+  list and automation gates (`useListsPreset`, `changeAutomation`).
+  gui-state `presets` (`guiPreset`, `describePreset`); GUI `save_preset`,
+  `use_preset`, `add_from_preset`, `update_presets`.
 - **Link recording** (`db/recording.go`, `enforce/recording.go`,
   `cli/record.go`): `rules.recording` → extension POSTs `/visit`; daemon
   buffers; `record stop` adds via `listAdd`/`clusterAdd`. Word recording

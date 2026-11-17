@@ -104,10 +104,21 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       as a whole (R-MODE-1: refused if that weakens a locked block).
       `TestModeKeepsOwnAutomation`, `TestModeBlocksShareAutomation`,
       `ci/gui_modes_smoke.py`, `ci/gui_cards_smoke.py`.
-    - [ ] Presets instead of clusters and templates: block, list, phrase
-      set, schedule, automation and hotkey presets, always copies; Presets
-      page; *Save as preset* (§3.2 Preset, §4.4).
-    - [ ] *Social preset* renamed *social media setting* (§3.2).
+    - [x] Presets instead of clusters and templates (§3.2 Preset, §4.4):
+      the Presets page (it was Clusters) shows block presets (the
+      templates: New block from it…), lists, automation and schedule
+      presets (Use…, Rename…, Delete), and list and phrase set presets (the
+      clusters' editor and recording). Saved from a block's ⋯ menu (Save as
+      block preset…), its Websites tab (Save lists as preset…: Both /
+      Blacklists / Exceptions, Include actions?; Add lists from a
+      preset…), its or a mode's Automation (Save as preset…, Use a
+      preset…). Always copies. CLI `kc9k preset save lists|automation|
+      schedule`, `use`, `rename`, `delete` (table `presets`); lists presets
+      used into an opened block go to its draft. Hotkey presets come with
+      hotkey actions (step 3). `TestPresets`, `ci/gui_presets_smoke.py`.
+    - [x] *Social preset* renamed *social media setting* (§3.2): the words
+      people see already said "social media settings"; SPEC's glossary now
+      does too.
   - [ ] Step 3:
     - [ ] Mode action (switch a mode on and lock it) from every trigger;
       the old monk action and ladder step become it (§3.9, R-MODE-4).

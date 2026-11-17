@@ -6006,6 +6006,11 @@ class Window(Gtk.ApplicationWindow):
         list_scroll.add(self.block_list)
         left.pack_start(list_scroll, True, True, 0)
         paned.pack1(left, False, False)
+        # Owner 2026-11-17: an opened block shows just that block, in the
+        # page's own style; the old block list beside it is gone (the cards
+        # and "← All blocks" choose blocks). The list widget stays, hidden.
+        left.set_no_show_all(True)
+        left.hide()
 
         self.detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
                               margin_start=20, margin_end=20, margin_top=16, margin_bottom=16)

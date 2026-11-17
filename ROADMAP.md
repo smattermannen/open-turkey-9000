@@ -48,8 +48,17 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       …` commands read only modes. The GUI's mode and schedule editors pass
       the flag. `TestModes`, `TestSavedSchedules`,
       `TestModeBlocksShareAutomation`, `ci/gui_modes_smoke.py`.
-    - [ ] An opened block is always a draft until *Save edits*; no *Edit as
-      draft* (§4.3: code contradicted SPEC).
+    - [x] An opened block is always a draft until *Save edits*; no *Edit as
+      draft* (§4.3: code contradicted SPEC). Its first edit in the
+      Websites or Apps tab makes the draft; the bar says "Unsaved edits"
+      with Save edits / Discard; leaving asks; its card shows "Unsaved
+      edits". The draft now also holds social media settings, the apps' and
+      window titles' actions and lists' test mode, and keeps what the block
+      was when it was made, so Save edits applies only what was changed in
+      it, on the block as it is now (an entry added meanwhile from the
+      browser's popup stays). Start, Stop, Unlock, automation, breaks,
+      allowance and bypass prevention act on the block at once (see §5).
+      `TestDraftRebased`, `TestDraftNeverRuns`, `ci/gui_lists_smoke.py`.
     - [x] YouTube playlists: a playlist's address in an exception list
       (kept as `youtube.com/playlist?list=<id>` however pasted) lets that
       playlist's videos through, only them; the separate box goes (§3.2
@@ -716,6 +725,18 @@ Only items not simply Built.
 - Windows (L): platform layer; `internal/blocker/` is Linux-only.
 
 ## 5. Proposed, not agreed
+
+- DECIDED 2026-11-17 (session; the owner asked that a block always be a
+  draft until Save edits): the draft holds what the Websites and Apps tabs
+  show (lists, phrase sets, social media settings, test mode, apps, window
+  titles and their actions); the block's menu (Start, Stop, Unlock,
+  Automation) and the Breaks & allowance and Bypass prevention tabs still
+  apply at once, each with its own button, because those are forms that
+  already wait for their button, and carrying their gates (an allowance
+  switches its block on; Pomodoro, rewards and ladders have their own
+  weakening rules) through a draft is a larger change the owner can ask
+  for. The draft is made at the first edit rather than when the block is
+  opened, so looking at a block changes nothing.
 
 - DECIDED 2026-11-17 (session; the owner asked for modes and schedule
   pages, these details were left open): a block is in at most one mode,

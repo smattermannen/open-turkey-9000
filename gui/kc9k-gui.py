@@ -40,6 +40,41 @@ SCHEDULE_PRESETS = (
 # §4.2 (owner 2026-11-17): a block card dragged onto a mode.
 BLOCK_TARGET = Gtk.TargetEntry.new("kc9k/block", Gtk.TargetFlags.SAME_APP, 0)
 
+# §4.3 (owner 2026-11-17): an opened block is always a draft. These commands
+# change what its Websites and Apps tabs show; run on the block opened on the
+# Blocks page they go to its draft (made at the first change), and apply
+# only with Save edits. For each: where the block's name is in the command.
+DRAFT_EDITS = {
+    "block": {sub: 2 for sub in ("add", "add-exception", "add-term", "add-keyword", "add-pattern",
+                                 "remove-site", "remove-entry", "remove-exception", "threshold", "action",
+                                 "add-app", "remove-app", "add-title", "remove-title", "import-list",
+                                 "trigger")},
+    "list": {sub: 2 for sub in ("create", "rename", "delete", "add", "remove", "scope", "where", "action",
+                                "threshold", "hits", "rate", "test", "import")} | {"copy": 4},
+    "phrase-set": {sub: 2 for sub in ("create", "add", "remove", "change", "scope", "action", "threshold",
+                                      "test", "rename", "delete", "import")},
+    "social": 1,
+}
+# Reading what those tabs show: the draft's, when there is one.
+DRAFT_READS = {"block": {"export-list": 2}, "list": {"export": 2, "show": 2},
+               "phrase-set": {"export": 2, "show": 2}}
+
+
+def draft_position(args, table):
+    """Where a block's name is in args by table (DRAFT_EDITS or DRAFT_READS),
+    or None."""
+    if not args or args[0] not in table:
+        return None
+    where = table[args[0]]
+    if isinstance(where, int):
+        return where
+    return where.get(args[1]) if len(args) > 1 else None
+
+
+def draft_of_name(block):
+    """The name of a block's draft (cli draftName)."""
+    return block + " (draft)"
+
 # The switches of 'kc9k option' (internal/enforce/options.go).
 OPTIONS = (
     ("polite-close", "Ask blocked apps to close first",
@@ -4964,6 +4999,38 @@ class Window(Gtk.ApplicationWindow):
         GLib.timeout_add_seconds(STATS_REFRESH_SECONDS, self.refresh_stats)
 
     # Running commands ----------------------------------------------------
+    def opened_block(self):
+        """The block opened on the Blocks page (never a draft), or None."""
+        name = getattr(self, "selected", None)
+        if (name and name in getattr(self, "blocks", {}) and not self.blocks[name].get("draft_of")
+                and self.stack.get_visible_child_name() == "blocks"
+                and self.blocks_stack.get_visible_child_name() == "detail"):
+            return name
+        return None
+
+    def to_draft(self, args, secret, then, timeout):
+        """§4.3 (owner 2026-11-17): a change to what the opened block's
+        Websites and Apps tabs show goes to its draft; the first one makes
+        the draft. Returns True when it took the command over."""
+        block = self.opened_block()
+        if not block:
+            return False
+        draft = draft_of_name(block)
+        for table, makes in ((DRAFT_EDITS, True), (DRAFT_READS, False)):
+            index = draft_position(args, table)
+            if index is None or index >= len(args) or args[index] != block:
+                continue
+            moved = list(args)
+            moved[index] = draft
+            if draft in self.blocks or self.blocks[block].get("draft") == draft:
+                self.run(moved, secret, then, timeout)
+            elif makes:
+                self.start_draft(None, then=lambda _o: self.run(moved, secret, then, timeout))
+            else:
+                return False  # a read with no draft: the block itself
+            return True
+        return False
+
     def run(self, args, secret=None, then=None, timeout=120):
         """Run a command in the background, then refresh.
 
@@ -4971,6 +5038,8 @@ class Window(Gtk.ApplicationWindow):
         session goes first on standard input; commands that don't need it
         never read it. A command that needs it and doesn't have it fails,
         and finished() asks for it and runs the command again."""
+        if self.to_draft(args, secret, then, timeout):
+            return
         self.set_sensitive(False)
         stdin, cli_args = secret, args
         if self.settings_password and self.state and self.state.get("settings_password"):
@@ -6039,7 +6108,7 @@ class Window(Gtk.ApplicationWindow):
         paned.pack2(detail_scroll, True, False)
         back = Gtk.Button(label="← All blocks", halign=Gtk.Align.START, relief=Gtk.ReliefStyle.NONE)
         back.get_style_context().add_class("kc9k-link")
-        back.connect("clicked", lambda _b: self.blocks_stack.set_visible_child_name("cards"))
+        back.connect("clicked", lambda _b: self.leave_block())
         self.detail.pack_start(back, False, False, 0)
         self.title_label = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
         self.title_label.get_style_context().add_class("kc9k-page-title")
@@ -6058,13 +6127,15 @@ class Window(Gtk.ApplicationWindow):
         self.hidden_bar.pack_start(reveal, False, False, 0)
         self.hidden_bar.get_children()[0].show()
         self.detail.pack_start(self.hidden_bar, False, False, 0)
-        # §4.3: editing a draft; nothing applies until Save.
+        # §4.3 (owner 2026-11-17): the block is always a draft; its edits
+        # apply with Save edits.
         self.draft_bar = Gtk.Box(spacing=8, no_show_all=True)
         self.draft_label = dim("")
-        draft_save = Gtk.Button(label="Save")
+        draft_save = Gtk.Button(label="Save edits")
         draft_save.get_style_context().add_class("suggested-action")
         draft_save.connect("clicked", lambda _b: self.finish_draft("save"))
-        draft_cancel = Gtk.Button(label="Cancel")
+        draft_cancel = Gtk.Button(label="Discard")
+        draft_cancel.set_tooltip_text("Drop the edits; the block stays as it is")
         draft_cancel.connect("clicked", lambda _b: self.finish_draft("cancel"))
         for widget in (self.draft_label, draft_save, draft_cancel):
             widget.show()
@@ -6079,10 +6150,7 @@ class Window(Gtk.ApplicationWindow):
         self.stop_button.connect("clicked", self.stop_block)
         self.unlock_button = Gtk.Button(label="Unlock…")
         self.unlock_button.connect("clicked", self.unlock_block)
-        self.draft_button = Gtk.Button(label="Edit as draft", no_show_all=True)
-        self.draft_button.set_tooltip_text("Changes wait until you save them (§4.3)")
-        self.draft_button.connect("clicked", self.start_draft)
-        for button in (self.start_button, self.stop_button, self.unlock_button, self.draft_button):
+        for button in (self.start_button, self.stop_button, self.unlock_button):
             actions.pack_start(button, False, False, 0)
         self.delete_button = Gtk.Button(label="Delete…")
         self.delete_button.get_style_context().add_class("destructive-action")
@@ -6445,7 +6513,7 @@ class Window(Gtk.ApplicationWindow):
         blocks = [b for b in self.state.get("blocks", []) if not b.get("draft_of")]
         modes = self.state.get("modes") or []
         shown = [(b["name"], b["active"], b.get("held"), b.get("continuous"), breaks_words(b), lock_words(b),
-                  b.get("enabled"), b.get("mode")) for b in blocks] + [json.dumps(modes, sort_keys=True)]
+                  b.get("enabled"), b.get("mode"), b.get("draft")) for b in blocks] + [json.dumps(modes, sort_keys=True)]
         if self.blocks_stack.get_visible_child_name() == "mode":
             self.update_mode_view()
         if shown == self.block_cards_shown:
@@ -6494,6 +6562,11 @@ class Window(Gtk.ApplicationWindow):
         state.get_style_context().add_class("dim-label")
         top = Gtk.Box(spacing=10)
         top.pack_start(title, False, False, 0)
+        if block.get("draft"):
+            # §4.3: edits made in it and not saved yet.
+            edits = pill("Unsaved edits", "warn")
+            edits.set_tooltip_text("Open the block to save or discard them")
+            top.pack_start(edits, False, False, 0)
         top.pack_end(switch, False, False, 0)
         top.pack_end(state, False, False, 0)
         automated = not block.get("continuous", True)
@@ -6850,8 +6923,12 @@ class Window(Gtk.ApplicationWindow):
         return value if answer == Gtk.ResponseType.OK else None
 
     def open_block(self, name, tab=None):
-        """Opens a block on the Blocks page, at a tab when given."""
-        self.selected = self.blocks.get(name, {}).get("draft") or name
+        """Opens a block on the Blocks page, at a tab when given; another
+        block's unsaved edits are asked about first (§4.3)."""
+        if (self.selected != name and self.blocks_stack.get_visible_child_name() == "detail"
+                and not self.leave_block(to_cards=False)):
+            return
+        self.selected = self.blocks.get(name, {}).get("draft_of") or name
         self.blocks_stack.set_visible_child_name("detail")
         self.stack.set_visible_child_name("blocks")
         self.update_block_list()
@@ -7025,12 +7102,11 @@ class Window(Gtk.ApplicationWindow):
         return box
 
     def update_block_list(self):
-        # §4.3: a draft takes its block's place on the page, not in the list.
+        # §4.3: a draft shows in its block's place, never in the list; the
+        # page keeps the block itself selected.
         names = [n for n in self.blocks if not self.blocks[n].get("draft_of")]
-        draft = self.blocks.get(self.selected, {}).get("draft")
-        if draft and draft in self.blocks:
-            self.selected = draft
-        shown = self.blocks.get(self.selected, {}).get("draft_of") or self.selected
+        self.selected = self.blocks.get(self.selected, {}).get("draft_of") or self.selected
+        shown = self.selected
         rows = self.block_list.get_children()
         if [getattr(r, "block_name", None) for r in rows] != names or any(
                 r.active != self.blocks[r.block_name]["active"] for r in rows):
@@ -7063,34 +7139,63 @@ class Window(Gtk.ApplicationWindow):
     def block_selected(self, _box, row):
         if row is None or self.updating:
             return
-        self.selected = self.blocks.get(row.block_name, {}).get("draft") or row.block_name
+        self.selected = row.block_name
         self.show_block()
 
-    def start_draft(self, _button):
-        """§4.3: a draft of the block; with a block password, that password
-        (the draft keeps it)."""
+    def start_draft(self, _button, then=None):
+        """§4.3: the block's draft, made at its first edit; with a block
+        password, that password (the draft keeps it)."""
         name = self.selected
         block = self.blocks.get(name) or {}
         if not name:
             return
         password = self.block_passwords.get(name)
         if block.get("block_password") and not password:
-            password = self.ask_text(f"Draft of '{name}'", "Its block password.", password=True)
+            password = self.ask_text(f"Edit '{name}'", "Its block password.", password=True)
             if not password:
                 return
         if password:
-            self.block_passwords[name] = self.block_passwords[name + " (draft)"] = password
-        self.run(["block", "draft", name], password + "\n" if password else None)
+            self.block_passwords[name] = self.block_passwords[draft_of_name(name)] = password
+        self.run(["block", "draft", name], password + "\n" if password else None, then=then)
 
-    def finish_draft(self, how):
-        """§4.3: save the draft into its block (weakening parts refused on a
-        locked block, and named) or drop it."""
-        block = self.blocks.get(self.selected) or {}
-        original = block.get("draft_of")
-        if not original:
-            return
-        self.selected = original
-        self.run(["block", "draft", original, how])
+    def has_edits(self, name=None):
+        """Whether a block (the opened one) has unsaved edits: a draft."""
+        name = name or self.selected
+        return bool(name and (self.blocks.get(name) or {}).get("draft"))
+
+    def finish_draft(self, how, name=None):
+        """§4.3: Save edits applies the draft to its block (weakening parts
+        refused on a locked block, and named); Discard drops it."""
+        name = name or self.selected
+        if self.has_edits(name):
+            self.run(["block", "draft", name, how])
+
+    def ask_unsaved(self, name):
+        """Leaving a block with unsaved edits: "save", "cancel" (discard)
+        or None (stay)."""
+        dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   text=f"Save the edits to {name}?",
+                                   secondary_text="Its websites and apps change only when you save them.")
+        dialog.add_button("Discard", 2)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        save = dialog.add_button("Save edits", Gtk.ResponseType.OK)
+        save.get_style_context().add_class("suggested-action")
+        answer = dialog.run()
+        dialog.destroy()
+        return {Gtk.ResponseType.OK: "save", 2: "cancel"}.get(answer)
+
+    def leave_block(self, to_cards=True):
+        """Leaves the opened block (back to the list unless to_cards is
+        False); unsaved edits are asked about first. False: stay."""
+        name = self.selected
+        if self.has_edits(name) and self.blocks_stack.get_visible_child_name() == "detail":
+            answer = self.ask_unsaved(name)
+            if answer is None:
+                return False
+            self.finish_draft(answer, name)
+        if to_cards:
+            self.blocks_stack.set_visible_child_name("cards")
+        return True
 
     def show_block(self):
         block = self.blocks.get(self.selected)
@@ -7116,30 +7221,21 @@ class Window(Gtk.ApplicationWindow):
         self.status_label.set_text(block_summary(block))
         users = block.get("users") or []
         self.users_button.set_label("Users: " + (", ".join(users) if users else "all"))
-        self.users_button.set_visible((len(self.state.get("accounts") or []) > 1 or bool(users))
-                                      and not block.get("draft_of"))
+        self.users_button.set_visible(len(self.state.get("accounts") or []) > 1 or bool(users))
         self.hidden_bar.set_visible(bool(block.get("hidden")))
-        drafting = block.get("draft_of")
-        self.draft_bar.set_visible(bool(drafting))
-        # §4.3: a draft holds its website lists, phrase sets, apps and window
-        # titles; the rest is changed on the block itself (the CLI refuses it
-        # here).
-        self.draft_label.set_text(f"Editing a draft of {drafting}: its website lists, phrase sets, apps and "
-                                  f"window titles change only when you save. Everything else is changed on "
-                                  f"{drafting} itself: save or cancel to get back to it." if drafting else "")
-        for widget in (self.app_triggers, self.title_triggers):
-            widget.set_visible(not drafting)
-        for number in range(self.block_tabs.get_n_pages()):
-            tab = self.block_tabs.get_nth_page(number)
-            tab.set_visible(not drafting or self.block_tabs.get_tab_label_text(tab) in ("Websites", "Apps"))
-        self.draft_button.set_visible(not drafting and not block.get("draft"))
-        for button in (self.start_button, self.stop_button, self.unlock_button):
-            if drafting:
-                button.set_sensitive(False)
-        self.update_lists(block.get("lists", []), block.get("phrase_sets", []))
-        self.apps.set_items(block["apps"], owner=block["name"])
-        self.titles.set_items(block.get("titles", []), owner=block["name"])
-        triggers = block.get("triggers") or {}
+        # §4.3 (owner 2026-11-17): the block is always a draft: its Websites
+        # and Apps tabs show the draft once there is one (made at the first
+        # edit); Save edits applies it, Discard drops it.
+        content = self.blocks.get(block.get("draft") or "") or block
+        editing = content is not block
+        self.draft_bar.set_visible(editing)
+        self.draft_label.set_text("Unsaved edits to its websites and apps: they apply when you save them."
+                                  + (" What would weaken it while it is locked is refused then, and named."
+                                     if block.get("held") else "") if editing else "")
+        self.update_lists(content.get("lists", []), content.get("phrase_sets", []))
+        self.apps.set_items(content["apps"], owner=block["name"])
+        self.titles.set_items(content.get("titles", []), owner=block["name"])
+        triggers = content.get("triggers") or {}
         self.app_triggers.set_actions(block["name"], triggers.get("apps", [{"name": "close"}]))
         self.title_triggers.set_actions(block["name"], triggers.get("titles", [{"name": "close"}]))
         self.schedules.set_items(block["schedules"])
@@ -7170,8 +7266,8 @@ class Window(Gtk.ApplicationWindow):
         others = [w for other in self.state.get("blocks", []) if other["name"] != block["name"]
                   for w in other.get("schedule_windows") or [] if not w.get("allow")]
         self.calendar.set_windows(block.get("schedule_windows", []), others)
-        set_switch(self.keyword_test_switch, block.get("keyword_test", False))
-        self.update_social(block)
+        set_switch(self.keyword_test_switch, content.get("keyword_test", False))
+        self.update_social(content)
         covered = set()
         for window in block.get("schedule_windows", []):
             if not window.get("allow"):
@@ -7217,7 +7313,7 @@ class Window(Gtk.ApplicationWindow):
         self.delay_request.set_sensitive(bool(block.get("delay_break")) and not block.get("delay_break_in") and not paused)
 
         self.start_button.set_label("Add locks…" if block["active"] else "Start…")
-        self.start_button.set_sensitive(not block.get("draft_of"))  # §4.3: a draft never runs
+        self.start_button.set_sensitive(True)
         # §3.4: unlocking lifts locks (a delay lock starts counting down) and
         # leaves the block on; stopping needs every lock lifted.
         self.stop_button.set_sensitive(block["active"] and not block["held"])
@@ -7225,7 +7321,7 @@ class Window(Gtk.ApplicationWindow):
             (block["char_locked"] or block["password_locked"]
              or (block["delay_seconds"] > 0 and not block.get("delay_left")))
             and not block["lock_seconds"] and not block["restart_locked"])
-        self.delete_button.set_sensitive(not block["active"] and not block["held"] and not block.get("draft_of"))
+        self.delete_button.set_sensitive(not block["active"] and not block["held"])
 
         limit = block["quota_limit"]
         self.quota_start.set_sensitive(limit > 0 and not block["quota_open"] and block["quota_used"] < limit)
@@ -7250,6 +7346,13 @@ class Window(Gtk.ApplicationWindow):
         of those still there, so a refresh doesn't disturb what is being
         typed. Phrase sets are keyed by minus their ID, as in the rules."""
         lists = list(lists) + [dict(p, id=-p["id"], kind="phrases") for p in phrase_sets]
+        # A list keeps its card when the block's draft takes over (other
+        # IDs, same names): what is being typed stays (§4.3).
+        by_name = {(c.data.get("kind") == "phrases", c.data["name"].lower()): i for i, c in self.list_cards.items()}
+        for entry in lists:
+            old = by_name.get((entry["kind"] == "phrases", entry["name"].lower()))
+            if old is not None and old != entry["id"] and entry["id"] not in self.list_cards:
+                self.list_cards[entry["id"]] = self.list_cards.pop(old)
         ids = [entry["id"] for entry in lists]
         for list_id in list(self.list_cards):
             if list_id not in ids:

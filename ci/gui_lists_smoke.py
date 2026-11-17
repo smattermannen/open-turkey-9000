@@ -35,6 +35,14 @@ def pump(cond, secs=15):
 fails = []
 def check(ok, what):
     print(("ok   " if ok else "FAIL ") + what); ok or fails.append(what)
+def all_widgets(root):
+    out = [root]
+    if isinstance(root, Gtk.Container):
+        for child in root.get_children():
+            out += all_widgets(child)
+    return out
+
+
 def settle():
     # Wait out a refresh already running (it may have read the state before
     # the last change), then read it afresh.
@@ -185,22 +193,47 @@ check(isinstance(win.state.get("accounts"), list) and win.blocks["b"].get("users
 win.choose_block_users(None, list(win.state["accounts"]))
 settle()
 check(win.users_button.get_label() == "Users: all", "users button: %s" % win.users_button.get_label())
-# §4.3 drafts: edit as draft, the draft takes the block's place, save applies.
-def entries_of(name):
-    b = next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == name)
-    return [e for l in b["lists"] for e in l["entries"]]
-win.selected = "b"; win.show_block()
-win.draft_button.clicked(); settle()
-check(win.selected == "b (draft)" and win.draft_bar.get_visible(), "editing the draft: %s" % win.selected)
-check("b (draft)" not in [r.block_name for r in win.block_list.get_children()], "draft not in the block list")
-r = cli("block", "add", "b (draft)", "drafted.example")
+# §4.3 (owner 2026-11-17): an opened block is always a draft: its first edit
+# makes the draft (no Edit as draft), nothing applies before Save edits, the
+# block itself stays selected and the draft never shows in the list.
 def entries_of(name):
     out = subprocess.run([W, "gui-state", "--reveal", name], input="open1\n", capture_output=True, text=True).stdout
     b = next(b for b in json.loads(out)["blocks"] if b["name"] == name)
     return [e for l in b["lists"] for e in l["entries"]]
+check(not hasattr(win, "draft_button"), "no Edit as draft button")
+win.get_child().show_all()  # as the app shows it (a stack only switches to shown pages); the window stays hidden
+win.open_block("b"); settle(); win.show_block()
+check(not win.draft_bar.get_visible(), "no unsaved edits yet")
+win.run(["block", "add", "b", "drafted.example"]); settle(); settle(); win.show_block()
+check(win.selected == "b" and win.draft_bar.get_visible() and "Save edits" in
+      [w.get_label() for w in win.draft_bar.get_children() if isinstance(w, Gtk.Button)],
+      "the first edit makes the draft, and Save edits shows: %s" % win.selected)
+check("b (draft)" not in [r.block_name for r in win.block_list.get_children()], "draft not in the block list")
 check("drafted.example" in entries_of("b (draft)") and "drafted.example" not in entries_of("b"), "nothing applies before save")
+check(any("drafted.example" in (c.data.get("entries") or []) for c in win.list_cards.values()),
+      "the Websites tab shows the draft's entries")
 check(next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == "b (draft)").get("hidden"), "the draft keeps the block password")
+win.run(["block", "add", "b", "second.example"]); settle(); settle()
+check("second.example" in entries_of("b (draft)") and "second.example" not in entries_of("b"), "a later edit goes to the same draft")
+win.blocks_stack.set_visible_child_name("cards"); settle()
+check(any(isinstance(w, Gtk.Label) and w.get_text() == "Unsaved edits" for w in all_widgets(win.block_cards)),
+      "the block's card says it has unsaved edits")
+win.open_block("b"); settle()
 win.finish_draft("save"); settle()
-check("drafted.example" in entries_of("b") and win.selected == "b", "save applies the draft")
+check("drafted.example" in entries_of("b") and "second.example" in entries_of("b") and win.selected == "b"
+      and "b (draft)" not in win.blocks, "Save edits applies the draft")
+# Leaving with unsaved edits asks: Cancel stays, Discard drops them.
+win.run(["block", "add", "b", "third.example"]); settle(); settle()
+win.ask_unsaved = lambda name: None
+win.leave_block(); settle()
+check(win.blocks_stack.get_visible_child_name() == "detail" and "b (draft)" in win.blocks, "Cancel stays with the edits")
+win.ask_unsaved = lambda name: "cancel"
+win.leave_block(); settle()
+check(win.blocks_stack.get_visible_child_name() == "cards" and "b (draft)" not in win.blocks
+      and "third.example" not in entries_of("b"), "Discard drops them and goes back to the list")
+# Away from the block (another page), a command for it applies at once.
+win.stack.set_visible_child_name("dashboard")
+win.run(["block", "add", "b", "direct.example"]); settle()
+check("direct.example" in entries_of("b") and "b (draft)" not in win.blocks, "outside the block's page: at once")
 print("FAILED:" if fails else "ALL OK", fails)
 sys.exit(1 if fails else 0)

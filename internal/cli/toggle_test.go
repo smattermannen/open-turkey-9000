@@ -631,8 +631,7 @@ func TestDraftNeverRuns(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"allowance", "set", draft, "30m"}, {"schedule", "add", draft, "--days", "mon", "--from", "09:00", "--to", "10:00"},
-		{"autostart", draft, "add", "at 08:00"}, {"pomodoro", "set", draft, "25m", "5m"}, {"social", draft, "youtube:shorts", "on"},
-		{"block", "trigger", draft, "apps", "logout", "on"},
+		{"autostart", draft, "add", "at 08:00"}, {"pomodoro", "set", draft, "25m", "5m"},
 		{"break", "reward", draft, "10m", "--per", "1h"}, {"bypass", "set", "--count", "3", "--within", "10m", "--then", "warning", "--block", draft},
 	} {
 		err := runCLI(t, args...)
@@ -645,6 +644,8 @@ func TestDraftNeverRuns(t *testing.T) {
 	}
 	mustRun(t, "block", "add", draft, "tiktok.com") // what a draft holds
 	mustRun(t, "block", "add-app", draft, "steam")
+	mustRun(t, "social", draft, "youtube:no-shorts", "on")
+	mustRun(t, "block", "trigger", draft, "apps", "logout", "on")
 	mustRun(t, "block", "draft", "b", "save")
 	if _, err := d.GetBlock(draft); err == nil {
 		t.Error("the draft stayed after save")
@@ -653,10 +654,69 @@ func TestDraftNeverRuns(t *testing.T) {
 	if blocked, _ := b.Lists.Find(db.DefaultBlockedList); !slices.Contains(blocked.Entries, "tiktok.com") {
 		t.Errorf("not saved: %v", blocked.Entries)
 	}
+	if apps, _ := d.TriggerActions("b", db.TriggerApps); !slices.Equal(b.Social, []string{"youtube:no-shorts"}) || len(apps) != 2 {
+		t.Errorf("social media settings or apps' actions not saved: %v %v", b.Social, apps)
+	}
 	mustRun(t, "block", "draft", "b")
 	mustRun(t, "block", "draft", "b", "cancel")
 	// The commands still work on the block itself.
 	mustRun(t, "schedule", "add", "b", "--days", "mon", "--from", "09:00", "--to", "10:00")
+}
+
+// §4.3 (owner 2026-11-17): Save edits applies only what was changed in the
+// draft since it was made, on the block as it is now: what was added to the
+// block meanwhile (the browser's popup, a recording) stays, what the draft
+// removed goes; test mode, social media settings and the apps' actions go
+// with it, and on a locked block what weakens is refused and named.
+func TestDraftRebased(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com", "x.com")
+	mustRun(t, "block", "add-app", "b", "steam")
+	mustRun(t, "list", "create", "b", "Words", "--text")
+	mustRun(t, "block", "draft", "b")
+	draft := "b (draft)"
+	mustRun(t, "block", "add", "b", "news.com") // meanwhile, outside the draft
+	mustRun(t, "block", "add-app", "b", "lutris")
+	mustRun(t, "block", "add", draft, "tiktok.com")
+	mustRun(t, "block", "remove-site", draft, "x.com")
+	mustRun(t, "block", "remove-app", draft, "steam")
+	mustRun(t, "list", "test", draft, "Words", "on")
+	mustRun(t, "social", draft, "reddit:no-popular", "on")
+	mustRun(t, "block", "draft", "b", "save")
+	b, _ := d.GetBlock("b")
+	blocked, _ := b.Lists.Find(db.DefaultBlockedList)
+	if !slices.Equal(blocked.Entries, []string{"reddit.com", "news.com", "tiktok.com"}) || !slices.Equal(b.Apps, []string{"lutris"}) {
+		t.Errorf("saved onto the block as it is now: %v, apps %v", blocked.Entries, b.Apps)
+	}
+	words, _ := b.Lists.Find("Words")
+	if !slices.Contains(d.TestLists(), words.ID) || !slices.Equal(b.Social, []string{"reddit:no-popular"}) {
+		t.Errorf("test mode %v, social %v", d.TestLists(), b.Social)
+	}
+	// Locked: the strengthening parts apply, the weakening ones are named.
+	mustRun(t, "list", "test", "b", "Words", "off")
+	mustRun(t, "block", "draft", "b")
+	mustRun(t, "block", "add", draft, "imgur.com")
+	mustRun(t, "social", draft, "reddit:no-popular", "off")
+	mustRun(t, "block", "trigger", draft, "titles", "close-browser", "on")
+	mustRun(t, "block", "trigger", draft, "apps", "close", "off")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	err := runCLI(t, "block", "draft", "b", "save")
+	if err == nil || !strings.Contains(err.Error(), "reddit:no-popular off") || !strings.Contains(err.Error(), "apps actions") {
+		t.Errorf("weakening parts of a locked block's draft: %v", err)
+	}
+	b, _ = d.GetBlock("b")
+	blocked, _ = b.Lists.Find(db.DefaultBlockedList)
+	titles, _ := d.TriggerActions("b", db.TriggerTitles)
+	apps, _ := d.TriggerActions("b", db.TriggerApps)
+	if !slices.Contains(blocked.Entries, "imgur.com") || !slices.Equal(b.Social, []string{"reddit:no-popular"}) ||
+		len(titles) != 2 || len(apps) != 1 {
+		t.Errorf("locked: entries %v, social %v, titles %v, apps %v", blocked.Entries, b.Social, titles, apps)
+	}
+	if _, err := d.GetBlock(draft); err == nil {
+		t.Error("the draft stayed after save")
+	}
 }
 
 // §4.3: a draft holds the block's phrase sets too; saving carries their

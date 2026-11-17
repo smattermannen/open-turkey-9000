@@ -396,15 +396,24 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `popup.js`); `/add` adds the tab's site to Blocked (refused with a blocks
   access password). Reward (`break reward`, alias `allowance`) earned in `earnBreaks`;
   `break text`/`relock` makes `unlock` pause instead (second unlock ends).
-- **Drafts** (`cli/draft.go`, §4.3): `block draft B` = `DuplicateBlock`
-  into "B (draft)" (setting `db.SettingDraftOf`), never runs
-  (`db.ActivateBlock` refuses, autostart skips); holds lists, phrase sets
-  (`CopyPhraseSets`, as stored), apps and window titles: `saveDraft`
-  replays differences via `listAdd`/`listWhere`/`listAction`… and
-  `saveDraftPhraseSets` (each through its gate) and names refusals;
-  commands for anything else refuse a draft (`draftRefused`,
-  `refuseDraftEdit` in the root PreRun); the GUI shows a draft only
-  Websites and Apps (no actions).
+- **Drafts** (`cli/draft.go`, §4.3; owner 2026-11-17: an opened block is
+  always a draft): `block draft B` (`makeDraft`) = `DuplicateBlock` into
+  "B (draft)" (setting `db.SettingDraftOf`) plus its social media
+  settings, trigger actions and lists' test mode, and keeps the block as it
+  was (`draftContent` JSON, setting `draft.base.<draft>`); never runs
+  (`db.ActivateBlock` refuses, autostart skips). `saveDraft` applies only
+  what changed in the draft since (base → draft) onto the block as it is
+  now (an entry added meanwhile stays) via `listAdd`/`listWhere`/
+  `listAction`…, `saveDraftPhraseSets`, `saveDraftTriggers` (each through
+  its gate) and names refusals; commands for anything else refuse a draft
+  (`draftRefused`, `refuseDraftEdit` in the root PreRun). GUI: no Edit as
+  draft; `Window.run` sends the commands of `DRAFT_EDITS` for the block
+  opened on the Blocks page to its draft (`to_draft`, made at the first
+  edit, `start_draft`), `DRAFT_READS` read it; `self.selected` stays the
+  block; Websites and Apps show the draft (`show_block`: `content`), the
+  bar says Unsaved edits with Save edits / Discard, leaving asks
+  (`leave_block`, `ask_unsaved`), the card shows "Unsaved edits"; list
+  cards keep their widget by name when the draft takes over.
 - **Affected users** (`db/users.go`, `cli/blockusers.go`, §3.2):
   `blocks.users`; `enforce.forEveryone` keeps partial blocks out of shared
   layers, `blockUIDs` → `blocker.KillBlockedFor`, `BuildRulesFor(user)`

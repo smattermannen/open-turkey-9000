@@ -224,6 +224,17 @@ func readNepsis(cmd *cobra.Command) (db.Nepsis, error) {
 		}
 		n.Steps = append(n.Steps, step)
 	}
+	// --step-json: a step as JSON (the interface's way: what a custom action
+	// runs may hold any character).
+	jsonSteps, _ := cmd.Flags().GetStringArray("step-json")
+	for _, text := range jsonSteps {
+		var step db.NepsisStep
+		if err := json.Unmarshal([]byte(text), &step); err != nil {
+			return n, fmt.Errorf("invalid --step-json: %w", err)
+		}
+		n.Steps = append(n.Steps, step)
+	}
+	steps = append(steps, jsonSteps...)
 	if cmd.Flags().Changed("count") || cmd.Flags().Changed("then") {
 		if len(steps) > 0 {
 			return n, fmt.Errorf("give --step, or --count, --within and --then, not both")
@@ -499,6 +510,7 @@ func init() {
 	monkCmd.Flags().String("for", "", "How long (e.g. 45m, 2h)")
 	addYesFlag(monkCmd)
 	nepsisSetCmd.Flags().StringArray("step", nil, `A step of the ladder, e.g. "3 in 10m: close-tab, logout 1m" (repeat for more)`)
+	nepsisSetCmd.Flags().StringArray("step-json", nil, "A step of the ladder as JSON (count, minutes, actions)")
 	nepsisSetCmd.Flags().StringSlice("detect", nil, "Which events count (default all): "+strings.Join(db.Detectors, ", "))
 	nepsisSetCmd.Flags().String("quiet", "", "Fall back a step after this long without firing (e.g. 2h)")
 	nepsisSetCmd.Flags().Int("count", 0, "One step: how many events")

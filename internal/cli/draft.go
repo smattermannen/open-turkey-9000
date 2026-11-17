@@ -112,6 +112,11 @@ var blockDraftCmd = &cobra.Command{
 		case "cancel":
 			return dropDraft(database, draft)
 		case "save":
+			// A monk or Mode action in the draft was acknowledged when it was
+			// set there (requireMonkAck): saving doesn't ask again.
+			if f := cmd.Flags().Lookup("no-confirm-ok"); f != nil {
+				_ = f.Value.Set("true")
+			}
 			refusedChanges, err := saveDraft(cmd, database, block, draft)
 			if err != nil {
 				return err
@@ -608,5 +613,6 @@ func saveDraftPhraseSets(database *db.DB, block string, base, nextSets []db.Phra
 
 func init() {
 	addYesFlag(blockDraftCmd)
+	addMonkAckFlag(blockDraftCmd)
 	blockCmd.AddCommand(blockDraftCmd)
 }

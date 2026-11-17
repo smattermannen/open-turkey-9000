@@ -56,6 +56,15 @@ func TestModeAndCustomActions(t *testing.T) {
 	if out := describeNepsis(n); !strings.Contains(out, "mode Evening Work for 1h0m0s") || !strings.Contains(out, "custom: open") {
 		t.Errorf("described: %s", out)
 	}
+	// In a draft (§4.3): the acknowledgement given there carries to Save edits.
+	mustRun(t, "block", "draft", "b")
+	mustRun(t, "list", "action", "b (draft)", "Blocked", "mode", "on", "--target", "Work", "--for", "2h", "--no-confirm-ok")
+	mustRun(t, "block", "draft", "b", "save")
+	detail, _ = d.GetBlock("b")
+	l, _ = detail.Lists.Find(db.DefaultBlockedList)
+	if mode, _ := l.Action(db.ActionMode); mode.Minutes != 120 {
+		t.Errorf("the draft's Mode action wasn't saved: %+v", mode)
+	}
 }
 
 // §3.9 Custom action (owner 2026-11-17): a mode opens or runs things when it
@@ -80,5 +89,32 @@ func TestModeCustom(t *testing.T) {
 	mustRun(t, "mode", "custom", "Study", "clear")
 	if param, _ := d.ModeCustom("Study"); param != "" {
 		t.Errorf("cleared, yet %q", param)
+	}
+}
+
+// R-MODE-4 by hand (owner 2026-11-17): kc9k mode run asks first, then the
+// mode runs, locked: its blocks can't be switched off or weakened.
+func TestModeRunCommand(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "w")
+	mustRun(t, "block", "add", "w", "w.com")
+	mustRun(t, "mode", "create", "Work")
+	mustRun(t, "mode", "add", "Work", "w")
+	if err := runCLI(t, "mode", "run", "Work", "--for", "1h"); err == nil {
+		t.Error("ran without confirmation")
+	}
+	mustRun(t, "mode", "run", "Work", "--for", "1h", "--yes")
+	if on, _ := d.IsBlockActive("w"); !on {
+		t.Fatal("its block isn't on")
+	}
+	if err := runCLI(t, "stop", "w"); err == nil {
+		t.Error("a block of a running mode was switched off")
+	}
+	if err := runCLI(t, "block", "remove-site", "w", "w.com"); err == nil || !strings.Contains(err.Error(), "while its mode 'Work' runs") {
+		t.Errorf("weakened during the run: %v", err)
+	}
+	if state := capture(t, "gui-state"); !strings.Contains(state, `"run_left":`) || strings.Contains(state, `"run_left":0,"name":"Work"`) {
+		t.Errorf("gui-state: %.300s", state[strings.Index(state, `"name":"Work"`):])
 	}
 }

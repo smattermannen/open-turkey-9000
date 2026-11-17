@@ -326,7 +326,15 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   ignored). `ci/gui_trigger_smoke.py`.
 - **Consequences** (`enforce/consequence.go`): close browsers, lock
   screen/logout/shutdown (via Frozen Chicken, only extended; ≤ once per 10
-  min), monk. Device effects via replaceable vars.
+  min), monk, mode (`StartModeRun`, `enforce/moderun.go`: `db.ModeRun` in
+  setting `mode.runs`; `modeRunning` in `enabledBlocks`, `ModeRunUntil` in
+  `blockHold`, `endModeRuns` in `Tick`), custom (`runCustom` →
+  `blocker.RunCustom`, `customDue` once a minute; a mode's own:
+  `runModeCustoms`, column `modes.custom`). `Consequence.Param`,
+  `TriggerAction.Param`, `NepsisAction.Param` carry the mode or the custom
+  items (`db.CustomItem`, `CustomParam`); CLI `--target`/`--custom`
+  (`addActionParamFlags`), ladder `--step-json`. Device effects via
+  replaceable vars.
 - **Allowance** (`internal/quota/`, `enforce/quota.go`): `Spend` only on
   use; daemon sampler adds apps; extension reports focused/playing seconds
   from `rules.quota` (`/usage`). Without LibreWolf, website sessions spend

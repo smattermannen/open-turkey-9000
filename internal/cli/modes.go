@@ -827,6 +827,52 @@ func lockMode(cmd *cobra.Command, m db.Mode, locks []string, passwordHash string
 	return nil
 }
 
+var modeRunCmd = &cobra.Command{
+	Use:   "run [mode]",
+	Short: "Run a mode now for a time, locked, whatever its automation says (a Mode action)",
+	Long: `The Mode action by hand (§3.9, R-MODE-4): the mode runs now for --for,
+whatever its windows and places say, and is locked until then: it can't be
+switched off or weakened. Then it is as it was: its blocks that were off
+are switched off again. Monk mode runs for the time; Frozen Chicken locks
+the screen for it. A longer time extends a run; a shorter one changes
+nothing.
+
+  kc9k mode run Work --for 2h --yes`,
+	Args: cobra.ExactArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		spec, _ := cmd.Flags().GetString("for")
+		d, err := parseUserDuration(spec)
+		if err != nil || d < time.Minute {
+			return fmt.Errorf("give --for, at least 1m (e.g. 45m, 2h)")
+		}
+		name := args[0]
+		switch {
+		case isFrozenChicken(name):
+			name = db.FrozenChickenName
+		case strings.EqualFold(name, "monk") || strings.EqualFold(name, db.MonkModeName):
+			name = db.MonkModeName
+		default:
+			m, err := database.GetMode(name)
+			if err != nil {
+				return err
+			}
+			name = m.Name
+		}
+		if err := requireLockPassword(database); err != nil {
+			return err
+		}
+		if err := confirmLocks(cmd, lockToSet{Target: "mode '" + name + "'", Kind: "runs now, locked, whatever its automation says",
+			Length: monkLength(d)}); err != nil {
+			return err
+		}
+		if err := enforce.StartModeRun(database, name, d); err != nil {
+			return err
+		}
+		fmt.Printf("Mode '%s' runs, locked, for %s.\n", name, humanDuration(d))
+		return enforce.ApplyFromDB(database)
+	}),
+}
+
 var modeCustomCmd = &cobra.Command{
 	Use:   "custom [mode] [add \"open …\"|\"run …\" | remove N | clear]",
 	Short: "What a mode opens or runs when it becomes enabled (custom actions)",
@@ -936,8 +982,9 @@ var modeShowCmd = &cobra.Command{
 func init() {
 	addYesFlag(modeOnCmd, modeAddCmd)
 	addStartLockFlags(modeLockCmd)
-	addYesFlag(modeLockCmd)
+	addYesFlag(modeLockCmd, modeRunCmd)
+	modeRunCmd.Flags().String("for", "", "How long it runs, locked (e.g. 45m, 2h)")
 	modeCmd.AddCommand(modeCreateCmd, modeRenameCmd, modeDeleteCmd, modeAddCmd, modeTakeOutCmd, modeOnCmd, modeOffCmd,
-		modeLockCmd, modeCustomCmd, modeShowCmd)
+		modeLockCmd, modeRunCmd, modeCustomCmd, modeShowCmd)
 	rootCmd.AddCommand(modeCmd)
 }

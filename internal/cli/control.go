@@ -500,6 +500,11 @@ var stopCmd = &cobra.Command{
 		if len(hold.layers) > 0 { // a range lock, or any other still on
 			return refused(database, blockName, fmt.Errorf("block '%s' is locked (%s)", blockName, db.LayerName(hold.layers[0])))
 		}
+		if hold.modeRun > hold.trusted { // R-MODE-4: its mode runs, locked
+			m, _, _ := database.ModeOf(blockName)
+			return refused(database, blockName, fmt.Errorf("block '%s' is locked while its mode '%s' runs (a Mode action), for %s more",
+				blockName, m.Name, humanDuration(time.Duration(hold.modeRun-hold.trusted)*time.Second)))
+		}
 
 		if err := database.DeactivateBlock(blockName); err != nil {
 			return err

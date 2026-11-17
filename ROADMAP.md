@@ -120,10 +120,37 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       people see already said "social media settings"; SPEC's glossary now
       does too.
   - [ ] Step 3:
-    - [ ] Mode action (switch a mode on and lock it) from every trigger;
-      the old monk action and ladder step become it (§3.9, R-MODE-4).
-    - [ ] Custom actions wherever actions are, and for a mode becoming
-      enabled (§3.9, R-CUSTOM-1/2).
+    - [x] Mode action from every trigger (§3.9, R-MODE-4, refined the same
+      day: the mode runs now for a time, locked, whatever its automation
+      says, then is as it was): list and phrase set action `mode`
+      (`--target M --for D`), the apps' and window titles' `mode`, ladder
+      step `mode NAME 2h`; by hand `kc9k mode run M --for D --yes` (for
+      hotkeys too). A mode of blocks: its blocks switched on, kept enabled
+      (`enabledBlocks`) and held (`blockHold.modeRun`, stop refused) until
+      the time is over (`db.ModeRun`, setting `mode.runs`), then those that
+      were off go off (`endModeRuns`); monk mode runs for the time, Frozen
+      Chicken locks the screen. Set up only with `--no-confirm-ok`
+      (R-LOCK-12, as the monk action). The monk action stays, as the Mode
+      action for monk mode. Extension 1.26.0: `mode` is a device action.
+      GUI: "Run a mode, locked" in lists' actions, the apps' and titles'
+      (`TriggerEditor`) and ladder steps (sent as `--step-json`); the mode's
+      card and view say "Running, locked". `TestModeRun`,
+      `TestModeRunCommand`, `TestModeAndCustomActions`,
+      `ci/gui_actions_smoke.py`. On the laptop: Unchecked.
+    - [x] Custom actions wherever actions are, and for a mode becoming
+      enabled (§3.9, R-CUSTOM-1/2): `custom` with `--custom "open …"` /
+      `"run …"` (list and phrase set actions, the apps' and titles', ladder
+      steps `custom "open …" "run …"`, `kc9k mode custom M add|remove|
+      clear`); run as the first signed-in desktop user (`blocker.RunCustom`:
+      xdg-open, sh -c; never root), at most once a minute per block and
+      trigger (`customDue`); a page's custom action is reported even when
+      nothing is taken away (extension 1.26.0: `outcome.custom`). A mode's
+      run each time it becomes enabled, once per boot while it stays so,
+      at sign-in when nobody was (`runModeCustoms`). GUI `CustomEditor`
+      (Open a site, file or folder / Run a program or command), in the
+      action dialogs and the mode's view ("When it becomes enabled").
+      `TestCustomAction`, `TestModeCustom`, `ci/gui_actions_smoke.py`,
+      `ci/match_test.js`. Opening on a real desktop: Unchecked.
     - [ ] Hotkey actions and the Hotkeys page (§3.9, §4.13).
     - [ ] Mode wallpapers, the override setting shared with circadian
       rhythm, the wallpaper default, places looked for before sign-in

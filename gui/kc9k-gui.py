@@ -161,10 +161,12 @@ SITE_ACTIONS = (
     ("logout", "Log out"),
     ("shutdown", "Shut down"),
     ("monk", "Monk mode"),
+    ("mode", "Run a mode, locked"),
+    ("custom", "Custom action"),
 )
 
 # Actions with settings: what to ask for when one is ticked.
-PARAM_ACTIONS = ("redirect", "image", "logout", "shutdown", "monk")
+PARAM_ACTIONS = ("redirect", "image", "logout", "shutdown", "monk", "mode", "custom")
 
 # What bypass prevention can do, mildest first.
 CONSEQUENCES = (
@@ -175,6 +177,8 @@ CONSEQUENCES = (
     ("logout", "Log out"),
     ("shutdown", "Shut down"),
     ("monk", "Monk mode"),
+    ("mode", "Run a mode, locked, for"),
+    ("custom", "Custom action"),
 )
 
 
@@ -198,16 +202,24 @@ DETECTORS = (
     ("access", "Wrong access passwords"),
 )
 # Consequences that take a time, and whether they need one.
-TIMED = {"lock-screen": True, "logout": False, "shutdown": False, "monk": True}
+TIMED = {"lock-screen": True, "logout": False, "shutdown": False, "monk": True, "mode": True}
 NEPSIS_MAX_COUNT = 1000  # db.MaxNepsisCount
 
 
 def describe_step(step):
     actions = []
     for action in step["actions"]:
-        text = dict(CONSEQUENCES).get(action["action"], action["action"]).lower()
-        if action.get("minutes"):
-            text += f" for {fmt_minutes(action['minutes'])}"
+        if action["action"] == "mode":
+            text = f"run {action.get('param', '')}, locked, for {fmt_minutes(action.get('minutes', 0))}"
+        elif action["action"] == "custom":
+            try:
+                text = "; ".join(f"{list(i)[0]} {list(i.values())[0]}" for i in json.loads(action.get("param") or "[]"))
+            except (ValueError, IndexError, AttributeError):
+                text = "a custom action"
+        else:
+            text = dict(CONSEQUENCES).get(action["action"], action["action"]).lower()
+            if action.get("minutes"):
+                text += f" for {fmt_minutes(action['minutes'])}"
         actions.append(text)
     return f"{step['count']} stopped things within {fmt_minutes(step['minutes'])}: {', '.join(actions)}."
 
@@ -2228,6 +2240,13 @@ class ListCard(Gtk.Frame):
             return "Shows your picture"
         if name == "monk":
             return f"Monk mode for {fmt_minutes(minutes)}"
+        if name == "mode":
+            return f"Runs {action.get('param', '')} for {fmt_minutes(minutes)}, locked"
+        if name == "custom":
+            try:
+                return "; ".join(f"{list(i)[0]} {list(i.values())[0]}" for i in json.loads(action.get("param") or "[]"))
+            except (ValueError, IndexError, AttributeError):
+                return "Custom action"
         verb = "Logs out" if name == "logout" else "Shuts down"
         return f"{verb} for {fmt_minutes(minutes)}" if minutes else f"{verb} once"
 
@@ -2247,6 +2266,18 @@ class ListCard(Gtk.Frame):
             path = window.choose_file("Choose a picture", Gtk.FileChooserAction.OPEN, "Choose")
             if path:
                 args = ["--image", path]
+        elif name == "mode":
+            chosen = window.ask_mode_run("Run a mode", current.get("param"), current.get("minutes") or 60)
+            if chosen and window.acknowledge_no_confirmation("This action"):
+                args = ["--target", chosen[0], "--for", f"{chosen[1]}m", "--no-confirm-ok"]
+        elif name == "custom":
+            try:
+                have = [f"{list(i)[0]} {list(i.values())[0]}" for i in json.loads(current.get("param") or "[]")]
+            except (ValueError, IndexError, AttributeError):
+                have = []
+            items = window.ask_custom("Custom action", have)
+            if items:
+                args = [a for item in items for a in ("--custom", item)]
         else:
             details = {
                 "monk": ("Monk mode", "The browser closes and every website is blocked, locked, "
@@ -3934,7 +3965,9 @@ class TriggerEditor(Gtk.Box):
     CONSEQUENCES = (("close-browser", "Close the browsers", None),
                     ("lock-screen", "Lock the screen for", 30 * 60),
                     ("logout", "Log out", 0), ("shutdown", "Shut down", 0),
-                    ("monk", "Start monk mode for", 60 * 60))
+                    ("monk", "Start monk mode for", 60 * 60),
+                    ("mode", "Run a mode, locked, for", 60 * 60),
+                    ("custom", "Custom action", None))
 
     def __init__(self, window, group, own, own_label, intro):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -3953,10 +3986,23 @@ class TriggerEditor(Gtk.Box):
             if seconds is not None:
                 once = name in ("logout", "shutdown")
                 field = DurationField(seconds, minimum=60, zero="once" if once else None,
-                                      maximum=30 * 86400 if name == "monk" else 86400, width=8)
+                                      maximum=30 * 86400 if name in ("monk", "mode") else 86400, width=8)
                 field.entry.connect("activate", lambda _e, n=name: self.time_changed(n))
                 row.pack_start(field, False, False, 0)
                 self.times[name] = field
+            if name == "mode":
+                # §3.9 Mode action: which mode (owner 2026-11-17).
+                self.mode_combo = Gtk.ComboBoxText(valign=Gtk.Align.START)
+                self.mode_combo.connect("changed", lambda _c: self.filling or self.time_changed("mode"))
+                row.pack_start(self.mode_combo, False, False, 0)
+            if name == "custom":
+                # §3.9 Custom action: what it opens or runs.
+                self.custom_items = []
+                self.custom_label = dim("")
+                change = Gtk.Button(label="Change…", valign=Gtk.Align.START)
+                change.connect("clicked", lambda _b: self.change_custom())
+                row.pack_start(change, False, False, 0)
+                row.pack_start(self.custom_label, False, False, 0)
             self.pack_start(row, False, False, 0)
 
     def set_actions(self, block, actions):
@@ -3968,8 +4014,33 @@ class TriggerEditor(Gtk.Box):
                 check.set_active(name in have)
                 if name in self.times and name in have and not self.times[name].has_focus():
                     self.times[name].set_seconds(have[name].get("minutes", 0) * 60)
+            choices = self.window.mode_choices()
+            chosen = (have.get("mode") or {}).get("param") or self.mode_combo.get_active_text()
+            self.mode_combo.remove_all()
+            for m in choices:
+                self.mode_combo.append_text(m)
+            if choices:
+                self.mode_combo.set_active(choices.index(chosen) if chosen in choices else 0)
+            if "custom" in have:
+                try:
+                    self.custom_items = [f"{list(i)[0]} {list(i.values())[0]}"
+                                         for i in json.loads(have["custom"].get("param") or "[]")]
+                except (ValueError, IndexError, AttributeError):
+                    self.custom_items = []
+            self.custom_label.set_text("; ".join(self.custom_items))
         finally:
             self.filling = False
+
+    def change_custom(self):
+        items = self.window.ask_custom("Custom action", self.custom_items)
+        if items is None:
+            return
+        self.custom_items = items
+        self.custom_label.set_text("; ".join(items))
+        if self.block and self.checks["custom"].get_active():
+            args = self.command("custom", True)
+            if args:
+                self.window.run(args)
 
     def command(self, name, on):
         args = ["block", "trigger", self.block, self.group, name, "on" if on else "off"]
@@ -3980,7 +4051,19 @@ class TriggerEditor(Gtk.Box):
                 return None
             if field.value:
                 args += ["--for", field.arg()]
-        if on and name == "monk":
+        if on and name == "mode":
+            if not self.mode_combo.get_active_text():
+                self.window.message("Make a mode first: a Mode action runs one.", Gtk.MessageType.INFO)
+                return None
+            args += ["--target", self.mode_combo.get_active_text()]
+        if on and name == "custom":
+            if not self.custom_items:
+                items = self.window.ask_custom("Custom action", [])
+                if not items:
+                    return None
+                self.custom_items = items
+            args += [a for item in self.custom_items for a in ("--custom", item)]
+        if on and name in ("monk", "mode"):
             if not self.window.acknowledge_no_confirmation("This trigger"):
                 return None
             args.append("--no-confirm-ok")
@@ -4041,6 +4124,78 @@ def schedule_summary(windows):
         parts.append(f"{len(windows) - 3} more")
     hours = f"{len(covered) / 60:.0f} h a week" if covered else "no windows yet"
     return (", ".join(parts) + " · " if parts else "") + hours
+
+
+class CustomEditor(Gtk.Box):
+    """§3.9 Custom action (owner 2026-11-17): what to open or run, one row
+    each with Remove, and a row to add one: open a site, file or folder, or
+    run a program or command. Items are "open …" / "run …" as the CLI takes
+    them. on_change(items), when given, runs after each change."""
+
+    KINDS = (("open", "Open a site, file or folder"), ("run", "Run a program or command"))
+
+    def __init__(self, window, items=(), on_change=None):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.window, self.on_change = window, on_change
+        self.rows = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.rows.get_style_context().add_class("frame")
+        self.rows.set_no_show_all(True)
+        self.pack_start(self.rows, False, False, 0)
+        add = Gtk.Box(spacing=6)
+        self.kind = Gtk.ComboBoxText()
+        for key, label in self.KINDS:
+            self.kind.append(key, label)
+        self.kind.set_active_id("open")
+        self.kind.connect("changed", lambda _c: self.entry.set_placeholder_text(
+            "https://… or ~/Documents/notes.odt" if self.kind.get_active_id() == "open" else "libreoffice --writer"))
+        self.entry = Gtk.Entry(placeholder_text="https://… or ~/Documents/notes.odt", width_chars=28)
+        self.entry.connect("activate", lambda _e: self.add_item())
+        choose = Gtk.Button(label="Choose…", tooltip_text="Choose a file or folder to open")
+        choose.connect("clicked", lambda _b: self.choose())
+        button = Gtk.Button(label="Add")
+        button.connect("clicked", lambda _b: self.add_item())
+        for widget in (self.kind, self.entry, choose, button):
+            add.pack_start(widget, widget is self.entry, widget is self.entry, 0)
+        self.pack_start(flow_row(add), False, False, 0)
+        self.items = []
+        self.set_items(items)
+
+    def set_items(self, items):
+        self.items = list(items)
+        for row in self.rows.get_children():
+            self.rows.remove(row)
+        for number, item in enumerate(self.items):
+            verb, _sep, what = item.partition(" ")
+            line = Gtk.Box(spacing=8, margin=6)
+            line.pack_start(Gtk.Label(label="Open" if verb == "open" else "Run", xalign=0), False, False, 0)
+            line.pack_start(Gtk.Label(label=what, xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE, selectable=True),
+                            True, True, 0)
+            remove = Gtk.Button(label="Remove", relief=Gtk.ReliefStyle.NONE)
+            remove.connect("clicked", lambda _b, n=number: self.remove_item(n))
+            line.pack_start(remove, False, False, 0)
+            self.rows.add(line)
+        self.rows.set_visible(bool(self.items))
+        self.rows.show_all()
+
+    def add_item(self, text=None):
+        what = (text if text is not None else self.entry.get_text()).strip()
+        if not what or "\n" in what:
+            return
+        self.entry.set_text("")
+        self.set_items(self.items + [f"{self.kind.get_active_id()} {what}"])
+        if self.on_change:
+            self.on_change(self.items)
+
+    def remove_item(self, number):
+        self.set_items(self.items[:number] + self.items[number + 1:])
+        if self.on_change:
+            self.on_change(self.items)
+
+    def choose(self):
+        path = self.window.choose_file("Choose a file or folder to open", Gtk.FileChooserAction.OPEN, "Choose")
+        if path:
+            self.kind.set_active_id("open")
+            self.add_item(path)
 
 
 def place_effect(subject, default_on, need_both, has_windows):
@@ -5266,6 +5421,7 @@ class Window(Gtk.ApplicationWindow):
             count.on_change(refresh_save)
             within.on_change(refresh_save)
             chosen = {a["action"]: a.get("minutes", 0) for a in step.get("actions") or []}
+            params = {a["action"]: a.get("param", "") for a in step.get("actions") or []}
             actions = {}
             for row, (key, label) in enumerate(CONSEQUENCES, start=1):
                 check = Gtk.CheckButton(label=label, active=key in chosen)
@@ -5275,10 +5431,41 @@ class Window(Gtk.ApplicationWindow):
                 if key in TIMED:
                     minutes = DurationField(
                         (chosen.get(key) or (30 if TIMED[key] else 0)) * 60, minimum=60,
-                        maximum=30 * 86400 if key == "monk" else 86400,
+                        maximum=30 * 86400 if key in ("monk", "mode") else 86400,
                         zero=None if TIMED[key] else "Just once", width=9)
                     grid.attach(minutes, 1, row, 1, 1)
                     minutes.on_change(refresh_save)
+                if key == "mode":
+                    # §3.9 Mode action (owner 2026-11-17): which mode.
+                    combo = Gtk.ComboBoxText()
+                    for name in self.mode_choices():
+                        combo.append_text(name)
+                    names = self.mode_choices()
+                    if names:
+                        combo.set_active(names.index(params.get("mode")) if params.get("mode") in names else 0)
+                    grid.attach(combo, 2, row, 1, 1)
+                    check.kc9k_param = lambda c=combo: c.get_active_text() or ""
+                if key == "custom":
+                    # §3.9 Custom action: what it opens or runs.
+                    try:
+                        items = [f"{list(i)[0]} {list(i.values())[0]}" for i in json.loads(params.get("custom") or "[]")]
+                    except (ValueError, IndexError, AttributeError):
+                        items = []
+                    holder = {"items": items}
+                    summary = dim("; ".join(items))
+                    change = Gtk.Button(label="Change…")
+
+                    def change_custom(_b, h=holder, s=summary, c=check):
+                        got = self.ask_custom("Custom action", h["items"])
+                        if got is not None:
+                            h["items"] = got
+                            s.set_text("; ".join(got))
+                            c.set_active(True)
+                    change.connect("clicked", change_custom)
+                    grid.attach(change, 1, row, 1, 1)
+                    grid.attach(summary, 2, row, 1, 1)
+                    check.kc9k_param = lambda h=holder: json.dumps(
+                        [{item.split(" ", 1)[0]: item.split(" ", 1)[1]} for item in h["items"]])
                 actions[key] = (check, minutes)
             frame.add(grid)
             steps_box.pack_start(frame, False, False, 0)
@@ -5340,11 +5527,19 @@ class Window(Gtk.ApplicationWindow):
             parts = []
             for key, (check, minutes) in actions.items():
                 if check.get_active():
-                    value = minutes.minutes if minutes is not None else 0
-                    parts.append(f"{key} {value}m" if value else key)
+                    part = {"action": key}
+                    if minutes is not None and minutes.minutes:
+                        part["minutes"] = minutes.minutes
+                    if hasattr(check, "kc9k_param"):
+                        part["param"] = check.kc9k_param()
+                        if not part["param"] or part["param"] == "[]":
+                            problem = (f"Step {number}: choose the mode it runs." if key == "mode" else
+                                       f"Step {number}: say what its custom action opens or runs.")
+                    parts.append(part)
             if not parts:
                 problem = f"Step {number} does nothing: tick at least one thing for it to do."
-            args += ["--step", f"{count.value} in {within.minutes}m: {', '.join(parts)}"]
+            # As JSON (--step-json): what a custom action runs may hold any character.
+            args += ["--step-json", json.dumps({"count": count.value, "minutes": within.minutes, "actions": parts})]
         detectors = [key for key, check in detector_checks.items() if check.get_active()]
         if not detectors:
             problem = "Nothing is counted: tick at least one thing under What counts."
@@ -5362,6 +5557,76 @@ class Window(Gtk.ApplicationWindow):
             self.message(problem, Gtk.MessageType.INFO)
             return None
         return args
+
+    def mode_choices(self):
+        """The modes a Mode action can run: monk mode, then the modes of
+        blocks (Frozen Chicken is Lock the screen / Log out / Shut down)."""
+        modes = [m["name"] for m in (self.state or {}).get("modes") or [] if not m.get("freeze")]
+        return sorted(modes, key=lambda n: (n != "Monk mode", n.lower()))
+
+    def ask_mode_run(self, title, mode=None, minutes=60, answer=None):
+        """§3.9 Mode action: which mode, and for how long it runs, locked.
+        Returns (mode, minutes) or None. answer: for tests."""
+        if answer is not None:
+            return answer
+        choices = self.mode_choices()
+        dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("OK", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_border_width(14)
+        box.pack_start(dim("The mode runs at once for this long, whatever its schedule and places say, and is "
+                           "locked until then: it can't be switched off or weakened. Then it is as it was."),
+                       False, False, 0)
+        combo = Gtk.ComboBoxText()
+        for name in choices:
+            combo.append_text(name)
+        if choices:
+            combo.set_active(choices.index(mode) if mode in choices else 0)
+        box.pack_start(combo, False, False, 0)
+        length = DurationField(max(minutes, 1) * 60, minimum=60, maximum=30 * 86400, presets=(1800, 3600, 4 * 3600),
+                               width=9)
+        box.pack_start(length, False, False, 0)
+        dialog.show_all()
+        reply = dialog.run()
+        chosen, valid, value = combo.get_active_text(), length.is_valid(), length.minutes
+        dialog.destroy()
+        if reply != Gtk.ResponseType.OK or not chosen:
+            return None
+        if not valid:
+            self.message(f"How long: {length.problem}", Gtk.MessageType.INFO)
+            return None
+        return chosen, value
+
+    def ask_custom(self, title, items=(), answer=None):
+        """§3.9 Custom action: what it opens or runs. Returns the items
+        ("open …"/"run …") or None. answer: for tests."""
+        if answer is not None:
+            return answer
+        dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("OK", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_border_width(14)
+        box.pack_start(dim("Opened or run as you, in your desktop session. It can do nothing you couldn't do "
+                           "yourself: a KC9K command in it meets every lock and password."), False, False, 0)
+        editor = CustomEditor(self, items)
+        box.pack_start(editor, False, False, 0)
+        dialog.set_default_size(560, -1)
+        dialog.show_all()
+        reply = dialog.run()
+        chosen = editor.items
+        dialog.destroy()
+        if reply != Gtk.ResponseType.OK:
+            return None
+        if not chosen:
+            self.message("Add something to open or run first.", Gtk.MessageType.INFO)
+            return None
+        return chosen
 
     def monk_mode(self, _button):
         seconds = self.ask_duration(
@@ -5388,9 +5653,10 @@ class Window(Gtk.ApplicationWindow):
             self.run(["bypass", "set", *args], then=self.queued_note)
 
     def acknowledge_monk_steps(self, args):
-        """Bypass prevention steps with monk need the acknowledgement."""
-        steps = [a for i, a in enumerate(args or []) if i and args[i - 1] == "--step"]
-        if any(re.search(r"\bmonk\b", step) for step in steps):
+        """Bypass prevention steps with monk mode or a Mode action need the
+        acknowledgement."""
+        steps = [a for i, a in enumerate(args or []) if i and args[i - 1] in ("--step", "--step-json")]
+        if any(re.search(r"\bmonk\b", step) or '"action": "mode"' in step for step in steps):
             if not self.acknowledge_no_confirmation("A bypass prevention step"):
                 return None
             return args + ["--no-confirm-ok"]
@@ -6674,11 +6940,14 @@ class Window(Gtk.ApplicationWindow):
                           if mode.get("active") else "Off")
         else:
             on, total = mode.get("on", 0), len(blocks)
+            run_left = mode.get("run_left") or 0
             switch.set_active(total > 0 and on == total)
-            switch.set_sensitive(total > 0)
-            switch.set_tooltip_text("Switch its blocks off (locked ones stay on)" if on == total and total else
+            switch.set_sensitive(total > 0 and not run_left)
+            switch.set_tooltip_text(f"Run by a Mode action, locked for {fmt_seconds(run_left)} more" if run_left else
+                                    "Switch its blocks off (locked ones stay on)" if on == total and total else
                                     "Switch its blocks on (without locks)")
-            state_text = ("No blocks yet" if not total else "On" if on == total else "Off" if not on else
+            state_text = (f"Running, locked, {fmt_seconds(run_left)} left" if run_left else
+                          "No blocks yet" if not total else "On" if on == total else "Off" if not on else
                           f"{on} of {total} on")
         switch.connect("state-set", self.toggle_mode_card, mode)
         state = Gtk.Label(label=state_text)
@@ -6841,6 +7110,14 @@ class Window(Gtk.ApplicationWindow):
         self.monk_editor = AutomationEditor(self, "monk")
         self.mode_editors.add_named(self.mode_editor, "mode")
         self.mode_editors.add_named(self.monk_editor, "monk")
+        # §3.9 Custom action (owner 2026-11-17): what the mode opens or runs
+        # each time it becomes enabled.
+        self.mode_custom = CustomEditor(self, on_change=self.set_mode_custom)
+        self.mode_custom_section = section(
+            "When it becomes enabled", dim("Open sites, files and folders, or run programs, each time the mode "
+                                           "becomes enabled (also once at sign-in, when it is enabled then)."),
+            self.mode_custom)
+        box.pack_start(self.mode_custom_section, False, False, 0)
         self.mode_automation_section = section(
             "Automation", self.mode_editors,
             help="Its windows (its own, and those of schedules applied to it) and its places. Disabled by "
@@ -6864,6 +7141,9 @@ class Window(Gtk.ApplicationWindow):
         self.mode_title.set_text(mode["name"])
         self.mode_freeze_box.set_visible(frozen)
         self.mode_automation_section.set_visible(not frozen)
+        self.mode_custom_section.set_visible(not frozen)
+        if not frozen and (mode.get("custom") or []) != self.mode_custom.items:
+            self.mode_custom.set_items(mode.get("custom") or [])
         if frozen:
             # §3.8 (owner 2026-11-17): on only with an end time; a running
             # freeze can't end.
@@ -6885,7 +7165,7 @@ class Window(Gtk.ApplicationWindow):
             self.mode_switch.set_sensitive(not mode.get("monk_left"))
         else:
             self.mode_switch.set_active(bool(blocks) and mode.get("on", 0) == len(blocks))
-            self.mode_switch.set_sensitive(bool(blocks))
+            self.mode_switch.set_sensitive(bool(blocks) and not mode.get("run_left"))
         self.updating = was
         self.mode_menu.set_visible(not monk)
         self.mode_lock_button.set_visible(not monk)
@@ -6902,9 +7182,11 @@ class Window(Gtk.ApplicationWindow):
         else:
             blocks = mode.get("blocks") or []
             self.mode_take_out_button.set_sensitive(bool(blocks))
-            self.mode_status.set_text(f"{mode.get('on', 0)} of {len(blocks)} blocks on" +
-                                      (f", {mode['locked']} locked" if mode.get("locked") else "") + "."
-                                      if blocks else "No blocks yet: drag blocks onto its card, or add them here.")
+            self.mode_status.set_text((f"Run by a Mode action: locked for {fmt_seconds(mode['run_left'])} more. "
+                                       if mode.get("run_left") else "") +
+                                      (f"{mode.get('on', 0)} of {len(blocks)} blocks on" +
+                                       (f", {mode['locked']} locked" if mode.get("locked") else "") + "."
+                                       if blocks else "No blocks yet: drag blocks onto its card, or add them here."))
             shown = json.dumps([self.blocks.get(b) for b in blocks], sort_keys=True)
             if getattr(self, "mode_blocks_shown", None) != (mode["name"], shown):
                 self.mode_blocks_shown = (mode["name"], shown)
@@ -6977,6 +7259,19 @@ class Window(Gtk.ApplicationWindow):
         if name:
             self.mode_blocks_shown = None
             self.take_out_of_mode(name)
+
+    def set_mode_custom(self, items):
+        """What the shown mode opens or runs when it becomes enabled: the
+        list as it is now (clear, then each added)."""
+        mode = getattr(self, "shown_mode", None)
+        if not mode:
+            return
+        commands = [["mode", "custom", mode, "clear"]] + [["mode", "custom", mode, "add", item] for item in items]
+
+        def step(rest):
+            if rest:
+                self.run(rest[0], then=lambda _o: step(rest[1:]))
+        step(commands)
 
     def lock_mode(self):
         """R-MODE-3: locks every block of the shown mode with the chosen

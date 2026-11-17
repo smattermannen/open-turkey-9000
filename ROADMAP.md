@@ -17,6 +17,50 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 
 ### 0.1 Code contradicting `SPEC.md`
 
+- [ ] **Owner report 2026-11-17 (later)** (after testing the latest build;
+  top priority; SPEC changed the same day, §6). In three steps, each
+  merged when done.
+  - [ ] Step 1, fixes:
+    - [ ] Deleting an opened block opened another block: back to the block
+      list (§4.2).
+    - [ ] Block cards without the ⋯ menu (§4.2: nothing else); a mode's
+      *Add blocks…* keeps "Move to the mode" reachable by keyboard.
+    - [ ] A mode's *Add blocks…* offers *Create new block…* (§4.2).
+    - [ ] Social media settings: a section after the blacklists, above the
+      exceptions, opened and closed; no tab of their own (§4.3).
+    - [ ] Places in a block's automation say plainly that they are added,
+      whether arriving switches the block on or off, and whether the
+      computer is there now (§4.5).
+    - [ ] A block and a mode may share a name (§4.2 Names): blocks, modes
+      and schedules each have their own names; commands that take any of
+      them read a block first, `--mode`/`--schedule` say otherwise.
+    - [ ] An opened block is always a draft until *Save edits*; no *Edit as
+      draft* (§4.3: code contradicted SPEC).
+    - [ ] YouTube playlists: a playlist address in an exception list lets
+      that playlist's videos through, only them; the separate box goes
+      (§3.2 Exception list).
+  - [ ] Step 2:
+    - [ ] Frozen Chicken is a mode among the blocks, up to a week; its
+      page leaves the sidebar (§3.8, §4.8, R-FREEZE-3).
+    - [ ] Monk mode switched on and off like any mode; locks on modes
+      (§3.8, R-MODE-3, R-MONK-3).
+    - [ ] Automation in the block's menu (greyed out in a mode: "Automated
+      by …"); a block keeps its own automation in a mode and gets it back
+      when taken out (§4.3, R-MODE-1).
+    - [ ] Presets instead of clusters and templates: block, list, phrase
+      set, schedule, automation and hotkey presets, always copies; Presets
+      page; *Save as preset* (§3.2 Preset, §4.4).
+    - [ ] *Social preset* renamed *social media setting* (§3.2).
+  - [ ] Step 3:
+    - [ ] Mode action (switch a mode on and lock it) from every trigger;
+      the old monk action and ladder step become it (§3.9, R-MODE-4).
+    - [ ] Custom actions wherever actions are, and for a mode becoming
+      enabled (§3.9, R-CUSTOM-1/2).
+    - [ ] Hotkey actions and the Hotkeys page (§3.9, §4.13).
+    - [ ] Mode wallpapers, the override setting shared with circadian
+      rhythm, the wallpaper default, places looked for before sign-in
+      (§4.10, R-MODE-5).
+
 - [x] **Owner report 2026-11-17** (real use on the laptop; top priority).
   Built the same day; on the laptop: Unchecked.
   - [x] Wrong wallpaper after a boot (§4.10 circadian wallpapers): at
@@ -540,7 +584,7 @@ Script-tested, never by a person. Script what can be into `ci/`.
 - [ ] Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
 - [ ] Mute and dark on real sites; polite close with a real app.
 - [ ] No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
-- [ ] Social presets beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
+- [ ] Social media settings beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
 - [ ] Chrome on the laptop. Checked 2026-11-15: the extension checks in from
   Chrome and Chromium, both show the block page; the policy force-installs
   and pins it, turns off incognito, guest and developer mode. Left (needs

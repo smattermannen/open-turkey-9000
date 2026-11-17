@@ -18,15 +18,18 @@ scrolling, adult content). Fights software designed to exploit psychology.
 - **Very hard to get around.** Strictest setup: only a factory reset gets
   out, and that is made deliberate by options the user chooses.
 - **More than block.** Actions: remove images, greyscale, mute, stop video,
-  darken, close tab/browser, logout, shutdown, monk mode. Enforce
-  SafeSearch; social feed presets.
+  darken, close tab/browser, logout, shutdown, switching a mode on and
+  locking it (monk mode, Frozen Chicken), custom actions (open sites,
+  files, folders, programs; run commands). Enforce SafeSearch; social media
+  settings.
 - **Recognises more than addresses.** Address, title, page text; planned:
   the ads a page loads. Apps by name, sandbox ID, script, file fingerprint.
 - **Any trigger to any action.** Several lists per block, each with its own
   actions.
 - **Stops the loophole hunt.** Bypass prevention: a user-chosen ladder of
   consequences.
-- **One button.** Hotkeys start blocks.
+- **One button.** Hotkeys run any action: start and lock blocks and modes,
+  open sites, programs and folders.
 - **Circadian rhythm.** Dark mode, blue light filter, brightness, wallpapers
   by time of day.
 - **Shareable projects.** Export/import the whole setup.
@@ -99,18 +102,17 @@ After publishing: Windows support.
 | Term | Meaning | Not |
 |---|---|---|
 | **Block** | Named group of lists, phrase sets, apps, folders, title entries, schedule, breaks, autostart, affected users, locks. | |
-| **Mode** | Named group of blocks with **one automation for all of them** (§3.6), or monk mode (§3.8). Shown among the blocks; a block is dragged into a mode and is in at most one. A block in a mode has the mode's automation. | Block |
-| **List** | Named entries in one block, with a **kind** and a **scope**. No list types: sites, URL entries and rendered terms can share a list. | Cluster |
+| **Mode** | Named group of blocks with **one automation for all of them** (§3.6), or monk mode or Frozen Chicken (§3.8). Shown among the blocks; a block is dragged into a mode and is in at most one. A block in a mode has the mode's automation; its own is kept, unused, until it is taken out. A mode may have **wallpapers** (§4.10) and custom actions run when it becomes enabled; it can be locked like a block (R-MODE-3). | Block |
+| **List** | Named entries in one block, with a **kind** and a **scope**. No list types: sites, URL entries and rendered terms can share a list. | Preset |
 | **Entry** | A site, URL entry or rendered term in a list. | |
 | **Scope** | Boxes *URL*, *title*, *text*. With URL: sites/URL entries match the address (and feed the layers); rendered terms match words in the address. | |
 | **Phrase set** | Named phrases in a block, with scope and actions, like a blacklist. Any number per block. | List |
 | **Blacklist** | Kind: matches get the list's actions. *CT: Websites.* | |
-| **Exception list** | Kind: spares matches from blacklists and phrase sets of its own block only; also lets YouTube playlists through. No phrase exceptions. *CT: Website Exceptions.* | Allowlist block |
+| **Exception list** | Kind: spares matches from blacklists and phrase sets of its own block only. A YouTube playlist address in it (`youtube.com/playlist?list=…`) lets that playlist's videos through, and only them. No phrase exceptions. *CT: Website Exceptions.* | Allowlist block |
 | **Allowlist block** | Blacklist `*.*`; only exceptions reachable. | |
-| **Cluster** | List or phrase set in no block: never enforced, freely editable, copied into blocks. | List |
-| **Template** | Ready-made block definition. | Cluster |
+| **Preset** | A saved copy kept outside blocks, of one type: **block preset**, **list preset**, **phrase set preset**, **schedule preset**, **automation preset**, **hotkey preset**. Never enforced, freely editable; using one copies it, and saving one copies too: a later change on either side changes nothing on the other. Kept on the Presets page. | Schedule |
 | **Affected users** | Local accounts a block applies to (default all); admin only. | |
-| **Social preset** | Keeps a site but removes a part (YouTube without Shorts, …). | List |
+| **Social media setting** | Keeps a site but removes a part (YouTube without Shorts, …). | List |
 | **Test mode** | Per list/phrase set: report matches instead of acting. | |
 
 ### 3.3 Block states
@@ -124,14 +126,14 @@ After publishing: Windows support.
 | **Lifted** | Active but disabled (its automation says off, break, pause, Pomodoro rest, allowance time). | Inactive |
 | **Continuous** | Type: no schedule and no place rules: enabled whenever active (breaks, pauses, Pomodoro rest and allowance time still lift it). | Automated |
 | **Automated** | Type: has a schedule and/or places, which switch it from its default (enabled or disabled) while active (§3.6 Automation); in a mode, its mode's. | Scheduled |
-| **Locked** | At least one lock on; can't be weakened. | Active |
+| **Locked** | At least one lock on, its own or its mode's; can't be weakened. | Active |
 
 Enforcing ends by schedule or switch-off. A lock never ends or starts a block.
 
 ### 3.4 Locks
 
-A lock belongs to a block. While **on**, the block can't be weakened (so
-not switched off or deleted). **Unlocked** as its kind says, then gone unless
+A lock belongs to a block or a mode (R-MODE-3). While **on**, the block can't
+be weakened (so not switched off or deleted). **Unlocked** as its kind says, then gone unless
 it has re-lock. Never changes what is blocked.
 
 | Term | Meaning | CT |
@@ -155,7 +157,7 @@ tamper protection settings can't be turned off.
 - **Strengthening**: a change that clearly blocks or protects more.
 - **Weakening**: every other change (removing/narrowing entries, adding
   exceptions, removing actions, raising thresholds, shrinking windows,
-  widening allow windows, looser break, test mode on, social preset off,
+  widening allow windows, looser break, test mode on, social media setting off,
   changing a redirect target, pausing, switching off, deleting, uninstalling,
   removing/shortening a lock).
 - **No weakening during active locks**: global setting; while anything is
@@ -180,7 +182,7 @@ tamper protection settings can't be turned off.
 | **Schedule** | Named weekly windows kept outside blocks (*Evening*, *Weekend*), made on the Schedules page. A block or mode uses any number of schedules besides windows of its own (*Apply schedule*); changing a schedule changes everything using it. Overlapping windows count once. |
 | **Place** | A set of Wi-Fi access points (no GPS), made on the Places page or from a block. The computer is there when as many of them as the user chooses (default 2) are in range. |
 | **Place rule** | A place in a block's automation; a block may have **any number**. Arriving there switches the block as its default says (enabled by default: off; disabled by default: on). A place rule has **no actions of its own**. |
-| **Automation** | What switches an active block (or a mode's blocks, or monk mode) by itself: its windows (its own and its schedules') and its places. The user sets the block **Enabled by default** (a window or a place turns it off) or **Disabled by default** (a window or a place turns it on). With both a schedule and places, the user sets whether switching needs **both** (in a window and at a place at once) or **either** (one is enough). Without a schedule or places the block is continuous. |
+| **Automation** | What switches an active block (or a mode's blocks, or monk mode, or Frozen Chicken) by itself: its windows (its own and its schedules') and its places. The user sets the block **Enabled by default** (a window or a place turns it off) or **Disabled by default** (a window or a place turns it on). With both a schedule and places, the user sets whether switching needs **both** (in a window and at a place at once) or **either** (one is enough). Without a schedule or places the block is continuous. A block in a mode keeps its own automation, unused, until it is taken out. |
 
 ### 3.7 Use
 
@@ -192,11 +194,11 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Frozen Chicken** | Device block: a freeze mode for up to 24 h, on demand or scheduled. A running freeze can't end early; a scheduled one can have locks. *CT: Frozen Turkey.* | Schedule lock |
+| **Frozen Chicken** | A mode (§3.2), not a block: freezes the device in a freeze mode. Switched on only with an end time at most a week ahead, or by its automation (windows only: scheduled freezes, each with its freeze mode); nothing else editable but its allowed apps and locks. A running freeze can't end early. *CT: Frozen Turkey.* | Schedule lock |
 | **Freeze mode** | *lock screen*, *logout*, *shutdown*, *allowed apps only*. | |
 | **Allowed apps only** | Only programs on the freeze's app list run. | Allowlist block |
-| **Monk mode** | A mode, not a block; preconfigured, nothing editable but its automation. Blocks `*.*` (exception `file://*` only) and cuts the whole computer's network: for a set time (`kc9k monk`, a list action, a ladder step), or while its automation (windows, schedules, places; disabled by default) has it on. Ends only at its time. | Block |
-| **Consequence** | Device action: close tab, close browser, lock screen, logout, shutdown, monk mode. Announced 60 s ahead except from bypass prevention. | Page action |
+| **Monk mode** | A mode, not a block; preconfigured, nothing editable but its automation and locks. Blocks `*.*` (exception `file://*` only) and cuts the whole computer's network while on. Switched on and off like any mode: by hand, by its automation (windows, schedules, places; disabled by default), or by a Mode action, which locks it as the action says. | Block |
+| **Consequence** | Device action: close tab, close browser, lock screen, logout, shutdown, Mode action. Announced 60 s ahead except from bypass prevention. | Page action |
 | **Strict mode** | Off by default. On and something locked: no `sudo`/`pkexec`; nothing runs from `/home` or `/tmp` except exempted folders (adding one weakens); no containers/VMs. Own setting lock. | |
 | **No-escape** | Closes boot exits: hides recovery entries and kernel options, GRUB password nobody knows. | Strict mode |
 | **Factory reset** | Wiping/reinstalling/booting another OS. Software can't forbid it. | |
@@ -206,7 +208,10 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Action** | What a blacklist or phrase set does on a match, and what a block's apps and its window titles do when they fire (one set each): page action or consequence. Apps and window titles close by default; each may untick that and take consequences instead or too (fired when an app or window is found, at most once a minute). Any of them may have no action: it then does nothing (an action can be unticked before another is ticked). A place rule has no actions (§3.6). |
+| **Action** | What a blacklist or phrase set does on a match, and what a block's apps and its window titles do when they fire (one set each): page action, consequence or custom action. Apps and window titles close by default; each may untick that and take consequences instead or too (fired when an app or window is found, at most once a minute). Any of them may have no action: it then does nothing (an action can be unticked before another is ticked). A place rule has no actions (§3.6). |
+| **Mode action** | Switches a chosen mode on and adds the locks set with the action (any kinds, last in the unlock order; only strengthens). With *Off when unlocked* the mode is switched off again once its last lock is unlocked, unless it was on before. Frozen Chicken: the action gives the freeze's length and freeze mode. |
+| **Custom action** | Opens sites, files, folders or programs, or runs a command, as the signed-in user. Offered wherever actions are (lists, phrase sets, apps, window titles, ladder steps), for when a mode becomes enabled, and in hotkeys (R-CUSTOM-1/2). |
+| **Hotkey action** | What a hotkey does, in the order set: switch a block or mode on (with locks) or off, pause a block, Frozen Chicken, every consequence, Mode actions and custom actions. |
 | **Block page** | Replaces the page, with a motivational message. |
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
 | **Look actions** | Greyscale, no images, no video, mute, dark. Change, don't block; combine. No images covers every image, animated GIFs included. |
@@ -244,7 +249,7 @@ mode unless no-escape is on.
 
 ### 3.12 Recording
 
-- **Link recording**: collects visited sites into a list or cluster.
+- **Link recording**: collects visited sites into a list or list preset.
 - **Word recording**: collects rendered visible words of visited pages, with counts.
 - **Specificity**: how much more common a word is on recorded pages than in normal browsing; ranks recorded words.
 - **Cut**: drop the lowest X % before saving.
@@ -258,8 +263,8 @@ mode unless no-escape is on.
 | **Extension** | Bundled browser extension. Required while anything is locked or uses websites; browsers without it are closed. |
 | **Supported browser** | LibreWolf, Chrome or Chromium with the extension. KC9K shows which are installed, whether each has it, and installs it in one click. |
 | **Setting** | Configured outside blocks: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `block-devtools`, `no-private`), **tamper protection setting** (§4.10), **behaviour setting** (never locked, exempt from no-weakening: `polite-close`, `block-page-details`), **preference** (interface only). |
-| **Hotkey** | Desktop key that switches a block on, optionally with a lock. |
-| **Project** | Whole setup in one file. *Backup*: everything. *Share*: without places and user names. Import previews, only adds, renames clashing blocks. |
+| **Hotkey** | Desktop key that runs its hotkey actions (§3.9): starts a block with a lock, opens a set of sites, programs and folders, … |
+| **Project** | Whole setup in one file, presets included. *Backup*: everything. *Share*: without places and user names. Import previews, only adds, renames clashing blocks. |
 | **Circadian rhythm** | Time-of-day settings: brightness and colour temperature (each an **automation clip**: 24-hour curve of points), wallpaper, dark mode in apps and pages. Never locked, never overrides the user. |
 
 ### 3.14 Words to avoid
@@ -280,11 +285,14 @@ mode unless no-escape is on.
 | blocklist | blacklist |
 | word combination, page word, keyword | phrase, rendered term |
 | whitelist | exception list |
-| profile | block, template |
+| profile | block, block preset |
 | unblock | switch off, unlock, pause, weaken |
 | loosen | weaken |
 | kids, children | youth, young people |
 | friction (for KC9K as a whole) | custom security |
+| cluster | list preset, phrase set preset |
+| template | block preset |
+| social preset, social feed preset | social media setting |
 
 ## 4. Functions
 
@@ -292,7 +300,7 @@ GUI and CLI offer the same functions.
 
 - **4.1 Overview**: active blocks (enabled/lifted, locks), today's remaining
   windows, break status, ladder positions.
-- **4.2 Blocks**: create (empty, template, allowlist) · on/off · continuous
+- **4.2 Blocks**: create (empty, block preset, allowlist) · on/off · continuous
   or automated · rename · duplicate (copy inactive) · delete (refused while
   locked) · affected users · export/import.
   - Modes (owner, 2026-11-17): on the same page as the blocks, each on a
@@ -300,21 +308,30 @@ GUI and CLI offer the same functions.
     its automation), on/off switch (switches its blocks on or off; monk
     mode: lets its automation run it), Continuous/Automated, its blocks.
     Drag a block onto a mode to put it in; take it out in the mode. Monk
-    mode is always there; other modes are created, renamed and deleted
-    (its blocks stay).
+    mode and Frozen Chicken are always there; other modes are created,
+    renamed and deleted (its blocks stay). Frozen Chicken's switch asks for
+    an end time (at most a week ahead). A mode's view: its blocks as cards,
+    *Add blocks…* with *Create new block…*, its automation, its wallpapers,
+    custom actions for when it becomes enabled, its locks.
+  - Names (owner, 2026-11-17): blocks, modes and schedules each have their
+    own names; a block and a mode may share one.
   - The list (owner, 2026-11-16; modern and sleek, R-GUI-3): each block on
     one card with its **name** (opens the block), its **on/off switch**,
     **"Continuous block" or "Automated block"** (opens the automation view:
     schedule and places, §4.5), its **breaks** ("No breaks" or what it
-    allows; opens them) and **locked/unlocked** (opens the locks).
+    allows; opens them) and **locked/unlocked** (opens the locks); nothing
+    else. Deleting an opened block comes back to this list.
 - **4.3 Block editor**:
   - Add: type, Enter; focus stays. Remove: button or Delete/Backspace;
     selection moves to next. Multi-select: Ctrl/Shift-click, Select all,
     Ctrl+A. Edit: double-click moves entry to text box (remove + add).
     Find: Ctrl+F.
-  - Save/Cancel: one draft per block; nothing applies until Save. Locked
-    block: Save refuses weakening changes and names them.
-  - Import *From KC9K* (other blocks' lists/phrase sets, clusters; several)
+  - The block's menu: Start, Stop, Unlock, **Automation** (§4.5; greyed
+    out in a mode, saying "Automated by *mode*"). These apply at once.
+  - Save edits/Cancel: an opened block is always a draft; nothing changed in
+    it applies until *Save edits*. Locked block: Save edits refuses
+    weakening changes and names them.
+  - Import *From KC9K* (other blocks' lists/phrase sets, presets; several)
     or *From file* (`.txt`, one entry per line); also *Whole internet* and
     *All searches containing…*. Export list/phrase set to `.txt`.
   - Import: one button; KC9K reads the file's layout itself. Phrases
@@ -330,16 +347,28 @@ GUI and CLI offer the same functions.
     a pop-up): any number of word sets, each necessary/optional, phrase
     length; double-click a phrase to load it. Saving a loaded phrase changes
     it (never adds a copy).
-  - Apps: program, folder, title entry; their actions. Social presets.
-    The block's own ladder. YouTube playlists let through: with the exceptions.
-- **4.4 Clusters and recording**: clusters create/edit/copy into block/save
-  from block. Link recording; word recording, ranked, cut before saving.
+  - Apps: program, folder, title entry; their actions. The block's own
+    ladder.
+  - Social media settings: a section after the blacklists, above the
+    exceptions, opened and closed. YouTube playlists let through: a
+    playlist address in an exception list.
+  - *Save as preset*: on a block (block preset), on its lists (asks
+    *Blacklists*, *Exceptions* or *Both*, and *Include actions?*), on a
+    phrase set, on its automation.
+- **4.4 Presets and recording**: the Presets page shows presets by type
+  (blocks, lists, phrase sets, schedules, automations, hotkeys), tidily
+  grouped: create, edit, rename, delete, use (copied into a block, mode or
+  hotkey), save from one. Link recording into a list or list preset; word
+  recording, ranked, cut before saving.
 - **4.5 Automation** (schedules and places, §3.6): weekly grid; drag to
   add/move, click to edit; 15-min grid, 5-min times; copy to days; similar
   windows edited together; other blocks greyed; break per window; allow
   windows. Enabled by default / Disabled by default; places, any number
-  per block; with a schedule and places, both or either. The same for a
-  mode (one automation for its blocks) and monk mode.
+  per block, each added place showing plainly that it is added, whether
+  arriving there switches the block on or off, and whether the computer
+  is there now; with a schedule and places, both or either. The same for
+  a mode (one automation for its blocks) and monk mode; Frozen Chicken
+  has windows only.
   - Schedules and Places each have a page in the sidebar (owner,
     2026-11-17): made and changed there without a block; each shows what
     uses it. A block's or mode's automation has **Apply schedule…**
@@ -350,7 +379,9 @@ GUI and CLI offer the same functions.
   date picked on a calendar (R-GUI-2).
 - **4.7 Breaks and autostart**: all of §3.6. Break status also in the
   extension's toolbar button and popup.
-- **4.8 Frozen Chicken**: start for a time; schedule; both may coexist.
+- **4.8 Frozen Chicken**: a mode among the blocks (no page of its own):
+  switched on for a time or until a date, at most a week ahead; its
+  automation schedules freezes; both may coexist.
 - **4.9 Statistics**: time used and times blocked per site, app, title. Time
   frame (presets/custom), bar chart over time with one colour per site/app, per user, top 5/10, search, filter by block, JSON
   export, delete, on/off, optionally skip private windows. Separate from
@@ -392,6 +423,8 @@ GUI and CLI offer the same functions.
       curve between points; presets;
     - wallpapers: picture plus times, on a timeline like a video editor's
       (drag a bar to move it, an end to change it); no fixed periods;
+      *Override modes*: the same setting as a mode's *Override circadian
+      rhythm wallpapers*, the other way round (one on is the other off);
     - *Play the day*: the next 24 hours shown on the screen in about 15
       seconds, then everything is back to now;
     - dark mode = system dark mode: system default, always light, always
@@ -406,7 +439,11 @@ GUI and CLI offer the same functions.
       off, it touches nothing.
   - Device protection: strict mode, no-escape, factory reset protection,
     guided setup.
-  - Passwords: settings, access. Global ladder, lockable. Hotkeys. Project:
+  - **Wallpaper default** (not part of circadian rhythm): what the desktop
+    shows when no mode's wallpaper and no circadian rhythm wallpaper
+    applies, and while the place isn't known yet: *Latest wallpaper*,
+    *Circadian rhythm* or *Custom* (a picture chosen here).
+  - Passwords: settings, access. Global ladder, lockable. Project:
     backup, share, import. Behaviour settings.
 - **4.11 Install**: `.deb`. No automatic updates for now. Uninstall refused
   while anything is locked.
@@ -426,6 +463,10 @@ GUI and CLI offer the same functions.
 
 Command/flag names follow the glossary; old names stay as aliases for a while.
 
+- **4.13 Hotkeys** (owner, 2026-11-17): their own page in the sidebar. Each
+  hotkey: its keys, its hotkey actions in order (§3.9), *Run without
+  confirmation* (§6 2026-11-14); add, change, remove, *Save as preset*.
+
 ## 5. Rules
 
 **Locks**
@@ -440,7 +481,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-LOCK-9** While anything is locked: uninstall refused, extension required, tamper protection can't be turned off.
 - **R-LOCK-10** No lock, delay or lead time unless the user set it.
 - **R-LOCK-11** A lock never starts itself, except via re-lock.
-- **R-LOCK-12** Every lock of every kind on every target (block, browser setting, setting, scheduled freeze, monk mode) asks for confirmation when set, showing target, kind and length. Nothing is locked before confirmation. GUI, CLI, hotkeys and presets alike.
+- **R-LOCK-12** Every lock of every kind on every target (block, mode, browser setting, setting, scheduled freeze, monk mode) asks for confirmation when set, showing target, kind and length. Nothing is locked before confirmation. GUI, CLI, hotkeys and presets alike. A lock an action sets later (Mode action, ladder step) is confirmed when the action is set up, with "I know this will not ask for confirmation".
 
 **Weakening**
 - **R-WEAK-1** Strengthening never needs unlocking. Setting a lock needs the settings password only if the user chose that.
@@ -458,7 +499,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 
 **Lists and phrases**
 - **R-LIST-1** Exceptions spare pages only from their own block's blacklists and phrase sets.
-- **R-LIST-2** Clusters are never enforced.
+- **R-LIST-2** Presets are never enforced.
 - **R-LIST-3** Every new block has the exception `file://*`.
 - **R-LIST-4** Text = rendered visible text; hidden/collapsed text doesn't count, text further down does. Each frame is judged on its own text.
 - **R-LIST-5** Case and accents ignored (é = e); look-alike letters from other alphabets count as Latin. Languages without word spaces are out of scope.
@@ -472,7 +513,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-PHRASE-7** A bridge skips 0–20 words between terms of different sets: `[big-, strong] [-gorilla, cat]` matches "big and long gorilla" and "big gorilla". Commas allowed, no `.` `!` `?`; order fixed (`big-` before `-gorilla`).
 - **R-PHRASE-8** A bridge needs both ends: `-gorilla` only after a `term-` of another set; `[-gorilla, cat] [jumping, river]` doesn't match "jumping gigantic gorilla". One-ended bridges are refused on entry. A middle link needs ≥ 3 word sets.
 - **R-PHRASE-9** Each phrase set action has a threshold of different phrases (default 1). No hit count or rate.
-- **R-PHRASE-10** Phrase sets can be exported, imported and kept as clusters; no recording into them.
+- **R-PHRASE-10** Phrase sets can be exported, imported and kept as phrase set presets; no recording into them.
 - **R-TITLE-1** Window title entries never apply to browsers.
 
 **GUI**
@@ -487,17 +528,25 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-EVENT-1** At most one event per tab and blocked site per minute. Restored tabs at browser start, preloaded pages and embedded frames don't count.
 
 **Modes and schedules**
-- **R-MODE-1** A block in a mode has the mode's automation; it isn't changed on the block. Putting a block into a mode changes its automation to the mode's (refused if that weakens it while locked); taking it out keeps it as it is.
+- **R-MODE-1** A block in a mode has the mode's automation; it isn't changed on the block, and its own is kept, unused. Putting a block into a mode, or taking it out (its own automation comes back), is refused if that weakens it while it or the mode is locked.
 - **R-MODE-2** A change of a mode's automation or of a schedule is refused as a whole if it weakens any locked block using it, naming the blocks; otherwise it applies to all of them at once.
+- **R-MODE-3** A mode is locked with any lock kind, as a block is (R-LOCK-1–12). Locked, it can't be switched off, deleted or weakened (its automation, a block taken out), and each of its blocks counts as locked.
+- **R-MODE-4** A Mode action switches its mode on and adds its locks, only strengthening (a running lock is never shortened). With *Off when unlocked* the mode goes off when its last lock is unlocked, unless it was on before the action.
+- **R-MODE-5** A mode's wallpapers show while it is enabled, over circadian rhythm's unless circadian rhythm overrides modes (one setting, shown in both places); of several modes, the one enabled last wins. While the place isn't known (no known network seen, also at boot before the first look) a mode switched by places shows none and the wallpaper default applies. KC9K looks for places as early as possible after boot, before anyone signs in, and puts the wallpaper in place for the desktop that starts.
 
 **Monk mode**
-- **R-MONK-1** Not a block: no lists, no entries, no settings but its automation. Listed among the blocks as a mode. Blocks `*.*` with only `file://*` excepted; the `monk` action isn't offered in it.
+- **R-MONK-1** Not a block: no lists, no entries, no settings but its automation. Listed among the blocks as a mode. Blocks `*.*` with only `file://*` excepted; no Mode action of its own is offered in it.
 - **R-MONK-2** Cuts the whole computer's network three ways at once: Wi-Fi radio off, every Ethernet interface down, firewall drops all but loopback. KC9K's local traffic (daemon ↔ extension) works. All three held for the whole time, undoing user changes. At the end, or after a restart/crash past the end, the previous connection state is restored. While its places decide, the Wi-Fi radio stays on (unused: the firewall drops everything) so the computer can tell where it is.
-- **R-MONK-3** Run by its automation, monk mode is on while its windows and places have it on, and ends only then: while running it can't be switched off and its automation can't be weakened. Switching it on, and adding to its time while it is on, asks for confirmation (R-LOCK-12).
+- **R-MONK-3** Monk mode is switched on and off like any mode: by hand, by its automation (on while its windows and places have it on), or by a Mode action. Only locks keep it on (R-MODE-3). Switching it on by hand asks for confirmation; its locks as R-LOCK-12.
 
 **Device**
 - **R-FREEZE-1** *Allowed apps only*: only listed programs (and system processes) run.
 - **R-FREEZE-2** A running freeze can't end; removing a locked scheduled freeze is refused.
+- **R-FREEZE-3** Frozen Chicken is switched on only with an end time at most a week ahead; extending keeps that limit, counted from now.
+
+**Custom actions**
+- **R-CUSTOM-1** A custom action runs as the signed-in user in their desktop session, never as root, and can do nothing the user couldn't: a KC9K command in it meets every lock, password and refusal as if typed. It never weakens a locked block, mode or setting.
+- **R-CUSTOM-2** From a match or a fired app or window title, a custom action runs at most once a minute per block and trigger; for a mode, each time it becomes enabled (a computer started while it is enabled: once, when the user signs in).
 - **R-WARN-1** Logout, shutdown, and freezes from a list action, a trigger's action (apps, window titles) or schedule are announced 60 s ahead.
 - **R-WARN-2** Bypass prevention has no countdown: it notifies at every event and step ("Event triggered, be careful") and acts at once, up to immediate shutdown.
 - **R-STRICT-1** Strict mode is on only if the user turned it on. Turning off is refused only by its own lock and R-WEAK-4.
@@ -533,6 +582,8 @@ Decisions not already written into §1–5:
 - 2026-11-16: Any trigger to any action: a block's apps and window titles each get one action set (close by default, and consequences).
 - 2026-11-16 (later): A place rule only enables or lifts its block; it has no actions (withdrawn from the decision above). An automated block is Enabled by default (its windows and places turn it off) or Disabled by default (they turn it on); any number of places per block; with a schedule and places, the user picks whether switching needs both or either. Blocks are continuous or automated; the block list shows name, on/off switch, Continuous/Automated block (opens the automation view), breaks and lock state. Android is on hold until the Linux project is finished.
 - 2026-11-17: Modes: a group of blocks automated together (one schedule and places for all), or monk mode, which can be automated by schedule and place. Modes sit with the blocks; blocks are dragged into a mode and shown inside it. Schedules and places have their own pages, made without a block; a block or mode applies a schedule (*Evening*, *Weekend*).
+
+- 2026-11-17 (later): Frozen Chicken is a mode (no page of its own), up to a week. Monk mode is switched on and off like any mode; only locks keep it on, and modes take locks as blocks do. A **Mode action** switches a mode on and locks it as set, from any trigger (replaces the monk action and ladder step). A block keeps its own automation while in a mode and gets it back when taken out. Automation is opened from the block's menu. An opened block is always a draft until *Save edits*. Blocks and modes may share names. Clusters and templates become **presets** of every type, always copies; schedules stay shared. *Social preset* is renamed *social media setting*. YouTube playlists are let through by their address in an exception list (a separate box withdrawn): a plain exception can't do it safely, because YouTube plays any video with any `list=` added. **Custom actions** (open sites, files, folders, programs; commands) wherever actions are and for a mode becoming enabled; free commands, but never past a lock. Hotkeys get a page and run **hotkey actions**. Modes have wallpapers; circadian rhythm and modes override each other by one setting; a **wallpaper default** covers an unknown place.
 
 ## 7. Open decisions
 

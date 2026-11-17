@@ -18,8 +18,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
@@ -129,6 +131,10 @@ func describePreset(database *db.DB, p db.Preset) string {
 		var windows []schedule.Window
 		_ = json.Unmarshal(p.Data, &windows)
 		return automationWords(database, schedule.Automation{Windows: windows})
+	case db.PresetHotkey:
+		var hp hotkeyPreset
+		_ = json.Unmarshal(p.Data, &hp)
+		return hp.Keys + " " + describeHotkey(db.Hotkey{Actions: hp.Actions})
 	}
 	return ""
 }
@@ -212,8 +218,22 @@ var presetSaveCmd = &cobra.Command{
 			}
 			fmt.Printf("Preset '%s' saved: the automation of %s.\n", name, t.what())
 			return nil
+		case db.PresetHotkey:
+			id, err := strconv.Atoi(source)
+			if err != nil {
+				return fmt.Errorf("a hotkey is saved by its number from 'kc9k hotkey list'")
+			}
+			h, err := database.GetHotkey(id)
+			if err != nil {
+				return err
+			}
+			if err := database.SavePreset(kind, name, hotkeyPreset{Keys: h.Keys, Actions: h.Steps(), NoConfirm: h.NoConfirm}); err != nil {
+				return err
+			}
+			fmt.Printf("Preset '%s' saved: hotkey %d (%s %s).\n", name, id, h.Keys, describeHotkey(h))
+			return nil
 		}
-		return fmt.Errorf("presets saved here are lists, automation or schedule ('kc9k template save' for a block, 'kc9k cluster save' for one list)")
+		return fmt.Errorf("presets saved here are lists, automation, schedule or hotkey ('kc9k template save' for a block, 'kc9k cluster save' for one list)")
 	}),
 }
 
@@ -349,9 +369,36 @@ func useListsPreset(cmd *cobra.Command, database *db.DB, block string, lp db.Lis
 	return settle(database, block)
 }
 
-// useHotkeyPreset is filled in with hotkey actions (§3.9, §4.13).
-var useHotkeyPreset = func(cmd *cobra.Command, database *db.DB, p db.Preset) error {
-	return fmt.Errorf("hotkey presets are added on the Hotkeys page")
+// hotkeyPreset is what a hotkey preset holds: a hotkey without its number
+// (and without a password lock's password: given again when it is used).
+type hotkeyPreset struct {
+	Keys      string            `json:"keys"`
+	Actions   []db.HotkeyAction `json:"actions"`
+	NoConfirm bool              `json:"no_confirm"`
+}
+
+// useHotkeyPreset adds a hotkey from a preset, on its keys or --keys,
+// through the checks and confirmations of 'kc9k hotkey add'.
+func useHotkeyPreset(cmd *cobra.Command, database *db.DB, p db.Preset) error {
+	var hp hotkeyPreset
+	if err := json.Unmarshal(p.Data, &hp); err != nil {
+		return err
+	}
+	keys := hp.Keys
+	if k, _ := cmd.Flags().GetString("keys"); k != "" {
+		accel, err := blocker.ParseAccel(k)
+		if err != nil {
+			return err
+		}
+		keys = accel
+	}
+	id, err := addHotkey(cmd, database, keys, hp.Actions, hp.NoConfirm)
+	if err != nil {
+		return err
+	}
+	h, _ := database.GetHotkey(id)
+	fmt.Printf("Hotkey %d from the preset '%s': %s %s.\n", id, p.Name, keys, describeHotkey(h))
+	return syncHotkeys(database)
 }
 
 var presetRenameCmd = &cobra.Command{
@@ -400,6 +447,7 @@ func init() {
 	}
 	addTargetFlags(presetSaveCmd, presetUseCmd)
 	addYesFlag(presetUseCmd)
+	presetUseCmd.Flags().String("keys", "", "hotkey: the keys of the new hotkey (else the preset's)")
 	addNowFlag(presetUseCmd)
 	presetCmd.AddCommand(presetSaveCmd, presetUseCmd, presetRenameCmd, presetDeleteCmd)
 	rootCmd.AddCommand(presetCmd)

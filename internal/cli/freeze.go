@@ -258,6 +258,8 @@ type guiHotkey struct {
 	db.Hotkey
 	Lock  string `json:"lock"`
 	Kinds string `json:"kinds"`
+	// Does: what a press does, in words (§3.9 Hotkey action).
+	Does string `json:"does"`
 }
 
 type guiSettingLock struct {
@@ -783,7 +785,7 @@ var guiStateCmd = &cobra.Command{
 		}
 		state.Hotkeys = []guiHotkey{}
 		for _, h := range hotkeys {
-			state.Hotkeys = append(state.Hotkeys, guiHotkey{h, strings.TrimPrefix(hotkeyLockText(h), " with "), hotkeyKinds(h)})
+			state.Hotkeys = append(state.Hotkeys, guiHotkey{h, strings.TrimPrefix(hotkeyLockText(h), " with "), hotkeyKinds(h), describeHotkey(h)})
 		}
 
 		state.SocialPresets = db.SocialPresets

@@ -8,6 +8,7 @@ import (
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
 func fakeDesktopHotkeys(t *testing.T) *int {
@@ -123,5 +124,77 @@ func TestHotkeyLockFlagsChecked(t *testing.T) {
 	}
 	if err := runCLI(t, "hotkey", "add", "ctrl+alt+x", "nosuchblock"); err == nil {
 		t.Error("a hotkey for a block that doesn't exist was accepted")
+	}
+}
+
+// §3.9 Hotkey action, §4.13 (owner 2026-11-17): a hotkey runs its actions in
+// order: here it starts a block, runs a mode (locked) and opens things. Its
+// locks are confirmed when it is added and at the press; one that switches
+// something off needs the settings password when it is added.
+func TestHotkeyActions(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	asked := fakeDesktopHotkeys(t)
+	blockWithSite(t)
+	mustRun(t, "block", "create", "w")
+	mustRun(t, "block", "add", "w", "w.com")
+	mustRun(t, "mode", "create", "Work")
+	mustRun(t, "mode", "add", "Work", "w")
+	add := []string{"hotkey", "add", "ctrl+alt+h", "--do", "start b", "--do", "mode-run Work 1h",
+		"--do", `custom "open https://example.org/plan" "run echo hi"`}
+	if err := runCLI(t, add...); err == nil {
+		t.Error("a hotkey that locks was added without confirmation")
+	}
+	mustRun(t, append(add, "--yes")...)
+	keys, _ := d.Hotkeys()
+	if len(keys) != 1 || len(keys[0].Actions) != 3 || keys[0].Actions[1].Target != "Work" || keys[0].Actions[1].Minutes != 60 {
+		t.Fatalf("hotkeys = %+v", keys)
+	}
+	if got := describeHotkey(keys[0]); got != "starts 'b', then runs the mode 'Work', locked, for 1 hour, then open https://example.org/plan; run echo hi" {
+		t.Errorf("described: %q", got)
+	}
+	mustRun(t, "hotkey", "run", fmt.Sprint(keys[0].ID))
+	if *asked != 1 {
+		t.Errorf("the press asked %d times, want 1", *asked)
+	}
+	trusted := mustTrusted(t, d)
+	if on, _ := d.IsBlockActive("b"); !on {
+		t.Error("b wasn't started")
+	}
+	if on, _ := d.IsBlockActive("w"); !on || enforce.ModeRunUntil(d, "w", trusted) < trusted+3500 {
+		t.Error("Work doesn't run, locked")
+	}
+	// Switching off: the settings password when it is added.
+	if err := runWith(t, 0, []string{"secret1"}, "password", "set"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, nil, "hotkey", "add", "ctrl+alt+x", "--do", "stop b"); err == nil {
+		t.Error("a hotkey that switches a block off was added without the settings password")
+	}
+	if err := runWith(t, 0, []string{"secret1"}, "hotkey", "add", "ctrl+alt+x", "--do", "stop b"); err != nil {
+		t.Errorf("with the settings password: %v", err)
+	}
+	for _, bad := range []string{"start", "mode-run Work", "monk", "freeze 2h sleep", "teleport", `custom "jump"`} {
+		if err := runCLI(t, "hotkey", "add", "ctrl+alt+y", "--do", bad, "--yes"); err == nil {
+			t.Errorf("--do %q was taken", bad)
+		}
+	}
+}
+
+// §3.2 Preset (owner 2026-11-17): a hotkey saved as a preset is added again
+// on other keys, through the same checks and confirmation.
+func TestHotkeyPreset(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	fakeDesktopHotkeys(t)
+	blockWithSite(t)
+	mustRun(t, "hotkey", "add", "ctrl+alt+h", "--do", "start b", "--do", `custom "open https://example.org"`)
+	keys, _ := d.Hotkeys()
+	mustRun(t, "preset", "save", "hotkey", fmt.Sprint(keys[0].ID), "Study")
+	mustRun(t, "hotkey", "remove", fmt.Sprint(keys[0].ID))
+	mustRun(t, "preset", "use", "Study", "--keys", "ctrl+alt+j")
+	keys, _ = d.Hotkeys()
+	if len(keys) != 1 || keys[0].Keys != "<Primary><Alt>j" || len(keys[0].Actions) != 2 {
+		t.Errorf("from the preset: %+v", keys)
 	}
 }

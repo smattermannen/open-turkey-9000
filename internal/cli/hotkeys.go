@@ -11,6 +11,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
 )
 
@@ -44,63 +46,243 @@ need it), not when you press it.`,
 
 var hotkeyAddCmd = &cobra.Command{
 	Use:   "add [keys] [block]",
-	Short: "Add a hotkey that starts a block",
-	Args:  cobra.ExactArgs(2),
+	Short: "Add a hotkey: what pressing the keys does",
+	Long: `A hotkey runs its actions in order when its keys are pressed (§3.9
+Hotkey action). The short form starts a block, with start's locks:
+
+  kc9k hotkey add ctrl+alt+s study --for 1h --yes
+
+Any actions, with --do (any number, in order):
+
+  --do "start BLOCK"        switch a block on (locks: the short form, or --do-json)
+  --do "stop BLOCK"         switch a block off (refused while it is locked)
+  --do "mode-on MODE"       switch a mode on; "mode-off MODE" off
+  --do "mode-run MODE 2h"   run a mode now, locked, for 2 hours
+  --do "monk 2h"            monk mode, locked, for 2 hours
+  --do "freeze 2h lock"     Frozen Chicken (lock, logout, shutdown or apps)
+  --do "close-browser"      close the browsers
+  --do "lock-screen [30m]"  lock the screen (for a while: Frozen Chicken)
+  --do "logout [1h]", --do "shutdown [1h]"
+  --do 'custom "open https://…" "run COMMAND"'   open or run things as you
+
+A hotkey that locks asks for confirmation at each press unless
+--no-confirm (its locks are then confirmed only now, R-LOCK-12). One that
+switches something off needs the settings password now (if one is set),
+not when pressed.`,
+	Args: cobra.RangeArgs(1, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		accel, err := blocker.ParseAccel(args[0])
 		if err != nil {
 			return err
 		}
-		if _, err := database.GetBlock(args[1]); err != nil {
-			return err
+		var actions []db.HotkeyAction
+		if len(args) == 2 {
+			if _, err := database.GetBlock(args[1]); err != nil {
+				return err
+			}
+			actions = append(actions, db.HotkeyAction{Kind: db.HotkeyStart, Target: args[1], LockArgs: lockArgs(cmd)})
+		} else if len(lockArgs(cmd)) > 0 {
+			return fmt.Errorf("locks go with the block a hotkey starts (kc9k hotkey add KEYS BLOCK --for 1h)")
+		}
+		texts, _ := cmd.Flags().GetStringArray("do")
+		for _, t := range texts {
+			a, err := parseHotkeyAction(t)
+			if err != nil {
+				return err
+			}
+			actions = append(actions, a)
+		}
+		jsons, _ := cmd.Flags().GetStringArray("do-json")
+		for _, t := range jsons {
+			var a db.HotkeyAction
+			if err := json.Unmarshal([]byte(t), &a); err != nil {
+				return fmt.Errorf("invalid --do-json: %w", err)
+			}
+			actions = append(actions, a)
 		}
 		noConfirm, _ := cmd.Flags().GetBool("no-confirm")
-		req, err := parseLockFlags(cmd, time.Now())
+		id, err := addHotkey(cmd, database, accel, actions, noConfirm)
 		if err != nil {
 			return err
 		}
-		if req.extras.Relock > 0 && !req.text && !req.password {
-			return fmt.Errorf("--relock goes with a text or password lock")
-		}
-		if noConfirm && len(req.kinds) == 0 {
-			return fmt.Errorf("--no-confirm goes with a lock: it is about the hotkey's lock")
-		}
-		h := db.Hotkey{Keys: accel, Block: args[1], LockArgs: lockArgs(cmd), NoConfirm: noConfirm}
-		if len(req.kinds) > 0 {
-			// The locks are set later without these questions, so ask now.
-			if err := requireLockPassword(database); err != nil {
-				return err
-			}
-			if req.password {
-				password, err := readPasswordStdin("Password for the hotkey's password lock")
-				if err != nil {
-					return err
-				}
-				if h.PasswordHash, err = db.HashPassword(password); err != nil {
-					return err
-				}
-			}
-			// R-LOCK-12: the locks are confirmed here. With --no-confirm
-			// ("Run without confirmation") this is the only time; otherwise
-			// pressing the hotkey asks again.
-			locks := pressLocks(args[1], req)
-			for i := range locks {
-				locks[i].Kind += ", set each time " + accel + " is pressed"
-				if noConfirm {
-					locks[i].Kind += ", without asking again"
-				}
-			}
-			if err := confirmLocks(cmd, locks...); err != nil {
-				return err
-			}
-		}
-		id, err := database.AddHotkey(h)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Hotkey %d: %s starts '%s'%s.\n", id, accel, args[1], hotkeyLockText(h))
+		h, _ := database.GetHotkey(id)
+		fmt.Printf("Hotkey %d: %s %s.\n", id, accel, describeHotkey(h))
 		return syncHotkeys(database)
 	}),
+}
+
+// addHotkey checks and stores a hotkey's actions: each valid, its blocks
+// and modes there; the settings password if one switches something off;
+// its locks confirmed (R-LOCK-12) and a password lock's password read.
+func addHotkey(cmd *cobra.Command, database *db.DB, accel string, actions []db.HotkeyAction, noConfirm bool) (int, error) {
+	if len(actions) == 0 {
+		return 0, fmt.Errorf("give what the hotkey does: a block to start, or --do")
+	}
+	h := db.Hotkey{Keys: accel, Actions: actions, NoConfirm: noConfirm}
+	var locks []lockToSet
+	weakens, password := false, false
+	for i, a := range actions {
+		if err := db.CheckHotkeyAction(a); err != nil {
+			return 0, fmt.Errorf("action %d: %w", i+1, err)
+		}
+		switch a.Kind {
+		case db.HotkeyStart, db.HotkeyStop:
+			if _, err := database.GetBlock(a.Target); err != nil {
+				return 0, fmt.Errorf("action %d: %w", i+1, err)
+			}
+			if h.Block == "" && a.Kind == db.HotkeyStart {
+				// The first block it starts, as older hotkeys kept it.
+				h.Block, h.LockArgs = a.Target, a.LockArgs
+			}
+		case db.HotkeyModeOn, db.HotkeyModeOff, db.HotkeyModeRun:
+			if _, err := resolveTarget(database, a.Target, db.KindMode); err != nil && !isFrozenChicken(a.Target) {
+				return 0, fmt.Errorf("action %d: %w", i+1, err)
+			}
+		}
+		weakens = weakens || a.Weakens()
+		if a.Kind == db.HotkeyStart && len(a.LockArgs) > 0 {
+			req, err := parseLockArgs(a.LockArgs, time.Now())
+			if err != nil {
+				return 0, fmt.Errorf("action %d: %w", i+1, err)
+			}
+			if req.extras.Relock > 0 && !req.text && !req.password {
+				return 0, fmt.Errorf("--relock goes with a text or password lock")
+			}
+			password = password || req.password
+			locks = append(locks, pressLocks(a.Target, req)...)
+		} else if a.Locks() {
+			locks = append(locks, lockToSet{Target: hotkeyActionWords(a), Kind: "locked", Length: ""})
+		}
+	}
+	if noConfirm && len(locks) == 0 {
+		return 0, fmt.Errorf("--no-confirm goes with a lock: it is about the hotkey's locks")
+	}
+	if weakens {
+		// Asked now, not at the press (as a hotkey's lock password is).
+		if err := requireSettingsPassword(database); err != nil {
+			return 0, err
+		}
+	}
+	if len(locks) > 0 {
+		if err := requireLockPassword(database); err != nil {
+			return 0, err
+		}
+		if password {
+			p, err := readPasswordStdin("Password for the hotkey's password lock")
+			if err != nil {
+				return 0, err
+			}
+			if h.PasswordHash, err = db.HashPassword(p); err != nil {
+				return 0, err
+			}
+		}
+		for i := range locks {
+			locks[i].Kind += ", set each time " + accel + " is pressed"
+			if noConfirm {
+				locks[i].Kind += ", without asking again"
+			}
+		}
+		if err := confirmLocks(cmd, locks...); err != nil {
+			return 0, err
+		}
+	}
+	return database.AddHotkey(h)
+}
+
+// parseHotkeyAction reads one --do, e.g. "mode-run Work 2h".
+func parseHotkeyAction(text string) (db.HotkeyAction, error) {
+	fields := splitOutsideQuotes(text, ' ')
+	if len(fields) == 0 {
+		return db.HotkeyAction{}, fmt.Errorf("empty --do")
+	}
+	a := db.HotkeyAction{Kind: strings.ToLower(fields[0])}
+	rest := fields[1:]
+	minutes := func(s string) (int, error) { return parseMinutes(s, "time") }
+	var err error
+	switch a.Kind {
+	case db.HotkeyStart, db.HotkeyStop, db.HotkeyModeOn, db.HotkeyModeOff:
+		a.Target = strings.Join(rest, " ")
+	case db.HotkeyModeRun:
+		if len(rest) < 2 {
+			return a, fmt.Errorf("mode-run is \"mode-run MODE 2h\"")
+		}
+		a.Target = strings.Join(rest[:len(rest)-1], " ")
+		a.Minutes, err = minutes(rest[len(rest)-1])
+	case db.HotkeyMonk:
+		if len(rest) != 1 {
+			return a, fmt.Errorf("monk is \"monk 2h\"")
+		}
+		a.Minutes, err = minutes(rest[0])
+	case db.HotkeyFreeze:
+		if len(rest) < 1 || len(rest) > 2 {
+			return a, fmt.Errorf("freeze is \"freeze 2h [lock|logout|shutdown|apps]\"")
+		}
+		a.Param = "lock"
+		if len(rest) == 2 {
+			a.Param = rest[1]
+		}
+		a.Minutes, err = minutes(rest[0])
+	case db.HotkeyLockScreen, db.HotkeyLogout, db.HotkeyShutdown:
+		if len(rest) == 1 {
+			a.Minutes, err = minutes(rest[0])
+		} else if len(rest) > 1 {
+			return a, fmt.Errorf("%s takes at most a time", a.Kind)
+		}
+	case db.HotkeyCustom:
+		a.Param, err = customFlag(rest)
+	default:
+		if len(rest) > 0 {
+			return a, fmt.Errorf("%s takes nothing more", a.Kind)
+		}
+	}
+	if err != nil {
+		return a, err
+	}
+	return a, db.CheckHotkeyAction(a)
+}
+
+// hotkeyActionWords says an action in a few words.
+func hotkeyActionWords(a db.HotkeyAction) string {
+	length := humanDuration(time.Duration(a.Minutes) * time.Minute)
+	switch a.Kind {
+	case db.HotkeyStart:
+		return "starts '" + a.Target + "'"
+	case db.HotkeyStop:
+		return "switches '" + a.Target + "' off"
+	case db.HotkeyModeOn:
+		return "switches the mode '" + a.Target + "' on"
+	case db.HotkeyModeOff:
+		return "switches the mode '" + a.Target + "' off"
+	case db.HotkeyModeRun:
+		return "runs the mode '" + a.Target + "', locked, for " + length
+	case db.HotkeyMonk:
+		return "starts monk mode, locked, for " + length
+	case db.HotkeyFreeze:
+		return "starts Frozen Chicken (" + a.Param + ") for " + length
+	case db.HotkeyCloseBrowser:
+		return "closes the browsers"
+	case db.HotkeyCustom:
+		return db.DescribeCustom(a.Param)
+	}
+	if a.Minutes > 0 {
+		return a.Kind + " for " + length
+	}
+	return a.Kind
+}
+
+// describeHotkey says what a press does.
+func describeHotkey(h db.Hotkey) string {
+	var parts []string
+	for _, a := range h.Steps() {
+		text := hotkeyActionWords(a)
+		if a.Kind == db.HotkeyStart && len(a.LockArgs) > 0 {
+			if req, err := parseLockArgs(a.LockArgs, time.Now()); err == nil {
+				text += " with " + describeLockList(pressLocks(a.Target, req))
+			}
+		}
+		parts = append(parts, text)
+	}
+	return strings.Join(parts, ", then ")
 }
 
 var hotkeyRemoveCmd = &cobra.Command{
@@ -140,12 +322,12 @@ var hotkeyListCmd = &cobra.Command{
 	}),
 }
 
-// hotkeyRunCmd is what a hotkey's shortcut runs. It starts the block in this
-// process, through 'start' with the hotkey's locks, and says how it went in a
-// notification, since no terminal shows the output.
+// hotkeyRunCmd is what a hotkey's shortcut runs: its actions in order, in
+// this process, and a notification of how it went, since no terminal shows
+// the output.
 var hotkeyRunCmd = &cobra.Command{
 	Use:    "run [number]",
-	Short:  "Start a hotkey's block (what pressing it runs)",
+	Short:  "Do what a hotkey does (what pressing it runs)",
 	Hidden: true,
 	Args:   cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -165,27 +347,59 @@ var hotkeyRunCmd = &cobra.Command{
 		}
 		// The settings password was asked when the hotkey was added.
 		settingsPasswordChecked = true
-		if locks := h.Args(); len(locks) > 0 {
-			fail := func(err error) error {
-				notify(fmt.Sprintf("Couldn't start '%s'", h.Block), err.Error())
-				return err
-			}
-			req, err := parseLockArgs(locks, time.Now())
-			if err != nil {
-				return fail(fmt.Errorf("the hotkey's locks: %w", err))
-			}
-			if req.password && h.PasswordHash == "" {
-				return fail(fmt.Errorf("the hotkey's password lock has no password; add the hotkey again"))
-			}
-			// R-LOCK-12: without "Run without confirmation" the press asks.
-			if !h.NoConfirm {
-				if !confirmOnDesktop("Lock '"+h.Block+"'?", fmt.Sprintf("Start '%s' with: %s. While it is on, it can't be weakened.", h.Block, describeLockList(pressLocks(h.Block, req)))) {
-					notify(fmt.Sprintf("'%s' not locked", h.Block), "You didn't confirm; nothing was started.")
-					return errNotConfirmed
+		steps := h.Steps()
+		// R-LOCK-12: without "Run without confirmation" a press that locks
+		// asks first, once for all its locks; no means nothing is done.
+		var locks []string
+		for _, a := range steps {
+			if a.Kind == db.HotkeyStart && len(a.LockArgs) > 0 {
+				req, err := parseLockArgs(a.LockArgs, time.Now())
+				if err != nil {
+					notify("Hotkey "+h.Keys, "Its locks can't be read: "+err.Error())
+					return err
 				}
+				if req.password && h.PasswordHash == "" {
+					err := fmt.Errorf("the hotkey's password lock has no password; add the hotkey again")
+					notify("Hotkey "+h.Keys, err.Error())
+					return err
+				}
+				locks = append(locks, "start '"+a.Target+"' with "+describeLockList(pressLocks(a.Target, req)))
+			} else if a.Locks() {
+				locks = append(locks, hotkeyActionWords(a))
 			}
-			if err := startCmd.ParseFlags(locks); err != nil {
-				return fail(err)
+		}
+		if len(locks) > 0 && !h.NoConfirm {
+			if !confirmOnDesktop("Lock?", "The hotkey "+h.Keys+" "+strings.Join(locks, ", then ")+
+				". While it is on, it can't be weakened.") {
+				notify("Hotkey "+h.Keys, "You didn't confirm; nothing was done.")
+				return errNotConfirmed
+			}
+		}
+		var done, failed []string
+		for _, a := range steps {
+			if err := runHotkeyAction(h, a); err != nil {
+				failed = append(failed, hotkeyActionWords(a)+": "+err.Error())
+				continue
+			}
+			done = append(done, hotkeyActionWords(a))
+		}
+		if len(failed) > 0 {
+			notify("Hotkey "+h.Keys+": not all done", strings.Join(failed, "\n"))
+			return fmt.Errorf("%s", strings.Join(failed, "; "))
+		}
+		notify("Hotkey "+h.Keys, strings.ToUpper(strings.Join(done, ", then ")[:1])+strings.Join(done, ", then ")[1:]+".")
+		return nil
+	},
+}
+
+// runHotkeyAction does one thing a hotkey does, as its command would; its
+// locks were confirmed already (at the press, or when it was added).
+func runHotkeyAction(h db.Hotkey, a db.HotkeyAction) error {
+	switch a.Kind {
+	case db.HotkeyStart:
+		if len(a.LockArgs) > 0 {
+			if err := startCmd.ParseFlags(a.LockArgs); err != nil {
+				return err
 			}
 			if err := startCmd.Flags().Set("yes", "true"); err != nil {
 				return err
@@ -193,13 +407,47 @@ var hotkeyRunCmd = &cobra.Command{
 			presetPasswordHash = h.PasswordHash
 			defer func() { presetPasswordHash = "" }()
 		}
-		if err := startCmd.RunE(startCmd, []string{h.Block}); err != nil {
-			notify(fmt.Sprintf("Couldn't start '%s'", h.Block), err.Error())
-			return err
+		return startCmd.RunE(startCmd, []string{a.Target})
+	case db.HotkeyStop:
+		return stopCmd.RunE(stopCmd, []string{a.Target})
+	case db.HotkeyModeOn, db.HotkeyModeOff:
+		c := modeOffCmd
+		if a.Kind == db.HotkeyModeOn {
+			c = modeOnCmd
+			// Monk mode switched on asks first: the press was that.
+			_ = c.Flags().Set("yes", "true")
 		}
-		notify(fmt.Sprintf("'%s' is on", h.Block), "Started by hotkey"+hotkeyLockText(h)+".")
-		return nil
-	},
+		return switchMode(c, a.Target, a.Kind == db.HotkeyModeOn)
+	}
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	why := "Hotkey " + h.Keys
+	switch a.Kind {
+	case db.HotkeyModeRun:
+		err = enforce.StartModeRun(database, a.Target, time.Duration(a.Minutes)*time.Minute)
+	case db.HotkeyMonk:
+		err = enforce.StartMonk(database, time.Duration(a.Minutes)*time.Minute)
+	case db.HotkeyFreeze:
+		until := time.Now().Add(time.Duration(a.Minutes) * time.Minute).Unix()
+		current, ferr := database.FreezeUntil()
+		if ferr != nil {
+			return ferr
+		}
+		if until > current {
+			err = database.SetFreeze(until, a.Param)
+		}
+	case db.HotkeyCustom:
+		err = enforce.Run(database, enforce.Consequence{Kind: db.ConsequenceCustom, Param: a.Param}, "")
+	default: // close-browser, lock-screen, logout, shutdown
+		err = enforce.Run(database, enforce.Consequence{Kind: a.Kind, Minutes: a.Minutes}, why)
+	}
+	if err != nil {
+		return err
+	}
+	return enforce.ApplyFromDB(database)
 }
 
 func noConfirmText(h db.Hotkey) string {
@@ -264,9 +512,13 @@ func syncHotkeys(database *db.DB) error {
 	}
 	desktop := make([]blocker.DesktopHotkey, len(keys))
 	for i, h := range keys {
+		name := describeHotkey(h)
+		if len(name) > 60 {
+			name = name[:57] + "…"
+		}
 		desktop[i] = blocker.DesktopHotkey{
 			ID: h.ID, Accel: h.Keys, Command: "/usr/local/bin/kc9k hotkey run " + strconv.Itoa(h.ID),
-			Name: "KC9K: start " + h.Block + hotkeyKinds(h),
+			Name: "KC9K: " + name,
 		}
 	}
 	if err := syncDesktopHotkeys(desktop); err != nil {
@@ -279,6 +531,8 @@ func init() {
 	addStartLockFlags(hotkeyAddCmd) // the locks each press sets
 	addYesFlag(hotkeyAddCmd)
 	hotkeyAddCmd.Flags().Bool("no-confirm", false, "Run without confirmation: pressing the hotkey sets its locks without asking (they are confirmed only now)")
+	hotkeyAddCmd.Flags().StringArray("do", nil, "An action, in order: start B, stop B, mode-on M, mode-off M, mode-run M 2h, monk 2h, freeze 2h lock, close-browser, lock-screen [D], logout [D], shutdown [D], custom \"open …\" \"run …\"")
+	hotkeyAddCmd.Flags().StringArray("do-json", nil, "An action as JSON (kind, target, minutes, param, lock_args)")
 	hotkeyCmd.AddCommand(hotkeyAddCmd, hotkeyRemoveCmd, hotkeyListCmd, hotkeyRunCmd)
 	rootCmd.AddCommand(hotkeyCmd)
 }

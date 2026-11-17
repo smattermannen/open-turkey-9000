@@ -39,6 +39,13 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     a minute more without its extension checking in; the dialog names it
     (gui-state `extension_missing_in`). `TestExtensionMissing`. On the
     laptop: Unchecked.
+  - [ ] Modes, schedules and places pages (§3.2 Mode, §3.6 Schedule, §3.8
+    Monk mode, §4.2, §4.5, R-MODE-1/2, R-MONK-1–3). Not built:
+    - [ ] Schedules outside blocks; Apply schedule on blocks and modes.
+    - [ ] Modes: a group of blocks with one automation; monk mode
+      automated by schedule and place.
+    - [ ] GUI: modes among the block cards (drag a block in), the mode's
+      view, Schedules and Places pages in the sidebar.
 
 - [x] **Owner 2026-11-16: automation and the block list (TOP PRIORITY).**
   Built the same day; on the laptop: Unchecked.
@@ -577,6 +584,24 @@ Only items not simply Built.
 - Windows (L): platform layer; `internal/blocker/` is Linux-only.
 
 ## 5. Proposed, not agreed
+
+- DECIDED 2026-11-17 (session; the owner asked for modes and schedule
+  pages, these details were left open): a block is in at most one mode,
+  because its automation can follow only one; a mode's switch switches
+  its blocks on or off (locked ones stay on and are named), rather than a
+  second switch over theirs; schedules are shared like places (changing
+  one changes every block using it, R-MODE-2) rather than copied, so
+  *Evening* is changed in one place; where windows of a block's schedules
+  overlap they are stored clipped, so a block's windows still never
+  overlap (R-SCHED-2); deleting a schedule or a mode leaves the blocks as
+  they are (their windows and automation stay), and taking a block out of
+  a mode leaves it the mode's automation, so neither changes what is
+  enforced; blocks, modes and schedules share one set of names, so a
+  command names one without asking which. Monk mode's automation is
+  always disabled by default (its windows and places turn it on): enabled
+  by default it would cut the network everywhere else, with nothing to
+  switch it off; with no network seen its places count as there, as a
+  block's do (§3.6), and Wi-Fi is kept on to see them.
 
 - DECIDED OVERNIGHT: how to check the clock against hardware and internet
   time (§4.10) → not built yet; trusted time stays CLOCK_BOOTTIME with

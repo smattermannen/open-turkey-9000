@@ -99,6 +99,7 @@ After publishing: Windows support.
 | Term | Meaning | Not |
 |---|---|---|
 | **Block** | Named group of lists, phrase sets, apps, folders, title entries, schedule, breaks, autostart, affected users, locks. | |
+| **Mode** | Named group of blocks with **one automation for all of them** (§3.6), or monk mode (§3.8). Shown among the blocks; a block is dragged into a mode and is in at most one. A block in a mode has the mode's automation. | Block |
 | **List** | Named entries in one block, with a **kind** and a **scope**. No list types: sites, URL entries and rendered terms can share a list. | Cluster |
 | **Entry** | A site, URL entry or rendered term in a list. | |
 | **Scope** | Boxes *URL*, *title*, *text*. With URL: sites/URL entries match the address (and feed the layers); rendered terms match words in the address. | |
@@ -122,7 +123,7 @@ After publishing: Windows support.
 | **Disabled** | Not enforcing now. | Inactive |
 | **Lifted** | Active but disabled (its automation says off, break, pause, Pomodoro rest, allowance time). | Inactive |
 | **Continuous** | Type: no schedule and no place rules: enabled whenever active (breaks, pauses, Pomodoro rest and allowance time still lift it). | Automated |
-| **Automated** | Type: has a schedule and/or places, which switch it from its default (enabled or disabled) while active (§3.6 Automation). | Scheduled |
+| **Automated** | Type: has a schedule and/or places, which switch it from its default (enabled or disabled) while active (§3.6 Automation); in a mode, its mode's. | Scheduled |
 | **Locked** | At least one lock on; can't be weakened. | Active |
 
 Enforcing ends by schedule or switch-off. A lock never ends or starts a block.
@@ -176,9 +177,10 @@ tamper protection settings can't be turned off.
 | **Session limit** | N openings per period; a session ends 3 min after switching away. |
 | **Pause** | One-off lift until a set time. |
 | **Autostart** | Switches a block on: once, time of day on set days, sign-in/wake, or next block window. |
-| **Place** | A set of Wi-Fi access points (no GPS). The computer is there when as many of them as the user chooses (default 2) are in range. |
+| **Schedule** | Named weekly windows kept outside blocks (*Evening*, *Weekend*), made on the Schedules page. A block or mode uses any number of schedules besides windows of its own (*Apply schedule*); changing a schedule changes everything using it. Overlapping windows count once. |
+| **Place** | A set of Wi-Fi access points (no GPS), made on the Places page or from a block. The computer is there when as many of them as the user chooses (default 2) are in range. |
 | **Place rule** | A place in a block's automation; a block may have **any number**. Arriving there switches the block as its default says (enabled by default: off; disabled by default: on). A place rule has **no actions of its own**. |
-| **Automation** | What switches an active block by itself: its schedule and its places. The user sets the block **Enabled by default** (a window or a place turns it off) or **Disabled by default** (a window or a place turns it on). With both a schedule and places, the user sets whether switching needs **both** (in a window and at a place at once) or **either** (one is enough). Without a schedule or places the block is continuous. |
+| **Automation** | What switches an active block (or a mode's blocks, or monk mode) by itself: its windows (its own and its schedules') and its places. The user sets the block **Enabled by default** (a window or a place turns it off) or **Disabled by default** (a window or a place turns it on). With both a schedule and places, the user sets whether switching needs **both** (in a window and at a place at once) or **either** (one is enough). Without a schedule or places the block is continuous. |
 
 ### 3.7 Use
 
@@ -193,7 +195,7 @@ tamper protection settings can't be turned off.
 | **Frozen Chicken** | Device block: a freeze mode for up to 24 h, on demand or scheduled. A running freeze can't end early; a scheduled one can have locks. *CT: Frozen Turkey.* | Schedule lock |
 | **Freeze mode** | *lock screen*, *logout*, *shutdown*, *allowed apps only*. | |
 | **Allowed apps only** | Only programs on the freeze's app list run. | Allowlist block |
-| **Monk mode** | A mode, not a block; preconfigured, nothing editable. For a set time blocks `*.*` (exception `file://*` only) and cuts the whole computer's network. Started by `kc9k monk`, a list action or a ladder step; ends only at its time. | Block |
+| **Monk mode** | A mode, not a block; preconfigured, nothing editable but its automation. Blocks `*.*` (exception `file://*` only) and cuts the whole computer's network: for a set time (`kc9k monk`, a list action, a ladder step), or while its automation (windows, schedules, places; disabled by default) has it on. Ends only at its time. | Block |
 | **Consequence** | Device action: close tab, close browser, lock screen, logout, shutdown, monk mode. Announced 60 s ahead except from bypass prevention. | Page action |
 | **Strict mode** | Off by default. On and something locked: no `sudo`/`pkexec`; nothing runs from `/home` or `/tmp` except exempted folders (adding one weakens); no containers/VMs. Own setting lock. | |
 | **No-escape** | Closes boot exits: hides recovery entries and kernel options, GRUB password nobody knows. | Strict mode |
@@ -293,6 +295,13 @@ GUI and CLI offer the same functions.
 - **4.2 Blocks**: create (empty, template, allowlist) · on/off · continuous
   or automated · rename · duplicate (copy inactive) · delete (refused while
   locked) · affected users · export/import.
+  - Modes (owner, 2026-11-17): on the same page as the blocks, each on a
+    card like a block's: name (opens the mode: its blocks as cards, and
+    its automation), on/off switch (switches its blocks on or off; monk
+    mode: lets its automation run it), Continuous/Automated, its blocks.
+    Drag a block onto a mode to put it in; take it out in the mode. Monk
+    mode is always there; other modes are created, renamed and deleted
+    (its blocks stay).
   - The list (owner, 2026-11-16; modern and sleek, R-GUI-3): each block on
     one card with its **name** (opens the block), its **on/off switch**,
     **"Continuous block" or "Automated block"** (opens the automation view:
@@ -329,7 +338,12 @@ GUI and CLI offer the same functions.
   add/move, click to edit; 15-min grid, 5-min times; copy to days; similar
   windows edited together; other blocks greyed; break per window; allow
   windows. Enabled by default / Disabled by default; places, any number
-  per block; with a schedule and places, both or either.
+  per block; with a schedule and places, both or either. The same for a
+  mode (one automation for its blocks) and monk mode.
+  - Schedules and Places each have a page in the sidebar (owner,
+    2026-11-17): made and changed there without a block; each shows what
+    uses it. A block's or mode's automation has **Apply schedule…**
+    (*Evening*, *Weekend*) and its places to tick.
 - **4.6 Locks**: all of §3.4, alone or layered, on blocks, browser settings
   and settings (global ladder too). Layer order fixed while locked; new lock
   goes last. Timer locks always extendable; set for a duration or until a
@@ -472,9 +486,14 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 **Events**
 - **R-EVENT-1** At most one event per tab and blocked site per minute. Restored tabs at browser start, preloaded pages and embedded frames don't count.
 
+**Modes and schedules**
+- **R-MODE-1** A block in a mode has the mode's automation; it isn't changed on the block. Putting a block into a mode changes its automation to the mode's (refused if that weakens it while locked); taking it out keeps it as it is.
+- **R-MODE-2** A change of a mode's automation or of a schedule is refused as a whole if it weakens any locked block using it, naming the blocks; otherwise it applies to all of them at once.
+
 **Monk mode**
-- **R-MONK-1** Not a block: not listed, no settings. Blocks `*.*` with only `file://*` excepted; takes no entries; the `monk` action isn't offered in it.
-- **R-MONK-2** Cuts the whole computer's network three ways at once: Wi-Fi radio off, every Ethernet interface down, firewall drops all but loopback. KC9K's local traffic (daemon ↔ extension) works. All three held for the whole time, undoing user changes. At the end, or after a restart/crash past the end, the previous connection state is restored.
+- **R-MONK-1** Not a block: no lists, no entries, no settings but its automation. Listed among the blocks as a mode. Blocks `*.*` with only `file://*` excepted; the `monk` action isn't offered in it.
+- **R-MONK-2** Cuts the whole computer's network three ways at once: Wi-Fi radio off, every Ethernet interface down, firewall drops all but loopback. KC9K's local traffic (daemon ↔ extension) works. All three held for the whole time, undoing user changes. At the end, or after a restart/crash past the end, the previous connection state is restored. While its places decide, the Wi-Fi radio stays on (unused: the firewall drops everything) so the computer can tell where it is.
+- **R-MONK-3** Run by its automation, monk mode is on while its windows and places have it on, and ends only then: while running it can't be switched off and its automation can't be weakened. Switching it on, and adding to its time while it is on, asks for confirmation (R-LOCK-12).
 
 **Device**
 - **R-FREEZE-1** *Allowed apps only*: only listed programs (and system processes) run.
@@ -513,6 +532,7 @@ Decisions not already written into §1–5:
 - 2026-11-16: Circadian rhythm: its own page only (not in Settings); wallpapers on a draggable timeline; Play the day preview.
 - 2026-11-16: Any trigger to any action: a block's apps and window titles each get one action set (close by default, and consequences).
 - 2026-11-16 (later): A place rule only enables or lifts its block; it has no actions (withdrawn from the decision above). An automated block is Enabled by default (its windows and places turn it off) or Disabled by default (they turn it on); any number of places per block; with a schedule and places, the user picks whether switching needs both or either. Blocks are continuous or automated; the block list shows name, on/off switch, Continuous/Automated block (opens the automation view), breaks and lock state. Android is on hold until the Linux project is finished.
+- 2026-11-17: Modes: a group of blocks automated together (one schedule and places for all), or monk mode, which can be automated by schedule and place. Modes sit with the blocks; blocks are dragged into a mode and shown inside it. Schedules and places have their own pages, made without a block; a block or mode applies a schedule (*Evening*, *Weekend*).
 
 ## 7. Open decisions
 

@@ -492,6 +492,16 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   windows and place rules only lift an active block (a lock keeps it on, not
   enabled). The 2026-11-15 upgrade switched on every inactive block with
   windows or place rules once (`migrateScheduledSwitchOn`).
+- **Schedules outside blocks, modes** (2026-11-17): `kc9k schedule create|
+  apply|take-off|rename|delete`, `schedule add|remove|list NAME` for a
+  block, mode ("monk" too) or schedule; a block's windows from a schedule
+  can't be removed on it (take the schedule off, or change it). `kc9k mode
+  create|add|take-out|on|off|rename|delete|show`; a block in a mode refuses
+  automation changes of its own. Monk mode: never enabled by default, no
+  blocks, switched on with `--yes`; running by its automation, off and any
+  weakening refused; announced 5 and 1 min before its windows. GUI: modes
+  above the block cards, the mode's view, Schedules and Places pages,
+  Overview "Mode: X" in Start and "Monk mode today …".
 - **Starting on an active block** only strengthens: any lock kind can be
   added, last in the unlock order (a duration timer or restart lock waits
   behind locks on); longer `--lock-chars`, later `--for/--until`, longer

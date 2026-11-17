@@ -21,11 +21,14 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
   top priority; SPEC changed the same day, §6). In three steps, each
   merged when done.
   - [ ] Step 1, fixes:
-    - [ ] Deleting an opened block opened another block: back to the block
-      list (§4.2).
-    - [ ] Block cards without the ⋯ menu (§4.2: nothing else); a mode's
-      *Add blocks…* keeps "Move to the mode" reachable by keyboard.
-    - [ ] A mode's *Add blocks…* offers *Create new block…* (§4.2).
+    - [x] Deleting an opened block opened another block (the page fell back
+      to the first block): now back to the block list; a refused delete
+      leaves the block open (§4.2). `ci/gui_cards_smoke.py`.
+    - [x] Block cards without the ⋯ menu (§4.2: nothing else); from the
+      keyboard a mode's *Add blocks…* and *Take out…* (R-GUI-3).
+      `ci/gui_cards_smoke.py`, `ci/gui_modes_smoke.py`.
+    - [x] A mode's *Add blocks…* offers *Create new block…*: made and put in
+      the mode at once (§4.2). `ci/gui_modes_smoke.py`.
     - [ ] Social media settings: a section after the blacklists, above the
       exceptions, opened and closed; no tab of their own (§4.3).
     - [ ] Places in a block's automation say plainly that they are added,

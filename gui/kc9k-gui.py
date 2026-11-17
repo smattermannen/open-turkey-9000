@@ -6435,7 +6435,7 @@ class Window(Gtk.ApplicationWindow):
             "Modes", self.mode_cards, plain=True,
             help="A mode is a group of blocks with one automation for all of them: one schedule and "
                  "places switch them together. Drag a block onto a mode to put it in (it then has the "
-                 "mode's automation), or use ⋯ on its card. Monk mode is a mode too: give it windows or "
+                 "mode's automation), or open the mode and use Add blocks…. Monk mode is a mode too: give it windows or "
                  "places and switch it on, and it runs then by itself."), False, False, 0)
         self.block_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.block_cards_shown = None
@@ -6520,32 +6520,13 @@ class Window(Gtk.ApplicationWindow):
         links.pack_end(link(lock_words(block), "changes-prevent-symbolic" if block.get("held") else
                             "changes-allow-symbolic", "Unlock it" if block.get("held") else "Add locks",
                             lambda: self.card_locks(name)), False, False, 0)
-        # §4.2 (owner 2026-11-17): dragged onto a mode it goes in; the ⋯
-        # menu does the same from the keyboard (R-GUI-3).
+        # §4.2 (owner 2026-11-17): dragged onto a mode it goes in; nothing
+        # else on the card (no ⋯ menu). From the keyboard (R-GUI-3): the
+        # mode's Add blocks… and Take out….
         for widget in (title,):
             widget.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, [BLOCK_TARGET], Gdk.DragAction.MOVE)
             widget.drag_source_set_icon_name("view-list-symbolic")
             widget.connect("drag-data-get", lambda _w, _c, data, _i, _t: data.set(data.get_target(), 8, name.encode()))
-        more = Gtk.MenuButton(relief=Gtk.ReliefStyle.NONE, valign=Gtk.Align.CENTER, tooltip_text="More")
-        more.add(Gtk.Image.new_from_icon_name("view-more-symbolic", Gtk.IconSize.MENU))
-        menu = Gtk.Menu()
-        modes = [m["name"] for m in self.state.get("modes") or [] if not m.get("monk")]
-        for mode in modes:
-            if mode != block.get("mode"):
-                item = Gtk.MenuItem(label=f"Move to the mode {mode}")
-                item.connect("activate", lambda _i, m=mode: self.move_to_mode(name, m))
-                menu.append(item)
-        if block.get("mode"):
-            item = Gtk.MenuItem(label=f"Take it out of {block['mode']}")
-            item.connect("activate", lambda _i: self.take_out_of_mode(name))
-            menu.append(item)
-        if not menu.get_children():
-            item = Gtk.MenuItem(label="Make a mode to put it in…")
-            item.connect("activate", lambda _i: self.create_mode(None, name))
-            menu.append(item)
-        menu.show_all()
-        more.set_popup(menu)
-        top.pack_end(more, False, False, 0)
         box = card(top, links, spacing=6)
         if not block["active"]:
             box.get_style_context().add_class("kc9k-block-off")
@@ -6695,13 +6676,19 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(self.mode_status, False, False, 0)
         # A mode of blocks: its blocks as cards.
         self.mode_block_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        add = Gtk.Button(label="Add blocks…", halign=Gtk.Align.START)
+        add = Gtk.Button(label="Add blocks…")
         add.connect("clicked", self.add_blocks_to_mode)
+        self.mode_take_out_button = take_out = Gtk.Button(label="Take out…")
+        take_out.set_tooltip_text("Take a block out of the mode")
+        take_out.connect("clicked", self.take_blocks_out_of_mode)
+        mode_buttons = Gtk.Box(spacing=6)
+        mode_buttons.pack_start(add, False, False, 0)
+        mode_buttons.pack_start(take_out, False, False, 0)
         self.mode_blocks_section = section(
-            "Its blocks", self.mode_block_cards, add, plain=True,
+            "Its blocks", self.mode_block_cards, mode_buttons, plain=True,
             help="They share the mode's automation below: changing it changes all of them, and a change "
                  "that weakens one of them while it is locked is refused for all. Each keeps its own lists, "
-                 "apps, breaks and locks. ⋯ on a card takes it out; it keeps the automation it has.")
+                 "apps, breaks and locks. Take out… takes one out again.")
         box.pack_start(self.mode_blocks_section, False, False, 0)
         # Monk mode: what it is, and starting it for a time.
         self.mode_monk_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -6762,6 +6749,7 @@ class Window(Gtk.ApplicationWindow):
                  "Give it windows or places below, then switch it on."))
         else:
             blocks = mode.get("blocks") or []
+            self.mode_take_out_button.set_sensitive(bool(blocks))
             self.mode_status.set_text(f"{mode.get('on', 0)} of {len(blocks)} blocks on" +
                                       (f", {mode['locked']} locked" if mode.get("locked") else "") + "."
                                       if blocks else "No blocks yet: drag blocks onto its card, or add them here.")
@@ -6778,37 +6766,65 @@ class Window(Gtk.ApplicationWindow):
         self.mode_editors.set_visible_child(editor)
         editor.show_data(mode["name"], mode)
 
-    def add_blocks_to_mode(self, _button):
+    CREATE_NEW = 1  # the Add blocks… dialog's Create new block… answer
+
+    def add_blocks_to_mode(self, _button, answer=None):
+        """Ticks blocks to put into the shown mode, or Create new block…
+        (§4.2, owner 2026-11-17), which makes one there. answer: for tests,
+        CREATE_NEW and the new block's name."""
         mode = getattr(self, "shown_mode", None)
-        names = [n for n, b in self.blocks.items() if not b.get("draft_of") and b.get("mode") != mode]
-        if not mode or not names:
-            self.message("Every block is in this mode already.", Gtk.MessageType.INFO)
+        if not mode:
             return
+        names = [n for n, b in self.blocks.items() if not b.get("draft_of") and b.get("mode") != mode]
         dialog = Gtk.Dialog(title=f"Add blocks to {mode}", transient_for=self, modal=True)
+        create = dialog.add_button("Create new block…", self.CREATE_NEW)
+        create.set_tooltip_text(f"A new, empty block in {mode}")
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         ok = dialog.add_button("Add", Gtk.ResponseType.OK)
         ok.get_style_context().add_class("suggested-action")
         box = dialog.get_content_area()
         box.set_spacing(8)
         box.set_border_width(12)
-        box.pack_start(dim("They get the mode's automation; their own windows and places give way to it."),
-                       False, False, 0)
+        box.pack_start(dim("They get the mode's automation; their own windows and places give way to it."
+                           if names else "Every block is in this mode already."), False, False, 0)
         checks = {}
         for n in names:
             other = self.blocks[n].get("mode")
             checks[n] = Gtk.CheckButton(label=n + (f" (now in {other})" if other else ""))
             box.pack_start(checks[n], False, False, 0)
         ok.set_sensitive(False)
+        ok.set_visible(bool(names))
         for check in checks.values():
             check.connect("toggled", lambda _c: ok.set_sensitive(any(c.get_active() for c in checks.values())))
         self.mode_add_dialog = (dialog, checks)  # for tests
-        dialog.show_all()
-        answer = dialog.run()
+        if answer is None:
+            dialog.show_all()
+            ok.set_visible(bool(names))
+            reply = dialog.run()
+        else:
+            reply = answer[0]
         chosen = [n for n, c in checks.items() if c.get_active()]
         dialog.destroy()
-        if answer == Gtk.ResponseType.OK and chosen:
+        if reply == self.CREATE_NEW:
+            name = answer[1] if answer is not None else self.ask_text(
+                f"New block in {mode}", "A short name, such as social-media. It gets the mode's automation.")
+            if name:
+                self.mode_blocks_shown = None
+                self.run(["block", "create", name],
+                         then=lambda _o: self.run(["mode", "add", mode, name]))
+        elif reply == Gtk.ResponseType.OK and chosen:
             self.mode_blocks_shown = None
             self.run(["mode", "add", mode, *chosen])
+
+    def take_blocks_out_of_mode(self, _button):
+        """The keyboard's way to take a block out of the shown mode (R-GUI-3;
+        the cards have no ⋯ menu)."""
+        mode = self.find_mode(getattr(self, "shown_mode", None)) or {}
+        name = self.choose("Take a block out", f"It leaves {mode.get('name')} and keeps the automation it has now.",
+                           mode.get("blocks") or [])
+        if name:
+            self.mode_blocks_shown = None
+            self.take_out_of_mode(name)
 
     def rename_mode(self):
         mode = getattr(self, "shown_mode", None)
@@ -7046,6 +7062,10 @@ class Window(Gtk.ApplicationWindow):
                 self.block_list.add(row)
             self.block_list.show_all()
         if self.selected not in self.blocks:
+            if self.selected is not None and self.blocks_stack.get_visible_child_name() == "detail":
+                # The opened block is gone (deleted elsewhere): back to the
+                # list rather than opening another block (§4.2).
+                self.blocks_stack.set_visible_child_name("cards")
             self.selected = shown = names[0] if names else None
         for row in self.block_list.get_children():
             if row.block_name == shown:
@@ -7613,11 +7633,16 @@ class Window(Gtk.ApplicationWindow):
             self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
 
     def delete_block(self, _button):
-        if self.selected and self.confirm(
-                f"Delete {self.selected}?", "The block and its lists are removed.",
-                "Delete", destructive=True):
-            name, self.selected = self.selected, None
-            self.run(["block", "remove", name])
+        """§4.2 (owner 2026-11-17): deleted, the page comes back to the block
+        list; refused, the block stays open."""
+        name = self.selected
+        if name and self.confirm(f"Delete {name}?", "The block and its lists are removed.",
+                                 "Delete", destructive=True):
+            def gone(_output):
+                if self.selected == name:
+                    self.selected = None
+                self.blocks_stack.set_visible_child_name("cards")
+            self.run(["block", "remove", name], then=gone)
 
     def fields_ok(self, *named):
         """R-GUI-1: before a command, every (name, field) must read right;

@@ -136,6 +136,19 @@ settle()
 # The mode's view: its blocks, its automation for all of them.
 win.open_mode("Evening"); settle()
 check(sorted(names(win.mode_block_cards)) == ["games", "social"], "its view shows its blocks")
+# Owner 2026-11-17 (later): no ⋯ menu on the cards; Add blocks… makes a new
+# block in the mode; Take out… takes one out from the keyboard.
+check(not any(isinstance(w, Gtk.MenuButton) for w in widgets(win.mode_block_cards) + widgets(win.block_cards)),
+      "block cards have no ⋯ menu")
+win.add_blocks_to_mode(None, answer=(win.CREATE_NEW, "reading")); settle()
+check(block("reading")["mode"] == "Evening" and "reading" in names(win.mode_block_cards),
+      "Create new block… makes one in the mode")
+real_choose = win.choose
+win.choose = lambda title, detail, names_: "reading" if "reading" in names_ else None
+win.take_blocks_out_of_mode(None); settle()
+win.choose = real_choose
+check(not block("reading")["mode"], "Take out… takes it out")
+cli("block", "remove", "reading")
 win.mode_editor.add_window("daily", "20:00", "23:00"); settle()
 check(all(len(block(b)["schedule_windows"]) == 1 for b in ("social", "games")), "a window for all its blocks")
 check(len(win.mode_editor.calendar.windows) == 1, "drawn on the mode's grid")

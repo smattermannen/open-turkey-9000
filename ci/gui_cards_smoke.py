@@ -145,6 +145,23 @@ cards()["plain"][2]["Unlocked"].clicked(); settle()
 check(dialogs == ["Start plain"], "with a draft open: the block's own locks: %s" % dialogs)
 Gtk.Dialog.run = real_run
 
+# §4.2 (owner 2026-11-17, later): nothing on a card but its parts (no ⋯
+# menu); deleting an opened block comes back to the list, never to another
+# block; a refused delete leaves it open.
+check(not any(isinstance(w, Gtk.MenuButton) for w in widgets(win.block_cards)), "the cards have no ⋯ menu")
+r = cli("block", "create", "gone"); assert r.returncode == 0, r.stderr
+settle()
+win.confirm = lambda *a, **k: True
+win.open_block("gone"); settle()
+win.delete_block(None); settle()
+check("gone" not in win.blocks and win.blocks_stack.get_visible_child_name() == "cards" and win.selected != "plain",
+      "deleted, the page comes back to the block list: %s %s" % (win.blocks_stack.get_visible_child_name(), win.selected))
+win.open_block("night"); settle()
+msgs.clear()
+win.delete_block(None); settle()
+check("night" in win.blocks and win.blocks_stack.get_visible_child_name() == "detail" and win.selected == "night",
+      "refused (it is locked), the block stays open: %s" % msgs)
+
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")
 raise SystemExit(1 if fails else 0)

@@ -4357,8 +4357,17 @@ class CircadianPage(Gtk.ScrolledWindow):
                       margin_start=24, margin_end=24, margin_top=20, margin_bottom=20)
         self.add(box)
 
-        top = Gtk.Box(spacing=12)
-        top.pack_start(heading("Circadian Rhythm"), False, False, 0)
+        # R-GUI-3 (2026-11-17): a page title and one line, as on the other
+        # pages; the long explanations behind ?.
+        top = Gtk.Box(spacing=8)
+        title = Gtk.Label(label="Circadian rhythm", xalign=0)
+        title.get_style_context().add_class("kc9k-page-title")
+        top.pack_start(title, False, False, 0)
+        top.pack_start(help_button(
+            "The screen, the wallpaper and dark mode follow the time of day: cues for the body "
+            "clock. Nothing here can be locked, and it never overrides you: change a level by "
+            "hand and its clip pauses until its next point. It leaves the desktop's own "
+            "brightness control and night light working; off, it touches nothing."), False, False, 0)
         self.master = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.master.connect("state-set", self.switch_master)
         top.pack_end(self.master, False, False, 0)
@@ -4369,11 +4378,13 @@ class CircadianPage(Gtk.ScrolledWindow):
         self.play.connect("clicked", self.play_day)
         top.pack_end(self.play, False, False, 0)
         self.playing = False
-        box.pack_start(top, False, False, 0)
-        box.pack_start(dim(
-            "The screen, the wallpaper and dark mode follow the time of day: cues for the body "
-            "clock. Nothing here can be locked, and it never overrides you: change a level by "
-            "hand and its clip pauses until its next point."), False, False, 0)
+        head = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        head.pack_start(top, False, False, 0)
+        subtitle = Gtk.Label(label="Brightness, colour, wallpaper and dark mode follow the time of day.",
+                             xalign=0, wrap=True)
+        subtitle.get_style_context().add_class("kc9k-page-subtitle")
+        head.pack_start(subtitle, False, False, 0)
+        box.pack_start(head, False, False, 0)
         self.warnings = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, no_show_all=True)
         box.pack_start(self.warnings, False, False, 0)
 
@@ -4385,11 +4396,12 @@ class CircadianPage(Gtk.ScrolledWindow):
         apply_preset.connect("clicked", self.use_preset)
         preset_row.pack_start(apply_preset, False, False, 0)
         self.preset_detail = dim("")
-        clips = section("Automation clips", dim(
-            "Each clip is a curve over 24 hours. Right-click adds a point (on a point: removes "
-            "it). Drag a point to move it (Shift: to the minute), drag the curve to bend it, "
-            "double-click a point to type exact values. While you drag a point, the screen "
-            "shows its value."), preset_row, self.preset_detail)
+        clips = section("Automation clips", dim("A curve over 24 hours for each level; right-click adds a point."),
+                        preset_row, self.preset_detail, help=(
+                            "Each clip is a curve over 24 hours. Right-click adds a point (on a point: "
+                            "removes it). Drag a point to move it (Shift: to the minute), drag the curve "
+                            "to bend it, double-click a point to type exact values. While you drag a "
+                            "point, the screen shows its value."))
         self.preset.connect("changed", self.preset_changed)
         box.pack_start(clips, False, False, 0)
         self.editors, self.lane_switches, self.lane_values = {}, {}, {}
@@ -4400,12 +4412,13 @@ class CircadianPage(Gtk.ScrolledWindow):
         self.wallpaper_timeline = WallpaperTimeline(self.wallpaper_moved)
         add_wallpaper = Gtk.Button(label="Add a wallpaper…", halign=Gtk.Align.START)
         add_wallpaper.connect("clicked", self.add_wallpaper)
-        box.pack_start(section("Wallpapers", dim(
-            "Each picture is the wallpaper between its two times. Drag a bar to move it, or an end "
-            "to change when it starts or stops (Shift: to the minute). Where times overlap, the "
-            "one that started last shows; what it covers is faint. A wallpaper you pick yourself "
-            "stays until the next one starts."),
-            self.wallpaper_timeline, self.wallpapers, add_wallpaper), False, False, 0)
+        box.pack_start(section("Wallpapers", dim("Each picture is the wallpaper between its two times."),
+                               self.wallpaper_timeline, self.wallpapers, add_wallpaper, help=(
+                                   "Drag a bar to move it, or an end to change when it starts or stops "
+                                   "(Shift: to the minute). Where times overlap, the one that started "
+                                   "last shows; what it covers is faint. A wallpaper you pick yourself "
+                                   "stays until the next one starts. The wallpaper due is in place when "
+                                   "you sign in.")), False, False, 0)
 
         self.dark_radios = {}
         dark_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -4449,9 +4462,10 @@ class CircadianPage(Gtk.ScrolledWindow):
         exempt_add.connect("clicked", self.add_exempt)
         exempt_row.pack_start(self.exempt_entry, False, False, 0)
         exempt_row.pack_start(exempt_add, False, False, 0)
-        box.pack_start(section("Dark pages", pages_row, dim(
-            "Pages that are dark already stay as they are. With the system's setting, pages "
-            "follow what the browser says the system prefers."), self.exempt, exempt_row), False, False, 0)
+        box.pack_start(section("Dark pages", pages_row, self.exempt, exempt_row, help=(
+            "Pages that are dark already stay as they are. With the system's setting, pages follow "
+            "what the browser says the system prefers. The extension's toolbar button exempts a "
+            "site too.")), False, False, 0)
 
     # Reading the state
     def refresh(self, force=False):

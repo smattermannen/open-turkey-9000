@@ -84,9 +84,9 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       with Open the mode / Take it out. `ci/gui_modes_smoke.py`; the
       click-everything, cards, automation and places smoke tests pass
       (the automation one expected the wording from before 2026-11-16's
-      "its place turns it": fixed). Drag and drop itself: Unchecked (the
-      test calls the drop handler; Xvfb has no pointer to drag with). On
-      a real screen: Unchecked.
+      "its place turns it": fixed). Drag and drop with a real pointer
+      (xdotool in Xvfb): `ci/gui_modes_drag_smoke.py`. On a real screen:
+      Unchecked.
 
 - [x] **Owner 2026-11-16: automation and the block list (TOP PRIORITY).**
   Built the same day; on the laptop: Unchecked.

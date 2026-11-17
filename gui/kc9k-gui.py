@@ -6811,13 +6811,31 @@ class Window(Gtk.ApplicationWindow):
         (self.unlock_block if block.get("held") else self.start_block)(None)
 
     def build_quota_tab(self):
+        """Breaks & allowance (R-GUI-3, redesigned 2026-11-17): a card each,
+        a line saying what it is (the rest behind ?), rows of a label and its
+        fields, one primary button."""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, margin=12)
+        labels = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
 
-        quota_row = Gtk.Box(spacing=6)
-        quota_row.pack_start(Gtk.Label(label="Time:", valign=Gtk.Align.START, margin_top=6), False, False, 0)
+        def form_row(text, *widgets):
+            row = Gtk.Box(spacing=8)
+            label = Gtk.Label(label=text, xalign=0, valign=Gtk.Align.START, margin_top=6)
+            labels.add_widget(label)
+            row.pack_start(label, False, False, 0)
+            for widget in widgets:
+                row.pack_start(widget, False, False, 0)
+            return row
+
+        def buttons(primary, *others):
+            row = Gtk.Box(spacing=6)
+            primary.get_style_context().add_class("suggested-action")
+            for button in (primary, *others):
+                row.pack_start(button, False, False, 0)
+            return row
+
+        # §3.6 allowance: per day, week, month, rolling 24 hours or window,
+        # refilled at a set time; sessions.
         self.quota_minutes = DurationField(1800, minimum=60, maximum=86400, width=9)
-        quota_row.pack_start(self.quota_minutes, False, False, 0)
-        # §3.6: per day, week or month, refilled at a set time.
         self.quota_per = Gtk.ComboBoxText()
         for key, label in (("day", "per day"), ("week", "per week"), ("month", "per month"),
                            ("rolling", "per 24 hours, rolling"), ("window", "per window")):
@@ -6825,13 +6843,11 @@ class Window(Gtk.ApplicationWindow):
         self.quota_per.set_active_id("day")
         self.quota_per.connect("changed", lambda combo: self.quota_minutes.set_limits(
             maximum={"week": 7 * 86400, "month": 31 * 86400}.get(combo.get_active_id(), 86400)))
-        quota_row.pack_start(self.quota_per, False, False, 0)
-        quota_row.pack_start(Gtk.Label(label="refill at"), False, False, 0)
         self.quota_refill = Gtk.Entry(text="00:00", width_chars=5, max_length=5)
-        quota_row.pack_start(self.quota_refill, False, False, 0)
-        quota_row.pack_start(Gtk.Label(label="sessions", valign=Gtk.Align.START, margin_top=6), False, False, 0)
+        quota_row = form_row("Time", self.quota_minutes, self.quota_per,
+                             Gtk.Label(label="refill at", valign=Gtk.Align.START, margin_top=6), self.quota_refill)
         self.quota_sessions = NumberField(0, 0, 100, width=4, hint="0: any number")
-        quota_row.pack_start(self.quota_sessions, False, False, 0)
+        sessions_row = form_row("Sessions", self.quota_sessions)
         self.quota_set = Gtk.Button(label="Save allowance")
         self.quota_set.connect("clicked", self.set_quota)
         self.quota_start = Gtk.Button(label="Use allowance now")
@@ -6840,91 +6856,86 @@ class Window(Gtk.ApplicationWindow):
         self.quota_end.connect("clicked", self.end_quota)
         self.quota_remove = Gtk.Button(label="Remove")
         self.quota_remove.connect("clicked", self.remove_quota)
-        quota_row.pack_start(self.quota_set, False, False, 0)
-        # The session buttons get their own row, so the page fits a narrow screen.
-        session_row = Gtk.Box(spacing=6)
-        for button in (self.quota_start, self.quota_end, self.quota_remove):
-            session_row.pack_start(button, False, False, 0)
         self.quota_label = dim("")
         box.pack_start(section(
-            "Allowance",
-            dim("Sessions you open lift the block until the period's time is spent. A session only "
-                "spends time while the block is in use: its app in front, its site in the focused "
-                "tab, or playing sound or video. An allowance protects nothing by itself: changes "
-                "apply at once until the block is locked; then it only takes less time."),
-            quota_row, session_row, self.quota_label), False, False, 0)
+            "Allowance", dim("Time to use what the block blocks, in sessions you open."),
+            quota_row, sessions_row, buttons(self.quota_set, self.quota_start, self.quota_end, self.quota_remove),
+            self.quota_label,
+            help="Sessions you open lift the block until the period's time is spent. A session only "
+                 "spends time while the block is in use: its app in front, its site in the focused "
+                 "tab, or playing sound or video. An allowance protects nothing by itself: changes "
+                 "apply at once until the block is locked; then it only takes less time or fewer "
+                 "sessions. Per window: each opening of a block window is a period."), False, False, 0)
 
-        pomodoro_row = Gtk.Box(spacing=6)
-        pomodoro_row.pack_start(Gtk.Label(label="Work:"), False, False, 0)
         self.work_minutes = DurationField(25 * 60, minimum=60, maximum=86400, width=8)
-        pomodoro_row.pack_start(self.work_minutes, False, False, 0)
-        pomodoro_row.pack_start(Gtk.Label(label="Break:"), False, False, 0)
         self.break_minutes = DurationField(5 * 60, minimum=60, maximum=86400, width=8)
-        pomodoro_row.pack_start(self.break_minutes, False, False, 0)
+        pomodoro_row = form_row("Work", self.work_minutes,
+                                Gtk.Label(label="then a break of", valign=Gtk.Align.START, margin_top=6),
+                                self.break_minutes)
         set_pomodoro = Gtk.Button(label="Save")
         set_pomodoro.connect("clicked", self.set_pomodoro)
         clear_pomodoro = Gtk.Button(label="Turn off")
         clear_pomodoro.connect("clicked", self.clear_pomodoro)
-        pomodoro_row.pack_start(set_pomodoro, False, False, 0)
-        pomodoro_row.pack_start(clear_pomodoro, False, False, 0)
-        long_row = Gtk.Box(spacing=6)
-        self.long_check = Gtk.CheckButton(label="A long break of")
+        self.long_check = Gtk.CheckButton(valign=Gtk.Align.START, margin_top=6,
+                                          tooltip_text="A long break now and then, instead of the short one")
         self.long_minutes = DurationField(15 * 60, minimum=60, maximum=86400, width=8)
         self.long_every = NumberField(4, 2, 20, width=4)
-        long_row.pack_start(self.long_check, False, False, 0)
-        long_row.pack_start(self.long_minutes, False, False, 0)
-        long_row.pack_start(Gtk.Label(label="after every"), False, False, 0)
-        long_row.pack_start(self.long_every, False, False, 0)
-        long_row.pack_start(Gtk.Label(label="work periods"), False, False, 0)
+        long_row = form_row("Long break", self.long_check, self.long_minutes,
+                            Gtk.Label(label="every", valign=Gtk.Align.START, margin_top=6), self.long_every,
+                            Gtk.Label(label="work periods", valign=Gtk.Align.START, margin_top=6))
         box.pack_start(section(
-            "Pomodoro", dim("While the block is on, it pauses for the break after each work period. "
-                            "During a work period the block's allowance can't be used."),
-            pomodoro_row, long_row), False, False, 0)
+            "Pomodoro", dim("Work and break take turns while the block is on, work first."),
+            pomodoro_row, long_row, buttons(set_pomodoro, clear_pomodoro),
+            help="While the block is on, it pauses for the break after each work period; its rhythm "
+                 "starts again each time the block is enabled (R-SCHED-3). During a work period the "
+                 "block's allowance can't be used. Locks stay on through the breaks."), False, False, 0)
 
-        allowance_row = Gtk.Box(spacing=6)
+        # §3.6 reward: saved up to one break, accumulating until a period
+        # ends, or each part kept for a time the user picks (no upper limit).
         self.allowance_minutes = DurationField(600, minimum=60, maximum=4 * 3600, width=8)
         self.allowance_per = DurationField(3600, minimum=300, maximum=86400, width=8)
-        allowance_row.pack_start(self.allowance_minutes, False, False, 0)
-        allowance_row.pack_start(Gtk.Label(label="of break for every"), False, False, 0)
-        allowance_row.pack_start(self.allowance_per, False, False, 0)
-        allowance_row.pack_start(Gtk.Label(label="of blocking, kept"), False, False, 0)
-        # §3.6: saved up to one break, accumulating until a period ends, or
-        # each part kept for a time the user picks (no upper limit).
+        allowance_row = form_row("Earn", self.allowance_minutes,
+                                 Gtk.Label(label="of break for every", valign=Gtk.Align.START, margin_top=6),
+                                 self.allowance_per,
+                                 Gtk.Label(label="of blocking", valign=Gtk.Align.START, margin_top=6))
         self.reward_keep = Gtk.ComboBoxText()
         for key, label in (("one", "up to one break"), ("window", "until the window ends"),
                            ("day", "until the day ends"), ("week", "until the week ends"),
                            ("month", "until the month ends"), ("time", "for a time after it is earned:")):
             self.reward_keep.append(key, label)
         self.reward_keep.set_active_id("one")
-        allowance_row.pack_start(self.reward_keep, False, False, 0)
         self.reward_keep_time = DurationField(7 * 86400, minimum=3600, width=8)
         self.reward_keep_time.set_no_show_all(True)
         self.reward_keep.connect("changed", lambda combo: self.reward_keep_time.set_visible(
             combo.get_active_id() == "time"))
-        allowance_row.pack_start(self.reward_keep_time, False, False, 0)
-        allowance_buttons = Gtk.Box(spacing=6)
-        for label, handler in (("Save reward", self.set_allowance), ("Remove", self.clear_allowance)):
-            button = Gtk.Button(label=label)
-            button.connect("clicked", handler)
-            allowance_buttons.pack_start(button, False, False, 0)
+        keep_row = form_row("Keep it", self.reward_keep, self.reward_keep_time)
+        save_reward = Gtk.Button(label="Save reward")
+        save_reward.connect("clicked", self.set_allowance)
+        remove_reward = Gtk.Button(label="Remove")
+        remove_reward.connect("clicked", self.clear_allowance)
         self.break_start = Gtk.Button(label="Take a break now")
         self.break_start.connect("clicked", self.start_break)
         self.break_end = Gtk.Button(label="End break")
         self.break_end.connect("clicked", self.end_break)
-        allowance_buttons.pack_start(self.break_start, False, False, 0)
-        allowance_buttons.pack_start(self.break_end, False, False, 0)
         self.break_label = dim("")
-        relock_row = Gtk.Box(spacing=6)
+        box.pack_start(section(
+            "Reward", dim("Break time earned while the block works, to take when you choose."),
+            allowance_row, keep_row, buttons(save_reward, remove_reward, self.break_start, self.break_end),
+            self.break_label,
+            help="Break time is earned while the block is on and the computer is in use, and kept as "
+                 "chosen: up to one break, until the window, day, week or month ends, or each part "
+                 "for as long as you choose. Take it when you choose, also while the block is locked; "
+                 "the block comes back by itself. Allowing more breaks weakens the block, so decide "
+                 "before locking it."), False, False, 0)
+
         self.relock_check = Gtk.CheckButton(label="Unlocking gives a break of")
         self.relock_minutes = DurationField(5 * 60, minimum=60, maximum=4 * 3600, width=8)
         relock_save = Gtk.Button(label="Save")
         relock_save.connect("clicked", self.set_relock)
-        relock_row.pack_start(self.relock_check, False, False, 0)
-        relock_row.pack_start(self.relock_minutes, False, False, 0)
-        relock_row.pack_start(Gtk.Label(label="then the block is back with its locks"), False, False, 0)
-        relock_row.pack_start(relock_save, False, False, 0)
+        relock_row = form_row("Text break", self.relock_check, self.relock_minutes,
+                              Gtk.Label(label="then the block is back with its locks", valign=Gtk.Align.START,
+                                        margin_top=6), relock_save)
         # §3.6 delay break: asked for, it begins after a countdown.
-        delay_row = Gtk.Box(spacing=6)
         self.delay_break_check = Gtk.CheckButton(label="Delay break of")
         self.delay_break_minutes = DurationField(600, minimum=60, maximum=4 * 3600, width=8)
         self.delay_wait_minutes = DurationField(1800, minimum=60, maximum=86400, width=8)
@@ -6932,21 +6943,16 @@ class Window(Gtk.ApplicationWindow):
         delay_save.connect("clicked", self.set_delay_break)
         self.delay_request = Gtk.Button(label="Request break")
         self.delay_request.connect("clicked", lambda _b: self.selected and self.run(["break", "request", self.selected]))
-        for widget in (self.delay_break_check, self.delay_break_minutes, Gtk.Label(label="after waiting"),
-                       self.delay_wait_minutes, delay_save, self.delay_request):
-            delay_row.pack_start(widget, False, False, 0)
+        delay_row = form_row("Delay break", self.delay_break_check, self.delay_break_minutes,
+                             Gtk.Label(label="after waiting", valign=Gtk.Align.START, margin_top=6),
+                             self.delay_wait_minutes, delay_save, self.delay_request)
         box.pack_start(section(
-            "Breaks",
-            dim("Break time is earned while the block is on and kept as chosen below: up to one "
-                "break, until the window, day, week or month ends, or for as long as you choose. "
-                "Take it when you choose, also while the block is locked; the block comes back by "
-                "itself. Allowing more breaks weakens the block, so decide before locking it."),
-            allowance_row, allowance_buttons, self.break_label,
-            dim("With the box below ticked, passing the typing challenge or giving the password "
-                "doesn't end the block: it lifts it for a while. Unlocking again during that "
-                "break ends it."),
-            relock_row, delay_row), False, False, 0)
-        for row in (quota_row, pomodoro_row, long_row, allowance_row, relock_row, delay_row):
+            "Breaks that keep the locks", dim("A break after a challenge or a countdown; the block stays locked."),
+            relock_row, delay_row,
+            help="Text break: passing the typing challenge or giving the password doesn't end the "
+                 "block's lock, it lifts the block for a while; unlocking again during that break ends "
+                 "it. Delay break: asked for, it begins after the wait you chose."), False, False, 0)
+        for row in (quota_row, sessions_row, pomodoro_row, long_row, allowance_row, keep_row, relock_row, delay_row):
             top_align(row)
             flow_row(row)
         return box

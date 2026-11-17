@@ -381,8 +381,11 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     ⋯; tabs 8 → 6 (Places under Schedule, "Breaks & allowance"); Clusters
     and Frozen Chicken regrouped; long rows wrap, so the window fits 1000
     pixels (was 1213: pages were cut off at the right); lock times in days
-    ("69 days 10 h", not "1666 h 40 min"). Left: Settings, Breaks tab,
-    Circadian, list cards. L
+    ("69 days 10 h", not "1666 h 40 min"). Breaks & allowance tab
+    (2026-11-17): a card each (Allowance, Pomodoro, Reward, Breaks that
+    keep the locks) with one line on the page and the rest behind ?,
+    labelled rows in a column, one primary button each. Settings: checked
+    on a screenshot, already cards of rows. Left: Circadian, list cards. L
   - Strict lockdown polkit now allows the backlight helper and colord.
   - [x] Hotkey locks (§3.4 timer lock "no upper limit", §3.13, R-GUI-2;
     found 2026-11-16): a hotkey's timer lock was capped at 24 hours and the

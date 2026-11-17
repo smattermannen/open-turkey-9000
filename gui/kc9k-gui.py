@@ -6622,6 +6622,10 @@ class Window(Gtk.ApplicationWindow):
         menu.show_all()
         self.mode_menu.set_popup(menu)
         head.pack_end(self.mode_menu, False, False, 0)
+        self.mode_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.mode_switch.connect("state-set", lambda sw, wanted: self.toggle_mode_card(
+            sw, wanted, self.find_mode(getattr(self, "shown_mode", None)) or {"name": ""}))
+        head.pack_end(self.mode_switch, False, False, 0)
         box.pack_start(head, False, False, 0)
         self.mode_status = dim("")
         box.pack_start(self.mode_status, False, False, 0)
@@ -6671,6 +6675,17 @@ class Window(Gtk.ApplicationWindow):
         self.mode_wait = None
         monk = bool(mode.get("monk"))
         self.mode_title.set_text(mode["name"])
+        # The switch, as on the mode's card (set without running anything).
+        was, self.updating = self.updating, True
+        blocks = mode.get("blocks") or []
+        if monk:
+            self.mode_switch.set_active(bool(mode.get("active")))
+            self.mode_switch.set_sensitive(not mode.get("running") and
+                                           (bool(mode.get("active")) or not mode.get("continuous")))
+        else:
+            self.mode_switch.set_active(bool(blocks) and mode.get("on", 0) == len(blocks))
+            self.mode_switch.set_sensitive(bool(blocks))
+        self.updating = was
         self.mode_menu.set_visible(not monk)
         self.mode_blocks_section.set_visible(not monk)
         self.mode_monk_box.set_visible(monk)
@@ -6679,7 +6694,8 @@ class Window(Gtk.ApplicationWindow):
             self.mode_status.set_text(
                 (f"Running, {fmt_seconds(left)} left. " if left else "") +
                 ("Switched on: its windows and places run it." if mode.get("active") else
-                 "Switched off: its windows and places don't run it (switch it on on its card)."))
+                 "Switched off: its windows and places don't run it." if not mode.get("continuous") else
+                 "Give it windows or places below, then switch it on."))
         else:
             blocks = mode.get("blocks") or []
             self.mode_status.set_text(f"{mode.get('on', 0)} of {len(blocks)} blocks on" +
@@ -9774,6 +9790,7 @@ button.kc9k-link { padding: 2px 6px; min-height: 0; border-radius: 6px; font-wei
   color: @theme_selected_bg_color; }
 button.kc9k-link:hover { background-color: alpha(@theme_selected_bg_color, 0.10); }
 button.kc9k-card-name { padding: 0 4px; min-height: 0; font-size: 1.3em; font-weight: 800; }
+label.kc9k-card-name { font-size: 1.3em; font-weight: 800; }
 .kc9k-card.kc9k-block-off { background-color: alpha(@theme_base_color, 0.6); }
 
 /* Status pills: what is on, what is locked. */

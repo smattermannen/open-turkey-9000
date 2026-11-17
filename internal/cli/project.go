@@ -53,6 +53,8 @@ type windowExport struct {
 	LockLead *int `json:"lock_minutes,omitempty"`
 	// Break is a block window's one break each time it is open (§3.6).
 	Break int64 `json:"break_seconds,omitempty"`
+	// Copy names the schedule (§3.6) a block's window is a copy of.
+	Copy string `json:"copy_of,omitempty"`
 }
 
 type pomodoroExport struct {
@@ -93,6 +95,10 @@ type blockExtras struct {
 	Triggers map[string][]db.TriggerAction `json:"triggers,omitempty"`
 	// Automation (§3.6): enabled by default, both; left out: neither.
 	Automation *db.AutomationSettings `json:"automation,omitempty"`
+	// Mode is the mode it is in, AppliedSchedules the schedules it uses
+	// (§3.2, §3.6; owner 2026-11-17).
+	InMode           string   `json:"in_mode,omitempty"`
+	AppliedSchedules []string `json:"applied_schedules,omitempty"`
 }
 
 type projectBlock struct {
@@ -136,6 +142,9 @@ type projectExport struct {
 	// Notifications are the notification choices (§4.10).
 	Notifications *enforce.NoticeOptions `json:"notifications,omitempty"`
 	StrictUse     bool                   `json:"strict_use,omitempty"` // §3.7
+	// Schedules kept outside blocks and modes (§3.6, §3.2).
+	Schedules []savedScheduleExport `json:"schedules,omitempty"`
+	Modes     []modeExport          `json:"modes,omitempty"`
 }
 
 func exportWindow(w schedule.Window) windowExport {
@@ -203,9 +212,14 @@ func exportBlock(database *db.DB, name string, images map[string]string) (projec
 	if err != nil {
 		return out, err
 	}
+	saved, err := database.SavedSchedules()
+	if err != nil {
+		return out, err
+	}
 	for _, s := range schedules {
 		w := exportWindow(s.Window())
 		w.Break = s.Break
+		w.Copy = savedName(saved, s.Source)
 		out.Schedules = append(out.Schedules, w)
 	}
 	if out.Users, err = database.BlockUsers(name); err != nil {
@@ -549,6 +563,9 @@ passwords, hotkeys and statistics are never in it.`,
 			}
 		}
 		out.StrictUse = enforce.StrictUseOn(database)
+		if err := exportModes(database, &out, share); err != nil {
+			return err
+		}
 		if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
 			n := enforce.LoadNoticeOptions(database)
 			out.Notifications = &n
@@ -610,6 +627,10 @@ With --dry-run, says what would happen and changes nothing.`,
 				return fmt.Errorf("block '%s': %w", b.Name, err)
 			}
 			blocks = append(blocks, c)
+		}
+		modes, err := checkModes(in)
+		if err != nil {
+			return err
 		}
 		type checkedCluster struct {
 			c     clusterExport
@@ -794,13 +815,20 @@ With --dry-run, says what would happen and changes nothing.`,
 				placeIDs[p.Name] = -1
 			}
 		}
+		var fileBlocks []string
+		for _, c := range blocks {
+			fileBlocks = append(fileBlocks, c.in.Name)
+		}
+		scheduleIDs, err := importSchedules(database, modes, fileBlocks, dry, say)
+		if err != nil {
+			return err
+		}
 		taken := map[string]bool{}
 		renamed := map[string]string{} // the file's block names -> created here
 		for _, c := range blocks {
 			name := c.in.Name
 			for n := 2; ; n++ {
-				_, err := database.GetBlock(name)
-				if err != nil && !taken[name] {
+				if what, err := database.NameTaken(name); err == nil && what == "" && !taken[name] {
 					break
 				}
 				name = fmt.Sprintf("%s-%d", c.in.Name, n)
@@ -814,6 +842,20 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 			renamed[c.in.Name] = name
 			c.in.Name = name
+			// Copies of a schedule that comes along: the schedule is
+			// applied instead (applyImportedSchedules).
+			var kept []schedule.Window
+			var keptIn []windowExport
+			for i, w := range c.windows {
+				if i < len(c.in.Schedules) && c.in.Schedules[i].Copy != "" && slices.Contains(c.in.AppliedSchedules, c.in.Schedules[i].Copy) {
+					continue
+				}
+				kept = append(kept, w)
+				if i < len(c.in.Schedules) {
+					keptIn = append(keptIn, c.in.Schedules[i])
+				}
+			}
+			c.windows, c.in.Schedules = kept, keptIn
 			if !dry {
 				if err := createBlock(database, c); err != nil {
 					return fmt.Errorf("block '%s': %w", name, err)
@@ -848,6 +890,12 @@ With --dry-run, says what would happen and changes nothing.`,
 					}
 				}
 			}
+			if err := applyImportedSchedules(database, name, c.in.AppliedSchedules, scheduleIDs, dry, say); err != nil {
+				return err
+			}
+		}
+		if err := importModes(database, modes, in, renamed, scheduleIDs, placeIDs, dry, say); err != nil {
+			return err
 		}
 		for _, c := range clusters {
 			if exists, err := database.ClusterExists(c.c.Name); err != nil {

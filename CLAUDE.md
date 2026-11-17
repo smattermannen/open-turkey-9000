@@ -411,7 +411,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   once/at/sign-in/next-window; daemon `runAutostarts` in `Tick` (first look
   only records; sign-in = new loginctl session or wake by BOOTTIME−MONOTONIC).
 - **Project** (`cli/project.go`): versioned JSON; import validates all, then
-  only adds (existing untouched, options only strengthened).
+  only adds (existing untouched, options only strengthened). Schedules and
+  modes: `cli/projectmodes.go` (`copy_of` on a block's window, `in_mode`,
+  `applied_schedules`).
 - **Social** (`db/social.go`, `cli/social.go`): `block_social`,
   `BlockDetail.Social`; `rules.social` → `webext/files/social.js`
   (`KC9K_SOCIAL`). Playlist = preset `youtube:playlist=<id>` plus

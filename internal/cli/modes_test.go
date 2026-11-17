@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -224,5 +227,67 @@ func TestMonkModeAutomation(t *testing.T) {
 	}
 	if out := capture(t, "mode"); !strings.Contains(out, "Monk mode runs") {
 		t.Errorf("mode: %s", out)
+	}
+}
+
+// §3.13 Project (owner 2026-11-17): schedules and modes travel in project
+// files; imported, blocks use the schedule again (not copies of its
+// windows), a mode gets its blocks back, monk mode its automation (never
+// switched on); a share leaves the mode's places out.
+func TestProjectModes(t *testing.T) {
+	notTerminal(t)
+	testDB(t)
+	mustRun(t, "schedule", "create", "Weekend")
+	mustRun(t, "schedule", "add", "Weekend", "--days", "weekends", "--from", "00:00", "--to", "24:00")
+	for _, b := range []string{"social", "games", "news"} {
+		mustRun(t, "block", "create", b)
+		mustRun(t, "block", "add", b, b+".com")
+	}
+	mustRun(t, "schedule", "apply", "news", "Weekend")
+	mustRun(t, "schedule", "add", "news", "--days", "mon", "--from", "08:00", "--to", "09:00")
+	mustRun(t, "mode", "create", "Evening")
+	mustRun(t, "mode", "add", "Evening", "social", "games")
+	mustRun(t, "schedule", "add", "Evening", "--days", "daily", "--from", "19:00", "--to", "23:00")
+	mustRun(t, "schedule", "apply", "Evening", "Weekend")
+	mustRun(t, "schedule", "add", "monk", "--days", "sun", "--from", "08:00", "--to", "10:00")
+	file := filepath.Join(t.TempDir(), "p.json")
+	if err := os.WriteFile(file, []byte(capture(t, "project", "export", "--share")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d := testDB(t) // a fresh computer
+	mustRun(t, "project", "import", file, "--yes")
+	news, err := d.BlockAutomationSpec("news")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(news.Own) != 1 || len(news.Schedules) != 1 {
+		t.Errorf("news: %+v", news)
+	}
+	if rows, _ := d.ListSchedules("news"); len(rows) != 2 {
+		t.Errorf("news windows: %+v", rows)
+	}
+	m, err := d.GetMode("Evening")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(m.Blocks, []string{"games", "social"}) || len(m.Spec.Own) != 1 || len(m.Spec.Schedules) != 1 {
+		t.Errorf("mode %+v", m)
+	}
+	if rows, _ := d.ListSchedules("social"); len(rows) != 3 {
+		t.Errorf("social follows the mode: %+v", rows)
+	}
+	monk, _ := d.MonkMode()
+	if len(monk.Spec.Own) != 1 || monk.Active {
+		t.Errorf("monk mode %+v", monk)
+	}
+	// Imported again: schedules and modes here are left as they are; the
+	// blocks come in renamed.
+	mustRun(t, "project", "import", file, "--yes")
+	if all, _ := d.SavedSchedules(); len(all) != 1 {
+		t.Errorf("schedules after a second import: %+v", all)
+	}
+	if m, _ := d.GetMode("Evening"); len(m.Blocks) != 4 {
+		t.Errorf("the second import's blocks join the mode: %v", m.Blocks)
 	}
 }

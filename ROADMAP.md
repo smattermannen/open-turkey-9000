@@ -59,7 +59,13 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       can't be switched off or weakened; Wi-Fi stays on for its places.
       `TestModeBlocksShareAutomation`, `TestMonkModeAutomation`,
       `TestMonkAutomationWindow`, `TestMonkAutomationPlace`,
-      `TestModes`. Not yet in projects (export/import).
+      `TestModes`. In projects: schedules and modes (with their own
+      windows, schedules, places in backups, settings); a block's windows
+      that are copies of a schedule say `copy_of` (an older KC9K reads
+      them as its own) and import applies the schedule instead; import
+      only adds (a schedule or mode of that name here is used as it is;
+      monk mode's automation only when it has none here, never switched
+      on). `TestProjectModes`.
     - [x] GUI: modes among the block cards above the blocks (monk mode
       always first; a block card dragged onto a mode goes in, or its ⋯
       menu "Move to the mode…"; blocks in a mode show only in its view),

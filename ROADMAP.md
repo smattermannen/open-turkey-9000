@@ -20,7 +20,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 - [ ] **Owner report 2026-11-17 (later)** (after testing the latest build;
   top priority; SPEC changed the same day, §6). In three steps, each
   merged when done.
-  - [ ] Step 1, fixes:
+  - [x] Step 1, fixes (built 2026-11-17; on the laptop: Unchecked):
     - [x] Deleting an opened block opened another block (the page fell back
       to the first block): now back to the block list; a refused delete
       leaves the block open (§4.2). `ci/gui_cards_smoke.py`.

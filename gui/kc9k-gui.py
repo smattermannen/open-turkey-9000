@@ -2082,7 +2082,15 @@ class ListCard(Gtk.Frame):
                 tooltip_text="For lists that read a page's title or text. Turning it on weakens the block.")
             self.test_check.connect("toggled", self.toggle_test)
             box.pack_start(self.test_check, False, False, 0)
-            box.pack_start(Gtk.Label(label="Actions:", xalign=0), False, False, 0)
+            # What it does in a line; every action behind Change actions…
+            # (R-GUI-3: the entries come first, details on demand).
+            does = Gtk.Box(spacing=8)
+            does.pack_start(Gtk.Label(label="Does:", valign=Gtk.Align.START), False, False, 0)
+            self.actions_summary = Gtk.Label(xalign=0, wrap=True, valign=Gtk.Align.START)
+            does.pack_start(self.actions_summary, True, True, 0)
+            self.actions_toggle = Gtk.ToggleButton(label="Change actions…", valign=Gtk.Align.START)
+            does.pack_start(self.actions_toggle, False, False, 0)
+            box.pack_start(does, False, False, 0)
             actions = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=5,
                                   column_spacing=12, row_spacing=2)
             for name, title in SITE_ACTIONS:
@@ -2090,7 +2098,10 @@ class ListCard(Gtk.Frame):
                 check.connect("toggled", self.toggle_action, name)
                 self.action_checks[name] = check
                 actions.add(check)
-            box.pack_start(actions, False, False, 0)
+            self.actions_revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
+            self.actions_revealer.add(actions)
+            self.actions_toggle.connect("toggled", lambda t: self.actions_revealer.set_reveal_child(t.get_active()))
+            box.pack_start(self.actions_revealer, False, False, 0)
             # The settings of ticked actions that have some, each with Change….
             self.param_rows = {}
             for name in PARAM_ACTIONS:
@@ -2164,6 +2175,10 @@ class ListCard(Gtk.Frame):
             actions = {a["action"]: a for a in data["actions"]}
             for name, check in self.action_checks.items():
                 check.set_active(name in actions)
+            if getattr(self, "actions_summary", None) is not None:
+                titles = [title for name, title in SITE_ACTIONS if name in actions]
+                self.actions_summary.set_text(", ".join(titles) if titles else
+                                              "Nothing yet: it only finds (tick an action under Change actions…)")
             for name, (row, label) in getattr(self, "param_rows", {}).items():
                 row.set_no_show_all(name not in actions)
                 row.set_visible(name in actions)

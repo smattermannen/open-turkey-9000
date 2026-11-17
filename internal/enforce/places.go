@@ -78,14 +78,21 @@ var (
 )
 
 // seenNetworks returns the networks in range, read at most every 10
-// seconds, asking for a fresh look every minute.
+// seconds, asking for a fresh look every minute. While none are seen (at
+// boot, after waking, Wi-Fi just switched on) it reads every 2 seconds and
+// asks every 15, so the place is known as soon as the networks are
+// (R-MODE-5).
 func seenNetworks(now time.Time) []db.Network {
 	placeMu.Lock()
 	defer placeMu.Unlock()
-	if now.Sub(placeAt) < 10*time.Second && !placeAt.IsZero() {
+	fresh, rescan := 10*time.Second, time.Minute
+	if len(placeSeen) == 0 {
+		fresh, rescan = 2*time.Second, 15*time.Second
+	}
+	if now.Sub(placeAt) < fresh && !placeAt.IsZero() {
 		return placeSeen
 	}
-	if now.Sub(placeRescan) > time.Minute {
+	if now.Sub(placeRescan) > rescan {
 		placeRescan = now
 		go func() { _ = exec.Command("nmcli", "dev", "wifi", "rescan").Run() }()
 	}

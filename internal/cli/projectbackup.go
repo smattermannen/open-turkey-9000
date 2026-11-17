@@ -8,6 +8,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -287,6 +288,12 @@ func importBackupExtras(database *db.DB, b *backupExtras, renamed map[string]str
 		if name, ok := renamed[h.Block]; ok {
 			h.Block = name
 		}
+		h.Actions = slices.Clone(h.Actions)
+		for i, a := range h.Actions {
+			if name, ok := renamed[a.Target]; ok && (a.Kind == db.HotkeyStart || a.Kind == db.HotkeyStop) {
+				h.Actions[i].Target = name
+			}
+		}
 		taken := false
 		for _, x := range have {
 			taken = taken || x.Keys == h.Keys
@@ -295,18 +302,12 @@ func importBackupExtras(database *db.DB, b *backupExtras, renamed map[string]str
 			fmt.Printf("The hotkey %s is in use here: left out.\n", h.Keys)
 			continue
 		}
-		if _, err := database.GetBlock(h.Block); err != nil {
-			fmt.Printf("The hotkey %s starts '%s', which isn't here: left out.\n", h.Keys, h.Block)
+		if why := hotkeyImportProblem(database, h); why != "" {
+			fmt.Printf("The hotkey %s %s: left out.\n", h.Keys, why)
 			continue
 		}
-		if len(h.Args()) > 0 {
-			if _, err := parseLockArgs(h.Args(), time.Now()); err != nil {
-				fmt.Printf("The hotkey %s has locks that can't be read (%v): left out.\n", h.Keys, err)
-				continue
-			}
-		}
 		h.PasswordHash = b.HotkeyPasswords[h.Keys]
-		say("add the hotkey %s (start %s%s)", h.Keys, h.Block, hotkeyLockText(h))
+		say("add the hotkey %s (%s)", h.Keys, describeHotkey(h))
 		if !dry {
 			if _, err := database.AddHotkey(h); err != nil {
 				return err
@@ -328,4 +329,35 @@ func importBackupExtras(database *db.DB, b *backupExtras, renamed map[string]str
 		}
 	}
 	return nil
+}
+
+// hotkeyImportProblem says why a hotkey from a backup can't be added here
+// ("" when it can): an action that can't be read, a block or mode that
+// isn't here, locks that can't be read.
+func hotkeyImportProblem(database *db.DB, h db.Hotkey) string {
+	steps := h.Steps()
+	if len(steps) == 0 {
+		return "does nothing"
+	}
+	for _, a := range steps {
+		if err := db.CheckHotkeyAction(a); err != nil {
+			return "has an action that can't be read (" + err.Error() + ")"
+		}
+		switch a.Kind {
+		case db.HotkeyStart, db.HotkeyStop:
+			if _, err := database.GetBlock(a.Target); err != nil {
+				return "uses the block '" + a.Target + "', which isn't here"
+			}
+		case db.HotkeyModeOn, db.HotkeyModeOff, db.HotkeyModeRun:
+			if _, err := resolveTarget(database, a.Target, db.KindMode); err != nil && !isFrozenChicken(a.Target) {
+				return "uses the mode '" + a.Target + "', which isn't here"
+			}
+		}
+		if len(a.LockArgs) > 0 {
+			if _, err := parseLockArgs(a.LockArgs, time.Now()); err != nil {
+				return "has locks that can't be read (" + err.Error() + ")"
+			}
+		}
+	}
+	return ""
 }

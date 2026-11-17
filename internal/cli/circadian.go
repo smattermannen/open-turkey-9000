@@ -41,10 +41,13 @@ type circadianView struct {
 	Lanes      []circadianLaneView `json:"lanes"`
 	Presets    []circadianPreset   `json:"presets"`
 	Wallpapers []circadianPicture  `json:"wallpapers"`
-	Dark       circadianDarkView   `json:"dark"`
-	DarkPages  bool                `json:"dark_pages"`
-	DarkExempt []string            `json:"dark_exempt"`
-	Hardware   circadianHardware   `json:"hardware"`
+	// OverrideModes: its wallpapers win over modes' (R-MODE-5; the same
+	// setting as a mode's "Override circadian rhythm wallpapers").
+	OverrideModes bool              `json:"override_modes"`
+	Dark          circadianDarkView `json:"dark"`
+	DarkPages     bool              `json:"dark_pages"`
+	DarkExempt    []string          `json:"dark_exempt"`
+	Hardware      circadianHardware `json:"hardware"`
 }
 
 type circadianLaneView struct {
@@ -130,12 +133,8 @@ func circadianState(database *db.DB) circadianView {
 	for _, p := range circadian.Presets {
 		view.Presets = append(view.Presets, circadianPreset{p.Name, p.Title, p.Detail, p.Lanes})
 	}
-	active := cfg.WallpaperAt(minute)
-	for i, w := range cfg.Wallpapers {
-		view.Wallpapers = append(view.Wallpapers, circadianPicture{Index: i + 1, Image: w.Image, Name: w.Name,
-			Path: filepath.Join(enforce.WallpapersDir(), w.Image),
-			From: circadian.Clock(w.From), To: circadian.Clock(w.To), Active: i == active})
-	}
+	view.Wallpapers = wallpaperPictures(cfg.Wallpapers, minute)
+	view.OverrideModes = enforce.LoadWallpaperSettings(database).CircadianFirst
 	view.Dark = circadianDarkView{Mode: cfg.Dark.Mode, LightFrom: circadian.Clock(cfg.Dark.LightFrom),
 		LightTo: circadian.Clock(cfg.Dark.LightTo), Now: "system"}
 	if dark, decided := cfg.DarkAt(minute); decided {
@@ -594,7 +593,6 @@ var circadianWallpaperRemoveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		var gone circadian.Wallpaper
-		var left []circadian.Wallpaper
 		if err := editCircadian(database, func(c *circadian.Config) error {
 			i, err := wallpaperIndex(c, args[0])
 			if err != nil {
@@ -602,17 +600,13 @@ var circadianWallpaperRemoveCmd = &cobra.Command{
 			}
 			gone = c.Wallpapers[i]
 			c.Wallpapers = slices.Delete(c.Wallpapers, i, i+1)
-			left = c.Wallpapers
 			return nil
 		}); err != nil {
 			return err
 		}
-		// The file goes when no other time uses it. It may still be on the
-		// desktop: the desktop keeps showing what it has loaded.
-		if !slices.ContainsFunc(left, func(w circadian.Wallpaper) bool { return w.Image == gone.Image }) &&
-			gone.Image == filepath.Base(gone.Image) && gone.Image != "" {
-			_ = os.Remove(filepath.Join(enforce.WallpapersDir(), gone.Image))
-		}
+		// The file goes when nothing else uses it (another time, a mode,
+		// the default).
+		forgetWallpaper(database, gone.Image)
 		fmt.Printf("Removed %s.\n", gone.Name)
 		return nil
 	}),

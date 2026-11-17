@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
+	"github.com/smattermannen/kc9k/internal/circadian"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/freeze"
@@ -146,6 +148,25 @@ type guiMode struct {
 	RunLeft int64 `json:"run_left"`
 	// TodayWindows: its windows still to come or open today (§4.1).
 	TodayWindows []string `json:"today_windows"`
+	// Wallpapers: its wallpapers (R-MODE-5), as circadian rhythm's.
+	Wallpapers []circadianPicture `json:"wallpapers"`
+}
+
+// guiWallpaper is the wallpaper settings outside circadian rhythm (§4.10).
+type guiWallpaper struct {
+	OverrideModes bool   `json:"override_modes"` // circadian rhythm's wallpapers win over modes'
+	Default       string `json:"default"`        // latest, circadian or custom
+	CustomName    string `json:"custom_name"`
+	CustomPath    string `json:"custom_path"`
+}
+
+func guiWallpaperSettings(database *db.DB) guiWallpaper {
+	s := enforce.LoadWallpaperSettings(database)
+	g := guiWallpaper{OverrideModes: s.CircadianFirst, Default: s.Default, CustomName: s.CustomName}
+	if s.Custom != "" {
+		g.CustomPath = filepath.Join(enforce.WallpapersDir(), s.Custom)
+	}
+	return g
 }
 
 // guiList is one website list for the interface.
@@ -380,6 +401,7 @@ type guiState struct {
 	Recording     *guiRecording     `json:"recording"`
 	Places        []guiPlace        `json:"places"`
 	Modes         []guiMode         `json:"modes"`     // §3.2, §3.8 (owner 2026-11-17)
+	Wallpaper     guiWallpaper      `json:"wallpaper"` // §4.10, R-MODE-5
 	Schedules     []guiSchedule     `json:"schedules"` // §3.6 schedules kept outside blocks
 	SocialPresets []db.SocialPreset `json:"social_presets"`
 	Access        map[string]string `json:"access"`
@@ -618,6 +640,7 @@ var guiStateCmd = &cobra.Command{
 		}
 		state.Schedules = guiSchedules(database, saved, modes)
 		state.Modes = guiModes(database, saved, modes, places, now, trusted)
+		state.Wallpaper = guiWallpaperSettings(database)
 		lifted := enforce.ScheduleLifted(database, now)
 		enabled := enforce.EnabledNames(database, trusted)
 		for _, b := range blocks {
@@ -869,7 +892,8 @@ func guiModes(database *db.DB, saved []db.SavedSchedule, modes []db.Mode, places
 			Windows: guiWins(saved, rows, m.Spec.DefaultOn), Schedules: []string{}, Places: []string{},
 			Automation: m.Spec.AutomationSettings, Continuous: a.Continuous(),
 			TodayWindows: windowsLeftToday(a.Windows, now), Custom: []string{},
-			RunLeft: enforce.ModeRunLeft(database, m.Name, trusted)}
+			RunLeft:    enforce.ModeRunLeft(database, m.Name, trusted),
+			Wallpapers: wallpaperPictures(enforce.ModeWallpapers(database, m.ID), circadian.MinuteOfDay(now))}
 		if param, err := database.ModeCustom(m.Name); err == nil && param != "" {
 			if items, err := db.CustomItems(param); err == nil {
 				for _, it := range items {
@@ -915,7 +939,8 @@ func guiModes(database *db.DB, saved []db.SavedSchedule, modes []db.Mode, places
 // can't end early), its windows the scheduled freezes.
 func guiFrozenChicken(database *db.DB, now time.Time) guiMode {
 	g := guiMode{Name: db.FrozenChickenName, Freeze: true, Blocks: []string{}, Windows: []guiWin{},
-		Schedules: []string{}, Places: []string{}, TodayWindows: []string{}, Custom: []string{}}
+		Schedules: []string{}, Places: []string{}, TodayWindows: []string{}, Custom: []string{},
+		Wallpapers: wallpaperPictures(enforce.ModeWallpapers(database, enforce.FrozenChickenWallpapers), circadian.MinuteOfDay(now))}
 	if until, err := database.FreezeUntil(); err == nil && until > now.Unix() {
 		g.FreezeLeft, g.Running, g.Active = until-now.Unix(), true, true
 		g.FreezeMode, _ = database.FreezeMode()

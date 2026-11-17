@@ -17,7 +17,9 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/smattermannen/kc9k/internal/circadian"
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
@@ -35,6 +37,11 @@ type modeExport struct {
 	Schedules  []string               `json:"schedules,omitempty"`
 	Places     []string               `json:"places,omitempty"` // backups only
 	Automation *db.AutomationSettings `json:"automation,omitempty"`
+	// Custom: what it opens or runs when it becomes enabled (a CustomParam).
+	Custom string `json:"custom,omitempty"`
+	// Wallpapers: its wallpapers (R-MODE-5); the pictures are in the file's
+	// "wallpaper".
+	Wallpapers []circadian.Wallpaper `json:"wallpapers,omitempty"`
 }
 
 // exportModes adds the schedules and modes to out, and each block's mode
@@ -60,10 +67,12 @@ func exportModes(database *db.DB, out *projectExport, share bool) error {
 		return err
 	}
 	for _, m := range modes {
-		if m.Monk && m.Spec.Equal(db.AutomationSpec{}) {
+		custom, _ := database.ModeCustom(m.Name)
+		wallpapers := enforce.ModeWallpapers(database, m.ID)
+		if m.Monk && m.Spec.Equal(db.AutomationSpec{}) && custom == "" && len(wallpapers) == 0 {
 			continue
 		}
-		e := modeExport{Name: m.Name, Monk: m.Monk}
+		e := modeExport{Name: m.Name, Monk: m.Monk, Custom: custom, Wallpapers: wallpapers}
 		for _, w := range m.Spec.Own {
 			e.Windows = append(e.Windows, exportWindow(w))
 		}
@@ -106,6 +115,7 @@ type checkedModes struct {
 	schedules map[string][]schedule.Window // by the file's name
 	modes     []modeExport
 	windows   map[string][]schedule.Window // a mode's own, by its name
+	pictures  map[string][]byte            // wallpaper pictures, by stored name
 }
 
 // checkModes checks a file's schedules and modes before anything is
@@ -258,6 +268,12 @@ func importModes(database *db.DB, c checkedModes, in projectExport, renamed map[
 			if err != nil {
 				return err
 			}
+			if err := importModeExtras(database, here.ID, here.Name, m, c.pictures, dry, say); err != nil {
+				return err
+			}
+			if spec.Equal(db.AutomationSpec{}) {
+				continue
+			}
 			if !here.Spec.Equal(db.AutomationSpec{}) {
 				fmt.Println("Monk mode has windows or places here already: left as it is.")
 				continue
@@ -294,6 +310,9 @@ func importModes(database *db.DB, c checkedModes, in projectExport, renamed map[
 			}
 			say("add mode '%s' with %d blocks", as, len(members))
 			if dry {
+				if err := importModeExtras(database, -1, as, m, c.pictures, dry, say); err != nil {
+					return err
+				}
 				continue
 			}
 			if err := database.CreateMode(as); err != nil {
@@ -303,6 +322,9 @@ func importModes(database *db.DB, c checkedModes, in projectExport, renamed map[
 				return err
 			}
 			if err := database.SetModeAutomation(target.ID, spec); err != nil {
+				return err
+			}
+			if err := importModeExtras(database, target.ID, as, m, c.pictures, dry, say); err != nil {
 				return err
 			}
 		}

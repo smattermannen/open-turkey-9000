@@ -145,6 +145,8 @@ type projectExport struct {
 	// Schedules kept outside blocks and modes (§3.6, §3.2).
 	Schedules []savedScheduleExport `json:"schedules,omitempty"`
 	Modes     []modeExport          `json:"modes,omitempty"`
+	// Wallpaper: the wallpaper settings and pictures (R-MODE-5).
+	Wallpaper *wallpaperExport `json:"wallpaper,omitempty"`
 }
 
 func exportWindow(w schedule.Window) windowExport {
@@ -574,6 +576,7 @@ passwords, hotkeys and statistics are never in it.`,
 		if err := exportModes(database, &out, share); err != nil {
 			return err
 		}
+		exportWallpapers(database, &out)
 		if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
 			n := enforce.LoadNoticeOptions(database)
 			out.Notifications = &n
@@ -626,6 +629,16 @@ With --dry-run, says what would happen and changes nothing.`,
 				return err
 			}
 		}
+		// R-CUSTOM-1: what the file would open or run here is shown first.
+		if customs := projectCustoms(in); len(customs) > 0 {
+			if dry {
+				for _, c := range customs {
+					fmt.Printf("Would: add a custom action that can %s\n", c)
+				}
+			} else if err := confirmCustoms(cmd, customs); err != nil {
+				return err
+			}
+		}
 
 		// Validate everything before writing anything.
 		var blocks []checkedBlock
@@ -637,6 +650,9 @@ With --dry-run, says what would happen and changes nothing.`,
 			blocks = append(blocks, c)
 		}
 		modes, err := checkModes(in)
+		if err == nil {
+			modes.pictures, err = checkWallpapers(in)
+		}
 		if err != nil {
 			return err
 		}
@@ -994,6 +1010,9 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 		}
 		if err := importCircadian(database, in.Circadian, dry, say); err != nil {
+			return err
+		}
+		if err := importWallpaperSettings(database, in.Wallpaper, modes.pictures, dry, say); err != nil {
 			return err
 		}
 		for name, raw := range in.Templates {

@@ -17,9 +17,9 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 
 ### 0.1 Code contradicting `SPEC.md`
 
-- [ ] **Owner report 2026-11-17 (later)** (after testing the latest build;
+- [x] **Owner report 2026-11-17 (later)** (after testing the latest build;
   top priority; SPEC changed the same day, §6). In three steps, each
-  merged when done.
+  merged when done; on the laptop: Unchecked.
   - [x] Step 1, fixes (built 2026-11-17; on the laptop: Unchecked):
     - [x] Deleting an opened block opened another block (the page fell back
       to the first block): now back to the block list; a refused delete
@@ -119,7 +119,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     - [x] *Social preset* renamed *social media setting* (§3.2): the words
       people see already said "social media settings"; SPEC's glossary now
       does too.
-  - [ ] Step 3:
+  - [x] Step 3 (built 2026-11-17; on the laptop: Unchecked):
     - [x] Mode action from every trigger (§3.9, R-MODE-4, refined the same
       day: the mode runs now for a time, locked, whatever its automation
       says, then is as it was): list and phrase set action `mode`
@@ -168,9 +168,47 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       page. SPEC's list of hotkey actions lost "pause a block" (there is no
       pause function). `TestHotkeyActions`, `TestHotkeyPreset`,
       `ci/gui_hotkey_smoke.py`. On a real keyboard: Unchecked.
-    - [ ] Mode wallpapers, the override setting shared with circadian
-      rhythm, the wallpaper default, places looked for before sign-in
-      (§4.10, R-MODE-5).
+    - [x] Mode wallpapers (§4.10, R-MODE-5): every mode, monk mode and
+      Frozen Chicken too, has wallpapers laid out as circadian rhythm's
+      (`kc9k mode wallpaper M add|time|remove`, settings
+      `mode.wallpapers.<id>`, Frozen Chicken's `.0`); the GUI's
+      `WallpaperEditor` is the circadian rhythm page's editor, in the
+      mode's view too. While a mode is enabled its picture due shows; of
+      several, the one enabled last. One setting decides which win
+      (`kc9k wallpaper priority modes|circadian`): "Override circadian
+      rhythm wallpapers" on every mode's view, "Override modes" on the
+      circadian rhythm page. The wallpaper default (`kc9k wallpaper
+      default latest|circadian|custom FILE`; Settings, Wallpaper default)
+      shows when neither has one and while the place isn't known for a
+      mode switched by places, which then shows nothing and doesn't let
+      circadian rhythm's picture through either (it might override it:
+      the owner's home/school example). A mode by time alone still shows.
+      The place counts as unknown at once at boot and after waking (time
+      asleep grew), otherwise after a minute without networks (one empty
+      look isn't leaving). Places looked for at once: the engine steps
+      every second while the place decides and isn't known (3 minutes
+      after starting or waking), networks read every 2 s and a scan asked
+      every 15 s while none are seen; the choice goes into signed-out
+      users' settings before anyone signs in, as circadian rhythm's did.
+      Before sleep a systemd hook the daemon writes while it matters
+      (`/usr/lib/systemd/system-sleep/kc9k`, `blocker.SyncSleepHook`,
+      removed by uninstall) runs `kc9k-bin wallpaper before-sleep`: with a
+      picture or circadian rhythm as default it goes on first, so the
+      laptop wakes with it, not with the last place's; after waking what
+      should show is given afresh. `kc9k wallpaper` says what shows now
+      and why. Project files carry the modes' wallpapers, the default and
+      its picture. `TestModeWallpaper*`, `TestWallpaperBeforeSleep`,
+      `TestWallpaperInUse`, `TestModeWallpaperCommands`,
+      `TestProjectModeWallpapersAndCustoms`, `ci/gui_wallpaper_smoke.py`.
+      On the laptop (a real boot and wake at two places): Unchecked.
+    - [x] Found while building it, fixed: project files didn't carry a
+      mode's custom actions; importing a file now lists what its custom
+      actions would open or run and needs `--yes` (the GUI shows them in
+      its Import question), since a shared file can come from anyone
+      (R-CUSTOM-1). A backup's hotkeys that run actions (or start no block)
+      were left out at import, and their blocks weren't renamed with the
+      file's: now checked action by action (`hotkeyImportProblem`).
+      `TestBackupHotkeyActions`.
 
 - [x] **Owner report 2026-11-17** (real use on the laptop; top priority).
   Built the same day; on the laptop: Unchecked.

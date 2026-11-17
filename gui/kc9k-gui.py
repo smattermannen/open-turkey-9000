@@ -356,6 +356,8 @@ CHALLENGE_MIN, CHALLENGE_MAX, CHALLENGE_DEFAULT = 1, 5000, 300
 PREFS_PATH = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
                           "kc9k", "gui.json")
 THEMES = (("system", "Same as the system"), ("light", "Light"), ("dark", "Dark"))
+# §4.10 Wallpaper default (owner 2026-11-17), as `kc9k wallpaper default` takes it.
+WALLPAPER_DEFAULTS = (("latest", "Latest wallpaper"), ("circadian", "Circadian rhythm"), ("custom", "Custom"))
 THEME_DIRS = ("/usr/share/themes", os.path.expanduser("~/.themes"),
               os.path.expanduser("~/.local/share/themes"))
 
@@ -4567,6 +4569,125 @@ class AutomationEditor(Gtk.Box):
                                 bool(settings.get("default_on")), bool(settings.get("need_both")), bool(windows))
 
 
+def choose_picture(parent, title="Choose a wallpaper"):
+    """A PNG, JPEG or WebP picture's path, or None."""
+    chooser = Gtk.FileChooserDialog(title=title, transient_for=parent, action=Gtk.FileChooserAction.OPEN)
+    chooser.add_button("Cancel", Gtk.ResponseType.CANCEL)
+    chooser.add_button("Choose", Gtk.ResponseType.OK)
+    pictures = Gtk.FileFilter()
+    pictures.set_name("Pictures (PNG, JPEG, WebP)")
+    for mime in ("image/png", "image/jpeg", "image/webp"):
+        pictures.add_mime_type(mime)
+    chooser.add_filter(pictures)
+    for folder in ("/usr/share/backgrounds", os.path.expanduser("~/Pictures")):
+        if os.path.isdir(folder):
+            try:
+                chooser.add_shortcut_folder(folder)
+            except GLib.Error:
+                pass
+    answer = chooser.run()
+    path = chooser.get_filename()
+    chooser.destroy()
+    return path if answer == Gtk.ResponseType.OK and path else None
+
+
+def picture_thumb(path, width=112, height=63):
+    """A thumbnail of a stored wallpaper (a placeholder when unreadable)."""
+    from gi.repository import GdkPixbuf
+    try:
+        thumb = Gtk.Image.new_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(path, width, height, True))
+    except GLib.Error:
+        thumb = Gtk.Image.new_from_icon_name("image-missing", Gtk.IconSize.DIALOG)
+    thumb.set_size_request(width, height)
+    return thumb
+
+
+class WallpaperEditor(Gtk.Box):
+    """Wallpapers by time (§4.10; R-MODE-5, owner 2026-11-17): the timeline,
+    a row per picture (its times typed, Set, Remove) and Add a wallpaper…,
+    the same for circadian rhythm and for each mode. command() gives the
+    command's start: ["circadian", "wallpaper"] or ["mode", "wallpaper",
+    <mode>]."""
+
+    def __init__(self, window, command):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.window, self.command = window, command
+        self.timeline = WallpaperTimeline(self.moved)
+        self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.add_button = Gtk.Button(label="Add a wallpaper…", halign=Gtk.Align.START)
+        self.add_button.connect("clicked", self.add)
+        for widget in (self.timeline, self.rows, self.add_button):
+            self.pack_start(widget, False, False, 0)
+        self.shown = None
+
+    def run(self, *args):
+        self.window.run([*self.command(), *args])
+
+    def moved(self, index, start, end):
+        """A bar dragged on the timeline: the picture's new times."""
+        self.run("time", str(index), hm_text(start), hm_text(end))
+
+    def fill(self, wallpapers):
+        now = datetime.datetime.now()
+        self.timeline.set_wallpapers(wallpapers, now.hour * 60 + now.minute)
+        self.timeline.set_visible(bool(wallpapers))
+        # The rows only when they change: times being typed stay.
+        key = (tuple(self.command()), json.dumps(wallpapers, sort_keys=True))
+        if key == self.shown:
+            return
+        self.shown = key
+        for child in self.rows.get_children():
+            self.rows.remove(child)
+        for picture in wallpapers:
+            row = Gtk.Box(spacing=10)
+            row.pack_start(picture_thumb(picture["path"]), False, False, 0)
+            name = Gtk.Label(label=picture["name"] + ("  (now)" if picture["active"] else ""), xalign=0,
+                             ellipsize=Pango.EllipsizeMode.MIDDLE, max_width_chars=30)
+            row.pack_start(name, True, True, 0)
+            start = Gtk.Entry(text=picture["from"], width_chars=6, max_length=5)
+            end = Gtk.Entry(text=picture["to"], width_chars=6, max_length=5)
+            save = lambda _w, p=picture, s=start, e=end: self.run(
+                "time", str(p["index"]), s.get_text().strip(), e.get_text().strip())
+            start.connect("activate", save)
+            end.connect("activate", save)
+            set_button = Gtk.Button(label="Set")
+            set_button.connect("clicked", save)
+            remove = Gtk.Button(label="Remove")
+            remove.connect("clicked", lambda _b, p=picture: self.run("remove", str(p["index"])))
+            for widget in (start, Gtk.Label(label="to"), end, set_button, remove):
+                widget.set_valign(Gtk.Align.CENTER)
+                row.pack_start(widget, False, False, 0)
+            self.rows.pack_start(row, False, False, 0)
+        if not wallpapers:
+            self.rows.pack_start(dim("None yet."), False, False, 0)
+        self.rows.show_all()
+
+    def add(self, _button, answer=None):
+        """A picture and its times. answer: for tests, (path, from, to)."""
+        if answer is not None:
+            self.run("add", *answer)
+            return
+        path = choose_picture(self.get_toplevel())
+        if not path:
+            return
+        dialog = Gtk.Dialog(title="When is it the wallpaper?", transient_for=self.get_toplevel(), modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Add", Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+        row = Gtk.Box(spacing=8, border_width=14)
+        start = Gtk.Entry(text="06:00", width_chars=6, max_length=5, activates_default=True)
+        end = Gtk.Entry(text="12:00", width_chars=6, max_length=5, activates_default=True)
+        for widget in (Gtk.Label(label="From"), start, Gtk.Label(label="to"), end):
+            row.pack_start(widget, False, False, 0)
+        dialog.get_content_area().add(row)
+        dialog.show_all()
+        reply = dialog.run()
+        times = start.get_text().strip(), end.get_text().strip()
+        dialog.destroy()
+        if reply == Gtk.ResponseType.OK:
+            self.run("add", path, *times)
+
+
 class CircadianPage(Gtk.ScrolledWindow):
     """Settings that follow the time of day (§4.10). Reads 'kc9k circadian
     show --json'; every change runs a 'kc9k circadian' command. Nothing here
@@ -4640,17 +4761,27 @@ class CircadianPage(Gtk.ScrolledWindow):
         self.clips_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         clips.pack_start(self.clips_box, False, False, 0)
 
-        self.wallpapers = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.wallpaper_timeline = WallpaperTimeline(self.wallpaper_moved)
-        add_wallpaper = Gtk.Button(label="Add a wallpaper…", halign=Gtk.Align.START)
-        add_wallpaper.connect("clicked", self.add_wallpaper)
+        self.wallpaper_editor = WallpaperEditor(self.window, lambda: ["circadian", "wallpaper"])
+        self.wallpapers, self.wallpaper_timeline = self.wallpaper_editor.rows, self.wallpaper_editor.timeline
+        # R-MODE-5 (owner 2026-11-17): one setting with each mode's
+        # "Override circadian rhythm wallpapers", seen from this side.
+        override_row = Gtk.Box(spacing=12)
+        override_row.pack_start(Gtk.Label(label="Override modes", xalign=0), False, False, 0)
+        override_row.pack_start(dim("its wallpapers over a mode's"), False, False, 0)
+        self.override_modes = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.override_modes.connect("state-set", self.switch_override_modes)
+        override_row.pack_end(self.override_modes, False, False, 0)
         box.pack_start(section("Wallpapers", dim("Each picture is the wallpaper between its two times."),
-                               self.wallpaper_timeline, self.wallpapers, add_wallpaper, help=(
+                               self.wallpaper_editor, override_row, help=(
                                    "Drag a bar to move it, or an end to change when it starts or stops "
                                    "(Shift: to the minute). Where times overlap, the one that started "
                                    "last shows; what it covers is faint. A wallpaper you pick yourself "
                                    "stays until the next one starts. The wallpaper due is in place when "
-                                   "you sign in.")), False, False, 0)
+                                   "you sign in. Modes have wallpapers too: while one is enabled its "
+                                   "wallpaper shows, unless Override modes is on (the same setting as a "
+                                   "mode's Override circadian rhythm wallpapers, the other way round). "
+                                   "What shows when neither has one is the wallpaper default, in "
+                                   "Settings.")), False, False, 0)
 
         self.dark_radios = {}
         dark_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -4759,8 +4890,8 @@ class CircadianPage(Gtk.ScrolledWindow):
             self.lane_values[name].set_text(now)
             self.editors[name].set_data(lane, view["minute"], view["on"] and lane["on"])
         self.fill_warnings(view)
-        if self.changed("wallpapers", view["wallpapers"]):
-            self.fill_wallpapers(view["wallpapers"])
+        self.wallpaper_editor.fill(view["wallpapers"])
+        set_switch(self.override_modes, bool(view.get("override_modes")))
         dark = view["dark"]
         self.dark_radios[dark["mode"]].set_active(True)
         if self.changed("dark times", [dark["light_from"], dark["light_to"]]):
@@ -4843,48 +4974,6 @@ class CircadianPage(Gtk.ScrolledWindow):
             bar.show_all()
         self.warnings.set_visible(bool(notes))
 
-    def wallpaper_moved(self, index, start, end):
-        """A bar dragged on the timeline: the picture's new times."""
-        self.window.run(["circadian", "wallpaper", "time", str(index), hm_text(start), hm_text(end)])
-
-    def fill_wallpapers(self, wallpapers):
-        from gi.repository import GdkPixbuf
-        now = datetime.datetime.now()
-        self.wallpaper_timeline.set_wallpapers(wallpapers, now.hour * 60 + now.minute)
-        self.wallpaper_timeline.set_visible(bool(wallpapers))
-        for child in self.wallpapers.get_children():
-            self.wallpapers.remove(child)
-        for picture in wallpapers:
-            row = Gtk.Box(spacing=10)
-            try:
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(picture["path"], 112, 63, True)
-                thumb = Gtk.Image.new_from_pixbuf(pixbuf)
-            except GLib.Error:
-                thumb = Gtk.Image.new_from_icon_name("image-missing", Gtk.IconSize.DIALOG)
-            thumb.set_size_request(112, 63)
-            row.pack_start(thumb, False, False, 0)
-            name = Gtk.Label(label=picture["name"] + ("  (now)" if picture["active"] else ""), xalign=0,
-                             ellipsize=Pango.EllipsizeMode.MIDDLE, max_width_chars=30)
-            row.pack_start(name, True, True, 0)
-            start = Gtk.Entry(text=picture["from"], width_chars=6, max_length=5)
-            end = Gtk.Entry(text=picture["to"], width_chars=6, max_length=5)
-            save = lambda _w, p=picture, s=start, e=end: self.window.run(
-                ["circadian", "wallpaper", "time", str(p["index"]), s.get_text().strip(), e.get_text().strip()])
-            start.connect("activate", save)
-            end.connect("activate", save)
-            set_button = Gtk.Button(label="Set")
-            set_button.connect("clicked", save)
-            remove = Gtk.Button(label="Remove")
-            remove.connect("clicked", lambda _b, p=picture: self.window.run(
-                ["circadian", "wallpaper", "remove", str(p["index"])]))
-            for widget in (start, Gtk.Label(label="to"), end, set_button, remove):
-                widget.set_valign(Gtk.Align.CENTER)
-                row.pack_start(widget, False, False, 0)
-            self.wallpapers.pack_start(row, False, False, 0)
-        if not wallpapers:
-            self.wallpapers.pack_start(dim("None yet."), False, False, 0)
-        self.wallpapers.show_all()
-
     # Changes
     def switch_master(self, switch, state):
         if not self.filling:
@@ -4899,6 +4988,11 @@ class CircadianPage(Gtk.ScrolledWindow):
     def switch_dark_pages(self, _switch, state):
         if not self.filling:
             self.window.run(["circadian", "dark-pages", "on" if state else "off"])
+        return True
+
+    def switch_override_modes(self, _switch, state):
+        if not self.filling:
+            self.window.run(["wallpaper", "priority", "circadian" if state else "modes"])
         return True
 
     def preset_changed(self, _combo):
@@ -5033,43 +5127,8 @@ class CircadianPage(Gtk.ScrolledWindow):
             self.window.run(["circadian", "exempt", "add", site],
                             then=lambda _o: self.exempt_entry.set_text(""))
 
-    def add_wallpaper(self, _button):
-        chooser = Gtk.FileChooserDialog(title="Choose a wallpaper", transient_for=self.window,
-                                        action=Gtk.FileChooserAction.OPEN)
-        chooser.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        chooser.add_button("Choose", Gtk.ResponseType.OK)
-        pictures = Gtk.FileFilter()
-        pictures.set_name("Pictures (PNG, JPEG, WebP)")
-        for mime in ("image/png", "image/jpeg", "image/webp"):
-            pictures.add_mime_type(mime)
-        chooser.add_filter(pictures)
-        for folder in ("/usr/share/backgrounds", os.path.expanduser("~/Pictures")):
-            if os.path.isdir(folder):
-                try:
-                    chooser.add_shortcut_folder(folder)
-                except GLib.Error:
-                    pass
-        answer = chooser.run()
-        path = chooser.get_filename()
-        chooser.destroy()
-        if answer != Gtk.ResponseType.OK or not path:
-            return
-        dialog = Gtk.Dialog(title="When is it the wallpaper?", transient_for=self.window, modal=True)
-        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        dialog.add_button("Add", Gtk.ResponseType.OK)
-        dialog.set_default_response(Gtk.ResponseType.OK)
-        row = Gtk.Box(spacing=8, border_width=14)
-        start = Gtk.Entry(text="06:00", width_chars=6, max_length=5, activates_default=True)
-        end = Gtk.Entry(text="12:00", width_chars=6, max_length=5, activates_default=True)
-        for widget in (Gtk.Label(label="From"), start, Gtk.Label(label="to"), end):
-            row.pack_start(widget, False, False, 0)
-        dialog.get_content_area().add(row)
-        dialog.show_all()
-        answer = dialog.run()
-        times = start.get_text().strip(), end.get_text().strip()
-        dialog.destroy()
-        if answer == Gtk.ResponseType.OK:
-            self.window.run(["circadian", "wallpaper", "add", path, *times])
+    def add_wallpaper(self, button=None, answer=None):
+        self.wallpaper_editor.add(button, answer)
 
 
 class Window(Gtk.ApplicationWindow):
@@ -7120,6 +7179,25 @@ class Window(Gtk.ApplicationWindow):
                                            "becomes enabled (also once at sign-in, when it is enabled then)."),
             self.mode_custom)
         box.pack_start(self.mode_custom_section, False, False, 0)
+        # R-MODE-5 (owner 2026-11-17): the mode's wallpapers, laid out as
+        # circadian rhythm's, and which win (one setting with circadian
+        # rhythm's Override modes).
+        self.mode_wallpapers = WallpaperEditor(self, lambda: ["mode", "wallpaper", getattr(self, "shown_mode", None) or ""])
+        override_row = Gtk.Box(spacing=12)
+        override_row.pack_start(Gtk.Label(label="Override circadian rhythm wallpapers", xalign=0), False, False, 0)
+        self.mode_override = Gtk.Switch(valign=Gtk.Align.CENTER)
+        self.mode_override.connect("state-set", self.toggle_mode_override)
+        override_row.pack_end(self.mode_override, False, False, 0)
+        self.mode_wallpaper_section = section(
+            "Wallpapers", dim("While the mode is enabled, each picture is the wallpaper between its two times."),
+            self.mode_wallpapers, override_row,
+            help="Drag a bar to move it, or an end to change when it starts or stops (Shift: to the minute). "
+                 "Of several enabled modes, the one enabled last shows its wallpaper. Override circadian "
+                 "rhythm wallpapers is one setting for all modes, the same as Override modes on the "
+                 "circadian rhythm page the other way round. A mode switched by places shows its wallpaper "
+                 "once KC9K knows where you are; until then (no Wi-Fi, the first seconds after starting or "
+                 "waking) the wallpaper default in Settings shows.")
+        box.pack_start(self.mode_wallpaper_section, False, False, 0)
         self.mode_automation_section = section(
             "Automation", self.mode_editors,
             help="Its windows (its own, and those of schedules applied to it) and its places. Disabled by "
@@ -7141,6 +7219,10 @@ class Window(Gtk.ApplicationWindow):
         monk = bool(mode.get("monk"))
         frozen = bool(mode.get("freeze"))
         self.mode_title.set_text(mode["name"])
+        self.mode_wallpapers.fill(mode.get("wallpapers") or [])
+        was, self.updating = self.updating, True
+        self.mode_override.set_active(not (self.state.get("wallpaper") or {}).get("override_modes"))
+        self.updating = was
         self.mode_freeze_box.set_visible(frozen)
         self.mode_automation_section.set_visible(not frozen)
         self.mode_custom_section.set_visible(not frozen)
@@ -7261,6 +7343,13 @@ class Window(Gtk.ApplicationWindow):
         if name:
             self.mode_blocks_shown = None
             self.take_out_of_mode(name)
+
+    def toggle_mode_override(self, _switch, wanted):
+        """R-MODE-5: modes' wallpapers over circadian rhythm's, or the other
+        way round, for all modes."""
+        if not self.updating:
+            self.run(["wallpaper", "priority", "modes" if wanted else "circadian"])
+        return False
 
     def set_mode_custom(self, items):
         """What the shown mode opens or runs when it becomes enabled: the
@@ -8764,9 +8853,11 @@ class Window(Gtk.ApplicationWindow):
             return
         locks = [line.split("Would: set a lock: ", 1)[1] for line in output.splitlines()
                  if "Would: set a lock: " in line]
+        # R-CUSTOM-1: what its custom actions open or run is in the list above.
+        customs = "Would: add a custom action that can " in output
         if self.confirm("Import this setup?", output.replace("Would: ", "• "), "Import") \
                 and self.confirm_lock(locks):
-            self.run(["project", "import", path] + (["--yes"] if locks else []),
+            self.run(["project", "import", path] + (["--yes"] if locks or customs else []),
                      then=lambda result: self.message(result, Gtk.MessageType.INFO))
 
     # Clusters ------------------------------------------------------------
@@ -10016,6 +10107,32 @@ class Window(Gtk.ApplicationWindow):
                             "image writers are blocked and image writers (USB Image Writer, Etcher, "
                             "Disks, …) are closed. It can't be turned off during a lock.")), False, False, 0)
 
+        # §4.10, R-MODE-5 (owner 2026-11-17): what shows when no mode or
+        # circadian rhythm wallpaper does, and while the place isn't known.
+        self.wallpaper_default = Gtk.ComboBoxText(valign=Gtk.Align.CENTER)
+        for key, label in WALLPAPER_DEFAULTS:
+            self.wallpaper_default.append(key, label)
+        self.wallpaper_default.connect("changed", self.wallpaper_default_changed)
+        default_row = Gtk.Box(spacing=16)
+        default_row.pack_start(Gtk.Label(label="Default to", xalign=0), True, True, 0)
+        default_row.pack_end(self.wallpaper_default, False, False, 0)
+        self.wallpaper_custom_row = Gtk.Box(spacing=10, no_show_all=True)
+        self.wallpaper_custom_thumb = Gtk.Box()
+        self.wallpaper_custom_name = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE, max_width_chars=30)
+        choose = Gtk.Button(label="Choose a picture…", valign=Gtk.Align.CENTER)
+        choose.connect("clicked", self.choose_wallpaper_default)
+        for widget in (self.wallpaper_custom_thumb, self.wallpaper_custom_name):
+            self.wallpaper_custom_row.pack_start(widget, False, False, 0)
+        self.wallpaper_custom_row.pack_end(choose, False, False, 0)
+        self.wallpaper_default_note = dim("")
+        box.pack_start(section(
+            "Wallpaper default",
+            dim("What the desktop shows when no mode and no circadian rhythm wallpaper does, and while "
+                "Killer Chicken can't tell where you are for a mode switched by places (no Wi-Fi, the "
+                "first seconds after starting or waking)."),
+            default_row, self.wallpaper_custom_row, self.wallpaper_default_note), False, False, 0)
+        self.wallpaper_default_shown = None
+
         self.password_status = Gtk.Label(xalign=0, wrap=True)
         password_row = Gtk.Box(spacing=6)
         self.password_set_button = Gtk.Button(label="Set password…")
@@ -10506,7 +10623,55 @@ class Window(Gtk.ApplicationWindow):
                         "Weakening and locks won't ask for it any more.", "Remove"):
             self.run(["password", "remove"], then=lambda _o: setattr(self, "settings_password", None))
 
+    def update_wallpaper_default(self):
+        w = self.state.get("wallpaper") or {}
+        key = json.dumps(w, sort_keys=True)
+        if key == self.wallpaper_default_shown:
+            return
+        self.wallpaper_default_shown = key
+        was, self.updating = self.updating, True
+        self.wallpaper_default.set_active_id(w.get("default") or "latest")
+        self.updating = was
+        custom = w.get("default") == "custom" and w.get("custom_path")
+        for child in self.wallpaper_custom_thumb.get_children():
+            self.wallpaper_custom_thumb.remove(child)
+        if custom:
+            self.wallpaper_custom_thumb.add(picture_thumb(w["custom_path"]))
+        self.wallpaper_custom_name.set_text(w.get("custom_name") or "")
+        self.wallpaper_custom_row.set_visible(bool(custom))
+        if custom:
+            self.wallpaper_custom_row.show_all()
+        self.wallpaper_default_note.set_text({
+            "latest": "The wallpaper stays as it is. At a new place without Wi-Fi that can be the last "
+                      "place's wallpaper until Killer Chicken knows where you are.",
+            "circadian": "Circadian rhythm's wallpaper for the time of day, even with circadian rhythm "
+                         "switched off.",
+            "custom": "This picture shows until Killer Chicken knows where you are. It also goes on before "
+                      "the computer sleeps, so it wakes with it, not with the last place's wallpaper.",
+        }.get(w.get("default") or "latest", ""))
+
+    def wallpaper_default_changed(self, combo):
+        if self.updating:
+            return
+        key = combo.get_active_id()
+        if key != "custom":
+            self.run(["wallpaper", "default", key])
+        elif (self.state.get("wallpaper") or {}).get("custom_path"):
+            self.run(["wallpaper", "default", "custom"])
+        else:
+            self.choose_wallpaper_default(None)
+
+    def choose_wallpaper_default(self, _button, path=None):
+        """Custom: the picture shown by default. path: for tests."""
+        path = path or choose_picture(self, "Choose the default wallpaper")
+        self.wallpaper_default_shown = None  # cancelled: the box shows the setting again
+        if path:
+            self.run(["wallpaper", "default", "custom", path])
+        else:
+            self.update_wallpaper_default()
+
     def update_settings(self):
+        self.update_wallpaper_default()
         lock = self.state.get("nepsis_lock", {})
         text = describe_nepsis(self.state.get("nepsis"), self.state.get("nepsis_count"))
         if lock.get("lock_seconds"):

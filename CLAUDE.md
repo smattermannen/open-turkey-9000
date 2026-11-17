@@ -35,8 +35,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   install-librewolf`). Independent of the source dir.
 - `make uninstall` runs hidden `prepare-uninstall`: refused while locked;
   else removes all layers, SafeSearch/search engine policies, unsigned-
-  extension permission, no-escape boot lock; leaves a policy telling
-  browsers to remove the extension. LibreWolf stays.
+  extension permission, no-escape boot lock, the sleep hook; leaves a
+  policy telling browsers to remove the extension. LibreWolf stays.
 - `TAGS=devmaster`: `kc9k master-set` / `kc9k master` (stdin) lift every
   lock, freeze, strict mode, no-escape. With root-owned
   `/var/lib/kc9k/allow-remote-control`, remote-controlled browsers aren't
@@ -410,7 +410,36 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `darkExempt` → daemon `/dark-exempt` (`darkExemptHandler`, refused
   behind an app/settings access password). `circadian.Shape` mirrored by
   GUI `clip_shape`.
-  `ci/circadian_test.py` tests dark pages.
+  `ci/circadian_test.py` tests dark pages. The wallpaper the engine gives
+  is `pickWallpaper`'s (wallpapers.go, below), not only circadian rhythm's.
+- **Wallpapers of modes** (R-MODE-5, §4.10; owner 2026-11-17;
+  `enforce/wallpapers.go`, `cli/wallpapers.go`, `cli/projectwallpapers.go`,
+  `blocker/sleephook.go`): settings `mode.wallpapers.<mode id>`
+  (`[]circadian.Wallpaper`; Frozen Chicken `FrozenChickenWallpapers` = 0)
+  and `wallpaper` (`WallpaperSettings`: `CircadianFirst`, `Default`
+  latest|circadian|custom, `Custom` picture kept when another default is
+  chosen). `lookAtModes` (enabled modes; one switched by places while
+  `placesHere` is unknown makes it `unsure`; `modeOnSince`: the one
+  enabled last wins) → `pickWallpaper` (`keep`: nothing given, nothing
+  forgotten). The engine (`Circadian.desktop`) holds a place known in the
+  last minute (`placeGrace`), forgets it at once on a wake
+  (`sleptSeconds` grew; `ForgetSeenNetworks`), steps every second while
+  `lookingForPlace`. `syncSleepHook` writes `/usr/lib/systemd/system-sleep/kc9k`
+  (`circadianSleepHook`, faked in `fakeCircadian`) while a mode switched by
+  places has wallpapers and the default isn't latest; it runs hidden
+  `kc9k wallpaper before-sleep` (`WallpaperBeforeSleep`, access-exempt),
+  which marks `wallpaper.before_sleep`; after the wake the engine gives
+  afresh (`beforeSleepGiven`). Pictures go when nothing uses them
+  (`WallpaperInUse`, `forgetWallpaper`). CLI `kc9k mode wallpaper M
+  [add|time|remove]`, `kc9k wallpaper [priority|default]`; gui-state
+  `modes[].wallpapers`, `wallpaper`; circadian view `override_modes`. GUI
+  `WallpaperEditor` (circadian page and mode view), `choose_picture`,
+  mode view `mode_override`, circadian `override_modes`, Settings
+  `wallpaper_default`. Project files: modes' `custom`/`wallpapers`,
+  `wallpaper` (settings, Frozen Chicken's, pictures); import lists custom
+  actions (`projectCustoms`) and needs `--yes` (`confirmCustoms`).
+  `TestModeWallpaper*`, `TestWallpaperBeforeSleep`,
+  `TestModeWallpaperCommands`, `ci/gui_wallpaper_smoke.py`.
 - **Pauses and breaks** (`db/pauses.go`, `enforce/soon.go`, `db/breaks.go`,
   `cli/breaks.go`): `block_pauses` until trusted time; `pausedFor` checked
   by `enabledBlocks`. `rules.soon` feeds toolbar badge/popup (`timeLeftFor`,
@@ -460,6 +489,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   from `nmcli` (`ScanWifi`); `AtPlace` needs `Place.Needed()` in range
   (`places.need`, default 2, `place need P N`, `place add --need`);
   `placesHere` (none seen: unknown, see Automation); `keepWifiOn`.
+  `seenNetworks` reads every 10 s (every 2 s, scan asked every 15 s, while
+  none are seen).
 - **Test mode** (`db/testmode.go`): lists go out `test: true`; extension
   shows `kc9kTestReport`, skips them in `kc9kListMatches`.
 - **Statistics**: foreground app time (daemon) and site time (extension);

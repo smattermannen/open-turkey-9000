@@ -28,6 +28,8 @@ type fakeScreen struct {
 	signedOut  []string // not signed in, with desktop settings
 	reached    [][]string
 	nightLight bool
+	hooks      []bool // the sleep hook written (true) or removed (false)
+	slept      int64  // seconds asleep since boot
 }
 
 func plain256() []uint16 {
@@ -88,7 +90,9 @@ func fakeCircadian(t *testing.T) *fakeScreen {
 	known := circadianExternalKnown
 	readGamma, setGamma := circadianReadGamma, circadianSetGamma
 	setWallpaper, setDark, nightLight, signedIn := circadianSetWallpaper, circadianSetDark, circadianNightLight, circadianSignedIn
+	hook, slept := circadianSleepHook, sleptSeconds
 	t.Cleanup(func() {
+		circadianSleepHook, sleptSeconds = hook, slept
 		circadianSignedIn = signedIn
 		circadianDry, circadianBacklights, circadianExternal, circadianDDC = dry, backlights, external, ddc
 		circadianExternalKnown = known
@@ -144,6 +148,8 @@ func fakeCircadian(t *testing.T) *fakeScreen {
 		return f.reach(r), nil
 	}
 	circadianNightLight = func() bool { return f.nightLight }
+	circadianSleepHook = func(on bool) error { f.hooks = append(f.hooks, on); return nil }
+	sleptSeconds = func() int64 { return f.slept }
 	return f
 }
 

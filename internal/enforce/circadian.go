@@ -115,7 +115,11 @@ var (
 	circadianReadLook     = blocker.ReadDesktopLook
 	circadianRestoreLook  = blocker.RestoreDesktopLook
 	circadianSleep        = time.Sleep
+	circadianSleepHook    = blocker.SyncSleepHook
 )
+
+// wallpaperPath is where a stored wallpaper is.
+func wallpaperPath(image string) string { return filepath.Join(WallpapersDir(), filepath.Base(image)) }
 
 func externalLevel(s blocker.ExternalScreen) circadianLevel {
 	return circadianLevel{Name: s.Name, ID: s.Display, Max: 100,
@@ -343,15 +347,45 @@ type Circadian struct {
 	slowAt       time.Time // the last look at external screens and the night light
 	desktopAt    time.Time // the last wallpaper or dark mode that reached nobody
 	desktopUsers []string  // who was signed in then
-	external     []string
-	displays     []string
-	nightLight   bool
-	status       string
+	desktopKeys  string    // what should have shown then
+
+	// Modes' wallpapers (R-MODE-5, wallpapers.go).
+	modeOnSince  map[int]time.Time // when each mode with wallpapers was first seen enabled
+	placeKnownAt time.Time         // the last look that knew the place
+	unsure       bool              // a mode switched by places might show a wallpaper, place unknown
+	placeMatters bool              // a mode switched by places has wallpapers
+	hookSynced   bool              // the sleep hook is as hookWanted says
+	hookWanted   bool
+	slept        int64     // time spent asleep since boot, at the last step
+	freshAt      time.Time // the engine's start or the last wake: the place is looked for at once
+
+	external   []string
+	displays   []string
+	nightLight bool
+	status     string
 }
 
 // NewCircadian makes an engine for d.
 func NewCircadian(d *db.DB) *Circadian {
-	return &Circadian{d: d, last: map[string]int{}, pausedBy: map[string]string{}, previewSeen: map[string]CircadianPreview{}}
+	return &Circadian{d: d, last: map[string]int{}, pausedBy: map[string]string{}, previewSeen: map[string]CircadianPreview{},
+		freshAt: time.Now(), slept: sleptSeconds()}
+}
+
+// placeLookInterval is how often the engine steps while it looks for the
+// place after starting or waking (R-MODE-5: the right wallpaper as early as
+// possible), for at most placeLookFor.
+const (
+	placeLookInterval = time.Second
+	placeLookFor      = 3 * time.Minute
+)
+
+// lookingForPlace reports whether the engine should step again soon: the
+// place decides the wallpaper and isn't known yet, shortly after it started
+// or the computer woke.
+func (e *Circadian) lookingForPlace(now time.Time) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.unsure && now.Sub(e.freshAt) < placeLookFor
 }
 
 // RunCircadian steps the engine every CircadianInterval, forever. It returns
@@ -362,10 +396,14 @@ func RunCircadian(d *db.DB) {
 	}
 	e := NewCircadian(d)
 	e.Step(time.Now())
-	ticker := time.NewTicker(CircadianInterval)
+	last := time.Now()
+	ticker := time.NewTicker(placeLookInterval)
 	defer ticker.Stop()
 	for now := range ticker.C {
-		e.Step(now)
+		if now.Sub(last) >= CircadianInterval || e.lookingForPlace(now) {
+			e.Step(now)
+			last = now
+		}
 	}
 }
 
@@ -410,6 +448,15 @@ func (e *Circadian) Step(now time.Time) {
 
 	cfg := CircadianConfig(e.d)
 	minute := circadian.MinuteOfDay(now)
+
+	// A wake (time spent asleep grew): the place is looked for afresh, as at
+	// boot (R-MODE-5).
+	woke := false
+	if slept := sleptSeconds(); slept-e.slept > 5 {
+		woke, e.freshAt, e.placeKnownAt = true, now, time.Time{}
+		ForgetSeenNetworks()
+		e.slept = slept
+	}
 
 	// Pauses that ran out: that clip starts afresh from whatever the level
 	// is now.
@@ -491,8 +538,13 @@ func (e *Circadian) Step(now time.Time) {
 	applied := circadianApplied{}
 	readJSONSetting(e.d, settingCircadianApplied, &applied)
 	before := applied
+	if e.beforeSleepGiven(now, woke) {
+		// The sleep hook gave the default: what should show is given afresh.
+		applied.Wallpaper, applied.WallpaperUsers = "", nil
+	}
 	reading := e.gamma(cfg, gammaPreviewed, minute, now, pauses, pause, resume, &applied)
 	e.desktop(cfg, minute, now, &applied)
+	e.syncSleepHook()
 	if !sameApplied(applied, before) {
 		writeJSONSetting(e.d, settingCircadianApplied, applied)
 	}
@@ -732,8 +784,14 @@ func sameApplied(a, b circadianApplied) bool {
 func (e *Circadian) desktop(cfg circadian.Config, minute float64, now time.Time, applied *circadianApplied) {
 	signedIn := circadianSignedIn()
 	slices.Sort(signedIn)
-	// A failure waits circadianRetry, unless someone signed in or out since.
-	canTry := e.desktopAt.IsZero() || now.Sub(e.desktopAt) >= circadianRetry || !slices.Equal(signedIn, e.desktopUsers)
+	// R-MODE-5: a mode's wallpaper, circadian rhythm's or the default.
+	look, hold := e.lookWithGrace(minute, now)
+	key, image, keep := pickWallpaper(LoadWallpaperSettings(e.d), cfg, minute, look, hold)
+	dark := DarkKey(cfg, minute)
+	// A failure waits circadianRetry, unless someone signed in or out since,
+	// or something else should show now.
+	canTry := e.desktopAt.IsZero() || now.Sub(e.desktopAt) >= circadianRetry || !slices.Equal(signedIn, e.desktopUsers) ||
+		key+"|"+dark != e.desktopKeys
 	failed := false
 	give := func(key string, done *string, users *[]string, set func(blocker.Reach) ([]string, error), what string) {
 		if key == "" {
@@ -769,16 +827,16 @@ func (e *Circadian) desktop(cfg circadian.Config, minute float64, now time.Time,
 		slices.Sort(merged)
 		*users = slices.Compact(merged)
 	}
-	key, image := WallpaperKey(cfg, minute)
-	give(key, &applied.Wallpaper, &applied.WallpaperUsers, func(r blocker.Reach) ([]string, error) {
-		return circadianSetWallpaper(filepath.Join(WallpapersDir(), image), r)
-	}, "wallpaper")
-	dark := DarkKey(cfg, minute)
+	if !keep {
+		give(key, &applied.Wallpaper, &applied.WallpaperUsers, func(r blocker.Reach) ([]string, error) {
+			return circadianSetWallpaper(wallpaperPath(image), r)
+		}, "wallpaper")
+	}
 	give(dark, &applied.Dark, &applied.DarkUsers, func(r blocker.Reach) ([]string, error) {
 		return circadianSetDark(dark == "dark", r)
 	}, "dark mode")
 	if failed {
-		e.desktopAt, e.desktopUsers = now, signedIn
+		e.desktopAt, e.desktopUsers, e.desktopKeys = now, signedIn, key+"|"+dark
 	}
 }
 

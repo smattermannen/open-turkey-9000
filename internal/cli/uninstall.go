@@ -157,6 +157,7 @@ func undoSystemChanges() []string {
 	note("restore LibreWolf's extension signing", blocker.SyncLibreWolfSigning(false))
 	note("remove KC9K's locks from LibreWolf's settings", blocker.SyncLibreWolfLocks(false))
 	note("remove forced SafeSearch", blocker.SyncSafeSearch(false))
+	note("remove the sleep hook", blocker.SyncSleepHook(false))
 	if blocker.BootLockInstalled() {
 		note("remove the no-escape boot lock", blocker.RemoveBootLock())
 	}

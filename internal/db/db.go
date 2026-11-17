@@ -683,6 +683,7 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 		if activeBlocks[i].Social, err = d.getBlockSocial(ids[i]); err != nil {
 			return nil, err
 		}
+		withPlaylists(&activeBlocks[i])
 		activeBlocks[i].HasPhrases = d.hasPhrases(ids[i])
 	}
 

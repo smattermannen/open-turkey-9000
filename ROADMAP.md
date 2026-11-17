@@ -29,19 +29,34 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       `ci/gui_cards_smoke.py`, `ci/gui_modes_smoke.py`.
     - [x] A mode's *Add blocks…* offers *Create new block…*: made and put in
       the mode at once (§4.2). `ci/gui_modes_smoke.py`.
-    - [ ] Social media settings: a section after the blacklists, above the
-      exceptions, opened and closed; no tab of their own (§4.3).
-    - [ ] Places in a block's automation say plainly that they are added,
-      whether arriving switches the block on or off, and whether the
-      computer is there now (§4.5).
+    - [x] Social media settings: a section of the Websites tab after the
+      blacklists, above the exceptions, opened and closed (closed it says
+      how many are on); no tab of their own (§4.3).
+      `ci/gui_playlist_smoke.py`.
+    - [x] Places in an automation (a block's, a mode's, monk mode's): one
+      widget (`PlaceRules`), a row per added place saying it is added,
+      what arriving there does ("Arriving here turns this block on/off";
+      with both, "Here during one of its windows …") and "You are here" /
+      "Not here now", with Remove; below, a saved place to add and Save
+      where I am now as… (for a mode too). How many networks a place needs
+      is set on the Places page only (§4.5). `ci/gui_places_smoke.py`.
     - [ ] A block and a mode may share a name (§4.2 Names): blocks, modes
       and schedules each have their own names; commands that take any of
       them read a block first, `--mode`/`--schedule` say otherwise.
     - [ ] An opened block is always a draft until *Save edits*; no *Edit as
       draft* (§4.3: code contradicted SPEC).
-    - [ ] YouTube playlists: a playlist address in an exception list lets
-      that playlist's videos through, only them; the separate box goes
-      (§3.2 Exception list).
+    - [x] YouTube playlists: a playlist's address in an exception list
+      (kept as `youtube.com/playlist?list=<id>` however pasted) lets that
+      playlist's videos through, only them; the separate box goes (§3.2
+      Exception list). Enforcement adds what it needs, never stored
+      (`db.withPlaylists`: the setting `youtube:playlist=<id>` for the
+      extension and the video pages exception); `kc9k social B playlist
+      ID on|off` adds or removes the entry; opening an older database
+      (`migratePlaylistExceptions`) and importing an older project file
+      (`AdoptOldPlaylists`) turn the old settings into entries.
+      `TestPlaylistException`, `TestPlaylistExceptionsMigrated`,
+      `TestPlaylistInEntry`, `ci/gui_playlist_smoke.py`. Playing a video of
+      a real playlist: still Unchecked (§0.2).
   - [ ] Step 2:
     - [ ] Frozen Chicken is a mode among the blocks, up to a week; its
       page leaves the sidebar (§3.8, §4.8, R-FREEZE-3).

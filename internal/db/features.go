@@ -133,6 +133,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateMonkMode(conn); err != nil {
 		return err
 	}
+	if err := migratePlaylistExceptions(conn); err != nil {
+		return err
+	}
 	return migrateModes(conn)
 }
 

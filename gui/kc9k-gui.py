@@ -1979,62 +1979,6 @@ class EditableList(Gtk.Box):
 DEFAULT_EXCEPTIONS = "Exceptions"  # db.DefaultExceptionsList
 
 
-class PlaylistBox(Gtk.Box):
-    """YouTube playlists a block lets through (§3.2, in its Exceptions):
-    one row per playlist with its Remove button, so the box is as tall as
-    its playlists, and a field to add one."""
-
-    def __init__(self, window):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.window = window
-        head = Gtk.Box(spacing=6)
-        head.pack_start(heading("YouTube playlists let through", "medium"), False, False, 0)
-        head.pack_start(help_button(
-            "For a block that stops YouTube: its page and its videos stay open, every other video "
-            "is blocked. Paste the playlist's address or ID. Removing one weakens the block."),
-            False, False, 0)
-        self.pack_start(head, False, False, 0)
-        self.rows = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        self.rows.get_style_context().add_class("frame")
-        self.rows.set_no_show_all(True)
-        self.pack_start(self.rows, False, False, 0)
-        add_row = Gtk.Box(spacing=6)
-        self.entry = Gtk.Entry(placeholder_text="Playlist address or ID", width_chars=34)
-        self.entry.connect("activate", self.add)
-        add = Gtk.Button(label="Let through")
-        add.connect("clicked", self.add)
-        add_row.pack_start(self.entry, False, False, 0)
-        add_row.pack_start(add, False, False, 0)
-        self.pack_start(add_row, False, False, 0)
-        self.shown = None
-
-    def set_playlists(self, ids):
-        if ids == self.shown:
-            return
-        self.shown = list(ids)
-        for row in self.rows.get_children():
-            self.rows.remove(row)
-        for playlist in ids:
-            line = Gtk.Box(spacing=6, margin=4)
-            line.pack_start(Gtk.Label(label=playlist, xalign=0, selectable=True), True, True, 0)
-            remove = Gtk.Button(label="Remove", relief=Gtk.ReliefStyle.NONE)
-            remove.connect("clicked", lambda _b, p=playlist: self.remove(p))
-            line.pack_start(remove, False, False, 0)
-            self.rows.add(line)
-        self.rows.set_visible(bool(ids))
-        self.rows.show_all()
-
-    def add(self, *_args):
-        text = self.entry.get_text().strip()
-        if text and self.window.selected:
-            self.entry.set_text("")
-            self.window.run(["social", self.window.selected, "playlist", text, "on"], then=self.window.queued_note)
-
-    def remove(self, playlist):
-        if self.window.selected:
-            self.window.run(["social", self.window.selected, "playlist", playlist, "off"])
-
-
 class ListCard(Gtk.Frame):
     """One website list: where it looks, its actions (blacklists), its
     thresholds for page text, and its entries. Every change runs through
@@ -2150,20 +2094,10 @@ class ListCard(Gtk.Frame):
             lambda: window.export_list(["list", "export", window.selected, self.data["name"]]),
             search=True, hidden=True, multi=True)
         box.pack_start(self.entries, True, True, 0)
-        # §3.2 (owner, 2026-11-16): YouTube playlists let through belong to
-        # the exceptions; the box is as tall as its playlists.
-        self.playlists = None
-        if self.is_exceptions and data["name"] == DEFAULT_EXCEPTIONS:
-            self.playlists = PlaylistBox(window)
-            box.pack_start(self.playlists, False, False, 0)
         self.update(data)
 
     def update(self, data):
         self.data = data
-        if self.playlists is not None:
-            block = self.window.blocks.get(self.window.selected) or {}
-            self.playlists.set_playlists([p.split("=", 1)[1] for p in block.get("social") or []
-                                          if p.startswith("youtube:playlist=")])
         self.filling = True
         try:
             kind = "exceptions" if self.is_exceptions else "blacklist"
@@ -4063,6 +3997,98 @@ def schedule_summary(windows):
     return (", ".join(parts) + " · " if parts else "") + hours
 
 
+def place_effect(subject, default_on, need_both, has_windows):
+    """What arriving at a place added to an automation does (§3.6), said
+    plainly: subject is "this block", "its blocks" or "monk mode"."""
+    state = "off" if default_on else "on"
+    if need_both and has_windows:
+        return f"Here during one of its windows, {subject} {'are' if subject == 'its blocks' else 'is'} {state}."
+    return f"Arriving here turns {subject} {state}."
+
+
+class PlaceRules(Gtk.Box):
+    """§3.6, §4.5 (owner 2026-11-17): the places in an automation, a row
+    each saying plainly that it is added, whether arriving there turns the
+    block (a mode's blocks, monk mode) on or off, and whether the computer is
+    there now; below, a saved place to add and, where given, Save where I am
+    now as…. add(place) and remove(place) run the commands."""
+
+    def __init__(self, window, add, remove, save_here=None):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.window, self.add_place, self.remove_place = window, add, remove
+        self.rows = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.rows.get_style_context().add_class("frame")
+        self.rows.set_no_show_all(True)
+        self.pack_start(self.rows, False, False, 0)
+        self.empty = dim("")
+        self.pack_start(self.empty, False, False, 0)
+        pick = Gtk.Box(spacing=6)
+        self.combo = Gtk.ComboBoxText(tooltip_text="A saved place (Places page)")
+        pick.pack_start(self.combo, False, False, 0)
+        self.add_button = Gtk.Button(label="Add this place")
+        self.add_button.connect("clicked", lambda _b: self.combo.get_active_text() and self.add_place(
+            self.combo.get_active_text()))
+        pick.pack_start(self.add_button, False, False, 0)
+        if save_here:
+            here = Gtk.Button(label="Save where I am now as…")
+            here.connect("clicked", lambda _b: save_here())
+            pick.pack_start(here, False, False, 0)
+        self.pick = flow_row(pick)
+        self.pack_start(self.pick, False, False, 0)
+        self.names = []  # the places shown as added (for tests)
+        self.shown = None
+
+    def show_places(self, added, subject, default_on=False, need_both=False, has_windows=False):
+        places = {p["name"]: p for p in (self.window.state or {}).get("places") or []}
+        effect = place_effect(subject, default_on, need_both, has_windows)
+        key = (list(added), effect, [(n, p.get("here")) for n, p in places.items()])
+        if key != self.shown:
+            self.shown = key
+            self.names = list(added)
+            for row in self.rows.get_children():
+                self.rows.remove(row)
+            for name in added:
+                line = Gtk.Box(spacing=10, margin=8)
+                line.pack_start(Gtk.Image.new_from_icon_name("emblem-ok-symbolic", Gtk.IconSize.MENU),
+                                False, False, 0)
+                text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                title = Gtk.Box(spacing=8)
+                label = Gtk.Label(label=name, xalign=0)
+                label.get_style_context().add_class("kc9k-card-name")
+                title.pack_start(label, False, False, 0)
+                here = (places.get(name) or {}).get("here")
+                title.pack_start(pill("You are here" if here else "Not here now", "on" if here else "off"),
+                                 False, False, 0)
+                text.pack_start(title, False, False, 0)
+                text.pack_start(dim("Added. " + effect), False, False, 0)
+                line.pack_start(text, True, True, 0)
+                remove = Gtk.Button(label="Remove", valign=Gtk.Align.CENTER)
+                remove.set_tooltip_text("Take this place out of the automation")
+                remove.connect("clicked", lambda _b, p=name: self.remove_place(p))
+                line.pack_start(remove, False, False, 0)
+                row = Gtk.ListBoxRow()
+                row.add(line)
+                row.place_name = name
+                self.rows.add(row)
+            self.rows.set_visible(bool(added))
+            self.rows.show_all()
+        self.empty.set_text("" if added else
+                            "No places added. A place added here switches it by itself: " + effect.lower()
+                            .replace("arriving here", "arriving at the place") if places else
+                            "No places saved yet: save where the computer is now.")
+        self.empty.set_visible(not added)
+        saved = [n for n in places if n not in added]
+        chosen = getattr(self, "to_choose", None) or self.combo.get_active_text()
+        self.to_choose = None
+        self.combo.remove_all()
+        for n in saved:
+            self.combo.append_text(n)
+        if saved:
+            self.combo.set_active(saved.index(chosen) if chosen in saved else 0)
+        self.combo.set_sensitive(bool(saved))
+        self.add_button.set_sensitive(bool(saved))
+
+
 class AutomationEditor(Gtk.Box):
     """§3.6, §4.5 (owner 2026-11-17): the automation of a mode (one for all
     its blocks), of monk mode, or the windows of a schedule kept outside
@@ -4118,7 +4144,6 @@ class AutomationEditor(Gtk.Box):
         presets.pack_end(self.total, False, False, 0)
         self.pack_start(flow_row(presets), False, False, 0)
         self.applied = Gtk.Box(spacing=6)
-        self.place_box = Gtk.Box(spacing=6)
         if kind != "schedule":
             row = Gtk.Box(spacing=6)
             row.pack_start(Gtk.Label(label="Schedules:"), False, False, 0)
@@ -4128,15 +4153,12 @@ class AutomationEditor(Gtk.Box):
             apply.connect("clicked", self.apply_schedule)
             row.pack_start(apply, False, False, 0)
             self.pack_start(flow_row(row), False, False, 0)
-            places = Gtk.Box(spacing=6)
-            places.pack_start(Gtk.Label(label="Places:"), False, False, 0)
-            places.pack_start(self.place_box, False, False, 0)
-            self.place_combo = Gtk.ComboBoxText()
-            places.pack_start(self.place_combo, False, False, 0)
-            add = Gtk.Button(label="Add this place")
-            add.connect("clicked", self.add_place)
-            places.pack_start(add, False, False, 0)
-            self.pack_start(flow_row(places), False, False, 0)
+            self.pack_start(heading("Places", "medium"), False, False, 0)
+            self.places = PlaceRules(window, self.add_named_place,
+                                     lambda p: self.run(["place", "rule", self.name, p, "off"]),
+                                     lambda: window.save_place(None, target=self.name))
+            self.place_combo = self.places.combo
+            self.pack_start(self.places, False, False, 0)
 
     # The commands -----------------------------------------------------
     def monk_ok(self, what):
@@ -4272,7 +4294,9 @@ class AutomationEditor(Gtk.Box):
             self.run(["schedule", "apply", self.name, name, *yes])
 
     def add_place(self, _button):
-        place = self.place_combo.get_active_text()
+        self.add_named_place(self.place_combo.get_active_text())
+
+    def add_named_place(self, place):
         if not place or not self.name:
             return
         yes = self.monk_ok(f"while the computer is at {place}")
@@ -4334,20 +4358,8 @@ class AutomationEditor(Gtk.Box):
         if not self.data.get("schedules"):
             self.applied.pack_start(dim("none"), False, False, 0)
         self.applied.show_all()
-        for child in self.place_box.get_children():
-            self.place_box.remove(child)
-        for place in places:
-            self.place_box.pack_start(self.chip(place, "Take this place off",
-                                                lambda p=place: self.run(["place", "rule", self.name, p, "off"])),
-                                      False, False, 0)
-        self.place_box.show_all()
-        saved = [p["name"] for p in self.window.state.get("places") or [] if p["name"] not in places]
-        chosen = self.place_combo.get_active_text()
-        self.place_combo.remove_all()
-        for p in saved:
-            self.place_combo.append_text(p)
-        if saved:
-            self.place_combo.set_active(saved.index(chosen) if chosen in saved else 0)
+        self.places.show_places(places, "monk mode" if self.kind == "monk" else "its blocks",
+                                bool(settings.get("default_on")), bool(settings.get("need_both")), bool(windows))
 
 
 class CircadianPage(Gtk.ScrolledWindow):
@@ -6131,13 +6143,31 @@ class Window(Gtk.ApplicationWindow):
         websites.pack_start(test_row, False, False, 0)
         self.list_cards = {}
         self.list_boxes = {}
+        social = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=6)
+        help_label = dim(
+            "Keep a site, take a part of it away while this block is on. Don't put the site on "
+            "the blacklist too. Ticking is always allowed; unticking weakens the block. Sites "
+            "change their pages now and then, and a setting that hides something may then miss "
+            "it until an update.")
+        help_label.set_max_width_chars(70)
+        social.pack_start(help_label, False, False, 0)
+        self.social_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.social_checks = {}
+        social.pack_start(self.social_box, False, False, 0)
+        self.social_expander = Gtk.Expander(use_markup=True)
+        self.social_expander.set_label("<b>Social media</b>")
+        self.social_expander.add(card(social))
         for kind, title, button_label, detail in (
                 ("blacklist", "Blacklists", "New blacklist…", ""),
                 ("exceptions", "Exceptions", "New exception list…",
-                 "A page an exception list matches is spared from every blacklist of this block."),
+                 "A page an exception list matches is spared from every blacklist of this block. "
+                 "A YouTube playlist's address (youtube.com/playlist?list=…) lets that playlist's "
+                 "videos through, and only them."),
                 ("phrases", "Phrase sets", "New phrase set…",
                  "Phrases are words that count only together, such as [eat, nice] [hello, grandpa]. "
                  "The block's exceptions spare pages from its phrase sets too.")):
+            if kind == "exceptions":
+                websites.pack_start(self.social_expander, False, False, 0)
             head = Gtk.Box(spacing=6)
             head.pack_start(heading(title, "medium"), False, False, 0)
             new = Gtk.Button(label=button_label)
@@ -6335,48 +6365,16 @@ class Window(Gtk.ApplicationWindow):
             "network seen (Wi-Fi off), places count as whatever keeps the block enabled, and "
             "Wi-Fi is switched back on."), False, False, 0)
         places.pack_start(places_head, False, False, 0)
-        pick_row = Gtk.Box(spacing=6)
-        self.place_combo = Gtk.ComboBoxText()
-        self.place_combo.connect("changed", lambda _c: self.show_place_need())
-        pick_row.pack_start(self.place_combo, False, False, 0)
-        place_on = Gtk.Button(label="Add this place")
-        place_on.set_tooltip_text("Being at it switches the block as its default says")
-        place_on.connect("clicked", lambda _b: self.selected and self.place_combo.get_active_text() and self.run(
-            ["place", "rule", self.selected, self.place_combo.get_active_text(), "on"]))
-        pick_row.pack_start(place_on, False, False, 0)
-        save_place = Gtk.Button(label="Save where I am now as…")
-        save_place.connect("clicked", self.save_place)
-        pick_row.pack_start(save_place, False, False, 0)
-        pick_flow = flow_row(pick_row)
-        places.pack_start(pick_flow, False, False, 0)
-        self.block_auto_widgets.append(pick_flow)
-        # §3.6: how many of the place's networks must be in range.
-        need_row = Gtk.Box(spacing=6)
-        need_row.pack_start(Gtk.Label(label="There when", valign=Gtk.Align.START, margin_top=6), False, False, 0)
-        self.place_need = NumberField(2, 1, 24, width=4)
-        need_row.pack_start(self.place_need, False, False, 0)
-        self.place_need_of = Gtk.Label(label="of its networks are in range", valign=Gtk.Align.START, margin_top=6)
-        need_row.pack_start(self.place_need_of, False, False, 0)
-        need_save = Gtk.Button(label="Save", valign=Gtk.Align.START)
-        need_save.connect("clicked", self.set_place_need)
-        guard_button(need_save, self.place_need)
-        need_row.pack_start(need_save, False, False, 0)
-        self.place_need_row = need_row
-        places.pack_start(need_row, False, False, 0)
-        self.place_rules = EditableList(
-            "Its places", "", lambda _values: None,
-            lambda value, _number: self.selected and self.run(["place", "rule", self.selected, value, "off"]))
-        add_row = self.place_rules.entry.get_parent()  # rules are added with the button above
-        self.place_rules.entry.set_no_show_all(True)
-        self.place_rules.entry.hide()
-        for child in add_row.get_children():
-            if isinstance(child, Gtk.Button) and child.get_label() == "Add":
-                child.set_no_show_all(True)
-                child.hide()
-        places.pack_start(self.place_rules, True, True, 0)
-        self.block_auto_widgets.append(self.place_rules)
-        self.places_label = dim("")
-        places.pack_start(self.places_label, False, False, 0)
+        # §4.5 (owner 2026-11-17): each added place says plainly that it is
+        # added and what arriving there does; how many networks a place
+        # needs is set on the Places page.
+        self.block_places = PlaceRules(
+            self, lambda p: self.selected and self.run(["place", "rule", self.selected, p, "on"]),
+            lambda p: self.selected and self.run(["place", "rule", self.selected, p, "off"]),
+            lambda: self.save_place(None))
+        self.place_combo = self.block_places.combo
+        places.pack_start(self.block_places, False, False, 0)
+        self.block_auto_widgets.append(self.block_places)
         schedule.pack_start(Gtk.Separator(margin_top=8, margin_bottom=4), False, False, 0)
         schedule.pack_start(places, False, False, 0)
 
@@ -6401,22 +6399,6 @@ class Window(Gtk.ApplicationWindow):
         nepsis.pack_start(row, False, False, 0)
         tabs.append_page(nepsis, Gtk.Label(label="Bypass prevention"))
 
-        social_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
-        social = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=12)
-        social_scroll.add(social)
-        help_label = dim(
-            "Keep a site, take a part of it away while this block is on. Don't put the site on "
-            "the blacklist too. Ticking is always allowed; unticking weakens the block. Sites "
-            "change their pages now and then, and a setting that hides something may then miss "
-            "it until an update.")
-        help_label.set_max_width_chars(70)
-        social.pack_start(help_label, False, False, 0)
-        self.social_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        self.social_checks = {}
-        social.pack_start(self.social_box, False, False, 0)
-        social.pack_start(dim("YouTube playlists let through are with the block's exceptions, on the "
-                              "Websites tab."), False, False, 0)
-        tabs.append_page(social_scroll, Gtk.Label(label="Social media"))
         # §4.2 (owner, 2026-11-16): the page opens on the block list, one
         # card per block; a card opens its block here.
         self.blocks_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
@@ -7192,22 +7174,11 @@ class Window(Gtk.ApplicationWindow):
                     if window["days"] & (1 << day):
                         covered.update((day, minute) for minute in range(window["start"], window["end"]))
         self.schedule_total.set_text(f"{len(covered) / 60:.0f} of 168 hours a week" if covered else "")
-        saved = [p["name"] for p in self.state.get("places") or []]
-        if getattr(self, "places_shown", None) != saved:
-            chosen = getattr(self, "place_to_show", None) or self.place_combo.get_active_text()
-            self.places_shown = saved
-            self.place_combo.remove_all()
-            for name in saved:
-                self.place_combo.append_text(name)
-            if saved:
-                self.place_combo.set_active(saved.index(chosen) if chosen in saved else 0)
+        settings = block.get("automation") or {}
+        self.block_places.to_choose = getattr(self, "place_to_show", None)
         self.place_to_show = None
-        self.show_place_need()
-        self.place_rules.set_items(block.get("places") or [], block["name"])
-        self.places_label.set_text(
-            "Saved places: " + ", ".join(f"{p['name']} (there when {p.get('need', 2)} of its {p['networks']} "
-                                         f"networks are in range)" for p in self.state.get("places") or [])
-            if saved else "No places saved yet: save where the computer is now.")
+        self.block_places.show_places(block.get("places") or [], "this block", bool(settings.get("default_on")),
+                                      bool(settings.get("need_both")), bool(block.get("schedules")))
         if not self.schedule_lead.has_focus():
             self.schedule_lock.set_active(block.get("schedule_lock", False))
             self.schedule_lead.set_value(block.get("schedule_lead", 0))
@@ -9799,28 +9770,14 @@ class Window(Gtk.ApplicationWindow):
         on = block.get("social") or []
         for name, check in self.social_checks.items():
             check.set_active(name in on)
+        count = sum(1 for name in self.social_checks if name in on)
+        self.social_expander.set_label("<b>Social media</b>" + (
+            f"  <small>{count} {'setting' if count == 1 else 'settings'} on</small>" if count else ""))
 
-    def place_info(self, name):
-        return next((p for p in (self.state or {}).get("places") or [] if p["name"] == name), None)
-
-    def show_place_need(self):
-        """The chosen place's networks needed, in the field beside it."""
-        place = self.place_info(self.place_combo.get_active_text())
-        self.place_need_row.set_visible(place is not None)
-        if place is not None and not self.place_need.entry.has_focus():
-            self.place_need.set_limits(1, max(place["networks"], 1))
-            self.place_need.set_text(str(place.get("need", 2)))
-            self.place_need_of.set_text(f"of its {place['networks']} networks are in range")
-
-    def set_place_need(self, _button):
-        name = self.place_combo.get_active_text()
-        if name and self.fields_ok(("Networks needed", self.place_need)):
-            self.place_to_show = name
-            self.run(["place", "need", name, str(self.place_need.value)])
-
-    def save_place(self, _button):
+    def save_place(self, _button, target=None):
         """§3.6: saves the Wi-Fi networks in range as a place and, ticked by
-        default, turns the selected block on there too."""
+        default, adds it to the automation of target (a mode's name) or of
+        the selected block."""
         dialog = Gtk.Dialog(title="Save this place", transient_for=self, modal=True)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         ok = dialog.add_button("Save", Gtk.ResponseType.OK)
@@ -9835,8 +9792,9 @@ class Window(Gtk.ApplicationWindow):
         entry = Gtk.Entry(activates_default=True)
         box.pack_start(entry, False, False, 0)
         rule = None
-        if self.selected:
-            rule = Gtk.CheckButton(label=f"Add it to '{self.selected}' (being here switches it)", active=True)
+        target = target or self.selected
+        if target:
+            rule = Gtk.CheckButton(label=f"Add it to '{target}' (being here switches it)", active=True)
             box.pack_start(rule, False, False, 0)
         ok.set_sensitive(False)
         entry.connect("changed", lambda e: ok.set_sensitive(bool(e.get_text().strip())))
@@ -9847,7 +9805,7 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         if answer != Gtk.ResponseType.OK or not name:
             return
-        block = self.selected
+        block = target
         self.place_to_show = name
 
         def saved(output):

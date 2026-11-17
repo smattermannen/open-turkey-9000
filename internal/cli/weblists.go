@@ -95,6 +95,11 @@ func urlEntry(e string) bool {
 // www. or trailing slash), so it reaches /etc/hosts and the firewall and is
 // found again when removed.
 func normalizeURLEntry(e string) string {
+	// A YouTube playlist's address, however pasted, is kept one way, so it
+	// is found again when removed (§3.2 Exception list).
+	if id, ok := db.PlaylistInEntry(e); ok {
+		return db.PlaylistException(id)
+	}
 	bare := e
 	if i := strings.Index(bare, "://"); i > 0 {
 		bare = bare[i+3:]
@@ -150,7 +155,21 @@ func listAdd(cmd *cobra.Command, database *db.DB, block, list string, entries []
 	if err := database.AddListEntries(l.ID, entries); err != nil {
 		return err
 	}
+	notePlaylists(block, l, entries)
 	return settle(database, block)
+}
+
+// notePlaylists says what a YouTube playlist's address does in an exception
+// list (§3.2): it lets that playlist's videos through, and only them.
+func notePlaylists(block string, l db.WebList, entries []string) {
+	if !l.IsExceptions() || !l.Where.URL {
+		return
+	}
+	for _, e := range entries {
+		if id, ok := db.PlaylistInEntry(e); ok {
+			fmt.Printf("Block '%s' lets the playlist %s through: its page and its videos, no other video.\n", block, id)
+		}
+	}
 }
 
 // listRemove removes entries from a list: looser for a blacklist, stricter

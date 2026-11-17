@@ -1,7 +1,9 @@
-"""GUI smoke test for places (§3.6): saving where the computer is (with a
-fake nmcli that sees chosen networks), turning a block on there (also a
-block with nothing in it yet: owner, 2026-11-16), the networks needed, the
-"Its places" list and removing a rule. Builds kc9k into a scratch folder, points
+"""GUI smoke test for places (§3.6, §4.5): saving where the computer is
+(with a fake nmcli that sees chosen networks), turning a block on there
+(also a block with nothing in it yet: owner, 2026-11-16), each added place
+on a row saying it is added, what arriving does and whether the computer is
+there (owner 2026-11-17), the networks needed (Places page), removing a
+rule. Builds kc9k into a scratch folder, points
 a wrapper at a scratch database (KC9K_DB: no layers are applied), loads
 gui/kc9k-gui.py as a module with CLI replaced and another application ID,
 and never shows the main window. Needs an X display; run as a normal user.
@@ -88,8 +90,17 @@ def find_button(root, label):
     return None
 
 
+def gui_widgets(root):
+    out = [root]
+    if isinstance(root, Gtk.Container):
+        for child in root.get_children():
+            out += gui_widgets(child)
+    return out
+
+
 msgs = []
 win.message = lambda text, *a, **k: msgs.append(text)
+win.get_child().show_all()
 settle()
 real_run = Gtk.Dialog.run
 
@@ -103,7 +114,8 @@ def answering(setup, response=Gtk.ResponseType.OK):
 
 # 1. An empty block: save where the computer is, turned on there at once.
 win.selected = "study"; win.show_block()
-check(win.places_label.get_text().startswith("No places saved yet"), "no places yet: " + win.places_label.get_text())
+check(win.block_places.empty.get_text().startswith("No places saved yet"),
+      "no places yet: " + win.block_places.empty.get_text())
 
 
 def name_home(dialog):
@@ -117,32 +129,40 @@ win.save_place(None); settle(); win.show_block()
 place = next((p for p in state()["places"] if p["name"] == "home"), None)
 check(place is not None and place["networks"] == 4 and place["need"] == 2, "home saved: %s" % place)
 check(place is not None and place["blocks"] == ["study"], "study is on at home: %s" % place)
-check([row[0] for row in win.place_rules.store] == ["home"], "On at shows home: %s" % [r[0] for r in win.place_rules.store])
-check(win.place_combo.get_active_text() == "home", "the new place is chosen in the list")
+check(win.block_places.names == ["home"], "the block shows home as added: %s" % win.block_places.names)
+texts = [w.get_text() for w in gui_widgets(win.block_places.rows) if isinstance(w, Gtk.Label)]
+check("Added. Arriving here turns this block on." in texts and "You are here" in texts,
+      "its row says it is added, what arriving does, and that the computer is there: %s" % texts)
+check(win.place_combo.get_active_text() is None, "nothing left to add: %s" % win.place_combo.get_active_text())
 check(not [m for m in msgs if m.startswith("Error")], "no error: %s" % msgs)
 msgs.clear()
+# Enabled by default: the row says arriving turns it off.
+r = cli("automation", "study", "default", "enabled"); assert r.returncode == 0, r.stderr
+settle(); win.show_block()
+texts = [w.get_text() for w in gui_widgets(win.block_places.rows) if isinstance(w, Gtk.Label)]
+check("Added. Arriving here turns this block off." in texts, "enabled by default: off here: %s" % texts)
 
-# 2. Networks needed: shown for the chosen place, checked as typed, saved.
-check(win.place_need_row.get_visible() and win.place_need.entry.get_text() == "2",
-      "needs 2 of 4 shown: %r" % win.place_need.entry.get_text())
-check("of its 4 networks" in win.place_need_of.get_text(), win.place_need_of.get_text())
-win.place_need.set_text("5")
-check(not win.place_need.is_valid() and "At most 4" in win.place_need.problem, "5 of 4 refused where typed")
-win.place_need.set_text("3")
-win.set_place_need(None); settle(); win.show_block()
+# 2. Networks needed: on the Places page, checked as typed, saved.
+win.stack.set_visible_child_name("places"); settle()
+need = next(w for w in gui_widgets(win.place_cards) if isinstance(w, gui.NumberField))
+check(need.entry.get_text() == "2", "needs 2 of 4 shown: %r" % need.entry.get_text())
+need.set_text("5")
+check(not need.is_valid() and "At most 4" in need.problem, "5 of 4 refused where typed")
+need.set_text("3")
+next(w for w in gui_widgets(need.get_parent()) if isinstance(w, Gtk.Button) and w.get_label() == "Save").clicked()
+settle()
 check(next(p for p in state()["places"] if p["name"] == "home")["need"] == 3, "need saved as 3")
-check("there when 3 of its 4" in win.places_label.get_text(), win.places_label.get_text())
+win.stack.set_visible_child_name("blocks"); settle()
 
 # 3. "Add this place" for another block, then remove the rule.
 win.selected = "games"; win.show_block()
 check(win.place_combo.get_active_text() == "home", "the place list is there for another block")
-win.place_combo.set_active(0)
-button = find_button(win, "Add this place")
+button = find_button(win.block_places, "Add this place")
 check(button is not None, "the Add this place button is there")
 button.clicked(); settle(); win.show_block()
-check([row[0] for row in win.place_rules.store] == ["home"], "games: On at home")
-win.place_rules.on_remove("home", 1); settle(); win.show_block()
-check(len(win.place_rules.store) == 0, "rule removed from the list")
+check(win.block_places.names == ["home"], "games: home added")
+find_button(win.block_places, "Remove").clicked(); settle(); win.show_block()
+check(win.block_places.names == [] and win.block_places.empty.get_visible(), "rule removed from the list")
 
 # 4. Saving without the tick saves only the place.
 wifi("BB:BB:BB:BB:BB:01", "BB:BB:BB:BB:BB:02")

@@ -101,7 +101,7 @@ check(names("titles") == [("close", 0), ("close-browser", 0)], "titles close the
 
 # §3.6: a place rule has no actions: nothing to tick beside On at, and
 # gui-state sends none.
-labels = [w.get_label() for w in gui_widgets(win.place_rules) if isinstance(w, Gtk.Button)]
+labels = [w.get_label() for w in gui_widgets(win.block_places) if isinstance(w, Gtk.Button)]
 check("Actions…" not in labels and not hasattr(win, "place_rule_actions"), "no actions for a place rule: %s" % labels)
 check(not any(k.startswith("place:") for k in triggers()), "gui-state has no place actions: %s" % list(triggers()))
 

@@ -1,15 +1,14 @@
-// social.go — kc9k social: social media settings, and YouTube playlists a
-// block lets through.
+// social.go — kc9k social: social media settings. A YouTube playlist let
+// through is an exception entry (§3.2); "playlist" here adds or removes it.
 //
 //	kc9k social                              # the settings there are
 //	kc9k social work                         # what a block has on
 //	kc9k social work youtube:no-shorts on
-//	kc9k social work playlist PLxxxxxxxx on   # only this playlist's videos
+//	kc9k social work playlist PLxxxxxxxx on   # = block add-exception work youtube.com/playlist?list=PLxxxxxxxx
 package cli
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -29,9 +28,10 @@ block stricter and is always allowed; turning one off weakens it.
   kc9k social <block> <setting> on|off
   kc9k social <block> playlist <id or address> on|off
 
-A playlist lets one YouTube playlist through a block that otherwise stops
-YouTube: its page and its videos stay open, every other video is blocked.
-The site's layout changes now and then; a setting that hides a part of a
+A YouTube playlist is let through by its address in an exception list
+(kc9k block add-exception <block> youtube.com/playlist?list=<id>): its page
+and its videos stay open, every other video is blocked. "playlist" here
+adds or removes that exception. The site's layout changes now and then; a setting that hides a part of a
 page may then miss it until Killer Chicken 9000 is updated.`,
 	Args: cobra.RangeArgs(0, 4),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
@@ -70,7 +70,7 @@ page may then miss it until Killer Chicken 9000 is updated.`,
 			return fmt.Errorf("usage: kc9k social <block> <setting> on|off")
 		}
 		preset := strings.ToLower(args[1])
-		if !db.IsSocialPreset(preset) || strings.HasPrefix(preset, db.PlaylistPrefix) {
+		if !db.IsSocialPreset(preset) {
 			return fmt.Errorf("unknown setting %q ('kc9k social' lists them)", args[1])
 		}
 		on := args[2] == "on"
@@ -85,70 +85,45 @@ page may then miss it until Killer Chicken 9000 is updated.`,
 	}),
 }
 
-// The addresses of YouTube a playlist needs open: its own page and video
-// pages. Which videos, the extension decides (the playlist's only).
-func playlistExceptions(id string) []string {
-	return []string{"youtube.com/playlist?list=" + id, "youtube.com/watch"}
-}
-
-// socialPlaylist lets a playlist through a block, or stops doing so.
-// Letting one through adds exceptions, which loosens the block; the gate for
-// that is the exception list's own (listAdd).
+// socialPlaylist lets a playlist through a block, or stops doing so: its
+// address added to the block's Exceptions (weakening, gated by the list's
+// own gate in listAdd), or taken out of whichever exception list has it
+// (stricter, always free). The extension keeps the video pages to the
+// playlist's videos (db.withPlaylists).
 func socialPlaylist(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail, text string, on bool) error {
 	id, ok := db.PlaylistID(text)
 	if !ok {
 		return fmt.Errorf("%q isn't a playlist: give its address (with list=… in it) or its ID (10 to 64 letters, digits, - or _, such as PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf)", text)
 	}
-	block, preset := detail.Name, db.PlaylistPrefix+id
+	block, entry := detail.Name, db.PlaylistException(id)
 	if on {
 		if _, ok := detail.Lists.Find(db.DefaultExceptionsList); !ok {
 			if _, err := database.CreateList(block, db.ListExceptions, db.DefaultExceptionsList, db.Where{URL: true}); err != nil {
 				return err
 			}
 		}
-		// The restriction first, so the exceptions never stand alone.
-		if err := database.SetSocial(block, preset, true); err != nil {
-			return err
+		return listAdd(cmd, database, block, db.DefaultExceptionsList, []string{entry})
+	}
+	removed := false
+	for _, l := range detail.Lists {
+		if !l.IsExceptions() {
+			continue
 		}
-		if err := listAdd(cmd, database, block, db.DefaultExceptionsList, playlistExceptions(id)); err != nil {
-			_ = database.SetSocial(block, preset, false)
-			return err
-		}
-		fmt.Printf("Block '%s' lets the playlist %s through: its page and its videos, no other video.\n", block, id)
-		return settle(database, block)
-	}
-	if !slices.Contains(detail.Social, preset) {
-		return fmt.Errorf("block '%s' doesn't let the playlist %s through", block, id)
-	}
-	// Taking the exceptions away makes the block stricter; the video pages
-	// stay open only while another playlist needs them.
-	remove := []string{playlistExceptions(id)[0]}
-	others := 0
-	for _, p := range detail.Social {
-		if strings.HasPrefix(p, db.PlaylistPrefix) && p != preset {
-			others++
-		}
-	}
-	if others == 0 {
-		remove = playlistExceptions(id)
-	}
-	if l, ok := detail.Lists.Find(db.DefaultExceptionsList); ok {
 		var have []string
-		for _, e := range remove {
-			for _, entry := range l.Entries { // entries are stored normalized
-				if strings.EqualFold(entry, e) {
-					have = append(have, entry)
-				}
+		for _, e := range l.Entries {
+			if got, ok := db.PlaylistInEntry(e); ok && got == id {
+				have = append(have, e)
 			}
 		}
 		if len(have) > 0 {
 			if err := database.RemoveListEntries(l.ID, have); err != nil {
 				return err
 			}
+			removed = true
 		}
 	}
-	if err := database.SetSocial(block, preset, false); err != nil {
-		return err
+	if !removed {
+		return fmt.Errorf("block '%s' doesn't let the playlist %s through", block, id)
 	}
 	fmt.Printf("Block '%s' no longer lets the playlist %s through.\n", block, id)
 	return settle(database, block)

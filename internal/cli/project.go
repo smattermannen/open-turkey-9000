@@ -342,7 +342,8 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 	if l := in.ScheduleLock; l != nil && (*l < 0 || *l > db.MaxScheduleLockLead) {
 		return out, fmt.Errorf("schedule lock lead time out of range")
 	}
-	for _, preset := range in.Social {
+	settings, _ := db.OldPlaylists(in.Social) // older files: playlists among them
+	for _, preset := range settings {
 		if !db.IsSocialPreset(preset) {
 			return out, fmt.Errorf("unknown social media setting %q", preset)
 		}
@@ -419,8 +420,15 @@ func createBlock(database *db.DB, c checkedBlock) error {
 			return err
 		}
 	}
-	for _, preset := range in.Social {
+	settings, playlists := db.OldPlaylists(in.Social)
+	for _, preset := range settings {
 		if err := database.SetSocial(in.Name, preset, true); err != nil {
+			return err
+		}
+	}
+	if len(playlists) > 0 {
+		// An older file: its playlists become exception entries (§3.2).
+		if err := database.AdoptOldPlaylists(in.Name, playlists); err != nil {
 			return err
 		}
 	}

@@ -1,11 +1,12 @@
-"""GUI smoke test for YouTube playlists let through (§3.2; owner,
-2026-11-16: they belong with the exceptions, in a box as tall as its
-playlists): the Exceptions card has the box, "Let through" adds one, its
-row's Remove takes it away, the Social media tab no longer has a playlist
-box. Builds kc9k into a scratch folder, a wrapper with KC9K_DB = scratch
-file, loads gui/kc9k-gui.py as a module with CLI replaced, another
-application ID, never shows the main window. Needs an X display; run as a
-normal user.
+"""GUI smoke test for YouTube playlists and social media settings (§3.2
+Exception list, §4.3; owner 2026-11-17): a playlist is let through by its
+address typed into an exception list (no box of its own), kept one way
+however it is pasted; the social media settings are a section of the
+Websites tab after the blacklists and above the exceptions, opened and
+closed, with no tab of their own. Builds kc9k into a scratch folder, a
+wrapper with KC9K_DB = scratch file, loads gui/kc9k-gui.py as a module with
+CLI replaced, another application ID, never shows the main window. Needs an
+X display; run as a normal user.
 
     xvfb-run -a python3 ci/gui_playlist_smoke.py
 """
@@ -73,45 +74,46 @@ def exceptions_card():
     return next(c for c in win.list_cards.values() if getattr(c, "data", {}).get("name") == "Exceptions")
 
 
-def social():
-    return next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == "yt").get("social") or []
+def block():
+    return next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == "yt")
+
+
+def exceptions():
+    return next(lst for lst in block()["lists"] if lst["name"] == "Exceptions")["entries"]
 
 
 settle()
 win.selected = "yt"; win.show_block()
 card = exceptions_card()
-check(card.playlists is not None, "the Exceptions card has the playlists box")
-blocked = next(c for c in win.list_cards.values() if getattr(c, "data", {}).get("name") == "Blocked")
-check(getattr(blocked, "playlists", None) is None, "a blacklist has none")
-check(not card.playlists.rows.get_visible() or not card.playlists.rows.get_children(), "no rows without playlists")
-check(not find(card.playlists, Gtk.ScrolledWindow), "no fixed-height scroll area in the box")
-
-card.playlists.entry.set_text("https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf")
-find(card.playlists, Gtk.Button, lambda b: b.get_label() == "Let through")[0].clicked()
+check(not hasattr(card, "playlists") and not find(card, Gtk.Button, lambda b: b.get_label() == "Let through"),
+      "the Exceptions card has no playlist box")
+card.entries.reveal()
+card.entries.entry.set_text("https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf&si=x")
+card.entries.entry.emit("activate")
 settle()
-card = exceptions_card()
-check("youtube:playlist=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf" in social(), "playlist let through: %s" % social())
-check(len(card.playlists.rows.get_children()) == 1, "one row for one playlist")
-card.playlists.entry.set_text("PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG")
-card.playlists.add()
-settle()
-card = exceptions_card()
-check(len(card.playlists.rows.get_children()) == 2, "two rows for two playlists")
-entries = next(lst for lst in next(b for b in json.loads(cli("gui-state").stdout)["blocks"])["lists"]
-               if lst["name"] == "Exceptions")["entries"]
-check("youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf" in entries, "its page is an exception: %s" % entries)
+check("youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf" in exceptions() and not block().get("social"),
+      "a playlist's address typed into Exceptions is kept one way: %s" % exceptions())
+check(any("lets the playlist" in l.get_text() or "playlist's address" in l.get_text() for l in find(win, Gtk.Label)),
+      "the Websites tab says what a playlist's address does")
+r = cli("block", "remove-exception", "yt", "youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf")
+check(r.returncode == 0 and not any("playlist" in e for e in exceptions()), "removed like any entry: %s" % r.stderr)
 
-remove = find(card.playlists, Gtk.Button, lambda b: b.get_label() == "Remove")
-remove[0].clicked()
+# Social media: after the blacklists, above the exceptions, opened and closed.
+tabs = [win.block_tabs.get_tab_label_text(win.block_tabs.get_nth_page(n)) for n in range(win.block_tabs.get_n_pages())]
+check("Social media" not in tabs, "no Social media tab: %s" % tabs)
+websites = win.list_boxes["blacklist"].get_parent()
+order = websites.get_children()
+check(order.index(win.list_boxes["blacklist"]) < order.index(win.social_expander) < order.index(win.list_boxes["exceptions"]),
+      "the Social media section sits between the blacklists and the exceptions")
+check(not win.social_expander.get_expanded(), "closed at first")
+win.social_expander.set_expanded(True)
+check(win.social_expander.get_expanded(), "opens")
+win.social_checks["youtube:no-shorts"].set_active(True)
 settle()
-card = exceptions_card()
-check("youtube:playlist=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf" not in social() and len(card.playlists.rows.get_children()) == 1,
-      "the row's Remove took it away: %s" % social())
-
-# The Social media tab has no playlist box any more.
-social_texts = [l.get_text() for l in find(win, Gtk.Label) if "playlist" in l.get_text().lower()]
-check(not any(t == "YouTube playlists" for t in social_texts), "no playlists heading on the Social media tab")
-check(not hasattr(win, "playlist_list"), "the old playlist list is gone")
+check(block().get("social") == ["youtube:no-shorts"] and "1 setting on" in win.social_expander.get_label(),
+      "a setting ticked in it, and the closed section says so: %s" % win.social_expander.get_label())
+win.social_expander.set_expanded(False)
+check(not win.social_expander.get_expanded(), "closes")
 check(not [m for m in msgs if m.startswith("Error")], "no errors: %s" % msgs)
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")

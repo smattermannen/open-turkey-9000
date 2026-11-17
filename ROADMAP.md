@@ -501,8 +501,14 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
   doesn't wait for DNS. `/etc/hosts`: measured 15 ms per name lookup at
   100,000 sites, so capped at `MaxHostsDomains` (20,000, ~3 ms; see §5);
   drift check one pass (was quadratic). 100,000-site test:
-  `blocker/biglist_test.go`. Left: browser policy with 100,000 entries:
-  Unchecked. (M)
+  `blocker/biglist_test.go`. Browser policy (2026-11-17): Chrome and
+  Chromium take only the first 1,000 entries of URLBlocklist/URLAllowlist
+  (Chrome for Testing in a cloud container, 100,000 entries: the 500th
+  blocked, the 1,500th and 50,000th not), so past 1,000 the policy holds
+  what /etc/hosts can't block first (patterns, file URLs, sites past its
+  cap), at most 1,000 (`ChromiumPolicyLimit`, `TestChromiumPolicyLimit`);
+  an allowlist past 1,000 exceptions blocks the rest in Chrome. Firefox
+  and LibreWolf with 100,000 entries: Unchecked. (M)
 - [ ] **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
   `project import` refuses monk steps/actions without `--no-confirm-ok`
   (`projectMonk`); both in `confirm_test.go`. `block import` the same. The
@@ -670,7 +676,9 @@ Only items not simply Built.
   the computer slow (15 ms each at 100,000 sites) → the hosts layer holds
   at most 20,000 sites, the rest are blocked by the browser policy, the
   extension and the firewall, because principle 9 says huge lists never
-  slow the computer and those layers already cover every site.
+  slow the computer and those layers already cover every site. (Corrected
+  2026-11-17: Chrome's policy takes 1,000 entries at most; they now go to
+  what /etc/hosts leaves out first.)
 - DECIDED OVERNIGHT: should SafeSearch make the extension required (closing
   browsers without it)? → no: Bing, DuckDuckGo and YouTube are pinned in
   /etc/hosts for every browser, and the extension adds the rest where it

@@ -64,3 +64,39 @@ func TestHugeSiteList(t *testing.T) {
 	}
 	t.Logf("hosts %v, check %v, lookups %v, cached %v", applied, checked, first, again)
 }
+
+// Chrome and Chromium take only ChromiumPolicyLimit entries of a URL list
+// (checked 2026-11-17). With 100,000 sites, the policy holds what
+// /etc/hosts can't block first: patterns and sites past MaxHostsDomains;
+// at most the limit, the same each time (its drift check compares).
+func TestChromiumPolicyLimit(t *testing.T) {
+	domains := make([]string, 100000)
+	for i := range domains {
+		domains[i] = fmt.Sprintf("site%d.example", i)
+	}
+	p := BrowserPolicy{BlockDomains: domains, BlockPatterns: []string{"*casino*"}}
+	set := chromiumBlockSet(p)
+	if len(set) != ChromiumPolicyLimit {
+		t.Fatalf("%d entries", len(set))
+	}
+	inHosts := map[string]bool{}
+	for _, d := range hostsDomains(domains) {
+		inHosts[d] = true
+	}
+	for _, e := range set {
+		if inHosts[e] {
+			t.Fatalf("%s is in /etc/hosts, yet took a place", e)
+		}
+	}
+	if strings.Join(set, ",") != strings.Join(chromiumBlockSet(p), ",") {
+		t.Error("not the same each time")
+	}
+	small := chromiumBlockSet(BrowserPolicy{BlockDomains: domains[:10]})
+	if len(small) != 10 {
+		t.Errorf("a small list was cut: %d", len(small))
+	}
+	allow := chromiumAllowSet(BrowserPolicy{AllowMode: true, AllowDomains: domains})
+	if len(allow) != ChromiumPolicyLimit {
+		t.Errorf("allowlist %d entries", len(allow))
+	}
+}

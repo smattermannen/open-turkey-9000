@@ -236,7 +236,9 @@ func IsHostsApplied(domains []string) bool {
 // computer reads the file line by line: 100,000 sites cost each lookup about
 // 15 ms on the test laptop, 20,000 about 3 ms (principle 9: huge lists
 // never slow the computer). Sites past the cap are still blocked by the
-// browser policy, the extension and the firewall.
+// extension and the firewall, by Firefox's and LibreWolf's policy, and by
+// Chrome's as far as its ChromiumPolicyLimit entries go (they go to these
+// sites first).
 const MaxHostsDomains = 20000
 
 // hostsDomains are the valid domains that go in /etc/hosts, at most

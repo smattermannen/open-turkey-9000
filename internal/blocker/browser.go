@@ -145,18 +145,45 @@ func firefoxExceptionSet(p BrowserPolicy) []string {
 	return dedupSort(set)
 }
 
-// chromiumBlockSet builds the URLBlocklist array for a policy.
+// ChromiumPolicyLimit is how many entries Chrome and Chromium take from
+// URLBlocklist and URLAllowlist: the rest are ignored (Chrome's policy
+// documentation; checked 2026-11-17: of 100,000 entries, the 500th was
+// blocked, the 1,500th and 50,000th not).
+const ChromiumPolicyLimit = 1000
+
+// chromiumBlockSet builds the URLBlocklist array for a policy. Past
+// ChromiumPolicyLimit, what /etc/hosts can't block comes first: patterns,
+// file URLs, then sites past MaxHostsDomains; the sites in /etc/hosts fill
+// what is left (they are blocked for Chrome there anyway). The extension
+// and the firewall block every site whatever the policy holds.
 func chromiumBlockSet(p BrowserPolicy) []string {
-	if p.AllowMode {
-		_, crPatterns := translated(p.BlockPatterns)
-		return dedupSort(append(append([]string{"*"}, crPatterns...), FilePatterns(p.BlockFiles)...))
-	}
 	_, crPatterns := translated(p.BlockPatterns)
-	return dedupSort(append(append(chromiumFilters(ValidDomains(p.BlockDomains)), crPatterns...), FilePatterns(p.BlockFiles)...))
+	files := FilePatterns(p.BlockFiles)
+	if p.AllowMode {
+		return dedupSort(append(append([]string{"*"}, crPatterns...), files...))
+	}
+	all := dedupSort(append(append(chromiumFilters(ValidDomains(p.BlockDomains)), crPatterns...), files...))
+	if len(all) <= ChromiumPolicyLimit {
+		return all
+	}
+	inHosts := map[string]bool{}
+	for _, d := range chromiumFilters(hostsDomains(p.BlockDomains)) {
+		inHosts[d] = true
+	}
+	var first, rest []string
+	for _, entry := range all {
+		if inHosts[entry] {
+			rest = append(rest, entry)
+		} else {
+			first = append(first, entry)
+		}
+	}
+	return dedupSort(append(first, rest...)[:ChromiumPolicyLimit])
 }
 
 // chromiumAllowSet builds the URLAllowlist array (only meaningful in allowlist
-// mode).
+// mode), at most ChromiumPolicyLimit entries: an exception left out blocks
+// more, never less.
 func chromiumAllowSet(p BrowserPolicy) []string {
 	_, set := translated(p.Exceptions)
 	if p.AllowMode {
@@ -165,7 +192,11 @@ func chromiumAllowSet(p BrowserPolicy) []string {
 	if len(set) == 0 {
 		return nil
 	}
-	return dedupSort(set)
+	set = dedupSort(set)
+	if len(set) > ChromiumPolicyLimit {
+		set = set[:ChromiumPolicyLimit]
+	}
+	return set
 }
 
 // dedupSort returns the sorted, deduplicated set of the input.

@@ -171,7 +171,8 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   time of the week and location where the block goes from enabled to
   lifted, and it doesn't leave a schedule-locked block continuous. `kc9k
   automation B [default enabled|disabled | needs both|either]`; GUI
-  Automation section atop Schedule & places (`update_automation`,
+  Automation section atop the automation view (`open_automation`, from the
+  block's menu; `update_automation`,
   `window_flags`: new windows follow the default);
   `ci/gui_automation_smoke.py`, `TestAutomationCommand`.
 - **Schedules and modes** (§3.2 Mode, §3.6 Schedule, R-MODE-1/2,
@@ -181,7 +182,10 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `SetBlockAutomation` writes it into the block's old tables as a diff
   (`schedules.source`: 0 own, else the schedule's id; unchanged rows keep
   id and break), schedule windows clipped by `ResolveWindows` so rows never
-  overlap: every reader of a block's windows is unchanged. Tables
+  overlap: every reader of a block's windows is unchanged. A block's own automation is kept
+  while it is in a mode (`mode_blocks.own`, `KeepOwnAutomation`,
+  `OwnAutomation`) and comes back on take-out or mode delete (`takeOut`,
+  gated as a whole, R-MODE-1). Tables
   `saved_schedules(_windows)`, `block_schedules`, `modes` (monk row made by
   `migrateModes`, `MonkModeName`), `mode_windows`, `mode_schedules`,
   `mode_places`, `mode_blocks` (one mode per block). Blocks, modes and

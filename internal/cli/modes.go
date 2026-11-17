@@ -433,17 +433,25 @@ var modeRenameCmd = &cobra.Command{
 
 var modeDeleteCmd = &cobra.Command{
 	Use:   "delete [mode]",
-	Short: "Delete a mode; its blocks stay, with the automation they have",
+	Short: "Delete a mode; its blocks are taken out (each gets its own automation back)",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		m, err := database.GetMode(args[0])
 		if err != nil {
 			return err
 		}
+		if m.Monk {
+			return fmt.Errorf("monk mode can't be deleted")
+		}
+		if len(m.Blocks) > 0 {
+			if err := takeOut(cmd, database, m.Blocks); err != nil {
+				return err
+			}
+		}
 		if err := database.DeleteMode(m.ID); err != nil {
 			return err
 		}
-		fmt.Printf("Mode '%s' deleted; its blocks stay as they are.\n", m.Name)
+		fmt.Printf("Mode '%s' deleted.\n", m.Name)
 		return nil
 	}),
 }
@@ -481,13 +489,22 @@ var modeAddCmd = &cobra.Command{
 			return err
 		}
 		for _, b := range args[1:] {
+			// R-MODE-1 (owner 2026-11-17): its own automation is kept, for
+			// when it is taken out (unless it is in a mode already).
+			own, err := database.BlockAutomationSpec(b)
+			if err != nil {
+				return err
+			}
 			if err := database.SetBlockMode(b, m.ID); err != nil {
+				return err
+			}
+			if err := database.KeepOwnAutomation(b, own); err != nil {
 				return err
 			}
 			if err := database.SetBlockAutomation(b, m.Spec); err != nil {
 				return err
 			}
-			fmt.Printf("'%s' is in the mode '%s' and has its automation.\n", b, m.Name)
+			fmt.Printf("'%s' is in the mode '%s' and has its automation; its own is kept for when it is taken out.\n", b, m.Name)
 		}
 		return enforce.ApplyFromDB(database)
 	}),
@@ -496,24 +513,59 @@ var modeAddCmd = &cobra.Command{
 var modeTakeOutCmd = &cobra.Command{
 	Use:     "take-out [block...]",
 	Aliases: []string{"remove"},
-	Short:   "Take blocks out of their mode; they keep the automation they have",
+	Short:   "Take blocks out of their mode; each gets its own automation back",
 	Args:    cobra.MinimumNArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		for _, b := range args {
-			m, in, err := database.ModeOf(b)
-			if err != nil {
+			if _, in, err := database.ModeOf(b); err != nil {
 				return err
-			}
-			if !in {
+			} else if !in {
 				return fmt.Errorf("'%s' is in no mode", b)
 			}
-			if err := database.SetBlockMode(b, 0); err != nil {
+		}
+		return takeOut(cmd, database, args)
+	}),
+}
+
+// takeOut takes blocks out of their modes (R-MODE-1, owner 2026-11-17): each
+// gets back the automation it had of its own, through the gate as a whole
+// (refused if that weakens a locked one); one put in before its own was
+// kept keeps the mode's.
+func takeOut(cmd *cobra.Command, database *db.DB, blocks []string) error {
+	all, err := database.SavedSchedules()
+	if err != nil {
+		return err
+	}
+	owns := map[string]db.AutomationSpec{}
+	changes := map[string]schedule.Automation{}
+	for _, b := range blocks {
+		own, has, err := database.OwnAutomation(b)
+		if err != nil {
+			return err
+		}
+		if has {
+			owns[b] = own
+			changes[b], _ = own.Automation(all)
+		}
+	}
+	if err := gateAutomation(cmd, database, changes, nil, schedule.Automation{}, schedule.Automation{}); err != nil {
+		return err
+	}
+	for _, b := range blocks {
+		m, _, _ := database.ModeOf(b)
+		if err := database.SetBlockMode(b, 0); err != nil {
+			return err
+		}
+		if own, has := owns[b]; has {
+			if err := database.SetBlockAutomation(b, own); err != nil {
 				return err
 			}
+			fmt.Printf("'%s' is out of the mode '%s' and has its own automation again.\n", b, m.Name)
+		} else {
 			fmt.Printf("'%s' is out of the mode '%s'; it keeps the automation it had.\n", b, m.Name)
 		}
-		return nil
-	}),
+	}
+	return enforce.ApplyFromDB(database)
 }
 
 var modeOnCmd = &cobra.Command{

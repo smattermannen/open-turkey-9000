@@ -17,6 +17,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -78,6 +79,7 @@ CREATE TABLE IF NOT EXISTS mode_places (
 CREATE TABLE IF NOT EXISTS mode_blocks (
     block_id INTEGER PRIMARY KEY,
     mode_id  INTEGER NOT NULL,
+    own      TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE,
     FOREIGN KEY (mode_id) REFERENCES modes(id) ON DELETE CASCADE
 );`
@@ -814,6 +816,59 @@ func (d *DB) SetBlockMode(block string, id int) error {
 	_, err = d.conn.Exec(`INSERT INTO mode_blocks (block_id, mode_id) VALUES (?, ?)
 		ON CONFLICT(block_id) DO UPDATE SET mode_id = excluded.mode_id`, blockID, id)
 	return err
+}
+
+// KeepOwnAutomation keeps a block's own automation while it is in a mode
+// (R-MODE-1, owner 2026-11-17): it comes back when the block is taken out.
+// Kept once, when it first goes in: moving to another mode keeps it.
+func (d *DB) KeepOwnAutomation(block string, spec AutomationSpec) error {
+	blockID, err := d.getBlockID(block)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return err
+	}
+	_, err = d.conn.Exec("UPDATE mode_blocks SET own = ? WHERE block_id = ? AND own = ''", string(raw), blockID)
+	return err
+}
+
+// OwnAutomation returns the automation a block in a mode had of its own,
+// with what no longer exists (a deleted schedule or place) left out; false
+// when none was kept (put in before 2026-11-17, or in no mode).
+func (d *DB) OwnAutomation(block string) (AutomationSpec, bool, error) {
+	blockID, err := d.getBlockID(block)
+	if err != nil {
+		return AutomationSpec{}, false, err
+	}
+	var raw string
+	err = d.conn.QueryRow("SELECT own FROM mode_blocks WHERE block_id = ?", blockID).Scan(&raw)
+	if err == sql.ErrNoRows || (err == nil && raw == "") {
+		return AutomationSpec{}, false, nil
+	}
+	if err != nil {
+		return AutomationSpec{}, false, err
+	}
+	var spec AutomationSpec
+	if err := json.Unmarshal([]byte(raw), &spec); err != nil {
+		return AutomationSpec{}, false, nil
+	}
+	saved, err := d.SavedSchedules()
+	if err != nil {
+		return AutomationSpec{}, false, err
+	}
+	spec.Schedules = slices.DeleteFunc(spec.Schedules, func(id int) bool {
+		return !slices.ContainsFunc(saved, func(s SavedSchedule) bool { return s.ID == id })
+	})
+	places, err := d.Places()
+	if err != nil {
+		return AutomationSpec{}, false, err
+	}
+	spec.Places = slices.DeleteFunc(spec.Places, func(id int) bool {
+		return !slices.ContainsFunc(places, func(p Place) bool { return p.ID == id })
+	})
+	return spec, true, nil
 }
 
 // migrateModes makes monk mode's row among the modes, once.

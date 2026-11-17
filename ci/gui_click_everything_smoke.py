@@ -234,6 +234,10 @@ for page_name in ("dashboard", "blocks", "clusters", "Frozen Chicken", "Monk mod
             title = win.block_tabs.get_tab_label_text(win.block_tabs.get_nth_page(tab))
             total += click_all(page, f"[blocks/{title}]")
             win.selected = "b"; win.show_block(); settle()
+        # Owner 2026-11-17: the automation opens from the block's menu.
+        win.open_automation("b"); settle()
+        total += click_all(win.automation_page, "[blocks/Automation]")
+        win.selected = "b"; win.blocks_stack.set_visible_child_name("detail"); win.show_block(); settle()
     else:
         total += click_all(page, f"[{page_name}]")
     if page_name == "dashboard":

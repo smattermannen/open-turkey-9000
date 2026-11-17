@@ -80,6 +80,7 @@ func upgradeSchema(conn *sql.DB) error {
 		{"schedules", "break_seconds", "INTEGER NOT NULL DEFAULT 0"},
 		{"schedules", "break_taken", "TEXT NOT NULL DEFAULT ''"},
 		{"schedules", "source", "INTEGER NOT NULL DEFAULT 0"}, // §3.6 Schedule: 0 own, else the schedule's id
+		{"mode_blocks", "own", "TEXT NOT NULL DEFAULT ''"},    // R-MODE-1: a block's own automation, kept
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {

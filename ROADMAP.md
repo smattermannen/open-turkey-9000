@@ -94,9 +94,16 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       through its blocks' locks): `kc9k mode lock M <start's lock flags>`
       starts every block with them after one confirmation; GUI Lock… in the
       mode's view. `TestModeLock`.
-    - [ ] Automation in the block's menu (greyed out in a mode: "Automated
-      by …"); a block keeps its own automation in a mode and gets it back
-      when taken out (§4.3, R-MODE-1).
+    - [x] Automation in the block's menu, a view of its own (no Schedule &
+      places tab; "← Back to the block"); greyed out in a mode with the
+      tooltip "Automated by 'M'", whose bar (Open the mode, Take it out) is
+      on the block's page; the card's Continuous/Automated block opens it
+      (§4.3). A block keeps its own automation in a mode (`mode_blocks.own`,
+      kept when it first goes in, also through a move to another mode) and
+      gets it back when taken out or the mode is deleted, through the gate
+      as a whole (R-MODE-1: refused if that weakens a locked block).
+      `TestModeKeepsOwnAutomation`, `TestModeBlocksShareAutomation`,
+      `ci/gui_modes_smoke.py`, `ci/gui_cards_smoke.py`.
     - [ ] Presets instead of clusters and templates: block, list, phrase
       set, schedule, automation and hotkey presets, always copies; Presets
       page; *Save as preset* (§3.2 Preset, §4.4).

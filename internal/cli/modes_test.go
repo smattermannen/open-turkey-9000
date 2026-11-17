@@ -180,10 +180,11 @@ func TestModeBlocksShareAutomation(t *testing.T) {
 	if on, _ := d.IsBlockActive("c"); !on {
 		t.Error("a locked block switched off")
 	}
-	// Taking a out keeps its automation; it is its own again.
+	// R-MODE-1 (owner 2026-11-17): taken out, a gets back the automation
+	// it had of its own (mon 08:00-09:00), kept while it was in the mode.
 	mustRun(t, "mode", "take-out", "a")
-	if rows, _ := d.ListSchedules("a"); len(rows) != 2 {
-		t.Errorf("a lost its windows leaving the mode: %+v", rows)
+	if rows, _ := d.ListSchedules("a"); len(rows) != 1 || rows[0].StartMin != 8*60 || rows[0].DaysMask != 2 {
+		t.Errorf("a's own automation didn't come back: %+v", rows)
 	}
 	mustRun(t, "schedule", "remove", "a", "1")
 	// A block put into a mode whose automation weakens it, while locked:
@@ -398,5 +399,47 @@ func TestFrozenChickenMode(t *testing.T) {
 	if i < 0 || !strings.Contains(state[i:i+400], `"freeze":true`) || !strings.Contains(state[i:i+400], `"running":true`) ||
 		!strings.Contains(state[i:i+400], `"freeze_mode":"logout"`) {
 		t.Errorf("gui-state: %.400s", state[max(i, 0):])
+	}
+}
+
+// R-MODE-1 (owner 2026-11-17): a block keeps its own automation while it is
+// in a mode (also when moved to another mode) and gets it back when taken
+// out or when the mode is deleted; refused as a whole when that weakens it
+// while it is locked.
+func TestModeKeepsOwnAutomation(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "x")
+	mustRun(t, "block", "add", "x", "x.com")
+	mustRun(t, "schedule", "add", "x", "--days", "tue", "--from", "10:00", "--to", "11:00")
+	mustRun(t, "mode", "create", "M")
+	mustRun(t, "schedule", "add", "M", "--days", "daily", "--from", "20:00", "--to", "21:00")
+	mustRun(t, "mode", "create", "N")
+	mustRun(t, "schedule", "add", "N", "--days", "daily", "--from", "20:00", "--to", "21:00")
+	mustRun(t, "schedule", "add", "N", "--days", "daily", "--from", "06:00", "--to", "07:00")
+	mustRun(t, "mode", "add", "M", "x")
+	mustRun(t, "mode", "add", "N", "x") // moved: its own stays the one from before M
+	own, has, err := d.OwnAutomation("x")
+	if err != nil || !has || len(own.Own) != 1 || own.Own[0].Start != 10*60 {
+		t.Fatalf("kept: %+v %v %v", own, has, err)
+	}
+	mustRun(t, "start", "x", "--for", "1h", "--yes")
+	if err := runCLI(t, "mode", "take-out", "x"); err == nil || !strings.Contains(err.Error(), "locked") {
+		t.Errorf("taken out of a stronger mode while locked: %v", err)
+	}
+	if err := runCLI(t, "mode", "delete", "N"); err == nil {
+		t.Error("a mode deleted though that weakens its locked block")
+	}
+	if m, in, _ := d.ModeOf("x"); !in || m.Name != "N" {
+		t.Errorf("refused, yet x left N: %v %v", m.Name, in)
+	}
+	// Unlocked: deleting the mode gives it its own automation back.
+	if err := d.DeactivateBlock("x"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "mode", "delete", "N")
+	rows, _ := d.ListSchedules("x")
+	if _, in, _ := d.ModeOf("x"); in || len(rows) != 1 || rows[0].StartMin != 10*60 {
+		t.Errorf("after the mode was deleted: in a mode %v, windows %+v", in, rows)
 	}
 }

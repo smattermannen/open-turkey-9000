@@ -4373,8 +4373,7 @@ class AutomationEditor(Gtk.Box):
             used = (self.data.get("blocks") or []) + [f"mode {m}" for m in self.data.get("modes") or []]
             self.summary.set_text("Used by " + ", ".join(used) + ": a change here changes them too; one that "
                                   "weakens a locked block is refused." if used else
-                                  "Used by nothing yet: apply it to blocks and modes on their Schedule & "
-                                  "places.")
+                                  "Used by nothing yet: apply it to blocks and modes in their Automation.")
         elif self.data.get("continuous"):
             self.summary.set_text("No windows or places yet: add some below." if self.kind == "monk" else
                                   "Continuous: its blocks are enabled whenever they are on. Add windows or "
@@ -5543,7 +5542,7 @@ class Window(Gtk.ApplicationWindow):
         page_header(box, "Schedules", "Weekly windows kept outside blocks, such as Evening or Weekend. Apply "
                     "them to blocks and modes; changing one here changes everything using it.",
                     help="A block or mode can use any number of schedules beside its own windows (Apply "
-                         "schedule… on its Schedule & places). Where they overlap they count once. A change "
+                         "schedule… in its Automation). Where they overlap they count once. A change "
                          "that weakens a locked block using the schedule is refused as a whole. Deleting a "
                          "schedule leaves its windows to what used it, as its own.")
         self.schedule_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -5639,7 +5638,7 @@ class Window(Gtk.ApplicationWindow):
                     "modes are switched by being at one.",
                     help="A place is the set of Wi-Fi networks in range when you save it: yours and the "
                          "neighbours'. The computer is there when as many of them as you choose are in range "
-                         "again. Add places to a block or mode on its Schedule & places. Needing more networks "
+                         "again. Add places to a block or mode in its Automation. Needing more networks "
                          "makes a place harder to recognise: refused while a block using it is locked. With "
                          "no network seen, places count as whatever keeps their blocks enabled.")
         save = Gtk.Button(label="Save where I am now as…", halign=Gtk.Align.START)
@@ -5699,7 +5698,7 @@ class Window(Gtk.ApplicationWindow):
         mode_blocks = {b for m in self.state.get("modes") or [] if m["name"] in modes for b in m.get("blocks") or []}
         used = [b for b in p.get("blocks") or [] if b not in mode_blocks] + [f"mode {m}" for m in modes]
         return card(top, flow_row(need_row), dim("Used by " + ", ".join(used) if used else
-                                                 "Not used yet: add it to a block or mode on its Schedule & places."),
+                                                 "Not used yet: add it to a block or mode in its Automation."),
                     spacing=6)
 
     def remove_place(self, name):
@@ -6121,6 +6120,21 @@ class Window(Gtk.ApplicationWindow):
         self.detail.pack_start(self.title_label, False, False, 0)
         self.detail.pack_start(self.status_pills, False, False, 0)
         self.detail.pack_start(self.status_label, False, False, 0)
+        # R-MODE-1 (owner 2026-11-17): a block in a mode has the mode's
+        # automation; its own is kept for when it is taken out.
+        self.block_mode_bar = Gtk.Box(spacing=8, no_show_all=True)
+        self.block_mode_label = Gtk.Label(xalign=0, wrap=True)
+        self.block_mode_bar.pack_start(self.block_mode_label, True, True, 0)
+        open_mode = Gtk.Button(label="Open the mode")
+        open_mode.connect("clicked", lambda _b: self.open_mode((self.blocks.get(self.selected) or {}).get("mode")))
+        take_out = Gtk.Button(label="Take it out")
+        take_out.set_tooltip_text("It gets its own automation back")
+        take_out.connect("clicked", lambda _b: self.selected and self.take_out_of_mode(self.selected))
+        self.block_mode_bar.pack_start(open_mode, False, False, 0)
+        self.block_mode_bar.pack_start(take_out, False, False, 0)
+        for child in self.block_mode_bar.get_children():
+            child.show()
+        self.detail.pack_start(self.block_mode_bar, False, False, 0)
         # §3.11: a block password hides the contents until typed.
         self.hidden_bar = Gtk.Box(spacing=8, no_show_all=True)
         self.hidden_bar.pack_start(dim("Its lists, apps and window titles are hidden by its block password."),
@@ -6154,7 +6168,11 @@ class Window(Gtk.ApplicationWindow):
         self.stop_button.connect("clicked", self.stop_block)
         self.unlock_button = Gtk.Button(label="Unlock…")
         self.unlock_button.connect("clicked", self.unlock_block)
-        for button in (self.start_button, self.stop_button, self.unlock_button):
+        # §4.3 (owner 2026-11-17): Automation in the block's menu; greyed
+        # out in a mode, which automates it.
+        self.automation_button = Gtk.Button(label="Automation")
+        self.automation_button.connect("clicked", lambda _b: self.open_automation())
+        for button in (self.start_button, self.stop_button, self.unlock_button, self.automation_button):
             actions.pack_start(button, False, False, 0)
         self.delete_button = Gtk.Button(label="Delete…")
         self.delete_button.get_style_context().add_class("destructive-action")
@@ -6330,21 +6348,6 @@ class Window(Gtk.ApplicationWindow):
         for child in self.auto_need_row.get_children():
             child.show_all()
         self.auto_need_row.set_no_show_all(True)
-        # R-MODE-1 (owner 2026-11-17): a block in a mode has the mode's
-        # automation; it is changed on the mode.
-        self.block_mode_bar = Gtk.Box(spacing=8, no_show_all=True)
-        self.block_mode_label = Gtk.Label(xalign=0, wrap=True)
-        self.block_mode_bar.pack_start(self.block_mode_label, True, True, 0)
-        open_mode = Gtk.Button(label="Open the mode")
-        open_mode.connect("clicked", lambda _b: self.open_mode((self.blocks.get(self.selected) or {}).get("mode")))
-        take_out = Gtk.Button(label="Take it out")
-        take_out.set_tooltip_text("It keeps the automation it has, and is changed here again")
-        take_out.connect("clicked", lambda _b: self.selected and self.take_out_of_mode(self.selected))
-        self.block_mode_bar.pack_start(open_mode, False, False, 0)
-        self.block_mode_bar.pack_start(take_out, False, False, 0)
-        for child in self.block_mode_bar.get_children():
-            child.show()
-        schedule.pack_start(self.block_mode_bar, False, False, 0)
         # §3.6 Schedule: schedules kept outside blocks, applied here.
         applied_row = Gtk.Box(spacing=6)
         applied_row.pack_start(Gtk.Label(label="Schedules:"), False, False, 0)
@@ -6424,9 +6427,20 @@ class Window(Gtk.ApplicationWindow):
             "while the lock is on."), False, False, 0)
         flow_row(lock_row)
         self.block_auto_widgets.append(flow_row(preset_row))
-        schedule_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        schedule_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         schedule_scroll.add(schedule)
-        tabs.append_page(schedule_scroll, Gtk.Label(label="Schedule & places"))
+        # §4.3 (owner 2026-11-17): the automation is its own view, opened
+        # from the block's menu (no tab).
+        self.automation_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
+                                       margin_start=20, margin_end=20, margin_top=16, margin_bottom=8)
+        back_to_block = Gtk.Button(label="← Back to the block", halign=Gtk.Align.START, relief=Gtk.ReliefStyle.NONE)
+        back_to_block.get_style_context().add_class("kc9k-link")
+        back_to_block.connect("clicked", lambda _b: self.blocks_stack.set_visible_child_name("detail"))
+        self.automation_title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
+        self.automation_title.get_style_context().add_class("kc9k-page-title")
+        self.automation_page.pack_start(back_to_block, False, False, 0)
+        self.automation_page.pack_start(self.automation_title, False, False, 0)
+        self.automation_page.pack_start(schedule_scroll, True, True, 0)
 
         # §3.6 places, under the schedule: both switch the block (Automation).
         places = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -6481,6 +6495,7 @@ class Window(Gtk.ApplicationWindow):
         self.blocks_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
         self.blocks_stack.add_named(self.build_block_cards(), "cards")
         self.blocks_stack.add_named(paned, "detail")
+        self.blocks_stack.add_named(self.automation_page, "automation")
         self.blocks_stack.add_named(self.build_mode_view(), "mode")
         return self.blocks_stack
 
@@ -6577,8 +6592,9 @@ class Window(Gtk.ApplicationWindow):
         links = Gtk.Box(spacing=8)
         links.pack_start(link("Automated block" if automated else "Continuous block",
                               "alarm-symbolic" if automated else "media-playlist-repeat-symbolic",
+                              f"Automated by '{block['mode']}'" if block.get("mode") else
                               "What switches it by itself: schedule and places",
-                              lambda: self.open_block(name, "Schedule & places")), False, False, 0)
+                              lambda: self.open_automation(name)), False, False, 0)
         links.set_center_widget(link(breaks_words(block), "preferences-system-time-symbolic", "Its breaks",
                                      lambda: self.open_block(name, "Breaks & allowance")))
         links.pack_end(link(lock_words(block), "changes-prevent-symbolic" if block.get("held") else
@@ -6999,9 +7015,29 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         return value if answer == Gtk.ResponseType.OK else None
 
+    def open_automation(self, name=None):
+        """The automation view of a block (the opened one): from its menu
+        (§4.3); a block in a mode opens the mode instead (R-MODE-1)."""
+        name = name or self.selected
+        block = self.blocks.get(name) or {}
+        if not block:
+            return
+        if block.get("mode"):
+            self.open_mode(block["mode"])
+            return
+        if name != self.selected or self.blocks_stack.get_visible_child_name() not in ("detail", "automation"):
+            self.open_block(name)
+        if self.selected != name:
+            return  # stayed with unsaved edits elsewhere
+        self.automation_title.set_text(f"Automation of {name}")
+        self.blocks_stack.set_visible_child_name("automation")
+
     def open_block(self, name, tab=None):
         """Opens a block on the Blocks page, at a tab when given; another
         block's unsaved edits are asked about first (§4.3)."""
+        if tab in ("Automation", "Schedule & places"):
+            self.open_automation(name)
+            return
         if (self.selected != name and self.blocks_stack.get_visible_child_name() == "detail"
                 and not self.leave_block(to_cards=False)):
             return
@@ -7320,7 +7356,14 @@ class Window(Gtk.ApplicationWindow):
         in_mode = block.get("mode")
         self.block_mode_bar.set_visible(bool(in_mode))
         self.block_mode_label.set_text(f"In the mode {in_mode}: it has the mode's automation, changed on the "
-                                       f"mode for all its blocks." if in_mode else "")
+                                       f"mode for all its blocks. Its own is kept for when it is taken out."
+                                       if in_mode else "")
+        self.automation_button.set_sensitive(not in_mode)
+        self.automation_button.set_tooltip_text(f"Automated by '{in_mode}'" if in_mode else
+                                                "What switches it by itself: its windows and places")
+        self.automation_title.set_text(f"Automation of {block['name']}")
+        if in_mode and self.blocks_stack.get_visible_child_name() == "automation":
+            self.blocks_stack.set_visible_child_name("detail")
         for widget in self.block_auto_widgets:
             widget.set_sensitive(not in_mode)
         for child in self.block_applied.get_children():

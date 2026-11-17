@@ -122,9 +122,11 @@ check(not win.card_switches["night"].get_sensitive() and win.card_switches["nigh
 
 # Its parts open the block where they say.
 shown["work"][2]["Automated block"].clicked(); settle()
-check(win.blocks_stack.get_visible_child_name() == "detail" and win.selected == "work" and
-      win.block_tabs.get_tab_label_text(win.block_tabs.get_nth_page(win.block_tabs.get_current_page())) == "Schedule & places",
-      "Automated block opens its schedule and places")
+check(win.blocks_stack.get_visible_child_name() == "automation" and win.selected == "work",
+      "Automated block opens its automation")
+tabs = [win.block_tabs.get_tab_label_text(win.block_tabs.get_nth_page(n)) for n in range(win.block_tabs.get_n_pages())]
+check("Schedule & places" not in tabs and win.automation_button.get_label() == "Automation",
+      "Automation is in the block's menu, not a tab: %s" % tabs)
 win.nav.emit("row-activated", win.nav_rows["blocks"]); settle()
 check(win.blocks_stack.get_visible_child_name() == "cards", "Blocks in the sidebar comes back to the list")
 cards()["work"][2]["Breaks: 10 min every hour"].clicked(); settle()

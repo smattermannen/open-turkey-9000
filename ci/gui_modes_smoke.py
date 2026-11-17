@@ -176,18 +176,21 @@ win.stack.set_visible_child_name("schedules"); settle()
 used = [w.get_text() for w in widgets(win.schedule_cards) if isinstance(w, Gtk.Label)]
 check(any("Used by mode Evening" in t for t in used), "the schedule says what uses it: %s" % used)
 
-# A block in a mode: its own automation greyed out, the mode named.
-win.open_block("social", "Schedule & places"); settle()
+# A block in a mode (owner 2026-11-17): Automation in its menu is greyed
+# out, "Automated by" the mode; taken out, it gets its own automation back.
+win.open_block("social"); settle()
 check(win.block_mode_bar.get_visible() and "Evening" in win.block_mode_label.get_text(), "the block names its mode")
-check(not any(w.get_sensitive() for w in win.block_auto_widgets), "and its automation is greyed out")
+check(not win.automation_button.get_sensitive() and win.automation_button.get_tooltip_text() == "Automated by 'Evening'",
+      "Automation is greyed out: %s" % win.automation_button.get_tooltip_text())
 win.take_out_of_mode("social"); settle()
-check(not block("social")["mode"] and block("social")["applied_schedules"] == ["Weekend"],
-      "taken out, it keeps the mode's automation")
-win.open_block("social", "Schedule & places"); settle()
-check(all(w.get_sensitive() for w in win.block_auto_widgets), "and is changed on itself again")
+check(not block("social")["mode"] and block("social")["applied_schedules"] == [] and not block("social")["schedules"],
+      "taken out, it has its own automation again (none)")
+win.open_automation("social"); settle()
+check(win.blocks_stack.get_visible_child_name() == "automation" and win.automation_button.get_sensitive()
+      and all(w.get_sensitive() for w in win.block_auto_widgets), "and is changed on itself again")
 
 # Apply schedule on a block of its own.
-win.open_block("news", "Schedule & places"); settle()
+win.open_automation("news"); settle()
 win.apply_schedule_to_block(None); settle()
 check(block("news")["applied_schedules"] == ["Weekend"], "Apply schedule… on a block")
 chips = [w.get_text() for w in widgets(win.block_applied) if isinstance(w, Gtk.Label)]

@@ -40,6 +40,11 @@ SCHEDULE_PRESETS = (
 # §4.2 (owner 2026-11-17): a block card dragged onto a mode.
 BLOCK_TARGET = Gtk.TargetEntry.new("kc9k/block", Gtk.TargetFlags.SAME_APP, 0)
 
+# §3.8, §4.8 (owner 2026-11-17): Frozen Chicken is a mode (db.FrozenChickenName),
+# up to a week (R-FREEZE-3).
+FROZEN_CHICKEN = "Frozen Chicken"
+FREEZE_MAX = 7 * 86400
+
 # §4.3 (owner 2026-11-17): an opened block is always a draft. These commands
 # change what its Websites and Apps tabs show; run on the block opened on the
 # Blocks page they go to its draft (made at the first change), and apply
@@ -2250,7 +2255,7 @@ class ListCard(Gtk.Frame):
                 title, detail, current.get("minutes", initial) * 60, minimum * 60 or 60,
                 30 * 86400 if name == "monk" else 86400, zero=None if name == "monk" else "Just once",
                 presets=(3600, 86400) if name == "monk" else (3600, 8 * 3600),
-                why_max="" if name == "monk" else "It goes through Frozen Chicken, which lasts at most a day.")
+                why_max="" if name == "monk" else "It goes through Frozen Chicken, which lasts at most a week.")
             if seconds is not None:
                 args = ["--for", f"{seconds // 60}m"] if seconds else []
                 if name == "monk":
@@ -4973,7 +4978,6 @@ class Window(Gtk.ApplicationWindow):
                 ("schedules", "Schedules", "x-office-calendar-symbolic", self.build_schedules_page),
                 ("places", "Places", "mark-location-symbolic", self.build_places_page),
                 ("clusters", "Clusters", "view-list-symbolic", self.build_clusters),
-                ("device", "Frozen Chicken", "weather-snow-symbolic", self.build_device),
                 ("stats", "Statistics", "x-office-presentation-symbolic", self.build_stats),
                 ("circadian", "Circadian rhythm", "weather-clear-night-symbolic", self.build_circadian),
                 ("settings", "Settings", "emblem-system-symbolic", self.build_settings)):
@@ -5927,7 +5931,7 @@ class Window(Gtk.ApplicationWindow):
         new_block = Gtk.Button(label="New block…")
         new_block.connect("clicked", self.create_block)
         freeze = Gtk.Button(label="Frozen Chicken…")
-        freeze.connect("clicked", lambda _b: self.stack.set_visible_child_name("device"))
+        freeze.connect("clicked", lambda _b: self.open_mode(FROZEN_CHICKEN))
         monk = Gtk.Button(label="Monk mode…")
         monk.connect("clicked", self.monk_mode)
         actions.pack_start(new_block, False, False, 0)
@@ -6602,13 +6606,21 @@ class Window(Gtk.ApplicationWindow):
         title.get_style_context().add_class("kc9k-card-name")
         title.connect("clicked", lambda _b: self.open_mode(name))
         icon = Gtk.Image.new_from_icon_name("weather-clear-night-symbolic" if mode.get("monk") else
+                                            "weather-snow-symbolic" if mode.get("freeze") else
                                             "view-grid-symbolic", Gtk.IconSize.LARGE_TOOLBAR)
         top = Gtk.Box(spacing=10)
         top.pack_start(icon, False, False, 0)
         top.pack_start(title, False, False, 0)
         switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         blocks = mode.get("blocks") or []
-        if mode.get("monk"):
+        if mode.get("freeze"):
+            left = mode.get("freeze_left") or 0
+            switch.set_active(bool(mode.get("running")))
+            switch.set_sensitive(not mode.get("running"))
+            switch.set_tooltip_text(f"Frozen for {fmt_seconds(left)} more: it can't end early" if left else
+                                    "Freeze the computer until a time you choose (at most a week)")
+            state_text = f"On, {fmt_seconds(left)} left" if left else "Off"
+        elif mode.get("monk"):
             # R-MONK-3 (owner 2026-11-17, later): switched like any mode;
             # only a run for a set time is locked.
             left = mode.get("monk_left") or 0
@@ -6633,8 +6645,11 @@ class Window(Gtk.ApplicationWindow):
         state.get_style_context().add_class("dim-label")
         top.pack_end(switch, False, False, 0)
         top.pack_end(state, False, False, 0)
-        if mode.get("monk"):
-            what = ("No windows or places: starts only for a time" if mode.get("continuous") else
+        if mode.get("freeze"):
+            what = ("No scheduled freezes: switched on with an end time" if mode.get("continuous") else
+                    "Scheduled: " + schedule_summary(mode.get("windows") or []).split(" · ")[0])
+        elif mode.get("monk"):
+            what = ("No windows or places: on until switched off" if mode.get("continuous") else
                     "Automated: " + (", ".join(mode.get("schedules") or []) or schedule_summary(mode.get("windows") or [])
                                      .split(" · ")[0] or "") + (" · at " + ", ".join(mode["places"]) if mode.get("places") else ""))
         else:
@@ -6648,7 +6663,7 @@ class Window(Gtk.ApplicationWindow):
         line.get_style_context().add_class("kc9k-link")
         line.connect("clicked", lambda _b: self.open_mode(name))
         box = card(top, line, spacing=6)
-        if not mode.get("monk"):
+        if not mode.get("monk") and not mode.get("freeze"):
             box.drag_dest_set(Gtk.DestDefaults.ALL, [BLOCK_TARGET], Gdk.DragAction.MOVE)
             box.connect("drag-data-received",
                         lambda _w, _c, _x, _y, data, _i, _t: self.move_to_mode(data.get_data().decode(), name))
@@ -6685,6 +6700,10 @@ class Window(Gtk.ApplicationWindow):
         if self.updating:
             return False
         self.block_cards_shown = None
+        if mode.get("freeze"):
+            if wanted:
+                self.freeze_dialog()
+            return True
         if mode.get("monk") and wanted:
             when = ("while its windows and places have it on" if not mode.get("continuous") else
                     "until you switch it off")
@@ -6771,17 +6790,20 @@ class Window(Gtk.ApplicationWindow):
         monk_now.connect("clicked", self.monk_mode)
         self.mode_monk_box.pack_start(monk_now, False, False, 0)
         box.pack_start(self.mode_monk_box, False, False, 0)
+        self.mode_freeze_box = self.guarded("device", FROZEN_CHICKEN, self.build_device())
+        box.pack_start(self.mode_freeze_box, False, False, 0)
         self.mode_editors = Gtk.Stack()
         self.mode_editor = AutomationEditor(self, "mode")
         self.monk_editor = AutomationEditor(self, "monk")
         self.mode_editors.add_named(self.mode_editor, "mode")
         self.mode_editors.add_named(self.monk_editor, "monk")
-        box.pack_start(section(
+        self.mode_automation_section = section(
             "Automation", self.mode_editors,
             help="Its windows (its own, and those of schedules applied to it) and its places. Disabled by "
                  "default: they turn its blocks on, and they are lifted otherwise; enabled by default: they "
                  "turn them off. With windows and places, either or both at once. Monk mode is always "
-                 "disabled by default."), False, False, 0)
+                 "disabled by default.")
+        box.pack_start(self.mode_automation_section, False, False, 0)
         self.shown_mode = None
         return scroll
 
@@ -6794,7 +6816,23 @@ class Window(Gtk.ApplicationWindow):
             return
         self.mode_wait = None
         monk = bool(mode.get("monk"))
+        frozen = bool(mode.get("freeze"))
         self.mode_title.set_text(mode["name"])
+        self.mode_freeze_box.set_visible(frozen)
+        self.mode_automation_section.set_visible(not frozen)
+        if frozen:
+            # §3.8 (owner 2026-11-17): on only with an end time; a running
+            # freeze can't end.
+            was, self.updating = self.updating, True
+            self.mode_switch.set_active(bool(mode.get("running")))
+            self.mode_switch.set_sensitive(not mode.get("running"))
+            self.updating = was
+            for widget in (self.mode_menu, self.mode_lock_button, self.mode_blocks_section, self.mode_monk_box):
+                widget.set_visible(False)
+            left = mode.get("freeze_left") or 0
+            self.mode_status.set_text(f"Frozen for {fmt_seconds(left)} more; it can't end early, only be extended."
+                                      if left else "Off. Switching it on asks until when (at most a week).")
+            return
         # The switch, as on the mode's card (set without running anything).
         was, self.updating = self.updating, True
         blocks = mode.get("blocks") or []
@@ -8575,13 +8613,14 @@ class Window(Gtk.ApplicationWindow):
 
     # Frozen Chicken ------------------------------------------------------
     def build_device(self):
-        scroll, box = page_box()
-        page_header(box, "Frozen Chicken", "Lock the whole computer for a while: the screen, your "
-                    "session, or the power.", help=(
-                        "Keeps the computer unusable until the time is up, even across restarts: the "
-                        "screen is locked again right away, sessions are logged out, or the computer "
-                        "shuts down. It can't be cancelled from the desktop, only extended. The time "
-                        "keeps counting while the computer is off. At most a day at a time."))
+        """Frozen Chicken's part of its mode's view (§3.8, §4.8, owner
+        2026-11-17): freeze now, its scheduled freezes, its allowed apps."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.pack_start(dim(
+            "Lock the whole computer for a while: the screen, your session, or the power. It keeps the "
+            "computer unusable until the time is up, even across restarts, and can't be cancelled, only "
+            "extended. The time keeps counting while the computer is off. At most a week at a time."),
+            False, False, 0)
 
         self.freeze_status = Gtk.Label(xalign=0)
         row = Gtk.Box(spacing=8)
@@ -8591,8 +8630,8 @@ class Window(Gtk.ApplicationWindow):
         self.freeze_mode.append("shutdown", "Shut down")
         self.freeze_mode.append("apps", "Allowed apps only")  # §3.8: kc9k freeze apps
         self.freeze_mode.set_active_id("lock")
-        self.freeze_minutes = DurationField(1800, minimum=60, maximum=86400, presets=(1800, 3600, 4 * 3600),
-                                            why_max="Frozen Chicken lasts at most a day.", width=9)
+        self.freeze_minutes = DurationField(1800, minimum=60, maximum=FREEZE_MAX, presets=(1800, 3600, 4 * 3600, 86400),
+                                            why_max="Frozen Chicken lasts at most a week.", width=9)
         self.freeze_button = Gtk.Button(label="Start Frozen Chicken…")
         self.freeze_button.get_style_context().add_class("destructive-action")
         self.freeze_button.connect("clicked", self.freeze)
@@ -8635,8 +8674,7 @@ class Window(Gtk.ApplicationWindow):
                        False, False, 0)
         flow_row(freeze_lock_row)
         box.pack_start(section("Allowed apps", self.freeze_apps), False, False, 0)
-
-        return scroll
+        return box
 
     def switch_row(self, switch, title, detail):
         row = Gtk.Box(spacing=16)
@@ -8740,6 +8778,47 @@ class Window(Gtk.ApplicationWindow):
             f"<b>On</b> for {fmt_seconds(frozen)} more, {modes.get(self.state['freeze_mode'], '')}. "
             "Starting again can only extend it." if frozen else "Off.")
         self.freeze_button.set_label("Extend…" if frozen else "Start Frozen Chicken…")
+
+    def freeze_dialog(self, answer=None):
+        """§3.8, R-FREEZE-3: Frozen Chicken switched on asks how (lock,
+        log out, shut down, allowed apps) and until when, at most a week
+        ahead. answer: (mode, flags) for tests."""
+        if answer is None:
+            dialog = Gtk.Dialog(title="Freeze the computer", transient_for=self, modal=True)
+            dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+            ok = dialog.add_button("Freeze", Gtk.ResponseType.OK)
+            ok.get_style_context().add_class("destructive-action")
+            box = dialog.get_content_area()
+            box.set_spacing(10)
+            box.set_border_width(14)
+            box.pack_start(dim("Until the time is up the computer can't be used as chosen here, also after a "
+                               "restart. It can't be cancelled, only extended. Save your work first."), False, False, 0)
+            how = Gtk.ComboBoxText()
+            for key, label in (("lock", "Lock the screen"), ("logout", "Log out"), ("shutdown", "Shut down"),
+                               ("apps", "Allowed apps only")):
+                how.append(key, label)
+            how.set_active_id(self.freeze_mode.get_active_id() or "lock")
+            box.pack_start(how, False, False, 0)
+            until = TimerLockField(allow_none=False, seconds=3600)
+            until.duration.set_limits(60, FREEZE_MAX, why_max="Frozen Chicken lasts at most a week.")
+            box.pack_start(until, False, False, 0)
+            self.freeze_dialog_parts = (dialog, how, until)  # for tests
+            dialog.show_all()
+            reply = dialog.run()
+            mode, flags, problem = how.get_active_id(), until.flags(), until.problem()
+            moment = until.until() if until.mode == "until" else None
+            dialog.destroy()
+            if reply != Gtk.ResponseType.OK:
+                return
+            if problem or not flags:
+                self.message(problem or "Choose how long.", Gtk.MessageType.INFO)
+                return
+            if moment and (moment - datetime.datetime.now()).total_seconds() > FREEZE_MAX:
+                self.message("Frozen Chicken lasts at most a week: pick an earlier date.", Gtk.MessageType.INFO)
+                return
+        else:
+            mode, flags = answer
+        self.run(["freeze", *flags, "--mode", mode, "--yes"])
 
     def freeze(self, _button):
         if not self.fields_ok(("Frozen Chicken", self.freeze_minutes)):

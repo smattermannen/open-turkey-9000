@@ -687,7 +687,7 @@ When several apply, the strongest page action wins (close-tab, then image,
 redirect, block). Device actions only follow from the page itself, never
 from something embedded in another page. A one-off logout or shutdown
 happens at most every 10 minutes; staying off or logged out goes through
-Frozen Chicken (at most a day). Monk mode blocks every website and cuts the
+Frozen Chicken (at most a week). Monk mode blocks every website and cuts the
 computer's internet connection for its time (see 'kc9k monk').
 
 Run 'on' again with other settings to change them: a longer time is always

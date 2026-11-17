@@ -48,7 +48,9 @@ win.state = None; win.refresh(); pump(lambda: win.state is not None)
 
 def titles(page):
     """Section headings of a page, top to bottom."""
-    box = win.covers[page][0].get_child_by_name("page").get_child().get_child()
+    box = win.covers[page][0].get_child_by_name("page")
+    if isinstance(box, Gtk.ScrolledWindow):
+        box = box.get_child().get_child()
     out = []
     for child in box.get_children():
         first = child.get_children()[0] if isinstance(child, Gtk.Box) and child.get_children() else child

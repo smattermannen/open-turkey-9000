@@ -61,9 +61,9 @@ func IsBlockingAction(name string) bool {
 }
 
 // Limits on an action's minutes. Logging out and shutting down for a while
-// go through Frozen Chicken, which lasts at most a day.
+// go through Frozen Chicken, which lasts at most a week (R-FREEZE-3).
 const (
-	MaxFreezeMinutes = 24 * 60
+	MaxFreezeMinutes = 7 * 24 * 60
 	MaxMonkMinutes   = 30 * 24 * 60
 )
 

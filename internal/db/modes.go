@@ -85,6 +85,10 @@ CREATE TABLE IF NOT EXISTS mode_blocks (
 // MonkModeName is monk mode's name among the modes (R-MONK-1).
 const MonkModeName = "Monk mode"
 
+// FrozenChickenName is Frozen Chicken's name among the modes (§3.8, owner
+// 2026-11-17): it is a mode, kept in the freeze tables, not in modes.
+const FrozenChickenName = "Frozen Chicken"
+
 // AutomationSpec is what a block's or a mode's automation is made of: its
 // own windows, the schedules it uses (in the order applied), its places
 // and its settings. Window.Allow is ignored: the default decides.
@@ -291,6 +295,13 @@ func (d *DB) NameTaken(kind, name string) (bool, error) {
 func (d *DB) checkNewName(kind, name string) error {
 	if err := CheckListName(name); err != nil {
 		return err
+	}
+	if kind == KindMode {
+		for _, own := range []string{MonkModeName, FrozenChickenName, "monk", "freeze", "frozen"} {
+			if strings.EqualFold(name, own) {
+				return fmt.Errorf("'%s' is monk mode's or Frozen Chicken's name", name)
+			}
+		}
 	}
 	taken, err := d.NameTaken(kind, name)
 	if err != nil {

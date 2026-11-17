@@ -392,6 +392,10 @@ off and its automation can only be added to.`,
 				}
 			}
 			fmt.Println("  " + describeTarget(database, autoTarget{Name: m.Name, Mode: &m}))
+			if m.Monk {
+				fmt.Println(db.FrozenChickenName)
+				fmt.Println("  " + describeFreeze(database))
+			}
 		}
 		return nil
 	}),
@@ -526,9 +530,58 @@ var modeOffCmd = &cobra.Command{
 	RunE:  func(cmd *cobra.Command, args []string) error { return switchMode(cmd, args[0], false) },
 }
 
+// isFrozenChicken reports whether a mode's name means Frozen Chicken (§3.8).
+func isFrozenChicken(name string) bool {
+	for _, n := range []string{db.FrozenChickenName, "freeze", "frozen"} {
+		if strings.EqualFold(name, n) {
+			return true
+		}
+	}
+	return false
+}
+
+// describeFreeze says whether Frozen Chicken runs, and its scheduled freezes.
+func describeFreeze(database *db.DB) string {
+	text := "off"
+	if until, err := database.FreezeUntil(); err == nil && until > time.Now().Unix() {
+		mode, _ := database.FreezeMode()
+		text = fmt.Sprintf("on (%s) until %s; it can't end early", mode, time.Unix(until, 0).Format("2006-01-02 15:04"))
+	}
+	if schedules, err := database.ListFreezeSchedules(); err == nil && len(schedules) > 0 {
+		var parts []string
+		for _, s := range schedules {
+			parts = append(parts, s.Window.String()+" ("+s.Mode+")")
+		}
+		text += "; scheduled: " + strings.Join(parts, ", ")
+	}
+	return "Frozen Chicken is " + text + "."
+}
+
+// switchFreeze: Frozen Chicken is switched on only with an end time
+// (R-FREEZE-3: 'kc9k freeze'), and a running freeze can't end (R-FREEZE-2).
+func switchFreeze(on bool) error {
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	if on {
+		return fmt.Errorf("Frozen Chicken starts with an end time, at most a week ahead: 'kc9k freeze --for 2h' (or --until; --mode lock, logout, shutdown or apps)")
+	}
+	if until, err := database.FreezeUntil(); err == nil && until > time.Now().Unix() {
+		return refused(database, db.FrozenChickenName, fmt.Errorf("Frozen Chicken is on until %s and can't end early",
+			time.Unix(until, 0).Format("2006-01-02 15:04")))
+	}
+	fmt.Println(describeFreeze(database))
+	return nil
+}
+
 // switchMode switches a mode's blocks on or off, as 'kc9k start' (without
 // locks) and 'kc9k stop' do for each; or monk mode's automation.
 func switchMode(cmd *cobra.Command, name string, on bool) error {
+	if isFrozenChicken(name) {
+		return switchFreeze(on)
+	}
 	database, err := openDB()
 	if err != nil {
 		return err
@@ -636,6 +689,9 @@ Monk mode is locked by running it for a time ('kc9k monk --for 2h'), Frozen
 Chicken by freezing ('kc9k freeze --for 2h').`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if isFrozenChicken(args[0]) {
+			return fmt.Errorf("Frozen Chicken is locked by freezing: 'kc9k freeze --for 2h --yes'")
+		}
 		database, err := openDB()
 		if err != nil {
 			return err
@@ -723,6 +779,11 @@ var modeShowCmd = &cobra.Command{
 	Short: "What a mode holds and what switches it",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if isFrozenChicken(args[0]) {
+			fmt.Println(db.FrozenChickenName)
+			fmt.Println("  " + describeFreeze(database))
+			return nil
+		}
 		t, err := resolveTarget(database, args[0], db.KindMode)
 		if err != nil {
 			return err

@@ -37,8 +37,18 @@ Emergency exit: in GRUB, press e on the boot entry and add
 			return fmt.Errorf("unknown mode %q (use lock, logout, shutdown or apps)", mode)
 		}
 
-		d, err := parseUserDuration(forDur)
-		if err != nil {
+		var d time.Duration
+		var err error
+		if untilSpec, _ := cmd.Flags().GetString("until"); untilSpec != "" {
+			if forDur != "" {
+				return fmt.Errorf("give --for or --until, not both")
+			}
+			at, err := untilToday(time.Now(), untilSpec)
+			if err != nil {
+				return fmt.Errorf("invalid --until %q: %w", untilSpec, err)
+			}
+			d = time.Until(at).Round(time.Minute)
+		} else if d, err = parseUserDuration(forDur); err != nil {
 			return fmt.Errorf("invalid --for duration %q: %w", forDur, err)
 		}
 		if err := freeze.Validate(d); err != nil {
@@ -118,6 +128,11 @@ type guiMode struct {
 	On         int                   `json:"on"`        // its blocks switched on
 	Locked     int                   `json:"locked"`    // its blocks locked
 	MonkLeft   int64                 `json:"monk_left"` // monk mode: seconds it runs on
+	// Frozen Chicken (§3.8, owner 2026-11-17): a mode whose automation is
+	// its scheduled freezes.
+	Freeze     bool   `json:"freeze"`
+	FreezeLeft int64  `json:"freeze_left"` // seconds it is frozen on
+	FreezeMode string `json:"freeze_mode"`
 	// TodayWindows: its windows still to come or open today (§4.1).
 	TodayWindows []string `json:"today_windows"`
 }
@@ -773,7 +788,8 @@ var guiStateCmd = &cobra.Command{
 }
 
 func init() {
-	freezeCmd.Flags().String("for", "", "How long to stay frozen (e.g. 30m, 2h; at most 24h)")
+	freezeCmd.Flags().String("for", "", "How long to stay frozen (e.g. 30m, 2h, 3d; at most a week)")
+	freezeCmd.Flags().String("until", "", "Frozen until a time (HH:MM, or YYYY-MM-DD HH:MM; at most a week ahead)")
 	freezeCmd.Flags().Bool("yes", false, "Confirm the freeze")
 	freezeCmd.Flags().String("mode", freeze.ModeLock, "How to freeze: lock, logout, shutdown, or apps (allowed apps only: kc9k freeze apps)")
 	_ = freezeCmd.MarkFlagRequired("for")
@@ -860,6 +876,31 @@ func guiModes(database *db.DB, saved []db.SavedSchedule, modes []db.Mode, places
 			}
 		}
 		out = append(out, g)
+		if m.Monk {
+			out = append(out, guiFrozenChicken(database, now))
+		}
 	}
 	return out
+}
+
+// guiFrozenChicken is Frozen Chicken as a mode: on while a freeze runs (it
+// can't end early), its windows the scheduled freezes.
+func guiFrozenChicken(database *db.DB, now time.Time) guiMode {
+	g := guiMode{Name: db.FrozenChickenName, Freeze: true, Blocks: []string{}, Windows: []guiWin{},
+		Schedules: []string{}, Places: []string{}, TodayWindows: []string{}}
+	if until, err := database.FreezeUntil(); err == nil && until > now.Unix() {
+		g.FreezeLeft, g.Running, g.Active = until-now.Unix(), true, true
+		g.FreezeMode, _ = database.FreezeMode()
+	}
+	schedules, _ := database.ListFreezeSchedules()
+	var windows []schedule.Window
+	for _, s := range schedules {
+		g.Windows = append(g.Windows, guiWin{Days: s.Window.Days, Start: s.Window.Start, End: s.Window.End})
+		windows = append(windows, s.Window)
+	}
+	g.Continuous = len(windows) == 0
+	if today := windowsLeftToday(windows, now); today != nil {
+		g.TodayWindows = today
+	}
+	return g
 }

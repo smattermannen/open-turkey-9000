@@ -535,7 +535,7 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   PNG/JPEG/GIF/WebP. Action edits: longer time or another picture free; new
   redirect address weakens. List logout/shutdown/lock-screen notified 60 s
   ahead; one-off logout/shutdown ≤ every 10 min; `--for` goes through
-  Frozen Chicken (≤ 24 h).
+  Frozen Chicken (≤ a week).
 - **Clusters**: copies are independent. `--exceptions`, `--as N`,
   `--into L`. Export = plain entry file with a scope header (`list import`
   reads it).
@@ -692,11 +692,14 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   here, confirms the locks, starts blocks that come with running locks. Clashing block → `name-2`; existing
   clusters/places kept; browser settings only on; ladder replaced only by a
   stricter one. `--dry-run` lists additions and locks.
-- **Frozen Chicken**: `freeze --for D --mode lock|logout|shutdown|apps --yes`
+- **Frozen Chicken** (a mode, owner 2026-11-17: `db.FrozenChickenName`, kept in
+  the freeze tables; gui-state `modes` entry `freeze` after monk mode,
+  `guiFrozenChicken`; `mode on|off|show freeze` say why/what; no sidebar page,
+  its sections `build_device` in the mode view): `freeze --for D|--until T --mode lock|logout|shutdown|apps --yes`
   (`apps`: allowed apps only, `freeze apps add|remove`);
   `freeze schedule add --days … --from --to [--mode] [--lock-lead D]`,
   `list`, `remove N`, `lock N on --lead D`. Back-to-back windows run on; a
-  longer running freeze is never shortened; ≤ 24 h; time counts while off;
+  longer running freeze is never shortened; ≤ a week; time counts while off;
   only extendable; shutdown mode powers off at each boot. Devmaster
   `master` works from a TTY in lock mode only.
 - **Strict mode** triggers on any lock, a running freeze or an on schedule

@@ -341,7 +341,7 @@ again. After --quiet without tripping, it falls back a step. For example:
 
 Actions: warning (a notification), close-tab (the page that tripped it),
 close-browser, lock-screen D, logout [D], shutdown [D] (with D: stay so that
-long, through Frozen Chicken, at most a day; without: once, at most every
+long, through Frozen Chicken, at most a week; without: once, at most every
 10 minutes), monk D. --count, --within, --then and --then-for are a short
 way to give one step with one action.
 

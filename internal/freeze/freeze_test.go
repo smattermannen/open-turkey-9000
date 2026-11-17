@@ -13,7 +13,8 @@ func TestValidate(t *testing.T) {
 		{30 * time.Second, false},
 		{time.Minute, true},
 		{24 * time.Hour, true},
-		{25 * time.Hour, false},
+		{7 * 24 * time.Hour, true}, // R-FREEZE-3: at most a week (owner 2026-11-17)
+		{7*24*time.Hour + time.Minute, false},
 	}
 	for _, c := range cases {
 		if err := Validate(c.d); (err == nil) != c.ok {

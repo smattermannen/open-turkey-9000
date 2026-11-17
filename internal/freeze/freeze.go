@@ -16,7 +16,9 @@ import (
 
 const (
 	MinDuration = time.Minute
-	MaxDuration = 24 * time.Hour
+	// MaxDuration: Frozen Chicken lasts at most a week (R-FREEZE-3, owner
+	// 2026-11-17), counted from now also when extended.
+	MaxDuration = 7 * 24 * time.Hour
 
 	// BypassParam on the kernel command line (edit the boot entry in GRUB)
 	// stops the freeze from being enforced during that boot.

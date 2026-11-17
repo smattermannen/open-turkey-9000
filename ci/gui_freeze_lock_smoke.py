@@ -65,7 +65,7 @@ def settle():
 Gtk.Dialog.run = lambda d: Gtk.ResponseType.CANCEL
 win.get_child().show_all()
 settle()
-win.stack.set_visible_child_name("device"); settle()
+win.open_mode("Frozen Chicken"); settle()
 
 msgs.clear()
 win.lock_freeze_schedule(None)

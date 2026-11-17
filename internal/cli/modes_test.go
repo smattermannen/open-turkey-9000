@@ -366,3 +366,37 @@ func TestModeLock(t *testing.T) {
 		t.Error("an empty mode was locked")
 	}
 }
+
+// §3.8, §4.8, R-FREEZE-2/3 (owner 2026-11-17): Frozen Chicken is a mode:
+// listed with them, switched on only with an end time at most a week ahead
+// (kc9k freeze --for or --until), never switched off while it runs; no mode
+// takes its name.
+func TestFrozenChickenMode(t *testing.T) {
+	testDB(t)
+	notTerminal(t)
+	if out := capture(t, "mode"); !strings.Contains(out, "Frozen Chicken\n  Frozen Chicken is off.") {
+		t.Errorf("mode: %s", out)
+	}
+	if err := runCLI(t, "mode", "on", "Frozen Chicken"); err == nil || !strings.Contains(err.Error(), "end time") {
+		t.Errorf("switched on without an end time: %v", err)
+	}
+	if err := runCLI(t, "mode", "create", "frozen chicken"); err == nil {
+		t.Error("a mode took Frozen Chicken's name")
+	}
+	if err := runCLI(t, "freeze", "--for", "8d", "--yes"); err == nil {
+		t.Error("frozen for more than a week")
+	}
+	if err := runCLI(t, "freeze", "--until", time.Now().Add(8*24*time.Hour).Format("2006-01-02 15:04"), "--yes"); err == nil {
+		t.Error("frozen until more than a week ahead")
+	}
+	mustRun(t, "freeze", "--for", "6d", "--mode", "logout", "--yes")
+	if err := runCLI(t, "mode", "off", "freeze"); err == nil {
+		t.Error("a running freeze was switched off")
+	}
+	state := capture(t, "gui-state")
+	i := strings.Index(state, `"name":"Frozen Chicken"`)
+	if i < 0 || !strings.Contains(state[i:i+400], `"freeze":true`) || !strings.Contains(state[i:i+400], `"running":true`) ||
+		!strings.Contains(state[i:i+400], `"freeze_mode":"logout"`) {
+		t.Errorf("gui-state: %.400s", state[max(i, 0):])
+	}
+}

@@ -206,7 +206,16 @@ settle()
 win.state = None; win.state_json = None; win.refresh(); pump(lambda: win.state is not None)
 settle()
 total = 0
-for page_name in ("dashboard", "blocks", "clusters", "device", "stats", "circadian", "settings") * 2:
+# Owner 2026-11-17: Frozen Chicken is a mode, its page part of the Blocks
+# page's mode view; monk mode's view too.
+for page_name in ("dashboard", "blocks", "clusters", "Frozen Chicken", "Monk mode", "stats", "circadian",
+                  "settings") * 2:
+    if page_name in ("Frozen Chicken", "Monk mode"):
+        win.open_mode(page_name)
+        settle()
+        total += click_all(win.blocks_stack.get_child_by_name("mode"), f"[mode {page_name}]")
+        win.blocks_stack.set_visible_child_name("cards")
+        continue
     if page_name == "dashboard" and total:
         answer["ok"] = True  # the second round
         clicked.clear()

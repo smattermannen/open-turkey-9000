@@ -72,8 +72,15 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       `TestPlaylistInEntry`, `ci/gui_playlist_smoke.py`. Playing a video of
       a real playlist: still Unchecked (§0.2).
   - [ ] Step 2:
-    - [ ] Frozen Chicken is a mode among the blocks, up to a week; its
-      page leaves the sidebar (§3.8, §4.8, R-FREEZE-3).
+    - [x] Frozen Chicken is a mode among the blocks, up to a week; its
+      page leaves the sidebar (§3.8, §4.8, R-FREEZE-3). Its card is next to
+      monk mode's (switched on it asks how and until when, `freeze_dialog`
+      with the calendar; running, the switch is greyed out); its view holds
+      Freeze now, Scheduled freezes and Allowed apps. `freeze --until`, at
+      most a week (also list actions and ladder steps through it); `kc9k
+      mode` lists it, `mode on|off|show freeze` say what to do; no mode takes
+      its name. `TestFrozenChickenMode`, `ci/gui_modes_smoke.py`,
+      `ci/gui_freeze_lock_smoke.py`.
     - [x] Monk mode switched on and off like any mode (§3.8, R-MONK-3):
       switched on (confirmed) it runs while its automation has it on, with
       none until switched off; switched off it stops; its automation is

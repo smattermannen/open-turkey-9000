@@ -107,13 +107,15 @@ Gtk.Dialog.run = lambda d: Gtk.ResponseType.CANCEL
 win.get_child().show_all()
 settle()
 win.stack.set_visible_child_name("blocks"); settle()
-check(names(win.mode_cards) == ["Monk mode"], "monk mode is always among the modes: %s" % names(win.mode_cards))
+check(names(win.mode_cards) == ["Monk mode", "Frozen Chicken"],
+      "monk mode and Frozen Chicken are always among the modes: %s" % names(win.mode_cards))
+check("device" not in win.nav_rows, "Frozen Chicken has no page of its own in the sidebar")
 check(sorted(names(win.block_cards)) == ["games", "news", "social"], "the blocks below")
 
 # New mode…, then a block dropped onto it.
 answers[:] = ["Evening"]
 win.create_mode(None); settle()
-check(names(win.mode_cards) == ["Monk mode", "Evening"], "New mode… makes one: %s" % names(win.mode_cards))
+check(names(win.mode_cards) == ["Monk mode", "Frozen Chicken", "Evening"], "New mode… makes one: %s" % names(win.mode_cards))
 check(win.blocks_stack.get_visible_child_name() == "mode" and win.mode_title.get_text() == "Evening",
       "and opens it")
 win.move_to_mode("social", "Evening"); settle()
@@ -241,6 +243,22 @@ msgs.clear()
 win.mode_editor.add_window("tue", "10:00", "11:00"); settle()
 check(len(mode("Evening").get("windows") or []) == before + 1 and not block("Evening")["schedules"],
       "the mode's editor changes the mode, not the block named like it: %s" % msgs)
+
+# Frozen Chicken (§3.8, owner 2026-11-17): a mode; its view holds freezing
+# now, its scheduled freezes and allowed apps; switched on it asks until when
+# (at most a week), and a running freeze can't be switched off.
+win.open_mode("Frozen Chicken"); settle()
+check(win.mode_freeze_box.get_visible() and not win.mode_automation_section.get_visible()
+      and not win.mode_blocks_section.get_visible(), "its view: the freeze sections, no blocks or automation")
+check(win.mode_switch.get_sensitive() and not win.mode_switch.get_active(), "off, its switch works")
+win.freeze_dialog(answer=("lock", ["--for", "2d"])); settle()
+fc = mode("Frozen Chicken")
+check(fc["running"] and fc["freeze_left"] > 86400, "frozen for two days: %s" % {k: fc[k] for k in ("running", "freeze_left")})
+win.open_mode("Frozen Chicken"); settle()
+check(not win.mode_switch.get_sensitive() and "can't end early" in win.mode_status.get_text(),
+      "running, it can't be switched off: %s" % win.mode_status.get_text())
+r = cli("freeze", "--for", "8d", "--yes")
+check(r.returncode != 0, "more than a week refused")
 
 print("messages:", msgs)
 print("all passed" if not fails else "FAILED: %s" % fails)

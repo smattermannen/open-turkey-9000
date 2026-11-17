@@ -47,7 +47,7 @@ func triggerConsequences(actions []db.TriggerAction) []Consequence {
 	var out []Consequence
 	for _, a := range actions {
 		if a.Name != db.TriggerClose {
-			out = append(out, Consequence{Kind: a.Name, Minutes: a.Minutes})
+			out = append(out, Consequence{Kind: a.Name, Minutes: a.Minutes, Param: a.Param})
 		}
 	}
 	return out
@@ -93,4 +93,23 @@ func appsTrigger(d *db.DB, b db.ActiveBlockDetail, now time.Time) {
 			logEvent(d, db.EventApp, b.BlockName, "")
 		}
 	}
+}
+
+// customRan holds when a custom action last ran for a block and its
+// trigger (a list, apps, window titles): at most once a minute (R-CUSTOM-2).
+var customRan = struct {
+	sync.Mutex
+	at map[string]time.Time
+}{at: map[string]time.Time{}}
+
+// customDue reports whether a custom action of key may run now, and notes
+// that it does.
+func customDue(key string, now time.Time) bool {
+	customRan.Lock()
+	defer customRan.Unlock()
+	if last, ok := customRan.at[key]; ok && now.Sub(last) < time.Minute {
+		return false
+	}
+	customRan.at[key] = now
+	return true
 }

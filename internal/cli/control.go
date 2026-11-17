@@ -907,6 +907,9 @@ type holdState struct {
 	extras         db.LockExtras
 	passwordHash   string
 	restartLocked  bool
+	// modeRun: until when a Mode action's run of its mode holds it
+	// (R-MODE-4), trusted time; 0 when none.
+	modeRun int64
 	// layers: the locks on, in unlock order (R-LOCK-6); the first is the
 	// one 'unlock' acts on.
 	layers  []string
@@ -925,7 +928,7 @@ func (h holdState) until() string {
 // alone don't.
 func (h holdState) held() bool {
 	return h.scheduleFrozen || h.active && (h.charLocked || h.timeLocked() || h.scheduledNow ||
-		h.passwordHash != "" || h.restartLocked || h.extras.Delay > 0 || len(h.layers) > 0)
+		h.passwordHash != "" || h.restartLocked || h.extras.Delay > 0 || len(h.layers) > 0 || h.modeRun > h.trusted)
 }
 
 // blockHold gathers everything that determines whether a block may be removed
@@ -990,6 +993,7 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 		}
 		h.scheduleFrozen = frozen
 	}
+	h.modeRun = enforce.ModeRunUntil(database, name, trusted)
 	return h, nil
 }
 

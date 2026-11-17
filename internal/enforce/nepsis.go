@@ -188,7 +188,7 @@ func checkNepsis(d *db.DB, now time.Time, scope string, n db.Nepsis) (r judgemen
 			r.closeTab = true
 			continue
 		}
-		if err := Run(d, Consequence{Kind: a.Kind, Minutes: a.Minutes}, ""); err != nil {
+		if err := Run(d, Consequence{Kind: a.Kind, Minutes: a.Minutes, Param: a.Param}, ""); err != nil {
 			log.Printf("nepsis: %v", err)
 		}
 	}
@@ -198,7 +198,7 @@ func checkNepsis(d *db.DB, now time.Time, scope string, n db.Nepsis) (r judgemen
 func describeActions(step db.NepsisStep) string {
 	var did []string
 	for _, a := range step.Actions {
-		did = append(did, Consequence{Kind: a.Kind, Minutes: a.Minutes}.String())
+		did = append(did, Consequence{Kind: a.Kind, Minutes: a.Minutes, Param: a.Param}.String())
 	}
 	return strings.Join(did, ", ")
 }

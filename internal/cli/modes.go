@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -826,6 +827,86 @@ func lockMode(cmd *cobra.Command, m db.Mode, locks []string, passwordHash string
 	return nil
 }
 
+var modeCustomCmd = &cobra.Command{
+	Use:   "custom [mode] [add \"open …\"|\"run …\" | remove N | clear]",
+	Short: "What a mode opens or runs when it becomes enabled (custom actions)",
+	Long: `A custom action of a mode (§3.9): when the mode becomes enabled (its
+automation turns it on, or it is switched on, or a Mode action runs it),
+these are opened or run as you, in your desktop session: sites, files,
+folders (open), programs and commands (run). A computer started while the
+mode is enabled runs them once, when you sign in.
+
+  kc9k mode custom Work                         what it does
+  kc9k mode custom Work add "open https://…"    add one
+  kc9k mode custom Work add "run libreoffice"
+  kc9k mode custom Work remove 2                remove the second
+  kc9k mode custom Work clear                   nothing
+
+A custom action can do nothing you couldn't do yourself: a KC9K command in
+it meets every lock and password as if typed (R-CUSTOM-1).`,
+	Args: cobra.RangeArgs(1, 3),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		t, err := resolveTarget(database, args[0], db.KindMode)
+		if err != nil {
+			return err
+		}
+		if t.Mode == nil {
+			return fmt.Errorf("'%s' is no mode", args[0])
+		}
+		name := t.Mode.Name
+		param, err := database.ModeCustom(name)
+		if err != nil {
+			return err
+		}
+		var items []db.CustomItem
+		if param != "" {
+			if items, err = db.CustomItems(param); err != nil {
+				return err
+			}
+		}
+		if len(args) == 1 {
+			if len(items) == 0 {
+				fmt.Printf("Mode '%s' opens nothing when it becomes enabled.\n", name)
+			}
+			for i, it := range items {
+				fmt.Printf("%d. %s\n", i+1, it)
+			}
+			return nil
+		}
+		switch args[1] {
+		case "add":
+			if len(args) != 3 {
+				return fmt.Errorf("give what to add: \"open ADDRESS-FILE-OR-FOLDER\" or \"run COMMAND\"")
+			}
+			it, err := db.ParseCustomItem(args[2])
+			if err != nil {
+				return err
+			}
+			items = append(items, it)
+		case "remove":
+			n, err := strconv.Atoi(strings.TrimSpace(strings.Join(args[2:], "")))
+			if err != nil || n < 1 || n > len(items) {
+				return fmt.Errorf("give the number of one to remove (1 to %d)", len(items))
+			}
+			items = append(items[:n-1], items[n:]...)
+		case "clear":
+			items = nil
+		default:
+			return fmt.Errorf("use add, remove or clear")
+		}
+		param = ""
+		if len(items) > 0 {
+			param = db.CustomParam(items)
+		}
+		if err := database.SetModeCustom(name, param); err != nil {
+			return err
+		}
+		fmt.Printf("Mode '%s' opens or runs %d %s when it becomes enabled.\n", name, len(items),
+			map[bool]string{true: "thing", false: "things"}[len(items) == 1])
+		return nil
+	}),
+}
+
 var modeShowCmd = &cobra.Command{
 	Use:   "show [mode]",
 	Short: "What a mode holds and what switches it",
@@ -857,6 +938,6 @@ func init() {
 	addStartLockFlags(modeLockCmd)
 	addYesFlag(modeLockCmd)
 	modeCmd.AddCommand(modeCreateCmd, modeRenameCmd, modeDeleteCmd, modeAddCmd, modeTakeOutCmd, modeOnCmd, modeOffCmd,
-		modeLockCmd, modeShowCmd)
+		modeLockCmd, modeCustomCmd, modeShowCmd)
 	rootCmd.AddCommand(modeCmd)
 }

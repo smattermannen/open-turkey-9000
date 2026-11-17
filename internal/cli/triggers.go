@@ -58,6 +58,20 @@ or a shorter --for, weakens the block. With only the block, prints them.`,
 			return err
 		}
 		a := db.TriggerAction{Name: strings.ToLower(args[2])}
+		if target, _ := cmd.Flags().GetString("target"); target != "" {
+			if a.Name != db.ConsequenceMode {
+				return fmt.Errorf("--target goes with the mode action")
+			}
+			a.Param = target
+		}
+		if custom, _ := cmd.Flags().GetStringArray("custom"); len(custom) > 0 {
+			if a.Name != db.ConsequenceCustom {
+				return fmt.Errorf("--custom goes with the custom action")
+			}
+			if a.Param, err = customFlag(custom); err != nil {
+				return err
+			}
+		}
 		if spec, _ := cmd.Flags().GetString("for"); spec != "" {
 			if !on {
 				return fmt.Errorf("--for only goes with 'on'")
@@ -84,15 +98,15 @@ or a shorter --for, weakens the block. With only the block, prints them.`,
 		}
 		strengthens := true
 		switch {
-		case on && had && a.Minutes == old.Minutes:
+		case on && had && a.Minutes == old.Minutes && a.Param == old.Param:
 			fmt.Printf("%s of '%s' already %s.\n", label, block, describeTrigger(a))
 			return nil
 		case on:
 			next = append(next, a)
 			// A longer time is stricter; a shorter one, or once instead of
 			// for a while, weakens.
-			strengthens = !had || (old.Minutes > 0 && a.Minutes > old.Minutes)
-			if a.Name == db.ConsequenceMonk {
+			strengthens = !had || (old.Param == a.Param && old.Minutes > 0 && a.Minutes > old.Minutes)
+			if a.Name == db.ConsequenceMonk || a.Name == db.ConsequenceMode {
 				if err := requireMonkAck(cmd, label+" of '"+block+"'"); err != nil {
 					return err
 				}
@@ -157,7 +171,8 @@ func printTriggers(database *db.DB, block string) error {
 }
 
 func init() {
-	blockTriggerCmd.Flags().String("for", "", "How long lock-screen, logout, shutdown or monk lasts (e.g. 30m, 2h)")
+	blockTriggerCmd.Flags().String("for", "", "How long lock-screen, logout, shutdown, monk or mode lasts (e.g. 30m, 2h)")
+	addActionParamFlags(blockTriggerCmd)
 	addMonkAckFlag(blockTriggerCmd)
 	blockCmd.AddCommand(blockTriggerCmd)
 }

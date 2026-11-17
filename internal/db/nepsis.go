@@ -29,11 +29,13 @@ const (
 	ConsequenceLogout       = "logout"        // Minutes: stay logged out (0: once)
 	ConsequenceShutdown     = "shutdown"      // Minutes: stay off (0: once)
 	ConsequenceMonk         = "monk"          // Minutes: how long (required)
+	ConsequenceMode         = "mode"          // Param: the mode; Minutes: how long it runs, locked (required)
+	ConsequenceCustom       = "custom"        // Param: what it opens or runs (CustomParam)
 )
 
 // Consequences lists them in display order, mildest first.
 var Consequences = []string{ConsequenceWarning, ConsequenceCloseTab, ConsequenceCloseBrowser,
-	ConsequenceLockScreen, ConsequenceLogout, ConsequenceShutdown, ConsequenceMonk}
+	ConsequenceLockScreen, ConsequenceLogout, ConsequenceShutdown, ConsequenceMonk, ConsequenceMode, ConsequenceCustom}
 
 // Detectors are the event kinds bypass detection can count. EventSearch is a
 // kind of EventPage: counting pages counts those too.
@@ -67,6 +69,7 @@ const nepsisSchema = `CREATE TABLE IF NOT EXISTS block_nepsis (
 type NepsisAction struct {
 	Kind    string `json:"action"`
 	Minutes int    `json:"minutes,omitempty"`
+	Param   string `json:"param,omitempty"` // mode: the mode; custom: what it does
 }
 
 // NepsisStep is one rung of the ladder: when Count events happen within
@@ -163,6 +166,9 @@ func (n Nepsis) Check() error {
 			if err := CheckConsequence(a.Kind, a.Minutes); err != nil {
 				return fmt.Errorf("step %d: %w", i+1, err)
 			}
+			if err := CheckConsequenceParam(a.Kind, a.Param); err != nil {
+				return fmt.Errorf("step %d: %w", i+1, err)
+			}
 		}
 	}
 	return nil
@@ -183,12 +189,31 @@ func CheckConsequence(name string, minutes int) error {
 		if minutes < 0 || minutes > MaxFreezeMinutes {
 			return fmt.Errorf("%s lasts at most %d hours (0: just once)", name, MaxFreezeMinutes/60)
 		}
-	case ConsequenceMonk:
+	case ConsequenceMonk, ConsequenceMode:
 		if minutes < 1 || minutes > MaxMonkMinutes {
-			return fmt.Errorf("monk mode lasts from 1 minute to %d days", MaxMonkMinutes/(24*60))
+			return fmt.Errorf("%s lasts from 1 minute to %d days", map[bool]string{true: "monk mode", false: "a mode run"}[name == ConsequenceMonk], MaxMonkMinutes/(24*60))
+		}
+	case ConsequenceCustom:
+		if minutes != 0 {
+			return fmt.Errorf("custom takes no duration")
 		}
 	default:
 		return fmt.Errorf("unknown action %q (use %s)", name, strings.Join(Consequences, ", "))
+	}
+	return nil
+}
+
+// CheckConsequenceParam checks what a consequence takes besides minutes:
+// a Mode action its mode, a custom action what it does; the others nothing.
+func CheckConsequenceParam(name, param string) error {
+	switch name {
+	case ConsequenceMode:
+		return CheckModeParam(param)
+	case ConsequenceCustom:
+		return CheckCustomParam(param)
+	}
+	if param != "" {
+		return fmt.Errorf("%s takes nothing besides its time", name)
 	}
 	return nil
 }
@@ -199,7 +224,7 @@ func actionsStricter(actions, old []NepsisAction) bool {
 	for _, o := range old {
 		found := false
 		for _, a := range actions {
-			if a.Kind == o.Kind && a.Minutes >= o.Minutes {
+			if a.Kind == o.Kind && a.Param == o.Param && a.Minutes >= o.Minutes {
 				found = true
 				break
 			}

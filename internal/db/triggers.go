@@ -31,12 +31,13 @@ const (
 
 // TriggerConsequences are the device actions every trigger group can take.
 var TriggerConsequences = []string{ConsequenceCloseBrowser, ConsequenceLockScreen, ConsequenceLogout,
-	ConsequenceShutdown, ConsequenceMonk}
+	ConsequenceShutdown, ConsequenceMonk, ConsequenceMode, ConsequenceCustom}
 
 // TriggerAction is one action of a trigger group.
 type TriggerAction struct {
 	Name    string `json:"name"`
 	Minutes int    `json:"minutes,omitempty"`
+	Param   string `json:"param,omitempty"` // mode: the mode; custom: what it does
 }
 
 // ValidTriggerGroup reports whether group names a trigger group.
@@ -55,6 +56,9 @@ func CheckTriggerAction(_ string, a TriggerAction) error {
 	}
 	if !slices.Contains(TriggerConsequences, a.Name) {
 		return fmt.Errorf("unknown action %q (use %s, %s)", a.Name, TriggerClose, strings.Join(TriggerConsequences, ", "))
+	}
+	if err := CheckConsequenceParam(a.Name, a.Param); err != nil {
+		return err
 	}
 	return CheckConsequence(a.Name, a.Minutes)
 }

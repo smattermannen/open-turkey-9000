@@ -92,6 +92,11 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 		if hold.scheduleFrozen && !hold.active {
 			return refused(database, name, fmt.Errorf("block '%s' is locked by its schedule lock (a window is open or opens within %s); until then it can only be made stricter (%s)", name, time.Duration(hold.scheduleLead)*time.Minute, strengtheningEdits))
 		}
+		if hold.modeRun > hold.trusted && !hold.timeLocked() && !hold.charLocked && hold.passwordHash == "" && len(hold.layers) == 0 {
+			m, _, _ := database.ModeOf(name)
+			return refused(database, name, fmt.Errorf("block '%s' is locked while its mode '%s' runs (a Mode action), for %s more; until then it can only be made stricter (%s)",
+				name, m.Name, humanDuration(time.Duration(hold.modeRun-hold.trusted)*time.Second), strengtheningEdits))
+		}
 		return refused(database, name, fmt.Errorf("block '%s' is locked; until its locks are lifted it can only be made stricter (%s)", name, strengtheningEdits))
 	}
 	return nil

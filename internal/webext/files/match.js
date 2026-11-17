@@ -839,25 +839,33 @@ function kc9kListActions(compiled, page) {
 // Actions that take the page away (rather than change how it looks), and
 // those that reach past the browser tab.
 const KC9K_PAGE_ACTIONS = ["close-tab", "image", "redirect", "block"];
-const KC9K_DEVICE_ACTIONS = ["close-browser", "logout", "shutdown", "monk"];
+const KC9K_DEVICE_ACTIONS = ["close-browser", "logout", "shutdown", "monk", "mode"];
+// Actions the daemon carries out without the page being taken away (§3.9
+// Custom action): reported, nothing else.
+const KC9K_REPORT_ACTIONS = ["custom"];
 
-// kc9kOutcome turns matches into what to do: { device, page, param, lists }.
-// device is true when any device action applies (the tab and the browser
-// close); page is the strongest page action ("close-tab", "image",
+// kc9kOutcome turns matches into what to do: { device, page, param, lists,
+// custom }. device is true when any device action applies (the tab and the
+// browser close); page is the strongest page action ("close-tab", "image",
 // "redirect", "block" or ""), and param its address or image. lists holds
-// [{ id, actions: [names] }] for the matches that take the page away, to
-// report to the daemon.
+// [{ id, actions: [names] }] for the matches that take the page away or
+// have a custom action, to report to the daemon; custom is true when one
+// has a custom action (reported even when nothing is taken away).
 function kc9kOutcome(matches) {
   const out = { device: false, page: "", param: "", lists: [] };
   let rank = KC9K_PAGE_ACTIONS.length;
   for (const match of matches) {
     const names = match.actions.map((action) => action.action);
-    const away = names.filter((name) => KC9K_PAGE_ACTIONS.includes(name) || KC9K_DEVICE_ACTIONS.includes(name));
+    const away = names.filter((name) => KC9K_PAGE_ACTIONS.includes(name) || KC9K_DEVICE_ACTIONS.includes(name) ||
+      KC9K_REPORT_ACTIONS.includes(name));
     if (away.length === 0) {
       continue;
     }
     out.lists.push({ id: match.list.id, actions: away });
     for (const action of match.actions) {
+      if (KC9K_REPORT_ACTIONS.includes(action.action)) {
+        out.custom = true;
+      }
       if (KC9K_DEVICE_ACTIONS.includes(action.action)) {
         out.device = true;
       }

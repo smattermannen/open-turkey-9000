@@ -20,6 +20,11 @@ func enabledBlocks(d *db.DB, active []db.ActiveBlockDetail, trusted int64) []db.
 	for _, b := range openQuotaBlocks(d) {
 		lifted[b.Name] = true
 	}
+	// R-MODE-4: a mode run by a Mode action enforces whatever its
+	// automation says.
+	for name := range modeRunning(d, trusted) {
+		delete(lifted, name)
+	}
 	out := make([]db.ActiveBlockDetail, 0, len(active))
 	for _, b := range active {
 		if !lifted[b.BlockName] && pausedFor(d, b.BlockName, trusted) <= 0 {

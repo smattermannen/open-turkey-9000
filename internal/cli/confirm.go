@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/lock"
 	"github.com/spf13/cobra"
 )
@@ -103,6 +104,32 @@ func requireMonkAck(cmd *cobra.Command, what string) error {
 		return nil
 	}
 	return fmt.Errorf("%s starts monk mode by itself, and monk mode started that way will not ask for confirmation; add --no-confirm-ok to say you know", what)
+}
+
+// addActionParamFlags gives the commands that turn actions on --target (the
+// mode a Mode action runs) and --custom (what a custom action opens or runs).
+func addActionParamFlags(cmds ...*cobra.Command) {
+	for _, c := range cmds {
+		c.Flags().String("target", "", "For mode: the mode it runs, locked (with --for)")
+		c.Flags().StringArray("custom", nil, "For custom: \"open ADDRESS-FILE-OR-FOLDER\" or \"run COMMAND\" (any number)")
+	}
+}
+
+// customFlag reads --custom items into a custom action's parameter.
+func customFlag(texts []string) (string, error) {
+	if len(texts) == 0 {
+		return "", fmt.Errorf("a custom action needs at least one --custom \"open …\" or \"run …\"")
+	}
+	var items []db.CustomItem
+	for _, t := range texts {
+		it, err := db.ParseCustomItem(t)
+		if err != nil {
+			return "", err
+		}
+		items = append(items, it)
+	}
+	param := db.CustomParam(items)
+	return param, db.CheckCustomParam(param)
 }
 
 // addMonkAckFlag gives commands that can set up an automatic monk mode the

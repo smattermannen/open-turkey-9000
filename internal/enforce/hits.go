@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -203,8 +204,18 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 				continue
 			}
 			blocking = blocking || db.IsBlockingAction(name)
-			if name == db.ActionLogout || name == db.ActionShutdown || name == db.ActionMonk {
+			if name == db.ActionLogout || name == db.ActionShutdown || name == db.ActionMonk || name == db.ActionMode {
 				device = append(device, a)
+			}
+			// §3.9 Custom action (R-CUSTOM-2): at most once a minute per
+			// block and list, whether the page was taken away or not.
+			if name == db.ActionCustom && customDue(block+"\x00list\x00"+strconv.Itoa(list.ID), time.Now()) {
+				c := Consequence{Kind: db.ConsequenceCustom, Param: a.Param}
+				go func() {
+					if err := Run(d, c, ""); err != nil {
+						log.Printf("hit: %v", err)
+					}
+				}()
 			}
 		}
 		if !blocking {
@@ -226,7 +237,8 @@ func hitHandler(d *db.DB) http.HandlerFunc {
 		closeTab = checkScopes(d, time.Now(), scopes)
 		for _, a := range device {
 			c := Consequence{Kind: map[string]string{db.ActionLogout: db.ConsequenceLogout,
-				db.ActionShutdown: db.ConsequenceShutdown, db.ActionMonk: db.ConsequenceMonk}[a.Name], Minutes: a.Minutes}
+				db.ActionShutdown: db.ConsequenceShutdown, db.ActionMonk: db.ConsequenceMonk,
+				db.ActionMode: db.ConsequenceMode}[a.Name], Minutes: a.Minutes, Param: a.Param}
 			why := "A page matched the list '" + list.Name + "' of block '" + block + "'."
 			runAnnounced(d, c, why)
 		}

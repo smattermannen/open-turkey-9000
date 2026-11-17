@@ -387,7 +387,13 @@ func Tick(d *db.DB, now time.Time) error {
 	// Monk mode: its cuts are held or undone here, and what it blocks is
 	// enforced beside the blocks. It is no block: apps, events and bypass
 	// detection below go by the blocks alone.
-	monk := enforceMonk(d, trusted) // R-MONK-3: a run for a set time, or switched on as a mode
+	endModeRuns(d, trusted) // R-MODE-4: a Mode action's run whose time is over
+	enabledNames := map[string]bool{}
+	for _, b := range active {
+		enabledNames[b.BlockName] = true
+	}
+	runModeCustoms(d, enabledNames, trusted) // §3.9: what a mode opens when it becomes enabled
+	monk := enforceMonk(d, trusted)          // R-MONK-3: a run for a set time, or switched on as a mode
 	enforced := active
 	if monk {
 		enforced = append(append([]db.ActiveBlockDetail{}, active...), monkBlock())

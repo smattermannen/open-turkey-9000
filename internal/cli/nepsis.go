@@ -118,7 +118,7 @@ func describeNepsis(n db.Nepsis) string {
 	for i, step := range n.Steps {
 		var actions []string
 		for _, a := range step.Actions {
-			actions = append(actions, enforce.Consequence{Kind: a.Kind, Minutes: a.Minutes}.String())
+			actions = append(actions, enforce.Consequence{Kind: a.Kind, Minutes: a.Minutes, Param: a.Param}.String())
 		}
 		lines = append(lines, fmt.Sprintf("  step %d: %d within %d min: %s", i+1, step.Count, step.Minutes,
 			strings.Join(actions, ", ")))
@@ -137,7 +137,9 @@ func parseMinutes(text, what string) (int, error) {
 	return int(d / time.Minute), nil
 }
 
-// parseStep reads "3 in 10m: close-tab, logout 1m".
+// parseStep reads "3 in 10m: close-tab, logout 1m"; a Mode action is
+// "mode NAME 2h", a custom action custom "open ADDRESS" "run COMMAND" (owner
+// 2026-11-17).
 func parseStep(text string) (db.NepsisStep, error) {
 	var step db.NepsisStep
 	m := stepPattern.FindStringSubmatch(text)
@@ -149,13 +151,28 @@ func parseStep(text string) (db.NepsisStep, error) {
 	if step.Minutes, err = parseMinutes(m[2], "window"); err != nil {
 		return step, err
 	}
-	for _, part := range strings.Split(m[3], ",") {
-		fields := strings.Fields(part)
-		if len(fields) == 0 || len(fields) > 2 {
+	for _, part := range splitOutsideQuotes(m[3], ',') {
+		fields := splitOutsideQuotes(part, ' ')
+		if len(fields) == 0 {
 			return step, fmt.Errorf("invalid action %q in step %q", strings.TrimSpace(part), text)
 		}
 		a := db.NepsisAction{Kind: strings.ToLower(fields[0])}
-		if len(fields) == 2 {
+		switch {
+		case a.Kind == db.ConsequenceMode:
+			if len(fields) < 3 {
+				return step, fmt.Errorf("a mode action is \"mode NAME 2h\": %q in step %q", strings.TrimSpace(part), text)
+			}
+			a.Param = strings.Join(fields[1:len(fields)-1], " ")
+			if a.Minutes, err = parseMinutes(fields[len(fields)-1], "duration"); err != nil {
+				return step, err
+			}
+		case a.Kind == db.ConsequenceCustom:
+			if a.Param, err = customFlag(fields[1:]); err != nil {
+				return step, err
+			}
+		case len(fields) > 2:
+			return step, fmt.Errorf("invalid action %q in step %q", strings.TrimSpace(part), text)
+		case len(fields) == 2:
 			if a.Minutes, err = parseMinutes(fields[1], "duration"); err != nil {
 				return step, err
 			}
@@ -163,6 +180,36 @@ func parseStep(text string) (db.NepsisStep, error) {
 		step.Actions = append(step.Actions, a)
 	}
 	return step, nil
+}
+
+// splitOutsideQuotes splits text at sep where it isn't inside double
+// quotes, trimming each part and dropping the quotes and empty parts.
+func splitOutsideQuotes(text string, sep rune) []string {
+	var parts []string
+	var b strings.Builder
+	quoted := false
+	flush := func() {
+		if p := strings.TrimSpace(b.String()); p != "" {
+			parts = append(parts, p)
+		}
+		b.Reset()
+	}
+	for _, r := range text {
+		switch {
+		case r == '"':
+			quoted = !quoted
+			if sep == ' ' {
+				continue // the quotes only hold a field together
+			}
+			b.WriteRune(r)
+		case r == sep && !quoted:
+			flush()
+		default:
+			b.WriteRune(r)
+		}
+	}
+	flush()
+	return parts
 }
 
 // readNepsis reads the steps (--step, or the one-step shorthand --count,
@@ -203,7 +250,7 @@ func readNepsis(cmd *cobra.Command) (db.Nepsis, error) {
 	}
 	for _, step := range n.Steps {
 		for _, a := range step.Actions {
-			if a.Kind == db.ConsequenceMonk {
+			if a.Kind == db.ConsequenceMonk || a.Kind == db.ConsequenceMode {
 				if err := requireMonkAck(cmd, "a bypass prevention step"); err != nil {
 					return n, err
 				}

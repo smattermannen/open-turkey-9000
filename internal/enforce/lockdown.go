@@ -86,6 +86,10 @@ func BlocksLocked(d *db.DB, now time.Time, trusted int64) (bool, error) {
 	if MonkEnd(d, trusted) > 0 {
 		return true, nil
 	}
+	// A mode run by a Mode action is locked for its time (R-MODE-4).
+	if len(modeRunning(d, trusted)) > 0 {
+		return true, nil
+	}
 	bootID, err := db.BootID()
 	if err != nil {
 		return false, err

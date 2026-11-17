@@ -140,6 +140,10 @@ type guiMode struct {
 	Freeze     bool   `json:"freeze"`
 	FreezeLeft int64  `json:"freeze_left"` // seconds it is frozen on
 	FreezeMode string `json:"freeze_mode"`
+	// Custom: what it opens or runs when it becomes enabled (§3.9).
+	Custom []string `json:"custom"`
+	// RunLeft: seconds a Mode action's run has left (R-MODE-4), locked.
+	RunLeft int64 `json:"run_left"`
 	// TodayWindows: its windows still to come or open today (§4.1).
 	TodayWindows []string `json:"today_windows"`
 }
@@ -862,7 +866,15 @@ func guiModes(database *db.DB, saved []db.SavedSchedule, modes []db.Mode, places
 		g := guiMode{Name: m.Name, Monk: m.Monk, Active: m.Active, Blocks: append([]string{}, m.Blocks...),
 			Windows: guiWins(saved, rows, m.Spec.DefaultOn), Schedules: []string{}, Places: []string{},
 			Automation: m.Spec.AutomationSettings, Continuous: a.Continuous(),
-			TodayWindows: windowsLeftToday(a.Windows, now)}
+			TodayWindows: windowsLeftToday(a.Windows, now), Custom: []string{},
+			RunLeft: enforce.ModeRunLeft(database, m.Name, trusted)}
+		if param, err := database.ModeCustom(m.Name); err == nil && param != "" {
+			if items, err := db.CustomItems(param); err == nil {
+				for _, it := range items {
+					g.Custom = append(g.Custom, it.String())
+				}
+			}
+		}
 		if g.TodayWindows == nil {
 			g.TodayWindows = []string{}
 		}
@@ -901,7 +913,7 @@ func guiModes(database *db.DB, saved []db.SavedSchedule, modes []db.Mode, places
 // can't end early), its windows the scheduled freezes.
 func guiFrozenChicken(database *db.DB, now time.Time) guiMode {
 	g := guiMode{Name: db.FrozenChickenName, Freeze: true, Blocks: []string{}, Windows: []guiWin{},
-		Schedules: []string{}, Places: []string{}, TodayWindows: []string{}}
+		Schedules: []string{}, Places: []string{}, TodayWindows: []string{}, Custom: []string{}}
 	if until, err := database.FreezeUntil(); err == nil && until > now.Unix() {
 		g.FreezeLeft, g.Running, g.Active = until-now.Unix(), true, true
 		g.FreezeMode, _ = database.FreezeMode()

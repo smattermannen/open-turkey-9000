@@ -340,13 +340,14 @@ var phraseSetActionCmd = &cobra.Command{
 			return fmt.Errorf("use 'on' or 'off'")
 		}
 		on := args[3] == "on"
-		if on && action == db.ActionMonk {
-			if err := requireMonkAck(cmd, "a phrase set's monk action"); err != nil {
+		if on && (action == db.ActionMonk || action == db.ActionMode) {
+			if err := requireMonkAck(cmd, "a phrase set's "+action+" action"); err != nil {
 				return err
 			}
 		}
-		if !on && (cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for")) {
-			return fmt.Errorf("--url, --image and --for only go with 'on'")
+		if !on && (cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for") ||
+			cmd.Flags().Changed("target") || cmd.Flags().Changed("custom")) {
+			return fmt.Errorf("--url, --image, --target, --custom and --for only go with 'on'")
 		}
 		var set actionSettings
 		if on {
@@ -465,7 +466,8 @@ func init() {
 	phraseSetActionCmd.Flags().String("url", "", "For redirect: the address to open instead")
 	phraseSetActionCmd.Flags().String("image", "", "For image: the picture to show instead")
 	addMonkAckFlag(phraseSetActionCmd)
-	phraseSetActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
+	phraseSetActionCmd.Flags().String("for", "", "For monk, mode, logout and shutdown: how long (e.g. 30m, 2h)")
+	addActionParamFlags(phraseSetActionCmd)
 	phraseSetCmd.AddCommand(phraseSetShowCmd, phraseSetCreateCmd, phraseSetAddCmd, phraseSetRemoveCmd, phraseSetChangeCmd, phraseSetScopeCmd,
 		phraseSetActionCmd, phraseSetThresholdCmd, phraseSetTestCmd, phraseSetRenameCmd, phraseSetDeleteCmd,
 		phraseSetExportCmd, phraseSetImportCmd)

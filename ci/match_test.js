@@ -212,6 +212,22 @@ const failed0 = [];
   }
 }
 
+// §3.9 Mode action and custom action (owner 2026-11-17): a Mode action is a
+// device action (the browser closes, the daemon runs the mode); a custom
+// action takes nothing away, yet is reported so the daemon runs it.
+{
+  const rule = (id, action) => ({ id, block: "b", name: "L", url: ["example.com"], title: [], text: [],
+    actions: [{ action, distinct: 1, hits: 1, param: "", minutes: 0 }], except: { url: [], title: [], text: [] } });
+  const outcome = (...rules) => kc9kOutcome(kc9kListMatches(kc9kCompileLists(rules), { url: "https://example.com/" }));
+  const mode = outcome(rule(1, "mode"));
+  const custom = outcome(rule(2, "custom"));
+  const both = outcome(rule(3, "block"), rule(4, "custom"));
+  if (!mode.device || !custom.custom || kc9kTakesAway(custom) || custom.lists[0].actions[0] !== "custom" ||
+    both.page !== "block" || !both.custom || both.lists.length !== 2) {
+    failed0.push("mode and custom actions: " + JSON.stringify([mode, custom, both]));
+  }
+}
+
 // §3.9 rate: matches per 1,000 words, on pages of at least 200 words.
 {
   const rated = (rate) => kc9kCompileLists([{

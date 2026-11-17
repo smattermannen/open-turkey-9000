@@ -33,18 +33,24 @@ const (
 	ActionLogout       = "logout"        // Minutes: stay logged out that long (0: once)
 	ActionShutdown     = "shutdown"      // Minutes: stay off that long (0: once)
 	ActionMonk         = "monk"          // Minutes: how long monk mode lasts
+	// ActionMode runs the mode named by Param for Minutes, locked (§3.9
+	// Mode action, R-MODE-4; owner 2026-11-17).
+	ActionMode = "mode"
+	// ActionCustom opens or runs what Param lists (CustomParam) as the
+	// signed-in user (§3.9 Custom action, R-CUSTOM-1/2).
+	ActionCustom = "custom"
 )
 
 // ActionNames lists the website actions in display order.
 var ActionNames = []string{ActionBlock, ActionGreyscale, ActionNoImages, ActionMute, ActionNoVideo,
 	ActionDark, ActionNoDownloads, ActionRedirect, ActionImage,
-	ActionCloseTab, ActionCloseBrowser, ActionLogout, ActionShutdown, ActionMonk}
+	ActionCloseTab, ActionCloseBrowser, ActionLogout, ActionShutdown, ActionMonk, ActionMode, ActionCustom}
 
 // IsDeviceAction reports whether an action reaches past the page: it closes
 // the browser, and the daemon carries out the rest.
 func IsDeviceAction(name string) bool {
 	switch name {
-	case ActionCloseBrowser, ActionLogout, ActionShutdown, ActionMonk:
+	case ActionCloseBrowser, ActionLogout, ActionShutdown, ActionMonk, ActionMode:
 		return true
 	}
 	return false
@@ -54,7 +60,7 @@ func IsDeviceAction(name string) bool {
 // only changing how it looks). Bypass prevention counts these.
 func IsBlockingAction(name string) bool {
 	switch name {
-	case ActionGreyscale, ActionNoImages, ActionMute, ActionNoVideo, ActionDark, ActionNoDownloads:
+	case ActionGreyscale, ActionNoImages, ActionMute, ActionNoVideo, ActionDark, ActionNoDownloads, ActionCustom:
 		return false
 	}
 	return IsAction(name)
@@ -87,13 +93,21 @@ func CheckActionParams(action, param string, minutes int) error {
 		if !IsImageName(param) {
 			return fmt.Errorf("image needs a picture (PNG, JPEG, GIF or WebP)")
 		}
+	case ActionMode:
+		if err := CheckModeParam(param); err != nil {
+			return err
+		}
+	case ActionCustom:
+		if err := CheckCustomParam(param); err != nil {
+			return err
+		}
 	default:
 		if param != "" {
 			return fmt.Errorf("%s takes no address or image", action)
 		}
 	}
 	switch action {
-	case ActionMonk:
+	case ActionMonk, ActionMode:
 		if minutes < 1 || minutes > MaxMonkMinutes {
 			return fmt.Errorf("monk mode lasts from 1 minute to %s", time.Duration(MaxMonkMinutes)*time.Minute)
 		}
@@ -115,10 +129,12 @@ func CheckActionParams(action, param string, minutes int) error {
 // image is neither, so it is allowed.
 func ParamsStricter(action, param, param2 string, minutes, minutes2 int) bool {
 	switch action {
-	case ActionRedirect:
+	case ActionRedirect, ActionCustom:
 		return param == param2
 	case ActionImage:
 		return true
+	case ActionMode:
+		return strings.EqualFold(param, param2) && minutes2 >= minutes
 	}
 	return minutes2 >= minutes
 }

@@ -324,6 +324,9 @@ function blockTitledTab(tab) {
     act(tab.id, tab.url, outcome, "title");
     return;
   }
+  if (outcome.custom) {
+    report(tab.id, tab.url, outcome, ""); // §3.9 Custom action: the daemon runs it
+  }
 }
 
 // Tabs whose page a list's title or text stripped of images, with the
@@ -632,6 +635,8 @@ function pageHit(message, sender) {
     // without loading, or whose block has exceptions by title or text) goes
     // back when the block ends; one taken away for its title or text stays.
     act(tab.id, message.url, outcome, isBlocked(message.url) ? "" : "keyword");
+  } else if (outcome.custom) {
+    report(tab.id, message.url, outcome, ""); // §3.9 Custom action: the daemon runs it
   }
 }
 
@@ -710,6 +715,9 @@ browser.webRequest.onBeforeRequest.addListener(
       }
       report(details.tabId, details.url, outcome);
       return replacement(details.url, outcome, "");
+    }
+    if (outcome.custom && details.type === "main_frame") {
+      report(details.tabId, details.url, outcome); // §3.9 Custom action: the daemon runs it
     }
     if (details.type === "main_frame") {
       // Social media settings: a video outside the playlists let through,

@@ -285,20 +285,37 @@ type actionSettings struct {
 	minutes int
 }
 
-// readActionSettings reads --url, --image and --for for an action. An image
-// file is stored (see storeImage); its name becomes the parameter.
+// readActionSettings reads --url, --image, --target, --custom and --for for
+// an action. An image file is stored (see storeImage); its name becomes the
+// parameter.
 func readActionSettings(cmd *cobra.Command, action string) (actionSettings, error) {
 	var s actionSettings
 	url, _ := cmd.Flags().GetString("url")
 	image, _ := cmd.Flags().GetString("image")
 	length, _ := cmd.Flags().GetString("for")
+	target, _ := cmd.Flags().GetString("target")
+	custom, _ := cmd.Flags().GetStringArray("custom")
 	switch {
 	case url != "" && action != db.ActionRedirect:
 		return s, fmt.Errorf("--url goes with the redirect action")
 	case image != "" && action != db.ActionImage:
 		return s, fmt.Errorf("--image goes with the image action")
+	case target != "" && action != db.ActionMode:
+		return s, fmt.Errorf("--target goes with the mode action")
+	case len(custom) > 0 && action != db.ActionCustom:
+		return s, fmt.Errorf("--custom goes with the custom action")
 	}
 	s.param = url
+	if action == db.ActionMode {
+		s.param = target
+	}
+	if action == db.ActionCustom {
+		param, err := customFlag(custom)
+		if err != nil {
+			return s, err
+		}
+		s.param = param
+	}
 	if image != "" {
 		name, err := storeImage(image)
 		if err != nil {
@@ -331,8 +348,8 @@ func listAction(cmd *cobra.Command, database *db.DB, block, list, action string,
 	if l.IsExceptions() {
 		return fmt.Errorf("'%s' is an exception list; only blacklists have actions", list)
 	}
-	if on && action == db.ActionMonk {
-		if err := requireMonkAck(cmd, "a list's monk action"); err != nil {
+	if on && (action == db.ActionMonk || action == db.ActionMode) {
+		if err := requireMonkAck(cmd, "a list's "+action+" action"); err != nil {
 			return err
 		}
 	}
@@ -682,6 +699,10 @@ var listActionCmd = &cobra.Command{
   logout         close the browser and log out (--for 1h: stay logged out)
   shutdown       close the browser and shut down (--for 1h: stay off)
   monk           close the browser and start monk mode (--for 1h, required)
+  mode           close the browser and run a mode, locked (--target MODE
+                 --for 1h, required)
+  custom         open or run things as you, the page left alone (--custom
+                 "open https://…" --custom "run COMMAND", any number)
 
 When several apply, the strongest page action wins (close-tab, then image,
 redirect, block). Device actions only follow from the page itself, never
@@ -706,8 +727,9 @@ allowed, another address weakens the list.`,
 				return err
 			}
 			set = &settings
-		} else if cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for") {
-			return fmt.Errorf("--url, --image and --for only go with 'on'")
+		} else if cmd.Flags().Changed("url") || cmd.Flags().Changed("image") || cmd.Flags().Changed("for") ||
+			cmd.Flags().Changed("target") || cmd.Flags().Changed("custom") {
+			return fmt.Errorf("--url, --image, --target, --custom and --for only go with 'on'")
 		}
 		return listAction(cmd, database, args[0], args[1], action, on, set)
 	}),
@@ -884,7 +906,8 @@ func init() {
 	listActionCmd.Flags().String("url", "", "For redirect: the address to open instead")
 	listActionCmd.Flags().String("image", "", "For image: the picture to show instead")
 	addMonkAckFlag(listActionCmd)
-	listActionCmd.Flags().String("for", "", "For monk, logout and shutdown: how long (e.g. 30m, 2h)")
+	listActionCmd.Flags().String("for", "", "For monk, mode, logout and shutdown: how long (e.g. 30m, 2h)")
+	addActionParamFlags(listActionCmd)
 	listCreateCmd.Flags().Bool("exceptions", false, "Make it an exception list")
 	listCreateCmd.Flags().Bool("terms", false, "Old alias; changes nothing (lists have no types)")
 	listCreateCmd.Flags().Bool("url", false, "Look at the address (the default)")

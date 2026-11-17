@@ -34,13 +34,44 @@ var (
 type Consequence struct {
 	Kind    string // a db.Consequence* name
 	Minutes int
+	Param   string // mode: the mode; custom: what it opens or runs (db.CustomParam)
 }
 
 func (c Consequence) String() string {
+	switch c.Kind {
+	case db.ConsequenceMode:
+		return fmt.Sprintf("mode %s for %s", c.Param, time.Duration(c.Minutes)*time.Minute)
+	case db.ConsequenceCustom:
+		return "custom: " + db.DescribeCustom(c.Param)
+	}
 	if c.Minutes > 0 {
 		return fmt.Sprintf("%s for %s", c.Kind, time.Duration(c.Minutes)*time.Minute)
 	}
 	return c.Kind
+}
+
+// runCustom carries out a custom action; tests replace it, and a test's
+// database (KC9K_DB) never runs anything.
+var runCustom = func(param string) error {
+	items, err := db.CustomItems(param)
+	if err != nil {
+		return err
+	}
+	if monkDeviceless() {
+		return nil
+	}
+	var opens, runs []string
+	for _, it := range items {
+		if it.Open != "" {
+			opens = append(opens, it.Open)
+		} else {
+			runs = append(runs, it.Run)
+		}
+	}
+	if !blocker.RunCustom(opens, runs) {
+		log.Printf("custom action: nobody is signed in to a desktop; not run")
+	}
+	return nil
 }
 
 // consequenceMu keeps two consequences from running at once (the rules
@@ -56,6 +87,9 @@ func Run(d *db.DB, c Consequence, why string) error {
 	consequenceMu.Lock()
 	defer consequenceMu.Unlock()
 	if err := db.CheckConsequence(c.Kind, c.Minutes); err != nil {
+		return err
+	}
+	if err := db.CheckConsequenceParam(c.Kind, c.Param); err != nil {
 		return err
 	}
 	now := time.Now()
@@ -74,12 +108,16 @@ func Run(d *db.DB, c Consequence, why string) error {
 		}
 	}
 	log.Printf("consequence: %s (%s)", c, why)
-	if why != "" {
+	if why != "" && c.Kind != db.ConsequenceCustom {
 		notifyDesktop("Killer Chicken 9000: "+c.String(), why)
 	}
 	switch c.Kind {
 	case db.ConsequenceWarning, db.ConsequenceCloseTab:
 		return nil
+	case db.ConsequenceMode:
+		return StartModeRun(d, c.Param, time.Duration(c.Minutes)*time.Minute)
+	case db.ConsequenceCustom:
+		return runCustom(c.Param)
 	case db.ConsequenceCloseBrowser:
 		return closeBrowsers()
 	case db.ConsequenceMonk:

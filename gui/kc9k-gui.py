@@ -5888,6 +5888,16 @@ class Window(Gtk.ApplicationWindow):
             item = Gtk.MenuItem(label=block["name"])
             item.connect("activate", lambda _i, n=block["name"]: self.start_from_dashboard(n))
             self.dash_start_menu.append(item)
+        # §4.2 modes (owner 2026-11-17): a mode's blocks switched on at once.
+        modes_off = [m for m in self.state.get("modes") or []
+                     if not m.get("monk") and m.get("blocks") and m.get("on", 0) < len(m["blocks"])]
+        if off and modes_off:
+            self.dash_start_menu.append(Gtk.SeparatorMenuItem())
+        for mode in modes_off:
+            item = Gtk.MenuItem(label=f"Mode: {mode['name']} ({len(mode['blocks'])} blocks)")
+            item.connect("activate", lambda _i, n=mode["name"]: self.run(["mode", "on", n]))
+            self.dash_start_menu.append(item)
+        off = off or modes_off
         if off:
             self.dash_start_menu.append(Gtk.SeparatorMenuItem())
         new_item = Gtk.MenuItem(label="New block…")

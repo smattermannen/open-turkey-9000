@@ -124,6 +124,15 @@ check(names(win.block_cards) == ["news"], "blocks in a mode leave the list: %s" 
 card_text = [w.get_label() for w in widgets(win.mode_cards) if isinstance(w, Gtk.Button)]
 check(any("2 blocks: games, social" in (t or "") for t in card_text), "the mode's card names its blocks: %s" % card_text)
 
+# The Overview's Start menu offers the mode too, and starts its blocks.
+win.stack.set_visible_child_name("dashboard"); settle()
+items = [i.get_label() for i in win.dash_start_menu.get_children() if isinstance(i, Gtk.MenuItem) and i.get_label()]
+check("Mode: Evening (2 blocks)" in items, "the Overview offers the mode: %s" % items)
+next(i for i in win.dash_start_menu.get_children() if i.get_label() == "Mode: Evening (2 blocks)").activate(); settle()
+check(block("social")["active"] and block("games")["active"], "and starts its blocks")
+cli("mode", "off", "Evening")
+settle()
+
 # The mode's view: its blocks, its automation for all of them.
 win.open_mode("Evening"); settle()
 check(sorted(names(win.mode_block_cards)) == ["games", "social"], "its view shows its blocks")

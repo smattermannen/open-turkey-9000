@@ -244,6 +244,11 @@ func TestFreezeScheduleLocks(t *testing.T) {
 	if err := runCLI(t, "freeze", "schedule", "remove", "1"); err == nil {
 		t.Error("removed a locked freeze schedule")
 	}
+	// The interface sees the lock (§3.8: its Lock…/Unlock… buttons).
+	if state := capture(t, "gui-state"); !strings.Contains(state, `"freeze_schedule_locks":[{`) ||
+		!strings.Contains(state, `"lock_order":["password"]`) || !strings.Contains(state, "locked (password)") {
+		t.Errorf("gui-state doesn't show the freeze schedule's lock: %.400s", state[strings.Index(state, "freeze_sched"):])
+	}
 	if err := runWith(t, 0, []string{"wrong"}, "freeze", "schedule", "unlock", "1"); err == nil {
 		t.Error("unlocked with a wrong password")
 	}

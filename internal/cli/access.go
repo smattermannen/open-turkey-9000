@@ -499,7 +499,7 @@ func (s *guiState) hideLocked() {
 		s.MonkSeconds = 0
 	}
 	if !open(areaDashboard, areaDevice) {
-		s.FreezeSeconds, s.FreezeMode, s.Strict, s.NoEscape, s.FreezeSched = 0, "", false, false, nil
+		s.FreezeSeconds, s.FreezeMode, s.Strict, s.NoEscape, s.FreezeSched, s.FreezeSchedLocks = 0, "", false, false, nil, nil
 	}
 	if !open(areaDashboard, areaBlocks, areaSettings) {
 		s.Nepsis, s.NepsisCount, s.NepsisLock = db.Nepsis{}, 0, guiSettingLock{}
@@ -520,6 +520,9 @@ func (s *guiState) hideLocked() {
 	}
 	if s.FreezeSched == nil {
 		s.FreezeSched = []string{}
+	}
+	if s.FreezeSchedLocks == nil {
+		s.FreezeSchedLocks = []guiSettingLock{}
 	}
 	if s.Browser == nil {
 		s.Browser = map[string]bool{}

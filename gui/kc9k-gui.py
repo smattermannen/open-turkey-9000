@@ -8425,7 +8425,15 @@ class Window(Gtk.ApplicationWindow):
         top_align(row)
         box.pack_start(section("Freeze now", row, self.freeze_status), False, False, 0)
         flow_row(row)
-        box.pack_start(section("Scheduled freezes", self.freeze_schedules, freeze_lock_row), False, False, 0)
+        # §3.8: every lock kind on a scheduled freeze (not removable then).
+        freeze_locks_row = Gtk.Box(spacing=6)
+        freeze_locks_row.pack_start(Gtk.Label(label="The selected schedule:"), False, False, 0)
+        for label, handler in (("Lock…", self.lock_freeze_schedule), ("Unlock…", self.unlock_freeze_schedule)):
+            button = Gtk.Button(label=label)
+            button.connect("clicked", handler)
+            freeze_locks_row.pack_start(button, False, False, 0)
+        box.pack_start(section("Scheduled freezes", self.freeze_schedules, freeze_lock_row, freeze_locks_row),
+                       False, False, 0)
         flow_row(freeze_lock_row)
         box.pack_start(section("Allowed apps", self.freeze_apps), False, False, 0)
 
@@ -8464,6 +8472,65 @@ class Window(Gtk.ApplicationWindow):
 
     def remove_freeze_schedule(self, _value, number):
         self.run(["freeze", "schedule", "remove", str(number)])
+
+    def chosen_freeze_schedule(self):
+        """The schedule picked in the list, as (its text, its number)."""
+        chosen = self.freeze_schedules._selected()
+        if not chosen:
+            self.message("Pick a schedule in the list first.", Gtk.MessageType.INFO)
+            return None
+        return chosen[-1]
+
+    def lock_freeze_schedule(self, _button):
+        """§3.8: timer, text, password, restart, range locks and re-lock on
+        a scheduled freeze; while on it can't be removed (R-FREEZE-2)."""
+        chosen = self.chosen_freeze_schedule()
+        if not chosen:
+            return
+        text, number = chosen
+        picker = LockPicker("remove it", "removed", ("timer", "password", "text", "restart", "range", "relock"))
+        asked = self.lock_dialog(f"Lock the freeze schedule {text}",
+                                 "It can't be removed until the locks end. Locks can be added later, but "
+                                 "only made stronger.", "Lock", picker, need_lock=True)
+        if asked is None:
+            return
+        locks, relock_flags, secret = asked
+        if not locks:
+            self.message("Choose at least one lock.", Gtk.MessageType.INFO)
+            return
+        if len(locks) > 1:
+            locks = self.choose_lock_order(locks)
+            if locks is None:
+                return
+        args = ["freeze", "schedule", "lock", str(number)]
+        lines = []
+        for i, (flags, words) in enumerate(locks):
+            args += flags
+            lines.append(f"freeze schedule {text}: " + (f"{i + 1} of {len(locks)}: " if len(locks) > 1 else "") + words)
+        if self.confirm_lock(lines):
+            self.run(args + relock_flags + ["--yes"], secret + "\n" if secret else None)
+
+    def unlock_freeze_schedule(self, _button):
+        chosen = self.chosen_freeze_schedule()
+        if not chosen:
+            return
+        text, number = chosen
+        locks = self.state.get("freeze_schedule_locks") or []
+        info = locks[number - 1] if number - 1 < len(locks) else {}
+        unlock = ["freeze", "schedule", "unlock", str(number)]
+        if (info.get("lock_order") or [])[:1] == ["password"]:
+            password = self.ask_text(f"Unlock the freeze schedule {text}", "Enter its password.", password=True)
+            if password:
+                self.run(unlock, password + "\n")
+            return
+        if not info.get("char_locked"):
+            self.message("Its first lock isn't a text or password lock: it ends by itself.", Gtk.MessageType.INFO)
+            return
+        command = " ".join([CLI] + [shlex.quote(a) for a in unlock])
+        try:
+            subprocess.Popen(["x-terminal-emulator", "-e", command])
+        except OSError as error:
+            self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
 
     def update_device(self):
         self.freeze_schedules.set_items(self.state.get("freeze_schedules", []))

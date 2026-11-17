@@ -469,13 +469,23 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unit tests run in the cloud 2026-11-16:
   `ExtensionGuardTest` (7) and the other 30 pass. On a phone: §0.2. (S)
-- [ ] **Page reading slow on big pages** (principle 9). Done: the first
+- [x] **Page reading slow on big pages** (principle 9). Done: the first
   read of a page goes in ≤ 8 ms pieces in idle time (`readPageText`,
   `READ_SLICE_MS`), then only added visible text, full re-read ≤ every 30 s;
   one-word terms via `kc9kWordIndex`; phrases split the text once per page
   and look words up in an index (100 phrases + 1,000 terms on a 3,000-word
-  page: 115 ms → 4 ms, timed in `ci/match_test.js`). Left: judging a huge
-  page (40,000 words) is still one piece (~37 ms). (M)
+  page: 115 ms → 4 ms, timed in `ci/match_test.js`). Judging is in pieces
+  too (2026-11-17): `kc9kListMatchesSteps` (and `kc9kTextHitsSteps`,
+  `kc9kPhrasesFoundSteps`, `kc9kPhraseTokenizedSteps`) yields every 1,000
+  words, term of several words and phrase; the content script runs it
+  READ_SLICE_MS at a time (`judgeOn`, `judged`), others run it to the end.
+  A phrase with every word set optional allocated a slot per word of the
+  sentence for each phrase (a page without full stops: 40,000 per phrase,
+  garbage collection pauses of 30 ms): now skipped unless enough sets are
+  found, and sparse. 40,000 words, 1,000 terms, 100 phrases: slowest step
+  3–5 ms (`ci/match_test.js`); in Chromium the page was held up at most
+  12 ms at a time, 150 ms before (`ci/content_harness_test.js`, which
+  fails on the old code). Extension 1.24.0. In LibreWolf: Unchecked.
 - [ ] **Gigantic URL lists** (principle 9). Extension: done (`kc9kIndex`,
   timed at 100,000 in `ci/match_test.js`). Firewall: done (nft sets,
   iptables fallback); the CLI no longer fills it (`deferFirewall`), the

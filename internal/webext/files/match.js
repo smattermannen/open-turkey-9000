@@ -475,17 +475,44 @@ function kc9kGlobWord(word, parts) {
   return at <= word.length - parts[parts.length - 1].length;
 }
 
+// kc9kDrain runs judging steps (a generator from a *Steps function) to the
+// end and returns what they found.
+function kc9kDrain(steps) {
+  let r;
+  do {
+    r = steps.next();
+  } while (!r.done);
+  return r.value;
+}
+
+// KC9K_STEP_WORDS is how many words a step of reading takes (principle 9:
+// a page judged in idle time never runs one piece over 16 ms; a step of
+// 1,000 words is about half a millisecond).
+const KC9K_STEP_WORDS = 1000;
+
 // kc9kIndexCounts reads a text once and returns how many times each indexed
 // term occurs (by its position in the list); terms in rest are left out.
 function kc9kIndexCounts(index, text) {
+  return kc9kDrain(kc9kIndexCountsSteps(index, text));
+}
+
+// kc9kIndexCountsSteps is kc9kIndexCounts in steps of KC9K_STEP_WORDS words.
+function* kc9kIndexCountsSteps(index, text) {
   const counts = new Map();
   const hit = (list) => {
     for (const i of list) {
       counts.set(i, (counts.get(i) || 0) + 1);
     }
   };
-  const words = kc9kFoldCached(text).match(/[\p{L}\p{N}]+/gu) || [];
-  for (const word of words) {
+  const folded = kc9kFoldCached(text);
+  const re = /[\p{L}\p{N}]+/gu;
+  let m;
+  let w = 0;
+  while ((m = re.exec(folded)) !== null) {
+    if (++w % KC9K_STEP_WORDS === 0) {
+      yield;
+    }
+    const word = m[0];
     const exact = index.exact.get(word);
     if (exact) {
       hit(exact);
@@ -533,14 +560,21 @@ function kc9kCountKeywords(text, keywords) {
 // kc9kTextHits counts, in text, how many of the matchers occur (each once)
 // and how many times they occur in all.
 function kc9kTextHits(matchers, text) {
+  return kc9kDrain(kc9kTextHitsSteps(matchers, text));
+}
+
+// kc9kTextHitsSteps is kc9kTextHits in steps: of words, and one matcher
+// of its own (terms of several words, combinations) a step.
+function* kc9kTextHitsSteps(matchers, text) {
   let distinct = 0;
   let total = 0;
   if (matchers.index) {
-    for (const n of kc9kIndexCounts(matchers.index, text).values()) {
+    for (const n of (yield* kc9kIndexCountsSteps(matchers.index, text)).values()) {
       distinct++;
       total += n;
     }
     for (const i of matchers.index.rest) {
+      yield;
       const n = matchers[i].count(text);
       if (n > 0) {
         distinct++;
@@ -550,6 +584,7 @@ function kc9kTextHits(matchers, text) {
     return { distinct, total };
   }
   for (const matcher of matchers) {
+    yield;
     const n = matcher.count(text);
     if (n > 0) {
       distinct++;
@@ -557,6 +592,18 @@ function kc9kTextHits(matchers, text) {
     }
   }
   return { distinct, total };
+}
+
+// kc9kSomeSteps reports, a matcher a step, whether one of matchers is in
+// text.
+function* kc9kSomeSteps(matchers, text) {
+  for (const matcher of matchers) {
+    yield;
+    if (matcher.test(text)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // kc9kCompileLists compiles the daemon's blacklists (see the daemon's
@@ -622,6 +669,13 @@ function kc9kRateMet(action, total, text) {
 }
 
 function kc9kListMatches(compiled, page) {
+  return kc9kDrain(kc9kListMatchesSteps(compiled, page));
+}
+
+// kc9kListMatchesSteps is kc9kListMatches in steps (principle 9): the
+// content script runs it in idle time, a few milliseconds at a time, so a
+// huge page never holds the page up; others run it to the end at once.
+function* kc9kListMatchesSteps(compiled, page) {
   const out = [];
   if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
     return out;
@@ -639,12 +693,12 @@ function kc9kListMatches(compiled, page) {
     if ((except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
       kc9kUrlTermsMatch(except.urlTerms, page.url) ||
       (hasTitle && except.title.some((matcher) => matcher.test(page.title))) ||
-      (hasText && except.text.some((matcher) => matcher.test(page.text)))) {
+      (hasText && (yield* kc9kSomeSteps(except.text, page.text)))) {
       continue;
     }
     if (list.phrases.length > 0) {
       // A phrase set: an action needs its number of different phrases.
-      const n = kc9kPhrasesFound(list, page).length;
+      const n = (yield* kc9kPhrasesFoundSteps(list, page)).length;
       const acts = list.actions.filter((action) => n > 0 && n >= (action.distinct || 1));
       if (acts.length > 0) {
         out.push({ list, actions: acts });
@@ -654,7 +708,7 @@ function kc9kListMatches(compiled, page) {
     const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       kc9kUrlTermsMatch(list.urlTerms, page.url) ||
       (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
-    const found = hasText && list.text.length > 0 ? kc9kTextHits(list.text, page.text) : { distinct: 0, total: 0 };
+    const found = hasText && list.text.length > 0 ? yield* kc9kTextHitsSteps(list.text, page.text) : { distinct: 0, total: 0 };
     const actions = list.actions.filter((action) => whole ||
       (found.distinct > 0 && found.distinct >= (action.distinct || 1) && found.total >= (action.hits || 1) &&
         kc9kRateMet(action, found.total, page.text)));
@@ -686,11 +740,25 @@ function kc9kPhraseText(phrase) {
 // kc9kPhrasesFound returns the names of a phrase set's phrases that match
 // the page where the set looks (only the parts of the page known so far).
 function kc9kPhrasesFound(list, page) {
+  return kc9kDrain(kc9kPhrasesFoundSteps(list, page));
+}
+
+// kc9kPhrasesFoundSteps is kc9kPhrasesFound a phrase a step.
+function* kc9kPhrasesFoundSteps(list, page) {
   const scope = list.phraseScope;
-  return list.phrases.filter((p) =>
-    (scope.includes("url") && p.url.test(page.url)) ||
-    (scope.includes("title") && typeof page.title === "string" && p.page.test(page.title)) ||
-    (scope.includes("text") && typeof page.text === "string" && p.page.test(page.text))).map((p) => p.name);
+  const found = [];
+  if (scope.includes("text") && typeof page.text === "string" && list.phrases.length > 0) {
+    yield* kc9kPhraseTokenizedSteps(kc9kFoldCached(page.text)); // split once, in steps, as the phrases read it
+  }
+  for (const p of list.phrases) {
+    yield;
+    if ((scope.includes("url") && p.url.test(page.url)) ||
+      (scope.includes("title") && typeof page.title === "string" && p.page.test(page.title)) ||
+      (scope.includes("text") && typeof page.text === "string" && p.page.test(page.text))) {
+      found.push(p.name);
+    }
+  }
+  return found;
 }
 
 // kc9kTestReport describes, for each list in keyword test mode, what it
@@ -893,6 +961,12 @@ const KC9K_BRIDGE_WORDS = 20;
 // kc9kPhraseTokens splits a text into sentences of words, each word with
 // the gap before it: "space" (only blank space), "comma" or "punct".
 function kc9kPhraseTokens(text) {
+  return kc9kDrain(kc9kPhraseTokensSteps(text));
+}
+
+// kc9kPhraseTokensSteps is kc9kPhraseTokens in steps of KC9K_STEP_WORDS
+// tokens (principle 9).
+function* kc9kPhraseTokensSteps(text) {
   const sentences = [];
   let words = [];
   let gap = "space";
@@ -900,6 +974,7 @@ function kc9kPhraseTokens(text) {
     .replace(/(\p{L})-(?=\p{L})/gu, "$1 "); // long-cat is long cat
   const re = /([\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*)|(\s+)|([.!?]+)|(,)|([^\s\p{L}\p{N}])/gu;
   let m;
+  let tokens = 0;
   const end = () => {
     if (words.length > 0) {
       sentences.push(words);
@@ -908,6 +983,9 @@ function kc9kPhraseTokens(text) {
     gap = "space";
   };
   while ((m = re.exec(value)) !== null) {
+    if (++tokens % KC9K_STEP_WORDS === 0) {
+      yield;
+    }
     if (m[1] !== undefined) {
       words.push({ word: m[1].replace(/’/g, "'"), gap });
       gap = "space";
@@ -933,12 +1011,20 @@ function kc9kPhraseTokens(text) {
 // reads the same text, so it is split once, not once per phrase.
 let kc9kTokenCache = { text: null, value: null };
 function kc9kPhraseTokenized(text) {
+  return kc9kDrain(kc9kPhraseTokenizedSteps(text));
+}
+
+// kc9kPhraseTokenizedSteps is kc9kPhraseTokenized in steps: at once when
+// the text was split already.
+function* kc9kPhraseTokenizedSteps(text) {
   const key = String(text);
   if (kc9kTokenCache.text !== key) {
-    const sentences = kc9kPhraseTokens(key);
-    const index = sentences.map((words) => {
+    const sentences = yield* kc9kPhraseTokensSteps(key);
+    const index = [];
+    let words = 0;
+    for (const sentence of sentences) {
       const map = new Map();
-      words.forEach((w, i) => {
+      sentence.forEach((w, i) => {
         const list = map.get(w.word);
         if (list) {
           list.push(i);
@@ -946,8 +1032,13 @@ function kc9kPhraseTokenized(text) {
           map.set(w.word, [i]);
         }
       });
-      return map;
-    });
+      index.push(map);
+      words += sentence.length;
+      if (words >= KC9K_STEP_WORDS) {
+        words = 0;
+        yield;
+      }
+    }
     kc9kTokenCache = { text: key, value: { sentences, index } };
   }
   return kc9kTokenCache.value;
@@ -1024,10 +1115,21 @@ function kc9kPhraseMatcher(phrase, scope) {
       if (sets.some((set, s) => set.necessary && !setHit[s])) {
         continue; // a necessary word set is missing from this sentence
       }
-      const at = words.map(() => []);
-      for (const p of found) {
-        at[p.start].push(p);
+      if (setHit.filter(Boolean).length < length) {
+        continue; // a match takes terms of length different sets (R-PHRASE-2)
       }
+      // The term places by where they start (sparse: a sentence may be a
+      // whole long page without a full stop).
+      const places = new Map();
+      for (const p of found) {
+        const list = places.get(p.start);
+        if (list) {
+          list.push(p);
+        } else {
+          places.set(p.start, [p]);
+        }
+      }
+      const at = (j) => places.get(j) || [];
       // Chains of term places, each set used once (an array, not a bit
       // mask: a phrase may have any number of word sets).
       const used = new Array(sets.length).fill(false);
@@ -1048,10 +1150,10 @@ function kc9kPhraseMatcher(phrase, scope) {
             if (words[j].gap === "punct") {
               break;
             }
-            next.push(...at[j].filter((p) => p.into));
+            next.push(...at(j).filter((p) => p.into));
           }
         } else if (last.end + 1 < words.length && words[last.end + 1].gap === "space") {
-          next.push(...at[last.end + 1].filter((p) => !p.into));
+          next.push(...at(last.end + 1).filter((p) => !p.into));
         }
         for (const p of next) {
           if (used[p.set]) {
@@ -1066,8 +1168,8 @@ function kc9kPhraseMatcher(phrase, scope) {
         }
         return false;
       };
-      for (const places of at) {
-        for (const p of places) {
+      for (const start of [...places.keys()].sort((a, b) => a - b)) {
+        for (const p of places.get(start)) {
           if (p.into) {
             continue;
           }

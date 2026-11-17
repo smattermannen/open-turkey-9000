@@ -156,6 +156,43 @@ const failed0 = [];
     failed0.push("a typical page with 1,000 terms and 100 phrases took " + slowest + " ms (> 50)");
   }
   console.log("typical page judged in " + slowest + " ms");
+
+  // Principle 9 (no single piece of work in a page over 16 ms): a huge page
+  // (40,000 words) with 1,000 terms (some of several words) and 100
+  // phrases, judged in steps as the content script does (a few ms of steps
+  // at a time): no step over 16 ms, the same result as in one go.
+  const hugeLists = kc9kCompileLists([
+    { id: 1, text: many.concat(["long term7", "long term9"]), actions: [{ action: "block", distinct: 3 }] },
+    { id: 2, phrases: typicalPhrases.map((_p, i) => ({ sets: [{ terms: ["alpha" + i] }, { terms: ["gamma" + i] }] })),
+      phrase_scope: ["text"], actions: [{ action: "greyscale" }] },
+    { id: 3, text: ["nowhere"], except: { text: ["absent one", "absent two"] }, actions: [{ action: "block" }] },
+  ]);
+  let worst = 0;
+  let worstAt = 0;
+  let same = true;
+  for (let round = 0; round < 3; round++) {
+    const hugePage = { url: "https://example.org/", title: "t", text: page.join(" ") + " alpha3 gamma3 long term7 r" + round };
+    const steps = kc9kListMatchesSteps(hugeLists, hugePage);
+    let r;
+    let stepped = 0;
+    do {
+      const t0 = process.hrtime.bigint();
+      r = steps.next();
+      const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+      if (round > 0 && ms > worst) {
+        worst = ms;
+        worstAt = stepped;
+      }
+      stepped++;
+    } while (!r.done);
+    const once = kc9kListMatches(hugeLists, hugePage);
+    same = same && JSON.stringify(r.value.map((m) => [m.list.id, m.actions])) ===
+      JSON.stringify(once.map((m) => [m.list.id, m.actions])) && once.length === 2 && stepped > 40;
+  }
+  if (worst > 16 || !same) {
+    failed0.push("a huge page judged in steps: slowest step " + worst.toFixed(1) + " ms, same result " + same);
+  }
+  console.log("huge page: slowest step " + worst.toFixed(1) + " ms (step " + worstAt + ")");
 }
 
 // §3.9 strongest action across blocks: consequence > close tab > image >

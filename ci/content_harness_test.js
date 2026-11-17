@@ -130,6 +130,72 @@ async function main() {
   check("no long task from the scan", long.length <= 1, long);
   await big.close();
 
+  // Principle 9: a huge page (40,000 words) with 1,000 rendered terms is
+  // judged in pieces in idle time: no long task, several pieces, and the
+  // term near its end still found and reported.
+  const huge = await browser.newPage();
+  const paragraphs = [];
+  for (let i = 0; i < 400; i++) {
+    const words = [];
+    for (let k = 0; k < 100; k++) {
+      words.push("word" + ((i * 100 + k) % 997));
+    }
+    if (i === 395) {
+      words.push("zebra");
+    }
+    paragraphs.push("<p>" + words.join(" ") + ".</p>");
+  }
+  await huge.route("http://words.example/**", (route) => route.fulfill({ status: 200, contentType: "text/html",
+    body: "<!doctype html><title>Huge</title>" + paragraphs.join("") }));
+  const terms = ["zebra"];
+  for (let i = 0; i < 999; i++) {
+    terms.push(["term" + i, "pre" + i + "*", "*suf" + i, "long term" + i][i % 4]);
+  }
+  await huge.addInitScript(() => {
+    window.longTasks = [];
+    new PerformanceObserver((list) => window.longTasks.push(...list.getEntries().map((e) => e.duration)))
+      .observe({ entryTypes: ["longtask"] });
+    // The page held up: the most a 5 ms timer is late, once the page is
+    // parsed (long tasks are only reported from 50 ms).
+    window.stall = 0;
+    document.addEventListener("DOMContentLoaded", () => {
+      let last = performance.now();
+      const tick = () => {
+        const now = performance.now();
+        window.stall = Math.max(window.stall, now - last - 5);
+        last = now;
+        if (!window.stopTicks) {
+          setTimeout(tick, 5);
+        }
+      };
+      setTimeout(tick, 5);
+    });
+  });
+  await huge.addInitScript((stored) => {
+    const listeners = { addListener() {} };
+    window.hits = [];
+    window.browser = {
+      storage: { local: { get: async () => ({ page: stored }) }, onChanged: listeners },
+      runtime: { sendMessage: async (m) => { if (m.type === "page-hits") window.hits.push(m); }, onMessage: listeners },
+    };
+  }, { lists: [{ id: 7, block: "b", name: "Words", url: [], title: [], text: terms,
+    actions: [{ action: "greyscale", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [] } }] });
+  await huge.addInitScript(script);
+  await huge.goto("http://words.example/huge");
+  await huge.waitForFunction(() => window.hits.length > 0, null, { timeout: 15000 })
+    .then(() => check("a huge page's term near the end found", true),
+      () => check("a huge page's term near the end found", false));
+  const hugeLong = await huge.evaluate(() => window.longTasks);
+  check("no long task from judging it", hugeLong.length <= 1, hugeLong);
+  const stall = await huge.evaluate(() => { window.stopTicks = true; return window.stall; });
+  console.log("     the page was held up at most " + stall.toFixed(1) + " ms at a time");
+  check("never held up over 16 ms at a time (principle 9)", stall <= 16, stall);
+  const hiddenAt = Date.now();
+  await huge.waitForFunction(() => getComputedStyle(document.documentElement).opacity === "1", null, { timeout: 5000 })
+    .then(() => check("and shown once judged", true, Date.now() - hiddenAt),
+      () => check("and shown once judged", false));
+  await huge.close();
+
   // Without no-images nothing is touched.
   const plain = await open(rules([{ action: "greyscale", distinct: 1, hits: 1 }]));
   check("other looks leave pictures alone", (await content(plain, "#a", "::before")).includes("url("),

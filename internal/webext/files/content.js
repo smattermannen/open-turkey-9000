@@ -369,8 +369,20 @@ function load(page) {
 // reporting each list action that newly applies to the background script.
 // Blocking goes through the background script, which sends the tab to the
 // block page and also hides images in the page's frames.
+// A page is judged in pieces too (principle 9): kc9kListMatchesSteps runs
+// READ_SLICE_MS at a time in idle time, the page staying hidden meanwhile
+// where a list could act on it (R-PAGE-1).
+let judging = null; // { url, lists, steps } while a page is judged
+
 function scanKeywords() {
-  if (window !== window.top || !lists || !textChanged) {
+  if (window !== window.top || !lists) {
+    return;
+  }
+  if (judging) {
+    judgeOn();
+    return;
+  }
+  if (!textChanged) {
     return;
   }
   const body = document.body || document.documentElement;
@@ -404,7 +416,35 @@ function scanKeywords() {
   } else {
     hideTestPanel();
   }
-  const matches = kc9kListMatches(lists, page);
+  judging = { url, lists, steps: kc9kListMatchesSteps(lists, page) };
+  judgeOn();
+}
+
+// judgeOn judges the page for a piece of idle time, and acts once it is
+// done; a page that changed address or rules meanwhile is read again.
+function judgeOn() {
+  const j = judging;
+  if (j.url !== keywordsFor || j.url !== location.href || j.lists !== lists) {
+    judging = null;
+    textChanged = true;
+    queueScan();
+    return;
+  }
+  const until = performance.now() + READ_SLICE_MS;
+  let r;
+  do {
+    r = j.steps.next();
+  } while (!r.done && performance.now() < until);
+  if (!r.done) {
+    queueScan(); // on in the next idle time
+    return;
+  }
+  judging = null;
+  judged(j.url, r.value);
+}
+
+// judged acts on what judging a page's address, title and text found.
+function judged(url, matches) {
   // Nothing more to learn once the page is taken away, or once every list
   // that reads it has reported all its actions.
   const takenAway = kc9kTakesAway(kc9kOutcome(matches));

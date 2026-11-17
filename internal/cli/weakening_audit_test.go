@@ -41,6 +41,10 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		{"block", "trigger", "b", "apps", "logout", "on", "--for", "1h"},
 		{"cluster", "create", "c"},
 		{"cluster", "add", "c", "example.org"},
+		{"schedule", "create", "Weekly"},
+		{"schedule", "add", "Weekly", "--days", "mon", "--from", "09:00", "--to", "10:00"},
+		{"mode", "create", "M"},
+		{"schedule", "add", "M", "--days", "mon", "--from", "09:00", "--to", "10:00"},
 	} {
 		mustRun(t, args...)
 	}
@@ -96,6 +100,10 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		{"bypass", "set", "--block", "b", "--count", "30", "--within", "10m", "--then", "warning"},
 		{"autostart", "b", "remove", "1"},
 		{"cluster", "copy", "c", "b", "--exceptions"},
+		// §3.6 Schedule, §3.2 Mode (2026-11-17): a first window lifts a
+		// continuous block outside it.
+		{"schedule", "apply", "b", "Weekly"},
+		{"mode", "add", "M", "b"},
 	} {
 		if err := runCLI(t, args...); err == nil {
 			t.Errorf("%v: a locked block was weakened", args)
@@ -124,6 +132,9 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 	}
 	if s, _ := d.ListSchedules("b"); len(s) != 0 {
 		t.Errorf("a window was added: %+v", s)
+	}
+	if m, in, _ := d.ModeOf("b"); in {
+		t.Errorf("put into mode %s", m.Name)
 	}
 	// A phrase change that doesn't only add terms is refused whole on a
 	// locked block (R-WEAK-5); one that only adds terms is free.

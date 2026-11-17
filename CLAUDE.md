@@ -169,6 +169,29 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   Automation section atop Schedule & places (`update_automation`,
   `window_flags`: new windows follow the default);
   `ci/gui_automation_smoke.py`, `TestAutomationCommand`.
+- **Schedules and modes** (§3.2 Mode, §3.6 Schedule, R-MODE-1/2,
+  R-MONK-1–3; owner 2026-11-17; `db/modes.go`, `cli/modes.go`,
+  `enforce/modes.go`): `db.AutomationSpec` (own windows, schedule ids,
+  places, settings) is what a block's or mode's automation is made of;
+  `SetBlockAutomation` writes it into the block's old tables as a diff
+  (`schedules.source`: 0 own, else the schedule's id; unchanged rows keep
+  id and break), schedule windows clipped by `ResolveWindows` so rows never
+  overlap: every reader of a block's windows is unchanged. Tables
+  `saved_schedules(_windows)`, `block_schedules`, `modes` (monk row made by
+  `migrateModes`, `MonkModeName`), `mode_windows`, `mode_schedules`,
+  `mode_places`, `mode_blocks` (one mode per block). Blocks, modes and
+  schedules share names (`NameTaken`; `CreateBlock`/`RenameBlock` refuse).
+  CLI: `resolveTarget` (block, mode, "monk", schedule) in `schedule
+  add|list|remove`, `schedule create|rename|delete|apply|take-off`, `place
+  rule`, `automation`; every change through `changeAutomation` /
+  `changeSchedule` → `gateAutomation` (all blocks affected, refused as a
+  whole; monk: `monkComparable`, refused while `MonkAutomationOn`,
+  confirmation when time is added). `kc9k mode create|rename|delete|add|
+  take-out|on|off|show` (group switch runs `startCmd`/`stopCmd` per block).
+  Daemon: `runMonkAutomation` before `enforceMonk` keeps `monk.until` ahead
+  (window end; `monkPlaceStep` while places decide); `monkKeepsWifi` leaves
+  the radio on. Tests `TestSavedSchedules`, `TestModeBlocksShareAutomation`,
+  `TestMonkModeAutomation`, `TestMonkAutomation*`, `db/modes_test.go`.
 - **Locks** (`internal/cli/`): `blockHold` decides lock state (text, timer,
   password, restart, delay, schedule lock `db/schedulelock.go`). Layered
   (R-LOCK-6/7, `db/layers.go`, `cli/layers.go`): `LockExtras.Order` from

@@ -239,7 +239,7 @@ func OpenDB(dbPath string) (*DB, error) {
 	}
 
 	// Bring older databases (created before newer columns existed) up to date.
-	if _, err := conn.Exec(webListsSchema + clustersSchema + recordingSchema + wordsSchema + eventsSchema + nepsisSchema + clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema + pausesSchema + breaksSchema + socialSchema + placesSchema + phrasesSchema + autostartSchema + templatesSchema + triggerActionsSchema + automationSchema); err != nil {
+	if _, err := conn.Exec(webListsSchema + clustersSchema + recordingSchema + wordsSchema + eventsSchema + nepsisSchema + clockSchema + freezeSchema + quotaSchema + exceptionsSchema + settingsSchema + settingLocksSchema + freezeScheduleSchema + titlesSchema + pageKeywordsSchema + hotkeysSchema + pomodoroSchema + usageSchema + pausesSchema + breaksSchema + socialSchema + placesSchema + phrasesSchema + autostartSchema + templatesSchema + triggerActionsSchema + automationSchema + modesSchema); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to create clock table: %w", err)
 	}
@@ -268,6 +268,9 @@ func (d *DB) Close() error {
 // exception list ("Exceptions"), both looking at addresses.
 // The name must be unique — if it already exists, the database returns an error.
 func (d *DB) CreateBlock(name string) error {
+	if err := d.refuseOtherName(name); err != nil {
+		return err
+	}
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
@@ -289,6 +292,19 @@ func (d *DB) CreateBlock(name string) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// refuseOtherName refuses a block name a mode or a schedule has: they
+// share one set of names (§3.2 Mode, §3.6 Schedule).
+func (d *DB) refuseOtherName(name string) error {
+	what, err := d.NameTaken(name)
+	if err != nil {
+		return err
+	}
+	if what == "mode" || what == "schedule" {
+		return fmt.Errorf("a %s is named '%s'; blocks, modes and schedules each need their own name", what, name)
+	}
+	return nil
 }
 
 // AddApps adds a list of process names to an existing block.

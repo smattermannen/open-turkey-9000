@@ -25,22 +25,22 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
-	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 )
 
 var scheduleCmd = &cobra.Command{
 	Use:   "schedule",
-	Short: "Manage recurring block schedules",
+	Short: "Windows of blocks and modes, and schedules kept outside blocks",
 }
 
 var scheduleAddCmd = &cobra.Command{
-	Use:   "add [block]",
-	Short: "Add a recurring block window (or, with --allow, an allow window) to a block",
+	Use:   "add [block|mode|schedule]",
+	Short: "Add a window to a block, mode or schedule (on a block, --allow: an allow window)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
@@ -80,58 +80,84 @@ var scheduleAddCmd = &cobra.Command{
 		if err := requireSettingsPassword(database); err != nil {
 			return err
 		}
-
-		// ListSchedules also confirms the block exists.
-		schedules, err := database.ListSchedules(name)
+		t, err := resolveTarget(database, name)
 		if err != nil {
 			return err
 		}
-		// §3.6: what a window does follows the block's default; on a block
-		// without windows or places, --allow sets it (enabled by default).
-		before, err := enforce.AutomationOf(database, name)
-		if err != nil {
-			return err
-		}
-		if before.Continuous() {
-			before.DefaultOn = allow
-		} else if allow != before.DefaultOn {
-			if before.DefaultOn {
-				return fmt.Errorf("'%s' is enabled by default: its windows turn it off, so add them with --allow "+
-					"('kc9k automation %s default disabled' makes its windows turn it on)", name, name)
+		if t.Saved != nil {
+			// A schedule kept outside blocks (§3.6): what its windows do is
+			// up to each block's default.
+			if allow {
+				return fmt.Errorf("--allow is for a block: a schedule's windows turn each block using it on or off as that block's default says")
 			}
-			return fmt.Errorf("'%s' is disabled by default: its windows turn it on, so --allow doesn't fit "+
-				"('kc9k automation %s default enabled' makes its windows turn it off)", name, name)
-		}
-		w.Allow = before.DefaultOn
-		for i, s := range schedules {
-			if s.Window().Overlaps(w) {
-				return fmt.Errorf("that window overlaps schedule %d (%s); a block's windows never overlap", i+1, s.Window())
+			for i, o := range t.Saved.Windows {
+				if o.Overlaps(w) {
+					return fmt.Errorf("that window overlaps window %d (%s); a schedule's windows never overlap", i+1, o)
+				}
 			}
-		}
-		// Adding enabled time is free; anything that lifts the block
-		// somewhere it is enabled now weakens it (R-LOCK-1): a window that
-		// turns it off, or the first one of a continuous block.
-		after := before
-		after.Windows = append(slices.Clone(before.Windows), w)
-		if err := ensureEditable(database, name, automationStrengthens(database, name, before, after)); err != nil {
-			return err
-		}
-
-		if err := database.AddSchedule(name, w); err != nil {
-			return err
-		}
-		if len(schedules) == 0 {
-			settings, err := database.Automation(name)
-			if err == nil {
-				settings.DefaultOn = w.Allow
-				err = database.SetAutomation(name, settings)
+			if err := changeSchedule(cmd, database, *t.Saved, append(slices.Clone(t.Saved.Windows), w)); err != nil {
+				return err
 			}
-			if err != nil {
+			fmt.Printf("Window %d added to the schedule '%s': %s\n", len(t.Saved.Windows)+1, t.Name, w)
+			return nil
+		}
+		if t.Block != "" {
+			if err := refuseInMode(database, t.Block); err != nil {
 				return err
 			}
 		}
-		fmt.Printf("Schedule %d added to '%s': %s\n", len(schedules)+1, name, w)
-		if allow && len(schedules) == 0 {
+		spec, err := targetSpec(database, t)
+		if err != nil {
+			return err
+		}
+		all, err := database.SavedSchedules()
+		if err != nil {
+			return err
+		}
+		// §3.6: what a window does follows the default; on a block without
+		// windows or places, --allow sets it (enabled by default).
+		before, _ := spec.Automation(all)
+		monk := t.Mode != nil && t.Mode.Monk
+		switch {
+		case monk && allow:
+			return fmt.Errorf("monk mode's windows turn it on: it is never enabled by default, so --allow doesn't fit")
+		case before.Continuous():
+			spec.DefaultOn = allow
+		case allow != spec.DefaultOn && spec.DefaultOn:
+			return fmt.Errorf("'%s' is enabled by default: its windows turn it off, so add them with --allow "+
+				"('kc9k automation %s default disabled' makes its windows turn it on)", t.Name, t.Name)
+		case allow != spec.DefaultOn:
+			return fmt.Errorf("'%s' is disabled by default: its windows turn it on, so --allow doesn't fit "+
+				"('kc9k automation %s default enabled' makes its windows turn it off)", t.Name, t.Name)
+		}
+		w.Allow = false
+		for i, o := range spec.Own {
+			if o.Overlaps(w) {
+				return fmt.Errorf("that window overlaps its window %d (%s); its windows never overlap", i+1, o)
+			}
+		}
+		spec.Own = append(spec.Own, w)
+		// Adding enabled time is free; anything that lifts the block
+		// somewhere it is enabled now weakens it (R-LOCK-1): a window that
+		// turns it off, or the first one of a continuous block.
+		if err := changeAutomation(cmd, database, t, spec); err != nil {
+			return err
+		}
+		w.Allow = spec.DefaultOn
+		if t.Block == "" {
+			fmt.Printf("Window added to %s: %s\n", t.what(), w)
+			return nil
+		}
+		num := 0
+		if rows, err := database.ListSchedules(name); err == nil {
+			for _, r := range rows {
+				if r.Source == 0 && r.DaysMask == w.Days && r.StartMin == w.Start && r.EndMin == w.End {
+					num = r.Num
+				}
+			}
+		}
+		fmt.Printf("Schedule %d added to '%s': %s\n", num, name, w)
+		if allow && before.Continuous() {
 			fmt.Printf("'%s' is now enabled at all times except during its allow windows, while it is on.\n", name)
 		}
 		if active, _ := database.IsBlockActive(name); !active {
@@ -142,37 +168,127 @@ var scheduleAddCmd = &cobra.Command{
 	},
 }
 
-var scheduleListCmd = &cobra.Command{
-	Use:   "list [block]",
-	Short: "List a block's schedules",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
-		database, err := openDB()
+// targetRows returns the windows of a block or mode as numbered for 'kc9k
+// schedule list' and 'remove', with where each comes from.
+func targetRows(database *db.DB, t autoTarget) ([]db.SourcedWindow, error) {
+	if t.Block != "" {
+		rows, err := database.ListSchedules(t.Block)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		defer database.Close()
+		out := make([]db.SourcedWindow, len(rows))
+		for i, r := range rows {
+			out[i] = db.SourcedWindow{Window: r.Window(), Source: r.Source}
+		}
+		return out, nil
+	}
+	if t.Saved != nil {
+		out := make([]db.SourcedWindow, len(t.Saved.Windows))
+		for i, w := range t.Saved.Windows {
+			out[i] = db.SourcedWindow{Window: w}
+		}
+		return out, nil
+	}
+	all, err := database.SavedSchedules()
+	if err != nil {
+		return nil, err
+	}
+	_, rows := t.Mode.Spec.Automation(all)
+	return rows, nil
+}
 
-		schedules, err := database.ListSchedules(name)
-		if err != nil {
-			return err
+// scheduleName returns the name of the schedule with id.
+func scheduleName(database *db.DB, id int) string {
+	all, _ := database.SavedSchedules()
+	for _, s := range all {
+		if s.ID == id {
+			return s.Name
 		}
-		if len(schedules) == 0 {
-			fmt.Printf("Block '%s' has no schedules.\n", name)
+	}
+	return fmt.Sprint(id)
+}
+
+var scheduleListCmd = &cobra.Command{
+	Use:   "list [block|mode|schedule]",
+	Short: "List the schedules kept outside blocks, or the windows of a block, mode or schedule",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if len(args) == 0 {
+			all, err := database.SavedSchedules()
+			if err != nil {
+				return err
+			}
+			if len(all) == 0 {
+				fmt.Println("No schedules yet. Make one with 'kc9k schedule create Evening', then 'kc9k schedule add Evening …'.")
+				return nil
+			}
+			for _, sc := range all {
+				fmt.Printf("%s (%s)\n", sc.Name, plural(len(sc.Windows), "1 window", fmt.Sprintf("%d windows", len(sc.Windows))))
+				for i, w := range sc.Windows {
+					fmt.Printf("  [%d] %s\n", i+1, w)
+				}
+				if users := scheduleUsersWords(database, sc.ID); users != "" {
+					fmt.Println("  used by " + users)
+				}
+			}
 			return nil
 		}
-		fmt.Printf("Schedules for '%s':\n", name)
-		for _, s := range schedules {
-			fmt.Printf("  [%d] %s\n", s.Num, s.Window())
+		t, err := resolveTarget(database, args[0])
+		if err != nil {
+			return err
+		}
+		rows, err := targetRows(database, t)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			if t.Block != "" {
+				fmt.Printf("Block '%s' has no schedules.\n", t.Name)
+			} else {
+				fmt.Printf("%s has no windows.\n", strings.ToUpper(t.what()[:1])+t.what()[1:])
+			}
+			return nil
+		}
+		if t.Block != "" {
+			fmt.Printf("Schedules for '%s':\n", t.Name)
+		} else {
+			fmt.Printf("Windows of %s:\n", t.what())
+		}
+		for i, r := range rows {
+			from := ""
+			if r.Source != 0 {
+				from = " (from the schedule '" + scheduleName(database, r.Source) + "')"
+			}
+			fmt.Printf("  [%d] %s%s\n", i+1, r.Window, from)
 		}
 		return nil
-	},
+	}),
+}
+
+// scheduleUsersWords names what uses a schedule.
+func scheduleUsersWords(database *db.DB, id int) string {
+	blocks, modes, err := database.ScheduleUsers(id)
+	if err != nil {
+		return ""
+	}
+	all, _ := database.Modes()
+	var parts []string
+	for _, m := range all {
+		if slices.Contains(modes, m.ID) {
+			parts = append(parts, "mode '"+m.Name+"'")
+		}
+	}
+	for _, b := range blocks {
+		if _, in, _ := database.ModeOf(b); !in {
+			parts = append(parts, "'"+b+"'")
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 var scheduleRemoveCmd = &cobra.Command{
-	Use:   "remove [block] [number]",
-	Short: "Remove a schedule from a block by its number (later ones are renumbered)",
+	Use:   "remove [block|mode|schedule] [number]",
+	Short: "Remove a window by its number (later ones are renumbered)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
@@ -186,33 +302,180 @@ var scheduleRemoveCmd = &cobra.Command{
 		}
 		defer database.Close()
 
+		t, err := resolveTarget(database, name)
+		if err != nil {
+			return err
+		}
+		rows, err := targetRows(database, t)
+		if err != nil {
+			return err
+		}
+		if num < 1 || num > len(rows) {
+			if t.Block != "" {
+				return fmt.Errorf("schedule %d not found in block '%s'", num, name)
+			}
+			return fmt.Errorf("%s has no window %d", t.what(), num)
+		}
+		row := rows[num-1]
+		if t.Saved != nil {
+			ws := slices.Delete(slices.Clone(t.Saved.Windows), num-1, num)
+			if err := changeSchedule(cmd, database, *t.Saved, ws); err != nil {
+				return err
+			}
+			fmt.Printf("Window %d removed from the schedule '%s'.\n", num, t.Name)
+			return nil
+		}
+		if row.Source != 0 {
+			s := scheduleName(database, row.Source)
+			return fmt.Errorf("window %d comes from the schedule '%s': change the schedule ('kc9k schedule list %s'), "+
+				"or take it off ('kc9k schedule take-off %s %s')", num, s, s, t.Name, s)
+		}
+		if t.Block != "" {
+			if err := refuseInMode(database, t.Block); err != nil {
+				return err
+			}
+		}
+		spec, err := targetSpec(database, t)
+		if err != nil {
+			return err
+		}
 		// Removing a window that turns the block on weakens it, so does one
 		// that turns it off when that leaves places alone to decide less
 		// often; refused while it is locked (a schedule lock included, from
 		// its lead time before a window). The rest only adds enabled time.
-		schedules, err := database.ListSchedules(name)
-		if err != nil {
+		spec.Own = slices.DeleteFunc(spec.Own, func(w schedule.Window) bool {
+			return w.Days == row.Days && w.Start == row.Start && w.End == row.End
+		})
+		if err := changeAutomation(cmd, database, t, spec); err != nil {
 			return err
 		}
-		if num < 1 || num > len(schedules) {
-			return fmt.Errorf("schedule %d not found in block '%s'", num, name)
+		if t.Block != "" {
+			fmt.Printf("Schedule %d removed from '%s'.\n", num, name)
+		} else {
+			fmt.Printf("Window %d removed from %s.\n", num, t.what())
 		}
-		before, err := enforce.AutomationOf(database, name)
-		if err != nil {
-			return err
-		}
-		after := before
-		after.Windows = slices.Delete(slices.Clone(before.Windows), num-1, num)
-		if err := ensureEditable(database, name, automationStrengthens(database, name, before, after)); err != nil {
-			return err
-		}
-
-		if err := database.RemoveSchedule(name, num); err != nil {
-			return err
-		}
-		fmt.Printf("Schedule %d removed from '%s'.\n", num, name)
 		return nil
 	},
+}
+
+var scheduleCreateCmd = &cobra.Command{
+	Use:   "create [name]",
+	Short: "Make a schedule kept outside blocks (Evening, Weekend), for blocks and modes to apply",
+	Long: `A schedule is named weekly windows kept outside blocks (§3.6). Give it
+windows with 'kc9k schedule add NAME --days … --from … --to …', then apply
+it to blocks and modes ('kc9k schedule apply BLOCK NAME'). Changing it later
+changes everything using it, refused as a whole if that weakens a locked
+block.`,
+	Args: cobra.ExactArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		if _, err := database.CreateSavedSchedule(args[0]); err != nil {
+			return err
+		}
+		fmt.Printf("Schedule '%s' made. Give it windows with 'kc9k schedule add %s --days … --from … --to …'.\n", args[0], args[0])
+		return nil
+	}),
+}
+
+var scheduleRenameCmd = &cobra.Command{
+	Use:   "rename [schedule] [new name]",
+	Short: "Rename a schedule kept outside blocks",
+	Args:  cobra.ExactArgs(2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		s, err := database.GetSavedSchedule(args[0])
+		if err != nil {
+			return err
+		}
+		if err := database.RenameSavedSchedule(s.ID, args[1]); err != nil {
+			return err
+		}
+		fmt.Printf("Schedule '%s' is now '%s'.\n", s.Name, args[1])
+		return nil
+	}),
+}
+
+var scheduleDeleteCmd = &cobra.Command{
+	Use:   "delete [schedule]",
+	Short: "Delete a schedule; blocks and modes using it keep its windows as their own",
+	Args:  cobra.ExactArgs(1),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		s, err := database.GetSavedSchedule(args[0])
+		if err != nil {
+			return err
+		}
+		if err := database.DeleteSavedSchedule(s.ID); err != nil {
+			return err
+		}
+		fmt.Printf("Schedule '%s' deleted; what used it keeps its windows as its own.\n", s.Name)
+		return nil
+	}),
+}
+
+var scheduleApplyCmd = &cobra.Command{
+	Use:   "apply [block|mode] [schedule]",
+	Short: "Give a block or mode a schedule's windows (Evening, Weekend), kept up to date",
+	Args:  cobra.ExactArgs(2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		return applySchedule(cmd, database, args[0], args[1], true)
+	}),
+}
+
+var scheduleTakeOffCmd = &cobra.Command{
+	Use:     "take-off [block|mode] [schedule]",
+	Aliases: []string{"unapply"},
+	Short:   "Take a schedule's windows off a block or mode",
+	Args:    cobra.ExactArgs(2),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		return applySchedule(cmd, database, args[0], args[1], false)
+	}),
+}
+
+// applySchedule puts a schedule on a block or mode, or takes it off,
+// through the gate: on a block disabled by default it adds enabled time
+// (free); enabled by default it lifts it (weakens).
+func applySchedule(cmd *cobra.Command, database *db.DB, name, schedName string, on bool) error {
+	if err := requireSettingsPassword(database); err != nil {
+		return err
+	}
+	t, err := resolveTarget(database, name)
+	if err != nil {
+		return err
+	}
+	if t.Saved != nil {
+		return fmt.Errorf("'%s' is a schedule: apply schedules to blocks and modes", name)
+	}
+	s, err := database.GetSavedSchedule(schedName)
+	if err != nil {
+		return err
+	}
+	if t.Block != "" {
+		if err := refuseInMode(database, t.Block); err != nil {
+			return err
+		}
+	}
+	spec, err := targetSpec(database, t)
+	if err != nil {
+		return err
+	}
+	has := slices.Contains(spec.Schedules, s.ID)
+	switch {
+	case on && has:
+		return fmt.Errorf("%s already has the schedule '%s'", t.what(), s.Name)
+	case !on && !has:
+		return fmt.Errorf("%s doesn't have the schedule '%s'", t.what(), s.Name)
+	case on:
+		spec.Schedules = append(spec.Schedules, s.ID)
+	default:
+		spec.Schedules = slices.DeleteFunc(spec.Schedules, func(id int) bool { return id == s.ID })
+	}
+	if err := changeAutomation(cmd, database, t, spec); err != nil {
+		return err
+	}
+	if on {
+		fmt.Printf("%s has the schedule '%s'; changing the schedule changes it too.\n", strings.ToUpper(t.what()[:1])+t.what()[1:], s.Name)
+	} else {
+		fmt.Printf("The schedule '%s' is off %s.\n", s.Name, t.what())
+	}
+	return nil
 }
 
 var scheduleLockCmd = &cobra.Command{
@@ -343,6 +606,8 @@ func init() {
 	scheduleAddCmd.Flags().Bool("allow", false, "Allow window: keep the block on at all times except during its allow windows")
 
 	addNowFlag(scheduleAddCmd, scheduleRemoveCmd)
+	addYesFlag(scheduleAddCmd, scheduleRemoveCmd, scheduleApplyCmd, scheduleTakeOffCmd)
+	scheduleCmd.AddCommand(scheduleCreateCmd, scheduleRenameCmd, scheduleDeleteCmd, scheduleApplyCmd, scheduleTakeOffCmd)
 	scheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h; at most 7 days)")
 	addYesFlag(scheduleLockCmd)
 	scheduleCmd.AddCommand(scheduleBreakCmd, scheduleLockCmd)

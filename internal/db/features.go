@@ -79,6 +79,7 @@ func upgradeSchema(conn *sql.DB) error {
 		{"setting_locks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
 		{"schedules", "break_seconds", "INTEGER NOT NULL DEFAULT 0"},
 		{"schedules", "break_taken", "TEXT NOT NULL DEFAULT ''"},
+		{"schedules", "source", "INTEGER NOT NULL DEFAULT 0"}, // §3.6 Schedule: 0 own, else the schedule's id
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {
@@ -129,7 +130,10 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateAutomation(conn); err != nil {
 		return err
 	}
-	return migrateMonkMode(conn)
+	if err := migrateMonkMode(conn); err != nil {
+		return err
+	}
+	return migrateModes(conn)
 }
 
 // addColumnIfMissing runs "ALTER TABLE ... ADD COLUMN" only when the column
@@ -187,6 +191,9 @@ type Schedule struct {
 	StartMin  int
 	EndMin    int
 	Allow     bool // allow window rather than block window (see schedule.Enforced)
+	// Source is the id of the schedule (§3.6) the window is a copy of; 0
+	// for the block's own.
+	Source int
 	// Break per window (§3.6): seconds of one break each time the window
 	// is open (0: none); BreakTaken names the occurrence it was taken in.
 	Break      int64
@@ -245,7 +252,7 @@ func (d *DB) ListSchedules(blockName string) ([]Schedule, error) {
 		return nil, err
 	}
 	rows, err := d.conn.Query(
-		"SELECT id, days_mask, start_min, end_min, allow, break_seconds, break_taken FROM schedules WHERE block_id = ? ORDER BY id",
+		"SELECT id, days_mask, start_min, end_min, allow, break_seconds, break_taken, source FROM schedules WHERE block_id = ? ORDER BY id",
 		blockID,
 	)
 	if err != nil {
@@ -256,7 +263,7 @@ func (d *DB) ListSchedules(blockName string) ([]Schedule, error) {
 	var out []Schedule
 	for rows.Next() {
 		s := Schedule{BlockName: blockName, Num: len(out) + 1}
-		if err := rows.Scan(&s.ID, &s.DaysMask, &s.StartMin, &s.EndMin, &s.Allow, &s.Break, &s.BreakTaken); err != nil {
+		if err := rows.Scan(&s.ID, &s.DaysMask, &s.StartMin, &s.EndMin, &s.Allow, &s.Break, &s.BreakTaken, &s.Source); err != nil {
 			return nil, fmt.Errorf("failed to read schedule: %w", err)
 		}
 		out = append(out, s)

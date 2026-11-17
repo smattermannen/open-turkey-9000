@@ -146,14 +146,17 @@ func PlaceRuled(d *db.DB) (map[string]bool, error) {
 	return out, nil
 }
 
-// keepWifiOn switches the Wi-Fi radio back on when place rules exist.
+// keepWifiOn switches the Wi-Fi radio back on when place rules exist, or
+// monk mode's automation has places.
 func keepWifiOn(d *db.DB) {
 	ruled, err := PlaceRuled(d)
-	if err != nil || len(ruled) == 0 {
+	monkPlaces := monkKeepsWifi(d)
+	if (err != nil || len(ruled) == 0) && !monkPlaces {
 		return
 	}
-	// Monk mode switches the radio off (R-MONK-2) and puts it back itself.
-	if until, err := d.MonkUntil(); err != nil || until > 0 {
+	// Monk mode switches the radio off (R-MONK-2) and puts it back itself,
+	// unless its own places need it.
+	if until, err := d.MonkUntil(); (err != nil || until > 0) && !monkPlaces {
 		return
 	}
 	out, err := exec.Command("nmcli", "radio", "wifi").Output()

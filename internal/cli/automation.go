@@ -14,13 +14,12 @@ import (
 	"strings"
 
 	"github.com/smattermannen/kc9k/internal/db"
-	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/schedule"
 	"github.com/spf13/cobra"
 )
 
 var automationCmd = &cobra.Command{
-	Use:   "automation [block] [default enabled|disabled | needs both|either]",
+	Use:   "automation [block|mode] [default enabled|disabled | needs both|either]",
 	Short: "What switches a block by itself: its default, and both or either",
 	Long: `While a block is on, its schedule (kc9k schedule) and its places (kc9k place
 rule; any number) switch it by themselves:
@@ -34,6 +33,8 @@ With both windows and places, switching needs:
   needs both         a window and a place at once
 
 A block without windows or places is continuous: enabled whenever it is on.
+A mode's automation is all its blocks' (kc9k mode); monk mode's is always
+disabled by default.
 A change that lifts the block anywhere it is enabled now weakens it, refused
 while it is locked; one that only adds enabled time is always allowed.`,
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -44,15 +45,22 @@ while it is locked; one that only adds enabled time is always allowed.`,
 	},
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		name := args[0]
-		before, err := enforce.AutomationOf(database, name)
+		t, err := resolveTarget(database, name)
 		if err != nil {
 			return err
 		}
+		if t.Saved != nil {
+			return fmt.Errorf("'%s' is a schedule: its windows do what the default of each block using it says", name)
+		}
 		if len(args) == 1 {
-			fmt.Println(describeAutomation(database, name, before))
+			fmt.Println(describeTarget(database, t))
 			return nil
 		}
-		after := before
+		spec, err := targetSpec(database, t)
+		if err != nil {
+			return err
+		}
+		after := spec
 		switch args[1] + " " + args[2] {
 		case "default enabled":
 			after.DefaultOn = true
@@ -65,21 +73,23 @@ while it is locked; one that only adds enabled time is always allowed.`,
 		default:
 			return fmt.Errorf("use 'default enabled', 'default disabled', 'needs both' or 'needs either'")
 		}
-		if after.DefaultOn == before.DefaultOn && after.NeedBoth == before.NeedBoth {
-			fmt.Println(describeAutomation(database, name, after))
+		if after.DefaultOn == spec.DefaultOn && after.NeedBoth == spec.NeedBoth {
+			fmt.Println(describeTarget(database, t))
 			return nil
 		}
 		if err := requireSettingsPassword(database); err != nil {
 			return err
 		}
-		if err := ensureEditable(database, name, automationStrengthens(database, name, before, after)); err != nil {
+		if err := changeAutomation(cmd, database, t, after); err != nil {
 			return err
 		}
-		if err := database.SetAutomation(name, db.AutomationSettings{DefaultOn: after.DefaultOn, NeedBoth: after.NeedBoth}); err != nil {
-			return err
+		if t.Mode != nil {
+			if t.Mode, err = func() (*db.Mode, error) { m, err := database.GetMode(t.Mode.Name); return &m, err }(); err != nil {
+				return err
+			}
 		}
-		fmt.Println(describeAutomation(database, name, after))
-		return reapplyIfActive(database, name)
+		fmt.Println(describeTarget(database, t))
+		return nil
 	}),
 }
 
@@ -146,5 +156,6 @@ func describeAutomation(database *db.DB, name string, a schedule.Automation) str
 }
 
 func init() {
+	addYesFlag(automationCmd, placeRuleCmd)
 	rootCmd.AddCommand(automationCmd)
 }

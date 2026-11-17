@@ -41,9 +41,25 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     laptop: Unchecked.
   - [ ] Modes, schedules and places pages (§3.2 Mode, §3.6 Schedule, §3.8
     Monk mode, §4.2, §4.5, R-MODE-1/2, R-MONK-1–3). Not built:
-    - [ ] Schedules outside blocks; Apply schedule on blocks and modes.
-    - [ ] Modes: a group of blocks with one automation; monk mode
-      automated by schedule and place.
+    - [x] Schedules outside blocks; Apply schedule on blocks and modes
+      (CLI: `kc9k schedule create|apply|take-off|rename|delete`; `schedule
+      add|remove|list` take a block, mode or schedule). Shared like
+      places: a change reaches everything using it, refused as a whole
+      when it weakens a locked block; overlapping schedules stored clipped
+      (R-SCHED-2 holds); deleting one leaves its windows as their own.
+      `TestSavedSchedules`, `TestResolveWindowsClips`,
+      `TestSetBlockAutomation`, the weakening audit.
+    - [x] Modes (CLI `kc9k mode …`): blocks share the mode's automation
+      (copies in each block, so the daemon and every other reader are
+      unchanged); a block in a mode isn't changed on its own; put in:
+      gated, taken out: keeps it; the switch switches the blocks (locked
+      ones stay on). Monk mode is a mode: windows, schedules and places;
+      switched on (confirmed) its automation runs it, to the window's end
+      or half a minute at a time while places decide; while it runs it
+      can't be switched off or weakened; Wi-Fi stays on for its places.
+      `TestModeBlocksShareAutomation`, `TestMonkModeAutomation`,
+      `TestMonkAutomationWindow`, `TestMonkAutomationPlace`,
+      `TestModes`. Not yet in projects (export/import).
     - [ ] GUI: modes among the block cards (drag a block in), the mode's
       view, Schedules and Places pages in the sidebar.
 

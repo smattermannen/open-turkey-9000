@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
@@ -119,6 +120,9 @@ var placeRemoveCmd = &cobra.Command{
 				return err
 			}
 		}
+		if err := monkUsesPlace(database, p.ID); err != nil {
+			return err
+		}
 		if err := database.DeletePlace(p.ID); err != nil {
 			return err
 		}
@@ -167,25 +171,37 @@ func setPlaceNeed(database *db.DB, p db.Place, need int, fresh bool) error {
 				return err
 			}
 		}
+		if err := monkUsesPlace(database, p.ID); err != nil {
+			return err
+		}
 	}
 	return database.SetPlaceNeed(p.ID, need)
 }
 
 var placeRuleCmd = &cobra.Command{
-	Use:   "rule [block] [place] [on|off]",
-	Short: "Let a place switch a block: on, or off when it is enabled by default",
+	Use:   "rule [block|mode] [place] [on|off]",
+	Short: "Let a place switch a block or mode: on, or off when it is enabled by default",
 	Args:  cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if args[2] != "on" && args[2] != "off" {
-			return fmt.Errorf("usage: kc9k place rule <block> <place> on|off")
+			return fmt.Errorf("usage: kc9k place rule <block|mode> <place> on|off")
 		}
-		block, on := args[0], args[2] == "on"
-		if _, err := database.GetBlock(block); err != nil {
+		on := args[2] == "on"
+		t, err := resolveTarget(database, args[0])
+		if err != nil {
 			return err
+		}
+		if t.Saved != nil {
+			return fmt.Errorf("'%s' is a schedule: places go on blocks and modes", args[0])
 		}
 		p, err := database.GetPlace(args[1])
 		if err != nil {
 			return err
+		}
+		if t.Block != "" {
+			if err := refuseInMode(database, t.Block); err != nil {
+				return err
+			}
 		}
 		// A rule switches nothing on (R-SCHED-1), so a block may get one
 		// before it has anything to enforce. A change that lifts the block
@@ -193,33 +209,50 @@ var placeRuleCmd = &cobra.Command{
 		// (with a schedule lock, also while the computer is there): a place
 		// that turns off a block enabled by default, the first place of a
 		// continuous block (enabled only there then), or removing a place
-		// that turns it on (§3.6).
-		before, err := enforce.AutomationOf(database, block)
+		// that turns it on (§3.6). A mode's goes to all its blocks.
+		spec, err := targetSpec(database, t)
 		if err != nil {
 			return err
 		}
-		after := before
-		if on {
-			after.Places = append(slices.Clone(before.Places), p.ID)
-		} else {
-			after.Places = slices.DeleteFunc(slices.Clone(before.Places), func(id int) bool { return id == p.ID })
+		if on && !slices.Contains(spec.Places, p.ID) {
+			spec.Places = append(spec.Places, p.ID)
+			slices.Sort(spec.Places)
+		} else if !on {
+			spec.Places = slices.DeleteFunc(spec.Places, func(id int) bool { return id == p.ID })
 		}
-		if err := ensureEditable(database, block, automationStrengthens(database, block, before, after)); err != nil {
+		if err := changeAutomation(cmd, database, t, spec); err != nil {
 			return err
 		}
-		if err := database.SetPlaceRule(block, p.ID, on); err != nil {
-			return err
+		block := t.Name
+		if t.Block == "" {
+			block = t.what()
 		}
 		switch {
-		case on && before.DefaultOn:
+		case on && spec.DefaultOn:
 			fmt.Printf("Block '%s' is lifted while the computer is at '%s' (it is enabled by default).\n", block, p.Name)
+		case on && t.Block == "":
+			fmt.Printf("%s is on while the computer is at '%s'.\n", strings.ToUpper(block[:1])+block[1:], p.Name)
 		case on:
 			fmt.Printf("Block '%s' is enabled while the computer is at '%s' (it is disabled by default).\n", block, p.Name)
 		default:
-			fmt.Printf("'%s' no longer switches block '%s'.\n", p.Name, block)
+			fmt.Printf("'%s' no longer switches %s.\n", p.Name, map[bool]string{true: "block '" + block + "'", false: block}[t.Block != ""])
 		}
 		return nil
 	}),
+}
+
+// monkUsesPlace gates a change that makes monk mode see a place less
+// often (removing it, needing more of its networks): refused while monk
+// mode runs by its automation (R-MONK-3).
+func monkUsesPlace(database *db.DB, id int) error {
+	m, err := database.MonkMode()
+	if err != nil || !m.Active || !slices.Contains(m.Spec.Places, id) {
+		return err
+	}
+	if enforce.MonkAutomationOn(database, time.Now()) {
+		return refused(database, db.MonkModeName, fmt.Errorf("monk mode is running by its automation, which uses this place: until it ends it can only be added to"))
+	}
+	return nil
 }
 
 // placeNames returns the places whose rule turns a block on.

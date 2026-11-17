@@ -387,6 +387,7 @@ func Tick(d *db.DB, now time.Time) error {
 	// Monk mode: its cuts are held or undone here, and what it blocks is
 	// enforced beside the blocks. It is no block: apps, events and bypass
 	// detection below go by the blocks alone.
+	runMonkAutomation(d, now, trusted) // R-MONK-3
 	monk := enforceMonk(d, trusted)
 	enforced := active
 	if monk {

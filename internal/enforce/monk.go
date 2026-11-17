@@ -160,7 +160,9 @@ func cutNetwork(d *db.DB) {
 		if first {
 			what = "off"
 		}
-		if wifi && wifiKnown {
+		// R-MONK-2: while its places decide, they need to see where the
+		// computer is; the firewall keeps Wi-Fi from carrying anything.
+		if wifi && wifiKnown && !monkKeepsWifi(d) {
 			log.Printf("monk mode: Wi-Fi radio %s", what)
 			if err := setWifiRadio(false); err != nil {
 				log.Printf("monk mode: %v", err)

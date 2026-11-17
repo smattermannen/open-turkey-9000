@@ -228,6 +228,11 @@ func TestMonkModeAutomation(t *testing.T) {
 	if out := capture(t, "mode"); !strings.Contains(out, "Monk mode runs") {
 		t.Errorf("mode: %s", out)
 	}
+	// §4.1: the Overview sees its windows today, and that it runs.
+	if state := capture(t, "gui-state"); !strings.Contains(state, `"today_windows":["00:00-24:00"]`) ||
+		!strings.Contains(state, `"running":true`) {
+		t.Errorf("gui-state: %.300s", state[strings.Index(state, `"modes"`):])
+	}
 }
 
 // §3.13 Project (owner 2026-11-17): schedules and modes travel in project

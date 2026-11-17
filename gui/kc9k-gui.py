@@ -5903,6 +5903,11 @@ class Window(Gtk.ApplicationWindow):
             device.append((f"Frozen Chicken {fmt_seconds(self.state['freeze_seconds'])}", "locked"))
         if self.state.get("monk_seconds"):
             device.append((f"Monk mode {fmt_seconds(self.state['monk_seconds'])}", "locked"))
+        else:
+            # §4.1 today's windows: monk mode run by its automation later today.
+            monk = next((m for m in self.state.get("modes") or [] if m.get("monk")), None)
+            if monk and monk.get("active") and monk.get("today_windows"):
+                device.append(("Monk mode today " + ", ".join(monk["today_windows"]), "lifted"))
         for text, kind in device:
             self.dash_device.pack_start(pill(text, kind), False, False, 0)
         self.dash_device.show_all()

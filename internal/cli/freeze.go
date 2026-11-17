@@ -118,6 +118,8 @@ type guiMode struct {
 	On         int                   `json:"on"`        // its blocks switched on
 	Locked     int                   `json:"locked"`    // its blocks locked
 	MonkLeft   int64                 `json:"monk_left"` // monk mode: seconds it runs on
+	// TodayWindows: its windows still to come or open today (§4.1).
+	TodayWindows []string `json:"today_windows"`
 }
 
 // guiList is one website list for the interface.
@@ -829,7 +831,11 @@ func guiModes(database *db.DB, saved []db.SavedSchedule, modes []db.Mode, places
 		a, rows := m.Spec.Automation(saved)
 		g := guiMode{Name: m.Name, Monk: m.Monk, Active: m.Active, Blocks: append([]string{}, m.Blocks...),
 			Windows: guiWins(saved, rows, m.Spec.DefaultOn), Schedules: []string{}, Places: []string{},
-			Automation: m.Spec.AutomationSettings, Continuous: a.Continuous()}
+			Automation: m.Spec.AutomationSettings, Continuous: a.Continuous(),
+			TodayWindows: windowsLeftToday(a.Windows, now)}
+		if g.TodayWindows == nil {
+			g.TodayWindows = []string{}
+		}
 		for _, id := range m.Spec.Schedules {
 			g.Schedules = append(g.Schedules, savedName(saved, id))
 		}

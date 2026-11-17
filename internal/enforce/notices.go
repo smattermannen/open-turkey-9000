@@ -139,6 +139,9 @@ type NoticeInput struct {
 	QuotaLeft     map[string]int64
 	TimerEnds     map[string]int64
 	Pomodoros     map[string]quota.Cycle
+	// MonkWindows: monk mode's windows while its automation is on
+	// (§3.8): announced as a scheduled freeze is, 5 and 1 minutes ahead.
+	MonkWindows []schedule.Window
 }
 
 // UpcomingNotices lists what is about to happen within NoticeLead, with
@@ -215,6 +218,18 @@ func Notices(in NoticeInput, o NoticeOptions, now time.Time) []Notice {
 		})
 	}
 
+	if m := startsWithin(func(t time.Time) bool { return schedule.InAny(in.MonkWindows, t) }, now, max(lead, NoticeLead)); m > 0 && m <= 5 {
+		key := "monk "
+		if m == 1 {
+			key = "monk-last "
+		}
+		notices = append(notices, Notice{
+			Key:   key + at(m),
+			Title: fmt.Sprintf("Monk mode starts in %s", minutes(m)),
+			Body:  "Every website is blocked and the internet connection is cut until its window ends.",
+		})
+	}
+
 	for _, name := range sortedKeys(in.QuotaLeft) {
 		left := in.QuotaLeft[name]
 		if left > 0 && o.On(NoticeAllowance) {
@@ -286,6 +301,11 @@ func sendNotices(d *db.DB, now time.Time) {
 			in.FreezeWindows = append(in.FreezeWindows, s.Window)
 			in.FreezeModes = append(in.FreezeModes, s.Mode)
 		}
+	}
+	// Monk mode's windows, switched on, when they start it by themselves
+	// (a place, which can't be foreseen, may be needed too).
+	if m, a, err := MonkAutomation(d); err == nil && m.Active && len(a.Windows) > 0 && (len(a.Places) == 0 || !a.NeedBoth) {
+		in.MonkWindows = a.Windows
 	}
 	if names, err := d.QuotaBlocks(); err == nil {
 		for _, name := range names {

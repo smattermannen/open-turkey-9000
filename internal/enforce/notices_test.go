@@ -94,3 +94,22 @@ func TestNoticeChoices(t *testing.T) {
 		t.Errorf("window-start off: %q", keys(got))
 	}
 }
+
+// §3.8: monk mode run by its windows is announced as a scheduled freeze
+// is: 5 minutes and 1 minute ahead (owner 2026-11-17: it cuts the network).
+func TestMonkNotices(t *testing.T) {
+	now := time.Date(2026, 11, 17, 17, 55, 0, 0, time.Local)
+	day := 1 << uint(now.Weekday())
+	in := NoticeInput{MonkWindows: []schedule.Window{{Days: day, Start: 18 * 60, End: 20 * 60}}}
+	got := Notices(in, DefaultNoticeOptions(), now)
+	if len(got) != 1 || got[0].Title != "Monk mode starts in 5 minutes" {
+		t.Fatalf("5 minutes ahead: %+v", got)
+	}
+	got = Notices(in, DefaultNoticeOptions(), now.Add(4*time.Minute))
+	if len(got) != 1 || got[0].Title != "Monk mode starts in 1 minute" || got[0].Key == "" {
+		t.Fatalf("1 minute ahead: %+v", got)
+	}
+	if got := Notices(in, DefaultNoticeOptions(), now.Add(-30*time.Minute)); len(got) != 0 {
+		t.Errorf("half an hour ahead: %+v", got)
+	}
+}

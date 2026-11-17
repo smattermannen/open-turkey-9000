@@ -60,7 +60,9 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       or half a minute at a time while places decide; while it runs it
       can't be switched off or weakened; Wi-Fi stays on for its places.
       `TestModeBlocksShareAutomation`, `TestMonkModeAutomation`,
-      `TestMonkAutomationWindow`, `TestMonkAutomationPlace`,
+      `TestMonkAutomationWindow`, `TestMonkAutomationPlace`; announced
+      5 and 1 minutes before its window, as a scheduled freeze is
+      (`TestMonkNotices`), and on the Overview ("Monk mode today …"),
       `TestModes`. In projects: schedules and modes (with their own
       windows, schedules, places in backups, settings); a block's windows
       that are copies of a schedule say `copy_of` (an older KC9K reads

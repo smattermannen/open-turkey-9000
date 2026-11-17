@@ -43,6 +43,7 @@ var draftRefused = map[string]int{
 	"autostart": 2, "pomodoro set": 1, "pomodoro off": 1,
 	"break reward": 2, "break text": 2, "break delay": 2, "break start": 1, "break end": 1, "break request": 1,
 	"social": 2, "place rule": 1, "block users": 2, "block trigger": 2, "automation": 3,
+	"schedule apply": 2, "schedule take-off": 2, // §3.6 Schedule (2026-11-17); a draft joins no mode (mode add)
 }
 
 // refuseDraftEdit refuses a command of draftRefused on a draft, naming the

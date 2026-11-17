@@ -17,7 +17,8 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 
 ### 0.1 Code contradicting `SPEC.md`
 
-- [ ] **Owner report 2026-11-17** (real use on the laptop; top priority).
+- [x] **Owner report 2026-11-17** (real use on the laptop; top priority).
+  Built the same day; on the laptop: Unchecked.
   - [x] Wrong wallpaper after a boot (§4.10 circadian wallpapers): at
     boot nobody is signed in, so the engine's first try reached nobody and
     the next waited a minute: the desktop started with the last picture
@@ -39,8 +40,9 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     a minute more without its extension checking in; the dialog names it
     (gui-state `extension_missing_in`). `TestExtensionMissing`. On the
     laptop: Unchecked.
-  - [ ] Modes, schedules and places pages (§3.2 Mode, §3.6 Schedule, §3.8
-    Monk mode, §4.2, §4.5, R-MODE-1/2, R-MONK-1–3). Not built:
+  - [x] Modes, schedules and places pages (§3.2 Mode, §3.6 Schedule, §3.8
+    Monk mode, §4.2, §4.5, R-MODE-1/2, R-MONK-1–3). Drafts take no
+    schedule and join no mode.
     - [x] Schedules outside blocks; Apply schedule on blocks and modes
       (CLI: `kc9k schedule create|apply|take-off|rename|delete`; `schedule
       add|remove|list` take a block, mode or schedule). Shared like

@@ -4156,7 +4156,7 @@ class AutomationEditor(Gtk.Box):
             self.pack_start(heading("Places", "medium"), False, False, 0)
             self.places = PlaceRules(window, self.add_named_place,
                                      lambda p: self.run(["place", "rule", self.name, p, "off"]),
-                                     lambda: window.save_place(None, target=self.name))
+                                     lambda: window.save_place(None, target=self.name, flags=self.flags()))
             self.place_combo = self.places.combo
             self.pack_start(self.places, False, False, 0)
 
@@ -4171,8 +4171,13 @@ class AutomationEditor(Gtk.Box):
             return ["--yes"]
         return None
 
-    def run(self, args):
-        self.window.run(args)
+    def flags(self):
+        """§4.2 Names (owner 2026-11-17): a mode or schedule may share a
+        block's name, so its commands say which is meant."""
+        return {"mode": ["--mode"], "monk": ["--mode"], "schedule": ["--schedule"]}.get(self.kind, [])
+
+    def run(self, args, then=None):
+        self.window.run(args + self.flags(), then=then)
 
     def add_window(self, days, frm, to):
         if not self.name:
@@ -4219,7 +4224,7 @@ class AutomationEditor(Gtk.Box):
             return
         flags = ["--allow"] if self.kind == "mode" and (self.data.get("automation") or {}).get("default_on") else []
         add = ["schedule", "add", self.name, "--days", ",".join(names), "--from", frm, "--to", to, *flags, *yes]
-        self.window.run(["schedule", "remove", self.name, str(index + 1)], then=lambda _o: self.window.run(add))
+        self.run(["schedule", "remove", self.name, str(index + 1)], then=lambda _o: self.run(add))
 
     def edit_window(self, index):
         windows = self.windows()
@@ -9774,7 +9779,7 @@ class Window(Gtk.ApplicationWindow):
         self.social_expander.set_label("<b>Social media</b>" + (
             f"  <small>{count} {'setting' if count == 1 else 'settings'} on</small>" if count else ""))
 
-    def save_place(self, _button, target=None):
+    def save_place(self, _button, target=None, flags=()):
         """§3.6: saves the Wi-Fi networks in range as a place and, ticked by
         default, adds it to the automation of target (a mode's name) or of
         the selected block."""
@@ -9810,7 +9815,7 @@ class Window(Gtk.ApplicationWindow):
 
         def saved(output):
             if with_rule and block:
-                self.run(["place", "rule", block, name, "on"],
+                self.run(["place", "rule", block, name, "on", *flags],
                          then=lambda rule_output: self.message(output + "\n" + rule_output, Gtk.MessageType.INFO))
             else:
                 self.message(output, Gtk.MessageType.INFO)

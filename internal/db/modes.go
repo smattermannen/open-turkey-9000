@@ -264,44 +264,47 @@ func (d *DB) GetSavedSchedule(name string) (SavedSchedule, error) {
 	return SavedSchedule{}, fmt.Errorf("no schedule named '%s'", name)
 }
 
-// NameTaken says what already has name, case ignored: "block", "mode",
-// "schedule", or "" for nothing. Blocks, modes and schedules share one set
-// of names, so a command can name any of them.
-func (d *DB) NameTaken(name string) (string, error) {
-	for _, q := range []struct{ what, query string }{
-		{"block", "SELECT COUNT(*) FROM blocks WHERE name = ? COLLATE NOCASE"},
-		{"mode", "SELECT COUNT(*) FROM modes WHERE name = ? COLLATE NOCASE"},
-		{"schedule", "SELECT COUNT(*) FROM saved_schedules WHERE name = ? COLLATE NOCASE"},
-	} {
-		var n int
-		if err := d.conn.QueryRow(q.query, name).Scan(&n); err != nil {
-			return "", err
-		}
-		if n > 0 {
-			return q.what, nil
-		}
+// Kinds of names: blocks, modes and schedules each have their own names
+// (§4.2 Names, owner 2026-11-17): a block and a mode may share one.
+const (
+	KindBlock    = "block"
+	KindMode     = "mode"
+	KindSchedule = "schedule"
+)
+
+// NameTaken reports whether a block, mode or schedule (kind) has name, case
+// ignored.
+func (d *DB) NameTaken(kind, name string) (bool, error) {
+	table := map[string]string{KindBlock: "blocks", KindMode: "modes", KindSchedule: "saved_schedules"}[kind]
+	if table == "" {
+		return false, fmt.Errorf("no kind of name %q", kind)
 	}
-	return "", nil
+	var n int
+	if err := d.conn.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE name = ? COLLATE NOCASE", name).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
-// checkNewName refuses a name for a new mode or schedule that is taken.
-func (d *DB) checkNewName(name string) error {
+// checkNewName refuses a name for a new mode or schedule (kind) that
+// another of its kind has.
+func (d *DB) checkNewName(kind, name string) error {
 	if err := CheckListName(name); err != nil {
 		return err
 	}
-	what, err := d.NameTaken(name)
+	taken, err := d.NameTaken(kind, name)
 	if err != nil {
 		return err
 	}
-	if what != "" {
-		return fmt.Errorf("a %s named '%s' already exists (blocks, modes and schedules each need their own name)", what, name)
+	if taken {
+		return fmt.Errorf("a %s named '%s' already exists", kind, name)
 	}
 	return nil
 }
 
 // CreateSavedSchedule makes an empty schedule.
 func (d *DB) CreateSavedSchedule(name string) (int, error) {
-	if err := d.checkNewName(name); err != nil {
+	if err := d.checkNewName(KindSchedule, name); err != nil {
 		return 0, err
 	}
 	res, err := d.conn.Exec("INSERT INTO saved_schedules (name) VALUES (?)", name)
@@ -319,7 +322,7 @@ func (d *DB) RenameSavedSchedule(id int, name string) error {
 		return fmt.Errorf("no such schedule")
 	}
 	if !strings.EqualFold(old, name) {
-		if err := d.checkNewName(name); err != nil {
+		if err := d.checkNewName(KindSchedule, name); err != nil {
 			return err
 		}
 	}
@@ -686,7 +689,7 @@ func (d *DB) MonkMode() (Mode, error) {
 
 // CreateMode makes an empty mode (a group of blocks).
 func (d *DB) CreateMode(name string) error {
-	if err := d.checkNewName(name); err != nil {
+	if err := d.checkNewName(KindMode, name); err != nil {
 		return err
 	}
 	if _, err := d.conn.Exec("INSERT INTO modes (name) VALUES (?)", name); err != nil {
@@ -705,7 +708,7 @@ func (d *DB) RenameMode(id int, name string) error {
 		return fmt.Errorf("monk mode keeps its name")
 	}
 	if !strings.EqualFold(m.Name, name) {
-		if err := d.checkNewName(name); err != nil {
+		if err := d.checkNewName(KindMode, name); err != nil {
 			return err
 		}
 	}

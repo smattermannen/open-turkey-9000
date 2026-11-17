@@ -836,7 +836,7 @@ With --dry-run, says what would happen and changes nothing.`,
 		for _, c := range blocks {
 			name := c.in.Name
 			for n := 2; ; n++ {
-				if what, err := database.NameTaken(name); err == nil && what == "" && !taken[name] {
+				if have, err := database.NameTaken(db.KindBlock, name); err == nil && !have && !taken[name] {
 					break
 				}
 				name = fmt.Sprintf("%s-%d", c.in.Name, n)

@@ -50,22 +50,53 @@ func (t autoTarget) what() string {
 }
 
 // resolveTarget finds what name names; "monk" names monk mode too.
-func resolveTarget(database *db.DB, name string) (autoTarget, error) {
-	if _, err := database.ListSchedules(name); err == nil {
-		return autoTarget{Name: name, Block: name}, nil
-	}
-	if m, err := database.GetMode(name); err == nil {
-		return autoTarget{Name: m.Name, Mode: &m}, nil
-	}
-	if strings.EqualFold(name, "monk") {
-		if m, err := database.MonkMode(); err == nil {
-			return autoTarget{Name: m.Name, Mode: &m}, nil
+func resolveTarget(database *db.DB, name string, kind string) (autoTarget, error) {
+	if kind == "" || kind == db.KindBlock {
+		if _, err := database.ListSchedules(name); err == nil {
+			return autoTarget{Name: name, Block: name}, nil
 		}
 	}
-	if s, err := database.GetSavedSchedule(name); err == nil {
-		return autoTarget{Name: s.Name, Saved: &s}, nil
+	if kind == "" || kind == db.KindMode {
+		if m, err := database.GetMode(name); err == nil {
+			return autoTarget{Name: m.Name, Mode: &m}, nil
+		}
+		if strings.EqualFold(name, "monk") {
+			if m, err := database.MonkMode(); err == nil {
+				return autoTarget{Name: m.Name, Mode: &m}, nil
+			}
+		}
+	}
+	if kind == "" || kind == db.KindSchedule {
+		if s, err := database.GetSavedSchedule(name); err == nil {
+			return autoTarget{Name: s.Name, Saved: &s}, nil
+		}
+	}
+	if kind != "" {
+		return autoTarget{}, fmt.Errorf("no %s named '%s'", kind, name)
 	}
 	return autoTarget{}, fmt.Errorf("no block, mode or schedule named '%s'", name)
+}
+
+// targetKind is what a name means in a command that takes a block, a mode
+// or a schedule: a block first, a mode, then a schedule, unless --mode or
+// --schedule says (§4.2 Names: a block and a mode may share a name).
+func targetKind(cmd *cobra.Command) string {
+	for _, kind := range []string{db.KindMode, db.KindSchedule} {
+		if f := cmd.Flags().Lookup(kind); f != nil && f.Value.String() == "true" {
+			return kind
+		}
+	}
+	return ""
+}
+
+// addTargetFlags gives commands that take a block, mode or schedule the
+// flags that say which is meant.
+func addTargetFlags(cmds ...*cobra.Command) {
+	for _, c := range cmds {
+		c.Flags().Bool(db.KindMode, false, "The name is a mode's (a block and a mode may share a name)")
+		c.Flags().Bool(db.KindSchedule, false, "The name is a schedule's")
+		c.MarkFlagsMutuallyExclusive(db.KindMode, db.KindSchedule)
+	}
 }
 
 // targetSpec returns the automation of a block or mode.
@@ -498,7 +529,7 @@ func switchMode(cmd *cobra.Command, name string, on bool) error {
 	if err != nil {
 		return err
 	}
-	t, err := resolveTarget(database, name)
+	t, err := resolveTarget(database, name, db.KindMode)
 	if err == nil && t.Mode == nil {
 		err = fmt.Errorf("'%s' is no mode", name)
 	}
@@ -590,7 +621,7 @@ var modeShowCmd = &cobra.Command{
 	Short: "What a mode holds and what switches it",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		t, err := resolveTarget(database, args[0])
+		t, err := resolveTarget(database, args[0], db.KindMode)
 		if err != nil {
 			return err
 		}

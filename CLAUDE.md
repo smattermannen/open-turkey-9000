@@ -185,8 +185,9 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
   `saved_schedules(_windows)`, `block_schedules`, `modes` (monk row made by
   `migrateModes`, `MonkModeName`), `mode_windows`, `mode_schedules`,
   `mode_places`, `mode_blocks` (one mode per block). Blocks, modes and
-  schedules share names (`NameTaken`; `CreateBlock`/`RenameBlock` refuse).
-  CLI: `resolveTarget` (block, mode, "monk", schedule) in `schedule
+  schedules each have their own names (`NameTaken(kind, name)`; owner
+  2026-11-17: a block and a mode may share one; `--mode`/`--schedule`).
+  CLI: `resolveTarget` (block, mode, "monk", schedule; `targetKind`) in `schedule
   add|list|remove`, `schedule create|rename|delete|apply|take-off`, `place
   rule`, `automation`; every change through `changeAutomation` /
   `changeSchedule` → `gateAutomation` (all blocks affected, refused as a

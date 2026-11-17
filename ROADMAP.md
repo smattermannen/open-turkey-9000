@@ -40,9 +40,14 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       "Not here now", with Remove; below, a saved place to add and Save
       where I am now as… (for a mode too). How many networks a place needs
       is set on the Places page only (§4.5). `ci/gui_places_smoke.py`.
-    - [ ] A block and a mode may share a name (§4.2 Names): blocks, modes
-      and schedules each have their own names; commands that take any of
-      them read a block first, `--mode`/`--schedule` say otherwise.
+    - [x] A block and a mode may share a name (§4.2 Names): blocks, modes
+      and schedules each have their own names (`db.NameTaken(kind, name)`);
+      commands that take any of them (`schedule add|list|remove|apply|
+      take-off`, `automation`, `place rule`) read a block first, then a
+      mode, then a schedule, and `--mode`/`--schedule` say otherwise; `mode
+      …` commands read only modes. The GUI's mode and schedule editors pass
+      the flag. `TestModes`, `TestSavedSchedules`,
+      `TestModeBlocksShareAutomation`, `ci/gui_modes_smoke.py`.
     - [ ] An opened block is always a draft until *Save edits*; no *Edit as
       draft* (§4.3: code contradicted SPEC).
     - [x] YouTube playlists: a playlist's address in an exception list

@@ -76,9 +76,6 @@ func (d *DB) RenameBlock(oldName, newName string) error {
 	if err != nil {
 		return err
 	}
-	if err := d.refuseOtherName(newName); err != nil {
-		return err
-	}
 	if _, err := d.conn.Exec("UPDATE blocks SET name = ? WHERE id = ?", newName, blockID); err != nil {
 		return fmt.Errorf("failed to rename '%s': %w", oldName, err)
 	}

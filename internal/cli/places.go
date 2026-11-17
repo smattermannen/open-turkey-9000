@@ -187,7 +187,7 @@ var placeRuleCmd = &cobra.Command{
 			return fmt.Errorf("usage: kc9k place rule <block|mode> <place> on|off")
 		}
 		on := args[2] == "on"
-		t, err := resolveTarget(database, args[0])
+		t, err := resolveTarget(database, args[0], targetKind(cmd))
 		if err != nil {
 			return err
 		}

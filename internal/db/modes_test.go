@@ -127,20 +127,32 @@ func TestModes(t *testing.T) {
 	if err := d.CreateBlock("work"); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.CreateMode("WORK"); err == nil {
-		t.Error("a mode took a block's name")
+	// §4.2 Names (owner 2026-11-17): blocks, modes and schedules each have
+	// their own names; a block and a mode may share one.
+	if err := d.CreateMode("WORK"); err != nil {
+		t.Errorf("a mode can't share a block's name: %v", err)
 	}
 	if err := d.CreateMode("Evening"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.CreateSavedSchedule("evening"); err == nil {
-		t.Error("a schedule took a mode's name")
+	if err := d.CreateMode("EVENING"); err == nil {
+		t.Error("two modes share a name")
 	}
-	if err := d.CreateBlock("Evening"); err == nil {
-		t.Error("a block took a mode's name")
+	if _, err := d.CreateSavedSchedule("evening"); err != nil {
+		t.Errorf("a schedule can't share a mode's name: %v", err)
 	}
-	if err := d.RenameBlock("work", "evening"); err == nil {
-		t.Error("a block renamed to a mode's name")
+	if _, err := d.CreateSavedSchedule("Evening"); err == nil {
+		t.Error("two schedules share a name")
+	}
+	if err := d.CreateBlock("Evening"); err != nil {
+		t.Errorf("a block can't share a mode's name: %v", err)
+	}
+	if err := d.RenameBlock("work", "Evening"); err == nil {
+		t.Error("a block renamed to another block's name")
+	}
+	work, _ := d.GetMode("work")
+	if err := d.RenameMode(work.ID, "Evening"); err == nil {
+		t.Error("a mode renamed to another mode's name")
 	}
 	if err := d.CreateMode("Night"); err != nil {
 		t.Fatal(err)

@@ -186,11 +186,11 @@ func importSchedules(database *db.DB, c checkedModes, blockNames []string, dry b
 		}
 		as := name
 		for n := 2; ; n++ {
-			what, err := database.NameTaken(as)
+			have, err := database.NameTaken(db.KindSchedule, as)
 			if err != nil {
 				return nil, err
 			}
-			if what == "" && !slices.Contains(blockNames, as) {
+			if !have {
 				break
 			}
 			as = fmt.Sprintf("%s-%d", name, n)
@@ -283,11 +283,11 @@ func importModes(database *db.DB, c checkedModes, in projectExport, renamed map[
 		} else {
 			as := m.Name
 			for n := 2; ; n++ {
-				what, err := database.NameTaken(as)
+				have, err := database.NameTaken(db.KindMode, as)
 				if err != nil {
 					return err
 				}
-				if what == "" {
+				if !have {
 					break
 				}
 				as = fmt.Sprintf("%s-%d", m.Name, n)

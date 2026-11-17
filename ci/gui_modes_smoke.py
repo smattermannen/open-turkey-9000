@@ -220,6 +220,17 @@ check(monk["active"] and monk["running"], "on, its window runs it: %s" % {k: mon
 r = cli("mode", "off", "monk")
 check(r.returncode != 0, "running, it can't be switched off")
 
+# §4.2 Names (owner 2026-11-17): a block may share a mode's name; the
+# mode's editor changes the mode, not the block of that name.
+r = cli("block", "create", "Evening")
+check(r.returncode == 0, "a block may share a mode's name: %s" % r.stderr.strip())
+win.open_mode("Evening"); settle()
+before = len(mode("Evening").get("windows") or [])
+msgs.clear()
+win.mode_editor.add_window("tue", "10:00", "11:00"); settle()
+check(len(mode("Evening").get("windows") or []) == before + 1 and not block("Evening")["schedules"],
+      "the mode's editor changes the mode, not the block named like it: %s" % msgs)
+
 print("messages:", msgs)
 print("all passed" if not fails else "FAILED: %s" % fails)
 raise SystemExit(1 if fails else 0)

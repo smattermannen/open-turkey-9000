@@ -27,10 +27,14 @@ func TestSavedSchedules(t *testing.T) {
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "reddit.com")
 	mustRun(t, "schedule", "create", "Evening")
-	if err := runCLI(t, "block", "create", "evening"); err == nil {
-		t.Error("a block took a schedule's name")
+	// §4.2 Names (owner 2026-11-17): a block may share a schedule's name;
+	// --schedule says which is meant (a block is read first).
+	mustRun(t, "block", "create", "Evening")
+	mustRun(t, "schedule", "add", "Evening", "--schedule", "--days", "weekdays", "--from", "18:00", "--to", "22:00")
+	if rows, _ := d.ListSchedules("Evening"); len(rows) != 0 {
+		t.Errorf("--schedule changed the block: %+v", rows)
 	}
-	mustRun(t, "schedule", "add", "Evening", "--days", "weekdays", "--from", "18:00", "--to", "22:00")
+	mustRun(t, "block", "remove", "Evening")
 	if err := runCLI(t, "schedule", "add", "Evening", "--days", "mon", "--from", "21:00", "--to", "23:00"); err == nil {
 		t.Error("a schedule's windows overlap")
 	}
@@ -113,8 +117,24 @@ func TestModeBlocksShareAutomation(t *testing.T) {
 	}
 	mustRun(t, "schedule", "add", "a", "--days", "mon", "--from", "08:00", "--to", "09:00")
 	mustRun(t, "mode", "create", "Night")
-	if err := runCLI(t, "mode", "create", "a"); err == nil {
-		t.Error("a mode took a block's name")
+	// §4.2 Names (owner 2026-11-17): a mode may share a block's name; --mode
+	// says which is meant (a block is read first).
+	mustRun(t, "mode", "create", "a")
+	mustRun(t, "schedule", "add", "a", "--mode", "--days", "tue", "--from", "08:00", "--to", "09:00")
+	if m, _ := d.GetMode("a"); len(m.Spec.Own) != 1 {
+		t.Errorf("--mode: the mode's windows %+v", m.Spec.Own)
+	}
+	if rows, _ := d.ListSchedules("a"); len(rows) != 1 {
+		t.Errorf("--mode changed the block: %+v", rows)
+	}
+	mustRun(t, "schedule", "add", "a", "--days", "wed", "--from", "08:00", "--to", "09:00")
+	if rows, _ := d.ListSchedules("a"); len(rows) != 2 {
+		t.Errorf("without --mode the block's windows: %+v", rows)
+	}
+	mustRun(t, "schedule", "remove", "a", "2")
+	mustRun(t, "mode", "delete", "a")
+	if err := runCLI(t, "mode", "create", "night"); err == nil {
+		t.Error("two modes share a name")
 	}
 	mustRun(t, "mode", "add", "Night", "a", "c")
 	if rows, _ := d.ListSchedules("a"); len(rows) != 0 {

@@ -45,7 +45,7 @@ while it is locked; one that only adds enabled time is always allowed.`,
 	},
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		name := args[0]
-		t, err := resolveTarget(database, name)
+		t, err := resolveTarget(database, name, targetKind(cmd))
 		if err != nil {
 			return err
 		}
@@ -157,5 +157,6 @@ func describeAutomation(database *db.DB, name string, a schedule.Automation) str
 
 func init() {
 	addYesFlag(automationCmd, placeRuleCmd)
+	addTargetFlags(automationCmd, placeRuleCmd)
 	rootCmd.AddCommand(automationCmd)
 }

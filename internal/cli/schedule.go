@@ -80,7 +80,7 @@ var scheduleAddCmd = &cobra.Command{
 		if err := requireSettingsPassword(database); err != nil {
 			return err
 		}
-		t, err := resolveTarget(database, name)
+		t, err := resolveTarget(database, name, targetKind(cmd))
 		if err != nil {
 			return err
 		}
@@ -233,7 +233,7 @@ var scheduleListCmd = &cobra.Command{
 			}
 			return nil
 		}
-		t, err := resolveTarget(database, args[0])
+		t, err := resolveTarget(database, args[0], targetKind(cmd))
 		if err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ var scheduleRemoveCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		t, err := resolveTarget(database, name)
+		t, err := resolveTarget(database, name, targetKind(cmd))
 		if err != nil {
 			return err
 		}
@@ -436,7 +436,7 @@ func applySchedule(cmd *cobra.Command, database *db.DB, name, schedName string, 
 	if err := requireSettingsPassword(database); err != nil {
 		return err
 	}
-	t, err := resolveTarget(database, name)
+	t, err := resolveTarget(database, name, targetKind(cmd))
 	if err != nil {
 		return err
 	}
@@ -607,6 +607,7 @@ func init() {
 
 	addNowFlag(scheduleAddCmd, scheduleRemoveCmd)
 	addYesFlag(scheduleAddCmd, scheduleRemoveCmd, scheduleApplyCmd, scheduleTakeOffCmd)
+	addTargetFlags(scheduleAddCmd, scheduleListCmd, scheduleRemoveCmd, scheduleApplyCmd, scheduleTakeOffCmd)
 	scheduleCmd.AddCommand(scheduleCreateCmd, scheduleRenameCmd, scheduleDeleteCmd, scheduleApplyCmd, scheduleTakeOffCmd)
 	scheduleLockCmd.Flags().String("lead", "0m", "How long before each window the lock comes on (e.g. 2h; at most 7 days)")
 	addYesFlag(scheduleLockCmd)

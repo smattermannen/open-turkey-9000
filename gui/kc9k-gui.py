@@ -37,6 +37,9 @@ SCHEDULE_PRESETS = (
     ("Nights", "daily", "00:00", "06:00"),
 )
 
+# §4.2 (owner 2026-11-17): a block card dragged onto a mode.
+BLOCK_TARGET = Gtk.TargetEntry.new("kc9k/block", Gtk.TargetFlags.SAME_APP, 0)
+
 # The switches of 'kc9k option' (internal/enforce/options.go).
 OPTIONS = (
     ("polite-close", "Ask blocked apps to close first",
@@ -2907,7 +2910,25 @@ class WeekCalendar(Gtk.DrawingArea):
                 x = left + column * column_width + 2
                 y0, y1 = y_of(w["start"]), y_of(w["end"])
                 cr.rectangle(x, y0, column_width - 4, max(y1 - y0, 2))
-                if w["allow"]:
+                if w.get("source"):
+                    # §3.6: a copy of a schedule's window, changed on the
+                    # Schedules page: lighter, with the schedule's name.
+                    cr.set_source_rgba(r, g, b, 0.45 if not w["allow"] else 0.12)
+                    cr.fill_preserve()
+                    cr.set_source_rgba(r, g, b, 0.9)
+                    cr.set_line_width(1)
+                    cr.set_dash([3, 2])
+                    cr.stroke()
+                    cr.set_dash([])
+                    if y1 - y0 > 14:
+                        layout.set_text(w["source"], -1)
+                        layout.set_width(int((column_width - 8) * Pango.SCALE))
+                        layout.set_ellipsize(Pango.EllipsizeMode.END)
+                        cr.set_source_rgba(*text)
+                        cr.move_to(x + 2, y0 + 1)
+                        PangoCairo.show_layout(cr, layout)
+                        layout.set_width(-1)
+                elif w["allow"]:
                     # Allow windows are gaps in an always-on block: outlined.
                     cr.set_source_rgba(r, g, b, 0.15)
                     cr.fill_preserve()
@@ -3987,6 +4008,318 @@ class TriggerEditor(Gtk.Box):
                 self.window.run(args)
 
 
+def window_words(w):
+    """A window as the CLI writes it: days, from, to."""
+    names = [DAY_NAMES[day] for day in range(7) if w["days"] & (1 << ((day + 1) % 7))]  # Monday first
+    return names, clock_text(w["start"]), "24:00" if w["end"] >= 1440 else clock_text(w["end"])
+
+
+def schedule_summary(windows):
+    """A schedule's windows in a line, and its hours a week."""
+    covered = set()
+    for w in windows:
+        for day in range(7):
+            if w["days"] & (1 << day):
+                covered.update((day, minute) for minute in range(w["start"], w["end"]))
+    parts = []
+    for w in windows[:3]:
+        names, frm, to = window_words(w)
+        days = ",".join(names) if len(names) < 7 else "daily"
+        parts.append(f"{days.replace('mon,tue,wed,thu,fri', 'weekdays').replace('sat,sun', 'weekends')} "
+                     f"{show_clock(w['start'])}–{show_clock(w['end'], True)}")
+    if len(windows) > 3:
+        parts.append(f"{len(windows) - 3} more")
+    hours = f"{len(covered) / 60:.0f} h a week" if covered else "no windows yet"
+    return (", ".join(parts) + " · " if parts else "") + hours
+
+
+class AutomationEditor(Gtk.Box):
+    """§3.6, §4.5 (owner 2026-11-17): the automation of a mode (one for all
+    its blocks), of monk mode, or the windows of a schedule kept outside
+    blocks. Every change runs the commands a block's does (schedule add and
+    remove, schedule apply and take-off, place rule, automation) with the
+    mode's or schedule's name; the CLI decides (R-MODE-2, R-MONK-3)."""
+
+    def __init__(self, window, kind):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.window, self.kind, self.name, self.data = window, kind, None, {}
+        self.summary = Gtk.Label(xalign=0, wrap=True)
+        self.pack_start(self.summary, False, False, 0)
+        self.buttons = {}
+        self.updating = False
+
+        def choice(pairs, setting):
+            row, group = Gtk.Box(), None
+            row.get_style_context().add_class("linked")
+            for value, label in pairs:
+                button = Gtk.RadioButton.new_with_label_from_widget(group, label)
+                button.set_mode(False)
+                group = group or button
+                button.connect("toggled", self.set_setting, setting, value)
+                row.pack_start(button, False, False, 0)
+                self.buttons[(setting, value)] = button
+            return row
+
+        if kind == "mode":
+            self.pack_start(choice((("disabled", "Disabled by default"), ("enabled", "Enabled by default")),
+                                   "default"), False, False, 0)
+        self.need_row = Gtk.Box(spacing=8)
+        if kind != "schedule":
+            self.need_row.pack_start(Gtk.Label(label="With windows and places:"), False, False, 0)
+            self.need_row.pack_start(choice((("either", "Either is enough"), ("both", "Both at once")), "needs"),
+                                     False, False, 0)
+            for child in self.need_row.get_children():
+                child.show_all()
+            self.need_row.set_no_show_all(True)
+            self.pack_start(self.need_row, False, False, 0)
+        self.calendar = WeekCalendar(self.create_window, self.edit_window, self.move_window)
+        intro = Gtk.Box(spacing=6)
+        intro.pack_start(dim("Drag down a day to add a window; click one to change or remove it; drag it "
+                             "to move it."), False, False, 0)
+        self.pack_start(intro, False, False, 0)
+        self.pack_start(self.calendar, False, False, 0)
+        presets = Gtk.Box(spacing=6)
+        presets.pack_start(Gtk.Label(label="Add:"), False, False, 0)
+        for label, days, start, end in SCHEDULE_PRESETS:
+            button = Gtk.Button(label=label, tooltip_text=f"{days} {start}-{end}")
+            button.connect("clicked", lambda _b, d=days, f=start, t=end: self.add_window(d, f, t))
+            presets.pack_start(button, False, False, 0)
+        self.total = dim("")
+        presets.pack_end(self.total, False, False, 0)
+        self.pack_start(flow_row(presets), False, False, 0)
+        self.applied = Gtk.Box(spacing=6)
+        self.place_box = Gtk.Box(spacing=6)
+        if kind != "schedule":
+            row = Gtk.Box(spacing=6)
+            row.pack_start(Gtk.Label(label="Schedules:"), False, False, 0)
+            row.pack_start(self.applied, False, False, 0)
+            apply = Gtk.Button(label="Apply schedule…")
+            apply.set_tooltip_text("Evening, Weekend…: made on the Schedules page; changing it there changes this too")
+            apply.connect("clicked", self.apply_schedule)
+            row.pack_start(apply, False, False, 0)
+            self.pack_start(flow_row(row), False, False, 0)
+            places = Gtk.Box(spacing=6)
+            places.pack_start(Gtk.Label(label="Places:"), False, False, 0)
+            places.pack_start(self.place_box, False, False, 0)
+            self.place_combo = Gtk.ComboBoxText()
+            places.pack_start(self.place_combo, False, False, 0)
+            add = Gtk.Button(label="Add this place")
+            add.connect("clicked", self.add_place)
+            places.pack_start(add, False, False, 0)
+            self.pack_start(flow_row(places), False, False, 0)
+
+    # The commands -----------------------------------------------------
+    def monk_ok(self, what):
+        """R-LOCK-12: adding to monk mode's time while it is on asks first;
+        the command then takes --yes. Others need nothing."""
+        if self.kind != "monk" or not self.data.get("active"):
+            return []
+        if self.window.confirm_lock([f"monk mode (no websites, no internet, can't be switched off while it "
+                                     f"runs): also {what}"]):
+            return ["--yes"]
+        return None
+
+    def run(self, args):
+        self.window.run(args)
+
+    def add_window(self, days, frm, to):
+        if not self.name:
+            return
+        yes = self.monk_ok(f"{days} {frm}–{to}")
+        if yes is None:
+            return
+        flags = ["--allow"] if self.kind == "mode" and (self.data.get("automation") or {}).get("default_on") else []
+        self.run(["schedule", "add", self.name, "--days", days, "--from", frm, "--to", to, *flags, *yes])
+
+    def create_window(self, column, start, end):
+        day = DAY_NAMES[column_day(column)]
+        if self.window.confirm(f"Add {day.capitalize()} {show_clock(start)}–{show_clock(end, True)}?",
+                               "Tick more days afterwards by clicking it.", "Add"):
+            self.add_window(day, clock_text(start), "24:00" if end >= 1440 else clock_text(end))
+
+    def from_schedule(self, w):
+        """A window from a schedule is changed on the Schedules page."""
+        if self.window.confirm(f"This window comes from the schedule {w['source']}",
+                               "Change it on the Schedules page (that changes everything using it), or take "
+                               "the schedule off here.", "Open Schedules"):
+            self.window.open_schedule(w["source"])
+
+    def windows(self):
+        return self.data.get("windows") or []
+
+    def move_window(self, index, days, start, end):
+        windows = self.windows()
+        if index >= len(windows):
+            return
+        if windows[index].get("source"):
+            self.from_schedule(windows[index])
+            return
+        self.replace(index, {"days": days, "start": start, "end": end})
+
+    def replace(self, index, w):
+        """Removes window index, then adds w (a change that weakens is
+        refused by the CLI, and the old one stays)."""
+        names, frm, to = window_words(w)
+        if not names:
+            return
+        yes = self.monk_ok(f"{','.join(names)} {frm}–{to}")
+        if yes is None:
+            return
+        flags = ["--allow"] if self.kind == "mode" and (self.data.get("automation") or {}).get("default_on") else []
+        add = ["schedule", "add", self.name, "--days", ",".join(names), "--from", frm, "--to", to, *flags, *yes]
+        self.window.run(["schedule", "remove", self.name, str(index + 1)], then=lambda _o: self.window.run(add))
+
+    def edit_window(self, index):
+        windows = self.windows()
+        if index >= len(windows):
+            return
+        w = windows[index]
+        if w.get("source"):
+            self.from_schedule(w)
+            return
+        dialog = Gtk.Dialog(title="Window", transient_for=self.window, modal=True)
+        dialog.add_button("Remove", 3)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Save", Gtk.ResponseType.OK)
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(12)
+        days_row, checks = Gtk.Box(spacing=6), {}
+        for column in range(7):
+            day = column_day(column)
+            bit = 1 << ((day + 1) % 7)
+            check = Gtk.CheckButton(label=DAY_NAMES[day].capitalize(), active=bool(w["days"] & bit))
+            checks[bit] = check
+            days_row.pack_start(check, False, False, 0)
+        box.pack_start(dim("Tick more days to copy the window to them."), False, False, 0)
+        box.pack_start(days_row, False, False, 0)
+        times = Gtk.Box(spacing=6)
+        start = Gtk.Entry(text=clock_text(w["start"]), width_chars=5)
+        end = Gtk.Entry(text="24:00" if w["end"] >= 1440 else clock_text(w["end"]), width_chars=5)
+        for widget in (Gtk.Label(label="From"), start, Gtk.Label(label="to"), end):
+            times.pack_start(widget, False, False, 0)
+        box.pack_start(times, False, False, 0)
+        self.dialog = (checks, start, end)  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        days = sum(bit for bit, check in checks.items() if check.get_active())
+        frm, to = start.get_text().strip(), end.get_text().strip()
+        dialog.destroy()
+        if answer == 3:
+            if self.window.confirm("Remove this window?", "A change that weakens a locked block is refused.",
+                                   "Remove", destructive=True):
+                self.run(["schedule", "remove", self.name, str(index + 1)])
+            return
+        if answer != Gtk.ResponseType.OK:
+            return
+        new_start, new_end = parse_clock(frm), (1440 if to == "24:00" else parse_clock(to))
+        if new_start is None or new_end is None or new_start >= new_end:
+            self.window.message("Times are HH:MM, the start before the end, e.g. 09:00 and 17:00.",
+                                Gtk.MessageType.INFO)
+            return
+        if (days, new_start, new_end) != (w["days"], w["start"], w["end"]):
+            self.replace(index, {"days": days, "start": new_start, "end": new_end})
+
+    def set_setting(self, button, setting, value):
+        if self.updating or not button.get_active() or not self.name:
+            return
+        self.run(["automation", self.name, setting, value])
+
+    def apply_schedule(self, _button):
+        have = set(self.data.get("schedules") or [])
+        names = [s["name"] for s in self.window.state.get("schedules") or [] if s["name"] not in have]
+        if not names:
+            if self.window.confirm("No schedule to apply", "Make schedules such as Evening or Weekend on the "
+                                   "Schedules page, then apply them here.", "Open Schedules"):
+                self.window.stack.set_visible_child_name("schedules")
+            return
+        name = self.window.choose("Apply a schedule", "Its windows join these; changing it on the Schedules "
+                                  "page changes them too.", names)
+        if not name:
+            return
+        yes = self.monk_ok(f"the schedule {name}")
+        if yes is not None:
+            self.run(["schedule", "apply", self.name, name, *yes])
+
+    def add_place(self, _button):
+        place = self.place_combo.get_active_text()
+        if not place or not self.name:
+            return
+        yes = self.monk_ok(f"while the computer is at {place}")
+        if yes is not None:
+            self.run(["place", "rule", self.name, place, "on", *yes])
+
+    def chip(self, text, tooltip, remove):
+        chip = Gtk.Box(spacing=2)
+        chip.get_style_context().add_class("kc9k-pill")
+        chip.get_style_context().add_class("on")
+        chip.pack_start(Gtk.Label(label=text), False, False, 0)
+        x = Gtk.Button.new_from_icon_name("window-close-symbolic", Gtk.IconSize.MENU)
+        x.set_relief(Gtk.ReliefStyle.NONE)
+        x.set_tooltip_text(tooltip)
+        x.connect("clicked", lambda _b: remove())
+        chip.pack_start(x, False, False, 0)
+        return chip
+
+    # Showing it ---------------------------------------------------------
+    def show_data(self, name, data):
+        """data: a mode or schedule from gui-state."""
+        self.name, self.data = name, data or {}
+        windows = self.windows()
+        self.calendar.set_windows(windows)
+        self.total.set_text(schedule_summary(windows).split(" · ")[-1])
+        settings = self.data.get("automation") or {}
+        places = self.data.get("places") or []
+        if self.kind == "schedule":
+            used = (self.data.get("blocks") or []) + [f"mode {m}" for m in self.data.get("modes") or []]
+            self.summary.set_text("Used by " + ", ".join(used) + ": a change here changes them too; one that "
+                                  "weakens a locked block is refused." if used else
+                                  "Used by nothing yet: apply it to blocks and modes on their Schedule & "
+                                  "places.")
+        elif self.data.get("continuous"):
+            self.summary.set_text("No windows or places yet: add some below." if self.kind == "monk" else
+                                  "Continuous: its blocks are enabled whenever they are on. Add windows or "
+                                  "places below to switch them all by themselves.")
+        else:
+            by = " and ".join(p for p, has in (("its windows", windows), ("its places", places)) if has)
+            if self.kind == "monk":
+                self.summary.set_text(f"Monk mode runs while {by} have it on, once switched on.")
+            else:
+                self.summary.set_text(f"Automated: {by} turn its blocks {'off' if settings.get('default_on') else 'on'}.")
+        self.updating = True
+        if ("default", "enabled") in self.buttons:
+            self.buttons[("default", "enabled" if settings.get("default_on") else "disabled")].set_active(True)
+        if ("needs", "both") in self.buttons:
+            self.buttons[("needs", "both" if settings.get("need_both") else "either")].set_active(True)
+        self.updating = False
+        if self.kind == "schedule":
+            return
+        self.need_row.set_visible(bool(windows) and bool(places))
+        for child in self.applied.get_children():
+            self.applied.remove(child)
+        for sched in self.data.get("schedules") or []:
+            self.applied.pack_start(self.chip(sched, "Take this schedule off",
+                                              lambda s=sched: self.run(["schedule", "take-off", self.name, s])),
+                                    False, False, 0)
+        if not self.data.get("schedules"):
+            self.applied.pack_start(dim("none"), False, False, 0)
+        self.applied.show_all()
+        for child in self.place_box.get_children():
+            self.place_box.remove(child)
+        for place in places:
+            self.place_box.pack_start(self.chip(place, "Take this place off",
+                                                lambda p=place: self.run(["place", "rule", self.name, p, "off"])),
+                                      False, False, 0)
+        self.place_box.show_all()
+        saved = [p["name"] for p in self.window.state.get("places") or [] if p["name"] not in places]
+        chosen = self.place_combo.get_active_text()
+        self.place_combo.remove_all()
+        for p in saved:
+            self.place_combo.append_text(p)
+        if saved:
+            self.place_combo.set_active(saved.index(chosen) if chosen in saved else 0)
+
+
 class CircadianPage(Gtk.ScrolledWindow):
     """Settings that follow the time of day (§4.10). Reads 'kc9k circadian
     show --json'; every change runs a 'kc9k circadian' command. Nothing here
@@ -4541,6 +4874,8 @@ class Window(Gtk.ApplicationWindow):
         for name, title, icon, build in (
                 ("dashboard", "Overview", "go-home-symbolic", self.build_dashboard),
                 ("blocks", "Blocks", "action-unavailable-symbolic", self.build_blocks),
+                ("schedules", "Schedules", "x-office-calendar-symbolic", self.build_schedules_page),
+                ("places", "Places", "mark-location-symbolic", self.build_places_page),
                 ("clusters", "Clusters", "view-list-symbolic", self.build_clusters),
                 ("device", "Frozen Chicken", "weather-snow-symbolic", self.build_device),
                 ("stats", "Statistics", "x-office-presentation-symbolic", self.build_stats),
@@ -5048,6 +5383,8 @@ class Window(Gtk.ApplicationWindow):
             for area, update in (("dashboard", self.update_dashboard),
                                  ("blocks", self.update_block_list),
                                  ("clusters", self.update_clusters),
+                                 ("schedules", self.update_schedules_page),
+                                 ("places", self.update_places_page),
                                  ("device", self.update_device),
                                  ("stats", self.update_stats_setting),
                                  ("settings", self.update_settings)):
@@ -5065,6 +5402,183 @@ class Window(Gtk.ApplicationWindow):
     def build_circadian(self):
         self.circadian = CircadianPage(self)
         return self.circadian
+
+    # Schedules and places pages (§4.5; owner 2026-11-17) ---------------
+    def build_schedules_page(self):
+        scroll, box = page_box()
+        page_header(box, "Schedules", "Weekly windows kept outside blocks, such as Evening or Weekend. Apply "
+                    "them to blocks and modes; changing one here changes everything using it.",
+                    help="A block or mode can use any number of schedules beside its own windows (Apply "
+                         "schedule… on its Schedule & places). Where they overlap they count once. A change "
+                         "that weakens a locked block using the schedule is refused as a whole. Deleting a "
+                         "schedule leaves its windows to what used it, as its own.")
+        self.schedule_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.pack_start(self.schedule_cards, False, False, 0)
+        new = Gtk.Button(label="New schedule…", halign=Gtk.Align.START)
+        new.get_style_context().add_class("suggested-action")
+        new.connect("clicked", self.create_schedule)
+        box.pack_start(new, False, False, 0)
+        self.schedule_editor = AutomationEditor(self, "schedule")
+        self.schedule_editor_title = heading("", "medium")
+        self.schedule_editor_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, no_show_all=True)
+        self.schedule_editor_box.pack_start(self.schedule_editor_title, False, False, 0)
+        self.schedule_editor_box.pack_start(card(self.schedule_editor), False, False, 0)
+        box.pack_start(self.schedule_editor_box, False, False, 0)
+        self.shown_schedule, self.schedule_cards_shown = None, None
+        return scroll
+
+    def update_schedules_page(self):
+        schedules = self.state.get("schedules") or []
+        names = [sc["name"] for sc in schedules]
+        if self.shown_schedule not in names:
+            self.shown_schedule = names[0] if names else None
+        key = json.dumps(schedules, sort_keys=True) + str(self.shown_schedule)
+        if key != self.schedule_cards_shown:
+            self.schedule_cards_shown = key
+            for child in self.schedule_cards.get_children():
+                self.schedule_cards.remove(child)
+            for sc in schedules:
+                self.schedule_cards.pack_start(self.schedule_card(sc), False, False, 0)
+            if not schedules:
+                self.schedule_cards.pack_start(dim("No schedules yet. Make Evening, Weekend or Work hours "
+                                                   "once, then apply them to any block or mode."), False, False, 0)
+            self.schedule_cards.show_all()
+        chosen = next((sc for sc in schedules if sc["name"] == self.shown_schedule), None)
+        self.schedule_editor_box.set_visible(chosen is not None)
+        if chosen is not None:
+            self.schedule_editor_title.set_text(chosen["name"])
+            self.schedule_editor.show_all()
+            self.schedule_editor_title.show()
+            self.schedule_editor_box.get_children()[1].show()
+            self.schedule_editor.show_data(chosen["name"], chosen)
+
+    def schedule_card(self, sc):
+        name = sc["name"]
+        title = Gtk.Button(label=name, relief=Gtk.ReliefStyle.NONE, halign=Gtk.Align.START,
+                           tooltip_text="Show and change its windows")
+        title.get_style_context().add_class("kc9k-card-name")
+        title.connect("clicked", lambda _b: self.open_schedule(name))
+        top = Gtk.Box(spacing=10)
+        top.pack_start(title, False, False, 0)
+        more = Gtk.MenuButton(relief=Gtk.ReliefStyle.NONE, valign=Gtk.Align.CENTER, tooltip_text="More")
+        more.add(Gtk.Image.new_from_icon_name("view-more-symbolic", Gtk.IconSize.MENU))
+        menu = Gtk.Menu()
+        for label, action in (("Rename…", lambda: self.rename_schedule(name)),
+                              ("Delete…", lambda: self.delete_schedule(name))):
+            item = Gtk.MenuItem(label=label)
+            item.connect("activate", lambda _i, a=action: a())
+            menu.append(item)
+        menu.show_all()
+        more.set_popup(menu)
+        top.pack_end(more, False, False, 0)
+        if name == self.shown_schedule:
+            top.pack_end(pill("Shown below", "on"), False, False, 0)
+        used = (sc.get("blocks") or []) + [f"mode {m}" for m in sc.get("modes") or []]
+        lines = [dim(schedule_summary(sc.get("windows") or [])),
+                 dim("Used by " + ", ".join(used) if used else "Not used yet")]
+        return card(top, *lines, spacing=4)
+
+    def open_schedule(self, name):
+        self.shown_schedule = name
+        self.stack.set_visible_child_name("schedules")
+        self.schedule_cards_shown = None
+        self.update_schedules_page()
+
+    def create_schedule(self, _button):
+        name = self.ask_text("New schedule", "A name, such as Evening or Weekend. Then give it windows below.")
+        if name:
+            self.run(["schedule", "create", name], then=lambda _o: self.open_schedule(name))
+
+    def rename_schedule(self, name):
+        new = self.ask_text("Rename the schedule", initial=name)
+        if new and new != name:
+            self.run(["schedule", "rename", name, new], then=lambda _o: self.open_schedule(new))
+
+    def delete_schedule(self, name):
+        if self.confirm(f"Delete the schedule {name}?", "Blocks and modes using it keep its windows as their "
+                        "own: nothing they block changes.", "Delete", destructive=True):
+            self.run(["schedule", "delete", name])
+
+    def build_places_page(self):
+        scroll, box = page_box()
+        page_header(box, "Places", "Where the computer is, known by the Wi-Fi networks in range. Blocks and "
+                    "modes are switched by being at one.",
+                    help="A place is the set of Wi-Fi networks in range when you save it: yours and the "
+                         "neighbours'. The computer is there when as many of them as you choose are in range "
+                         "again. Add places to a block or mode on its Schedule & places. Needing more networks "
+                         "makes a place harder to recognise: refused while a block using it is locked. With "
+                         "no network seen, places count as whatever keeps their blocks enabled.")
+        save = Gtk.Button(label="Save where I am now as…", halign=Gtk.Align.START)
+        save.get_style_context().add_class("suggested-action")
+        save.connect("clicked", lambda _b: self.save_place_alone())
+        box.pack_start(save, False, False, 0)
+        self.place_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.pack_start(self.place_cards, False, False, 0)
+        self.place_cards_shown = None
+        return scroll
+
+    def update_places_page(self):
+        places = self.state.get("places") or []
+        key = json.dumps(places, sort_keys=True)
+        if key == self.place_cards_shown:
+            return
+        self.place_cards_shown = key
+        for child in self.place_cards.get_children():
+            self.place_cards.remove(child)
+        for p in places:
+            self.place_cards.pack_start(self.place_card(p), False, False, 0)
+        if not places:
+            self.place_cards.pack_start(dim("No places yet. Save where the computer is now: home, the "
+                                            "library, work."), False, False, 0)
+        self.place_cards.show_all()
+
+    def place_card(self, p):
+        name = p["name"]
+        top = Gtk.Box(spacing=10)
+        title = Gtk.Label(label=name, xalign=0)
+        title.get_style_context().add_class("kc9k-card-name")
+        top.pack_start(title, False, False, 0)
+        if p.get("here"):
+            top.pack_start(pill("You are here", "on"), False, False, 0)
+        more = Gtk.MenuButton(relief=Gtk.ReliefStyle.NONE, valign=Gtk.Align.CENTER, tooltip_text="More")
+        more.add(Gtk.Image.new_from_icon_name("view-more-symbolic", Gtk.IconSize.MENU))
+        menu = Gtk.Menu()
+        for label, action in (("Add the networks in range now", lambda: self.run(["place", "add", name], timeout=60)),
+                              ("Remove…", lambda: self.remove_place(name))):
+            item = Gtk.MenuItem(label=label)
+            item.connect("activate", lambda _i, a=action: a())
+            menu.append(item)
+        menu.show_all()
+        more.set_popup(menu)
+        top.pack_end(more, False, False, 0)
+        need_row = Gtk.Box(spacing=6)
+        need_row.pack_start(Gtk.Label(label="There when", valign=Gtk.Align.START, margin_top=6), False, False, 0)
+        need = NumberField(p.get("need", 2), 1, max(p.get("networks", 1), 1), width=4)
+        need_row.pack_start(need, False, False, 0)
+        need_row.pack_start(Gtk.Label(label=f"of its {p.get('networks', 0)} networks are in range",
+                                      valign=Gtk.Align.START, margin_top=6), False, False, 0)
+        need_save = Gtk.Button(label="Save", valign=Gtk.Align.START)
+        need_save.connect("clicked", lambda _b: self.run(["place", "need", name, str(need.get_value_as_int())]))
+        guard_button(need_save, need)
+        need_row.pack_start(need_save, False, False, 0)
+        modes = p.get("modes") or []
+        mode_blocks = {b for m in self.state.get("modes") or [] if m["name"] in modes for b in m.get("blocks") or []}
+        used = [b for b in p.get("blocks") or [] if b not in mode_blocks] + [f"mode {m}" for m in modes]
+        return card(top, flow_row(need_row), dim("Used by " + ", ".join(used) if used else
+                                                 "Not used yet: add it to a block or mode on its Schedule & places."),
+                    spacing=6)
+
+    def remove_place(self, name):
+        if self.confirm(f"Forget the place {name}?", "Blocks and modes using it lose it: refused while that "
+                        "weakens a locked block.", "Remove", destructive=True):
+            self.run(["place", "remove", name])
+
+    def save_place_alone(self):
+        """Saves the networks in range as a place, for no block."""
+        name = self.ask_text("Save this place", "A name for where the computer is now, such as home or library. "
+                             "Saving under a name that exists adds the networks seen now.")
+        if name:
+            self.run(["place", "add", name], timeout=60, then=lambda out: self.message(out, Gtk.MessageType.INFO))
 
     def page_changed(self, *_args):
         row = getattr(self, "nav_rows", {}).get(self.stack.get_visible_child_name())
@@ -5103,7 +5617,8 @@ class Window(Gtk.ApplicationWindow):
 
     def locked(self, area):
         # The Clusters page belongs to the Blocks area.
-        return self.access.get({"clusters": "blocks", "circadian": "settings"}.get(area, area)) == "locked"
+        return self.access.get({"clusters": "blocks", "schedules": "blocks", "places": "blocks",
+                                "circadian": "settings"}.get(area, area)) == "locked"
 
     def update_covers(self):
         app_locked = self.access.get("app") == "locked"
@@ -5644,8 +6159,35 @@ class Window(Gtk.ApplicationWindow):
         for child in self.auto_need_row.get_children():
             child.show_all()
         self.auto_need_row.set_no_show_all(True)
+        # R-MODE-1 (owner 2026-11-17): a block in a mode has the mode's
+        # automation; it is changed on the mode.
+        self.block_mode_bar = Gtk.Box(spacing=8, no_show_all=True)
+        self.block_mode_label = Gtk.Label(xalign=0, wrap=True)
+        self.block_mode_bar.pack_start(self.block_mode_label, True, True, 0)
+        open_mode = Gtk.Button(label="Open the mode")
+        open_mode.connect("clicked", lambda _b: self.open_mode((self.blocks.get(self.selected) or {}).get("mode")))
+        take_out = Gtk.Button(label="Take it out")
+        take_out.set_tooltip_text("It keeps the automation it has, and is changed here again")
+        take_out.connect("clicked", lambda _b: self.selected and self.take_out_of_mode(self.selected))
+        self.block_mode_bar.pack_start(open_mode, False, False, 0)
+        self.block_mode_bar.pack_start(take_out, False, False, 0)
+        for child in self.block_mode_bar.get_children():
+            child.show()
+        schedule.pack_start(self.block_mode_bar, False, False, 0)
+        # §3.6 Schedule: schedules kept outside blocks, applied here.
+        applied_row = Gtk.Box(spacing=6)
+        applied_row.pack_start(Gtk.Label(label="Schedules:"), False, False, 0)
+        self.block_applied = Gtk.Box(spacing=6)
+        applied_row.pack_start(self.block_applied, False, False, 0)
+        apply_button = Gtk.Button(label="Apply schedule…")
+        apply_button.set_tooltip_text("Evening, Weekend…: made on the Schedules page; changing it there "
+                                      "changes this block too")
+        apply_button.connect("clicked", self.apply_schedule_to_block)
+        applied_row.pack_start(apply_button, False, False, 0)
+        applied_flow = flow_row(applied_row)
+        self.block_auto_widgets = [default_row, self.auto_need_row, applied_flow]
         schedule.pack_start(section(
-            "Automation", self.auto_summary, default_row, self.auto_need_row,
+            "Automation", self.auto_summary, default_row, self.auto_need_row, applied_flow,
             help="While the block is on, its windows (below) and its places (further down; as many as "
                  "you like) switch it by themselves. Disabled by default: they turn it on, and it is "
                  "lifted otherwise. Enabled by default: they turn it off, and it is enabled otherwise. "
@@ -5670,6 +6212,7 @@ class Window(Gtk.ApplicationWindow):
                       "with Start). With a schedule lock (below) it "
                       "can't be weakened during its windows and for a lead time before them.")
         schedule.pack_start(self.schedules, True, True, 0)
+        self.block_auto_widgets += [self.calendar, self.schedules]
         # §3.6 autostart: rules that switch the block on by itself.
         self.autostarts = EditableList(
             "Autostart", "at 08:00 mon-fri",
@@ -5709,7 +6252,7 @@ class Window(Gtk.ApplicationWindow):
             "switched off. A longer lead time is always allowed; a shorter one or off is refused "
             "while the lock is on."), False, False, 0)
         flow_row(lock_row)
-        flow_row(preset_row)
+        self.block_auto_widgets.append(flow_row(preset_row))
         schedule_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
         schedule_scroll.add(schedule)
         tabs.append_page(schedule_scroll, Gtk.Label(label="Schedule & places"))
@@ -5740,7 +6283,9 @@ class Window(Gtk.ApplicationWindow):
         save_place = Gtk.Button(label="Save where I am now as…")
         save_place.connect("clicked", self.save_place)
         pick_row.pack_start(save_place, False, False, 0)
-        places.pack_start(flow_row(pick_row), False, False, 0)
+        pick_flow = flow_row(pick_row)
+        places.pack_start(pick_flow, False, False, 0)
+        self.block_auto_widgets.append(pick_flow)
         # §3.6: how many of the place's networks must be in range.
         need_row = Gtk.Box(spacing=6)
         need_row.pack_start(Gtk.Label(label="There when", valign=Gtk.Align.START, margin_top=6), False, False, 0)
@@ -5765,6 +6310,7 @@ class Window(Gtk.ApplicationWindow):
                 child.set_no_show_all(True)
                 child.hide()
         places.pack_start(self.place_rules, True, True, 0)
+        self.block_auto_widgets.append(self.place_rules)
         self.places_label = dim("")
         places.pack_start(self.places_label, False, False, 0)
         schedule.pack_start(Gtk.Separator(margin_top=8, margin_bottom=4), False, False, 0)
@@ -5812,37 +6358,63 @@ class Window(Gtk.ApplicationWindow):
         self.blocks_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
         self.blocks_stack.add_named(self.build_block_cards(), "cards")
         self.blocks_stack.add_named(paned, "detail")
+        self.blocks_stack.add_named(self.build_mode_view(), "mode")
         return self.blocks_stack
 
     def build_block_cards(self):
         scroll, box = page_box()
-        page_header(box, "Blocks", "What each block blocks, what switches it, its breaks and its locks.")
+        page_header(box, "Blocks", "What each block blocks, what switches it, its breaks and its locks. "
+                    "Drag a block onto a mode to automate it with the mode's blocks.")
+        # §4.2 modes (owner 2026-11-17): on the same page, above the blocks.
+        self.mode_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.pack_start(section(
+            "Modes", self.mode_cards, plain=True,
+            help="A mode is a group of blocks with one automation for all of them: one schedule and "
+                 "places switch them together. Drag a block onto a mode to put it in (it then has the "
+                 "mode's automation), or use ⋯ on its card. Monk mode is a mode too: give it windows or "
+                 "places and switch it on, and it runs then by itself."), False, False, 0)
         self.block_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.block_cards_shown = None
-        box.pack_start(self.block_cards, False, False, 0)
-        new = Gtk.Button(label="New block…", halign=Gtk.Align.START)
+        box.pack_start(section("Blocks", self.block_cards, plain=True), False, False, 0)
+        buttons = Gtk.Box(spacing=8)
+        new = Gtk.Button(label="New block…")
         new.get_style_context().add_class("suggested-action")
         new.connect("clicked", self.create_block)
-        box.pack_start(new, False, False, 0)
+        buttons.pack_start(new, False, False, 0)
+        new_mode = Gtk.Button(label="New mode…")
+        new_mode.connect("clicked", self.create_mode)
+        buttons.pack_start(new_mode, False, False, 0)
+        box.pack_start(buttons, False, False, 0)
         return scroll
 
     def update_block_cards(self):
-        """One card per block (drafts stay with their block): its name, an
-        on/off switch, continuous or automated, its breaks, its locks."""
+        """One card per block (drafts stay with their block, blocks in a
+        mode are inside it): its name, an on/off switch, continuous or
+        automated, its breaks, its locks; above them one card per mode."""
         blocks = [b for b in self.state.get("blocks", []) if not b.get("draft_of")]
+        modes = self.state.get("modes") or []
         shown = [(b["name"], b["active"], b.get("held"), b.get("continuous"), breaks_words(b), lock_words(b),
-                  b.get("enabled")) for b in blocks]
+                  b.get("enabled"), b.get("mode")) for b in blocks] + [json.dumps(modes, sort_keys=True)]
+        if self.blocks_stack.get_visible_child_name() == "mode":
+            self.update_mode_view()
         if shown == self.block_cards_shown:
             return
         self.block_cards_shown = shown
-        for child in self.block_cards.get_children():
-            self.block_cards.remove(child)
-        for b in blocks:
+        self.card_switches = {}
+        for child in self.block_cards.get_children() + self.mode_cards.get_children():
+            child.get_parent().remove(child)
+        for m in modes:
+            self.mode_cards.pack_start(self.mode_card(m), False, False, 0)
+        loose = [b for b in blocks if not b.get("mode")]
+        for b in loose:
             self.block_cards.pack_start(self.block_card(b), False, False, 0)
         if not blocks:
             self.block_cards.pack_start(dim("No blocks yet. A block holds what to block, when, and how it holds."),
                                         False, False, 0)
+        elif not loose:
+            self.block_cards.pack_start(dim("Every block is in a mode."), False, False, 0)
         self.block_cards.show_all()
+        self.mode_cards.show_all()
 
     def block_card(self, block):
         name = block["name"]
@@ -5884,10 +6456,315 @@ class Window(Gtk.ApplicationWindow):
         links.pack_end(link(lock_words(block), "changes-prevent-symbolic" if block.get("held") else
                             "changes-allow-symbolic", "Unlock it" if block.get("held") else "Add locks",
                             lambda: self.card_locks(name)), False, False, 0)
+        # §4.2 (owner 2026-11-17): dragged onto a mode it goes in; the ⋯
+        # menu does the same from the keyboard (R-GUI-3).
+        for widget in (title,):
+            widget.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, [BLOCK_TARGET], Gdk.DragAction.MOVE)
+            widget.drag_source_set_icon_name("view-list-symbolic")
+            widget.connect("drag-data-get", lambda _w, _c, data, _i, _t: data.set(data.get_target(), 8, name.encode()))
+        more = Gtk.MenuButton(relief=Gtk.ReliefStyle.NONE, valign=Gtk.Align.CENTER, tooltip_text="More")
+        more.add(Gtk.Image.new_from_icon_name("view-more-symbolic", Gtk.IconSize.MENU))
+        menu = Gtk.Menu()
+        modes = [m["name"] for m in self.state.get("modes") or [] if not m.get("monk")]
+        for mode in modes:
+            if mode != block.get("mode"):
+                item = Gtk.MenuItem(label=f"Move to the mode {mode}")
+                item.connect("activate", lambda _i, m=mode: self.move_to_mode(name, m))
+                menu.append(item)
+        if block.get("mode"):
+            item = Gtk.MenuItem(label=f"Take it out of {block['mode']}")
+            item.connect("activate", lambda _i: self.take_out_of_mode(name))
+            menu.append(item)
+        if not menu.get_children():
+            item = Gtk.MenuItem(label="Make a mode to put it in…")
+            item.connect("activate", lambda _i: self.create_mode(None, name))
+            menu.append(item)
+        menu.show_all()
+        more.set_popup(menu)
+        top.pack_end(more, False, False, 0)
         box = card(top, links, spacing=6)
         if not block["active"]:
             box.get_style_context().add_class("kc9k-block-off")
         return box
+
+    # Modes (§3.2, §3.8, §4.2; owner 2026-11-17) -------------------------
+    def mode_card(self, mode):
+        """A mode on the Blocks page: its name (opens it), its switch, what
+        switches it, its blocks; blocks dropped on it go in."""
+        name = mode["name"]
+        title = Gtk.Button(label=name, relief=Gtk.ReliefStyle.NONE, halign=Gtk.Align.START,
+                           tooltip_text="Open the mode")
+        title.get_style_context().add_class("kc9k-card-name")
+        title.connect("clicked", lambda _b: self.open_mode(name))
+        icon = Gtk.Image.new_from_icon_name("weather-clear-night-symbolic" if mode.get("monk") else
+                                            "view-grid-symbolic", Gtk.IconSize.LARGE_TOOLBAR)
+        top = Gtk.Box(spacing=10)
+        top.pack_start(icon, False, False, 0)
+        top.pack_start(title, False, False, 0)
+        switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        blocks = mode.get("blocks") or []
+        if mode.get("monk"):
+            switch.set_active(bool(mode.get("active")))
+            running = mode.get("running")
+            switch.set_sensitive(not running and (bool(mode.get("active")) or not mode.get("continuous")))
+            switch.set_tooltip_text("Running: it ends only at its time" if running else
+                                    "Give it windows or places first" if mode.get("continuous") else
+                                    "Let its windows and places run it" if not mode.get("active") else
+                                    "Stop its windows and places from running it")
+            left = mode.get("monk_left") or 0
+            state_text = (f"Running, {fmt_seconds(left)} left" if left else
+                          "On: runs by itself" if mode.get("active") else "Off")
+        else:
+            on, total = mode.get("on", 0), len(blocks)
+            switch.set_active(total > 0 and on == total)
+            switch.set_sensitive(total > 0)
+            switch.set_tooltip_text("Switch its blocks off (locked ones stay on)" if on == total and total else
+                                    "Switch its blocks on (without locks)")
+            state_text = ("No blocks yet" if not total else "On" if on == total else "Off" if not on else
+                          f"{on} of {total} on")
+        switch.connect("state-set", self.toggle_mode_card, mode)
+        state = Gtk.Label(label=state_text)
+        state.get_style_context().add_class("dim-label")
+        top.pack_end(switch, False, False, 0)
+        top.pack_end(state, False, False, 0)
+        if mode.get("monk"):
+            what = ("No windows or places: starts only for a time" if mode.get("continuous") else
+                    "Automated: " + (", ".join(mode.get("schedules") or []) or schedule_summary(mode.get("windows") or [])
+                                     .split(" · ")[0] or "") + (" · at " + ", ".join(mode["places"]) if mode.get("places") else ""))
+        else:
+            what = ("Continuous" if mode.get("continuous") else "Automated") + " · " + (
+                f"{len(blocks)} {'block' if len(blocks) == 1 else 'blocks'}: {', '.join(blocks)}" if blocks else
+                "drag blocks here")
+            if mode.get("locked"):
+                what += f" · {mode['locked']} locked"
+        line = Gtk.Button(label=what, relief=Gtk.ReliefStyle.NONE, halign=Gtk.Align.START,
+                          tooltip_text="Open the mode: its blocks and what switches them")
+        line.get_style_context().add_class("kc9k-link")
+        line.connect("clicked", lambda _b: self.open_mode(name))
+        box = card(top, line, spacing=6)
+        if not mode.get("monk"):
+            box.drag_dest_set(Gtk.DestDefaults.ALL, [BLOCK_TARGET], Gdk.DragAction.MOVE)
+            box.connect("drag-data-received",
+                        lambda _w, _c, _x, _y, data, _i, _t: self.move_to_mode(data.get_data().decode(), name))
+        return box
+
+    def create_mode(self, _button, block=None):
+        name = self.ask_text("New mode", "A name, such as Evening or Work. Then drag blocks onto it; one "
+                             "schedule and places switch them together.")
+        if not name:
+            return
+        if block:
+            self.run(["mode", "create", name], then=lambda _o: self.move_to_mode(block, name))
+        else:
+            self.run(["mode", "create", name], then=lambda _o: self.open_mode(name))
+
+    def move_to_mode(self, block, mode):
+        """R-MODE-1: the block gets the mode's automation (refused if that
+        weakens it while it is locked)."""
+        if not block or block not in self.blocks:
+            return
+        if self.blocks[block].get("mode") == mode:
+            return
+        if self.confirm(f"Put {block} into {mode}?",
+                        f"It then has the mode's automation: its own windows and places give way to "
+                        f"{mode}'s. Taken out later, it keeps the mode's.", "Put it in"):
+            self.block_cards_shown = None
+            self.run(["mode", "add", mode, block])
+
+    def take_out_of_mode(self, block):
+        self.block_cards_shown = None
+        self.run(["mode", "take-out", block])
+
+    def toggle_mode_card(self, switch, wanted, mode):
+        if self.updating:
+            return False
+        self.block_cards_shown = None
+        if mode.get("monk") and wanted:
+            if not self.confirm_lock([f"monk mode, run by its windows and places: no websites and no internet "
+                                      f"then, and it can't be switched off while it runs"]):
+                return True
+            self.run(["mode", "on", mode["name"], "--yes"])
+        else:
+            self.run(["mode", "on" if wanted else "off", mode["name"]])
+        return True
+
+    def find_mode(self, name):
+        for m in (self.state or {}).get("modes") or []:
+            if m["name"] == name:
+                return m
+        return None
+
+    def open_mode(self, name):
+        self.shown_mode = name
+        # Made a moment ago: the state that has it is on its way.
+        self.mode_wait = None if self.find_mode(name) else name
+        self.stack.set_visible_child_name("blocks")
+        self.blocks_stack.set_visible_child_name("mode")
+        self.update_mode_view()
+
+    def build_mode_view(self):
+        scroll, box = page_box()
+        back = Gtk.Button(label="← All blocks", halign=Gtk.Align.START, relief=Gtk.ReliefStyle.NONE)
+        back.get_style_context().add_class("kc9k-link")
+        back.connect("clicked", lambda _b: self.blocks_stack.set_visible_child_name("cards"))
+        box.pack_start(back, False, False, 0)
+        head = Gtk.Box(spacing=10)
+        self.mode_title = Gtk.Label(xalign=0)
+        self.mode_title.get_style_context().add_class("kc9k-page-title")
+        head.pack_start(self.mode_title, False, False, 0)
+        self.mode_menu = Gtk.MenuButton(relief=Gtk.ReliefStyle.NONE, valign=Gtk.Align.CENTER, tooltip_text="More")
+        self.mode_menu.add(Gtk.Image.new_from_icon_name("view-more-symbolic", Gtk.IconSize.MENU))
+        menu = Gtk.Menu()
+        for label, action in (("Rename…", self.rename_mode), ("Delete…", self.delete_mode)):
+            item = Gtk.MenuItem(label=label)
+            item.connect("activate", lambda _i, a=action: a())
+            menu.append(item)
+        menu.show_all()
+        self.mode_menu.set_popup(menu)
+        head.pack_end(self.mode_menu, False, False, 0)
+        box.pack_start(head, False, False, 0)
+        self.mode_status = dim("")
+        box.pack_start(self.mode_status, False, False, 0)
+        # A mode of blocks: its blocks as cards.
+        self.mode_block_cards = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        add = Gtk.Button(label="Add blocks…", halign=Gtk.Align.START)
+        add.connect("clicked", self.add_blocks_to_mode)
+        self.mode_blocks_section = section(
+            "Its blocks", self.mode_block_cards, add, plain=True,
+            help="They share the mode's automation below: changing it changes all of them, and a change "
+                 "that weakens one of them while it is locked is refused for all. Each keeps its own lists, "
+                 "apps, breaks and locks. ⋯ on a card takes it out; it keeps the automation it has.")
+        box.pack_start(self.mode_blocks_section, False, False, 0)
+        # Monk mode: what it is, and starting it for a time.
+        self.mode_monk_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.mode_monk_box.pack_start(dim(
+            "Every website is blocked and the internet connection is cut (Wi-Fi off, Ethernet down, firewall "
+            "closed). Give it windows or places below and switch it on: it then runs in them by itself, "
+            "and can't be switched off while it runs (it ends at the window's end, or when you leave). "
+            "While its places decide, Wi-Fi stays on to see where you are; the firewall still cuts it."),
+            False, False, 0)
+        monk_now = Gtk.Button(label="Start now for a time…", halign=Gtk.Align.START)
+        monk_now.connect("clicked", self.monk_mode)
+        self.mode_monk_box.pack_start(monk_now, False, False, 0)
+        box.pack_start(self.mode_monk_box, False, False, 0)
+        self.mode_editors = Gtk.Stack()
+        self.mode_editor = AutomationEditor(self, "mode")
+        self.monk_editor = AutomationEditor(self, "monk")
+        self.mode_editors.add_named(self.mode_editor, "mode")
+        self.mode_editors.add_named(self.monk_editor, "monk")
+        box.pack_start(section(
+            "Automation", self.mode_editors,
+            help="Its windows (its own, and those of schedules applied to it) and its places. Disabled by "
+                 "default: they turn its blocks on, and they are lifted otherwise; enabled by default: they "
+                 "turn them off. With windows and places, either or both at once. Monk mode is always "
+                 "disabled by default."), False, False, 0)
+        self.shown_mode = None
+        return scroll
+
+    def update_mode_view(self):
+        mode = self.find_mode(getattr(self, "shown_mode", None))
+        if mode is None and getattr(self, "mode_wait", None) == getattr(self, "shown_mode", None):
+            return
+        if mode is None:
+            self.blocks_stack.set_visible_child_name("cards")
+            return
+        self.mode_wait = None
+        monk = bool(mode.get("monk"))
+        self.mode_title.set_text(mode["name"])
+        self.mode_menu.set_visible(not monk)
+        self.mode_blocks_section.set_visible(not monk)
+        self.mode_monk_box.set_visible(monk)
+        if monk:
+            left = mode.get("monk_left") or 0
+            self.mode_status.set_text(
+                (f"Running, {fmt_seconds(left)} left. " if left else "") +
+                ("Switched on: its windows and places run it." if mode.get("active") else
+                 "Switched off: its windows and places don't run it (switch it on on its card)."))
+        else:
+            blocks = mode.get("blocks") or []
+            self.mode_status.set_text(f"{mode.get('on', 0)} of {len(blocks)} blocks on" +
+                                      (f", {mode['locked']} locked" if mode.get("locked") else "") + "."
+                                      if blocks else "No blocks yet: drag blocks onto its card, or add them here.")
+            shown = json.dumps([self.blocks.get(b) for b in blocks], sort_keys=True)
+            if getattr(self, "mode_blocks_shown", None) != (mode["name"], shown):
+                self.mode_blocks_shown = (mode["name"], shown)
+                for child in self.mode_block_cards.get_children():
+                    self.mode_block_cards.remove(child)
+                for b in blocks:
+                    if b in self.blocks:
+                        self.mode_block_cards.pack_start(self.block_card(self.blocks[b]), False, False, 0)
+                self.mode_block_cards.show_all()
+        editor = self.monk_editor if monk else self.mode_editor
+        self.mode_editors.set_visible_child(editor)
+        editor.show_data(mode["name"], mode)
+
+    def add_blocks_to_mode(self, _button):
+        mode = getattr(self, "shown_mode", None)
+        names = [n for n, b in self.blocks.items() if not b.get("draft_of") and b.get("mode") != mode]
+        if not mode or not names:
+            self.message("Every block is in this mode already.", Gtk.MessageType.INFO)
+            return
+        dialog = Gtk.Dialog(title=f"Add blocks to {mode}", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Add", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(12)
+        box.pack_start(dim("They get the mode's automation; their own windows and places give way to it."),
+                       False, False, 0)
+        checks = {}
+        for n in names:
+            other = self.blocks[n].get("mode")
+            checks[n] = Gtk.CheckButton(label=n + (f" (now in {other})" if other else ""))
+            box.pack_start(checks[n], False, False, 0)
+        ok.set_sensitive(False)
+        for check in checks.values():
+            check.connect("toggled", lambda _c: ok.set_sensitive(any(c.get_active() for c in checks.values())))
+        self.mode_add_dialog = (dialog, checks)  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        chosen = [n for n, c in checks.items() if c.get_active()]
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and chosen:
+            self.mode_blocks_shown = None
+            self.run(["mode", "add", mode, *chosen])
+
+    def rename_mode(self):
+        mode = getattr(self, "shown_mode", None)
+        name = mode and self.ask_text("Rename the mode", initial=mode)
+        if name and name != mode:
+            self.run(["mode", "rename", mode, name], then=lambda _o: setattr(self, "shown_mode", name))
+
+    def delete_mode(self):
+        mode = getattr(self, "shown_mode", None)
+        if mode and self.confirm(f"Delete the mode {mode}?", "Its blocks stay, with the automation they "
+                                 "have now.", "Delete", destructive=True):
+            self.blocks_stack.set_visible_child_name("cards")
+            self.run(["mode", "delete", mode])
+
+    def choose(self, title, detail, names):
+        """One of names, picked in a dialog; None when cancelled."""
+        dialog = Gtk.Dialog(title=title, transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("OK", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(12)
+        if detail:
+            box.pack_start(dim(detail), False, False, 0)
+        combo = Gtk.ComboBoxText()
+        for n in names:
+            combo.append_text(n)
+        combo.set_active(0)
+        box.pack_start(combo, False, False, 0)
+        self.choose_dialog = (dialog, combo)  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        value = combo.get_active_text()
+        dialog.destroy()
+        return value if answer == Gtk.ResponseType.OK else None
 
     def open_block(self, name, tab=None):
         """Opens a block on the Blocks page, at a tab when given."""
@@ -6174,6 +7051,28 @@ class Window(Gtk.ApplicationWindow):
         self.title_triggers.set_actions(block["name"], triggers.get("titles", [{"name": "close"}]))
         self.schedules.set_items(block["schedules"])
         self.update_automation(block)
+        in_mode = block.get("mode")
+        self.block_mode_bar.set_visible(bool(in_mode))
+        self.block_mode_label.set_text(f"In the mode {in_mode}: it has the mode's automation, changed on the "
+                                       f"mode for all its blocks." if in_mode else "")
+        for widget in self.block_auto_widgets:
+            widget.set_sensitive(not in_mode)
+        for child in self.block_applied.get_children():
+            self.block_applied.remove(child)
+        for sched in block.get("applied_schedules") or []:
+            chip = Gtk.Box(spacing=2)
+            chip.get_style_context().add_class("kc9k-pill")
+            chip.get_style_context().add_class("on")
+            chip.pack_start(Gtk.Label(label=sched), False, False, 0)
+            x = Gtk.Button.new_from_icon_name("window-close-symbolic", Gtk.IconSize.MENU)
+            x.set_relief(Gtk.ReliefStyle.NONE)
+            x.set_tooltip_text("Take this schedule off the block")
+            x.connect("clicked", lambda _b, sc=sched, b=block["name"]: self.run(["schedule", "take-off", b, sc]))
+            chip.pack_start(x, False, False, 0)
+            self.block_applied.pack_start(chip, False, False, 0)
+        if not block.get("applied_schedules"):
+            self.block_applied.pack_start(dim("none"), False, False, 0)
+        self.block_applied.show_all()
         self.autostarts.set_items(block.get("autostarts") or [])
         others = [w for other in self.state.get("blocks", []) if other["name"] != block["name"]
                   for w in other.get("schedule_windows") or [] if not w.get("allow")]
@@ -6787,8 +7686,31 @@ class Window(Gtk.ApplicationWindow):
 
     def move_window_from_calendar(self, index, days, start, end):
         windows = (self.blocks.get(self.selected) or {}).get("schedule_windows") or []
-        if index < len(windows):
+        if index < len(windows) and windows[index].get("source"):
+            self.window_from_schedule(windows[index])
+        elif index < len(windows):
             self.replace_window(index, days, start, end, windows[index].get("allow", False))
+
+    def window_from_schedule(self, w):
+        """§3.6: a window from a schedule is changed on the Schedules page."""
+        if self.confirm(f"This window comes from the schedule {w['source']}",
+                        "Change it on the Schedules page (that changes everything using it), or take the "
+                        "schedule off this block under Automation.", "Open Schedules"):
+            self.open_schedule(w["source"])
+
+    def apply_schedule_to_block(self, _button):
+        block = self.blocks.get(self.selected) or {}
+        have = set(block.get("applied_schedules") or [])
+        names = [sc["name"] for sc in self.state.get("schedules") or [] if sc["name"] not in have]
+        if not names:
+            if self.confirm("No schedule to apply", "Make schedules such as Evening or Weekend on the "
+                            "Schedules page, then apply them here.", "Open Schedules"):
+                self.stack.set_visible_child_name("schedules")
+            return
+        name = self.choose("Apply a schedule", "Its windows join the block's; changing the schedule on the "
+                           "Schedules page changes them too.", names)
+        if name and self.selected:
+            self.run(["schedule", "apply", self.selected, name])
 
     def edit_window_from_calendar(self, index):
         """§4.5: click a window to change its days (copy to days) and times,
@@ -6798,6 +7720,9 @@ class Window(Gtk.ApplicationWindow):
         if not block or index >= len(windows):
             return
         w = windows[index]
+        if w.get("source"):
+            self.window_from_schedule(w)
+            return
         dialog = Gtk.Dialog(title="Window", transient_for=self, modal=True)
         dialog.add_button("Remove", 3)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)

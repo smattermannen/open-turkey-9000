@@ -60,8 +60,23 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
       `TestModeBlocksShareAutomation`, `TestMonkModeAutomation`,
       `TestMonkAutomationWindow`, `TestMonkAutomationPlace`,
       `TestModes`. Not yet in projects (export/import).
-    - [ ] GUI: modes among the block cards (drag a block in), the mode's
-      view, Schedules and Places pages in the sidebar.
+    - [x] GUI: modes among the block cards above the blocks (monk mode
+      always first; a block card dragged onto a mode goes in, or its ⋯
+      menu "Move to the mode…"; blocks in a mode show only in its view),
+      the mode's view (its blocks as cards, Add blocks…, Rename/Delete,
+      its automation: `AutomationEditor` with grid, presets, Apply
+      schedule…, places; monk mode: Start now for a time…), Schedules and
+      Places pages in the sidebar (cards with what uses each; a schedule's
+      grid; Save where I am now as…, networks needed, "You are here"). A
+      block's Schedule & places: Apply schedule… with its schedules as
+      chips, windows from a schedule drawn dashed with its name (a click
+      offers the Schedules page), and in a mode its automation greyed out
+      with Open the mode / Take it out. `ci/gui_modes_smoke.py`; the
+      click-everything, cards, automation and places smoke tests pass
+      (the automation one expected the wording from before 2026-11-16's
+      "its place turns it": fixed). Drag and drop itself: Unchecked (the
+      test calls the drop handler; Xvfb has no pointer to drag with). On
+      a real screen: Unchecked.
 
 - [x] **Owner 2026-11-16: automation and the block list (TOP PRIORITY).**
   Built the same day; on the laptop: Unchecked.

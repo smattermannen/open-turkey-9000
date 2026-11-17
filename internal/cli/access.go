@@ -71,6 +71,7 @@ var commandAreas = map[string][]string{
 	"project":       {areaSettings},
 	"record":        {areaBlocks},
 	"schedule":      {areaBlocks},
+	"mode":          {areaDashboard, areaBlocks},
 	"pending":       {areaBlocks},
 	"quota":         {areaBlocks},
 	"allowance":     {areaBlocks},
@@ -489,7 +490,10 @@ func (s *guiState) hideLocked() {
 		s.Blocks = nil
 	}
 	if !open(areaBlocks) {
-		s.Clusters, s.Recording, s.Places = nil, nil, nil
+		s.Clusters, s.Recording, s.Places, s.Schedules = nil, nil, nil, nil
+	}
+	if !open(areaDashboard, areaBlocks) {
+		s.Modes = nil
 	}
 	if !open(areaDashboard) {
 		s.MonkSeconds = 0
@@ -507,6 +511,12 @@ func (s *guiState) hideLocked() {
 	// The interface expects these to be present.
 	if s.Blocks == nil {
 		s.Blocks = []guiBlock{}
+	}
+	if s.Modes == nil {
+		s.Modes = []guiMode{}
+	}
+	if s.Schedules == nil {
+		s.Schedules = []guiSchedule{}
 	}
 	if s.FreezeSched == nil {
 		s.FreezeSched = []string{}

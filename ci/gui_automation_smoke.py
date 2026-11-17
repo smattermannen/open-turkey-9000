@@ -83,7 +83,7 @@ r = cli("place", "rule", "b", "home", "on"); assert r.returncode == 0, r.stderr
 settle()
 check("its places turn it on" in win.auto_summary.get_text(), "places turn it on: " + win.auto_summary.get_text())
 win.auto_buttons[("default", "enabled")].set_active(True); settle()
-check(state()["automation"]["default_on"] and "turn it off" in automation(), "Enabled by default clicked: " + automation())
+check(state()["automation"]["default_on"] and "it off (enabled by default)" in automation(), "Enabled by default clicked: " + automation())
 check("its places turn it off" in win.auto_summary.get_text(), "the summary follows: " + win.auto_summary.get_text())
 
 # A window drawn on the grid follows the default: it turns the block off.

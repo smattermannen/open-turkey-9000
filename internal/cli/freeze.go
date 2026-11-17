@@ -89,6 +89,35 @@ type guiWin struct {
 	End   int   `json:"end"`
 	Allow bool  `json:"allow"`
 	Break int64 `json:"break,omitempty"` // §3.6: seconds of its one break
+	// Source names the schedule (§3.6) the window comes from; "" for its
+	// own.
+	Source string `json:"source,omitempty"`
+}
+
+// guiSchedule is a schedule kept outside blocks (§3.6), for the Schedules
+// page: its windows and what uses it.
+type guiSchedule struct {
+	Name    string   `json:"name"`
+	Windows []guiWin `json:"windows"`
+	Blocks  []string `json:"blocks"` // blocks using it, not through a mode
+	Modes   []string `json:"modes"`
+}
+
+// guiMode is a mode (§3.2, §3.8) for the Blocks page.
+type guiMode struct {
+	Name       string                `json:"name"`
+	Monk       bool                  `json:"monk"`
+	Active     bool                  `json:"active"` // monk mode: its automation runs it
+	Blocks     []string              `json:"blocks"`
+	Windows    []guiWin              `json:"windows"` // its own and its schedules', numbered as 'schedule list'
+	Schedules  []string              `json:"schedules"`
+	Places     []string              `json:"places"`
+	Automation db.AutomationSettings `json:"automation"`
+	Continuous bool                  `json:"continuous"`
+	Running    bool                  `json:"running"`   // monk mode: its automation runs it now
+	On         int                   `json:"on"`        // its blocks switched on
+	Locked     int                   `json:"locked"`    // its blocks locked
+	MonkLeft   int64                 `json:"monk_left"` // monk mode: seconds it runs on
 }
 
 // guiList is one website list for the interface.
@@ -124,59 +153,63 @@ type guiBlock struct {
 	Triggers map[string][]db.TriggerAction `json:"triggers"`
 	// Automation (§3.6): its default and both/either; continuous without
 	// windows or places.
-	Automation        db.AutomationSettings `json:"automation"`
-	Continuous        bool                  `json:"continuous"`
-	Name              string                `json:"name"`
-	Lists             []guiList             `json:"lists"`
-	PhraseSets        []guiPhraseSet        `json:"phrase_sets"`
-	Apps              []string              `json:"apps"`
-	Titles            []string              `json:"titles"`
-	Nepsis            db.Nepsis             `json:"nepsis"`
-	NepsisCount       int                   `json:"nepsis_count"`
-	Schedules         []string              `json:"schedules"`
-	Windows           []guiWin              `json:"schedule_windows"`
-	Users             []string              `json:"users"` // §3.2; empty: every account
-	Active            bool                  `json:"active"`
-	Held              bool                  `json:"held"`
-	CharLocked        bool                  `json:"char_locked"`
-	PomodoroOn        int64                 `json:"pomodoro_on"`
-	PomodoroOff       int64                 `json:"pomodoro_off"`
-	PomodoroLong      int64                 `json:"pomodoro_long"`
-	PomodoroEvery     int64                 `json:"pomodoro_every"`
-	OnBreak           bool                  `json:"on_break"`
-	Password          bool                  `json:"password_locked"`
-	Restart           bool                  `json:"restart_locked"`
-	Delay             int64                 `json:"delay_seconds"`
-	StopSeconds       int64                 `json:"stop_seconds"`
-	DelayLeft         int64                 `json:"delay_left"`            // the delay lock unlocks in this many seconds, once asked
-	LockOrder         []string              `json:"lock_order,omitempty"`  // locks on, in unlock order (R-LOCK-6)
-	TimerAfter        int64                 `json:"timer_after,omitempty"` // a timer lock's seconds, counted once the locks before it are unlocked
-	RangeLock         string                `json:"range_lock,omitempty"`  // §3.4, e.g. "mon,tue 09:00-17:00"
-	RangeOn           bool                  `json:"range_on,omitempty"`
-	Scheduled         bool                  `json:"scheduled"`                // has windows or a place rule (§3.3)
-	HasPassword       bool                  `json:"block_password,omitempty"` // §3.11
-	DraftOf           string                `json:"draft_of,omitempty"`       // §4.3: this is a draft of that block
-	Draft             string                `json:"draft,omitempty"`          // §4.3: this block's draft
-	TodayWindows      []string              `json:"today_windows,omitempty"`  // §4.1: windows still to come or open today
-	Autostarts        []string              `json:"autostarts"`               // §3.6
-	Hidden            bool                  `json:"hidden,omitempty"`         // contents left out until revealed
-	Lifted            bool                  `json:"lifted"`                   // active, but its windows or places lift it now
-	Enabled           bool                  `json:"enabled"`                  // §3.3: active and enforcing now
-	LockSeconds       int64                 `json:"lock_seconds"`
-	QuotaLimit        int64                 `json:"quota_limit"`
-	QuotaUsed         int64                 `json:"quota_used"`
-	QuotaOpen         bool                  `json:"quota_open"`
-	QuotaNext         int64                 `json:"quota_next"`
-	QuotaPeriod       string                `json:"quota_period,omitempty"`        // "" day, week, month (§3.6)
-	QuotaRefill       string                `json:"quota_refill,omitempty"`        // HH:MM
-	QuotaSessions     int                   `json:"quota_sessions,omitempty"`      // §3.6 session limit (0: none)
-	QuotaSessionsUsed int                   `json:"quota_sessions_used,omitempty"` // this period
-	KeywordTest       bool                  `json:"keyword_test"`
-	Places            []string              `json:"places"`
-	LoosenDelay       int64                 `json:"loosen_delay"`
-	ScheduleLock      bool                  `json:"schedule_lock"`
-	ScheduleLead      int                   `json:"schedule_lead"` // minutes
-	Social            []string              `json:"social"`
+	Automation db.AutomationSettings `json:"automation"`
+	Continuous bool                  `json:"continuous"`
+	// Mode is the mode it is in (§3.2; its automation is the mode's),
+	// AppliedSchedules the schedules it uses (§3.6).
+	Mode              string         `json:"mode"`
+	AppliedSchedules  []string       `json:"applied_schedules"`
+	Name              string         `json:"name"`
+	Lists             []guiList      `json:"lists"`
+	PhraseSets        []guiPhraseSet `json:"phrase_sets"`
+	Apps              []string       `json:"apps"`
+	Titles            []string       `json:"titles"`
+	Nepsis            db.Nepsis      `json:"nepsis"`
+	NepsisCount       int            `json:"nepsis_count"`
+	Schedules         []string       `json:"schedules"`
+	Windows           []guiWin       `json:"schedule_windows"`
+	Users             []string       `json:"users"` // §3.2; empty: every account
+	Active            bool           `json:"active"`
+	Held              bool           `json:"held"`
+	CharLocked        bool           `json:"char_locked"`
+	PomodoroOn        int64          `json:"pomodoro_on"`
+	PomodoroOff       int64          `json:"pomodoro_off"`
+	PomodoroLong      int64          `json:"pomodoro_long"`
+	PomodoroEvery     int64          `json:"pomodoro_every"`
+	OnBreak           bool           `json:"on_break"`
+	Password          bool           `json:"password_locked"`
+	Restart           bool           `json:"restart_locked"`
+	Delay             int64          `json:"delay_seconds"`
+	StopSeconds       int64          `json:"stop_seconds"`
+	DelayLeft         int64          `json:"delay_left"`            // the delay lock unlocks in this many seconds, once asked
+	LockOrder         []string       `json:"lock_order,omitempty"`  // locks on, in unlock order (R-LOCK-6)
+	TimerAfter        int64          `json:"timer_after,omitempty"` // a timer lock's seconds, counted once the locks before it are unlocked
+	RangeLock         string         `json:"range_lock,omitempty"`  // §3.4, e.g. "mon,tue 09:00-17:00"
+	RangeOn           bool           `json:"range_on,omitempty"`
+	Scheduled         bool           `json:"scheduled"`                // has windows or a place rule (§3.3)
+	HasPassword       bool           `json:"block_password,omitempty"` // §3.11
+	DraftOf           string         `json:"draft_of,omitempty"`       // §4.3: this is a draft of that block
+	Draft             string         `json:"draft,omitempty"`          // §4.3: this block's draft
+	TodayWindows      []string       `json:"today_windows,omitempty"`  // §4.1: windows still to come or open today
+	Autostarts        []string       `json:"autostarts"`               // §3.6
+	Hidden            bool           `json:"hidden,omitempty"`         // contents left out until revealed
+	Lifted            bool           `json:"lifted"`                   // active, but its windows or places lift it now
+	Enabled           bool           `json:"enabled"`                  // §3.3: active and enforcing now
+	LockSeconds       int64          `json:"lock_seconds"`
+	QuotaLimit        int64          `json:"quota_limit"`
+	QuotaUsed         int64          `json:"quota_used"`
+	QuotaOpen         bool           `json:"quota_open"`
+	QuotaNext         int64          `json:"quota_next"`
+	QuotaPeriod       string         `json:"quota_period,omitempty"`        // "" day, week, month (§3.6)
+	QuotaRefill       string         `json:"quota_refill,omitempty"`        // HH:MM
+	QuotaSessions     int            `json:"quota_sessions,omitempty"`      // §3.6 session limit (0: none)
+	QuotaSessionsUsed int            `json:"quota_sessions_used,omitempty"` // this period
+	KeywordTest       bool           `json:"keyword_test"`
+	Places            []string       `json:"places"`
+	LoosenDelay       int64          `json:"loosen_delay"`
+	ScheduleLock      bool           `json:"schedule_lock"`
+	ScheduleLead      int            `json:"schedule_lead"` // minutes
+	Social            []string       `json:"social"`
 	// Breaks: the allowance (seconds per BreakPer of blocking), what is
 	// earned, the relock time, and how long the block is lifted for now.
 	BreakAllowance int64  `json:"break_allowance"`
@@ -253,6 +286,8 @@ type guiPlace struct {
 	Networks int      `json:"networks"`
 	Need     int      `json:"need"`   // networks needed in range (§3.6)
 	Blocks   []string `json:"blocks"` // blocks on there
+	Modes    []string `json:"modes"`  // modes using it (their blocks are in Blocks too)
+	Here     bool     `json:"here"`   // the computer is there now
 }
 
 type guiState struct {
@@ -310,6 +345,8 @@ type guiState struct {
 	Clusters      []guiCluster      `json:"clusters"`
 	Recording     *guiRecording     `json:"recording"`
 	Places        []guiPlace        `json:"places"`
+	Modes         []guiMode         `json:"modes"`     // §3.2, §3.8 (owner 2026-11-17)
+	Schedules     []guiSchedule     `json:"schedules"` // §3.6 schedules kept outside blocks
 	SocialPresets []db.SocialPreset `json:"social_presets"`
 	Access        map[string]string `json:"access"`
 	AccessUnused  []int             `json:"access_unused"`
@@ -504,14 +541,35 @@ var guiStateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		modes, err := database.Modes()
+		if err != nil {
+			return err
+		}
+		saved, err := database.SavedSchedules()
+		if err != nil {
+			return err
+		}
 		state.Places = []guiPlace{}
+		var seen []db.Network
+		if len(places) > 0 {
+			seen, _ = enforce.ScanWifi(false)
+		}
 		for _, p := range places {
 			blocks := p.Blocks
 			if blocks == nil {
 				blocks = []string{}
 			}
-			state.Places = append(state.Places, guiPlace{Name: p.Name, Networks: len(p.Networks), Need: p.Needed(), Blocks: blocks})
+			g := guiPlace{Name: p.Name, Networks: len(p.Networks), Need: p.Needed(), Blocks: blocks, Modes: []string{},
+				Here: len(seen) > 0 && enforce.AtPlace(p, seen)}
+			for _, m := range modes {
+				if slices.Contains(m.Spec.Places, p.ID) {
+					g.Modes = append(g.Modes, m.Name)
+				}
+			}
+			state.Places = append(state.Places, g)
 		}
+		state.Schedules = guiSchedules(database, saved, modes)
+		state.Modes = guiModes(database, saved, modes, places, now, trusted)
 		lifted := enforce.ScheduleLifted(database, now)
 		enabled := enforce.EnabledNames(database, trusted)
 		for _, b := range blocks {
@@ -585,7 +643,17 @@ var guiStateCmd = &cobra.Command{
 			for _, s := range schedules {
 				g.Schedules = append(g.Schedules, s.Window().String())
 				w := s.Window()
-				g.Windows = append(g.Windows, guiWin{Days: w.Days, Start: w.Start, End: w.End, Allow: w.Allow, Break: s.Break})
+				g.Windows = append(g.Windows, guiWin{Days: w.Days, Start: w.Start, End: w.End, Allow: w.Allow, Break: s.Break,
+					Source: savedName(saved, s.Source)})
+			}
+			g.Mode, g.AppliedSchedules = "", []string{}
+			if m, in, _ := database.ModeOf(b.Name); in {
+				g.Mode = m.Name
+			}
+			if spec, err := database.BlockAutomationSpec(b.Name); err == nil {
+				for _, id := range spec.Schedules {
+					g.AppliedSchedules = append(g.AppliedSchedules, savedName(saved, id))
+				}
 			}
 			g.Password, g.Restart, g.Delay = hold.passwordHash != "", hold.restartLocked, hold.extras.Delay
 			g.LockOrder = hold.layers
@@ -698,4 +766,82 @@ func init() {
 	_ = freezeCmd.MarkFlagRequired("for")
 	guiStateCmd.Flags().StringArray("reveal", nil, "Show a block with a block password (its password on stdin)")
 	rootCmd.AddCommand(freezeCmd, guiStateCmd)
+}
+
+// savedName returns the name of the schedule with id, "" for 0.
+func savedName(saved []db.SavedSchedule, id int) string {
+	for _, s := range saved {
+		if s.ID == id {
+			return s.Name
+		}
+	}
+	return ""
+}
+
+// guiWins turns windows into the interface's, with where each comes from.
+func guiWins(saved []db.SavedSchedule, rows []db.SourcedWindow, allow bool) []guiWin {
+	out := []guiWin{}
+	for _, r := range rows {
+		out = append(out, guiWin{Days: r.Days, Start: r.Start, End: r.End, Allow: allow, Source: savedName(saved, r.Source)})
+	}
+	return out
+}
+
+// guiSchedules describes the schedules kept outside blocks.
+func guiSchedules(database *db.DB, saved []db.SavedSchedule, modes []db.Mode) []guiSchedule {
+	out := []guiSchedule{}
+	for _, s := range saved {
+		g := guiSchedule{Name: s.Name, Windows: []guiWin{}, Blocks: []string{}, Modes: []string{}}
+		for _, w := range s.Windows {
+			g.Windows = append(g.Windows, guiWin{Days: w.Days, Start: w.Start, End: w.End})
+		}
+		blocks, ids, _ := database.ScheduleUsers(s.ID)
+		for _, m := range modes {
+			if slices.Contains(ids, m.ID) {
+				g.Modes = append(g.Modes, m.Name)
+			}
+		}
+		for _, b := range blocks {
+			if _, in, _ := database.ModeOf(b); !in {
+				g.Blocks = append(g.Blocks, b)
+			}
+		}
+		out = append(out, g)
+	}
+	return out
+}
+
+// guiModes describes the modes: monk mode first.
+func guiModes(database *db.DB, saved []db.SavedSchedule, modes []db.Mode, places []db.Place, now time.Time, trusted int64) []guiMode {
+	out := []guiMode{}
+	for _, m := range modes {
+		a, rows := m.Spec.Automation(saved)
+		g := guiMode{Name: m.Name, Monk: m.Monk, Active: m.Active, Blocks: append([]string{}, m.Blocks...),
+			Windows: guiWins(saved, rows, m.Spec.DefaultOn), Schedules: []string{}, Places: []string{},
+			Automation: m.Spec.AutomationSettings, Continuous: a.Continuous()}
+		for _, id := range m.Spec.Schedules {
+			g.Schedules = append(g.Schedules, savedName(saved, id))
+		}
+		for _, p := range places {
+			if slices.Contains(m.Spec.Places, p.ID) {
+				g.Places = append(g.Places, p.Name)
+			}
+		}
+		for _, b := range m.Blocks {
+			if on, _ := database.IsBlockActive(b); on {
+				g.On++
+			}
+			if hold, err := blockHold(database, b, now); err == nil && hold.held() {
+				g.Locked++
+			}
+		}
+		if m.Monk {
+			g.Running = m.Active && enforce.MonkAutomationOn(database, now)
+			if end := enforce.MonkEnd(database, trusted); end > 0 {
+				g.MonkLeft = end - trusted
+			}
+		}
+		out = append(out, g)
+	}
+	return out
 }

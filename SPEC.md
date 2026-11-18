@@ -72,7 +72,7 @@ In short: everything Cold Turkey does, plus user-shaped bypass prevention,
 more triggers and actions, several lists per block, layered sequential
 locks, project export, monk mode, lockable SafeSearch, circadian rhythm.
 
-After the Android app: Windows support. No public release.
+After the Android app: Windows support.
 
 ## 2. Principles
 
@@ -313,7 +313,7 @@ mode unless no-escape is on.
 | allowance (earned time) | reward |
 | session break | session limit |
 | option, browser option | behaviour setting, browser setting |
-| nepsis, bypass detection | bypass prevention (*Nepsis* becomes the app name at publishing) |
+| nepsis, bypass detection | bypass prevention |
 | rule (for block/list) | block, list, entry ("rule" only for rule IDs, place rules, the `rules` feed) |
 | blocklist | blacklist |
 | word combination, page word, keyword | phrase, rendered term |
@@ -622,7 +622,7 @@ Decisions not already written into §1–5:
 - 2026-11-18: An Index at the top of this file for navigation; it adds no rules (owner).
 - 2026-11-18: The clock check (§4.10 tamper protection) may ask internet time: an outside query the owner agreed to (principle 6).
 - 2026-11-18: SafeSearch is lockable per engine: Google, Bing, DuckDuckGo and YouTube are each their own browser setting (§4.10).
-- 2026-11-18: No public release. When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
+- 2026-11-18: When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
 
 ## 7. Open decisions
 

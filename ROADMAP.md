@@ -882,7 +882,7 @@ Only items not simply Built.
   type it).
 - **2.8** Everything else Not built/Partial in §1.
 
-## 3. Testers and Android (owner 2026-11-18: no public release)
+## 3. Testers and Android (owner 2026-11-18)
 
 When §0–§2 are done: the owner's brothers test KC9K on their computers
 while the Android app is built (its §0 items, `android/CLAUDE.md`).

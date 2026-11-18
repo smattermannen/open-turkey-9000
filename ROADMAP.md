@@ -14,53 +14,55 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 
 One row per open item; find it with ``grep -n '`A3`' ROADMAP.md`` and
 read only that item. Needs: **agent** (code or scripts, cloud or test machine),
-**box** (the test machine: real browsers, root, daemon), **owner** (a
-person on the laptop, or the owner's decision). New items get the next ID
+**box** (an agent on the test machine: root, X11 desktop, real browsers,
+network, screenshots), **vm** (box, but in a VM with a snapshot: logout,
+shutdown, network cuts, strict mode, reboots), **owner** (only the owner:
+a decision, a verdict, or real hardware input). New items get the next ID
 of their group and a row here; a finished item loses its row.
 
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
-| A1 | `no-images` GIF drawn by a pseudo-element: run in LibreWolf, the owner's site | §3.9 | extension | box, owner |
+| A1 | `no-images` GIF drawn by a pseudo-element: run in LibreWolf, the owner's site | §3.9 | extension | box |
 | A2 | Looks from page text lifted on clicks: run `extras_test`/`browser_test` | §3.9 | extension | box |
 | A3 | `no-downloads` in Chrome | §3.9 | extension, browsers | box |
-| A4 | Brightness slider gone, night light off | §4.10 | circadian | owner |
-| A5 | Phrase editor save: confirm | §4.3, R-WEAK-5 | lists, gui | owner |
-| A6 | Locking an enabled block: confirm | R-LOCK-7 | locks, gui | owner |
+| A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
+| A5 | Phrase editor save: confirm | §4.3, R-WEAK-5 | lists, gui | box |
+| A6 | Locking an enabled block: confirm | R-LOCK-7 | locks, gui | box |
 | A7 | Phrase editor UI awkward: owner's specifics | §4.3 | gui, lists | owner |
-| A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box, owner |
+| A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A9 | GUI redesign: owner's verdict | R-GUI-3 | gui | owner |
 | A10 | Lock model: hardware/internet clock check (needs agreement, §5) | §3.4, §4.10 | locks | owner |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
-| A12 | R-LOCK-12: a person clicks Lock and Cancel | R-LOCK-12 | hotkeys, locks | owner |
+| A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
 | B1 | Notification before an allowance session ends (script it) | §3.6 | allowance, hotkeys | agent, box |
-| B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | box |
-| B3 | Strict mode holes | §3.8 | device | box |
-| B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | box |
-| B5 | Rendered terms on real sites; hotkeys on real keyboards, GNOME | §3.1, §4.13 | extension, hotkeys | owner |
-| B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | owner |
-| B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | box, owner |
-| B8 | Use counting with a person | §3.7 | allowance | owner |
-| B9 | Mute and dark on real sites; polite close with a real app | §3.9 | extension, apps-titles | owner |
+| B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
+| B3 | Strict mode holes | §3.8 | device | vm |
+| B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | vm |
+| B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
+| B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | box |
+| B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
+| B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
+| B9 | Mute and dark on real sites; polite close with a real app | §3.9 | extension, apps-titles | box |
 | B10 | No-video on a real embedded player | §3.9 | extension | box |
-| B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | owner |
-| B12 | Chrome on the laptop: popup, extension can't be removed | §3.13 | browsers | owner |
+| B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
+| B12 | Chrome: popup, extension can't be removed | §3.13 | browsers | box |
 | B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
-| B14 | Monk mode live (`ci/monk_live_test.sh` unwritten), reboot mid-way | R-MONK-2 | device | agent, box |
-| B15 | GUI design pass on a real screen | R-GUI-3 | gui | owner |
-| B16 | New list dialog on a real screen | §3.2 | gui, lists | owner |
-| B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | owner |
-| 2.1 | Circadian on real hardware | §4.10 | circadian | box, owner |
+| B14 | Monk mode live (`ci/monk_live_test.sh` unwritten), reboot mid-way | R-MONK-2 | device | agent, vm |
+| B15 | GUI design pass on a real screen (screenshots; owner's verdict after) | R-GUI-3 | gui | box, owner |
+| B16 | New list dialog on a real screen | §3.2 | gui, lists | box |
+| B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
+| 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
 | 2.4 | SafeSearch: a lock per engine, if wanted | §4.10 | browsers | owner |
 | 2.5 | Several locks of one kind | §3.4 | locks | agent |
-| 2.6 | Factory reset protection | §4.10 | device | agent, box |
+| 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| C1–C3 | Release: build without devmaster, cleanup, tag | §4.11 | install | owner |
+| C1–C2 | Build without devmaster; cleanup | §4.11 | install | agent |
+| C3 | Tagged release | §4.11 | install | owner |
 
-Done, awaiting the owner's check on the laptop: §0.1 *Owner report
-2026-11-17 (later)*, *Owner report 2026-11-17*, *Owner 2026-11-16*, and
-the items above marked owner.
+Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
+(later)*, *Owner report 2026-11-17*, *Owner 2026-11-16*.
 
 ## 0. Fix what exists
 

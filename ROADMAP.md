@@ -10,6 +10,58 @@ then §2.
 Status: Built, Partial, Differs (built unlike SPEC), Not built, Unchecked.
 Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 
+## Index
+
+One row per open item; find it with ``grep -n '`A3`' ROADMAP.md`` and
+read only that item. Needs: **agent** (code or scripts, cloud or test machine),
+**box** (the test machine: real browsers, root, daemon), **owner** (a
+person on the laptop, or the owner's decision). New items get the next ID
+of their group and a row here; a finished item loses its row.
+
+| ID | Item | SPEC | Notes | Needs |
+|---|---|---|---|---|
+| A1 | `no-images` GIF drawn by a pseudo-element: run in LibreWolf, the owner's site | §3.9 | extension | box, owner |
+| A2 | Looks from page text lifted on clicks: run `extras_test`/`browser_test` | §3.9 | extension | box |
+| A3 | `no-downloads` in Chrome | §3.9 | extension, browsers | box |
+| A4 | Brightness slider gone, night light off | §4.10 | circadian | owner |
+| A5 | Phrase editor save: confirm | §4.3, R-WEAK-5 | lists, gui | owner |
+| A6 | Locking an enabled block: confirm | R-LOCK-7 | locks, gui | owner |
+| A7 | Phrase editor UI awkward: owner's specifics | §4.3 | gui, lists | owner |
+| A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box, owner |
+| A9 | GUI redesign: owner's verdict | R-GUI-3 | gui | owner |
+| A10 | Lock model: hardware/internet clock check (needs agreement, §5) | §3.4, §4.10 | locks | owner |
+| A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
+| A12 | R-LOCK-12: a person clicks Lock and Cancel | R-LOCK-12 | hotkeys, locks | owner |
+| B1 | Notification before an allowance session ends (script it) | §3.6 | allowance, hotkeys | agent, box |
+| B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | box |
+| B3 | Strict mode holes | §3.8 | device | box |
+| B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | box |
+| B5 | Rendered terms on real sites; hotkeys on real keyboards, GNOME | §3.1, §4.13 | extension, hotkeys | owner |
+| B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | owner |
+| B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | box, owner |
+| B8 | Use counting with a person | §3.7 | allowance | owner |
+| B9 | Mute and dark on real sites; polite close with a real app | §3.9 | extension, apps-titles | owner |
+| B10 | No-video on a real embedded player | §3.9 | extension | box |
+| B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | owner |
+| B12 | Chrome on the laptop: popup, extension can't be removed | §3.13 | browsers | owner |
+| B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
+| B14 | Monk mode live (`ci/monk_live_test.sh` unwritten), reboot mid-way | R-MONK-2 | device | agent, box |
+| B15 | GUI design pass on a real screen | R-GUI-3 | gui | owner |
+| B16 | New list dialog on a real screen | §3.2 | gui, lists | owner |
+| B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | owner |
+| 2.1 | Circadian on real hardware | §4.10 | circadian | box, owner |
+| 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
+| 2.4 | SafeSearch: a lock per engine, if wanted | §4.10 | browsers | owner |
+| 2.5 | Several locks of one kind | §3.4 | locks | agent |
+| 2.6 | Factory reset protection | §4.10 | device | agent, box |
+| 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
+| 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
+| C1–C3 | Release: build without devmaster, cleanup, tag | §4.11 | install | owner |
+
+Done, awaiting the owner's check on the laptop: §0.1 *Owner report
+2026-11-17 (later)*, *Owner report 2026-11-17*, *Owner 2026-11-16*, and
+the items above marked owner.
+
 ## 0. Fix what exists
 
 **Android is on hold until the Linux project is finished** (owner,
@@ -324,7 +376,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 
 - [ ] **Owner report 2026-11-15** (real use on the laptop; top priority).
   Status per item; check against the latest build before calling it fixed.
-  - [ ] `no-images` doesn't hide GIFs (§3.9 Look actions: animated GIFs
+  - [ ] `A1` `no-images` doesn't hide GIFs (§3.9 Look actions: animated GIFs
     included). Checked 2026-11-16 in LibreWolf (cloud container), from page
     text and from an address list: GIFs as `<img>`, `<picture>`, inline
     `background-image … !important`, `<input type=image>`, inside a shadow
@@ -339,7 +391,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     content, !important, shadow root, added later, text kept, a
     20,000-element page without long tasks) passes. Not run in LibreWolf
     yet; confirm the owner's case on the laptop (which site?). S
-  - [ ] Looks from page text (greyscale, no-images, no-video) unreliable
+  - [ ] `A2` Looks from page text (greyscale, no-images, no-video) unreliable
     and lifted for a moment on every click inside a site (§3.9; owner
     2026-11-15). Causes found: `render` forgot the page's looks on a new
     address while `scanKeywords` thought the page already read, so a page
@@ -354,7 +406,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     roots included; bfcache pages read again. Extension 1.19.0. Not run in
     a browser here; confirm on the laptop (`ci/extras_test.py`,
     `ci/browser_test.py`). S
-  - [ ] `no-downloads` doesn't block downloads (§3.9). Checked 2026-11-16
+  - [ ] `A3` `no-downloads` doesn't block downloads (§3.9). Checked 2026-11-16
     in LibreWolf: a link on the page, a file from another host (only the
     origin as referrer) and a file the page makes itself (`blob:`) are all
     cancelled (`ci/download_test.py`, four cases). Likely cause in Chrome:
@@ -362,7 +414,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     forbid downloads (each page reports once). Fixed in 1.21.0: the pages
     are kept in session storage; a download that finishes before it can be
     cancelled has its file removed. Unchecked in Chrome (not run here). S
-  - [ ] Desktop brightness slider gone from the menu; blue-light filter
+  - [ ] `A4` Desktop brightness slider gone from the menu; blue-light filter
     toggles on and off; desktop night light turns itself off while its
     switch shows on, **also with circadian off and strict mode off** (§4.10
     circadian: must leave the desktop's controls working, off touches
@@ -383,7 +435,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     (Strict lockdown's polkit rule also blocks the backlight helper and
     colord, which breaks the same controls while strict mode is on; fix
     done.)
-  - [ ] Phrase editor: saving a change said the set has no such phrase
+  - [ ] `A5` Phrase editor: saving a change said the set has no such phrase
     (owner, again after the first fix: set 2's terms pasted into set 1 of a
     7-set phrase). Causes: phrases stored by older versions (migrated
     combinations, imports) differ from their shown form in case, spacing or
@@ -404,12 +456,12 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     `ci/gui_phrase_edit_smoke.py` (edit twice in a row, case-only edits,
     old stored rows, refresh and rename mid-edit, unicode, 100 word sets,
     locked block, export/import). Confirm on the laptop.
-  - [ ] Locking an enabled block refused password, restart, delay, range
+  - [ ] `A6` Locking an enabled block refused password, restart, delay, range
     and word/own-text locks ("already active; … are set when it starts"),
     against R-LOCK-7. Fixed: `strengthenLocks` adds every kind last in the
     order given (`TestLockActiveBlock`). The GUI's lock dialog offers every
     kind on a running block too (merged 2026-11-16); confirm on the laptop.
-  - [ ] Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
+  - [ ] `A7` Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
   - [x] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
     none allowed; length ≥ 2. Built in `db.Phrase`, `match.js`, GUI.
   - [x] Lists and phrase sets may have no action (§3.9, changed
@@ -554,7 +606,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     (`parseUserDuration`), confirmations say "69 days 10 hours 40
     minutes". The monk mode button never passed `--yes`, so the CLI always
     refused it: now confirmed (R-LOCK-12) and run.
-  - [ ] No flashing (R-PAGE-1). Built (extension 1.20.0): while a list or
+  - [ ] `A8` No flashing (R-PAGE-1). Built (extension 1.20.0): while a list or
     phrase set could still act on the top page by its title or text (and no
     address exception spares it), the page is invisible (opacity 0, so it is
     still read) until judged: the first full read 500 ms after its document
@@ -567,7 +619,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
     now none. All browser suites pass in LibreWolf (run in a cloud
     container, 98 checks). Confirm on the laptop: Chrome, and real sites
     (a 0.5 s blank on pages while text lists are on). M
-  - [ ] GUI overall unclear, hard to read, not pretty or easy to use (owner,
+  - [ ] `A9` GUI overall unclear, hard to read, not pretty or easy to use (owner,
     2026-11-15; R-GUI-3). Redesign page by page. Done: a design layer
     (cards, status pills, page titles with one-line subtitles, ? popovers
     for long explanations, an icon sidebar); Overview rebuilt (status card
@@ -646,7 +698,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
   (`TestLockedScheduleAndAllowanceStrengthening`). The old `block.go`
   commands called `os.Exit`, so they couldn't be tested in-process: they
   return errors now (same message).
-- [ ] **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
+- [ ] `A10` **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
   (`kc9k schedule lock B on --lead D`) replaces built-in schedule/place
   protection, 2 h edit freeze and 24 h allow-window queue (upgrade gives
   scheduled/placed blocks a 2 h-lead schedule lock); freeze schedules have
@@ -689,7 +741,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
   3–5 ms (`ci/match_test.js`); in Chromium the page was held up at most
   12 ms at a time, 150 ms before (`ci/content_harness_test.js`, which
   fails on the old code). Extension 1.24.0. In LibreWolf: Unchecked.
-- [ ] **Gigantic URL lists** (principle 9). Extension: done (`kc9kIndex`,
+- [ ] `A11` **Gigantic URL lists** (principle 9). Extension: done (`kc9kIndex`,
   timed at 100,000 in `ci/match_test.js`). Firewall: done (nft sets,
   iptables fallback); the CLI no longer fills it (`deferFirewall`), the
   daemon does within a cycle with its 30 min lookup cache, so `start`
@@ -704,7 +756,7 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
   cap), at most 1,000 (`ChromiumPolicyLimit`, `TestChromiumPolicyLimit`);
   an allowlist past 1,000 exceptions blocks the rest in Chrome. Firefox
   and LibreWolf with 100,000 entries: Unchecked. (M)
-- [ ] **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
+- [ ] `A12` **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
   `project import` refuses monk steps/actions without `--no-confirm-ok`
   (`projectMonk`); both in `confirm_test.go`. `block import` the same. The
   hotkey press dialog (`blocker.ConfirmDesktop`) ran live on the laptop
@@ -717,40 +769,40 @@ Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
 
 Script-tested, never by a person. Script what can be into `ci/`.
 
-- [ ] Notification before an allowance session ends. (Not tried overnight:
+- [ ] `B1` Notification before an allowance session ends. (Not tried overnight:
   a test allowance could only be removed at midnight, leaving its block on;
   since 2026-11-16 it is removed at once, so this can be scripted.)
-- [ ] Scheduled Frozen Chicken in logout/shutdown modes.
-- [ ] Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
-- [ ] Shutdown mode and `kc9k.nofreeze`; measure fast relock.
-- [ ] Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
-- [ ] Websites tab on a real screen. (Address change without load: a
+- [ ] `B2` Scheduled Frozen Chicken in logout/shutdown modes.
+- [ ] `B3` Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
+- [ ] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock.
+- [ ] `B5` Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
+- [ ] `B6` Websites tab on a real screen. (Address change without load: a
   `history.pushState` page is caught by a URL list in LibreWolf,
   `extras_test.py`; on YouTube itself still Unchecked.)
-- [ ] One-off logout/shutdown from a list; Dashboard monk button. (Checked
+- [ ] `B7` One-off logout/shutdown from a list; Dashboard monk button. (Checked
   2026-11-15: a timer-locked global ladder refuses `bypass off` and a weaker
   ladder, and turns off once the lock ends.)
-- [ ] Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
-- [ ] Mute and dark on real sites; polite close with a real app.
-- [ ] No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
-- [ ] Social media settings beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
-- [ ] Chrome on the laptop. Checked 2026-11-15: the extension checks in from
+- [ ] `B8` Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
+- [ ] `B9` Mute and dark on real sites; polite close with a real app.
+- [ ] `B10` No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
+- [ ] `B11` Social media settings beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
+- [ ] `B12` Chrome on the laptop. Checked 2026-11-15: the extension checks in from
   Chrome and Chromium, both show the block page; the policy force-installs
   and pins it, turns off incognito, guest and developer mode. Left (needs
   a person): the popup, and that the extension really can't be removed in
   the Extensions page.
-- [ ] Block unsupported browsers (`kc9k tamper unsupported-browsers`).
+- [ ] `B13` Block unsupported browsers (`kc9k tamper unsupported-browsers`).
   Checked 2026-11-15: Firefox is closed within ~2 s with the reason logged;
   LibreWolf with the extension stays (browser_test); `kc9k browsers install
   chromium` installs Mint's chromium (`/usr/lib/chromium/chromium`, policy
   in `/etc/chromium/policies`) and works. Left: upgrade from
   `force-librewolf` keeping a lock; a portable LibreWolf.
-- [ ] Monk mode live (`ci/monk_live_test.sh` unwritten), incl. reboot mid-way.
-- [ ] GUI design pass: pages since 2026-11-10 never seen on a real screen.
-- [ ] Lists without types (§3.2): checked 2026-11-15: `H` and `test` have
+- [ ] `B14` Monk mode live (`ci/monk_live_test.sh` unwritten), incl. reboot mid-way.
+- [ ] `B15` GUI design pass: pages since 2026-11-10 never seen on a real screen.
+- [ ] `B16` Lists without types (§3.2): checked 2026-11-15: `H` and `test` have
   one `Blocked` each; `H` blocks reddit.com by address and a page by its
   text in LibreWolf. Left: the New list dialog on a real screen.
-- [ ] Active vs enabled on the laptop: checked 2026-11-15 with a throwaway
+- [ ] `B17` Active vs enabled on the laptop: checked 2026-11-15 with a throwaway
   block: off it stays out of /etc/hosts in its window; on, it is in /etc/hosts
   in its window, and outside it shows "lifted by its schedule" and leaves
   /etc/hosts. Left: the GUI's "lifted by its schedule now" on a real screen.
@@ -833,9 +885,9 @@ Only items not simply Built.
 
 ## 3. Before release
 
-- [ ] Build without `TAGS=devmaster`.
-- [ ] Remove `ci/vm.sh`; on the laptop remove `/etc/sudoers.d/99-claude-test`.
-- [ ] Tagged release.
+- [ ] `C1` Build without `TAGS=devmaster`.
+- [ ] `C2` Remove `ci/vm.sh`; on the laptop remove `/etc/sudoers.d/99-claude-test`.
+- [ ] `C3` Tagged release.
 
 ## 4. After publishing
 

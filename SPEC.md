@@ -10,6 +10,39 @@ Rules for this file:
 5. Rules (§5) have IDs; tests name the rule they prove.
 6. *CT: …* gives Cold Turkey's word.
 
+## Index
+
+Navigation only; the sections below hold the content. Read the sections
+for your topic, not the whole file: headings `## N.` and `### 3.N`,
+functions `- **4.N`, rules `- **R-…**` (`grep -n 'R-LOCK-6' SPEC.md`),
+decisions in §6 by date.
+
+| Topic | Read |
+|---|---|
+| Purpose, principles (speed: principle 9) | §1, §2 |
+| Glossary words to avoid | §3.14 |
+| Targets: sites, apps, window titles, files | §3.1, R-TITLE-1, R-DESKTOP-1 |
+| Blocks, lists, exceptions, matching | §3.1, §3.2, §4.2, §4.3, R-LIST-1–6 |
+| Phrase sets | §3.2, §4.3, R-PHRASE-1–10 |
+| Block states: active, enabled, lifted | §3.3 |
+| Locks | §3.4, §4.6, R-LOCK-1–12 |
+| Weakening, strengthening | §3.5, R-WEAK-1–5 |
+| Automation: schedules, places, modes | §3.2 Mode/Schedule, §3.6, §4.2 Modes, §4.5, R-SCHED-1–2, R-MODE-1–5 |
+| Breaks, allowance, Pomodoro, autostart, use | §3.6, §3.7, §4.7, R-SCHED-3, R-BREAK-1–2 |
+| Device: monk mode, Frozen Chicken, strict mode, no-escape | §3.8, §4.8, §4.10 Device protection, R-MONK-1–3, R-FREEZE-1–3, R-STRICT-1, R-ESCAPE-1 |
+| Actions, triggers, custom actions, warnings | §3.9, R-CUSTOM-1–2, R-WARN-1, R-MODE-4 |
+| Bypass prevention, events | §3.10, R-WARN-2, R-EVENT-1 |
+| Passwords | §3.11, §4.10 Passwords |
+| Recording, presets | §3.12, §4.4, R-LIST-2, R-PHRASE-10 |
+| The program: CLI, daemon, extension, browsers | §3.13, §4.10 Extension/Browsers/Tamper protection/Browser settings, §4.12, R-LOCK-9 |
+| Page behaviour in the browser | R-PAGE-1, R-LIST-4–5, R-PHRASE-4–8 |
+| Overview, statistics | §4.1, §4.9 |
+| Settings, notifications, circadian rhythm, wallpapers | §4.10, R-MODE-5 |
+| Install, uninstall | §4.11, R-LOCK-9 |
+| Hotkeys | §4.13 |
+| GUI rules | R-GUI-1–3 |
+| Decisions, open decisions | §6, §7 |
+
 ## 1. Vision
 
 Goal: control over one's digital life; break harmful habits (gaming, doom
@@ -586,6 +619,7 @@ Decisions not already written into §1–5:
 - 2026-11-17 (session, to confirm with the owner): wallpapers while the place isn't known. A mode switched by places shows none, and the wallpaper default shows in place of circadian rhythm's picture too when such a mode would override it (the home/school example); a mode by time alone still shows. The place is unknown at once at boot and after waking, otherwise after a minute without networks. With a picture or circadian rhythm as the default, it also goes on before the computer sleeps. The default's own picture is kept when another default is chosen. Importing a file whose custom actions open or run something asks first.
 - 2026-11-17 (session, to confirm with the owner): a mode is locked as its kind allows (R-MODE-3: a mode of blocks through its blocks' locks, monk mode and Frozen Chicken by a time); a Mode action runs its mode now for a time, locked, whatever its automation says (R-MODE-4), as the monk action and ladder step did.
 - 2026-11-17 (later): Frozen Chicken is a mode (no page of its own), up to a week. Monk mode is switched on and off like any mode; only locks keep it on, and modes take locks as blocks do. A **Mode action** switches a mode on and locks it as set, from any trigger (replaces the monk action and ladder step). A block keeps its own automation while in a mode and gets it back when taken out. Automation is opened from the block's menu. An opened block is always a draft until *Save edits*. Blocks and modes may share names. Clusters and templates become **presets** of every type, always copies; schedules stay shared. *Social preset* is renamed *social media setting*. YouTube playlists are let through by their address in an exception list (a separate box withdrawn): a plain exception can't do it safely, because YouTube plays any video with any `list=` added. **Custom actions** (open sites, files, folders, programs; commands) wherever actions are and for a mode becoming enabled; free commands, but never past a lock. Hotkeys get a page and run **hotkey actions**. Modes have wallpapers; circadian rhythm and modes override each other by one setting; a **wallpaper default** covers an unknown place.
+- 2026-11-18: An Index at the top of this file for navigation; it adds no rules (owner).
 
 ## 7. Open decisions
 

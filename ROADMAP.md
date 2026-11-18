@@ -55,7 +55,7 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| C1 | Build for the brothers' computers: with or without devmaster? | §4.11 | install | owner |
+| C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
 Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
@@ -887,8 +887,8 @@ Only items not simply Built.
 When §0–§2 are done: the owner's brothers test KC9K on their computers
 while the Android app is built (its §0 items, `android/CLAUDE.md`).
 
-- [ ] `C1` Build for the brothers' computers (with or without
-  `TAGS=devmaster`: owner decides).
+- [ ] `C1` Build for the brothers' computers with `TAGS=devmaster`
+  (owner 2026-11-18; the master password stays with the owner).
 - [ ] `C2` Remove `ci/vm.sh`; on the laptop remove `/etc/sudoers.d/99-claude-test`.
 
 ## 4. After Android

@@ -55,8 +55,8 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| C1–C2 | Build without devmaster; cleanup | §4.11 | install | agent |
-| C3 | Tagged release | §4.11 | install | owner |
+| C1 | Build for the brothers' computers: with or without devmaster? | §4.11 | install | owner |
+| C2 | Remove test helpers | §4.11 | install | agent |
 
 Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
 (later)*, *Owner report 2026-11-17*, *Owner 2026-11-16*.
@@ -882,13 +882,16 @@ Only items not simply Built.
   type it).
 - **2.8** Everything else Not built/Partial in §1.
 
-## 3. Before release
+## 3. Testers and Android (owner 2026-11-18: no public release)
 
-- [ ] `C1` Build without `TAGS=devmaster`.
+When §0–§2 are done: the owner's brothers test KC9K on their computers
+while the Android app is built (its §0 items, `android/CLAUDE.md`).
+
+- [ ] `C1` Build for the brothers' computers (with or without
+  `TAGS=devmaster`: owner decides).
 - [ ] `C2` Remove `ci/vm.sh`; on the laptop remove `/etc/sudoers.d/99-claude-test`.
-- [ ] `C3` Tagged release.
 
-## 4. After publishing
+## 4. After Android
 
 - Windows (L): platform layer; `internal/blocker/` is Linux-only.
 

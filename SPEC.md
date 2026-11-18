@@ -72,7 +72,7 @@ In short: everything Cold Turkey does, plus user-shaped bypass prevention,
 more triggers and actions, several lists per block, layered sequential
 locks, project export, monk mode, lockable SafeSearch, circadian rhythm.
 
-After publishing: Windows support.
+After the Android app: Windows support. No public release.
 
 ## 2. Principles
 
@@ -622,6 +622,7 @@ Decisions not already written into §1–5:
 - 2026-11-18: An Index at the top of this file for navigation; it adds no rules (owner).
 - 2026-11-18: The clock check (§4.10 tamper protection) may ask internet time: an outside query the owner agreed to (principle 6).
 - 2026-11-18: SafeSearch is lockable per engine: Google, Bing, DuckDuckGo and YouTube are each their own browser setting (§4.10).
+- 2026-11-18: No public release. When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
 
 ## 7. Open decisions
 

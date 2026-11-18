@@ -28,10 +28,8 @@ of their group and a row here; a finished item loses its row.
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
 | A5 | Phrase editor save: confirm | §4.3, R-WEAK-5 | lists, gui | box |
 | A6 | Locking an enabled block: confirm | R-LOCK-7 | locks, gui | box |
-| A7 | Phrase editor UI awkward: owner's specifics | §4.3 | gui, lists | owner |
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
-| A9 | GUI redesign: owner's verdict | R-GUI-3 | gui | owner |
-| A10 | Lock model: hardware/internet clock check (needs agreement, §5) | §3.4, §4.10 | locks | owner |
+| A10 | Lock model: clock check against hardware clock and internet time (agreed, SPEC §6 2026-11-18) | §3.4, §4.10 | locks | agent, box |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
 | B1 | Notification before an allowance session ends (script it) | §3.6 | allowance, hotkeys | agent, box |
@@ -48,12 +46,11 @@ of their group and a row here; a finished item loses its row.
 | B12 | Chrome: popup, extension can't be removed | §3.13 | browsers | box |
 | B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
 | B14 | Monk mode live (`ci/monk_live_test.sh` unwritten), reboot mid-way | R-MONK-2 | device | agent, vm |
-| B15 | GUI design pass on a real screen (screenshots; owner's verdict after) | R-GUI-3 | gui | box, owner |
 | B16 | New list dialog on a real screen | §3.2 | gui, lists | box |
 | B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
-| 2.4 | SafeSearch: a lock per engine, if wanted | §4.10 | browsers | owner |
+| 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
 | 2.5 | Several locks of one kind | §3.4 | locks | agent |
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
@@ -463,7 +460,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     against R-LOCK-7. Fixed: `strengthenLocks` adds every kind last in the
     order given (`TestLockActiveBlock`). The GUI's lock dialog offers every
     kind on a running block too (merged 2026-11-16); confirm on the laptop.
-  - [ ] `A7` Phrase editor UI awkward (§4.3). Needs the owner's specifics. M
+  - [x] `A7` Phrase editor UI awkward (§4.3). Owner 2026-11-18: good now.
   - [x] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
     none allowed; length ≥ 2. Built in `db.Phrase`, `match.js`, GUI.
   - [x] Lists and phrase sets may have no action (§3.9, changed
@@ -621,7 +618,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     now none. All browser suites pass in LibreWolf (run in a cloud
     container, 98 checks). Confirm on the laptop: Chrome, and real sites
     (a 0.5 s blank on pages while text lists are on). M
-  - [ ] `A9` GUI overall unclear, hard to read, not pretty or easy to use (owner,
+  - [x] `A9` (Owner 2026-11-18: the design has become tremendous.) GUI overall unclear, hard to read, not pretty or easy to use (owner,
     2026-11-15; R-GUI-3). Redesign page by page. Done: a design layer
     (cards, status pills, page titles with one-line subtitles, ? popovers
     for long explanations, an icon sidebar); Overview rebuilt (status card
@@ -721,7 +718,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
   scheduled blocks on once); allowance sessions lift their block (it stays
   on); the GUI block start and setting lock dialogs ask the unlock order. Not built:
-  hardware/internet clock check (see §5). (L)
+  hardware/internet clock check (see §5; owner agreed 2026-11-18, SPEC §6). (L)
 - [x] **Android extension can be switched off** (§3.13): built (5 s grace
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unit tests run in the cloud 2026-11-16:
@@ -800,7 +797,7 @@ Script-tested, never by a person. Script what can be into `ci/`.
   in `/etc/chromium/policies`) and works. Left: upgrade from
   `force-librewolf` keeping a lock; a portable LibreWolf.
 - [ ] `B14` Monk mode live (`ci/monk_live_test.sh` unwritten), incl. reboot mid-way.
-- [ ] `B15` GUI design pass: pages since 2026-11-10 never seen on a real screen.
+- [x] `B15` GUI design pass: seen by the owner on a real screen (2026-11-18: tremendous).
 - [ ] `B16` Lists without types (§3.2): checked 2026-11-15: `H` and `test` have
   one `Blocked` each; `H` blocks reddit.com by address and a page by its
   text in LibreWolf. Left: the New list dialog on a real screen.
@@ -863,7 +860,7 @@ Only items not simply Built.
 - **2.2 Ad trigger** (M): built (scope `ads`); left: a browser test
   (`ci/extras_test.py`), and growing the shipped industry lists.
 - **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under
-  the one `safesearch` setting. Left: a lock per engine, if wanted.
+  the one `safesearch` setting. Left: a lock per engine (owner 2026-11-18: wanted; SPEC §6).
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
   order, `unlock` lifts only the first, status and GUI show the order). Left:
   several locks of one kind (the order is chosen in the GUI now).
@@ -933,6 +930,7 @@ Only items not simply Built.
   hardware-clock count would only end timer locks sooner and the hardware
   clock can be set in firmware without a firmware password, and an internet
   time query is a new outside query (principle 6) the owner should agree to.
+  Owner agreed 2026-11-18 (SPEC §6): build the check (`A10`).
 - DECIDED OVERNIGHT: a huge list in /etc/hosts makes every name lookup on
   the computer slow (15 ms each at 100,000 sites) → the hosts layer holds
   at most 20,000 sites, the rest are blocked by the browser policy, the

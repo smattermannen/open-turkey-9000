@@ -47,6 +47,8 @@ TURNS=${AUTOPILOT_TURNS:-300}
 BUDGET=${AUTOPILOT_BUDGET_USD:-}              # per session, empty = none
 TIMEOUT=${AUTOPILOT_TIMEOUT:-4h}
 MODEL=${AUTOPILOT_MODEL:-}
+EFFORT=${AUTOPILOT_EFFORT:-}                  # item sessions: e.g. xhigh, max, ultracode (agent teams)
+RESOLVER_EFFORT=${AUTOPILOT_RESOLVER_EFFORT:-max} # one careful chain, no agents
 PERM=${AUTOPILOT_PERMISSION_MODE:-bypassPermissions}
 PUSH=${AUTOPILOT_PUSH:-0}
 RESOLVE=${AUTOPILOT_RESOLVE:-1}               # 0 = no resolver rounds
@@ -201,6 +203,8 @@ claude_args() { # $1 = turns, $2 = model (default $MODEL)
 		--disallowedTools "Bash(sudo:*)" "Bash(git push:*)" "Bash(kc9k-bin:*)" "Bash(./install.sh:*)" "Bash(make install:*)")
 	[ "$MODE" = resolver ] && args+=(Agent Task) # the decision is the resolver model's alone
 	[ -n "$m" ] && args+=(--model "$m")
+	if [ "$MODE" = resolver ]; then args+=(--effort "$RESOLVER_EFFORT")
+	elif [ -n "$EFFORT" ]; then args+=(--effort "$EFFORT"); fi
 	[ -n "$BUDGET" ] && args+=(--max-budget-usd "$BUDGET")
 }
 

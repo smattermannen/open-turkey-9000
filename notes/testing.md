@@ -30,6 +30,8 @@
   tagged, nothing above SPEC's Index, no untagged §6 line removed
   (`spec_check`), every turn of the session and of a conflict session on
   that model (`model_check`). `AUTOPILOT_RESOLVE=0` turns it off.
+  `AUTOPILOT_EFFORT` sets item sessions' `--effort` (`ultracode`: agent
+  teams); the resolver runs at `AUTOPILOT_RESOLVER_EFFORT` (default `max`).
 - `ci/autopilot-team.sh DIR...`: one worker per Claude account, each
   `DIR` a `CLAUDE_CONFIG_DIR` logged in to its own account.
 - Parallel workers are one Unix user: each runs under its own

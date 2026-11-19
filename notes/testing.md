@@ -20,7 +20,15 @@
   → `skip.txt`. A usage limit retries the round after the reset;
   `AUTOPILOT_ROUNDS=0` runs until `STOP`. State in
   `~/.local/state/kc9k-autopilot/`. Run as a non-sudo user, never on the
-  test laptop.
+  test laptop, unless in box mode.
+- Box mode (`AUTOPILOT_BOX=1`, on the test machine): sessions may use
+  sudo, `install.sh`, `kc9k-bin`, the daemon, real browsers and X11 (only
+  `git push` stays blocked: the script lands after the gate); Needs
+  default `agent|box`; the gate adds every `roottest` test via
+  `sudo -n go test -tags roottest` (`root_tests`). Needs passwordless
+  sudo (checked at start); one box worker per machine (`box.lock`). The
+  prompt still sends network cuts, logout, shutdown, reboot and freezing
+  to a VM (STUCK) and asks the session to remove its test blocks.
 - Resolver round (`resolver_round`): when the open questions (§5 entries
   not `DECIDED`/`FOR THE OWNER`, SPEC §7, `skip.txt`) differ from the
   last run's (`resolver-seen.txt`), one worker (claim `RESOLVER`) runs a

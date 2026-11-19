@@ -21,6 +21,14 @@
 #   sudo adduser --disabled-password kc9k-bot
 #   sudo -iu kc9k-bot   # then: claude login, git credentials, run this
 #
+# Box mode (AUTOPILOT_BOX=1), on the test machine only (one that may be
+# wiped): sessions may use sudo, install kc9k and run the daemon, real
+# browsers and the X11 desktop, and also take Index items whose Needs is
+# "box". The gate adds the roottest tests (run as root). Needs sudo without
+# a password for this user (/etc/sudoers.d/kc9k-autopilot:
+# "<user> ALL=(ALL) NOPASSWD: ALL"). One box worker per machine; "vm" items
+# (network cuts, logout, shutdown, reboots) are still left to a VM.
+#
 # The resolver: when ROADMAP.md §5, SPEC.md §7 or the skipped items hold
 # questions it has not had, a worker runs a resolver session instead of an
 # item. Only the resolver may change SPEC.md, only on $RESOLVER_MODEL
@@ -61,6 +69,8 @@ RESOLVE=${AUTOPILOT_RESOLVE:-1}               # 0 = no resolver rounds
 RESOLVER_MODEL=claude-opus-5-5                # the owner's rule: no other model decides
 TAG='(By Opus)'
 GUI_TESTS=${AUTOPILOT_GUI_TESTS:-auto}        # auto: when xvfb-run exists
+BOX=${AUTOPILOT_BOX:-0}                       # 1 = sudo, root tests, box items
+[ "$BOX" = 1 ] && NEEDS=${AUTOPILOT_NEEDS:-agent|box}
 
 ROOT=${XDG_STATE_HOME:-$HOME/.local/state}/kc9k-autopilot
 HUB=$ROOT/hub.git           # shared by the workers; $BRANCH lives here
@@ -79,8 +89,12 @@ die() { echo "autopilot[$WORKER]: $*" >&2; exit 1; }
 say() { echo "[$(date '+%F %T')] $WORKER: $*" | tee -a "$ROOT/autopilot.log"; }
 locked() { local l=$1; shift; ( flock 9; "$@" ) 9>"$ROOT/$l.lock"; } # one worker at a time
 
-[ "$(id -u)" -ne 0 ] || die "never as root"
-if [ -z "${AUTOPILOT_ALLOW_ADMIN:-}" ] && id -nG | tr ' ' '\n' | grep -qxE 'sudo|wheel|admin'; then
+[ "$(id -u)" -ne 0 ] || die "never as root (tests refuse as root; box mode uses sudo)"
+if [ "$BOX" = 1 ]; then
+	sudo -n true 2>/dev/null || die "box mode needs sudo without a password for $(id -un):
+  echo '$(id -un) ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/kc9k-autopilot
+  sudo chmod 440 /etc/sudoers.d/kc9k-autopilot && sudo visudo -c"
+elif [ -z "${AUTOPILOT_ALLOW_ADMIN:-}" ] && id -nG | tr ' ' '\n' | grep -qxE 'sudo|wheel|admin'; then
 	die "$(id -un) is an administrator: tests and the agent could run kc9k-bin as root
 on this computer. Use a separate user (see the top of this file) or set
 AUTOPILOT_ALLOW_ADMIN=1 inside a throwaway VM."
@@ -97,6 +111,10 @@ if [ -z "${AUTOPILOT_OWN_BUS:-}" ]; then
 fi
 
 mkdir -p "$LOGS"; touch "$NOTES" "$SKIP" "$CLAIMS"
+if [ "$BOX" = 1 ]; then # the machine is shared state: one box worker
+	exec 8>"$ROOT/box.lock"
+	flock -n 8 || die "another box worker runs on this machine"
+fi
 rm -f "$ROOT/STOP"
 
 init_hub() {
@@ -176,6 +194,22 @@ gate() { # $1 = base commit; prints why it fails, returns 1
 		done
 		rm -f kc9k
 	fi
+	[ "$BOX" = 1 ] && { root_tests || return 1; }
+	return 0
+}
+
+# Box mode: the roottest tests, as root, in each package that has them.
+root_tests() {
+	local f pkgs pkg names
+	pkgs=$(grep -l '^//go:build roottest' $(git ls-files '*_test.go') | xargs -rn1 dirname | sort -u)
+	for pkg in $pkgs; do
+		names=$(grep -ohE '^func (Test[A-Za-z0-9_]+)' $(grep -l '^//go:build roottest' "$pkg"/*_test.go) \
+			| sed 's/^func //' | paste -sd'|')
+		[ -n "$names" ] || continue
+		timeout 20m sudo -n env PATH="$PATH" HOME=/root go test -count=1 -tags roottest \
+			-run "^($names)\$" "./$pkg" >"$STATE/root.out" 2>&1 \
+			|| { echo "root tests in $pkg failed:"; tail -40 "$STATE/root.out"; return 1; }
+	done
 }
 
 # Every hunk of SPEC.md's diff carries the tag; the rules for the file
@@ -211,8 +245,8 @@ for l in open(sys.argv[1], errors="replace"):
 
 claude_args() { # $1 = turns, $2 = model, $3 = effort (empty: the CLI's default)
 	args=(-p --output-format stream-json --verbose --max-turns "$1"
-		--permission-mode "$PERM"
-		--disallowedTools "Bash(sudo:*)" "Bash(git push:*)" "Bash(kc9k-bin:*)" "Bash(./install.sh:*)" "Bash(make install:*)")
+		--permission-mode "$PERM" --disallowedTools "Bash(git push:*)") # the script lands, after the gate
+	[ "$BOX" = 1 ] || args+=("Bash(sudo:*)" "Bash(kc9k-bin:*)" "Bash(./install.sh:*)" "Bash(make install:*)")
 	[ "$MODE" = resolver ] && args+=(Agent Task Workflow) # the decision is the resolver model's alone
 	[ -n "${2:-}" ] && args+=(--model "$2")
 	[ -n "${3:-}" ] && args+=(--effort "$3")
@@ -304,10 +338,22 @@ is watching and nobody will answer questions: decide, or stop.
    for the files you touch.
 2. Your item is \`$1\`: $2 (notes: $3). Find it with
    grep -n '\`$1\`' ROADMAP.md. Work on this item only.
+$(if [ "$BOX" = 1 ]; then cat <<'BOXEOF'
+   You run on the test machine (box): you may use sudo, root, install.sh,
+   the installed daemon, kc9k, real browsers and the X11 desktop. Nothing
+   on it needs keeping. Never cut its network, log out, shut down, reboot,
+   freeze it or turn on strict mode: that ends this session. If the item
+   needs that (a VM), real use, or a decision of the owner, change no
+   code: say so under the item in ROADMAP.md, commit that, report STUCK.
+   Before you finish, remove the blocks, locks and schedules you added.
+BOXEOF
+else cat <<'BOXEOF'
    If it cannot be finished and verified in this container (it needs the
    owner's laptop, real use, a real browser, root, the installed daemon,
    a VM, or a decision of the owner), change no code: say so under the
    item in ROADMAP.md, commit that, and report STUCK.
+BOXEOF
+fi)
    If the item is large, do one complete, merged-quality step of it and
    say in ROADMAP.md what is left.
 3. Other sessions work on this repository at the same time, and your
@@ -336,8 +382,11 @@ $(if [ -n "$4" ]; then awk -F'\t' '{printf "   - `%s` %s (notes: %s)\n", $1, $2,
    yourself: agents cost more than they save there.
 6. Verify as a normal user: CGO_ENABLED=0 go build ./..., go vet ./...,
    go test ./... and the ci/gui_*_smoke.py touching your change under
-   xvfb-run -a if present. Never use sudo, install.sh, make install,
-   kc9k/kc9k-bin outside tests, or the browser tests in ci/*_test.py.
+   xvfb-run -a if present.$(if [ "$BOX" = 1 ]; then echo "
+   Run go test as yourself, never with sudo (as root KC9K_DB is ignored);
+   root tests: sudo go test -tags roottest -run <name> ./<package>.
+   Check on the real desktop what your item says needs it."; else echo " Never use sudo, install.sh, make install,
+   kc9k/kc9k-bin outside tests, or the browser tests in ci/*_test.py."; fi)
 7. Update ROADMAP.md in the same commit as the code (status, "on the
    laptop: Unchecked" where real use is still needed, "Last checked").
    Commit on the current branch with a message like the existing ones.

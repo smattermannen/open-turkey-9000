@@ -1,6 +1,6 @@
 # Testing
 
-- Covers: `ci/`, `*_test.go`, `cmd/try-challenge/`, `ci/autopilot.sh`
+- Covers: `ci/`, `*_test.go`, `cmd/try-challenge/`, `ci/autopilot.sh`, `ci/autopilot-team.sh`
 - SPEC: §5 (tests name the rule they prove)
 - Connects to: every note; first read [locks](locks.md) before a test that locks anything
 
@@ -8,12 +8,23 @@
 
 - `./try-challenge.sh [len]` (`cmd/try-challenge/`): unlock challenge alone.
 - Root Chrome test: `go test -tags roottest -run Chrome ./internal/enforce`.
-- `ci/autopilot.sh`: unattended loop, one `claude -p` session per
-  `ROADMAP.md` item in a private clone; the script's gate (build, vet,
-  tests, SPEC.md untouched, ROADMAP.md changed) decides what lands on
-  branch `autopilot`. Run as a non-sudo user, never on the test laptop.
-  A usage limit retries the round after the reset (`AUTOPILOT_LIMIT_WAIT`
-  when the log names none); `AUTOPILOT_ROUNDS=0` runs until stopped.
+- `ci/autopilot.sh`: unattended loop of `claude -p` sessions working down
+  `ROADMAP.md`. The script, not the session, picks the item: the next
+  Index row whose Needs match `AUTOPILOT_NEEDS` (default `agent`), not in
+  `skip.txt` and not claimed by another worker (`claims.txt`, dead
+  workers' claims dropped). The prompt names the other workers' items and
+  notes to keep out of. Landing is one worker at a time (`land.lock`):
+  rebase onto the shared hub (`hub.git`; a short session resolves
+  conflicts), gate (build, vet, tests, GUI smoke, SPEC.md untouched,
+  ROADMAP.md changed), fast-forward `autopilot`. STUCK or failing twice
+  → `skip.txt`. A usage limit retries the round after the reset;
+  `AUTOPILOT_ROUNDS=0` runs until `STOP`. State in
+  `~/.local/state/kc9k-autopilot/`. Run as a non-sudo user, never on the
+  test laptop.
+- `ci/autopilot-team.sh DIR...`: one worker per Claude account, each
+  `DIR` a `CLAUDE_CONFIG_DIR` logged in to its own account.
+- `startX` (`blocker/x11_test.go`) takes a display only when its lock
+  file names its own Xvfb: parallel workers race for displays.
 
 ## Test laptop (owner's, Mint 22.3, `TAGS=devmaster`, used for real)
 

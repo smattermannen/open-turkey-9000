@@ -39,6 +39,9 @@ func TestXauthCookie(t *testing.T) {
 }
 
 // startX starts a virtual X server needing the returned Xauthority file.
+// Other test runs (parallel autopilot workers) may pick the same display at
+// the same moment: a server that loses the race exits, and one is only ours
+// when its lock file names our process.
 func startX(t *testing.T) (display, xauth string) {
 	t.Helper()
 	for _, tool := range []string{"Xvfb", "xauth", "xterm"} {
@@ -46,47 +49,65 @@ func startX(t *testing.T) (display, xauth string) {
 			t.Skipf("%s not installed", tool)
 		}
 	}
-	// A display with neither a socket nor a lock file: a server that died
-	// without cleaning up leaves both, and its socket only looks alive.
-	display = ""
+	xauth = filepath.Join(t.TempDir(), "Xauthority")
 	for i := 77; i < 99; i++ {
 		n := strconv.Itoa(i)
+		// Neither a socket nor a lock file: a server that died without
+		// cleaning up leaves both, and its socket only looks alive.
 		_, sockErr := os.Stat("/tmp/.X11-unix/X" + n)
 		_, lockErr := os.Stat("/tmp/.X" + n + "-lock")
-		if os.IsNotExist(sockErr) && os.IsNotExist(lockErr) {
-			display = n
-			break
+		if !os.IsNotExist(sockErr) || !os.IsNotExist(lockErr) {
+			continue
+		}
+		if tryX(t, n, xauth) {
+			return ":" + n, xauth
 		}
 	}
-	if display == "" {
-		t.Skip("no free X display between :77 and :98")
-	}
-	xauth = filepath.Join(t.TempDir(), "Xauthority")
+	t.Skip("no free X display between :77 and :98")
+	return "", ""
+}
+
+// tryX starts Xvfb on display n; false when another server got it first.
+func tryX(t *testing.T, n, xauth string) bool {
+	t.Helper()
 	key := make([]byte, 16)
 	rand.Read(key)
-	if out, err := exec.Command("xauth", "-f", xauth, "add", ":"+display, ".", hex.EncodeToString(key)).CombinedOutput(); err != nil {
+	if out, err := exec.Command("xauth", "-f", xauth, "add", ":"+n, ".", hex.EncodeToString(key)).CombinedOutput(); err != nil {
 		t.Fatalf("xauth: %v %s", err, out)
 	}
-	server := exec.Command("Xvfb", ":"+display, "-auth", xauth, "-screen", "0", "800x600x24", "-nolisten", "tcp")
+	server := exec.Command("Xvfb", ":"+n, "-auth", xauth, "-screen", "0", "800x600x24", "-nolisten", "tcp")
 	if err := server.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		// SIGTERM lets Xvfb remove its socket and lock file.
-		server.Process.Signal(syscall.SIGTERM)
-		server.Wait()
-		os.Remove("/tmp/.X11-unix/X" + display)
-		os.Remove("/tmp/.X" + display + "-lock")
-	})
+	exited := make(chan struct{})
+	go func() { server.Wait(); close(exited) }()
+	pid := strconv.Itoa(server.Process.Pid)
 	for i := 0; i < 50; i++ {
-		if conn, err := net.Dial("unix", "/tmp/.X11-unix/X"+display); err == nil {
-			conn.Close()
-			return ":" + display, xauth
+		select {
+		case <-exited:
+			return false
+		default:
+		}
+		lock, _ := os.ReadFile("/tmp/.X" + n + "-lock")
+		if strings.TrimSpace(string(lock)) == pid {
+			if conn, err := net.Dial("unix", "/tmp/.X11-unix/X"+n); err == nil {
+				conn.Close()
+				t.Cleanup(func() {
+					// SIGTERM lets Xvfb remove its socket and lock file.
+					server.Process.Signal(syscall.SIGTERM)
+					<-exited
+					os.Remove("/tmp/.X11-unix/X" + n)
+					os.Remove("/tmp/.X" + n + "-lock")
+				})
+				return true
+			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	server.Process.Kill()
+	<-exited
 	t.Fatal("Xvfb didn't start")
-	return "", ""
+	return false
 }
 
 func startClient(t *testing.T, display, xauth string, args ...string) *exec.Cmd {

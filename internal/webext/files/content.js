@@ -75,9 +75,11 @@ let readingDone = false;
 // R-PAGE-1: no flashing. While a list or phrase set could still act on the
 // top page by its title or text (and no address exception spares it), the
 // page is kept invisible until it is judged, so a page that is blocked or
-// given a look never shows without it first. Invisible means opacity 0: its
-// text is still laid out and read (visibility: hidden would hide it from
-// innerText). Judged means the first full read once the page has settled:
+// given a look never shows without it first. Invisible means opacity 0 on
+// what the root holds, not on the root: its text is still laid out and read
+// (visibility: hidden would hide it from innerText), and the page's own
+// background stays (the root at opacity 0 takes the canvas with it, so every
+// page flashed white while judged, dark ones too). Judged means the first full read once the page has settled:
 // loaded, or SETTLE_MS after its document is ready, or SETTLE_MS after an
 // address change without loading (its new content comes in by then). A page
 // that is taken away stays hidden until the block page replaces it; nothing
@@ -110,7 +112,7 @@ function ensureHidden() {
   }
   const style = document.createElement("style");
   style.id = HIDE_ID;
-  style.textContent = "html { opacity: 0 !important; pointer-events: none !important; }";
+  style.textContent = "html > :not(head) { opacity: 0 !important; pointer-events: none !important; }";
   root.appendChild(style);
 }
 

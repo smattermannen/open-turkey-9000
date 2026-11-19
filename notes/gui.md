@@ -28,6 +28,9 @@
   `DurationField` (typed `2d 4h`, says why when wrong, never clamps),
   `NumberField`, `TimerLockField` (none / for / until a calendar date),
   `LockPicker` (every lock kind; `lock_dialog` reads it before closing).
+  `EditableList` has a `ResizeGrip` under it (drag down: taller; double-click:
+  back), height kept in gui.json `list_heights` under `size_key` (website
+  list, phrase set) or the list's title; `ci/gui_list_resize_smoke.py`.
   CLI side: `cli/duration.go` (`parseUserDuration` with d/w,
   `humanDuration`, `untilToday` with dates).
 

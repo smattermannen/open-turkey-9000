@@ -15,8 +15,9 @@
   Frames judge their own text (`scanFrame`, R-LIST-4) and ask the
   background (`frame-hits` → `frameHit`) for the block page.
 - No flashing (R-PAGE-1, `content.js`): while a list could still act on the
-  top page by its title or text (`mayActByText`), it stays at opacity 0
-  (`hidePage`) until judged and settled (`SETTLE_MS` after DOMContentLoaded
+  top page by its title or text (`mayActByText`), what its root holds stays
+  at opacity 0 (`hidePage`; not the root itself, which takes the canvas and
+  flashes white; the page's own background shows) until judged and settled (`SETTLE_MS` after DOMContentLoaded
   or an address change seen in the MutationObserver), never over
   `HIDE_CAP_MS`. Don't hide with `visibility`: `innerText` skips it.
 - `no-images` pictures drawn as CSS content: `content.js` marks elements

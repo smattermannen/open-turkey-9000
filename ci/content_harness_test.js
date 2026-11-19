@@ -191,10 +191,52 @@ async function main() {
   console.log("     the page was held up at most " + stall.toFixed(1) + " ms at a time");
   check("never held up over 16 ms at a time (principle 9)", stall <= 16, stall);
   const hiddenAt = Date.now();
-  await huge.waitForFunction(() => getComputedStyle(document.documentElement).opacity === "1", null, { timeout: 5000 })
+  await huge.waitForFunction(() => getComputedStyle(document.body).opacity === "1", null, { timeout: 5000 })
     .then(() => check("and shown once judged", true, Date.now() - hiddenAt),
       () => check("and shown once judged", false));
   await huge.close();
+
+  // R-PAGE-1: a page kept hidden while judged shows its own background, not
+  // a white flash (the root at opacity 0 took the canvas with it).
+  const dark = await browser.newPage({ viewport: { width: 200, height: 200 } });
+  await dark.route("http://dark.example/**", (route) => route.fulfill({ status: 200, contentType: "text/html",
+    body: "<!doctype html><title>Dark</title><body style='background:#123;color:#fff'><p>plain words</p>" +
+      "<img src='/slow.gif'></body>" }));
+  await dark.addInitScript((stored) => {
+    const listeners = { addListener() {} };
+    window.browser = {
+      storage: { local: { get: async () => ({ page: stored }) }, onChanged: listeners },
+      runtime: { sendMessage: async () => undefined, onMessage: listeners },
+    };
+  }, { lists: [{ id: 8, block: "b", name: "Words", url: [], title: [], text: ["zebra"],
+    actions: [{ action: "greyscale", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [] } }] });
+  await dark.addInitScript(script);
+  // The picture never loads, so the page waits to be judged.
+  let releaseGif;
+  await dark.route("http://dark.example/slow.gif", (route) => new Promise((resolve) => {
+    releaseGif = () => resolve(route.fulfill({ status: 200, contentType: "image/gif", body: GIF }));
+  }));
+  await dark.goto("http://dark.example/page", { waitUntil: "domcontentloaded" });
+  const hiddenNow = await dark.evaluate(() => getComputedStyle(document.body).opacity);
+  const pixel = (await dark.screenshot({ clip: { x: 150, y: 150, width: 1, height: 1 } })).toString("base64");
+  const rgb = await dark.evaluate(async (data) => {
+    const img = new Image();
+    img.src = "data:image/png;base64," + data;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    const x = c.getContext("2d");
+    x.drawImage(img, 0, 0);
+    return Array.from(x.getImageData(0, 0, 1, 1).data.slice(0, 3));
+  }, pixel);
+  check("a page being judged is hidden", hiddenNow === "0", hiddenNow);
+  check("and keeps its own background, no white flash", rgb.join(",") === "17,34,51", rgb);
+  if (releaseGif) {
+    releaseGif();
+  }
+  await dark.waitForFunction(() => getComputedStyle(document.body).opacity === "1", null, { timeout: 5000 })
+    .then(() => check("then shown", true), () => check("then shown", false));
+  await dark.close();
 
   // R-LIST-4: rendered visible text only (hidden and collapsed text doesn't
   // count, text far down does), and each frame on its own text: a frame

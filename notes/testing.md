@@ -12,6 +12,8 @@
   `ROADMAP.md` item in a private clone; the script's gate (build, vet,
   tests, SPEC.md untouched, ROADMAP.md changed) decides what lands on
   branch `autopilot`. Run as a non-sudo user, never on the test laptop.
+  A usage limit retries the round after the reset (`AUTOPILOT_LIMIT_WAIT`
+  when the log names none); `AUTOPILOT_ROUNDS=0` runs until stopped.
 
 ## Test laptop (owner's, Mint 22.3, `TAGS=devmaster`, used for real)
 

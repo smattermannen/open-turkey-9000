@@ -12,13 +12,15 @@
 #   sudo adduser --disabled-password kc9k-bot
 #   sudo -iu kc9k-bot   # then: claude login, git credentials, run this
 #
+# A usage limit is not a failure: the round is retried after the reset.
 # Stop: touch ~/.local/state/kc9k-autopilot/STOP (ends after the round).
 set -uo pipefail
 
 ORIGIN=${AUTOPILOT_ORIGIN:-$(git -C "$(dirname "$0")" remote get-url origin)}
 BRANCH=${AUTOPILOT_BRANCH:-autopilot}         # where passing work lands
 FROM=${AUTOPILOT_FROM:-main}                  # where $BRANCH starts if new
-ROUNDS=${AUTOPILOT_ROUNDS:-20}
+ROUNDS=${AUTOPILOT_ROUNDS:-20}                # 0 = run until stopped
+LIMIT_WAIT=${AUTOPILOT_LIMIT_WAIT:-30m}       # usage limit, reset time unknown
 MAX_FAILS=${AUTOPILOT_MAX_FAILS:-3}           # failed rounds in a row → stop
 TRIES=${AUTOPILOT_TRIES:-2}                   # failed tries per item → skip it
 TURNS=${AUTOPILOT_TURNS:-300}
@@ -122,8 +124,27 @@ $(tail -40 "$NOTES")
 EOF
 }
 
+limit_hit() { # $1 = session log; true if the session ended on a usage limit
+	tail -5 "$1" | grep -qiE 'usage limit|limit reached|hit your limit|rate.?limit|out of (extra )?usage'
+}
+
+wait_for_limit() { # sleeps until the reset the log names, else $LIMIT_WAIT
+	local reset now
+	reset=$(tail -5 "$1" | grep -oE 'limit reached\|[0-9]{10}' | grep -oE '[0-9]{10}$' | tail -1)
+	now=$(date +%s)
+	if [ -n "$reset" ] && [ "$reset" -gt "$now" ]; then
+		say "usage limit; waiting until $(date -d "@$reset" '+%F %T')"
+		sleep $((reset - now + 60))
+	else
+		say "usage limit; waiting $LIMIT_WAIT"
+		sleep "$LIMIT_WAIT"
+	fi
+}
+
 fails=0
-for round in $(seq 1 "$ROUNDS"); do
+round=0
+while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
+	round=$((round + 1))
 	[ -e "$STATE/STOP" ] && { say "STOP file found"; rm -f "$STATE/STOP"; break; }
 	git checkout -q "$BRANCH" && git reset -q --hard && git clean -qfd
 	base=$(git rev-parse HEAD)
@@ -145,6 +166,15 @@ for round in $(seq 1 "$ROUNDS"); do
 	item=$(sed -n 's/^ITEM: *//p' "$RESULT" 2>/dev/null | head -1)
 	summary=$(sed -n 's/^SUMMARY: *//p' "$RESULT" 2>/dev/null | head -1)
 	say "session exit $code, ${status:-no result}: ${item:-?} — ${summary:-}"
+
+	if [ -z "$status" ] && limit_hit "$log"; then
+		git checkout -q -f "$BRANCH"
+		if [ "$(git rev-list --count "$base..$attempt")" -eq 0 ]; then git branch -qD "$attempt"
+		else say "kept unfinished work as $attempt"; fi
+		round=$((round - 1))
+		wait_for_limit "$log"
+		continue
+	fi
 
 	if [ "$status" = NOTHING_LEFT ] && [ "$(git rev-list --count "$base"..HEAD)" -eq 0 ]; then
 		say "nothing left in scope; done"; git checkout -q "$BRANCH"; git branch -qD "$attempt"; break

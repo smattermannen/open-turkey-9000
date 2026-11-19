@@ -32,6 +32,7 @@ of their group and a row here; a finished item loses its row.
 | A10 | Lock model: clock check against hardware clock and internet time (agreed, SPEC §6 2026-11-18) | §3.4, §4.10 | locks | agent, box |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
+| A13 | `install.sh`: LibreWolf step fails with "database is locked" on a fresh install | — | install, db-project | agent, vm |
 | B1 | Notification before an allowance session ends (script it) | §3.6 | allowance, hotkeys | agent, box |
 | B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
 | B3 | Strict mode holes | §3.8 | device | vm |
@@ -763,6 +764,13 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   unanswered (screen locked) it times out after 60 s and nothing is locked;
   synthetic keys from other programs are ignored. Left: a person clicks
   Lock and Cancel on an unlocked screen. (S)
+- [ ] `A13` **`install.sh` races the daemon for the DB.** Seen 2026-11-19 on a
+  fresh Ubuntu 24.04 VM: step 3 (`kc9k-bin browser install-librewolf`)
+  failed with `database is locked (SQLITE_BUSY)`, apparently while the
+  just-started daemon created the database; running it again afterwards
+  worked. Find why the 5 s `busy_timeout` did not cover it and fix it;
+  prove it on a fresh install in the VM (snapshot `clean` has kc9k
+  installed: remove it first, or start from a VM without it). (S)
 
 ### 0.2 Not yet confirmed in real use
 

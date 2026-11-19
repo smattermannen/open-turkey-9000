@@ -30,8 +30,21 @@
   `sudo -n go test -tags roottest` (`root_tests`). Needs passwordless
   sudo (checked at start). Several box workers may run (`autopilot-team.sh`);
   only one holds a box-only item (Needs without `agent`) at a time. The
-  prompt still sends network cuts, logout, shutdown, reboot and freezing
-  to a VM (STUCK) and asks the session to remove its test blocks.
+  prompt sends network cuts, logout, shutdown, reboot and freezing to a VM
+  (STUCK when none is set) and asks the session to remove its test blocks.
+- VM (`AUTOPILOT_VM=<libvirt domain>`, box mode only): Needs default
+  `agent|box|vm`. Checked at start: the snapshot (`AUTOPILOT_VM_SNAPSHOT`,
+  default `clean`) exists on `AUTOPILOT_VM_URI` (default
+  `qemu:///system`). Before a round on an item whose Needs has `vm`,
+  `vm_reset start` reverts the VM running and waits for ssh
+  (`AUTOPILOT_VM_SSH`); after it, `vm_reset` reverts it again. The prompt
+  gives the session the VM (rsync the tree, build, install, test there).
+  One vm item at a time; a vm item does not hold up box items.
+- The owner's VM (2026-11-19): `kc9k-vm` on the test machine, Ubuntu 24.04
+  cloud image, Cinnamon autologin on X11 as `tester` (passwordless sudo),
+  kc9k and LibreWolf installed, repo at `~/open-turkey-9000`; ssh alias
+  `kc9k-vm` (key `~/.ssh/kc9k-vm`), IP 192.168.122.80 pinned, snapshot
+  `clean` taken shut off.
 - Resolver round (`resolver_round`): when the open questions (§5 entries
   not `DECIDED`/`FOR THE OWNER`, SPEC §7, `skip.txt`) differ from the
   last run's (`resolver-seen.txt`), one worker (claim `RESOLVER`) runs a

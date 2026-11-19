@@ -28,7 +28,14 @@
 # a password for this user (/etc/sudoers.d/kc9k-autopilot:
 # "<user> ALL=(ALL) NOPASSWD: ALL"). Box workers share the machine: only
 # one holds an item that needs it (Needs without "agent") at a time; "vm" items
-# (network cuts, logout, shutdown, reboots) are still left to a VM.
+# (network cuts, logout, shutdown, reboots) are left alone unless a VM is set.
+#
+# VM (AUTOPILOT_VM=<libvirt domain>, with box mode): also takes "vm" items.
+# Before such a round the script reverts the VM to its snapshot
+# (AUTOPILOT_VM_SNAPSHOT, default clean) and starts it; the session reaches
+# it with ssh (AUTOPILOT_VM_SSH, default the domain name) and virsh
+# (AUTOPILOT_VM_URI, default qemu:///system); after the round it is reverted
+# again. One vm item at a time on the machine.
 #
 # The resolver: when ROADMAP.md §5, SPEC.md §7 or the skipped items hold
 # questions it has not had, a worker runs a resolver session instead of an
@@ -71,7 +78,12 @@ RESOLVER_MODEL=claude-opus-5-5                # the owner's rule: no other model
 TAG='(By Opus)'
 GUI_TESTS=${AUTOPILOT_GUI_TESTS:-auto}        # auto: when xvfb-run exists
 BOX=${AUTOPILOT_BOX:-0}                       # 1 = sudo, root tests, box items
+VM=${AUTOPILOT_VM:-}                          # libvirt domain for "vm" items
+VM_SSH=${AUTOPILOT_VM_SSH:-$VM}
+VM_SNAPSHOT=${AUTOPILOT_VM_SNAPSHOT:-clean}
+VM_URI=${AUTOPILOT_VM_URI:-qemu:///system}
 [ "$BOX" = 1 ] && NEEDS=${AUTOPILOT_NEEDS:-agent|box}
+[ -n "$VM" ] && NEEDS=${AUTOPILOT_NEEDS:-agent|box|vm}
 
 ROOT=${XDG_STATE_HOME:-$HOME/.local/state}/kc9k-autopilot
 HUB=$ROOT/hub.git           # shared by the workers; $BRANCH lives here
@@ -95,6 +107,13 @@ if [ "$BOX" = 1 ]; then
 	sudo -n true 2>/dev/null || die "box mode needs sudo without a password for $(id -un):
   echo '$(id -un) ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/kc9k-autopilot
   sudo chmod 440 /etc/sudoers.d/kc9k-autopilot && sudo visudo -c"
+	if [ -n "$VM" ]; then
+		command -v virsh >/dev/null || die "virsh not found (package libvirt-clients)"
+		virsh -c "$VM_URI" snapshot-info "$VM" --snapshotname "$VM_SNAPSHOT" >/dev/null \
+			|| die "VM $VM has no snapshot $VM_SNAPSHOT on $VM_URI (are you in group libvirt?)"
+	fi
+elif [ -n "$VM" ]; then
+	die "AUTOPILOT_VM needs box mode (AUTOPILOT_BOX=1)"
 elif [ -z "${AUTOPILOT_ALLOW_ADMIN:-}" ] && id -nG | tr ' ' '\n' | grep -qxE 'sudo|wheel|admin'; then
 	die "$(id -un) is an administrator: tests and the agent could run kc9k-bin as root
 on this computer. Use a separate user (see the top of this file) or set
@@ -147,13 +166,28 @@ others() {
 release() { locked claims sed -i "/\t$WORKER\t/d" "$CLAIMS"; }
 
 box_only() { ! grep -qE '(^|[ ,])agent([ ,]|$)' <<<"$1"; } # $1 = Needs
+vm_item() { [ -n "$VM" ] && grep -qE '(^|[ ,])vm([ ,]|$)' <<<"$1"; } # $1 = Needs
+
+# Back to the snapshot; $1 = start: running, and reachable over ssh.
+vm_reset() {
+	if [ "${1:-}" = start ]; then
+		virsh -c "$VM_URI" snapshot-revert "$VM" "$VM_SNAPSHOT" --running --force >/dev/null || return 1
+		local i; for i in $(seq 36); do
+			ssh -o BatchMode=yes -o ConnectTimeout=5 "$VM_SSH" true 2>/dev/null && return 0
+			sleep 5
+		done
+		return 1
+	fi
+	virsh -c "$VM_URI" snapshot-revert "$VM" "$VM_SNAPSHOT" --force >/dev/null
+}
 
 claim_next() { # prints the claimed row, or "WAIT" / "NONE"
-	local live id title notes needs held=0 box_busy=0
+	local live id title notes needs held=0 box_busy=0 vm_busy=0
 	live=$(others)
 	# Box items use the machine itself (daemon, browsers, desktop): one at a time.
 	while IFS=$'\t' read -r id _ _ needs; do
-		cut -f1 <<<"$live" | grep -qxF -- "$id" && box_only "$needs" && box_busy=1
+		cut -f1 <<<"$live" | grep -qxF -- "$id" || continue
+		if vm_item "$needs"; then vm_busy=1; elif box_only "$needs"; then box_busy=1; fi
 	done < <(index_rows)
 	# Keep only live claims of others; ours is written below.
 	awk -F'\t' -v me="$WORKER" '$2!=me' "$CLAIMS" | while IFS=$'\t' read -r id w pid; do
@@ -163,7 +197,8 @@ claim_next() { # prints the claimed row, or "WAIT" / "NONE"
 		grep -qE "(^|[ ,])($NEEDS)([ ,]|$)" <<<"$needs" || continue
 		grep -qxF -- "$id" "$SKIP" && continue
 		if cut -f1 <<<"$live" | grep -qxF -- "$id"; then held=1; continue; fi
-		if [ "$box_busy" = 1 ] && box_only "$needs"; then held=1; continue; fi
+		if [ "$box_busy" = 1 ] && box_only "$needs" && ! vm_item "$needs"; then held=1; continue; fi
+		if [ "$vm_busy" = 1 ] && vm_item "$needs"; then held=1; continue; fi
 		printf '%s\t%s\t%s\n' "$id" "$WORKER" "$$" >>"$CLAIMS"
 		printf '%s\t%s\t%s\t%s\n' "$id" "$title" "$notes" "$needs"
 		return
@@ -332,7 +367,7 @@ print("models: %s; cost: $%.2f" % (", ".join(parts) or "?", res.get("total_cost_
 EOF
 }
 
-prompt() { # $1 = ID, $2 = item, $3 = notes, $4 = other workers' rows, $5 = lead
+prompt() { # $1 = ID, $2 = item, $3 = notes, $4 = other workers' rows, $5 = lead, $6 = VM is set up
 	cat <<EOF
 You are one round of an unattended loop working on this repository. Nobody
 is watching and nobody will answer questions: decide, or stop.
@@ -347,11 +382,24 @@ $(if [ "$BOX" = 1 ]; then cat <<'BOXEOF'
    the installed daemon, kc9k, real browsers and the X11 desktop. Nothing
    on it needs keeping. Never cut its network, log out, shut down, reboot,
    freeze it or turn on strict mode: that ends this session. If the item
-   needs that (a VM), real use, or a decision of the owner, change no
-   code: say so under the item in ROADMAP.md, commit that, report STUCK.
+   needs that (a VM) and no VM is named below, real use, or a decision of
+   the owner, change no code: say so under the item in ROADMAP.md, commit
+   that, report STUCK.
    Before you finish, remove the blocks, locks and schedules you added.
 BOXEOF
-else cat <<'BOXEOF'
+fi)$(if [ -n "$VM" ] && [ -n "${6:-}" ]; then echo; cat <<VMEOF
+   A VM is yours for this item: libvirt domain $VM, fresh from snapshot
+   $VM_SNAPSHOT and running; ssh $VM_SSH (user with passwordless sudo,
+   kc9k installed, Cinnamon autologin on X11, this repo at
+   ~/open-turkey-9000 from GitHub, older than yours). Copy your tree there
+   (rsync -a --delete --exclude .git ./ $VM_SSH:open-turkey-9000/), build
+   and sudo ./install.sh there. Do network cuts, logout, shutdown, reboots,
+   freezing and strict mode only in the VM; drive and check it from here
+   (ssh, virsh -c $VM_URI: start, reboot, screenshot, snapshot-revert
+   $VM $VM_SNAPSHOT --running to start over). Never change the snapshot.
+   The script reverts the VM after this round.
+VMEOF
+fi)$(if [ "$BOX" != 1 ]; then cat <<'BOXEOF'
    If it cannot be finished and verified in this container (it needs the
    owner's laptop, real use, a real browser, root, the installed daemon,
    a VM, or a decision of the owner), change no code: say so under the
@@ -605,7 +653,16 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 	elif [ "$row" = NONE ]; then
 		say "nothing left in scope (Needs: $NEEDS); done"; break
 	fi
-	IFS=$'\t' read -r id title notes _ <<<"$row"
+	IFS=$'\t' read -r id title notes needs <<<"$row"
+	use_vm=
+	if vm_item "$needs"; then
+		say "reverting $VM to $VM_SNAPSHOT for \`$id\`"
+		if vm_reset start; then use_vm=1
+		else
+			say "VM $VM did not come up on ssh $VM_SSH; waiting $IDLE_WAIT"
+			vm_reset; release; sleep "$IDLE_WAIT"; continue
+		fi
+	fi
 	pick_lead "$id"
 	round=$((round + 1))
 	base=$(git rev-parse HEAD)
@@ -618,9 +675,10 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 
 	claude_args "$TURNS" "$lead_model" "$lead_effort"
 	prompt "$id" "$title" "$notes" "$(locked claims others | while IFS=$'\t' read -r oid _; do
-		index_rows | awk -F'\t' -v i="$oid" '$1==i'; done)" "$lead_model at effort $lead_effort ($lead_why)" \
+		index_rows | awk -F'\t' -v i="$oid" '$1==i'; done)" "$lead_model at effort $lead_effort ($lead_why)" "$use_vm" \
 		| timeout "$TIMEOUT" claude "${args[@]}" >"$log" 2>&1
 	code=$?
+	[ -n "$use_vm" ] && { vm_reset || say "could not revert $VM"; }
 	say "$(usage_line "$log")"
 
 	status=$(sed -n 's/^STATUS: *//p' "$RESULT" 2>/dev/null | head -1)

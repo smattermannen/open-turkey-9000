@@ -1,6 +1,6 @@
 # Testing
 
-- Covers: `ci/`, `*_test.go`, `cmd/try-challenge/`
+- Covers: `ci/`, `*_test.go`, `cmd/try-challenge/`, `ci/autopilot.sh`
 - SPEC: §5 (tests name the rule they prove)
 - Connects to: every note; first read [locks](locks.md) before a test that locks anything
 
@@ -8,6 +8,10 @@
 
 - `./try-challenge.sh [len]` (`cmd/try-challenge/`): unlock challenge alone.
 - Root Chrome test: `go test -tags roottest -run Chrome ./internal/enforce`.
+- `ci/autopilot.sh`: unattended loop, one `claude -p` session per
+  `ROADMAP.md` item in a private clone; the script's gate (build, vet,
+  tests, SPEC.md untouched, ROADMAP.md changed) decides what lands on
+  branch `autopilot`. Run as a non-sudo user, never on the test laptop.
 
 ## Test laptop (owner's, Mint 22.3, `TAGS=devmaster`, used for real)
 

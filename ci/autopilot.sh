@@ -53,6 +53,11 @@
 # Following main: before each round, $AUTOPILOT_FROM on GitHub is brought
 # into $BRANCH (fast-forward, else a merge; a conflict is logged and left).
 #
+# The merge review: work that passed the gate is read by a $RESOLVER_MODEL
+# session (no edits) that says yes or no; only then does it land on
+# $AUTOPILOT_BRANCH and fast-forward $MAIN (AUTOPILOT_MERGE_MAIN=0: not).
+# A no goes to the next session like any failure.
+#
 # A usage limit is not a failure: the round is retried after the reset.
 # Stop: touch ~/.local/state/kc9k-autopilot/STOP (every worker ends after
 # its round; starting a worker clears it).
@@ -87,7 +92,10 @@ PLAN=${AUTOPILOT_PLAN:-1}                     # 0 = stop when no item is left
 PLAN_MODEL=${AUTOPILOT_PLAN_MODEL:-opus}
 PLAN_EFFORT=${AUTOPILOT_PLAN_EFFORT:-xhigh}
 FOLLOW=${AUTOPILOT_FOLLOW:-1}                 # 0 = $BRANCH does not follow $FROM
-RESOLVER_MODEL=claude-opus-5-5                # the owner's rule: no other model decides
+RESOLVER_MODEL=claude-opus-5-5                # the owner's rule: no other model decides or merges
+MERGE_MAIN=${AUTOPILOT_MERGE_MAIN:-1}         # 1: what the merge review passes goes to $MAIN too
+MAIN=${AUTOPILOT_MAIN:-main}
+REVIEW_EFFORT=${AUTOPILOT_REVIEW_EFFORT:-xhigh}
 TAG='(By Opus)'
 GUI_TESTS=${AUTOPILOT_GUI_TESTS:-auto}        # auto: when xvfb-run exists
 BOX=${AUTOPILOT_BOX:-0}                       # 1 = sudo, root tests, box items
@@ -104,6 +112,7 @@ STATE=$ROOT/$WORKER
 REPO=$STATE/repo
 LOGS=$STATE/logs
 RESULT=$STATE/result.txt    # written by the session
+REVIEW=$STATE/review.txt    # written by the merge review
 NOTES=$ROOT/notes.md        # what failed, read by the next sessions
 SKIP=$ROOT/skip.txt         # item IDs given up on, one per line
 CLAIMS=$ROOT/claims.txt     # ID <tab> worker <tab> pid
@@ -160,6 +169,9 @@ if [ ! -d "$REPO/.git" ]; then
 	git -C "$REPO" remote add github "$ORIGIN"
 fi
 cd "$REPO" || exit 1
+# Rebases and sessions commit here: an identity unless the user has one.
+git config user.email >/dev/null || git config user.email "kc9k-autopilot@localhost"
+git config user.name >/dev/null || git config user.name "kc9k-autopilot ($WORKER)"
 
 # Index rows: ID <tab> item <tab> notes <tab> needs
 index_rows() {
@@ -298,7 +310,7 @@ for l in open(sys.argv[1], errors="replace"):
     if d.get("type") == "result": print("\n".join(d.get("modelUsage") or {}))' "$1"
 	} | grep -vx '<synthetic>' | grep . | sort -u)
 	[ "$models" = "$RESOLVER_MODEL" ] && return 0
-	echo "resolver log $1: served by '$(tr '\n' ' ' <<<"$models")', not $RESOLVER_MODEL only"; return 1
+	echo "session log $1: served by '$(tr '\n' ' ' <<<"$models")', not $RESOLVER_MODEL only"; return 1
 }
 
 claude_args() { # $1 = turns, $2 = model, $3 = effort (empty: the CLI's default)
@@ -306,6 +318,7 @@ claude_args() { # $1 = turns, $2 = model, $3 = effort (empty: the CLI's default)
 		--permission-mode "$PERM" --disallowedTools "Bash(git push:*)") # the script lands, after the gate
 	[ "$BOX" = 1 ] || args+=("Bash(sudo:*)" "Bash(kc9k-bin:*)" "Bash(./install.sh:*)" "Bash(make install:*)")
 	[ "$MODE" = resolver ] && args+=(Agent Task Workflow) # the decision is the resolver model's alone
+	[ "$MODE" = review ] && args+=(Edit Write NotebookEdit) # the review changes nothing
 	[ -n "${2:-}" ] && args+=(--model "$2")
 	[ -n "${3:-}" ] && args+=(--effort "$3")
 	[ -n "$BUDGET" ] && args+=(--max-budget-usd "$BUDGET")
@@ -588,19 +601,108 @@ wait_for_limit() { # sleeps until the reset the log names, else $LIMIT_WAIT
 	fi
 }
 
-# Under the land lock: onto the hub's $BRANCH, gate, fast-forward the hub.
-land() { # $1 = attempt branch; prints why it fails, returns 1
-	local attempt=$1 tip rlog
-	local gh
-	if [ "$PUSH" = 1 ] && git fetch -q github "$BRANCH" 2>/dev/null; then
-		# The owner may have pushed to $BRANCH on GitHub: follow it.
-		gh=$(git rev-parse FETCH_HEAD)
-		git fetch -q origin "$BRANCH"
-		git merge-base --is-ancestor "origin/$BRANCH" "$gh" \
-			&& git push -q origin "$gh:refs/heads/$BRANCH"
+review_prompt() { # $1 = base, $2 = what the commits are for
+	cat <<EOF
+You are the merge reviewer of an unattended loop working on this
+repository. What you approve is merged into the main branch with no person
+reading it first: you are the last check. Decide whether the commits
+$1..HEAD may be merged. They are for: $2
+
+1. Read CLAUDE.md. Run git log --oneline $1..HEAD and git diff $1..HEAD.
+   Read the ROADMAP.md item and the SPEC.md rules the change cites, and
+   whatever code you need to judge it. Build, vet, the tests and the GUI
+   smoke tests already passed; you may run tests again.
+2. Say no when any of these holds:
+   - it does not do what the item asks, or does more (other items' work,
+     unrelated rewrites);
+   - the tests do not prove the rules they name, or would pass without
+     the change;
+   - tests, checks or the weakening audit were deleted, skipped or
+     loosened (t.Skip, removed cases, weaker assertions, longer timeouts
+     hiding a bug) without a reason that holds;
+   - a path lets a locked block be weakened (R-WEAK-1/2), a lock be
+     written without confirmation (R-LOCK-12), or the GUI decide anything;
+   - ROADMAP.md claims more than was verified (where real use is still
+     needed it must say "on the laptop: Unchecked"), or a note was not
+     updated with the code;
+   - SPEC.md changed without $TAG on every change, or a decision there
+     contradicts the owner's decisions (§6 entries without $TAG) or §2;
+   - anything else a careful maintainer would not merge: a security hole,
+     data loss, behaviour you can see is broken.
+   Small matters of style are no reason to say no.
+3. Change nothing: no edits, no commits. Subagents only with model opus.
+4. Last, write exactly this to $REVIEW:
+   MERGE: yes | no
+   REASONS:
+   - <for no: each reason, with file:line, specific enough for the next
+     session to fix it; for yes: one line on what you checked>
+EOF
+}
+
+# The merge review: $RESOLVER_MODEL reads the commits and says yes or no.
+review() { # $1 = base, $2 = what the commits are for; prints why not, returns 1
+	local head log was=$MODE verdict tries=0
+	head=$(git rev-parse HEAD)
+	while :; do
+		log="$LOGS/$(basename "$(git rev-parse --abbrev-ref HEAD)")-review-$(date +%H%M%S).jsonl"
+		rm -f "$REVIEW"
+		MODE=review; claude_args 120 "$RESOLVER_MODEL" "$REVIEW_EFFORT"; MODE=$was
+		review_prompt "$1" "$2" | timeout 90m claude "${args[@]}" >"$log" 2>&1
+		if [ "$(git rev-parse HEAD)" != "$head" ]; then
+			git reset -q --hard "$head"; echo "the merge review committed (log $log)"; return 1
+		fi
+		git reset -q --hard "$head"; git clean -qfd
+		[ -s "$REVIEW" ] || ! limit_hit "$log" || [ "$tries" -ge 3 ] && break
+		tries=$((tries + 1)); wait_for_limit "$log"
+	done
+	model_check "$log" || return 1
+	verdict=$(sed -n 's/^MERGE: *//p' "$REVIEW" 2>/dev/null | head -1)
+	if [ "$verdict" = yes ]; then
+		say "merge review: yes ($(usage_line "$log"))"; return 0
 	fi
+	echo "merge review said ${verdict:-nothing} (log $log):"
+	sed -n '/^REASONS:/,$p' "$REVIEW" 2>/dev/null | tail -n +2 | head -40
+	return 1
+}
+
+# The owner may push to $MAIN or $BRANCH on GitHub: build on it. Sets
+# MAIN_PAUSED when $MAIN cannot be merged into $BRANCH without conflicts.
+sync_github() {
+	local gh here
+	MAIN_PAUSED=
+	[ "$PUSH" = 1 ] || return 0
+	git fetch -q origin "$BRANCH"
+	if git fetch -q github "$BRANCH" 2>/dev/null; then
+		gh=$(git rev-parse FETCH_HEAD)
+		git merge-base --is-ancestor "origin/$BRANCH" "$gh" \
+			&& git push -q origin "$gh:refs/heads/$BRANCH" && git fetch -q origin "$BRANCH"
+	fi
+	[ "$MERGE_MAIN" = 1 ] && git fetch -q github "$MAIN" 2>/dev/null || return 0
+	gh=$(git rev-parse FETCH_HEAD)
+	git merge-base --is-ancestor "$gh" "origin/$BRANCH" && return 0
+	if git merge-base --is-ancestor "origin/$BRANCH" "$gh"; then
+		git push -q origin "$gh:refs/heads/$BRANCH"; git fetch -q origin "$BRANCH"; return 0
+	fi
+	here=$(git rev-parse --abbrev-ref HEAD)
+	git checkout -q --detach "origin/$BRANCH"
+	if git -c user.name=kc9k-autopilot -c user.email=autopilot@localhost merge -q --no-edit "$gh" >/dev/null 2>&1; then
+		git push -q origin "HEAD:refs/heads/$BRANCH"; git fetch -q origin "$BRANCH"
+		say "merged the owner's $MAIN into $BRANCH"
+	else
+		git merge --abort; MAIN_PAUSED=1
+		say "the owner's $MAIN conflicts with $BRANCH: merging to $MAIN paused"
+	fi
+	git checkout -q "$here"
+}
+
+# Under the land lock: onto the hub's $BRANCH (and the owner's pushes),
+# gate again if anything moved, fast-forward $BRANCH and $MAIN.
+land() { # $1 = attempt branch, $2 = its base (gated and reviewed against it)
+	local attempt=$1 tip rlog moved=
+	sync_github
 	git fetch -q origin "$BRANCH" || { echo "fetch from hub failed"; return 1; }
 	tip=$(git rev-parse "origin/$BRANCH")
+	[ "$tip" = "$2" ] || moved=1
 	if ! git rebase -q "origin/$BRANCH" >/dev/null 2>&1; then
 		git rebase --abort
 		say "rebase conflict; a session resolves it"
@@ -612,10 +714,21 @@ land() { # $1 = attempt branch; prints why it fails, returns 1
 			git rebase --abort; echo "rebase conflict left unresolved (log $rlog)"; return 1
 		fi
 		git merge-base --is-ancestor "$tip" HEAD || { echo "rebase not done (log $rlog)"; return 1; }
+		# A session changed the reviewed work: review it again.
+		review "$tip" "$REVIEW_WHAT (rebased; a session resolved conflicts)" || return 1
 	fi
-	gate "$tip" || return 1
+	if [ -n "$moved" ]; then gate "$tip" || return 1; fi
 	git push -q origin "HEAD:refs/heads/$BRANCH" || { echo "push to hub failed"; return 1; }
-	if [ "$PUSH" = 1 ]; then git push -q github "HEAD:refs/heads/$BRANCH" || say "push to GitHub failed"; fi
+	if [ "$PUSH" = 1 ]; then git push -q github "HEAD:refs/heads/$BRANCH" || say "push of $BRANCH to GitHub failed"; fi
+	if [ "$MERGE_MAIN" = 1 ] && [ -z "$MAIN_PAUSED" ]; then
+		git push -q origin "HEAD:refs/heads/$MAIN" || { say "hub $MAIN is not behind $BRANCH: not merged"; return 0; }
+		if [ "$PUSH" = 1 ]; then
+			git push -q github "HEAD:refs/heads/$MAIN" && say "MERGED into $MAIN on GitHub" \
+				|| say "push of $MAIN to GitHub failed (the owner pushed meanwhile?); next landing retries"
+		else
+			say "MERGED into the hub's $MAIN"
+		fi
+	fi
 }
 
 resolver_round() {
@@ -638,7 +751,9 @@ resolver_round() {
 	fi
 	if [ "$(git rev-list --count "$base"..HEAD)" -eq 0 ]; then
 		say "resolver: decided nothing"
-	elif why=$(locked land land "$attempt" 2>&1); then
+	elif REVIEW_WHAT="resolver decisions into SPEC.md and ROADMAP.md" \
+		&& why=$(gate "$base" 2>&1) && why=$(review "$base" "$REVIEW_WHAT" 2>&1) \
+		&& why=$(locked land land "$attempt" "$base" 2>&1); then
 		say "RESOLVER PASSED: $BRANCH now $(git log -1 --format='%h %s')"
 		for id in $unskip; do
 			grep -vxF -- "$id" "$SKIP" >"$SKIP.new"; mv "$SKIP.new" "$SKIP"; say "unskipped \`$id\`"
@@ -735,7 +850,9 @@ planner_round() { # returns 1 when the project is finished
 	fi
 	if [ "$(git rev-list --count "$base..$attempt")" -gt 0 ]; then
 		git checkout -q "$attempt"
-		if why=$(locked land land "$attempt" 2>&1); then
+		REVIEW_WHAT="planner: new ROADMAP.md items"
+		if why=$(gate "$base" 2>&1) && why=$(review "$base" "$REVIEW_WHAT" 2>&1) \
+			&& why=$(locked land land "$attempt" "$base" 2>&1); then
 			say "PLANNER PASSED: $BRANCH now $(git log -1 --format='%h %s')"
 		else
 			say "PLANNER FAILED, kept as $attempt: $(head -1 <<<"$why")"
@@ -823,7 +940,9 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 		continue
 	fi
 
-	if why=$(locked land land "$attempt" 2>&1); then
+	REVIEW_WHAT="ROADMAP.md item \`$id\` ($title)"
+	if why=$(gate "$base" 2>&1) && why=$(review "$base" "$REVIEW_WHAT" 2>&1) \
+		&& why=$(locked land land "$attempt" "$base" 2>&1); then
 		say "PASSED: $BRANCH now $(git log -1 --format='%h %s')"
 		git checkout -q -f "$BRANCH"; git branch -qD "$attempt"
 		fails=0

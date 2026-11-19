@@ -133,7 +133,7 @@ func fileOwner(t *testing.T, path string) uint64 {
 
 func findWindow(t *testing.T, display, xauth, title string) (X11Window, bool) {
 	t.Helper()
-	for i := 0; i < 40; i++ {
+	for i := 0; i < 150; i++ { // up to 15 s: parallel test runs slow xterm down
 		c, err := openUserDisplay(display, xauth, fileOwner(t, xauth))
 		if err != nil {
 			t.Fatal(err)

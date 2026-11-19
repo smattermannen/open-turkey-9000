@@ -85,6 +85,16 @@
   result's `modelUsage` (lead and subagents) and cost. The resolver runs
   at `AUTOPILOT_RESOLVER_EFFORT` (default `max`); `model_check` reads
   `modelUsage` too.
+- Merge review (`review`): after the gate (item, resolver and planner rounds), a `RESOLVER_MODEL` session
+  with no edit tools reads `base..HEAD` and writes `MERGE: yes|no` and
+  reasons; `model_check` on its log. Yes: `land` rebases (a conflict
+  session's result is reviewed again), gates again only if `$BRANCH`
+  moved, and fast-forwards `autopilot` and `main` (hub; GitHub with
+  `AUTOPILOT_PUSH=1`). No: a failed try with the reasons. `sync_github`
+  first builds on the owner's pushes to `main`; a conflict pauses
+  merging to `main` for that landing. `AUTOPILOT_MERGE_MAIN=0` keeps
+  `main` untouched. The clone gets a local git identity when the user
+  has none (rebases commit).
 - `ci/autopilot-team.sh DIR...`: one worker per Claude account, each
   `DIR` a `CLAUDE_CONFIG_DIR` logged in to its own account.
 - Parallel workers are one Unix user: each runs under its own

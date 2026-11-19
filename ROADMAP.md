@@ -782,7 +782,10 @@ Script-tested, never by a person. Script what can be into `ci/`.
 - [ ] `B5` Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
 - [ ] `B6` Websites tab on a real screen. (Address change without load: a
   `history.pushState` page is caught by a URL list in LibreWolf,
-  `extras_test.py`; on YouTube itself still Unchecked.)
+  `extras_test.py`; on YouTube itself still Unchecked.) Lists are
+  taller by dragging the grip under them (owner 2026-11-19; height kept
+  per kind in gui.json, `ci/gui_list_resize_smoke.py` under Xvfb): try it
+  on a real screen.
 - [ ] `B7` One-off logout/shutdown from a list; Dashboard monk button. (Checked
   2026-11-15: a timer-locked global ladder refuses `bypass off` and a weaker
   ladder, and turns off once the lock ends.)

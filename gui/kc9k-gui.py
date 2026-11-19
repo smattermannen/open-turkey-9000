@@ -1855,6 +1855,82 @@ def split_entries(text):
     return out
 
 
+class ResizeGrip(Gtk.EventBox):
+    """A handle under a list: drag it down to make the list taller, up to
+    make it shorter; a double-click puts it back. The height is remembered
+    in gui.json under key, so the list opens the same next time."""
+
+    MIN = 80
+
+    def __init__(self, target, key, default):
+        super().__init__(tooltip_text="Drag to make the list taller or shorter")
+        self.target, self.key, self.default = target, key, default
+        self.drag = None
+        line = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        line.get_style_context().add_class("kc9k-grip-line")
+        self.add(line)
+        self.get_style_context().add_class("kc9k-grip")
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK |
+                        Gdk.EventMask.BUTTON1_MOTION_MASK)
+        self.connect("realize", lambda w: w.get_window().set_cursor(
+            Gdk.Cursor.new_from_name(w.get_display(), "ns-resize")))
+        self.connect("button-press-event", self._press)
+        self.connect("motion-notify-event", self._motion)
+        self.connect("button-release-event", self._release)
+        height = self._heights().get(key)
+        if isinstance(height, int) and height >= self.MIN:
+            target.set_size_request(-1, height)
+
+    @staticmethod
+    def _prefs():
+        app = Gtk.Application.get_default()
+        return getattr(app, "prefs", None)
+
+    def _heights(self):
+        prefs = self._prefs()
+        heights = prefs.get("list_heights") if prefs is not None else None
+        return heights if isinstance(heights, dict) else {}
+
+    def set_height(self, height):
+        """Sets the list's height (None: back to its own) and remembers it."""
+        if height is not None:
+            height = max(self.MIN, int(height))
+        self.target.set_size_request(-1, -1 if height is None else height)
+        prefs = self._prefs()
+        if prefs is not None and self.key:
+            heights = dict(self._heights())
+            if height is None:
+                heights.pop(self.key, None)
+            else:
+                heights[self.key] = height
+            prefs["list_heights"] = heights
+            save_prefs(prefs)
+
+    def _press(self, _widget, event):
+        if event.button != 1:
+            return False
+        if event.type == Gdk.EventType._2BUTTON_PRESS:
+            self.drag = None
+            self.set_height(None)
+            return True
+        self.drag = (event.y_root, self.target.get_allocated_height())
+        return True
+
+    def _motion(self, _widget, event):
+        if self.drag is None:
+            return False
+        y0, start = self.drag
+        self.target.set_size_request(-1, max(self.MIN, int(start + event.y_root - y0)))
+        return True
+
+    def _release(self, _widget, event):
+        if self.drag is None or event.button != 1:
+            return False
+        self.drag = None
+        self.set_height(self.target.get_size_request()[1])
+        return True
+
+
 class EditableList(Gtk.Box):
     """A titled list with an entry for adding and a button for removing.
 
@@ -1865,7 +1941,7 @@ class EditableList(Gtk.Box):
 
     def __init__(self, title, placeholder, on_add, on_remove,
                  on_import=None, on_export=None, help_text="", search=False, hidden=False,
-                 on_activate=None, split=None, entry=True, multi=False):
+                 on_activate=None, split=None, entry=True, multi=False, size_key=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.on_add, self.on_remove = on_add, on_remove
         self.split = split or split_entries
@@ -1917,6 +1993,9 @@ class EditableList(Gtk.Box):
         self.stack.add_named(frame, "cover")
         self.stack.add_named(scroll, "list")
         self.pack_start(self.stack, True, True, 0)
+        # Long lists are easier to read through taller: drag the grip down.
+        self.grip = ResizeGrip(self.stack, size_key or title or placeholder, 120)
+        self.pack_start(self.grip, False, False, 0)
 
         row = self.button_row = Gtk.Box(spacing=6)
         self.entry = Gtk.Entry(placeholder_text=placeholder)
@@ -2152,7 +2231,7 @@ class ListCard(Gtk.Frame):
             "", "reddit.com  *casino*  nsfw", self.add_entries, self.remove_entry,
             lambda: window.import_list(["list", "import", window.selected, self.data["name"]]),
             lambda: window.export_list(["list", "export", window.selected, self.data["name"]]),
-            search=True, hidden=True, multi=True)
+            search=True, hidden=True, multi=True, size_key="website list")
         box.pack_start(self.entries, True, True, 0)
         self.update(data)
 
@@ -2590,7 +2669,7 @@ class PhraseSetCard(ListCard):
             "", "", self.add_entries, self.remove_entry,
             lambda: window.import_into_phrase_set(self),
             lambda: window.export_list(["phrase-set", "export", window.selected, self.data["name"]]),
-            search=True, hidden=True, on_activate=self.edit_phrase,
+            search=True, hidden=True, on_activate=self.edit_phrase, size_key="phrase set",
             split=lambda text: [text.strip()] if text.strip() else [], entry=False, multi=True)
         box.pack_start(self.entries, True, True, 0)
         box.pack_start(dim("Double-click a phrase to load it into the editor below."), False, False, 0)
@@ -11123,6 +11202,12 @@ label.kc9k-card-name { font-size: 1.3em; font-weight: 800; }
 frame.kc9k-listcard > border { border-radius: 12px; border: 1px solid alpha(@theme_fg_color, 0.13);
   background-color: @theme_base_color; }
 button.kc9k-help { padding: 0 6px; min-height: 0; min-width: 0; border-radius: 999px; }
+
+/* The grip under a list: drag to make it taller. */
+.kc9k-grip { min-height: 10px; margin-top: -4px; }
+.kc9k-grip-line { min-width: 36px; min-height: 3px; border-radius: 2px;
+  background-color: alpha(@theme_fg_color, 0.25); }
+.kc9k-grip:hover .kc9k-grip-line { background-color: alpha(@theme_selected_bg_color, 0.9); }
 """
 
 

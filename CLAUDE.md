@@ -6,7 +6,7 @@ Linux productivity blocker: CLI + systemd daemon + browser extension + GTK GUI.
 
 | File | Holds | Changes |
 |---|---|---|
-| `SPEC.md` | What KC9K should be: principles, glossary, rules, decisions | Only with the owner |
+| `SPEC.md` | What KC9K should be: principles, glossary, rules, decisions | With the owner, or the autopilot's resolver (tagged *(By Opus)*) |
 | `ROADMAP.md` | Status against `SPEC.md`; next work. Only status file | Same commit as the code |
 | `CLAUDE.md` | Shared rules, build, test, note index | Agents |
 | `notes/*.md` | Code layout and built behaviour, one note per area | Agents, same commit as the code |
@@ -26,7 +26,7 @@ Read only what your work needs:
    read one more note rather than guess.
 
 Code vs `SPEC.md`: `SPEC.md` wins; log the gap in `ROADMAP.md`. If `SPEC.md`
-seems wrong or silent, ask the owner. Fix before adding (`ROADMAP.md` §0). No
+seems wrong or silent, ask the owner (unattended: a `ROADMAP.md` §5 entry). Fix before adding (`ROADMAP.md` §0). No
 other planning/status files. No user-facing docs. A change to code updates
 its note in the same commit; a fact lives in exactly one note.
 

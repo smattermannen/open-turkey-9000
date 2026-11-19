@@ -21,6 +21,15 @@
   `AUTOPILOT_ROUNDS=0` runs until `STOP`. State in
   `~/.local/state/kc9k-autopilot/`. Run as a non-sudo user, never on the
   test laptop.
+- Resolver round (`resolver_round`): when the open questions (§5 entries
+  not `DECIDED`/`FOR THE OWNER`, SPEC §7, `skip.txt`) differ from the
+  last run's (`resolver-seen.txt`), one worker (claim `RESOLVER`) runs a
+  session on `RESOLVER_MODEL`, no subagents. It decides into SPEC.md
+  tagged `(By Opus)` or marks `FOR THE OWNER`; `UNSKIP:` IDs leave
+  `skip.txt`. The gate: only SPEC.md and ROADMAP.md, every SPEC hunk
+  tagged, nothing above SPEC's Index, no untagged §6 line removed
+  (`spec_check`), every turn of the session and of a conflict session on
+  that model (`model_check`). `AUTOPILOT_RESOLVE=0` turns it off.
 - `ci/autopilot-team.sh DIR...`: one worker per Claude account, each
   `DIR` a `CLAUDE_CONFIG_DIR` logged in to its own account.
 - `startX` (`blocker/x11_test.go`) takes a display only when its lock

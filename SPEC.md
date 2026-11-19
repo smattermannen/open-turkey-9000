@@ -3,10 +3,14 @@
 What KC9K is meant to be. Status lives in `ROADMAP.md`.
 
 Rules for this file:
-1. Changed only with the owner's agreement; log it in §6.
+1. Changed only with the owner's agreement; log it in §6. Exception: the
+   autopilot's resolver (`ci/autopilot.sh`) decides open questions; every
+   change it makes ends with *(By Opus)*. It never changes these rules or
+   an owner decision; the owner can overrule any of its decisions.
 2. No status or work items.
 3. Use the glossary's words exactly, everywhere. New names go here first.
-4. Where code or docs disagree, this file wins. If it seems wrong, ask the owner.
+4. Where code or docs disagree, this file wins. If it seems wrong, ask the owner
+   (unattended sessions: an entry in `ROADMAP.md` §5 for the resolver).
 5. Rules (§5) have IDs; tests name the rule they prove.
 6. *CT: …* gives Cold Turkey's word.
 
@@ -623,6 +627,7 @@ Decisions not already written into §1–5:
 - 2026-11-18: The clock check (§4.10 tamper protection) may ask internet time: an outside query the owner agreed to (principle 6).
 - 2026-11-18: SafeSearch is lockable per engine: Google, Bing, DuckDuckGo and YouTube are each their own browser setting (§4.10).
 - 2026-11-18: When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
+- 2026-11-19: The autopilot's resolver may write decisions into this file, each change tagged as rule 1 says; only the owner's decisions are untagged (owner).
 
 ## 7. Open decisions
 

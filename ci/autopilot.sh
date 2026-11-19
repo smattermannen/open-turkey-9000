@@ -80,6 +80,12 @@ fi
 command -v claude >/dev/null || die "claude not found"
 command -v go >/dev/null || die "go not found (expected in /usr/local/go/bin)"
 command -v flock >/dev/null || die "flock not found (util-linux)"
+# A private D-Bus session bus per worker: the GUI smoke tests register fixed
+# GTK application IDs, and two workers' tests on one bus would meet.
+if [ -z "${AUTOPILOT_OWN_BUS:-}" ]; then
+	command -v dbus-run-session >/dev/null || die "dbus-run-session not found (package dbus)"
+	AUTOPILOT_OWN_BUS=1 exec dbus-run-session -- "$0" "$@"
+fi
 
 mkdir -p "$LOGS"; touch "$NOTES" "$SKIP" "$CLAIMS"
 rm -f "$ROOT/STOP"

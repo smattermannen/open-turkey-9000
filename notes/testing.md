@@ -32,8 +32,11 @@
   that model (`model_check`). `AUTOPILOT_RESOLVE=0` turns it off.
 - `ci/autopilot-team.sh DIR...`: one worker per Claude account, each
   `DIR` a `CLAUDE_CONFIG_DIR` logged in to its own account.
-- `startX` (`blocker/x11_test.go`) takes a display only when its lock
-  file names its own Xvfb: parallel workers race for displays.
+- Parallel workers are one Unix user: each runs under its own
+  `dbus-run-session` (the GUI smoke tests' fixed application IDs would
+  meet on one bus); `startX` (`blocker/x11_test.go`) takes a display only
+  when its lock file names its own Xvfb. Go tests use port 0 and
+  `t.TempDir()`; two full `go test ./...` at once pass.
 
 ## Test laptop (owner's, Mint 22.3, `TAGS=devmaster`, used for real)
 

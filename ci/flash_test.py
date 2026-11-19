@@ -6,7 +6,7 @@ Run on a disposable machine (installed KC9K, TAGS=devmaster):
     GECKOWEBDRIVER=<dir with geckodriver> python3 ci/flash_test.py
 
 Each test page records, at every animation frame (just before it is
-painted), whether its content is visible (the root's opacity) and the
+painted), whether its content is visible (the body's opacity) and the
 root's filter, in localStorage; a page of the same site reads them back
 after the blocked one is gone.
 """
@@ -60,7 +60,8 @@ RECORDER = """<script>
     const root = document.documentElement;
     const cs = getComputedStyle(root);
     const text = document.body ? document.body.innerText : "";
-    frames.push(cs.opacity + "|" + cs.filter + "|" + (word.test(text) ? 1 : 0) + "|" + Math.round(performance.now()));
+    const shown = document.body ? getComputedStyle(document.body).opacity : cs.opacity;
+    frames.push(shown + "|" + cs.filter + "|" + (word.test(text) ? 1 : 0) + "|" + Math.round(performance.now()));
     try { localStorage.setItem(key, JSON.stringify(frames)); } catch (e) {}
     if (frames.length < 400) requestAnimationFrame(tick);
   }

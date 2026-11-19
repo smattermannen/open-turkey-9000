@@ -617,7 +617,12 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     blocked word for 2–16 frames on load and ~2 s after an address change;
     now none. All browser suites pass in LibreWolf (run in a cloud
     container, 98 checks). Confirm on the laptop: Chrome, and real sites
-    (a 0.5 s blank on pages while text lists are on). M
+    (a 0.5 s blank on pages while text lists are on). Owner 2026-11-19:
+    every page flashed white on opening or a click, with only small lists.
+    Cause: opacity 0 on the root also hid the canvas, so the blank was
+    white, dark pages too. Extension 1.27.0 hides what the root holds
+    instead; the page's own background stays (`ci/content_harness_test.js`
+    checks a dark page's pixel while hidden). Confirm on the laptop. M
   - [x] `A9` (Owner 2026-11-18: the design has become tremendous.) GUI overall unclear, hard to read, not pretty or easy to use (owner,
     2026-11-15; R-GUI-3). Redesign page by page. Done: a design layer
     (cards, status pills, page titles with one-line subtitles, ? popovers

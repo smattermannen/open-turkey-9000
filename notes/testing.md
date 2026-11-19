@@ -17,7 +17,9 @@
   rebase onto the shared hub (`hub.git`; a short session resolves
   conflicts), gate (build, vet, tests, GUI smoke, SPEC.md untouched,
   ROADMAP.md changed), fast-forward `autopilot`. STUCK or failing twice
-  → `skip.txt`. A usage limit retries the round after the reset;
+  → `skip.txt`. A usage limit retries the round after the reset (the
+  stream's `rate_limit_event` lines are not one); a session that ends
+  without a result logs why (`session_error`);
   `AUTOPILOT_ROUNDS=0` runs until `STOP`. State in
   `~/.local/state/kc9k-autopilot/`. Run as a non-sudo user, never on the
   test laptop, unless in box mode.
@@ -26,7 +28,8 @@
   `git push` stays blocked: the script lands after the gate); Needs
   default `agent|box`; the gate adds every `roottest` test via
   `sudo -n go test -tags roottest` (`root_tests`). Needs passwordless
-  sudo (checked at start); one box worker per machine (`box.lock`). The
+  sudo (checked at start). Several box workers may run (`autopilot-team.sh`);
+  only one holds a box-only item (Needs without `agent`) at a time. The
   prompt still sends network cuts, logout, shutdown, reboot and freezing
   to a VM (STUCK) and asks the session to remove its test blocks.
 - Resolver round (`resolver_round`): when the open questions (§5 entries

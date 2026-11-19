@@ -26,7 +26,8 @@
 # browsers and the X11 desktop, and also take Index items whose Needs is
 # "box". The gate adds the roottest tests (run as root). Needs sudo without
 # a password for this user (/etc/sudoers.d/kc9k-autopilot:
-# "<user> ALL=(ALL) NOPASSWD: ALL"). One box worker per machine; "vm" items
+# "<user> ALL=(ALL) NOPASSWD: ALL"). Box workers share the machine: only
+# one holds an item that needs it (Needs without "agent") at a time; "vm" items
 # (network cuts, logout, shutdown, reboots) are still left to a VM.
 #
 # The resolver: when ROADMAP.md §5, SPEC.md §7 or the skipped items hold
@@ -111,10 +112,6 @@ if [ -z "${AUTOPILOT_OWN_BUS:-}" ]; then
 fi
 
 mkdir -p "$LOGS"; touch "$NOTES" "$SKIP" "$CLAIMS"
-if [ "$BOX" = 1 ]; then # the machine is shared state: one box worker
-	exec 8>"$ROOT/box.lock"
-	flock -n 8 || die "another box worker runs on this machine"
-fi
 rm -f "$ROOT/STOP"
 
 init_hub() {
@@ -149,9 +146,15 @@ others() {
 
 release() { locked claims sed -i "/\t$WORKER\t/d" "$CLAIMS"; }
 
+box_only() { ! grep -qE '(^|[ ,])agent([ ,]|$)' <<<"$1"; } # $1 = Needs
+
 claim_next() { # prints the claimed row, or "WAIT" / "NONE"
-	local live id title notes needs held=0
+	local live id title notes needs held=0 box_busy=0
 	live=$(others)
+	# Box items use the machine itself (daemon, browsers, desktop): one at a time.
+	while IFS=$'\t' read -r id _ _ needs; do
+		cut -f1 <<<"$live" | grep -qxF -- "$id" && box_only "$needs" && box_busy=1
+	done < <(index_rows)
 	# Keep only live claims of others; ours is written below.
 	awk -F'\t' -v me="$WORKER" '$2!=me' "$CLAIMS" | while IFS=$'\t' read -r id w pid; do
 		kill -0 "$pid" 2>/dev/null && printf '%s\t%s\t%s\n' "$id" "$w" "$pid"
@@ -160,6 +163,7 @@ claim_next() { # prints the claimed row, or "WAIT" / "NONE"
 		grep -qE "(^|[ ,])($NEEDS)([ ,]|$)" <<<"$needs" || continue
 		grep -qxF -- "$id" "$SKIP" && continue
 		if cut -f1 <<<"$live" | grep -qxF -- "$id"; then held=1; continue; fi
+		if [ "$box_busy" = 1 ] && box_only "$needs"; then held=1; continue; fi
 		printf '%s\t%s\t%s\n' "$id" "$WORKER" "$$" >>"$CLAIMS"
 		printf '%s\t%s\t%s\t%s\n' "$id" "$title" "$notes" "$needs"
 		return
@@ -480,7 +484,28 @@ EOF
 }
 
 limit_hit() { # $1 = session log; true if the session ended on a usage limit
-	tail -5 "$1" | grep -qiE 'usage limit|limit reached|hit your limit|rate.?limit|out of (extra )?usage'
+	# (not the stream's rate_limit_event lines, which every session has)
+	tail -5 "$1" | grep -v '"type": *"rate_limit_event"' \
+		| grep -qiE 'usage limit|limit reached|hit your limit|rate.?limit|out of (extra )?usage'
+}
+
+# Why a session ended without a result: its result text or last lines.
+session_error() { # $1 = session log
+	python3 -I - "$1" <<'PYEOF' 2>/dev/null || tail -3 "$1"
+import json, sys
+last, res = [], None
+for line in open(sys.argv[1], errors="replace"):
+    try:
+        d = json.loads(line)
+    except ValueError:
+        if line.strip(): last.append(line.strip())
+        continue
+    if d.get("type") == "result": res = d
+if res and (res.get("is_error") or res.get("subtype") != "success"):
+    print(res.get("subtype"), str(res.get("result") or res.get("errors") or "")[:400])
+else:
+    print(" | ".join(last[-3:])[:400] or "(empty log)")
+PYEOF
 }
 
 wait_for_limit() { # sleeps until the reset the log names, else $LIMIT_WAIT
@@ -601,6 +626,7 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 	status=$(sed -n 's/^STATUS: *//p' "$RESULT" 2>/dev/null | head -1)
 	summary=$(sed -n 's/^SUMMARY: *//p' "$RESULT" 2>/dev/null | head -1)
 	say "session exit $code, ${status:-no result}: \`$id\` — ${summary:-}"
+	[ -z "$status" ] && say "session output: $(session_error "$log")"
 
 	if [ -z "$status" ] && limit_hit "$log"; then
 		git checkout -q -f "$BRANCH"

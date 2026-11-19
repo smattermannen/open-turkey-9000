@@ -46,8 +46,14 @@ TRIES=${AUTOPILOT_TRIES:-2}                   # failed tries per item → skip i
 TURNS=${AUTOPILOT_TURNS:-300}
 BUDGET=${AUTOPILOT_BUDGET_USD:-}              # per session, empty = none
 TIMEOUT=${AUTOPILOT_TIMEOUT:-4h}
-MODEL=${AUTOPILOT_MODEL:-}
-EFFORT=${AUTOPILOT_EFFORT:-}                  # item sessions: e.g. xhigh, max, ultracode (agent teams)
+MODEL=${AUTOPILOT_MODEL:-}                    # set: every item session on this model
+EFFORT=${AUTOPILOT_EFFORT:-}                  # set: every item session at this effort
+# Otherwise a triage session sizes each item and the tier picks both
+# ("model effort"; effort ultracode = agent teams). A retry is one tier up.
+TIER1=${AUTOPILOT_TIER1:-sonnet high}         # small, low risk
+TIER2=${AUTOPILOT_TIER2:-opus xhigh}          # medium, or high risk
+TIER3=${AUTOPILOT_TIER3:-opus xhigh}          # large
+TRIAGE_MODEL=${AUTOPILOT_TRIAGE_MODEL:-haiku}
 RESOLVER_EFFORT=${AUTOPILOT_RESOLVER_EFFORT:-max} # one careful chain, no agents
 PERM=${AUTOPILOT_PERMISSION_MODE:-bypassPermissions}
 PUSH=${AUTOPILOT_PUSH:-0}
@@ -65,6 +71,7 @@ RESULT=$STATE/result.txt    # written by the session
 NOTES=$ROOT/notes.md        # what failed, read by the next sessions
 SKIP=$ROOT/skip.txt         # item IDs given up on, one per line
 CLAIMS=$ROOT/claims.txt     # ID <tab> worker <tab> pid
+TRIAGE=$ROOT/triage.txt     # ID <tab> hash of the item's text <tab> size <tab> risk
 SEEN=$ROOT/resolver-seen.txt # the questions the resolver last had (hash)
 export PATH="/usr/local/go/bin:$PATH"
 
@@ -191,24 +198,103 @@ spec_check() { # $1 = base
 # Every turn of the session was served by $RESOLVER_MODEL.
 model_check() { # $1 = session log (stream-json)
 	local models
-	models=$(grep -oE '"model": *"[^"]*"' "$1" | sed 's/.*"\([^"]*\)"$/\1/' | grep -vx '<synthetic>' | sort -u)
+	models=$( { grep -oE '"model": *"[^"]*"' "$1" | sed 's/.*"\([^"]*\)"$/\1/'
+		python3 -I -c 'import json,sys
+for l in open(sys.argv[1], errors="replace"):
+    try: d = json.loads(l)
+    except ValueError: continue
+    if d.get("type") == "result": print("\n".join(d.get("modelUsage") or {}))' "$1"
+	} | grep -vx '<synthetic>' | grep . | sort -u)
 	[ "$models" = "$RESOLVER_MODEL" ] && return 0
 	echo "resolver log $1: served by '$(tr '\n' ' ' <<<"$models")', not $RESOLVER_MODEL only"; return 1
 }
 
-claude_args() { # $1 = turns, $2 = model (default $MODEL)
-	local m=${2:-$MODEL}
+claude_args() { # $1 = turns, $2 = model, $3 = effort (empty: the CLI's default)
 	args=(-p --output-format stream-json --verbose --max-turns "$1"
 		--permission-mode "$PERM"
 		--disallowedTools "Bash(sudo:*)" "Bash(git push:*)" "Bash(kc9k-bin:*)" "Bash(./install.sh:*)" "Bash(make install:*)")
-	[ "$MODE" = resolver ] && args+=(Agent Task) # the decision is the resolver model's alone
-	[ -n "$m" ] && args+=(--model "$m")
-	if [ "$MODE" = resolver ]; then args+=(--effort "$RESOLVER_EFFORT")
-	elif [ -n "$EFFORT" ]; then args+=(--effort "$EFFORT"); fi
+	[ "$MODE" = resolver ] && args+=(Agent Task Workflow) # the decision is the resolver model's alone
+	[ -n "${2:-}" ] && args+=(--model "$2")
+	[ -n "${3:-}" ] && args+=(--effort "$3")
 	[ -n "$BUDGET" ] && args+=(--max-budget-usd "$BUDGET")
 }
 
-prompt() { # $1 = ID, $2 = item, $3 = notes, $4 = other workers' rows
+# The item's own text: its Index row and its section in ROADMAP.md.
+item_text() { # $1 = ID
+	index_rows | awk -F'\t' -v i="$1" '$1==i'
+	awk -v id="\`$1\`" 'f && (/^- \[/ || /^#/) {exit} index($0, id) && /^- \[/ {f=1} f' ROADMAP.md
+}
+
+# Prints "size risk" (S|M|L, low|high), from a cheap read-only session,
+# cached until the item's text changes. Unsure → "M high": the safe side.
+triage() { # $1 = ID
+	local text key line size risk out
+	text=$(item_text "$1"); key=$(sha256sum <<<"$text" | cut -c1-16)
+	line=$(awk -F'\t' -v i="$1" -v k="$key" '$1==i && $2==k {print $3" "$4}' "$TRIAGE" 2>/dev/null | tail -1)
+	[ -n "$line" ] && { echo "$line"; return; }
+	out=$(timeout 15m claude -p --model "$TRIAGE_MODEL" --effort low --max-turns 12 \
+		--allowedTools Read Grep Glob --disallowedTools Bash Edit Write Agent Task Workflow <<EOF 2>/dev/null
+Classify one work item of this repository for an unattended coding loop.
+Read only what you need (CLAUDE.md's note table, the SPEC.md rules the
+item cites, the files its notes name). Do not change anything.
+
+$text
+
+SIZE: S (one or two files, under a few hours), M (several files, about a
+day), or L (many files or a new subsystem, days).
+RISK: high if a subtle mistake would weaken a lock, a block, enforcement,
+the weakening audit, passwords or security, or lose the user's data;
+otherwise low.
+Answer with exactly two lines and nothing else:
+SIZE: S|M|L
+RISK: low|high
+EOF
+)
+	size=$(grep -oE '^SIZE: *[SML]\b' <<<"$out" | grep -oE '[SML]$' | head -1)
+	risk=$(grep -oE '^RISK: *(low|high)' <<<"$out" | grep -oE '(low|high)$' | head -1)
+	if [ -z "$size" ] || [ -z "$risk" ]; then echo "M high"; return; fi
+	printf '%s\t%s\t%s\t%s\n' "$1" "$key" "$size" "$risk" >>"$TRIAGE"
+	echo "$size $risk"
+}
+
+# Sets lead_model, lead_effort, lead_why for the item.
+pick_lead() { # $1 = ID
+	local size risk tier tries t
+	read -r size risk <<<"$(triage "$1")"
+	tier=1
+	{ [ "$size" = M ] || [ "$risk" = high ]; } && tier=2
+	[ "$size" = L ] && tier=3
+	tries=$(grep -cF -- "— [$1] " "$NOTES")
+	[ "$tries" -gt 0 ] && tier=$((tier + tries))
+	[ "$tier" -gt 3 ] && tier=3
+	case $tier in 1) t=$TIER1 ;; 2) t=$TIER2 ;; *) t=$TIER3 ;; esac
+	lead_model=${MODEL:-${t%% *}}
+	lead_effort=${EFFORT:-${t#* }}
+	lead_why="size $size, risk $risk, $tries earlier failed tries: tier $tier"
+}
+
+# Which models served the session (its result's modelUsage: the lead and
+# every subagent), their output tokens, and what it cost.
+usage_line() { # $1 = session log
+	python3 -I - "$1" <<'EOF' 2>/dev/null || echo "models: ?"
+import json, sys
+res = None
+for line in open(sys.argv[1], errors="replace"):
+    try:
+        d = json.loads(line)
+    except ValueError:
+        continue
+    if d.get("type") == "result":
+        res = d
+if not res:
+    print("models: ? (no result)"); sys.exit()
+mu = res.get("modelUsage") or {}
+parts = ["%s %dk out" % (m, (u.get("outputTokens") or 0) // 1000) for m, u in sorted(mu.items())]
+print("models: %s; cost: $%.2f" % (", ".join(parts) or "?", res.get("total_cost_usd") or 0))
+EOF
+}
+
+prompt() { # $1 = ID, $2 = item, $3 = notes, $4 = other workers' rows, $5 = lead
 	cat <<EOF
 You are one round of an unattended loop working on this repository. Nobody
 is watching and nobody will answer questions: decide, or stop.
@@ -234,8 +320,20 @@ $(if [ -n "$4" ]; then awk -F'\t' '{printf "   - `%s` %s (notes: %s)\n", $1, $2,
    SPEC.md: add a short entry to ROADMAP.md §5 (Proposed, not agreed)
    describing the question, commit it, and report STUCK. A resolver
    session decides it later.
-5. Build it with tests. You may use subagents (Agent tool) for parallel
-   exploration, a plan, and a review of your diff before committing.
+5. Build it with tests. You run as $5. Use subagents (Agent
+   tool) where they save time, and set their model and effort parameters
+   to fit each job, as these instructions ask:
+   - finding and reading code, listing call sites: model haiku, effort low;
+   - mechanical edits or tests, each agent on its own files: model sonnet,
+     effort medium;
+   - a plan for a change beyond a few files: model opus, effort high;
+   - always, before committing: a fresh review agent, model opus, effort
+     high, given git diff, the SPEC.md rules your item cites and
+     CLAUDE.md's shared rules, asked whether the tests prove those rules
+     and what the change breaks or misses. Fix what it finds.
+   Two agents never edit the same file. Decisions stay with you, and
+   SPEC.md questions go to §5 (step 4). For a small item, do the work
+   yourself: agents cost more than they save there.
 6. Verify as a normal user: CGO_ENABLED=0 go build ./..., go vet ./...,
    go test ./... and the ci/gui_*_smoke.py touching your change under
    xvfb-run -a if present. Never use sudo, install.sh, make install,
@@ -366,8 +464,8 @@ land() { # $1 = attempt branch; prints why it fails, returns 1
 		git rebase --abort
 		say "rebase conflict; a session resolves it"
 		rlog="$LOGS/$(basename "$attempt")-rebase.jsonl"
-		if [ "$MODE" = resolver ]; then claude_args 80 "$RESOLVER_MODEL"; MODEL_LOGS+=("$rlog")
-		else claude_args 80; fi
+		if [ "$MODE" = resolver ]; then claude_args 80 "$RESOLVER_MODEL" "$RESOLVER_EFFORT"; MODEL_LOGS+=("$rlog")
+		else claude_args 80 "${TIER1%% *}" "${TIER1#* }"; fi
 		resolve_prompt | timeout 1h claude "${args[@]}" >"$rlog" 2>&1
 		if [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
 			git rebase --abort; echo "rebase conflict left unresolved (log $rlog)"; return 1
@@ -387,7 +485,7 @@ resolver_round() {
 	git checkout -q -b "$attempt"; rm -f "$RESULT"
 	log="$LOGS/$(basename "$attempt").jsonl"; MODEL_LOGS=("$log")
 	say "resolver: $attempt from $(git log -1 --format=%h "$base"), log $log"
-	claude_args 150 "$RESOLVER_MODEL"
+	claude_args 150 "$RESOLVER_MODEL" "$RESOLVER_EFFORT"
 	resolver_prompt | timeout 2h claude "${args[@]}" >"$log" 2>&1
 	code=$?
 	status=$(sed -n 's/^STATUS: *//p' "$RESULT" 2>/dev/null | head -1)
@@ -434,6 +532,7 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 		say "nothing left in scope (Needs: $NEEDS); done"; break
 	fi
 	IFS=$'\t' read -r id title notes _ <<<"$row"
+	pick_lead "$id"
 	round=$((round + 1))
 	base=$(git rev-parse HEAD)
 	attempt="autopilot-try/$WORKER-$(date +%Y%m%d-%H%M%S)"
@@ -441,12 +540,14 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 	rm -f "$RESULT"
 	log="$LOGS/$(basename "$attempt").jsonl"
 	say "round $round: \`$id\` $title, $attempt from $(git log -1 --format=%h "$base"), log $log"
+	say "lead: $lead_model at $lead_effort ($lead_why)"
 
-	claude_args "$TURNS"
+	claude_args "$TURNS" "$lead_model" "$lead_effort"
 	prompt "$id" "$title" "$notes" "$(locked claims others | while IFS=$'\t' read -r oid _; do
-		index_rows | awk -F'\t' -v i="$oid" '$1==i'; done)" \
+		index_rows | awk -F'\t' -v i="$oid" '$1==i'; done)" "$lead_model at effort $lead_effort ($lead_why)" \
 		| timeout "$TIMEOUT" claude "${args[@]}" >"$log" 2>&1
 	code=$?
+	say "$(usage_line "$log")"
 
 	status=$(sed -n 's/^STATUS: *//p' "$RESULT" 2>/dev/null | head -1)
 	summary=$(sed -n 's/^SUMMARY: *//p' "$RESULT" 2>/dev/null | head -1)

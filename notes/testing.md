@@ -30,8 +30,17 @@
   tagged, nothing above SPEC's Index, no untagged §6 line removed
   (`spec_check`), every turn of the session and of a conflict session on
   that model (`model_check`). `AUTOPILOT_RESOLVE=0` turns it off.
-  `AUTOPILOT_EFFORT` sets item sessions' `--effort` (`ultracode`: agent
-  teams); the resolver runs at `AUTOPILOT_RESOLVER_EFFORT` (default `max`).
+- Lead model and effort per item (`pick_lead`): a read-only triage
+  session (`AUTOPILOT_TRIAGE_MODEL`, effort low) gives size S/M/L and
+  risk low/high, cached in `triage.txt` until the item's text changes
+  (unsure: M high). Tier 1 small and low risk, 2 medium or high risk, 3
+  large (`AUTOPILOT_TIER1..3`, "model effort"); each earlier failure one
+  tier up; `AUTOPILOT_MODEL`/`AUTOPILOT_EFFORT` force one. The prompt
+  sets subagents' model and effort by job (search haiku, edits sonnet,
+  plan and the review before committing opus). Each round logs the
+  result's `modelUsage` (lead and subagents) and cost. The resolver runs
+  at `AUTOPILOT_RESOLVER_EFFORT` (default `max`); `model_check` reads
+  `modelUsage` too.
 - `ci/autopilot-team.sh DIR...`: one worker per Claude account, each
   `DIR` a `CLAUDE_CONFIG_DIR` logged in to its own account.
 - Parallel workers are one Unix user: each runs under its own

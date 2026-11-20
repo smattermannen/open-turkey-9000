@@ -7,7 +7,12 @@
 ## Commands
 
 - `./try-challenge.sh [len]` (`cmd/try-challenge/`): unlock challenge alone.
-- Root Chrome test: `go test -tags roottest -run Chrome ./internal/enforce`.
+- Root Chrome test: `go test -tags roottest -run Chrome ./internal/enforce`,
+  with the daemon stopped (it holds the rules port) and Playwright's
+  Chromium under `/opt/pw-browsers/chromium-*/` (else skipped).
+- On a box with a spinning disk, SQLite's fsyncs make `internal/cli` take
+  ~16 min (default `go test` timeout 10 min): give the tests
+  `TMPDIR=/dev/shm/…`.
 - `ci/autopilot.sh`: unattended loop of `claude -p` sessions working down
   `ROADMAP.md`. The script, not the session, picks the item: the next
   Index row whose Needs match `AUTOPILOT_NEEDS` (default `agent`), not in
@@ -85,6 +90,9 @@
   `download_test`, `flash_test`: R-PAGE-1, records per animation frame
   whether a blocked word was painted). No Node
   there: `cjs ci/match_test_cjs.js`.
+- `ci/allowance_notify_test.sh` (box, real daemon, desktop unlocked; ~4
+  min): an allowance session's advance notice arrives on the session bus
+  and the session ends on time (B1).
 - GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
   `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
   never `show()`. `KC9K_DB` never applies layers nor sets desktop hotkeys.

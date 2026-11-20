@@ -1,6 +1,6 @@
 # Database, project files, backup
 
-- Covers: `internal/db/` (`db.go`, `features.go`, `pending.go`, `clock.go`), `cli/project.go`, `projectbackup.go`
+- Covers: `internal/db/` (`db.go`, `openlock.go`, `features.go`, `pending.go`, `clock.go`), `cli/project.go`, `projectbackup.go`
 - SPEC: §4.2 export/import, §4.10 Project
 - Connects to: every note (each table belongs to an area); [lists](lists.md) and [automation](automation.md) for imports
 
@@ -13,7 +13,12 @@
 - **DB** (`internal/db/`): SQLite `/var/lib/kc9k/kc9k.db`, WAL, busy_timeout
   and foreign_keys per connection via `_pragma`. `KC9K_DB` overrides (tests
   only). `db.go`, `features.go` (schedules, time locks, upgrades),
-  `weblists.go`, `pending.go`.
+  `weblists.go`, `pending.go`. Schema setup in `OpenDB` (WAL switch,
+  `CREATE … IF NOT EXISTS`, upgrades) runs under an flock on
+  `<db>.setup-lock` (`openlock.go`; waits ≤ 30 s, then unlocked): on a
+  fresh install the daemon and `install-librewolf` create the DB at once,
+  and busy_timeout doesn't cover a stale-snapshot write or two processes
+  adding one column (`TestFreshDatabaseOpenedByManyAtOnce`).
 
 ## Built behaviour
 

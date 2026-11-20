@@ -32,8 +32,7 @@ of their group and a row here; a finished item loses its row.
 | A10 | Lock model: clock check against hardware clock and internet time (agreed, SPEC §6 2026-11-18) | §3.4, §4.10 | locks | agent, box |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
-| A13 | `install.sh`: LibreWolf step fails with "database is locked" on a fresh install | — | install, db-project | agent, vm |
-| B1 | Notification before an allowance session ends (script it) | §3.6 | allowance, hotkeys | agent, box |
+| A13 | `install.sh` DB race: fixed; confirm a fresh install in the VM | — | install, db-project | vm |
 | B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
 | B3 | Strict mode holes | §3.8 | device | vm |
 | B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | vm |
@@ -776,14 +775,32 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   worked. Find why the 5 s `busy_timeout` did not cover it and fix it;
   prove it on a fresh install in the VM (snapshot `clean` has kc9k
   installed: remove it first, or start from a VM without it). (S)
+  Fixed 2026-11-20 (overnight, desktop): busy_timeout doesn't cover a
+  write after a read whose snapshot another process has changed (SQLITE_BUSY
+  at once), and two processes could both find a column missing and both
+  add it ("duplicate column"). The schema setup in `OpenDB` now runs under
+  an flock on `<db>.setup-lock`. `TestFreshDatabaseOpenedByManyAtOnce` (four
+  processes create one new DB; failed without the lock). On the desktop:
+  the installed build, DB deleted, daemon start + `install-librewolf` + two
+  `status` at once, 10 times: no error; `install.sh` with no DB: no error.
+  Left: a fresh install on the VM (`ci/vm.sh`), Unchecked. Not covered:
+  a deferred transaction that reads then writes (some migrations, runtime
+  code) can still get SQLITE_BUSY at once beside the daemon's writes;
+  `_txlock=immediate` would close that (not done: changes every `Begin`).
 
 ### 0.2 Not yet confirmed in real use
 
 Script-tested, never by a person. Script what can be into `ci/`.
 
-- [ ] `B1` Notification before an allowance session ends. (Not tried overnight:
-  a test allowance could only be removed at midnight, leaving its block on;
-  since 2026-11-16 it is removed at once, so this can be scripted.)
+- [x] `B1` Notification before an allowance session ends (§3.6, §4.10
+  notifications): `ci/allowance_notify_test.sh` (a test block with
+  gnome-calculator, 3 min allowance, advance 2 min, the app kept focused
+  with xdotool input, dbus-monitor on the session bus). Run 2026-11-20 on
+  the desktop (Mint 22.3, installed build, real daemon): "'kc9k-b1test': 2
+  minutes of today's allowance left" after 58 s of use, the session over
+  and the app closed after 177 s. Looking at the bubble on a screen: not
+  needed (notify-send's text is what was checked).
+
 - [ ] `B2` Scheduled Frozen Chicken in logout/shutdown modes.
 - [ ] `B3` Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
 - [ ] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock.

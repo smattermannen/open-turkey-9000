@@ -12,7 +12,8 @@
   install-librewolf`). Independent of the source dir.
 - `make uninstall` runs hidden `prepare-uninstall`: refused while locked;
   else removes all layers, SafeSearch/search engine policies, unsigned-
-  extension permission, no-escape boot lock, the sleep hook; leaves a
+  extension permission, no-escape boot lock, a strict mode lockdown a
+  crash left (`LockdownInstalled`: sudoers, polkit, PAM guard), the sleep hook; leaves a
   policy telling browsers to remove the extension. LibreWolf stays.
 - `TAGS=devmaster`: `kc9k master-set` / `kc9k master` (stdin) lift every
   lock, freeze, strict mode, no-escape. With root-owned

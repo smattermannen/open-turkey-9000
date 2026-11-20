@@ -84,6 +84,8 @@ var commandAreas = map[string][]string{
 	"strict":        {areaDevice},
 	"no-escape":     {areaDevice},
 	"reset-guard":   {areaDevice},
+	"firmware-lock": {areaDevice},
+	"guided-setup":  {areaDevice},
 	"no-weakening":  {areaSettings},
 	"dns":           {areaSettings},
 	"tamper":        {areaSettings},

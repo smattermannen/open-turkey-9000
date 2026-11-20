@@ -904,3 +904,30 @@ func TestBlockTriggerCommand(t *testing.T) {
 		t.Error("a shorter logout was taken while locked")
 	}
 }
+
+// R-FREEZE-1: a running lock freeze can't be extended into allowed apps
+// only (programs could run again); allowed apps only can become a lock.
+func TestFreezeExtendKeepsStrongerMode(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "freeze", "--for", "1h", "--mode", "logout", "--yes")
+	if err := runCLI(t, "freeze", "--for", "2h", "--mode", "apps", "--yes"); err == nil {
+		t.Error("a logout freeze became allowed apps only")
+	}
+	if m, _ := d.FreezeMode(); m != "logout" {
+		t.Errorf("mode = %q", m)
+	}
+	events, _ := d.RecentEvents(0, 10)
+	if len(events) == 0 || events[0].Kind != db.EventRefused {
+		t.Errorf("the refusal isn't logged: %+v", events)
+	}
+	mustRun(t, "freeze", "--for", "2h", "--mode", "logout", "--yes")
+	if err := d.SetFreeze(0, ""); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "freeze", "--for", "1h", "--mode", "apps", "--yes")
+	mustRun(t, "freeze", "--for", "2h", "--mode", "shutdown", "--yes")
+	if m, _ := d.FreezeMode(); m != "shutdown" {
+		t.Errorf("allowed apps only extended into shutdown: mode = %q", m)
+	}
+}

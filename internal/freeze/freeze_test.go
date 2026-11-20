@@ -37,3 +37,21 @@ func TestEngaged(t *testing.T) {
 		t.Error("only the exact parameter should bypass the freeze")
 	}
 }
+
+// R-FREEZE-1, §3.5: extending a running freeze never turns it into allowed
+// apps only, which lets programs run; the other way is free.
+func TestExtendMode(t *testing.T) {
+	for _, c := range []struct{ running, next, want string }{
+		{"", ModeApps, ModeApps},
+		{ModeLock, ModeApps, ModeLock},
+		{ModeLogout, ModeApps, ModeLogout},
+		{ModeShutdown, ModeApps, ModeShutdown},
+		{ModeApps, ModeLock, ModeLock},
+		{ModeApps, ModeApps, ModeApps},
+		{ModeLock, ModeShutdown, ModeShutdown},
+	} {
+		if got := ExtendMode(c.running, c.next); got != c.want {
+			t.Errorf("ExtendMode(%q, %q) = %q; want %q", c.running, c.next, got, c.want)
+		}
+	}
+}

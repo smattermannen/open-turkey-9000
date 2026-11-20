@@ -55,7 +55,7 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| D3 | Instagram social setting "Following only" (no suggested posts) | §3.2 | extension, lists | agent, box |
+| D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
@@ -80,11 +80,12 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     R-LOCK-12). SPEC §4.3 already says the menu applies at once. Built
     2026-11-20 (`start_block`, `add_locks`; `ci/gui_cards_smoke.py`; on a
     real screen: Unchecked).
-  - **D3** Instagram: a social setting `instagram:following-only`: the
-    feed shows only accounts followed, no suggested posts (e.g. redirect
-    `/` to `/?variant=following`, hide suggested units). `db/social.go`,
-    `webext/files/social.js` (redirects match the path only today: needs a
-    query check), test in `ci/match_test.js`; note `extension`.
+  - **D3** Instagram: social setting `instagram:following-only`: `/`
+    goes to `/?variant=following`, Instagram's feed of accounts followed
+    (no suggested posts). Built 2026-11-20 (`social.js` redirects take a
+    `query` that stops them; `ci/match_test.js`). Left (box): on the real
+    site, incl. clicking the logo; nothing hides suggested units yet (CSS
+    can't match their text).
   - [x] **D4** ClipEditor: a small circle in the middle of each segment
     between two points; left-drag it to change the bend (`tension`).
     Was: the whole curve was the drag target (`on_curve`, gone).

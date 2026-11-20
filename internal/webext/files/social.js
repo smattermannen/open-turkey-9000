@@ -2,7 +2,8 @@
 
 // Social media settings (the daemon's db/social.go): what each one does.
 // A setting belongs to a site (hosts), sends some of its addresses elsewhere
-// (redirects: the first whose path matches, unless keep matches), and hides
+// (redirects: the first whose path matches, unless keep matches the path or
+// query matches the query string, "?a=b"), and hides
 // parts of its pages (hide: CSS selectors, on the paths given by on, all
 // when absent). Sites change their pages now and then; the selectors here
 // are the part to update when a setting stops hiding something.
@@ -47,6 +48,12 @@ const KC9K_SOCIAL = {
     hosts: KC9K_INSTAGRAM,
     redirects: [{ path: /^\/reels?(\/|$)/, to: "/" }],
     hide: [{ css: "a[href=\"/reels/\"], a[href^=\"/reels/\"]" }],
+  },
+  // The feed of accounts followed, newest first: no suggested posts
+  // (owner 2026-11-20, D3). Instagram's own "Following" feed.
+  "instagram:following-only": {
+    hosts: KC9K_INSTAGRAM,
+    redirects: [{ path: /^\/$/, query: /[?&]variant=following(&|$)/, to: "/?variant=following" }],
   },
   "instagram:no-explore": {
     hosts: KC9K_INSTAGRAM,
@@ -149,11 +156,12 @@ function kc9kSocialRedirect(presets, url) {
       continue;
     }
     for (const rule of preset.redirects || []) {
-      if (!rule.path.test(u.pathname) || (rule.keep && (rule.keep.test(u.pathname) || KC9K_ACCOUNT.test(u.pathname)))) {
+      if (!rule.path.test(u.pathname) || (rule.keep && (rule.keep.test(u.pathname) || KC9K_ACCOUNT.test(u.pathname))) ||
+        (rule.query && rule.query.test(u.search))) {
         continue;
       }
       const to = u.protocol + "//" + u.host + rule.to;
-      if (to !== u.protocol + "//" + u.host + u.pathname) {
+      if (to !== u.protocol + "//" + u.host + u.pathname + (rule.to.includes("?") ? u.search : "")) {
         return to;
       }
     }

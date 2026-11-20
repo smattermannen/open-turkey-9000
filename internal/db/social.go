@@ -38,6 +38,7 @@ var SocialPresets = []SocialPreset{
 	{"youtube:no-recommendations", "YouTube", "No recommendations beside and after videos"},
 	{"youtube:no-comments", "YouTube", "No comments"},
 	{"instagram:messages-only", "Instagram", "Messages only"},
+	{"instagram:following-only", "Instagram", "Following only (no suggested posts)"},
 	{"instagram:no-reels", "Instagram", "No Reels"},
 	{"instagram:no-explore", "Instagram", "No Explore page"},
 	{"facebook:no-feed", "Facebook", "No news feed"},

@@ -33,6 +33,8 @@
   exceptions `youtube.com/playlist?list=<id>`, `youtube.com/watch`; GUI:
   `PlaylistBox` in the Exceptions card (`ci/gui_playlist_smoke.py`);
   `checkPlaylistVideo`.
+  A redirect may take `query` (a regex on `?…`): matching it stops the
+  redirect (`instagram:following-only` → `/?variant=following`).
 
 ## Built behaviour
 

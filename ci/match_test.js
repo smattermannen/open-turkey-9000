@@ -608,6 +608,22 @@ if (typeof kc9kSocialRedirect === "function") {
       process.exitCode = 1;
     }
   }
+  // D3: Instagram's Following feed; the query is checked, so no loop.
+  const following = [
+    ["https://www.instagram.com/", "https://www.instagram.com/?variant=following"],
+    ["https://www.instagram.com/?variant=home", "https://www.instagram.com/?variant=following"],
+    ["https://www.instagram.com/?variant=following", ""],
+    ["https://www.instagram.com/?hl=sv&variant=following", ""],
+    ["https://www.instagram.com/direct/inbox/", ""],
+    ["https://www.instagram.com/someone/", ""],
+    ["https://example.com/", ""],
+  ];
+  for (const [url, want] of following) {
+    if (kc9kSocialRedirect(["instagram:following-only"], url) !== want) {
+      console.error("FAIL following-only", url, "got", kc9kSocialRedirect(["instagram:following-only"], url), "want", want);
+      process.exitCode = 1;
+    }
+  }
   if (kc9kPlaylistBlocks(["youtube:no-shorts"], "https://www.youtube.com/watch?v=abc") ||
     !kc9kSocialCss(on, "https://www.youtube.com/watch?v=x").includes("ytd-reel-shelf-renderer") ||
     kc9kSocialCss(on, "https://example.com/") !== "") {

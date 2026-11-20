@@ -628,6 +628,7 @@ Decisions not already written into §1–5:
 - 2026-11-18: SafeSearch is lockable per engine: Google, Bing, DuckDuckGo and YouTube are each their own browser setting (§4.10).
 - 2026-11-18: When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
 - 2026-11-19: The autopilot's resolver may write decisions into this file, each change tagged as rule 1 says; only the owner's decisions are untagged (owner).
+- 2026-11-20: A lock of a kind a block already has (§3.4) is added as a second lock of that kind, last in the unlock order, not a strengthening of the first (owner).
 
 ## 7. Open decisions
 

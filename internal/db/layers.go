@@ -6,7 +6,10 @@
 // from the moment the locks before it are gone; a restart lock behind
 // others waits (RestartPending) and needs a boot after they are gone. A
 // dated timer lock simply holds until its date. New locks go last (R-LOCK-7).
-// Each kind appears once.
+// Each kind has one place (the block's columns); a lock of a kind already
+// there waits in LockExtras.Queue, after all the others, and takes its
+// kind's place once every lock before it is gone (§3.4, several locks of one
+// kind).
 package db
 
 import (
@@ -115,8 +118,24 @@ func (e LockExtras) InRange(t time.Time) bool {
 }
 
 // Layers returns the block's locks in unlock order: the stored order, then
-// any kind set but missing from it, in the legacy order.
+// any kind set but missing from it, in the legacy order, then the queue.
 func Layers(detail *BlockDetail, e LockExtras) []string {
+	return append(placedLayers(detail, e), queuedKinds(e)...)
+}
+
+func queuedKinds(e LockExtras) []string {
+	var out []string
+	for _, q := range e.Queue {
+		out = append(out, q.Kind)
+	}
+	return out
+}
+
+// PlacedLayers is Layers without the queue: the kinds in their places,
+// whose order LockExtras.Order stores.
+func PlacedLayers(detail *BlockDetail, e LockExtras) []string { return placedLayers(detail, e) }
+
+func placedLayers(detail *BlockDetail, e LockExtras) []string {
 	order := ParseLayerOrder(e.Order)
 	if len(order) == 0 {
 		order = append(order, legacyOrder...)
@@ -152,14 +171,50 @@ func layerSet(kind string, detail *BlockDetail, e LockExtras) bool {
 
 // LayersOn returns the locks still on, in unlock order; the first is the
 // one to unlock next.
+// Queued locks are all on: they wait behind the others.
 func LayersOn(detail *BlockDetail, e LockExtras, trusted int64, bootID string) []string {
+	return append(placedOn(detail, e, trusted, bootID), queuedKinds(e)...)
+}
+
+func placedOn(detail *BlockDetail, e LockExtras, trusted int64, bootID string) []string {
 	var out []string
-	for _, k := range Layers(detail, e) {
+	for _, k := range placedLayers(detail, e) {
 		if LayerOn(k, detail, e, trusted, bootID) {
 			out = append(out, k)
 		}
 	}
 	return out
+}
+
+// promote puts the first queued lock in its kind's place, now that no other
+// lock is on, and makes it last in the stored order.
+func promote(detail *BlockDetail, e *LockExtras, trusted int64, bootID string) {
+	q := e.Queue[0]
+	e.Queue = e.Queue[1:]
+	switch q.Kind {
+	case LayerText:
+		detail.Locked, detail.LockChars, e.Style = true, q.Chars, q.Style
+	case LayerPassword:
+		e.PasswordHash = q.PasswordHash
+	case LayerTimer:
+		e.TimerAfter = 0
+		if q.For > 0 {
+			detail.LockedUntil = trusted + q.For
+		} else {
+			detail.LockedUntil = q.Until
+		}
+	case LayerRestart:
+		e.RestartBoot = bootID
+	case LayerDelay:
+		e.Delay, e.DelayUntil = q.Delay, 0
+	}
+	var order []string
+	for _, k := range ParseLayerOrder(e.Order) {
+		if k != q.Kind {
+			order = append(order, k)
+		}
+	}
+	e.Order = strings.Join(append(order, q.Kind), ",")
 }
 
 // AdvanceLayers starts the first lock still on if it was waiting: a
@@ -172,7 +227,13 @@ func AdvanceLayers(detail *BlockDetail, e *LockExtras, trusted int64, bootID str
 		e.LiftedKinds, e.LiftedUntil = "", 0
 		changed = true
 	}
-	on := LayersOn(detail, *e, trusted, bootID)
+	// Queued locks take their kind's place once nothing before them is on
+	// (a dated timer lock already past lets the next one through at once).
+	for len(e.Queue) > 0 && len(placedOn(detail, *e, trusted, bootID)) == 0 {
+		promote(detail, e, trusted, bootID)
+		changed = true
+	}
+	on := placedOn(detail, *e, trusted, bootID)
 	if len(on) == 0 {
 		return changed
 	}

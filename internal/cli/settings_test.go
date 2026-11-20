@@ -153,8 +153,11 @@ func TestTextLockStyles(t *testing.T) {
 	if extras.Style != lock.StyleCustom+"I choose to focus" || !detail.Locked || detail.LockChars != len("I choose to focus") {
 		t.Errorf("custom text lock: style %q, locked %v, %d chars", extras.Style, detail.Locked, detail.LockChars)
 	}
-	if err := runCLI(t, "start", "b", "--lock-words", "--yes"); err == nil {
-		t.Error("a text lock's kind changed on an active block")
+	// Another kind of text lock is a second text lock (§3.4), the first
+	// stays as it was.
+	mustRun(t, "start", "b", "--lock-words", "--yes")
+	if e, _ := d.GetLockExtras("b"); e.Style != lock.StyleCustom+"I choose to focus" || len(e.Queue) != 1 || e.Queue[0].Style != lock.StyleWords {
+		t.Errorf("second text lock: style %q, queue %+v", e.Style, e.Queue)
 	}
 	mustRun(t, "browser", "safesearch", "on", "--lock-words", "--lock-chars", "40", "--yes")
 	s, _ := d.GetSettingLock("safesearch")

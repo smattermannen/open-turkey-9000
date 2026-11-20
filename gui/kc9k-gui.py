@@ -8252,8 +8252,9 @@ class Window(Gtk.ApplicationWindow):
         picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS)
         asked = self.lock_dialog(
             f"Add locks to {block['name']}" if active else f"Start {block['name']} with locks",
-            "New locks come after the ones already on, unlocked last. A lock that is on can only "
-            "be made stronger: a later timer, a longer text or delay lock." if active else
+            "New locks come after the ones already on, unlocked last. A kind it already has is "
+            "a second lock of that kind (the last timer or delay lock is extended instead). "
+            "A lock that is on can only be made stronger." if active else
             "It starts with the locks below. Once on, a lock can only be made stronger.",
             "Add locks", picker, need_lock=True)
         if asked is None:

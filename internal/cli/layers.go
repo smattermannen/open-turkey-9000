@@ -92,8 +92,16 @@ func lockKindsInOrder(cmd *cobra.Command) []string {
 // "text lock → timer lock (1h after the text lock)".
 func describeLayers(layers []string, detail *db.BlockDetail, e db.LockExtras) string {
 	parts := make([]string, len(layers))
+	placed := len(layers) - len(e.Queue) // the queue is last (db.Layers)
 	for i, k := range layers {
 		parts[i] = db.LayerName(k)
+		if i >= placed {
+			parts[i] = "another " + parts[i]
+			if q := e.Queue[i-placed]; q.Kind == db.LayerTimer && q.For > 0 {
+				parts[i] += fmt.Sprintf(" (%s)", time.Duration(q.For)*time.Second)
+			}
+			continue
+		}
 		if k == db.LayerTimer && e.TimerAfter > 0 && i > 0 {
 			parts[i] += fmt.Sprintf(" (%s after the %s)", time.Duration(e.TimerAfter)*time.Second, db.LayerName(layers[i-1]))
 		}

@@ -6601,7 +6601,7 @@ class Window(Gtk.ApplicationWindow):
         self.detail.pack_start(self.draft_bar, False, False, 0)
 
         actions = Gtk.Box(spacing=6)
-        self.start_button = Gtk.Button(label="Start…")
+        self.start_button = Gtk.Button(label="Start")
         self.start_button.get_style_context().add_class("suggested-action")
         self.start_button.connect("clicked", self.start_block)
         self.stop_button = Gtk.Button(label="Stop")
@@ -7603,7 +7603,7 @@ class Window(Gtk.ApplicationWindow):
         block itself, never its draft (§4.3: a draft never runs)."""
         self.selected = name
         block = self.blocks.get(name) or {}
-        (self.unlock_block if block.get("held") else self.start_block)(None)
+        (self.unlock_block if block.get("held") else self.add_locks)(None)
 
     def build_quota_tab(self):
         """Breaks & allowance (R-GUI-3, redesigned 2026-11-17): a card each,
@@ -7970,7 +7970,7 @@ class Window(Gtk.ApplicationWindow):
                 self.delay_wait_minutes.set_value(block.get("delay_wait", 0) // 60)
         self.delay_request.set_sensitive(bool(block.get("delay_break")) and not block.get("delay_break_in") and not paused)
 
-        self.start_button.set_label("Add locks…" if block["active"] else "Start…")
+        self.start_button.set_label("Add locks…" if block["active"] else "Start")
         self.start_button.set_sensitive(True)
         # §3.4: unlocking lifts locks (a delay lock starts counting down) and
         # leaves the block on; stopping needs every lock lifted.
@@ -8230,6 +8230,19 @@ class Window(Gtk.ApplicationWindow):
         return chosen if answer == Gtk.ResponseType.OK else None
 
     def start_block(self, _button):
+        """§4.3 (owner 2026-11-20, D2): Start applies at once, without
+        locks; once on, the same button is Add locks…"""
+        block = self.blocks.get(self.selected)
+        if not block:
+            return
+        if block["active"]:
+            self.add_locks(None)
+        else:
+            self.run(["start", block["name"]])
+
+    def add_locks(self, _button):
+        """The lock dialog: locks for the selected block, which starts it
+        if it is off (a card's lock state asks for this)."""
         block = self.blocks.get(self.selected)
         if not block:
             return
@@ -8238,18 +8251,17 @@ class Window(Gtk.ApplicationWindow):
         # ones already on; those only get stronger.
         picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS)
         asked = self.lock_dialog(
-            f"Add locks to {block['name']}" if active else f"Start {block['name']}",
+            f"Add locks to {block['name']}" if active else f"Start {block['name']} with locks",
             "New locks come after the ones already on, unlocked last. A lock that is on can only "
             "be made stronger: a later timer, a longer text or delay lock." if active else
-            "Start without locks to stop any time, or add locks below. Once on, a lock can only "
-            "be made stronger.",
-            "Add locks" if active else "Start", picker, need_lock=active)
+            "It starts with the locks below. Once on, a lock can only be made stronger.",
+            "Add locks", picker, need_lock=True)
         if asked is None:
             return
         chosen, relock_flags, secret = asked
         args = ["start", block["name"]]
         target = f"block '{block['name']}'"
-        if active and not chosen:
+        if not chosen:
             return  # nothing to add
         # R-LOCK-6: locks unlock one at a time in the order of their flags.
         if len(chosen) > 1:

@@ -30,6 +30,8 @@
   `DurationField` (typed `2d 4h`, says why when wrong, never clamps),
   `NumberField`, `TimerLockField` (none / for / until a calendar date),
   `LockPicker` (every lock kind; `lock_dialog` reads it before closing).
+  A block's Start runs `kc9k start` at once (`start_block`, D2); once on it
+  is Add locks… (`add_locks`, the lock dialog; a card's lock state too).
   `EditableList` has a `ResizeGrip` under it (drag down: taller; double-click:
   back), height kept in gui.json `list_heights` under `size_key` (website
   list, phrase set) or the list's title; `ci/gui_list_resize_smoke.py`.

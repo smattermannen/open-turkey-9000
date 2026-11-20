@@ -144,7 +144,7 @@ r = cli("block", "draft", "plain"); assert r.returncode == 0, r.stderr
 settle()
 dialogs.clear()
 cards()["plain"][2]["Unlocked"].clicked(); settle()
-check(dialogs == ["Start plain"], "with a draft open: the block's own locks: %s" % dialogs)
+check(dialogs == ["Start plain with locks"], "with a draft open: the block's own locks: %s" % dialogs)
 Gtk.Dialog.run = real_run
 
 # §4.2 (owner 2026-11-17, later): nothing on a card but its parts (no ⋯
@@ -177,8 +177,20 @@ def inside(widget, ancestor):
 win.open_block("plain"); settle()
 check(inside(win.block_tabs, win.detail_scroll), "the tabs scroll")
 check(not any(inside(w, win.detail_scroll) for w in (win.title_label, win.draft_bar, win.start_button, win.more_menu[0])),
-      "the top bar (title, Save edits, Start…, ⋯) stays outside the scrolled part")
+      "the top bar (title, Save edits, Start, ⋯) stays outside the scrolled part")
 check(not isinstance(win.detail.get_parent(), Gtk.Viewport), "the page itself does not scroll")
+
+# D2 (owner 2026-11-20): Start runs at once, no lock dialog; then it is Add locks….
+cli("stop", "plain"); settle()
+win.open_block("plain"); settle()
+check(win.start_button.get_label() == "Start", "an off block's button is Start: %s" % win.start_button.get_label())
+dialogs.clear()
+real_run, Gtk.Dialog.run = Gtk.Dialog.run, lambda d: (dialogs.append(d.get_title()), Gtk.ResponseType.CANCEL)[1]
+win.start_button.clicked(); settle()
+Gtk.Dialog.run = real_run
+check(not dialogs and win.blocks["plain"]["active"], "Start starts it at once, no dialog: %s" % dialogs)
+check(win.start_button.get_label() == "Add locks…", "once on: Add locks…")
+check(not win.blocks["plain"].get("held"), "started without locks")
 
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")

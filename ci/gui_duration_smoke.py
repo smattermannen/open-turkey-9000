@@ -141,7 +141,7 @@ def start_for(dialog):
 
 
 answering(start_for)
-win.selected = "b"; win.start_block(None); settle()
+win.selected = "b"; win.add_locks(None); settle()
 blk = next(x for x in state()["blocks"] if x["name"] == "b")
 check(blk["active"] and abs(blk["lock_seconds"] - 6000000) < 300, "block b timer-locked 100000 min: %s" % blk["lock_seconds"])
 check(confirmed and "69 days 10 hours 40 minutes" in confirmed[-1][0], "confirmation in days: %s" % confirmed[-1:])
@@ -152,7 +152,7 @@ def start_until(dialog):
 
 
 answering(start_until)
-win.selected = "c"; win.start_block(None); settle()
+win.selected = "c"; win.add_locks(None); settle()
 out = cli("status").stdout
 check("2099-12-24" in out, "block c locked until 2099: " + " ".join(l for l in out.splitlines() if "c" in l)[:200])
 
@@ -179,7 +179,7 @@ def wrong_password(dialog):
 
 answering(wrong_password)
 cli("block", "create", "d"); cli("block", "add", "d", "example.net")
-win.selected = "d"; win.start_block(None); settle()
+win.selected = "d"; win.add_locks(None); settle()
 check(cli("block", "info", "d").returncode == 0, "d started with a password lock")
 
 # Monk mode from the button: confirmed (R-LOCK-12), --yes passed, runs.

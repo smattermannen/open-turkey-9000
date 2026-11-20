@@ -55,7 +55,6 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| D2 | Start a block without the lock dialog (locks via "Add locks…" once on) | §4.3, R-LOCK-7 | gui, locks | agent, owner |
 | D3 | Instagram social setting "Following only" (no suggested posts) | §3.2 | extension, lists | agent, box |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
@@ -76,10 +75,11 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     the window while the tabs below scroll (built 2026-11-20: only the tabs
     are in `detail_scroll`; `ci/gui_cards_smoke.py`; on a real screen:
     Unchecked).
-  - **D2** Start… opens a lock dialog (`start_block`, `LockPicker`);
-    remove it: Start runs `kc9k start <block>` at once. Locks are added
-    afterwards with "Add locks…" (R-LOCK-7, still confirmed, R-LOCK-12).
-    SPEC §4.3 to update with the owner if it describes the dialog.
+  - [x] **D2** Start runs `kc9k start <block>` at once, no lock dialog;
+    once on, the button is "Add locks…" (R-LOCK-7, still confirmed,
+    R-LOCK-12). SPEC §4.3 already says the menu applies at once. Built
+    2026-11-20 (`start_block`, `add_locks`; `ci/gui_cards_smoke.py`; on a
+    real screen: Unchecked).
   - **D3** Instagram: a social setting `instagram:following-only`: the
     feed shows only accounts followed, no suggested posts (e.g. redirect
     `/` to `/?variant=following`, hide suggested units). `db/social.go`,
@@ -87,7 +87,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     query check), test in `ci/match_test.js`; note `extension`.
   - [x] **D4** ClipEditor: a small circle in the middle of each segment
     between two points; left-drag it to change the bend (`tension`).
-    Today the whole curve is the drag target (`on_curve`); note `gui`.
+    Was: the whole curve was the drag target (`on_curve`, gone).
     Built 2026-11-20 (`handles`, `handle_at`; `ci/gui_circadian_smoke.py`;
     on a real screen: Unchecked).
 

@@ -442,6 +442,9 @@ GUI and CLI offer the same functions.
 - **4.8 Frozen Chicken**: a mode among the blocks (no page of its own):
   switched on for a time or until a date, at most a week ahead; its
   automation schedules freezes; both may coexist.
+  - A running freeze in lock screen, logout or shutdown mode, extended by
+    hand or by a scheduled freeze, keeps its mode: it never becomes allowed
+    apps only, which lets programs run (that would weaken it). *(By Opus)*
 - **4.9 Statistics**: time used and times blocked per site, app, title. Time
   frame (presets/custom), bar chart over time with one colour per site/app, per user, top 5/10, search, filter by block, JSON
   export, delete, on/off, optionally skip private windows. Separate from
@@ -693,6 +696,7 @@ Decisions not already written into §1–5:
 - 2026-11-21 (By Opus): The firmware lock sets the firmware's boot settings first and its password last, typed by the trusted person and never stored; removing it is refused while anything is locked and needs that password (§4.10). Making it a KC9K lock with kinds would add nothing: only the trusted person can lift it. Stronger blocking: the one-time boot menu goes off too, since a firmware password alone leaves it open on many computers.
 - 2026-11-21 (By Opus): Tamper protection settings that KC9K always enforced (close browsers if the extension stops, block inactive tabs, block embedded content) are on by default and can be turned off while nothing is locked; the new ones (close guest profiles, block the installer) are off by default (principle 7: behaviour changes are settings, not new defaults; principle 3: a new protection is chosen). Block the installer lets a newer version through, as §4.10 names only reinstalling, downgrading and removal.
 - 2026-11-21 (By Opus): Setting locks stack like a block's (§4.6) and their re-lock brings back the whole configuration: a setting lock is a lock in §3.4's sense, the owner's examples (two partners' passwords) fit settings as well, and one rule for both is simpler to learn. A lock option given twice in one command is two locks (it used to keep the last), so several locks of one kind need no second command. Settles ROADMAP §5 "setting locks stacking".
+- 2026-11-21 (By Opus): Extending a running freeze never switches it to allowed apps only (§4.8): from a text console during a lock-screen freeze, `kc9k freeze --mode apps` would otherwise open the desktop's programs again; the reverse (allowed apps only to lock screen) strengthens and stays free.
 - 2026-11-21 (By Opus): The guided setup (§4.10) is a read-only checklist with each step's own command, no-escape last: the 2026-11-14 "no first-run wizard" decision rules out a wizard, and a checklist that shows what is left keeps the strictest setup deliberate (principle 3).
 
 ## 7. Open decisions

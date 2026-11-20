@@ -24,6 +24,15 @@
   `new_password`). With a password already set each change writes
   `current_password` first. Settings `device.firmware-lock`,
   `device.firmware-before` (what it changed, put back by `off`).
+- **Allowed apps only** (`blocker/allowedapps.go`): `readAppProcesses`
+  (replaceable) lists processes; `appsToClose` (pure) keeps system and
+  desktop programs, allowed ones and their descendants (≤ 64 parents),
+  leaves root's, other system users' and unreadable programs alone;
+  `killApp` (replaceable) ends them. The daemon's freeze effects are
+  `enforce` vars `freezeLogout`, `freezePowerOff`, `freezeLockScreen`,
+  `freezeCloseApps`, faked in `TestMain`. `freeze.ExtendMode`: a running
+  lock/logout/shutdown freeze keeps its mode when extended to `apps` (CLI
+  refuses and logs; `reconcileFreezeSchedules` keeps the running mode).
 - **Guided setup** (`cli/guidedsetup.go`): `guidedSetup` builds the steps
   (`setupStep`: id, state done/todo/by-hand/info/unknown, command); reads
   `shadowPath` (root password) and `grubCfgPath` (other systems), both

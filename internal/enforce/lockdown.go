@@ -149,6 +149,11 @@ func reconcileFreezeSchedules(d *db.DB, now time.Time) error {
 	if until.Unix() <= current {
 		return nil
 	}
+	if current > now.Unix() { // a running freeze keeps a mode that lets nothing run
+		if running, err := d.FreezeMode(); err == nil {
+			mode = freeze.ExtendMode(running, mode)
+		}
+	}
 	log.Printf("daemon: scheduled freeze (%s) until %s", mode, until.Format("2006-01-02 15:04"))
 	return d.SetFreeze(until.Unix(), mode)
 }
@@ -180,6 +185,15 @@ func LockFreezeEngaged(d *db.DB, now time.Time) bool {
 	return err != nil || mode == freeze.ModeLock
 }
 
+// What a running freeze does to the device, by its freeze mode; replaced in
+// tests.
+var (
+	freezeLogout     = blocker.LogoutUsers
+	freezePowerOff   = blocker.PowerOff
+	freezeLockScreen = blocker.LockSessions
+	freezeCloseApps  = blocker.CloseAllExcept
+)
+
 func enforceFreeze(d *db.DB, now time.Time) {
 	until, err := d.FreezeUntil()
 	if err != nil {
@@ -196,13 +210,13 @@ func enforceFreeze(d *db.DB, now time.Time) {
 	}
 	switch mode {
 	case freeze.ModeLogout:
-		err = blocker.LogoutUsers()
+		err = freezeLogout()
 	case freeze.ModeShutdown:
-		err = blocker.PowerOff()
+		err = freezePowerOff()
 	case freeze.ModeApps:
-		blocker.CloseAllExcept(FreezeApps(d)) // R-FREEZE-1
+		freezeCloseApps(FreezeApps(d)) // R-FREEZE-1
 	default:
-		err = blocker.LockSessions()
+		err = freezeLockScreen()
 	}
 	if err != nil {
 		log.Printf("daemon: freeze: %v", err)

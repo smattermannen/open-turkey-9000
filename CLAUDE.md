@@ -79,14 +79,14 @@ Before testing anything that locks, blocks or restarts the daemon, read
 | [install](notes/install.md) | Install, uninstall, devmaster (`install.sh`, `packaging/`, `cli/uninstall.go`, `cli/master.go`) |
 | [enforce-daemon](notes/enforce-daemon.md) | `enforce/enforce.go`, `enabled.go`, `internal/daemon/`, affected users |
 | [layers-net](notes/layers-net.md) | hosts, firewall, DNS (`blocker/hosts.go`, `firewall.go`, `resolve.go`) |
-| [browsers](notes/browsers.md) | Policies, extension guard, supported browsers, LibreWolf, Chrome, browser setting locks |
+| [browsers](notes/browsers.md) | Policies, extension guard, supported browsers, LibreWolf, Chrome, browser setting locks, tamper protection settings |
 | [extension](notes/extension.md) | `webext/files/` (`match.js`, `content.js`, `background.js`, `social.js`) |
 | [apps-titles](notes/apps-titles.md) | Process kill, scripts, window titles, X11, polite close, behaviour settings |
 | [lists](notes/lists.md) | Blocks, website lists, phrase sets, import, presets, recording, drafts, test mode |
 | [actions](notes/actions.md) | Actions, ad trigger, trigger actions, consequences, bypass prevention, workarounds |
 | [locks](notes/locks.md) | Locks, layered locks, confirmation, text lock, settings/access/block passwords, no weakening |
 | [automation](notes/automation.md) | Automation, schedules, modes, places, autostart (`internal/schedule/`, `cli/modes.go`) |
-| [device](notes/device.md) | Monk mode, Frozen Chicken, strict mode, no-escape, sockets |
+| [device](notes/device.md) | Monk mode, Frozen Chicken, allowed apps, strict mode (PAM guard), no-escape, factory reset protection (firmware lock), guided setup, sockets |
 | [allowance](notes/allowance.md) | Allowance, Pomodoro, breaks, pauses, statistics (`internal/quota/`) |
 | [circadian](notes/circadian.md) | Circadian rhythm, mode wallpapers, sleep hook (`internal/circadian/`) |
 | [hotkeys](notes/hotkeys.md) | Hotkeys, notifications |

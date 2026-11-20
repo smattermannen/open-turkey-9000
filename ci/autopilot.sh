@@ -44,6 +44,15 @@
 # the tag "(By Opus)" (checked per hunk); the rules for the file above
 # SPEC.md's Index and the owner's §6 decisions are never changed.
 #
+# The planner: when no open item is left for this worker, a planner
+# session (AUTOPILOT_PLAN_MODEL/EFFORT) compares SPEC.md with ROADMAP.md and
+# adds the next items (Index rows and sections; only ROADMAP.md changes).
+# The loop ends when the planner says the project is finished, or when what
+# it planned still leaves nothing to take. AUTOPILOT_PLAN=0 turns it off.
+#
+# Following main: before each round, $AUTOPILOT_FROM on GitHub is brought
+# into $BRANCH (fast-forward, else a merge; a conflict is logged and left).
+#
 # A usage limit is not a failure: the round is retried after the reset.
 # Stop: touch ~/.local/state/kc9k-autopilot/STOP (every worker ends after
 # its round; starting a worker clears it).
@@ -74,6 +83,10 @@ RESOLVER_EFFORT=${AUTOPILOT_RESOLVER_EFFORT:-max} # one careful chain, no agents
 PERM=${AUTOPILOT_PERMISSION_MODE:-bypassPermissions}
 PUSH=${AUTOPILOT_PUSH:-0}
 RESOLVE=${AUTOPILOT_RESOLVE:-1}               # 0 = no resolver rounds
+PLAN=${AUTOPILOT_PLAN:-1}                     # 0 = stop when no item is left
+PLAN_MODEL=${AUTOPILOT_PLAN_MODEL:-opus}
+PLAN_EFFORT=${AUTOPILOT_PLAN_EFFORT:-xhigh}
+FOLLOW=${AUTOPILOT_FOLLOW:-1}                 # 0 = $BRANCH does not follow $FROM
 RESOLVER_MODEL=claude-opus-5-5                # the owner's rule: no other model decides
 TAG='(By Opus)'
 GUI_TESTS=${AUTOPILOT_GUI_TESTS:-auto}        # auto: when xvfb-run exists
@@ -97,6 +110,7 @@ CLAIMS=$ROOT/claims.txt     # ID <tab> worker <tab> pid
 TRIAGE=$ROOT/triage.txt     # ID <tab> hash of the item's text <tab> size <tab> risk
 SEEN=$ROOT/resolver-seen.txt # the questions the resolver last had (hash)
 export PATH="/usr/local/go/bin:$PATH"
+export GIT_TERMINAL_PROMPT=0 # a missing GitHub login fails, never waits on a prompt
 
 die() { echo "autopilot[$WORKER]: $*" >&2; exit 1; }
 say() { echo "[$(date '+%F %T')] $WORKER: $*" | tee -a "$ROOT/autopilot.log"; }
@@ -218,6 +232,11 @@ gate() { # $1 = base commit; prints why it fails, returns 1
 		[ -z "$other" ] || { echo "the resolver changed more than SPEC.md and ROADMAP.md:"; echo "$other"; return 1; }
 		spec_check "$base" || return 1
 		for l in "${MODEL_LOGS[@]}"; do model_check "$l" || return 1; done
+		return 0
+	fi
+	if [ "$MODE" = planner ]; then
+		local other; other=$(grep -vx 'ROADMAP.md' <<<"$changed")
+		[ -z "$other" ] || { echo "the planner changed more than ROADMAP.md:"; echo "$other"; return 1; }
 		return 0
 	fi
 	if grep -qx 'SPEC.md' <<<"$changed"; then echo "SPEC.md changed (only the resolver may)"; return 1; fi
@@ -635,13 +654,113 @@ resolver_round() {
 	sha256sum <<<"$(open_questions)" | cut -c1-16 >"$SEEN"
 }
 
+# Brings $FROM (GitHub) into the hub's $BRANCH: fast-forward, else a merge.
+follow_main() {
+	[ "$FOLLOW" = 1 ] || return 0
+	git fetch -q github "$FROM" 2>/dev/null || { say "could not fetch $FROM from GitHub"; return 0; }
+	local main; main=$(git rev-parse FETCH_HEAD)
+	git fetch -q origin "$BRANCH" || return 0
+	git merge-base --is-ancestor "$main" "origin/$BRANCH" && return 0
+	if git merge-base --is-ancestor "origin/$BRANCH" "$main"; then
+		git push -q origin "$main:refs/heads/$BRANCH" && say "$BRANCH fast-forwarded to $FROM ($(git log -1 --format=%h "$main"))"
+		return 0
+	fi
+	git checkout -q -f -B "$BRANCH" "origin/$BRANCH" && git clean -qfd
+	if git merge -q --no-edit -m "Merge $FROM into $BRANCH" "$main" >/dev/null 2>&1; then
+		git push -q origin "HEAD:refs/heads/$BRANCH" && say "merged $FROM ($(git log -1 --format=%h "$main")) into $BRANCH"
+	else
+		git merge --abort 2>/dev/null
+		say "$FROM conflicts with $BRANCH; not merged (merge it by hand)"
+	fi
+}
+
+claim_planner() { # one planner at a time
+	others | cut -f1 | grep -qx PLANNER && return 1
+	printf 'PLANNER\t%s\t%s\n' "$WORKER" "$$" >>"$CLAIMS"
+}
+
+planner_prompt() {
+	cat <<PEOF
+You are the planner of an unattended loop working on this repository.
+Nobody is watching and nobody will answer questions. Worker sessions take
+ROADMAP.md Index rows one at a time; right now no open row is left that
+they can take (their Needs: $NEEDS; skipped: $(tr '\n' ' ' <"$SKIP")).
+Your job: plan the next work until the Linux project is finished.
+
+1. Read CLAUDE.md, ROADMAP.md (its Index, §0–§4 and §5) and SPEC.md's
+   Index, then the SPEC.md sections you plan from. Respect the owner's
+   order in ROADMAP.md (fix before adding; Android on hold; testers and
+   Windows later).
+2. Find what SPEC.md asks of the Linux project that is not done: §1 rows
+   Partial or Not built, §0.2 checks not yet done, §2 features, and
+   skipped items. Failure notes of the loop (why items were skipped):
+$(tail -60 "$NOTES" | sed 's/^/   /')
+3. For each, add an Index row with the next ID of its group and a section
+   under the right heading: concrete scope, the SPEC rules it proves,
+   what done means (tests by name), size (S/M/L). Large work: split into
+   rows of at most a day each. Needs as the Index explains (agent, box,
+   vm, owner); a box or vm item says what to check on the desktop or in
+   the VM. A skipped row you replace with smaller ones: remove it.
+   Order the Index so the most important work comes first.
+4. Where SPEC.md is silent, do not invent: add a §5 entry (the resolver
+   decides it). Do not edit SPEC.md or any file but ROADMAP.md. Do not
+   write code. No subagents needed beyond reading.
+5. Commit on the current branch with a message starting "Planner:".
+   Leave no uncommitted files. Do not push, do not switch branches.
+6. Last, write exactly these lines to $RESULT:
+   STATUS: PLANNED | FINISHED
+   SUMMARY: <one line: what you added, or why nothing is left>
+   FINISHED only if nothing in SPEC.md for Linux is left for an agent.
+PEOF
+}
+
+planner_round() { # returns 1 when the project is finished
+	local base attempt log code status why
+	MODE=planner
+	base=$(git rev-parse HEAD)
+	attempt="autopilot-plan/$WORKER-$(date +%Y%m%d-%H%M%S)"
+	git checkout -q -b "$attempt"; rm -f "$RESULT"
+	log="$LOGS/$(basename "$attempt").jsonl"
+	say "planner: $attempt from $(git log -1 --format=%h "$base"), $PLAN_MODEL at $PLAN_EFFORT, log $log"
+	claude_args 200 "$PLAN_MODEL" "$PLAN_EFFORT"
+	planner_prompt | timeout 2h claude "${args[@]}" >"$log" 2>&1
+	code=$?
+	status=$(sed -n 's/^STATUS: *//p' "$RESULT" 2>/dev/null | head -1)
+	say "$(usage_line "$log")"
+	say "planner exit $code, ${status:-no result}: $(sed -n 's/^SUMMARY: *//p' "$RESULT" 2>/dev/null | head -1)"
+	[ -z "$status" ] && say "session output: $(session_error "$log")"
+	git checkout -q -f "$BRANCH"
+	if [ -z "$status" ] && limit_hit "$log"; then
+		git branch -qD "$attempt" 2>/dev/null; MODE=item; release; wait_for_limit "$log"; return 0
+	fi
+	if [ "$(git rev-list --count "$base..$attempt")" -gt 0 ]; then
+		git checkout -q "$attempt"
+		if why=$(locked land land "$attempt" 2>&1); then
+			say "PLANNER PASSED: $BRANCH now $(git log -1 --format='%h %s')"
+		else
+			say "PLANNER FAILED, kept as $attempt: $(head -1 <<<"$why")"
+			{ echo "## $(date '+%F %T') $attempt — planner"; echo '```'; tail -25 <<<"$why"; echo '```'; } >>"$NOTES"
+		fi
+		git checkout -q -f "$BRANCH"
+		git fetch -q origin "$BRANCH" && git reset -q --hard "origin/$BRANCH"
+		git rev-list --count "$BRANCH..$attempt" 2>/dev/null | grep -qx 0 && git branch -qD "$attempt"
+	else
+		git branch -qD "$attempt" 2>/dev/null
+	fi
+	MODE=item
+	[ "$status" = FINISHED ] && return 1
+	return 0
+}
+
 trap release EXIT
 MODE=item
+planned=0 # a planner ran and nothing was taken since
 MODEL_LOGS=()
 fails=0
 round=0
 while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 	[ -e "$ROOT/STOP" ] && { say "STOP file found"; break; }
+	locked land follow_main
 	git fetch -q origin "$BRANCH" || { say "fetch from hub failed"; sleep 60; continue; }
 	git checkout -q -f -B "$BRANCH" "origin/$BRANCH" && git clean -qfd
 	if resolve_due && locked claims claim_resolver; then
@@ -651,8 +770,17 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 	if [ "$row" = WAIT ]; then
 		say "only other workers' items left; waiting $IDLE_WAIT"; sleep "$IDLE_WAIT"; continue
 	elif [ "$row" = NONE ]; then
-		say "nothing left in scope (Needs: $NEEDS); done"; break
+		if [ "$PLAN" != 1 ] || [ "$planned" -ge 2 ]; then
+			say "nothing left in scope (Needs: $NEEDS); done"; break
+		fi
+		if ! locked claims claim_planner; then
+			say "another worker is planning; waiting $IDLE_WAIT"; sleep "$IDLE_WAIT"; continue
+		fi
+		planned=$((planned + 1))
+		if ! planner_round; then release; say "the planner says the project is finished; done"; break; fi
+		release; continue
 	fi
+	planned=0
 	IFS=$'\t' read -r id title notes needs <<<"$row"
 	use_vm=
 	if vm_item "$needs"; then

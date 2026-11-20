@@ -54,6 +54,17 @@
   cut, so the VM checks itself (`inside 1`, then a oneshot unit runs
   `inside 2` after the restart it makes) into `/var/lib/kc9k-monk-live`;
   the host waits for ssh and reads `verdict`. `MONK_MINUTES` (default 6).
+- Planner round (`planner_round`): when `claim_next` finds nothing
+  (NONE), one worker (claim `PLANNER`) runs a session
+  (`AUTOPILOT_PLAN_MODEL`/`_EFFORT`, default opus xhigh) that adds the next
+  Index rows and sections from SPEC.md, §1 and the failure notes; the gate
+  allows only ROADMAP.md. The loop ends on `STATUS: FINISHED`, or after two
+  planner rounds with nothing taken between them. `AUTOPILOT_PLAN=0` ends
+  at NONE as before.
+- Following main (`follow_main`, under `land.lock`, each round): GitHub's
+  `$AUTOPILOT_FROM` into the hub's `autopilot`, fast-forward or a merge; a
+  conflict is logged and left for the owner. `AUTOPILOT_FOLLOW=0` turns it
+  off. `GIT_TERMINAL_PROMPT=0`: a missing GitHub login fails, never waits.
 - Resolver round (`resolver_round`): when the open questions (§5 entries
   not `DECIDED`/`FOR THE OWNER`, SPEC §7, `skip.txt`) differ from the
   last run's (`resolver-seen.txt`), one worker (claim `RESOLVER`) runs a

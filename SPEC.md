@@ -182,7 +182,7 @@ it has re-lock. Never changes what is blocked.
 | **Schedule lock** | On during windows, at places, and for a user-chosen lead time before a window; with allow windows: on outside them. | Schedule |
 | **Restart lock** | Unlocked by a restart. Any block. | Restart |
 | **Password lock** | Unlocked by a password (e.g. a partner's). | Password |
-| **Re-lock** | Lock option: comes on again a set time after unlocking. | |
+| **Re-lock** | Lock option: a set time after unlocking, the whole lock configuration the block had (every lock, in its order) comes on again. | |
 | **Layered sequential locks** | Several locks on a block or setting, unlocked one by one in the user's order. | |
 | **Trusted time** | Real time, protected by the tamper settings the user enabled. All locks use it. | |
 
@@ -418,6 +418,11 @@ GUI and CLI offer the same functions.
     partners' password locks; a timer lock, a text lock, then another timer
     lock). A lock of a kind a block already has is added as another lock of
     that kind, last, not a strengthening of the first (§6 2026-11-20).
+    No exceptions: a new timer or delay lock is its own layer (its duration
+    counts from the previous lock's unlocking, R-LOCK-6), extending a timer
+    lock is a separate action; range, text and password locks stack too,
+    with or without re-lock; each hotkey press adds its locks again
+    (confirmed per R-LOCK-12).
   - The text lock's challenge is typed in the terminal the command runs in
     or, without one, in a window the command itself opens on the user's
     desktop (§6 2026-11-14); only keys typed there count. A paste, a drop or
@@ -638,6 +643,7 @@ Decisions not already written into §1–5:
 - 2026-11-18: When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
 - 2026-11-19: The autopilot's resolver may write decisions into this file, each change tagged as rule 1 says; only the owner's decisions are untagged (owner).
 - 2026-11-20: A lock of a kind a block already has (§3.4) is added as a second lock of that kind, last in the unlock order, not a strengthening of the first (owner).
+- 2026-11-20 (later): Stacking has no exceptions (§4.6): a new timer or delay lock is its own layer, not a change to the last one (extending stays a separate action); range locks stack in their order; text and password locks stack on a block with re-lock; each hotkey press adds its locks again. Re-lock brings back the whole lock configuration the block had, every lock in its order (§3.4) (owner).
 - 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
 
 ## 7. Open decisions

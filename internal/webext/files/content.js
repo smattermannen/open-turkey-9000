@@ -92,8 +92,14 @@ let hideCap = null;
 let settleAt = 0; // when the page may be shown, once judged (0: not yet known)
 let takenAwayFor = null;
 
+// judgedHere reports whether this document's address is one the lists
+// judge: web pages, and local files while the rules say so (§3.1).
+function judgedHere() {
+  return /^https?:$/.test(location.protocol) || (location.protocol === "file:" && kc9kJudgedAddress(lists, location.href));
+}
+
 function hidePage() {
-  if (window !== window.top || !/^https?:$/.test(location.protocol)) {
+  if (window !== window.top || !judgedHere()) {
     return;
   }
   if (!hidden) {
@@ -129,7 +135,9 @@ function showPage() {
 // what it shows: one that reads the title or text (or whose exceptions do),
 // not in test mode, and not spared by an address exception.
 function mayActByText(url) {
+  const file = /^file:/i.test(url || "");
   return Boolean(lists) && lists.some((list) => !list.test && kc9kReadsPage([list]) &&
+    (!file || (list.filePages && !kc9kFileMatch(list.except.files, url))) &&
     !(list.except.url.match.length > 0 && kc9kMatches(list.except.url, url)) &&
     !kc9kUrlTermsMatch(list.except.urlTerms, url));
 }
@@ -497,7 +505,7 @@ let frameJudging = null; // { url, lists, steps } while a frame is judged
 let frameBlocked = false;
 
 function scanFrame() {
-  if (!lists || frameBlocked || !/^https?:$/.test(location.protocol) || !document.body || !kc9kReadsPage(lists)) {
+  if (!lists || frameBlocked || !judgedHere() || !document.body || !kc9kReadsPage(lists)) {
     return;
   }
   enterAddress(topUrl()); // as render() keeps it: a frame's looks follow the tab's address

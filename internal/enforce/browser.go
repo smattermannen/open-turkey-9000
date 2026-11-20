@@ -355,6 +355,11 @@ type ListRule struct {
 	// places PhraseScope names (url, title, text).
 	Phrases     []db.Phrase `json:"phrases,omitempty"`
 	PhraseScope []string    `json:"phrase_scope,omitempty"`
+	// FilePages: local files (file://) are judged too, by Files (the
+	// list's file entries), the block's file exceptions and the list's
+	// terms; only while tamper "allow file:// blocking" is on (§3.1).
+	FilePages bool     `json:"file_pages,omitempty"`
+	Files     []string `json:"files,omitempty"`
 }
 
 // phraseRules turns a block's phrase sets into rules, with the block's
@@ -397,6 +402,8 @@ type RuleExcept struct {
 	Title    []string `json:"title"`
 	Text     []string `json:"text"`
 	URLTerms []string `json:"url_terms,omitempty"`
+	// Files: the block's file exceptions (file://*, R-LIST-3), for file pages.
+	Files []string `json:"files,omitempty"`
 }
 
 // blockExcept collects a block's exceptions for its rules (R-LIST-1).
@@ -450,6 +457,22 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 		out = append(out, rule)
 	}
 	return out
+}
+
+// withFilePages lets the extension judge local files with rules (§3.1,
+// tamper "allow file:// blocking"): each list's file entries and the
+// block's file exceptions go with them.
+func withFilePages(rules []ListRule, lists db.Lists) {
+	except := blocker.FilePatterns(lists.ExceptionAddresses())
+	for i := range rules {
+		rules[i].FilePages = true
+		rules[i].Except.Files = except
+		for _, l := range lists {
+			if l.ID == rules[i].ID && rules[i].Phrases == nil {
+				rules[i].Files = blocker.FilePatterns(l.Addresses())
+			}
+		}
+	}
 }
 
 // BuildRules collects the rules for the extension right now.
@@ -513,6 +536,9 @@ func BuildRulesFor(d *db.DB, user string) (Rules, error) {
 		blockRules := listRules(b)
 		if len(b.Lists) == 0 || (b.Lists[0].ID != MonkListID && b.Lists[0].ID != ResetGuardListID) {
 			blockRules = append(blockRules, phraseRules(d, b.BlockName, except)...)
+		}
+		if FileURLsOn(d) {
+			withFilePages(blockRules, b.Lists)
 		}
 		for _, rule := range blockRules {
 			// Test mode is for tuning what a list finds in pages: lists that

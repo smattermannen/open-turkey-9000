@@ -21,6 +21,13 @@
   `KC9K_LOOKALIKES` (Cyrillic, Greek, Armenian, small capitals). Terms are
   folded the same way. `ci/match_test.js`; frames in Chromium
   (`ci/content_harness_test.js`); `frameHit` in `ci/background_test.js`.
+- **File pages** (§3.1): judged only when a rule has `file_pages`
+  (tamper "allow file:// blocking"; `enforce.withFilePages`), by `files`
+  and `except.files` (`kc9kFilePaths`, `kc9kFileMatch`: decoded path,
+  `*` only at the end) and the list's terms; `kc9kJudgedAddress` is the
+  one check for "is this address judged" (match, content `judgedHere`,
+  background `pageHit`, `frameHit`, `blockTitledTab`,
+  `closeNewlyBlockedTabs`). `*.*` never matches a file.
 - No flashing (R-PAGE-1, `content.js`): while a list could still act on the
   top page by its title or text (`mayActByText`), what its root holds stays
   at opacity 0 (`hidePage`; not the root itself, which takes the canvas and

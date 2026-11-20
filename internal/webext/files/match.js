@@ -98,6 +98,49 @@ function kc9kFilter(raw) {
   };
 }
 
+// Local files (§3.1): judged only while the rules say so (tamper "allow
+// file:// blocking": a list's file_pages), by its file entries
+// (file:///home/u/games/* is a folder's content, file:///x/y.html one
+// file, file://* every file) and its block's file exceptions (file://* by
+// default, R-LIST-3). Paths are compared decoded and case-sensitive.
+function kc9kFilePaths(entries) {
+  const out = [];
+  for (const entry of entries || []) {
+    const m = /^file:\/\/(.*)$/i.exec(String(entry).trim());
+    if (!m) {
+      continue;
+    }
+    const path = m[1] === "*" ? "/*" : m[1];
+    if (!path.startsWith("/") || path.slice(0, -1).includes("*")) {
+      continue;
+    }
+    out.push(path.endsWith("*") ? { prefix: path.slice(0, -1) } : { exact: path.replace(/(.)\/$/, "$1") });
+  }
+  return out;
+}
+
+// kc9kFileMatch reports whether the file page at url is one of the paths.
+function kc9kFileMatch(paths, url) {
+  if (!paths || paths.length === 0 || !/^file:/i.test(url || "")) {
+    return false;
+  }
+  let path;
+  try {
+    path = decodeURIComponent(new URL(url).pathname);
+  } catch (error) {
+    return false;
+  }
+  const bare = path.replace(/(.)\/$/, "$1");
+  return paths.some((p) => (p.exact !== undefined ? p.exact === bare : path.startsWith(p.prefix)));
+}
+
+// kc9kJudgedAddress reports whether pages at url are judged by the compiled
+// lists: web pages always, local files when a list says so.
+function kc9kJudgedAddress(compiled, url) {
+  return /^(https?|ftp):/i.test(url || "") ||
+    (/^file:/i.test(url || "") && (compiled || []).some((list) => list.filePages));
+}
+
 // kc9kEmbedded turns an address written inside another one into a full URL:
 // "https://reddit.com/x", "https:/reddit.com/x" or "reddit.com/x".
 function kc9kEmbedded(text) {
@@ -656,7 +699,10 @@ function kc9kCompileLists(lists) {
       phraseScope: list.phrase_scope || [],
       ads: (list.ads || []).map((d) => String(d).toLowerCase()),
       actions: list.actions || [],
+      filePages: Boolean(list.file_pages),
+      files: kc9kFilePaths(list.files),
       except: {
+        files: kc9kFilePaths(except.files),
         url: kc9kFilter({ match: except.url || [] }),
         urlTerms: kc9kKeywordMatchers(except.url_terms),
         title: kc9kKeywordMatchers(except.title),
@@ -700,9 +746,10 @@ function kc9kListMatches(compiled, page) {
 // huge page never holds the page up; others run it to the end at once.
 function* kc9kListMatchesSteps(compiled, page) {
   const out = [];
-  if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
+  if (!page || !page.url || !kc9kJudgedAddress(compiled, page.url)) {
     return out;
   }
+  const file = /^file:/i.test(page.url);
   const hasTitle = typeof page.title === "string";
   const hasText = typeof page.text === "string";
   for (const list of compiled) {
@@ -710,10 +757,14 @@ function* kc9kListMatchesSteps(compiled, page) {
     if (list.test) {
       continue; // shown, not run: see kc9kTestReport
     }
+    if (file && !list.filePages) {
+      continue;
+    }
     if ((except.title.length > 0 && !hasTitle) || (except.text.length > 0 && !hasText)) {
       continue;
     }
-    if ((except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
+    if ((file && kc9kFileMatch(except.files, page.url)) ||
+      (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
       kc9kUrlTermsMatch(except.urlTerms, page.url) ||
       (hasTitle && except.title.some((matcher) => matcher.test(page.title))) ||
       (hasText && (yield* kc9kSomeSteps(except.text, page.text)))) {
@@ -728,7 +779,8 @@ function* kc9kListMatchesSteps(compiled, page) {
       }
       continue;
     }
-    const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
+    const whole = (file && kc9kFileMatch(list.files, page.url)) ||
+      (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       kc9kUrlTermsMatch(list.urlTerms, page.url) ||
       (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
     const found = hasText && list.text.length > 0 ? yield* kc9kTextHitsSteps(list.text, page.text) : { distinct: 0, total: 0 };
@@ -790,21 +842,24 @@ function* kc9kPhrasesFoundSteps(list, page) {
 // spared is true when one of the block's exceptions matches the page.
 function kc9kTestReport(compiled, page) {
   const out = [];
-  if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
+  if (!page || !page.url || !kc9kJudgedAddress(compiled, page.url)) {
     return out;
   }
+  const file = /^file:/i.test(page.url);
   const title = typeof page.title === "string" ? page.title : "";
   const text = typeof page.text === "string" ? page.text : "";
   for (const list of compiled) {
-    if (!list.test) {
+    if (!list.test || (file && !list.filePages)) {
       continue;
     }
     const except = list.except;
-    const spared = (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
+    const spared = (file && kc9kFileMatch(except.files, page.url)) ||
+      (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
       kc9kUrlTermsMatch(except.urlTerms, page.url) ||
       except.title.some((matcher) => matcher.test(title)) || except.text.some((matcher) => matcher.test(text));
     const urlWords = kc9kUrlWords(page.url);
-    const address = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
+    const address = (file && kc9kFileMatch(list.files, page.url)) ||
+      (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       list.urlTerms.some((matcher) => matcher.test(urlWords));
     const inTitle = list.titleRaw.filter((entry, i) => list.title[i].test(title));
     const entries = [];

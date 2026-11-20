@@ -317,6 +317,38 @@ async function main() {
     await t.close();
   }
 
+  // §3.1: a local file is judged by its text only while the rules say so
+  // (tamper "allow file:// blocking"), and spared by a file exception.
+  const os = require("os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kc9k-file-"));
+  const local = path.join(dir, "page.html");
+  fs.writeFileSync(local, "<!doctype html><meta charset=\"utf-8\"><title>Notes</title><p>Play casino games</p>");
+  async function judgeFile(filePages, exceptFiles) {
+    const f = await browser.newPage();
+    await f.addInitScript((stored) => {
+      const listeners = { addListener() {} };
+      window.sent = [];
+      window.browser = {
+        storage: { local: { get: async () => ({ page: stored }) }, onChanged: listeners },
+        runtime: { sendMessage: async (m) => { window.sent.push(m); return undefined; }, onMessage: listeners },
+      };
+    }, { lists: [{ id: 4, block: "b", name: "Words", url: [], title: [], text: ["casino"], file_pages: filePages,
+      actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [], files: exceptFiles } }] });
+    await f.addInitScript(script);
+    await f.goto("file://" + local);
+    await f.waitForTimeout(2000);
+    const hits = (await f.evaluate(() => window.sent)).filter((m) => m.type === "page-hits");
+    await f.close();
+    return hits;
+  }
+  let fileHits = await judgeFile(true, []);
+  check("a local file is judged by its text", fileHits.length === 1 && fileHits[0].url.startsWith("file://"), fileHits);
+  fileHits = await judgeFile(false, []);
+  check("not while file:// blocking is off", fileHits.length === 0, fileHits);
+  fileHits = await judgeFile(true, ["file://*"]);
+  check("and spared by file://*", fileHits.length === 0, fileHits);
+  fs.rmSync(dir, { recursive: true, force: true });
+
   // Without no-images nothing is touched.
   const plain = await open(rules([{ action: "greyscale", distinct: 1, hits: 1 }]));
   check("other looks leave pictures alone", (await content(plain, "#a", "::before")).includes("url("),

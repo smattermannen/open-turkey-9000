@@ -768,3 +768,45 @@ if (typeof kc9kSocialRedirect === "function") {
     process.exitCode = 1;
   }
 }
+
+// §3.1 file URL entries: local files are judged only while the rules say so
+// (tamper "allow file:// blocking": file_pages), by a list's file entries,
+// its terms, and the block's file exceptions (file://* by default spares all).
+{
+  const lists = (filePages, exceptFiles) => kc9kCompileLists([{
+    id: 20, block: "b", name: "Files", url: ["*.*"], title: [], text: ["casino"],
+    files: ["file:///home/u/games/*", "file:///home/u/notes/plan.html"], file_pages: filePages,
+    actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [], files: exceptFiles },
+  }]);
+  const acts = (compiled, url, text) => kc9kListMatches(compiled, { url, title: "", text: text || "" }).length > 0;
+  const on = lists(true, ["file:///home/u/games/allowed/*"]);
+  const cases = [
+    [on, "file:///home/u/games/poker.html", "", true, "a file in a blocked folder"],
+    [on, "file:///home/u/games/sub/x.html", "", true, "deeper in the folder"],
+    [on, "file:///home/u/games/allowed/x.html", "", false, "spared by a file exception"],
+    [on, "file:///home/u/notes/plan.html", "", true, "one blocked file"],
+    [on, "file:///home/u/notes/plan.html/", "", true, "the same file with a slash"],
+    [on, "file:///home/u/notes/other.html", "", false, "another file: *.* is the web only"],
+    [on, "file:///home/u/notes/other.html", "play casino here", true, "a local page by its text"],
+    [on, "file:///home/u/games%20x/a.html", "", false, "a folder that only starts the same"],
+    [on, "file:///home/U/games/a.html", "", false, "paths are case-sensitive"],
+    [lists(false, []), "file:///home/u/games/poker.html", "play casino", false, "file blocking off: never judged"],
+    [lists(true, ["file://*"]), "file:///home/u/games/poker.html", "play casino", false, "file://* spares every file"],
+    [on, "https://example.com/", "", true, "web pages as before"],
+  ];
+  for (const [compiled, url, text, want, what] of cases) {
+    if (acts(compiled, url, text) !== want) {
+      console.error("FAIL file pages: " + what + " (" + url + ")");
+      process.exitCode = 1;
+    }
+  }
+  if (!kc9kJudgedAddress(on, "file:///x") || kc9kJudgedAddress(lists(false, []), "file:///x") ||
+    !kc9kJudgedAddress([], "https://a.example/") || kc9kJudgedAddress(on, "about:blank")) {
+    console.error("FAIL kc9kJudgedAddress");
+    process.exitCode = 1;
+  }
+  if (kc9kFilePaths(["file://home/x", "file:///a/*/b", "https://x.example", "file:///ok/*"]).length !== 1) {
+    console.error("FAIL kc9kFilePaths keeps only absolute paths with * at the end");
+    process.exitCode = 1;
+  }
+}

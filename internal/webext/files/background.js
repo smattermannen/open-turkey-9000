@@ -317,7 +317,7 @@ function act(tabId, url, outcome, reason) {
 // A tab's title is judged by the title lists only: window title entries
 // never apply to browsers (R-TITLE-1).
 function blockTitledTab(tab) {
-  if (!tab.url || !/^https?:/i.test(tab.url)) {
+  if (!tab.url || !kc9kJudgedAddress(lists, tab.url)) {
     return;
   }
   const outcome = kc9kOutcome(kc9kListMatches(lists, { url: tab.url, title: tab.title || "" }));
@@ -566,7 +566,7 @@ function mirrorHit(message, sender) {
 // taken from this script's own rules, never from the report.
 function frameHit(message, sender) {
   const tab = sender && sender.tab;
-  if (!tab || !sender.frameId || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
+  if (!tab || !sender.frameId || typeof message.url !== "string" || !kc9kJudgedAddress(lists, message.url)) {
     return null;
   }
   const matches = [];
@@ -599,7 +599,7 @@ function why(sender) {
 // rules, never from the report.
 function pageHit(message, sender) {
   const tab = sender && sender.tab;
-  if (!tab || sender.frameId !== 0 || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
+  if (!tab || sender.frameId !== 0 || typeof message.url !== "string" || !kc9kJudgedAddress(lists, message.url)) {
     return;
   }
   const matches = [];
@@ -907,7 +907,7 @@ function apply(rules) {
 async function closeNewlyBlockedTabs() {
   const tabs = await browser.tabs.query({});
   for (const tab of tabs) {
-    if (!tab.url || !/^https?:/i.test(tab.url)) {
+    if (!tab.url || !kc9kJudgedAddress(lists, tab.url)) {
       continue;
     }
     const outcome = addressOutcome(tab.url);

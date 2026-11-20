@@ -13,7 +13,9 @@
 - Browser policies (Firefox, Chrome, Chromium, Brave, Edge, Opera,
   Vivaldi): blocklist, allowlist, wildcards, DoH off.
   `file://` entries (`BlockFiles`, `FilePatterns`) only with tamper
-  `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions.
+  `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions;
+  the same setting has the extension judge file pages (`withFilePages`,
+  [extension](extension.md)).
 - `extguard.go`: extension mandatory while `enforce.ExtensionRequired` and
   a supported browser is installed, in the accounts that need it
   (`EnforceFor`, `enforce.extensionUsers`, §3.2); closes browsers whose extension hasn't

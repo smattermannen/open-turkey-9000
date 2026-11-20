@@ -98,6 +98,11 @@ func lockCases() []lockCase {
 		{name: "unsupported browsers password lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "unsupported browsers restart lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--restart"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "unsupported browsers lock by the old name", setup: supportedInstalled, args: []string{"browser", "force-librewolf", "on", "--for", "1h"}, isSet: settingLocked(db.UnsupportedBrowsers)},
+		{name: "firmware lock", setup: func(t *testing.T) { fakeFirmwareRoot(t) }, args: []string{"firmware-lock", "on"},
+			lines: []string{"partner"}, isSet: func(t *testing.T, d *db.DB) bool {
+				v, _ := d.GetSetting(SettingFirmwareLock)
+				return v == "on"
+			}},
 		{name: "monk mode", args: []string{"monk", "--for", "30m"}, isSet: func(t *testing.T, d *db.DB) bool {
 			trusted, _ := d.TrustedNow(time.Now())
 			return enforce.MonkOn(d, trusted)

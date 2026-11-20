@@ -141,6 +141,7 @@ var prepareUninstallCmd = &cobra.Command{
 //     permission for the unsigned extension, and KC9K's locks in LibreWolf's
 //     settings (your own overrides file applies directly again);
 //   - the SafeSearch lines in /etc/hosts, which pin Google to one address;
+//   - strict mode's lockdown if a crash left it (sudoers, polkit, PAM guard);
 //   - the no-escape boot lock, whose GRUB password nobody knows;
 //   - the extension files.
 //
@@ -158,6 +159,9 @@ func undoSystemChanges() []string {
 	note("remove KC9K's locks from LibreWolf's settings", blocker.SyncLibreWolfLocks(false))
 	note("remove forced SafeSearch", blocker.SyncSafeSearch(nil))
 	note("remove the sleep hook", blocker.SyncSleepHook(false))
+	if blocker.LockdownInstalled() { // left by a crash: strict mode's sudoers, polkit and PAM guard
+		note("remove strict mode's lockdown", blocker.RemoveLockdown())
+	}
 	if blocker.BootLockInstalled() {
 		note("remove the no-escape boot lock", blocker.RemoveBootLock())
 	}

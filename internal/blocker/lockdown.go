@@ -8,9 +8,10 @@ import (
 	"strings"
 )
 
-// Lockdown takes root away from the desktop user while a block is held. sudo
+// Lockdown takes root away from the desktop user while a block is locked. sudo
 // and pkexec cover every terminal, including text consoles, so there is no need
-// to block terminal programs. Root-equivalent group sockets (docker, lxd,
+// to block terminal programs; a root password is kept out of login and su by
+// the PAM guard (pamguard.go). Root-equivalent group sockets (docker, lxd,
 // libvirt) are closed too; see sockets.go. Recovery mode and booting another system still
 // work; see freeze.BypassParam for the exit the daemon itself honours.
 const (
@@ -81,6 +82,9 @@ func ApplyLockdown(user string) error {
 			return err
 		}
 	}
+	if err := ApplyPAMGuard(); err != nil {
+		return err
+	}
 	return LockPrivilegedSockets()
 }
 
@@ -91,7 +95,20 @@ func RemoveLockdown() error {
 			return err
 		}
 	}
+	if err := RemovePAMGuard(); err != nil {
+		return err
+	}
 	return UnlockPrivilegedSockets()
+}
+
+// LockdownInstalled reports whether any part of the lockdown is in place.
+func LockdownInstalled() bool {
+	for _, path := range []string{lockdownSudoers, lockdownPolkit} {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+	}
+	return PAMGuardInstalled()
 }
 
 // LogoutUsers ends the sessions of every regular user.

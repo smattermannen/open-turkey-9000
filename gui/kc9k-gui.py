@@ -9689,6 +9689,159 @@ class Window(Gtk.ApplicationWindow):
         self.run(["reset-guard", "on" if wanted else "off"])
         return True
 
+    def device_setup_row(self):
+        """§4.10 Device protection: the firmware lock and the guided setup."""
+        row = Gtk.Box(spacing=8)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text.pack_start(Gtk.Label(label="Factory reset protection: firmware lock", xalign=0), False, False, 0)
+        text.pack_start(dim("USB and network boot off, the boot order locked, and a firmware password "
+                            "a trusted person keeps. The guided setup lists every step of the "
+                            "strictest setup, in order."), False, False, 0)
+        row.pack_start(text, True, True, 0)
+        guided = Gtk.Button(label="Guided setup…", valign=Gtk.Align.CENTER)
+        guided.connect("clicked", self.show_guided_setup)
+        firmware = Gtk.Button(label="Firmware lock…", valign=Gtk.Align.CENTER)
+        firmware.connect("clicked", self.show_firmware_lock)
+        row.pack_end(guided, False, False, 0)
+        row.pack_end(firmware, False, False, 0)
+        return row
+
+    def cli_json(self, args):
+        """Runs a reading command now and returns its JSON, or None after
+        saying why."""
+        ok, output = cli_with_access(list(self.access_passwords), args)
+        if not ok:
+            self.message(output or "The command failed.")
+            return None
+        try:
+            return json.loads(output)
+        except ValueError:
+            self.message("Unexpected answer from kc9k: " + output[:200])
+            return None
+
+    def show_firmware_lock(self, _button):
+        status = self.cli_json(["firmware-lock", "--json"])
+        if status is None:
+            return
+        lines = []
+        if not status["available"]:
+            lines.append("This computer's firmware settings can't be changed from Linux. Do it in the "
+                         "firmware's own setup (press F2, F1, F10 or Del while the computer starts): turn "
+                         "off booting from USB and the network, lock the boot order, and set a firmware "
+                         "password that a trusted person types and keeps.")
+        else:
+            lines.append("Firmware lock: " + ("on" if status["locked"] else "off"))
+            lines.append("Firmware password: " + ("set" if status["password"] else "not set"))
+            for setting in status["settings"]:
+                state = setting["current"]
+                if not setting["want"]:
+                    state += " (can't be changed here)"
+                elif not setting["done"]:
+                    state += f" (the lock sets {setting['want']})"
+                lines.append(f"{setting['purpose']} ({setting['name']}): {state}")
+            for missing in status["missing"]:
+                lines.append(f"{missing}: not offered here; set it in the firmware's own setup")
+        dialog = Gtk.MessageDialog(transient_for=self, modal=True, text="Firmware lock",
+                                   secondary_text="\n".join(lines), message_type=Gtk.MessageType.INFO)
+        dialog.add_button("Close", Gtk.ResponseType.CLOSE)
+        if status["available"] and status["set_by_kc9k"]:
+            dialog.add_button("Remove…", 2)
+        if status["available"] and not status["locked"]:
+            dialog.add_button("Lock the firmware…", Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            self.lock_firmware(status)
+        elif answer == 2:
+            password = self.ask_text("Firmware password", "The trusted person types it. The settings "
+                                     "the lock changed are put back and the password is cleared.",
+                                     password=True)
+            if password:
+                self.run(["firmware-lock", "off"], password + "\n")
+
+    def lock_firmware(self, status):
+        if status["password"]:
+            password = self.ask_text("The firmware password already set",
+                                     "Needed to change the firmware's settings; it stays as it is.",
+                                     password=True)
+        else:
+            password = self.ask_text("Firmware password",
+                                     "The trusted person types it and keeps it. Killer Chicken 9000 "
+                                     "doesn't keep it.", password=True)
+            if password and self.ask_text("Type it again", password=True) != password:
+                self.message("The two passwords differ; nothing changed.", Gtk.MessageType.INFO)
+                return
+        if not password:
+            return
+        kind = ("USB and network boot off, boot order locked, under the firmware password already set"
+                if status["password"] else
+                "USB and network boot off, boot order locked, a firmware password a trusted person keeps")
+        if not self.confirm_lock([f"the computer's firmware: firmware lock ({kind})"]):
+            return
+        self.run(["firmware-lock", "on", "--yes"], password + "\n")
+
+    GUIDED_MARKS = {"done": "✓", "todo": "○", "by-hand": "○", "info": "ℹ", "unknown": "?"}
+
+    def show_guided_setup(self, _button):
+        steps = self.cli_json(["guided-setup", "--json"])
+        if steps is None:
+            return
+        dialog = Gtk.Dialog(title="Guided setup", transient_for=self, modal=True)
+        dialog.add_button("Close", Gtk.ResponseType.CLOSE)
+        dialog.set_default_size(620, 560)
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin=16)
+        box.pack_start(dim("The strictest setup, step by step: what protects the setup first, "
+                           "no-escape last. Each step says whether it is done."), False, False, 0)
+        chosen = []
+        for i, step in enumerate(steps):
+            row = Gtk.Box(spacing=12)
+            mark = Gtk.Label(label=self.GUIDED_MARKS.get(step["state"], "?"), valign=Gtk.Align.START)
+            row.pack_start(mark, False, False, 0)
+            text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            title = f"{i + 1}. {step['title']}" + (" (optional)" if step.get("optional") else "")
+            text.pack_start(Gtk.Label(label=title, xalign=0), False, False, 0)
+            text.pack_start(dim(step["detail"]), False, False, 0)
+            command = step.get("command", "")
+            if step["state"] != "done" and command and not command.startswith("kc9k "):
+                shown = Gtk.Label(label=command, xalign=0, selectable=True)
+                shown.get_style_context().add_class("monospace")
+                text.pack_start(shown, False, False, 0)
+            row.pack_start(text, True, True, 0)
+            if step["state"] in ("todo", "by-hand") and self.guided_action(step["id"]):
+                button = Gtk.Button(label="Do it…", valign=Gtk.Align.START)
+                button.connect("clicked", lambda _b, s=step: (chosen.append(s), dialog.response(Gtk.ResponseType.OK)))
+                row.pack_end(button, False, False, 0)
+            box.pack_start(row, False, False, 0)
+        scroll.add(box)
+        dialog.get_content_area().pack_start(scroll, True, True, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and chosen:
+            self.guided_action(chosen[0]["id"], chosen[0])()
+
+    def guided_action(self, step_id, step=None):
+        """What a guided setup step's Do it… runs: the same as its own
+        switch or button elsewhere, so it asks the same questions."""
+        def tamper():
+            commands = [c.strip().split()[1:] for c in (step or {}).get("command", "").split(";") if c.strip()]
+
+            def next_one(_output=None):
+                if commands:
+                    self.run(commands.pop(0), then=next_one)
+            next_one()
+        return {
+            "settings-password": lambda: self.set_settings_password(None),
+            "no-weakening": lambda: self.toggle_no_weakening(None, True),
+            "tamper": tamper,
+            "strict": lambda: self.toggle_strict(None, True),
+            "strict-lock": lambda: self.lock_setting(None, "strict", "Strict mode"),
+            "reset-guard": lambda: self.toggle_reset_guard(None, True),
+            "firmware": lambda: self.show_firmware_lock(None),
+            "no-escape": lambda: self.toggle_no_escape(None, True),
+        }.get(step_id)
+
     def toggle_no_weakening(self, _switch, wanted):
         if self.updating:
             return False
@@ -10307,7 +10460,8 @@ class Window(Gtk.ApplicationWindow):
             self.switch_row(self.reset_guard_switch, "Factory reset protection: installer media guard",
                             "While anything is locked, the download pages of operating systems and USB "
                             "image writers are blocked and image writers (USB Image Writer, Etcher, "
-                            "Disks, …) are closed. It can't be turned off during a lock.")), False, False, 0)
+                            "Disks, …) are closed. It can't be turned off during a lock."),
+            self.device_setup_row()), False, False, 0)
 
         # §4.10, R-MODE-5 (owner 2026-11-17): what shows when no mode or
         # circadian rhythm wallpaper does, and while the place isn't known.

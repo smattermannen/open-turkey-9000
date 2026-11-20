@@ -9004,12 +9004,32 @@ class Window(Gtk.ApplicationWindow):
     def share_project(self, button):
         self.export_project(button, share=True)
 
+    def ask_share_presets(self):
+        """Sharing the setup: include the presets? True, False, or None
+        (cancelled). A backup always includes them (SPEC §3.13)."""
+        dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   text="Include your presets?",
+                                   secondary_text="Block presets, list and phrase set presets, schedule, "
+                                                  "automation and hotkey presets.")
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Without presets", 2)
+        dialog.add_button("With presets", Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        return {Gtk.ResponseType.OK: True, 2: False}.get(answer)
+
     def export_project(self, _button, share=False):
+        command = ["project", "export"]
+        if share:
+            presets = self.ask_share_presets()
+            if presets is None:
+                return
+            command += ["--share", "--presets" if presets else "--presets=false"]
         path = self.choose_file("Share the setup (without places)" if share else "Back up the whole setup",
                                 Gtk.FileChooserAction.SAVE, "Save")
         if not path:
             return
-        ok, output = cli_with_access(self.access_passwords, ["project", "export"] + (["--share"] if share else []))
+        ok, output = cli_with_access(self.access_passwords, command)
         if not ok:
             self.message(output)
             return
@@ -10391,10 +10411,11 @@ class Window(Gtk.ApplicationWindow):
             project_row.pack_start(button, False, False, 0)
         box.pack_start(section(
             "Project",
-            dim("Save every block, cluster and setting to one file. A backup also holds your "
+            dim("Save every block and setting to one file. A backup also holds every preset, your "
                 "places (the Wi-Fi networks they are known by), running locks, passwords (as hashes), "
-                "hotkeys and statistics; a file to share leaves them out. Importing shows what it "
-                "adds first, only adds, and gives a block whose name is taken a new name."),
+                "hotkeys and statistics; a file to share leaves those out and asks about presets. "
+                "Importing shows what it adds first, only adds, and gives a block or preset whose "
+                "name is taken a new name."),
             project_row), False, False, 0)
 
         self.option_switches = {}

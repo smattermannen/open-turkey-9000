@@ -54,7 +54,6 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: the text lock's challenge in the command's own window (decided 2026-11-20, §5); rules server secret (for the owner, §5) | R-LOCK-5, §4.6 | browsers, locks | agent, owner |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| E1 | Projects: presets of every type as a choice (owner 2026-11-20) | §3.13 | db-project, lists | agent |
 | E2 | Words to avoid still shown: template, cluster (GUI, CLI names) | §3.14, §4.12 | gui, lists | agent |
 | D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
@@ -72,17 +71,13 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
 
 - [ ] **Doc audit 2026-11-20** (docs and code compared; notes fixed in the
   same session; what the code still gets wrong is below).
-  - [ ] **E1** Presets in projects are a choice (owner 2026-11-20, SPEC
-    §3.13, §6): `project export` (and the GUI's export) asks whether to
-    include presets; included means every type: block presets
-    (`templates`), list and phrase set presets (`clusters`) and the
-    `presets` table (lists, automation, schedule, hotkey). Today the code
-    differs both ways: templates and clusters always go in
-    (`cli/project.go` `Templates`, `Clusters`), the `presets` table never
-    does (export, import and `cli/projectbackup.go` all skip it). A backup
-    holds every preset always. Import adds presets as it adds blocks (only
-    adds; a clashing name gets a new one); tests in `project_test.go`,
-    `projectbackup_test.go`; update `notes/db-project.md`.
+  - [x] **E1** Presets in projects are a choice (owner 2026-11-20, SPEC
+    §3.13, §6): built 2026-11-20. A backup (`project export`) holds every
+    preset (block presets, list and phrase set presets, the `presets`
+    table); `--share` only with `--presets` (a terminal asks; the GUI's
+    Share… asks). Import adds them like blocks (same content skipped, a
+    taken name gets `name-2`). `TestProjectPresetsAreAChoice`; the GUI
+    question on a real screen: Unchecked.
   - [ ] **E2** Words to avoid (§3.14) still shown to the user; command
     names follow the glossary, old ones stay as aliases (§4.12):
     - GUI (`gui/kc9k-gui.py`): New block dialog "Start empty or from a
@@ -940,7 +935,7 @@ Only items not simply Built.
 | Item | Status | Notes |
 |---|---|---|
 | §3.1 File URL entries | Partial | built: with tamper `file-urls` on, blacklist `file:///…` entries go into Firefox/LibreWolf and Chrome policies unless the block's file exceptions spare them (checked live in LibreWolf); Chrome live: Unchecked; the extension doesn't judge file pages |
-| §3.2 Block preset | Built | your own saved blocks: `template save B T`, `template`, `template remove T`, `block create X --template T` (names: E2); GUI ⋯ "Save as block preset…" and a choice in New block; Presets page; projects (always: E1). None shipped |
+| §3.2 Block preset | Built | your own saved blocks: `template save B T`, `template`, `template remove T`, `block create X --template T` (names: E2); GUI ⋯ "Save as block preset…" and a choice in New block; Presets page; projects (a choice, always in a backup). None shipped |
 | §3.2 Affected users | Partial | `block users B all|USER…` (GUI "Users:" button, gui-state `users`/`accounts`, projects): a block for some accounts stays out of hosts/firewall/policies (shared by every account) unless it covers them all; its lists reach only those users' extensions (`BuildRulesFor`, user from the socket uid) and its apps are closed only in their processes (`KillBlockedFor`). Fewer users weakens. Not per user yet: window titles, folders, fetch tools, the extension guard. Live: one account on the laptop, so only "every account" checked |
 | §3.3 Continuous/automated types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
 | §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. GUI: block start dialog and the setting lock dialogs |

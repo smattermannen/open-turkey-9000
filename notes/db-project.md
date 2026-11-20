@@ -25,12 +25,17 @@
 Not fixed by `SPEC.md`; the code is the truth.
 
 - **Project**: holds blocks (lists, apps, titles, schedules, schedule lock,
-  social, allowance, Pomodoro, breaks, ladders), list and phrase set presets
-  (clusters) and block presets (templates; not the `presets` table), browser and
-  behaviour settings, global ladder, freeze schedules, list images; backup
+  social, allowance, Pomodoro, breaks, ladders), browser and
+  behaviour settings, global ladder, freeze schedules, list images. Presets
+  of every type (`exportPresets`: `clusters`, `templates`, `presets` table
+  rows) go in a backup always and in a `--share` only by choice
+  (`--presets`; without it a terminal asks on stderr, elsewhere none; the
+  GUI's Share… asks). Import adds presets like blocks: one with the same
+  name and content is skipped, a different one whose name is taken comes
+  in as `name-2` (`freeName`, `importPresets`). Backup
   adds places and place rules, and (`cli/projectbackup.go`) running locks
   (with range lock, queued locks and the configuration re-lock restores),
   password hashes, hotkeys, statistics: import adds only where nothing is
   here, confirms the locks, starts blocks that come with running locks. Clashing block → `name-2`; existing
-  presets/places kept; browser settings only on; ladder replaced only by a
+  places kept; browser settings only on; ladder replaced only by a
   stricter one. `--dry-run` lists additions and locks.

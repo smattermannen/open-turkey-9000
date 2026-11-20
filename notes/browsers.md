@@ -15,7 +15,8 @@
   `file://` entries (`BlockFiles`, `FilePatterns`) only with tamper
   `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions.
 - `extguard.go`: extension mandatory while `enforce.ExtensionRequired` and
-  a supported browser is installed; closes browsers whose extension hasn't
+  a supported browser is installed, in the accounts that need it
+  (`EnforceFor`, `enforce.extensionUsers`, §3.2); closes browsers whose extension hasn't
   fetched `/rules` with `X-KC9K-Extension` within 60 s (traced via
   `/proc/net/tcp`), at once if remote-controlled (`remotecontrol.go`) or
   started before the last protecting settings change

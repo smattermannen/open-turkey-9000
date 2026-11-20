@@ -116,29 +116,74 @@ const checkInRecordEvery = 30 * time.Second
 // only the extension enforces (web-only, force-search) is on. A block of
 // apps alone doesn't need it.
 func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
-	for _, b := range active {
-		if b.Lists.Enforces() || len(b.Social) > 0 || b.HasPhrases {
+	required, _ := extensionUsers(d, active)
+	return required
+}
+
+// needsExtension reports whether a block has something only the extension
+// enforces.
+func needsExtension(lists db.Lists, social []string, phrases bool) bool {
+	return lists.Enforces() || len(social) > 0 || phrases
+}
+
+// extensionUsers is ExtensionRequired, and whose browsers need it (§3.2
+// affected users): nil for every account, else the user IDs of the accounts
+// the blocks needing it name. Options, locks and blocks for everyone need
+// it in every account.
+func extensionUsers(d *db.DB, active []db.ActiveBlockDetail) (bool, []uint64) {
+	var some []uint64
+	partial := false
+	add := func(b db.ActiveBlockDetail) bool {
+		uids := blockUIDs(b)
+		if uids == nil {
 			return true
+		}
+		partial = true
+		some = append(some, uids...)
+		return false
+	}
+	for _, b := range active {
+		if needsExtension(b.Lists, b.Social, b.HasPhrases) && add(b) {
+			return true, nil
 		}
 	}
 	// An open quota session counts the time on its websites, which only the
 	// extension sees: without it, another browser would be free.
 	for _, b := range openQuotaBlocks(d) {
-		if b.Lists.Enforces() {
-			return true
+		if !b.Lists.Enforces() {
+			continue
+		}
+		users, _ := d.BlockUsers(b.Name)
+		if add(db.ActiveBlockDetail{BlockName: b.Name, Lists: b.Lists, Users: users}) {
+			return true, nil
 		}
 	}
 	if BrowserOn(d, "web-only") || BrowserOn(d, "force-search") {
-		return true
+		return true, nil
 	}
 	// R-LOCK-9: while anything is locked, the extension is required.
 	now := time.Now()
 	trusted, err := d.TrustedNow(now)
-	if err != nil {
-		return false
+	if err == nil {
+		if locked, err := AnyLock(d, now, trusted); err == nil && locked {
+			return true, nil
+		}
 	}
-	locked, err := AnyLock(d, now, trusted)
-	return err == nil && locked
+	if partial {
+		return true, dedupUIDs(some)
+	}
+	return false, nil
+}
+
+// dedupUIDs returns uids without repeats, never nil.
+func dedupUIDs(uids []uint64) []uint64 {
+	out := []uint64{}
+	for _, u := range uids {
+		if !slices.Contains(out, u) {
+			out = append(out, u)
+		}
+	}
+	return out
 }
 
 // ExtensionRequiredNow is ExtensionRequired for the blocks in force now,
@@ -733,13 +778,16 @@ func enforceBrowser(d *db.DB) {
 // is there to use instead: without one, every browser would be closed.
 func enforceExtension(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
 	unsupported := UnsupportedBrowsersOn(d)
-	if !unsupported && !ExtensionRequired(d, active) {
+	required, uids := extensionUsers(d, active)
+	if unsupported {
+		uids = nil // every account: no other browser may run
+	} else if !required {
 		return
 	}
 	if !blocker.ExtensionBrowserInstalled() {
 		return // 'kc9k status' says so
 	}
-	if extensionGuard.Enforce(now, protectionChanged(d), unsupported) > 0 {
+	if extensionGuard.EnforceFor(now, protectionChanged(d), unsupported, uids) > 0 {
 		logEventFor(d, db.EventBrowser, websiteBlocks(active), "")
 	}
 }

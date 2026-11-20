@@ -105,6 +105,16 @@ func (g *ExtensionGuard) CheckIn(remoteAddr string) (bool, string) {
 // that isn't an installed supported browser (see SupportedBrowsers) is
 // closed at once: it can never run the extension.
 func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time, unsupported bool) int {
+	return g.EnforceFor(now, settingsChanged, unsupported, nil)
+}
+
+// EnforceFor is Enforce for the browsers of the users uids only (§3.2
+// affected users: a block for some accounts needs the extension in theirs
+// alone); nil: every regular user. An empty, non-nil uids closes nothing.
+func (g *ExtensionGuard) EnforceFor(now, settingsChanged time.Time, unsupported bool, uids []uint64) int {
+	if uids != nil && len(uids) == 0 {
+		return 0
+	}
 	if now.Sub(g.started) < ExtensionGrace() {
 		return 0 // the daemon just started: give running browsers time to check in
 	}
@@ -116,7 +126,7 @@ func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time, unsupported boo
 	var targets []int
 	for pid := range parent {
 		name := exeName(pid)
-		if exeName(parent[pid]) == name || !ownedByUser(pid) || !g.browsers.guarded(pid) {
+		if exeName(parent[pid]) == name || !ownedByAny(pid, uids) || !g.browsers.guarded(pid) {
 			continue // a child process of a browser, a system program, or not a browser
 		}
 		p := guardedProcess{remote: remoteControlled(pid) && !remoteControlAllowed(), supported: supportedExe(pid) != ""}

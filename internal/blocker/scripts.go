@@ -286,8 +286,13 @@ func toolNaming(comm, exe, script string, args, domains []string) string {
 
 // KillNaming kills the user's download and streaming tools that were given
 // the address of one of the domains, and returns their names.
-func KillNaming(domains []string) []string {
-	if len(domains) == 0 {
+func KillNaming(domains []string) []string { return KillNamingFor(domains, nil) }
+
+// KillNamingFor is KillNaming for the processes of the users uids only
+// (§3.2 affected users); nil: every regular user. An empty, non-nil uids
+// kills nothing.
+func KillNamingFor(domains []string, uids []uint64) []string {
+	if len(domains) == 0 || (uids != nil && len(uids) == 0) {
 		return nil
 	}
 	entries, err := os.ReadDir("/proc")
@@ -297,7 +302,7 @@ func KillNaming(domains []string) []string {
 	var tools []string
 	for _, entry := range entries {
 		pid, err := strconv.Atoi(entry.Name())
-		if err != nil || pid <= 1 || pid == os.Getpid() || !ownedByUser(pid) {
+		if err != nil || pid <= 1 || pid == os.Getpid() || !ownedByAny(pid, uids) {
 			continue
 		}
 		exe, _ := os.Readlink("/proc/" + entry.Name() + "/exe")

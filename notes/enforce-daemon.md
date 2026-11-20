@@ -15,4 +15,12 @@
   `blocks.users`; `enforce.forEveryone` keeps partial blocks out of shared
   layers, `blockUIDs` → `blocker.KillBlockedFor`, `BuildRulesFor(user)`
   with `clientUser` (socket uid, `blocker.ClientUser`); `regularUsers` /
-  cli `accounts` faked in tests.
+  cli `accounts` faked in tests. Also per user (2026-11-21): window titles
+  and folder entries (`titleTargets` → `blocker.TitlesByUser`, each
+  desktop user's windows judged by every account's targets and their own;
+  `titleHitBlocks` blames only blocks for that user), fetch tools
+  (`blockDomains` → `blocker.KillNamingFor`), the extension guard
+  (`extensionUsers` → `ExtensionGuard.EnforceFor`: options, locks
+  (R-LOCK-9), a block for everyone and block unsupported browsers need it
+  in every account). The GUI's "isn't running" dialog still looks at every
+  account's browsers.

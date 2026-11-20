@@ -129,6 +129,14 @@ func blockUIDs(b db.ActiveBlockDetail) []uint64 {
 	return uids
 }
 
+// blockDomains are the sites a block's lists block by address, whoever it
+// applies to (Inputs leaves a block for some users out).
+func blockDomains(b db.ActiveBlockDetail) []string {
+	b.Users = nil
+	_, _, policy := Inputs([]db.ActiveBlockDetail{b})
+	return policy.BlockDomains
+}
+
 // pageExceptions reports whether a block has exceptions by title or text.
 func pageExceptions(lists db.Lists) bool {
 	return len(lists.ExceptionTerms(db.PlaceURL))+len(lists.ExceptionTerms(db.PlaceTitle))+len(lists.ExceptionTerms(db.PlaceText)) > 0
@@ -144,63 +152,97 @@ var titleGuardBusy atomic.Bool
 
 // enforceTitles starts a title guard cycle unless one is still running.
 // Each window asked to close is logged as an event of every active block
-// listing its keyword.
+// listing its keyword for the user whose window it was.
 func enforceTitles(d *db.DB, active []db.ActiveBlockDetail, now time.Time) {
 	if !titleGuardBusy.CompareAndSwap(false, true) {
 		return
 	}
-	// Owner, 2026-11-16: a block's window titles close their windows unless
-	// its title actions leave them open; then they are only watched, for
-	// the other actions.
-	var keywords, watch []string
-	titleActions := map[string][]db.TriggerAction{}
-	for _, b := range active {
-		if len(b.Titles) == 0 {
-			continue
-		}
-		actions := triggerActions(d, b.BlockName, db.TriggerTitles)
-		titleActions[b.BlockName] = actions
-		if hasTriggerAction(actions, db.TriggerClose) {
-			keywords = append(keywords, b.Titles...)
-		} else if len(triggerConsequences(actions)) > 0 {
-			watch = append(watch, b.Titles...)
-		}
-	}
-	owners := titleOwners(active)
-	var folders []string
-	for _, b := range active {
-		for _, a := range b.Apps {
-			if strings.HasSuffix(a, "/") && strings.HasPrefix(a, "/") {
-				folders = append(folders, a)
-				owners[a] = append(owners[a], b.BlockName)
-			}
-		}
-	}
-	titleGuard.SetFolders(folders)
+	targets, titleActions := titleTargets(d, active)
 	go func() {
 		defer titleGuardBusy.Store(false)
-		_, asked, seen := titleGuard.EnforceWatch(keywords, watch, now)
-		for _, keyword := range append(asked, seen...) {
-			for _, block := range owners[keyword] {
-				logEvent(d, db.EventTitle, block, keyword)
+		_, hits := titleGuard.EnforceUsers(targets, now)
+		for _, h := range hits {
+			for _, block := range titleHitBlocks(active, h) {
+				logEvent(d, db.EventTitle, block, h.Keyword)
 				if actions, ok := titleActions[block]; ok {
 					fireTrigger(d, block, db.TriggerTitles, actions,
-						"A window of block '"+block+"' was open ("+keyword+").", now)
+						"A window of block '"+block+"' was open ("+h.Keyword+").", now)
 				}
 			}
 		}
 	}()
 }
 
-// titleOwners maps each window-title keyword to the active blocks listing it.
-func titleOwners(active []db.ActiveBlockDetail) map[string][]string {
-	owners := map[string][]string{}
+// titleTargets is what the title guard looks for, per user (§3.2 affected
+// users): each block's window titles and folder entries go to the accounts
+// it names, or to everyone. It also returns each block's title actions.
+func titleTargets(d *db.DB, active []db.ActiveBlockDetail) (blocker.TitlesByUser, map[string][]db.TriggerAction) {
+	targets := blocker.TitlesByUser{Users: map[uint64]blocker.TitleTargets{}}
+	titleActions := map[string][]db.TriggerAction{}
 	for _, b := range active {
-		for _, k := range b.Titles {
-			owners[k] = append(owners[k], b.BlockName)
+		var own blocker.TitleTargets
+		// Owner, 2026-11-16: a block's window titles close their windows
+		// unless its title actions leave them open; then they are only
+		// watched, for the other actions.
+		if len(b.Titles) > 0 {
+			actions := triggerActions(d, b.BlockName, db.TriggerTitles)
+			titleActions[b.BlockName] = actions
+			if hasTriggerAction(actions, db.TriggerClose) {
+				own.Close = b.Titles
+			} else if len(triggerConsequences(actions)) > 0 {
+				own.Watch = b.Titles
+			}
+		}
+		own.Folders = folderEntries(b.Apps)
+		if own.Empty() {
+			continue
+		}
+		uids := blockUIDs(b)
+		if uids == nil {
+			targets.All = joinTargets(targets.All, own)
+			continue
+		}
+		for _, uid := range uids {
+			targets.Users[uid] = joinTargets(targets.Users[uid], own)
 		}
 	}
-	return owners
+	return targets, titleActions
+}
+
+// folderEntries are the folder entries among a block's apps (§3.1).
+func folderEntries(apps []string) []string {
+	var out []string
+	for _, a := range apps {
+		if strings.HasSuffix(a, "/") && strings.HasPrefix(a, "/") {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func joinTargets(a, b blocker.TitleTargets) blocker.TitleTargets {
+	return blocker.TitleTargets{
+		Close:   append(append([]string{}, a.Close...), b.Close...),
+		Watch:   append(append([]string{}, a.Watch...), b.Watch...),
+		Folders: append(append([]string{}, a.Folders...), b.Folders...),
+	}
+}
+
+// titleHitBlocks names the active blocks a title guard hit is to blame on:
+// those listing its keyword (a window title or folder entry) that apply to
+// the user whose window it was.
+func titleHitBlocks(active []db.ActiveBlockDetail, h blocker.TitleHit) []string {
+	var out []string
+	for _, b := range active {
+		if !slices.Contains(b.Titles, h.Keyword) && !slices.Contains(folderEntries(b.Apps), h.Keyword) {
+			continue
+		}
+		if uids := blockUIDs(b); uids != nil && !slices.Contains(uids, h.UID) {
+			continue
+		}
+		out = append(out, b.BlockName)
+	}
+	return out
 }
 
 // logEvent records an event, logging a failure.
@@ -474,10 +516,10 @@ func Tick(d *db.DB, now time.Time) error {
 	if guard {
 		killApps(d, ResetGuardApps, db.EventTamper) // installer media guard
 	}
-	// Download and streaming tools given a blocked site's address.
+	// Download and streaming tools given a blocked site's address, in the
+	// processes of the users the block applies to (§3.2).
 	for _, b := range active {
-		_, _, policy := Inputs([]db.ActiveBlockDetail{b})
-		if tools := blocker.KillNaming(policy.BlockDomains); len(tools) > 0 {
+		if tools := blocker.KillNamingFor(blockDomains(b), blockUIDs(b)); len(tools) > 0 {
 			log.Printf("daemon: closed %s: given an address block '%s' stops", strings.Join(tools, ", "), b.BlockName)
 			logEvent(d, db.EventWorkaround, b.BlockName, strings.Join(tools, ", "))
 		}

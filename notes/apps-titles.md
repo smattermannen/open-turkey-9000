@@ -12,9 +12,11 @@
   shells/session processes. `scripts.go`: Python by script
   (`pythonScript`, `essentialProcess`), copies by hash (`HashEntry`
   `sha256:<hex>:<size>:<path>`, hidden by `visibleApps`; system programs
-  never match), `KillNaming` (fetch tools given a blocked domain).
+  never match), `KillNaming`/`KillNamingFor` (fetch tools given a blocked
+  domain; per user for a block's affected users).
 - `titles.go`/`x11.go`: asks matching windows to close (also file manager
-  windows showing a folder entry: `SetFolders`, `folderWindow`), kills after
+  windows showing a folder entry: `folderWindow`); targets per user
+  (`EnforceUsers(TitlesByUser)`, §3.2; `TitleHit` names the user), kills after
   `TitleCloseGrace`; cgo-free X11 client (user's own Xauthority only,
   cookie only to root/user-owned socket, capped replies, 3 s budget, PID
   trusted only for the session user). Runs beside the cycle

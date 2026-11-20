@@ -44,7 +44,6 @@ of their group and a row here; a finished item loses its row.
 | B12 | Chrome: popup, extension can't be removed | §3.13 | browsers | box |
 | B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
 | B14 | Monk mode live: run `ci/monk_live_test.sh host` (written, never run), reboot mid-way | R-MONK-2 | device | vm |
-| B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
 | 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
@@ -964,10 +963,19 @@ Script-tested, never by a person. Script what can be into `ci/`.
   b16test.example and 127.0.0.1/b16pat/ by address (policy, then the
   block page) and a local page by the word in its text
   (`reason=keyword`); a plain page opened. Block removed, hosts cleared.
-- [ ] `B17` Active vs enabled on the laptop: checked 2026-11-15 with a throwaway
+- [x] `B17` Active vs enabled on the laptop: checked 2026-11-15 with a throwaway
   block: off it stays out of /etc/hosts in its window; on, it is in /etc/hosts
   in its window, and outside it shows "lifted by its schedule" and leaves
-  /etc/hosts. Left: the GUI's "lifted by its schedule now" on a real screen.
+  /etc/hosts. GUI on a real screen: Built, checked 2026-11-20 on the desktop
+  (X11 :0, installed build = HEAD's code). Throwaway block, one entry, window
+  daily 03:00-04:00, started without locks at 23:47: `status` "[lifted] [lifted
+  by its schedule]", not in /etc/hosts; Blocks page card "On, lifted now",
+  "Automated block"; block page pill "Lifted now" and "Active, lifted ·
+  automated · lifted by its automation now". Window 23:00-24:00 added: within
+  ~10 s `status` "[enabled] [today: 23:00-24:00]", in /etc/hosts, block page
+  pill "On" and "Active, enabled · automated · today: 23:00-24:00". Window
+  removed: lifted again on both, out of /etc/hosts. Block stopped, windows and
+  block removed.
 
 ## 1. `SPEC.md` coverage
 

@@ -23,7 +23,7 @@ of their group and a row here; a finished item loses its row.
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
 | A1 | `no-images` GIF drawn by a pseudo-element: run in LibreWolf, the owner's site | §3.9 | extension | box |
-| A2 | Looks from page text lifted on clicks: run `extras_test`/`browser_test` | §3.9 | extension | box |
+| A2 | Looks from page text lifted on clicks: suites pass (2026-11-20); real use on the laptop | §3.9 | extension | owner |
 | A3 | `no-downloads` in Chrome | §3.9 | extension, browsers | box |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
 | A5 | Phrase editor save: confirm | §4.3, R-WEAK-5 | lists, gui | box |
@@ -390,6 +390,11 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     content, !important, shadow root, added later, text kept, a
     20,000-element page without long tasks) passes. Not run in LibreWolf
     yet; confirm the owner's case on the laptop (which site?). S
+    2026-11-20 (overnight, desktop, LibreWolf 159, installed devmaster
+    build): all LibreWolf suites pass, each run alone (browser_test 20,
+    extras_test 27, flash_test 10, download_test 4, actions_test 14,
+    quota_test 2); `ci/content_harness_test.js` passes in Playwright's
+    Chromium. The owner's own site: still Unchecked.
   - [ ] `A2` Looks from page text (greyscale, no-images, no-video) unreliable
     and lifted for a moment on every click inside a site (§3.9; owner
     2026-11-15). Causes found: `render` forgot the page's looks on a new
@@ -405,6 +410,9 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     roots included; bfcache pages read again. Extension 1.19.0. Not run in
     a browser here; confirm on the laptop (`ci/extras_test.py`,
     `ci/browser_test.py`). S
+    2026-11-20 (overnight, desktop): `extras_test` 27/27 and `browser_test`
+    20/20 pass in LibreWolf 159 (local pages, not real sites). Left: real
+    use on the laptop.
   - [ ] `A3` `no-downloads` doesn't block downloads (§3.9). Checked 2026-11-16
     in LibreWolf: a link on the page, a file from another host (only the
     origin as referrer) and a file the page makes itself (`blob:`) are all
@@ -623,6 +631,10 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     white, dark pages too. Extension 1.27.0 hides what the root holds
     instead; the page's own background stays (`ci/content_harness_test.js`
     checks a dark page's pixel while hidden). Confirm on the laptop. M
+    2026-11-20 (overnight, desktop): `flash_test` 10/10 in LibreWolf 159,
+    the content harness's no-white-flash checks in Chromium, and the root
+    Chrome for Testing test (`TestChromeRunsTheExtension`) pass. Real
+    sites and branded Chrome: Unchecked.
   - [x] `A9` (Owner 2026-11-18: the design has become tremendous.) GUI overall unclear, hard to read, not pretty or easy to use (owner,
     2026-11-15; R-GUI-3). Redesign page by page. Done: a design layer
     (cards, status pills, page titles with one-line subtitles, ? popovers

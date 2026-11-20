@@ -2,9 +2,10 @@
 // their locks.
 //
 //	kc9k browser                                   # list settings and locks
-//	kc9k browser safesearch on [--for 2h] [--lock] # turn on, optionally locked
-//	kc9k browser safesearch off                    # refused while locked
-//	kc9k browser unlock safesearch                 # challenge or password
+//	kc9k browser safesearch-google on [--for 2h] [--lock] # turn on, optionally locked
+//	kc9k browser safesearch-google off                    # refused while locked
+//	kc9k browser unlock safesearch-google                 # challenge or password
+//	kc9k browser safesearch on|off [lock flags]           # every engine at once
 //	kc9k browser install-librewolf
 package cli
 
@@ -30,7 +31,7 @@ independently of any block, when it is turned on:
 
   --for DURATION    Timer lock: can't be turned off for this long (e.g. 2h, 7d is 168h).
   --until HH:MM     Timer lock until a clock time today (or tomorrow if already past).
-  --lock            Typing challenge ('kc9k browser unlock <setting>') to turn it off.
+  --lock            Text lock: a challenge ('kc9k browser unlock <setting>') to turn it off.
   --lock-chars N    Challenge length in characters (default 300, 10 to 5000).
   --password-stdin  Password ('kc9k browser unlock <setting>') to turn it off.
   --restart         Stays on until the computer restarts.
@@ -41,6 +42,13 @@ Locks can be added to a setting that is already on, and only made stronger: a
 timer lock can only be extended and a challenge only lengthened. unlock runs the
 challenge and asks for the password, then turns the setting off; time and
 restart locks can't be unlocked, only waited out.
+
+SafeSearch is a setting per engine: safesearch-google, safesearch-bing,
+safesearch-duckduckgo and safesearch-youtube (Restricted Mode), each with
+its own locks. 'kc9k browser safesearch on|off' switches all four, and its
+lock flags set the same lock on each. While Google's, Bing's or
+DuckDuckGo's is on, Brave, Yahoo and SearXNG searches are kept strict too
+and engines that can't be kept strict are blocked.
 
 block-devtools also can't be turned off while a block is locked or Frozen
 Chicken runs, since blocks rely on it. block-devtools is on
@@ -84,6 +92,9 @@ every other browser at any time, turn on 'kc9k tamper unsupported-browsers'.`,
 		}
 		if name == "images" || name == "greyscale" {
 			return fmt.Errorf("%s is now chosen per block: 'kc9k block action <block> %s on'", name, map[string]string{"images": db.ActionNoImages, "greyscale": db.ActionGreyscale}[name])
+		}
+		if name == enforce.SafeSearchGroup {
+			return safeSearchGroup(cmd, database, value)
 		}
 		if !enforce.IsLockableSetting(name) {
 			return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))
@@ -565,6 +576,92 @@ func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
 	return nil
 }
 
+// safeSearchGroup switches every engine's SafeSearch (§4.10, §6
+// 2026-11-18: each its own browser setting) at once. Lock flags set the same
+// lock on each engine, all confirmed together (R-LOCK-12); turning them off
+// goes engine by engine, so a locked one stays on.
+func safeSearchGroup(cmd *cobra.Command, database *db.DB, value string) error {
+	names := make([]string, len(enforce.SafeSearchEngines))
+	for i, e := range enforce.SafeSearchEngines {
+		names[i] = enforce.SafeSearchSetting(e)
+	}
+	switch value {
+	case "on":
+		if !lockFlagsGiven(cmd) {
+			for _, name := range names {
+				if err := database.SetSetting(enforce.SettingKey(name), "on"); err != nil {
+					return err
+				}
+			}
+			fmt.Printf("SafeSearch is on for %s.\n", strings.Join(enforce.SafeSearchEngines, ", "))
+			return nil
+		}
+		if err := requireLockPassword(database); err != nil {
+			return err
+		}
+		want, err := requestedSettingLock(cmd, database, enforce.SafeSearchGroup) // the password is read once
+		if err != nil {
+			return err
+		}
+		type step struct {
+			next    db.SettingLock
+			changes []string
+		}
+		var steps []step
+		var confirm []lockToSet
+		for _, name := range names {
+			cur, err := loadSettingLock(database, name)
+			if err != nil {
+				return err
+			}
+			w := want
+			w.Name = name
+			next, changes, err := strengthenSettingLock(cur, w, cmd.Flags().Changed("lock-chars"))
+			if err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
+			if len(changes) > 0 {
+				steps = append(steps, step{next, changes})
+				confirm = append(confirm, settingLocks(settingTarget(name), cur, next)...)
+			}
+		}
+		if len(steps) == 0 {
+			return fmt.Errorf("every engine's SafeSearch already has those locks")
+		}
+		if err := confirmLocks(cmd, confirm...); err != nil {
+			return err
+		}
+		for _, name := range names {
+			if err := database.SetSetting(enforce.SettingKey(name), "on"); err != nil {
+				return err
+			}
+		}
+		for _, s := range steps {
+			if err := database.SetSettingLock(s.next); err != nil {
+				return err
+			}
+			fmt.Printf("%s is on, %s\n", s.next.Name, strings.Join(s.changes, ", "))
+		}
+		return nil
+	case "off":
+		if lockFlagsGiven(cmd) {
+			return fmt.Errorf("lock flags only go with 'on'")
+		}
+		var refusedOnes []string
+		for _, name := range names {
+			if err := browserSettingOff(database, name); err != nil {
+				refusedOnes = append(refusedOnes, err.Error())
+			}
+		}
+		if len(refusedOnes) > 0 {
+			return fmt.Errorf("%s", strings.Join(refusedOnes, "; "))
+		}
+		fmt.Println("SafeSearch is off for every engine.")
+		return nil
+	}
+	return fmt.Errorf("use 'on' or 'off'")
+}
+
 // refuseWhileHeld returns why a setting can't be turned off by unlocking it,
 // or nil. Time and restart locks can only be waited out.
 func (s settingLockState) refuseWhileHeld(name string) error {
@@ -641,6 +738,10 @@ func browserSettingOff(database *db.DB, name string) error {
 func unlockBrowserSetting(database *db.DB, name string) error {
 	if name == forceLibreWolfAlias {
 		name = db.UnsupportedBrowsers
+	}
+	if name == enforce.SafeSearchGroup {
+		return fmt.Errorf("each engine's SafeSearch has its own lock: unlock it with 'kc9k browser unlock safesearch-<engine>' (%s)",
+			strings.Join(enforce.SafeSearchEngines, ", "))
 	}
 	if !enforce.IsLockableSetting(name) {
 		return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))

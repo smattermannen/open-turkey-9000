@@ -958,6 +958,11 @@ With --dry-run, says what would happen and changes nothing.`,
 				}
 			}
 		}
+		if in.Browser[enforce.SafeSearchGroup] { // a file from before a setting per engine
+			for _, e := range enforce.SafeSearchEngines {
+				in.Browser[enforce.SafeSearchSetting(e)] = true
+			}
+		}
 		for _, name := range enforce.BrowserSettings {
 			if !in.Browser[name] || enforce.BrowserOn(database, name) {
 				continue

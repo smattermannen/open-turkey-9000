@@ -59,11 +59,11 @@ func TestUnsupportedBrowsersSetting(t *testing.T) {
 	}
 
 	// So does any other lock (§4.10 tamper protection: anything locked).
-	mustRun(t, "browser", "safesearch", "on", "--for", "1h", "--yes")
+	mustRun(t, "browser", "safesearch-google", "on", "--for", "1h", "--yes")
 	if err := runCLI(t, "tamper", "unsupported-browsers", "off"); err == nil {
 		t.Error("turned off while a browser setting is locked")
 	}
-	if err := d.ClearSettingLock("safesearch"); err != nil {
+	if err := d.ClearSettingLock("safesearch-google"); err != nil {
 		t.Fatal(err)
 	}
 

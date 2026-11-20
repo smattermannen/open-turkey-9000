@@ -291,7 +291,7 @@ func TestRulesSafeSearch(t *testing.T) {
 	if r, _ := BuildRules(d); r.SafeSearch {
 		t.Error("on without the setting")
 	}
-	if err := d.SetSetting(SettingKey("safesearch"), "on"); err != nil {
+	if err := d.SetSetting(SettingKey("safesearch-google"), "on"); err != nil {
 		t.Fatal(err)
 	}
 	if r, _ := BuildRules(d); !r.SafeSearch {

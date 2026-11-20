@@ -110,6 +110,9 @@ func upgradeSchema(conn *sql.DB) error {
 	if err := migrateForceLibreWolf(conn); err != nil {
 		return err
 	}
+	if err := migrateSafeSearch(conn); err != nil {
+		return err
+	}
 	if err := migrateWebLists(conn); err != nil {
 		return err
 	}

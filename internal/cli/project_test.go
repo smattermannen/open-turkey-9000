@@ -51,7 +51,7 @@ func TestProjectExportImport(t *testing.T) {
 	mustRun(t, "nepsis", "set", "--block", "work", "--step", "3 in 10m: warning")
 	mustRun(t, "cluster", "create", "papers")
 	mustRun(t, "cluster", "add", "papers", "arxiv.org", "jstor.org")
-	mustRun(t, "browser", "safesearch", "on")
+	mustRun(t, "browser", "safesearch-google", "on")
 	mustRun(t, "option", "polite-close", "off")
 	file := filepath.Join(t.TempDir(), "project.json")
 	if err := os.WriteFile(file, []byte(capture(t, "project", "export")), 0o644); err != nil {
@@ -114,7 +114,7 @@ func TestProjectExportImport(t *testing.T) {
 	if c, err := fresh.GetCluster("papers"); err != nil || len(c.Entries) != 2 {
 		t.Errorf("list preset = %+v, %v", c, err)
 	}
-	if !enforce.BrowserOn(fresh, "safesearch") || enforce.OptionOn(fresh, enforce.OptionPoliteClose) {
+	if !enforce.BrowserOn(fresh, "safesearch-google") || enforce.OptionOn(fresh, enforce.OptionPoliteClose) {
 		t.Error("browser option or behaviour option didn't come along")
 	}
 

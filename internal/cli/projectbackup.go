@@ -180,7 +180,18 @@ func (b *backupExtras) backupLocks(renamed map[string]string, database *db.DB, t
 // lock on here, still running.
 func (b *backupExtras) importableSettingLocks(database *db.DB, trusted int64) []db.SettingLock {
 	var out []db.SettingLock
+	var all []db.SettingLock
 	for _, l := range b.SettingLocks {
+		if l.Name == db.OldSafeSearch { // a file from before a lock per engine: one each
+			for _, name := range db.SafeSearchSettings {
+				l.Name = name
+				all = append(all, l)
+			}
+			continue
+		}
+		all = append(all, l)
+	}
+	for _, l := range all {
 		if !enforce.IsLockableSetting(l.Name) && l.Name != db.NepsisLockName {
 			continue
 		}

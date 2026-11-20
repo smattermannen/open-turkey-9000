@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
 // A setting's locks can be added to and made stronger, never weaker.
@@ -42,5 +46,53 @@ func TestStrengthenSettingLock(t *testing.T) {
 	got, _, err := strengthenSettingLock(state(stale), db.SettingLock{LockedUntil: 1200}, false)
 	if err != nil || got.LockedUntil != 1200 || got.RestartBoot != "" {
 		t.Errorf("over stale locks = %+v, %v", got, err)
+	}
+}
+
+// §4.10, §6 2026-11-18: SafeSearch is a browser setting per engine, each
+// with its own locks; 'browser safesearch' switches all four, its lock flags
+// lock each, confirmed together (R-LOCK-12).
+func TestSafeSearchPerEngine(t *testing.T) {
+	notTerminal(t)
+	d := testDB(t)
+	mustRun(t, "browser", "safesearch-bing", "on")
+	if got := enforce.SafeSearchOn(d); len(got) != 1 || got[0] != "bing" {
+		t.Errorf("engines on = %v", got)
+	}
+	if r, _ := enforce.BuildRules(d); !r.SafeSearch || len(r.SafeSearchEngines) != 1 {
+		t.Errorf("rules: %v %v", r.SafeSearch, r.SafeSearchEngines)
+	}
+	if err := runCLI(t, "browser", "safesearch", "on", "--for", "1h"); err == nil {
+		t.Error("locks on every engine without --yes")
+	}
+	if got := enforce.SafeSearchOn(d); len(got) != 1 {
+		t.Errorf("an unconfirmed lock turned engines on: %v", got)
+	}
+	mustRun(t, "browser", "safesearch", "on", "--for", "1h", "--yes")
+	for _, e := range enforce.SafeSearchEngines {
+		name := enforce.SafeSearchSetting(e)
+		if l, _ := d.GetSettingLock(name); l.LockedUntil == 0 || !enforce.BrowserOn(d, name) {
+			t.Errorf("%s: on %v, lock %+v", name, enforce.BrowserOn(d, name), l)
+		}
+	}
+	if err := runCLI(t, "browser", "safesearch-youtube", "off"); err == nil {
+		t.Error("a locked engine's SafeSearch was turned off")
+	}
+	if err := runCLI(t, "browser", "safesearch", "off"); err == nil || !enforce.BrowserOn(d, "safesearch-google") {
+		t.Errorf("safesearch off while locked: %v", err)
+	}
+	if err := runCLI(t, "browser", "unlock", "safesearch"); err == nil || !strings.Contains(err.Error(), "safesearch-<engine>") {
+		t.Errorf("unlock safesearch: %v", err)
+	}
+}
+
+// A project file from before (one "safesearch") turns every engine's on.
+func TestOldProjectSafeSearch(t *testing.T) {
+	d := testDB(t)
+	file := filepath.Join(t.TempDir(), "old.json")
+	os.WriteFile(file, []byte(`{"kc9k_project":1,"blocks":[],"browser_options":{"safesearch":true}}`), 0o644)
+	mustRun(t, "project", "import", file)
+	if got := enforce.SafeSearchOn(d); len(got) != 4 {
+		t.Errorf("engines on = %v", got)
 	}
 }

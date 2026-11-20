@@ -66,10 +66,10 @@ func TestStrictModeLock(t *testing.T) {
 	if err := runCLI(t, "no-weakening", "off"); err == nil {
 		t.Error("no-weakening turned off during a lock")
 	}
-	if err := runCLI(t, "browser", "safesearch", "on"); err != nil {
+	if err := runCLI(t, "browser", "safesearch-google", "on"); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLI(t, "browser", "safesearch", "off"); err == nil {
+	if err := runCLI(t, "browser", "safesearch-google", "off"); err == nil {
 		t.Error("a browser setting was weakened under no-weakening during a lock")
 	}
 	if err := d.DeactivateBlock("b"); err != nil {
@@ -89,16 +89,16 @@ func TestPasswordForLocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	// No password given: a lock is still set.
-	if err := runWith(t, 0, nil, "browser", "safesearch", "on", "--for", "1m", "--yes"); err != nil {
+	if err := runWith(t, 0, nil, "browser", "safesearch-google", "on", "--for", "1m", "--yes"); err != nil {
 		t.Fatalf("a lock without the settings password: %v", err)
 	}
 	if err := runWith(t, 0, nil, "password", "locks", "on"); err != nil {
 		t.Fatal(err)
 	}
-	if err := runWith(t, 0, nil, "browser", "safesearch", "on", "--for", "2m", "--yes"); err == nil {
+	if err := runWith(t, 0, nil, "browser", "safesearch-google", "on", "--for", "2m", "--yes"); err == nil {
 		t.Error("a lock was set without the settings password after 'password locks on'")
 	}
-	if err := runWith(t, 0, []string{"secret1"}, "browser", "safesearch", "on", "--for", "3m", "--yes"); err != nil {
+	if err := runWith(t, 0, []string{"secret1"}, "browser", "safesearch-google", "on", "--for", "3m", "--yes"); err != nil {
 		t.Errorf("a lock with the settings password: %v", err)
 	}
 	if err := runWith(t, 0, nil, "password", "locks", "off"); err == nil {
@@ -159,12 +159,12 @@ func TestTextLockStyles(t *testing.T) {
 	if e, _ := d.GetLockExtras("b"); e.Style != lock.StyleCustom+"I choose to focus" || len(e.Queue) != 1 || e.Queue[0].Style != lock.StyleWords {
 		t.Errorf("second text lock: style %q, queue %+v", e.Style, e.Queue)
 	}
-	mustRun(t, "browser", "safesearch", "on", "--lock-words", "--lock-chars", "40", "--yes")
-	s, _ := d.GetSettingLock("safesearch")
+	mustRun(t, "browser", "safesearch-google", "on", "--lock-words", "--lock-chars", "40", "--yes")
+	s, _ := d.GetSettingLock("safesearch-google")
 	if s.Style != lock.StyleWords || s.LockChars != 40 {
 		t.Errorf("setting lock: %+v", s)
 	}
-	if err := runCLI(t, "browser", "safesearch", "on", "--lock", "--yes"); err == nil {
+	if err := runCLI(t, "browser", "safesearch-google", "on", "--lock", "--yes"); err == nil {
 		t.Error("a word lock became a character lock")
 	}
 	if err := runCLI(t, "start", "b", "--lock-text", "café", "--yes"); err == nil {

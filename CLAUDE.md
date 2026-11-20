@@ -70,7 +70,8 @@ Before testing anything that locks, blocks or restarts the daemon, read
 - `cmd/kc9k/main.go` → `cli.Execute()`. Cobra commands in `internal/cli/`
   (`block.go`, `control.go`: start/stop/unlock/status; `toggle.go`). `kc9k --help` lists them.
 - **Android**: `android/CLAUDE.md`. Its `RulesServer` serves `/rules`;
-  `rules.safesearch` comes only from there (`kc9kSafeSearch` in `match.js`).
+  its `rules.safesearch` has no `safesearch_engines` (every engine;
+  `kc9kSafeSearch` in `match.js`).
 
 | Note | Area (main paths; `blocker/` = `internal/blocker/`, etc.) |
 |---|---|

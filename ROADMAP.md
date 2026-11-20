@@ -50,7 +50,7 @@ of their group and a row here; a finished item loses its row.
 | B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
-| 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
+| 2.4 | SafeSearch per engine: built; in real browsers (Unchecked) | §4.10 | browsers | box |
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret (for the owner, §5); the text lock's window on a real desktop (Unchecked) | R-LOCK-5, §4.6 | browsers, locks | owner, box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
@@ -946,7 +946,7 @@ Only items not simply Built.
 | §3.9 Ad trigger | Partial | scope `ads` on blacklists and clusters (`list create --ads`, `list where B L ads on`, GUI "Ads" box): entries are ad network domains or industries (`db.AdIndustries`: adult, crypto, dating, gambling); rules `ads`; the extension watches each tab's third-party requests (`noteAdRequest`) and a page loading a listed network matches with every action (`kc9kAdMatches`, unit-tested). Not in shared layers. Browser test: Not run (the owner was using the laptop; the browser test changes LibreWolf settings and would close their windows) |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
 | §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--preset C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Presets page (list presets) "Record words" with cut % and the most specific words |
-| §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |
+| §4.10 SafeSearch | Built | a browser setting per engine (`safesearch-google`, `-bing`, `-duckduckgo`, `-youtube`), each its own lock; `browser safesearch` switches all four. Pinned in hosts (every browser) per engine, `safesearch_engines` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked: with Google's, Bing's or DuckDuckGo's, §5). In real browsers: Unchecked (`2.4`) |
 | §4.10 Tamper settings | Partial | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Not built as settings: guest profiles (Chrome guest mode is always off by policy), extension stop (the guard always does it), installer (dpkg prerm refuses removal while locked; install.sh reinstall not guarded), inactive tabs, embedded content (frames always get the block page) |
 | §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
@@ -970,8 +970,13 @@ Only items not simply Built.
   (`cli/projectcircadian.go`; import only where none is set).
 - **2.2 Ad trigger** (M): built (scope `ads`); left: a browser test
   (`ci/extras_test.py`), and growing the shipped industry lists.
-- **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under
-  the one `safesearch` setting. Left: a lock per engine (owner 2026-11-18: wanted; SPEC §6).
+- **2.4 SafeSearch** (S): a lock per engine built 2026-11-20 (SPEC §6
+  2026-11-18): four browser settings, the old one and its lock moved to
+  each (`TestMigrateSafeSearch`, `TestSafeSearchPerEngine`,
+  `ci/match_test.js`, `ci/gui_settings_smoke.py`). Unchecked (box): in
+  LibreWolf and Chrome, with only one engine on, that engine's searches
+  are strict and the others' are not; the hosts section changes with the
+  settings; YouTube Restricted Mode alone.
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
   order, `unlock` lifts only the first, status and GUI show the order).
   Several locks of one kind on a block built 2026-11-20 (owner: a second
@@ -1026,6 +1031,16 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
 - Windows (L): platform layer; `internal/blocker/` is Linux-only.
 
 ## 5. Proposed, not agreed
+
+- PROPOSED 2026-11-20 (session, building `2.4`): SPEC §4.10 and §6
+  2026-11-18 name four engines with their own SafeSearch setting and are
+  silent on the rest: Brave, Yahoo and SearXNG (kept strict from the
+  address) and the engines that can't be kept strict (Startpage, Ecosia,
+  Mojeek, Yandex, Marginalia: blocked). Built meanwhile: they go with any of
+  Google's, Bing's or DuckDuckGo's SafeSearch (not YouTube's), because
+  with one search engine kept strict the others are the way around it, and
+  YouTube Restricted Mode alone shouldn't block search engines. Owner: keep
+  this, give them a setting of their own, or tie them to Google's only?
 
 - DECIDED 2026-11-17 (session; the owner asked that a block always be a
   draft until Save edits): the draft holds what the Websites and Apps tabs

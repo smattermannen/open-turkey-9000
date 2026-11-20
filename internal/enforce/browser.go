@@ -28,7 +28,30 @@ const rulesPort = 47613
 // own sites (see db.Actions). Neither is the extension: it is always
 // installed, and browsers without it are closed while it is needed (see
 // ExtensionRequired).
-var BrowserSettings = []string{"web-only", "safesearch", "force-search", "block-devtools", "no-private"}
+var BrowserSettings = []string{"web-only", "safesearch-google", "safesearch-bing", "safesearch-duckduckgo",
+	"safesearch-youtube", "force-search", "block-devtools", "no-private"}
+
+// SafeSearchGroup is the name that switches every engine's SafeSearch at
+// once (and the one setting there was before 2026-11-18).
+const SafeSearchGroup = "safesearch"
+
+// SafeSearchEngines are the engines with their own SafeSearch browser
+// setting, "safesearch-<engine>" (§4.10, §6 2026-11-18).
+var SafeSearchEngines = []string{"google", "bing", "duckduckgo", "youtube"}
+
+// SafeSearchSetting is the browser setting of one engine's SafeSearch.
+func SafeSearchSetting(engine string) string { return SafeSearchGroup + "-" + engine }
+
+// SafeSearchOn returns the engines whose SafeSearch is on.
+func SafeSearchOn(d *db.DB) []string {
+	out := []string{}
+	for _, e := range SafeSearchEngines {
+		if BrowserOn(d, SafeSearchSetting(e)) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
 
 // defaultOn are options that are on until turned off. LibreWolf's developer
 // tools can switch the extension off from its own pages or about:debugging,
@@ -227,8 +250,11 @@ type Rules struct {
 	WebOnly    bool       `json:"web_only"`
 	// SafeSearch: the extension keeps Bing, DuckDuckGo, Brave, Yahoo and
 	// SearXNG on strict, YouTube on Restricted Mode, and blocks engines it
-	// can't hold (§4.10; Google also by hosts, blocker.SyncSafeSearch).
-	SafeSearch bool `json:"safesearch"`
+	// can't hold (§4.10; also by hosts, blocker.SyncSafeSearch). On when
+	// any engine's is; SafeSearchEngines says which (an extension without
+	// it, or Android's rules, take every engine).
+	SafeSearch        bool     `json:"safesearch"`
+	SafeSearchEngines []string `json:"safesearch_engines"`
 	// StrictUse: every open tab of an allowance session's sites counts, not
 	// only the one in front (§3.7).
 	StrictUse bool     `json:"strict_use"`
@@ -389,13 +415,14 @@ func BuildRules(d *db.DB) (Rules, error) { return BuildRulesFor(d, "") }
 func BuildRulesFor(d *db.DB, user string) (Rules, error) {
 	rules := Rules{
 		Lists: []ListRule{}, Quota: []ListRule{}, Block: []string{}, Exceptions: []string{},
-		WebOnly:    BrowserOn(d, "web-only"),
-		SafeSearch: BrowserOn(d, "safesearch"),
-		StrictUse:  StrictUseOn(d),
-		Titles:     []string{},
+		WebOnly:           BrowserOn(d, "web-only"),
+		SafeSearchEngines: SafeSearchOn(d),
+		StrictUse:         StrictUseOn(d),
+		Titles:            []string{},
 
 		ExtensionVersion: webext.Version(),
 	}
+	rules.SafeSearch = len(rules.SafeSearchEngines) > 0
 	if recording, err := d.GetRecording(); err != nil {
 		return rules, err
 	} else if recording != nil && recording.Words {
@@ -694,7 +721,7 @@ func enforceBrowser(d *db.DB) {
 	if err := blocker.EnsureChromeSetup(chrome); err != nil {
 		log.Printf("browser: %v", err)
 	}
-	if err := blocker.SyncSafeSearch(BrowserOn(d, "safesearch")); err != nil {
+	if err := blocker.SyncSafeSearch(SafeSearchOn(d)); err != nil {
 		log.Printf("browser: safesearch: %v", err)
 	}
 }

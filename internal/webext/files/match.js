@@ -890,11 +890,25 @@ function kc9kTakesAway(outcome) {
 // setting can't be forced from the address are blocked. form holds a POST
 // search's fields (webRequest requestBody.formData): IronFox sends its
 // searches as POST, so they are moved into the address, which then carries
-// the setting whether the request stays a POST or not. Returns { block: true },
+// the setting whether the request stays a POST or not. engines are those
+// whose SafeSearch is on ("safesearch_engines": google, bing, duckduckgo,
+// youtube; left out: all, as Android's rules and older ones mean). Brave,
+// Yahoo, SearXNG and the engines that can't be kept strict go with any of
+// Google's, Bing's or DuckDuckGo's. Returns { block: true },
 // { redirect: address } or null when the address is already right.
 const KC9K_UNSAFE_SEARCH = /^(([a-z0-9-]+\.)*(startpage\.com|ecosia\.org|mojeek\.com|marginalia-search\.com|marginalia\.nu)|(www\.)?yandex\.[a-z]{2,3}(\.[a-z]{2})?|ya\.ru)$/;
 
-function kc9kSafeSearch(rawUrl, form) {
+const KC9K_SAFESEARCH_ENGINES = ["google", "bing", "duckduckgo", "youtube"];
+
+function kc9kSafeSearchEngine(engines, engine) {
+  const on = Array.isArray(engines) ? engines : KC9K_SAFESEARCH_ENGINES;
+  if (engine === "other") {
+    return on.includes("google") || on.includes("bing") || on.includes("duckduckgo");
+  }
+  return on.includes(engine);
+}
+
+function kc9kSafeSearch(rawUrl, form, engines) {
   let url;
   try {
     url = new URL(rawUrl);
@@ -907,16 +921,20 @@ function kc9kSafeSearch(rawUrl, form) {
   const host = url.hostname.toLowerCase();
   const path = url.pathname;
   if (KC9K_UNSAFE_SEARCH.test(host)) {
-    return { block: true };
+    return kc9kSafeSearchEngine(engines, "other") ? { block: true } : null;
   }
   let setting = null; // [parameter, value]
+  let engine = "other";
   let safeHost = host;
   if (/^([a-z0-9-]+\.)*google(\.[a-z]{2,3}){1,2}$/.test(host) && path === "/search") {
     setting = ["safe", "active"];
+    engine = "google";
   } else if (/^(www\.)?bing\.com$/.test(host) && /^\/((images|videos|news)\/)?search$/.test(path)) {
     setting = ["adlt", "strict"];
+    engine = "bing";
   } else if (/^([a-z0-9-]+\.)?duckduckgo\.com$/.test(host) && /^\/((html|lite)\/?)?$/.test(path)) {
     setting = ["kp", "1"];
+    engine = "duckduckgo";
     // safe.duckduckgo.com is always strict, cookies or not.
     if (host === "duckduckgo.com" || host === "www.duckduckgo.com") {
       safeHost = "safe.duckduckgo.com";
@@ -928,7 +946,7 @@ function kc9kSafeSearch(rawUrl, form) {
   } else if ((host === "search.disroot.org" || /^searx(ng)?\./.test(host)) && path === "/search") {
     setting = ["safesearch", "2"]; // SearXNG
   }
-  if (!setting) {
+  if (!setting || !kc9kSafeSearchEngine(engines, engine)) {
     return null;
   }
   const fields = form && typeof form === "object" ? Object.keys(form) : [];

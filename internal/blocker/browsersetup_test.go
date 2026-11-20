@@ -5,21 +5,31 @@ import (
 	"testing"
 )
 
-// §4.10: SafeSearch pins Google, Bing, DuckDuckGo and YouTube.
+// §4.10: SafeSearch pins Google, Bing, DuckDuckGo and YouTube, each for its
+// own browser setting (§6 2026-11-18).
 func TestSafeSearchSection(t *testing.T) {
 	base := "127.0.0.1 localhost\n"
 	ips := map[string]string{"forcesafesearch.google.com": "1.2.3.4", "strict.bing.com": "5.6.7.8",
 		"safe.duckduckgo.com": "9.9.9.1", "restrict.youtube.com": "1.1.1.2"}
-	once := renderSafeSearch(base, ips)
+	all := safeSearchFor([]string{"google", "bing", "duckduckgo", "youtube"})
+	once := renderSafeSearch(base, all, ips)
 	for _, want := range []string{"1.2.3.4 www.google.com", "5.6.7.8 bing.com", "9.9.9.1 duckduckgo.com", "1.1.1.2 www.youtube.com"} {
 		if !strings.Contains(once, want+"\n") {
 			t.Fatalf("missing %q: %q", want, once)
 		}
 	}
-	if !safeSearchComplete(once) || safeSearchComplete(renderSafeSearch(base, map[string]string{"forcesafesearch.google.com": "1.2.3.4"})) {
+	google := safeSearchFor([]string{"google"})
+	if !safeSearchComplete(once, all) || safeSearchComplete(renderSafeSearch(base, all, map[string]string{"forcesafesearch.google.com": "1.2.3.4"}), all) {
 		t.Error("completeness: an old Google-only section must be rewritten")
 	}
-	if twice := renderSafeSearch(once, ips); twice != once {
+	if safeSearchComplete(once, google) {
+		t.Error("Bing, DuckDuckGo and YouTube stay pinned after their settings are off")
+	}
+	onlyGoogle := renderSafeSearch(once, google, ips)
+	if !safeSearchComplete(onlyGoogle, google) || strings.Contains(onlyGoogle, "bing") || strings.Contains(onlyGoogle, "youtube") {
+		t.Errorf("Google alone: %q", onlyGoogle)
+	}
+	if twice := renderSafeSearch(once, all, ips); twice != once {
 		t.Fatalf("not stable: %q", twice)
 	}
 	if got := stripSafeSearch(once); strings.Contains(got, "google") || strings.Contains(got, "bing") {

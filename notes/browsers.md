@@ -36,6 +36,22 @@
   browser setting `force-librewolf` (`migrateForceLibreWolf` moves state
   and lock row; hidden alias in `kc9k browser`; old project files read).
   `GuardsBlocks`: it and `block-devtools`.
+- **SafeSearch per engine** (§4.10, SPEC §6 2026-11-18): browser settings
+  `safesearch-google|bing|duckduckgo|youtube` (`enforce.SafeSearchEngines`,
+  `SafeSearchSetting`, `SafeSearchOn`; `db.SafeSearchSettings` the same
+  names), each with its own lock. `kc9k browser safesearch on|off` is the
+  group (`cli/browser.go` `safeSearchGroup`): lock flags read once and
+  set on each engine, one confirmation for all; off engine by engine;
+  `unlock safesearch` refused (names the engines). `migrateSafeSearch`
+  copies the old `browser.safesearch` state and its lock row to every
+  engine (every column, so a running lock holds each); old project files'
+  `browser_options.safesearch` and backup setting locks named `safesearch`
+  become all four. Hosts: `blocker.SyncSafeSearch(engines)` pins only those
+  engines' targets and removes the others'. Rules: `safesearch` (any on)
+  plus `safesearch_engines`; the extension's `kc9kSafeSearch(url, form,
+  engines)` (no list: all, for Android and older rules); Brave, Yahoo,
+  SearXNG and blocked engines go with Google's, Bing's or DuckDuckGo's
+  (ROADMAP §5); the YouTube-Restrict header with YouTube's.
 - **Chrome** (`webext/chrome.go`, `blocker/chromesetup.go`): `PackChrome`
   builds MV3 manifest + service worker (`chrome-worker.js`), signs CRX3 with
   a per-computer key (`webext.ChromeKeyPath`); daemon serves

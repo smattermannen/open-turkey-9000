@@ -89,10 +89,10 @@ func lockCases() []lockCase {
 			return on
 		}},
 		{name: "strict mode lock", args: []string{"strict", "on", "--for", "1h"}, isSet: settingLocked(enforce.StrictLockName)},
-		{name: "browser setting timer lock", args: []string{"browser", "safesearch", "on", "--for", "1h"}, isSet: settingLocked("safesearch")},
-		{name: "browser setting text lock", args: []string{"browser", "safesearch", "on", "--lock"}, isSet: settingLocked("safesearch")},
-		{name: "browser setting password lock", args: []string{"browser", "safesearch", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked("safesearch")},
-		{name: "browser setting restart lock", args: []string{"browser", "safesearch", "on", "--restart"}, isSet: settingLocked("safesearch")},
+		{name: "browser setting timer lock", args: []string{"browser", "safesearch-google", "on", "--for", "1h"}, isSet: settingLocked("safesearch-google")},
+		{name: "browser setting text lock", args: []string{"browser", "safesearch-google", "on", "--lock"}, isSet: settingLocked("safesearch-google")},
+		{name: "browser setting password lock", args: []string{"browser", "safesearch-google", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked("safesearch-google")},
+		{name: "browser setting restart lock", args: []string{"browser", "safesearch-google", "on", "--restart"}, isSet: settingLocked("safesearch-google")},
 		{name: "unsupported browsers timer lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--for", "1h"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "unsupported browsers text lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--lock"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "unsupported browsers password lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked(db.UnsupportedBrowsers)},
@@ -183,7 +183,7 @@ func TestRLOCK12_NoLockNoQuestion(t *testing.T) {
 	notTerminal(t)
 	blockWithSite(t)
 	mustRun(t, "start", "b")
-	mustRun(t, "browser", "safesearch", "on")
+	mustRun(t, "browser", "safesearch-google", "on")
 	mustRun(t, "strict", "on")
 	if !blockActive(t, d) {
 		t.Error("the block didn't start")

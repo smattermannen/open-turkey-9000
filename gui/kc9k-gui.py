@@ -98,7 +98,11 @@ OPTIONS = (
 
 # Browser settings (SPEC §4.10), in the order SPEC lists them.
 BROWSER_OPTIONS = (
-    ("safesearch", "Force Google SafeSearch", ""),
+    ("safesearch-google", "SafeSearch on Google", "Also keeps Brave, Yahoo and SearXNG searches strict and blocks "
+     "search engines that can't be kept strict (so do Bing's and DuckDuckGo's)."),
+    ("safesearch-bing", "SafeSearch on Bing", ""),
+    ("safesearch-duckduckgo", "SafeSearch on DuckDuckGo", ""),
+    ("safesearch-youtube", "YouTube Restricted Mode", ""),
     ("force-search", "Force Google as the search engine", ""),
     ("web-only", "Web results only",
      "No image, shopping or AI results in Google."),

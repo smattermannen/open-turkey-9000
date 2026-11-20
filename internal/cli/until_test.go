@@ -114,8 +114,8 @@ func TestLongTimerLocks(t *testing.T) {
 		t.Errorf("--until 2099-12-24: queue %+v", extras.Queue)
 	}
 
-	mustRun(t, "browser", "safesearch", "on", "--until", "2099-12-24", "--yes")
-	if err := runCLI(t, "browser", "safesearch", "off"); err == nil {
+	mustRun(t, "browser", "safesearch-google", "on", "--until", "2099-12-24", "--yes")
+	if err := runCLI(t, "browser", "safesearch-google", "off"); err == nil {
 		t.Error("a setting locked until 2099 was turned off")
 	}
 	if err := runCLI(t, "browser", "web-only", "on", "--until", "2020-01-01 10:00", "--yes"); err == nil {

@@ -11,6 +11,7 @@ const POLL_MS = 3000;
 let lists = [];
 let webOnly = false;
 let safeSearch = false;
+let safeSearchEngines = null; // null: every engine (rules without the list)
 
 // Firefox for Android (IronFox) has no windows or idle API: there the tab in
 // front is the active one, and the phone counts as in use.
@@ -732,7 +733,7 @@ browser.webRequest.onBeforeRequest.addListener(
     }
     if (safeSearch && (details.type === "main_frame" || details.type === "sub_frame")) {
       const form = details.method === "POST" && details.requestBody ? details.requestBody.formData : null;
-      const action = kc9kSafeSearch(details.url, form);
+      const action = kc9kSafeSearch(details.url, form, safeSearchEngines);
       if (action && action.block) {
         return blockedPage(details.url, "safesearch");
       }
@@ -762,7 +763,7 @@ browser.webRequest.onBeforeRequest.addListener(
 // SafeSearch on YouTube: the header Google honours for Restricted Mode.
 browser.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
-    if (!safeSearch) {
+    if (!safeSearch || !kc9kSafeSearchEngine(safeSearchEngines, "youtube")) {
       return {};
     }
     const headers = (details.requestHeaders || []).filter((h) => h.name.toLowerCase() !== "youtube-restrict");
@@ -791,7 +792,7 @@ function stillBlocked(url) {
     return true;
   }
   if (safeSearch) {
-    const action = kc9kSafeSearch(url, null);
+    const action = kc9kSafeSearch(url, null, safeSearchEngines);
     if (action && action.block) {
       return true;
     }
@@ -894,6 +895,7 @@ function apply(rules) {
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
   safeSearch = Boolean(rules.safesearch);
+  safeSearchEngines = Array.isArray(rules.safesearch_engines) ? rules.safesearch_engines : null;
   strictUse = Boolean(rules.strict_use);
   statsSkipPrivate = Boolean(rules.stats_skip_private);
   if (recording !== Boolean(rules.recording)) {

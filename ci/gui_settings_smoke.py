@@ -76,7 +76,8 @@ r = cli("freeze", "apps", "remove", "libreoffice"); settle()
 
 check("Strict mode" not in device and "No-escape" not in device, "Device Blocks keeps only Frozen Chicken: " + ", ".join(device))
 check("Recording" in titles("stats"), "statistics recording on the Statistics page")
-check([n for n, *_ in gui.BROWSER_OPTIONS] == ["safesearch", "force-search", "web-only", "block-devtools", "no-private"],
+check([n for n, *_ in gui.BROWSER_OPTIONS] == ["safesearch-google", "safesearch-bing", "safesearch-duckduckgo", "safesearch-youtube",
+                                               "force-search", "web-only", "block-devtools", "no-private"],
       "browser settings in §4.10 order")
 check("force-librewolf" not in win.browser_switches and "unsupported-browsers" not in win.browser_switches,
       "block unsupported browsers not among browser settings")
@@ -122,11 +123,12 @@ check(not msgs, "no error so far: " + "; ".join(msgs))
 
 # Locked: turning it off is refused by the command and the message shown.
 answer(Gtk.ResponseType.OK, {"clock": True}); win.tamper_dialog(); settle()
-r = cli("browser", "safesearch", "on", "--for", "1h", "--yes"); check(r.returncode == 0, "safesearch locked: " + r.stderr)
+r = cli("browser", "safesearch-bing", "on", "--for", "1h", "--yes"); check(r.returncode == 0, "safesearch-bing locked: " + r.stderr)
 settle()
-status, _unlock = win.setting_locks["safesearch"]
+status, _unlock = win.setting_locks["safesearch-bing"]
 check(status.get_text().startswith("Locked: for"), "browser setting lock shown: " + status.get_text())
-check(not win.browser_switches["safesearch"].get_sensitive(), "locked browser setting can't be switched")
+check(not win.browser_switches["safesearch-bing"].get_sensitive(), "locked browser setting can't be switched")
+check(win.browser_switches["safesearch-google"].get_sensitive(), "another engine's SafeSearch keeps its own switch")
 answer(Gtk.ResponseType.OK, {"clock": False}); win.tamper_dialog(); settle()
 check(clock() == "clock on", "clock stays on while something is locked")
 check(any("locked" in m for m in msgs), "refusal shown: " + "; ".join(msgs))

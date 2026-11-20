@@ -10,6 +10,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 const settingLocksSchema = `CREATE TABLE IF NOT EXISTS setting_locks (
@@ -243,6 +244,70 @@ func migrateForceLibreWolf(conn *sql.DB) error {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM setting_locks WHERE name = ?", oldForceLibreWolf); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// OldSafeSearch is the one SafeSearch browser setting before each engine
+// had its own (§6 2026-11-18); SafeSearchSettings are those (the same as
+// enforce's SafeSearchSetting of each engine).
+const OldSafeSearch = "safesearch"
+
+var SafeSearchSettings = []string{"safesearch-google", "safesearch-bing", "safesearch-duckduckgo", "safesearch-youtube"}
+
+// migrateSafeSearch carries the one SafeSearch setting over to each
+// engine's once: its on/off state to every engine, and its lock row to
+// every engine unchanged (a lock of each, so a running lock holds every
+// engine exactly as before; nothing is weakened).
+func migrateSafeSearch(conn *sql.DB) error {
+	var n int
+	if err := conn.QueryRow(`SELECT (SELECT COUNT(*) FROM settings WHERE key = ?) + (SELECT COUNT(*) FROM setting_locks WHERE name = ?)`,
+		"browser."+OldSafeSearch, OldSafeSearch).Scan(&n); err != nil || n == 0 {
+		return err
+	}
+	tx, err := conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var value string
+	err = tx.QueryRow("SELECT value FROM settings WHERE key = ?", "browser."+OldSafeSearch).Scan(&value)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	var columns []string // every column but name, so each copy is the whole lock
+	rows, qerr := tx.Query("SELECT name FROM pragma_table_info('setting_locks')")
+	if qerr != nil {
+		return qerr
+	}
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			rows.Close()
+			return err
+		}
+		if c != "name" {
+			columns = append(columns, c)
+		}
+	}
+	rows.Close()
+	list := strings.Join(columns, ", ")
+	for _, name := range SafeSearchSettings {
+		if err == nil {
+			if _, err := tx.Exec("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", "browser."+name, value); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec("INSERT OR IGNORE INTO setting_locks (name, "+list+") SELECT ?, "+list+
+			" FROM setting_locks WHERE name = ?", name, OldSafeSearch); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("DELETE FROM settings WHERE key = ?", "browser."+OldSafeSearch); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM setting_locks WHERE name = ?", OldSafeSearch); err != nil {
 		return err
 	}
 	return tx.Commit()

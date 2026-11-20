@@ -668,6 +668,34 @@ if (typeof kc9kSocialRedirect === "function") {
       process.exitCode = 1;
     }
   }
+  // §6 2026-11-18: each engine's SafeSearch on its own. Brave, Yahoo,
+  // SearXNG and the blocked engines go with Google's, Bing's or DuckDuckGo's.
+  const engineCases = [
+    [["google"], "https://www.google.com/search?q=x", "redirect"],
+    [["google"], "https://www.bing.com/search?q=x", null],
+    [["google"], "https://duckduckgo.com/?q=x", null],
+    [["google"], "https://search.brave.com/search?q=x", "redirect"],
+    [["google"], "https://www.startpage.com/sp/search", "block"],
+    [["bing"], "https://www.bing.com/search?q=x", "redirect"],
+    [["bing"], "https://www.google.com/search?q=x", null],
+    [["duckduckgo"], "https://duckduckgo.com/?q=x", "redirect"],
+    [["youtube"], "https://www.google.com/search?q=x", null],
+    [["youtube"], "https://www.startpage.com/sp/search", null],
+    [["youtube"], "https://search.yahoo.com/search?p=x", null],
+    [[], "https://www.google.com/search?q=x", null],
+  ];
+  for (const [engines, url, want] of engineCases) {
+    const got = kc9kSafeSearch(url, null, engines);
+    const what = got ? (got.block ? "block" : "redirect") : null;
+    if (what !== want) {
+      console.error("FAIL safesearch engines", JSON.stringify(engines), url, "got", JSON.stringify(got), "want", want);
+      process.exitCode = 1;
+    }
+  }
+  if (!kc9kSafeSearchEngine(undefined, "youtube") || kc9kSafeSearchEngine(["google"], "youtube")) {
+    console.error("FAIL safesearch: YouTube's Restricted Mode follows its own setting");
+    process.exitCode = 1;
+  }
 }
 
 // §3.12 word recording: a page's words, counted.

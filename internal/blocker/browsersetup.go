@@ -145,19 +145,35 @@ const (
 
 // safeSearchTarget pins search sites to the address their owner gives for
 // forced SafeSearch (§4.10): Google, Bing, DuckDuckGo, YouTube Restricted
-// Mode. It works in every browser, the extension or not.
+// Mode, each for its own browser setting (§6 2026-11-18). It works in every
+// browser, the extension or not.
 type safeSearchTarget struct {
+	engine   string   // google, bing, duckduckgo, youtube
 	safe     string   // the documented safe name, looked up for its address
 	fallback string   // its address when the lookup fails ("" = leave out)
 	hosts    []string // the names pinned to it
 }
 
 var safeSearchTargets = []safeSearchTarget{
-	{"forcesafesearch.google.com", "216.239.38.120", []string{"www.google.com", "google.com", "www.google.se", "google.se"}},
-	{"strict.bing.com", "", []string{"www.bing.com", "bing.com"}},
-	{"safe.duckduckgo.com", "", []string{"duckduckgo.com", "www.duckduckgo.com"}},
-	{"restrict.youtube.com", "216.239.38.120", []string{"www.youtube.com", "youtube.com", "m.youtube.com",
+	{"google", "forcesafesearch.google.com", "216.239.38.120", []string{"www.google.com", "google.com", "www.google.se", "google.se"}},
+	{"bing", "strict.bing.com", "", []string{"www.bing.com", "bing.com"}},
+	{"duckduckgo", "safe.duckduckgo.com", "", []string{"duckduckgo.com", "www.duckduckgo.com"}},
+	{"youtube", "restrict.youtube.com", "216.239.38.120", []string{"www.youtube.com", "youtube.com", "m.youtube.com",
 		"youtubei.googleapis.com", "youtube.googleapis.com", "www.youtube-nocookie.com"}},
+}
+
+// safeSearchFor returns the targets of the engines named.
+func safeSearchFor(engines []string) []safeSearchTarget {
+	var out []safeSearchTarget
+	for _, t := range safeSearchTargets {
+		for _, e := range engines {
+			if e == t.engine {
+				out = append(out, t)
+				break
+			}
+		}
+	}
+	return out
 }
 
 func stripSafeSearch(content string) string {
@@ -176,11 +192,12 @@ func stripSafeSearch(content string) string {
 	return strings.Join(out, "\n")
 }
 
-// renderSafeSearch returns hosts content with the SafeSearch section; ips
-// gives each target's address by its safe name (missing: left out).
-func renderSafeSearch(content string, ips map[string]string) string {
+// renderSafeSearch returns hosts content with the SafeSearch section for
+// targets; ips gives each target's address by its safe name (missing: left
+// out).
+func renderSafeSearch(content string, targets []safeSearchTarget, ips map[string]string) string {
 	lines := []string{safeSearchBegin}
-	for _, t := range safeSearchTargets {
+	for _, t := range targets {
 		if ip := ips[t.safe]; ip != "" {
 			for _, host := range t.hosts {
 				lines = append(lines, ip+" "+host)
@@ -191,43 +208,53 @@ func renderSafeSearch(content string, ips map[string]string) string {
 	return strings.TrimRight(stripSafeSearch(content), "\n") + "\n" + strings.Join(lines, "\n") + "\n"
 }
 
-// safeSearchComplete reports whether the section pins every target's hosts.
-func safeSearchComplete(content string) bool {
-	if !strings.Contains(content, safeSearchBegin) || !strings.Contains(content, safeSearchEnd) {
+// safeSearchComplete reports whether the section pins exactly the targets'
+// hosts: every one of them, and no other engine's.
+func safeSearchComplete(content string, targets []safeSearchTarget) bool {
+	start, end := strings.Index(content, safeSearchBegin), strings.Index(content, safeSearchEnd)
+	if start < 0 || end < start {
 		return false
 	}
-	section := content[strings.Index(content, safeSearchBegin):]
-	for _, t := range safeSearchTargets {
-		for _, host := range t.hosts {
-			if !strings.Contains(section, " "+host+"\n") {
-				return false
-			}
+	pinned := map[string]bool{}
+	for _, line := range strings.Split(content[start+len(safeSearchBegin):end], "\n") {
+		if f := strings.Fields(line); len(f) == 2 {
+			pinned[f[1]] = true
 		}
 	}
-	return true
+	want := 0
+	for _, t := range targets {
+		for _, host := range t.hosts {
+			if !pinned[host] {
+				return false
+			}
+			want++
+		}
+	}
+	return len(pinned) == want
 }
 
-// SyncSafeSearch keeps the search sites on their forced SafeSearch
-// addresses, restoring the entries if someone removes them.
-func SyncSafeSearch(on bool) error {
+// SyncSafeSearch keeps the search sites of the engines named (google, bing,
+// duckduckgo, youtube) on their forced SafeSearch addresses, restoring the
+// entries if someone removes them, and the others' entries out.
+func SyncSafeSearch(engines []string) error {
 	data, err := os.ReadFile(hostsPath)
 	if err != nil {
 		return err
 	}
 	content := string(data)
 	want := stripSafeSearch(content)
-	if on {
-		if safeSearchComplete(content) {
+	if targets := safeSearchFor(engines); len(targets) > 0 {
+		if safeSearchComplete(content, targets) {
 			return nil
 		}
 		ips := map[string]string{}
-		for _, t := range safeSearchTargets {
+		for _, t := range targets {
 			ips[t.safe] = t.fallback
 			if v4, _ := resolveIPs(t.safe); len(v4) > 0 {
 				ips[t.safe] = v4[0]
 			}
 		}
-		want = renderSafeSearch(content, ips)
+		want = renderSafeSearch(content, targets, ips)
 	}
 	if want == content {
 		return nil

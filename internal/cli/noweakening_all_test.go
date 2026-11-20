@@ -34,7 +34,9 @@ func TestNoWeakeningEverySetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
-		{"browser", "safesearch", "off"},
+		{"browser", "safesearch-google", "off"},
+		{"browser", "safesearch-youtube", "off"},
+		{"browser", "safesearch", "off"}, // every engine at once
 		{"tamper", "clock", "off"},
 		{"tamper", "file-urls", "off"},
 		{"tamper", "private", "off"},

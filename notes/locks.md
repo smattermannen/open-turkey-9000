@@ -1,6 +1,6 @@
 # Locks, weakening, passwords, access
 
-- Covers: `internal/lock/`, `db/locks.go`, `db/layers.go`, `cli/lockflags.go`, `layers.go`, `confirm.go`, `loosen.go`, `control.go`, `textlock.go`, `settingspassword.go`, `noweakening.go`, `access.go`, `blockpassword.go`, `enforce/lock.go`
+- Covers: `internal/lock/`, `db/locks.go`, `db/layers.go`, `cli/lockflags.go`, `layers.go`, `confirm.go`, `loosen.go`, `control.go`, `textlock.go`, `settingspassword.go`, `noweakening.go`, `access.go`, `blockpassword.go`, `enforce/lock.go`, `enforce/clockcheck.go`
 - SPEC: §3.4, §3.5, §3.11, §4.6, R-LOCK-1–12, R-WEAK-1–5
 - Connects to: everything gated: [lists](lists.md), [automation](automation.md), [browsers](browsers.md), [hotkeys](hotkeys.md), [device](device.md); [testing](testing.md) (weakening audit)
 
@@ -58,6 +58,20 @@ Not fixed by `SPEC.md`; the code is the truth.
   `--delay`; shorter/earlier, another password, another range or text-lock
   kind refused. A challenge longer than the
   terminal is paged (Enter per page), accuracy over all.
+- **Trusted time** (`db/clock.go`): the clock; with `tamper clock` on and a
+  timer lock running (blocks, setting locks, monk mode), only the boot
+  clock moves it, powered-off time not counted. **Clock check** (§4.10,
+  SPEC §6 2026-11-18; `enforce/clockcheck.go`, daemon every 5 min): once
+  per boot while that holds, two of google/cloudflare/microsoft over HTTPS
+  must agree (Date header, no-cache, the earlier taken; the DoH resolvers'
+  IPs are firewalled) and the RTC is read (`/sys/class/rtc/rtc0`);
+  `CheckClock` keeps an anchor (real, trusted, boot clock, RTC). The next
+  anchor raises trusted to anchor trusted + real time passed, capped by
+  the RTC's count; the system clock plays no part. The anchor is a floor
+  in `TrustedNow` for its boot, dropped whenever no timer lock runs (else
+  a clock set back before the next lock would shorten it,
+  `TestClockAnchorDoesNotShortenNextLock`). Offline: nothing given back. Journal:
+  "clock check: … counted".
 - **Strengthening allowed while locked**: add apps/titles/blacklist entries,
   `list create`, blacklist scope/action on, lower threshold/hits, remove
   exceptions or exception scopes, delete an exception list, copy a cluster

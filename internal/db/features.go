@@ -82,6 +82,11 @@ func upgradeSchema(conn *sql.DB) error {
 		{"schedules", "source", "INTEGER NOT NULL DEFAULT 0"}, // §3.6 Schedule: 0 own, else the schedule's id
 		{"mode_blocks", "own", "TEXT NOT NULL DEFAULT ''"},    // R-MODE-1: a block's own automation, kept
 		{"modes", "custom", "TEXT NOT NULL DEFAULT ''"},       // §3.9: custom actions for when it becomes enabled
+		{"clock_state", "anchor_boot", "TEXT NOT NULL DEFAULT ''"}, // §4.10 clock check (clock.go)
+		{"clock_state", "anchor_boottime", "INTEGER NOT NULL DEFAULT 0"},
+		{"clock_state", "anchor_real", "INTEGER NOT NULL DEFAULT 0"},
+		{"clock_state", "anchor_trusted", "INTEGER NOT NULL DEFAULT 0"},
+		{"clock_state", "anchor_rtc", "INTEGER NOT NULL DEFAULT 0"},
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {

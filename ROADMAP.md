@@ -29,7 +29,7 @@ of their group and a row here; a finished item loses its row.
 | A5 | Phrase editor save: confirm | §4.3, R-WEAK-5 | lists, gui | box |
 | A6 | Locking an enabled block: confirm | R-LOCK-7 | locks, gui | box |
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
-| A10 | Lock model: clock check against hardware clock and internet time (agreed, SPEC §6 2026-11-18) | §3.4, §4.10 | locks | agent, box |
+| A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
 | A13 | `install.sh` DB race: fixed; confirm a fresh install in the VM | — | install, db-project | vm |
@@ -722,8 +722,18 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   strict mode, global ladder); active vs enabled for schedules and places
   (`enabledBlocks`; the daemon no longer switches blocks; upgrade switched
   scheduled blocks on once); allowance sessions lift their block (it stays
-  on); the GUI block start and setting lock dialogs ask the unlock order. Not built:
-  hardware/internet clock check (see §5; owner agreed 2026-11-18, SPEC §6). (L)
+  on); the GUI block start and setting lock dialogs ask the unlock order.
+  Clock check built 2026-11-20 (overnight, desktop): powered-off time
+  counts again once internet time (two of three HTTPS sources agreeing)
+  proves it, never more than the hardware clock says; anchors per boot
+  (`db/clock.go` `CheckClock`, `enforce/clockcheck.go`, daemon every 5
+  min; `TestCheckClock`, `TestAdvanceClockKeepsAnchorFloor`,
+  `TestClockCheckEndsLockAfterPoweredOffTime`,
+  `TestClockAnchorDoesNotShortenNextLock`, `TestAgreedTime`,
+  `TestCheckClockAsksOnlyWhenDue`). The live query answered here (1.6 s
+  off, RTC exact). Unchecked: a real power-off during a timer lock (needs a
+  VM: shut it down for an hour mid-lock, boot, `journalctl -u kc9k | grep
+  'clock check'`, the lock's end in `kc9k status`). (L)
 - [x] **Android extension can be switched off** (§3.13): built (5 s grace
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unit tests run in the cloud 2026-11-16:
@@ -966,7 +976,8 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   hardware-clock count would only end timer locks sooner and the hardware
   clock can be set in firmware without a firmware password, and an internet
   time query is a new outside query (principle 6) the owner should agree to.
-  Owner agreed 2026-11-18 (SPEC §6): build the check (`A10`).
+  Owner agreed 2026-11-18 (SPEC §6): build the check (`A10`). Built
+  2026-11-20: see `A10`.
 - DECIDED OVERNIGHT: a huge list in /etc/hosts makes every name lookup on
   the computer slow (15 ms each at 100,000 sites) → the hosts layer holds
   at most 20,000 sites, the rest are blocked by the browser policy, the

@@ -18,7 +18,7 @@
   access password). Reward (`break reward`, alias `allowance`) earned in `earnBreaks`;
   `break text`/`relock` makes `unlock` pause instead (second unlock ends).
 - **Statistics**: foreground app time (daemon) and site time (extension);
-  not counted when locked or after 2 min idle; kept a year. `stats --json`
+  not counted when locked or after 3 min idle (`idleLimit`); kept a year. `stats --json`
   rows are filtered by `--search`/`--block` (block password, §3.11); time
   frame `--days N` or `--from D [--to D]` (GUI Custom…, `DateButton`,
   `stats_range_problem`). GUI:

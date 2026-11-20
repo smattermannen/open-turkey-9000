@@ -798,6 +798,20 @@ Script-tested, never by a person. Script what can be into `ci/`.
   2026-11-15: a timer-locked global ladder refuses `bypass off` and a weaker
   ladder, and turns off once the lock ends.)
 - [ ] `B8` Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
+  2026-11-20 (overnight, desktop, Mint 22.3): idle was never seen there:
+  cinnamon-screensaver 6.6 answers `GetSessionIdleTime` with "not
+  implemented", so the check said "there" and idle time counted as use (and
+  earned break rewards). Fixed: idle from the X server (Xwayland not
+  trusted), else Cinnamon (`blocker/idle.go`; `TestX11IdleMillis` on Xvfb,
+  `TestAwayFromDesktopUsesX11Idle`). On the desktop's :0 as root:
+  637 s idle → away, after a mouse move → there. Focused app counted with
+  simulated input: `ci/allowance_notify_test.sh` (B1). Left: with a person
+  (real keyboard), and a website session. The X server's idle time now
+  comes before the session bus's (the user's own: an answer there saying
+  "idle" stopped use being counted). Still open (found in review): "screen
+  locked" is asked only on the session bus (`GetActive`), so a program
+  holding `org.cinnamon.ScreenSaver` that says "locked" stops allowance use
+  being counted; check the lock another way (logind `LockedHint`?).
 - [ ] `B9` Mute and dark on real sites; polite close with a real app.
 - [ ] `B10` No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
 - [ ] `B11` Social media settings beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.

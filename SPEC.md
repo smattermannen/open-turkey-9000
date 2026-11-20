@@ -426,6 +426,12 @@ GUI and CLI offer the same functions.
     lock is a separate action; range, text and password locks stack too,
     with or without re-lock; each hotkey press adds its locks again
     (confirmed per R-LOCK-12).
+  - A setting's locks (browser settings, tamper protection, strict mode,
+    the global ladder, scheduled freezes) stack the same way, and their
+    re-lock brings back the setting's whole lock configuration. Several
+    locks of one kind may be given at once: a lock option given twice is
+    two locks, in the order given. A hotkey or a mode's lock keeps one
+    password, so it sets at most one password lock. *(By Opus)*
   - The text lock's challenge is typed in the terminal the command runs in
     or, without one, in a window the command itself opens on the user's
     desktop (§6 2026-11-14); only keys typed there count. A paste, a drop or
@@ -686,6 +692,7 @@ Decisions not already written into §1–5:
 - 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
 - 2026-11-21 (By Opus): The firmware lock sets the firmware's boot settings first and its password last, typed by the trusted person and never stored; removing it is refused while anything is locked and needs that password (§4.10). Making it a KC9K lock with kinds would add nothing: only the trusted person can lift it. Stronger blocking: the one-time boot menu goes off too, since a firmware password alone leaves it open on many computers.
 - 2026-11-21 (By Opus): Tamper protection settings that KC9K always enforced (close browsers if the extension stops, block inactive tabs, block embedded content) are on by default and can be turned off while nothing is locked; the new ones (close guest profiles, block the installer) are off by default (principle 7: behaviour changes are settings, not new defaults; principle 3: a new protection is chosen). Block the installer lets a newer version through, as §4.10 names only reinstalling, downgrading and removal.
+- 2026-11-21 (By Opus): Setting locks stack like a block's (§4.6) and their re-lock brings back the whole configuration: a setting lock is a lock in §3.4's sense, the owner's examples (two partners' passwords) fit settings as well, and one rule for both is simpler to learn. A lock option given twice in one command is two locks (it used to keep the last), so several locks of one kind need no second command. Settles ROADMAP §5 "setting locks stacking".
 - 2026-11-21 (By Opus): The guided setup (§4.10) is a read-only checklist with each step's own command, no-escape last: the 2026-11-14 "no first-run wizard" decision rules out a wizard, and a checklist that shows what is left keeps the strictest setup deliberate (principle 3).
 
 ## 7. Open decisions

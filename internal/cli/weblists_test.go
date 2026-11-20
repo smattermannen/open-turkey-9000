@@ -32,6 +32,7 @@ func resetFlags(cmd *cobra.Command) {
 		}
 		f.Changed = false
 	})
+	clearLockOccurrences(cmd) // a lock flag given in an earlier run isn't given again
 	for _, c := range cmd.Commands() {
 		resetFlags(c)
 	}

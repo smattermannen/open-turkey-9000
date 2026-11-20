@@ -110,7 +110,7 @@ func TestHotkeyLockFlagsChecked(t *testing.T) {
 	fakeDesktopHotkeys(t)
 	blockWithSite(t)
 	for _, args := range [][]string{
-		{"--for", "1h", "--until", "18:00"},
+		{"--for", "1h", "--for", "0m"},
 		{"--delay", "50d"},
 		{"--relock", "10m"},
 		{"--lock-chars", "6000", "--lock"},

@@ -2,6 +2,7 @@ package db
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -34,14 +35,14 @@ func TestMigrateSafeSearch(t *testing.T) {
 			}
 			want := lock
 			want.Name = name
-			if got, _ := d.GetSettingLock(name); got != want {
+			if got, _ := d.GetSettingLock(name); !reflect.DeepEqual(got, want) {
 				t.Errorf("open %d: %s lock = %+v; want %+v", i, name, got, want)
 			}
 		}
 		if v, _ := d.GetSetting("browser." + OldSafeSearch); v != "" {
 			t.Errorf("open %d: the old setting is still there", i)
 		}
-		if old, _ := d.GetSettingLock(OldSafeSearch); old != (SettingLock{Name: OldSafeSearch}) {
+		if old, _ := d.GetSettingLock(OldSafeSearch); !reflect.DeepEqual(old, SettingLock{Name: OldSafeSearch}) {
 			t.Errorf("open %d: the old lock is still there: %+v", i, old)
 		}
 		d.Close()

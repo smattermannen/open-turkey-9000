@@ -932,8 +932,8 @@ Only items not simply Built.
 | §3.2 Block preset | Built | your own saved blocks: `block-preset save B P`, `block-preset`, `block-preset remove P`, `block create X --preset P` (old names `template`, `--template` kept as aliases); GUI ⋯ "Save as block preset…" and a choice in New block; Presets page; projects (a choice, always in a backup). None shipped |
 | §3.2 Affected users | Partial | `block users B all|USER…` (GUI "Users:" button, gui-state `users`/`accounts`, projects): a block for some accounts stays out of hosts/firewall/policies (shared by every account) unless it covers them all; its lists reach only those users' extensions (`BuildRulesFor`, user from the socket uid) and its apps are closed only in their processes (`KillBlockedFor`), its window titles and folder entries judge only their windows (`TitlesByUser`, Xvfb-tested), its sites close only their fetch tools (`KillNamingFor`), and the extension guard closes only their browsers unless something needs it everywhere (`extensionUsers`, 2026-11-21). Fewer users weakens. The GUI's "isn't running" dialog asks for its own account (`ExtensionRequiredNowFor`, `callerUID`: sudo's user; its browsers only), though browsers' check-ins are kept per browser, not per account. Live: one account on the laptop, so only "every account" checked (Unchecked; Needs: a second account on the test machine) |
 | §3.3 Continuous/automated types | Built | the type follows the block's windows and place rules (SPEC defines it so; no field to set), in a mode its mode's (the mode's automation is written into its blocks); breaks, allowance sessions and schedules lift, never switch; gui-state `continuous`, the card's "Continuous block"/"Automated block". `TestBlockTypeContinuousOrAutomated` (2026-11-21) |
-| §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. GUI: block start dialog and the setting lock dialogs |
-| §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI start and setting lock dialogs ask the order (Up/Down); several of one kind on blocks (any kind, also with re-lock and from hotkeys); `extend` for timer locks; block re-lock brings back the whole configuration; setting locks one per kind, their re-lock text/password only |
+| §3.4 Range lock | Built | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked; several stack (2026-11-21, also given twice in one command). GUI: block start dialog and the setting lock dialogs |
+| §3.4 Layered sequential locks | Built | blocks and setting locks (CLI flag order); GUI start and setting lock dialogs ask the order (Up/Down); several of one kind on blocks and settings (any kind, also with re-lock and from hotkeys; a flag given twice in one command is two locks, 2026-11-21); `extend` for timer locks; re-lock brings back the whole configuration on blocks and settings (SPEC §4.6 *(By Opus)*). The GUI flow on a real screen: Unchecked (`2.5`) |
 | §3.6 Break per block window | Built | `schedule break B N 10m|off`: one break each time window N is open (`break start` takes it, then reward); new/longer weakens; GUI window editor; projects |
 | §3.6 Allowance | Built | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). and rolling 24 hours (`--per rolling`, hourly buckets), and per window (`--per window`: each opening of a block window is a period, `enforce.QuotaPeriod`; outside windows nothing refills; an overnight span is two windows, so two periods) |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month|<time ≥ 1h>` (default one; a time keeps each part that long after it is earned, no upper limit, 2026-11-16; the 1-day cap on what is saved is gone, so is the 4 h cap on one break taken from it), GUI choice with a duration field, projects; longer keep, or period ↔ time, weakens. Ending a break early used to give back at most one break's worth also for an accumulating reward: fixed |
@@ -996,11 +996,14 @@ Only items not simply Built.
   `kc9k extend B --for|--until`, GUI Extend timer… (`TestExtendTimerLock`,
   `ci/gui_extend_smoke.py`). A block's re-lock brings back its whole lock
   configuration in its order (`LockExtras.Config`,
-  `TestRelockWholeConfiguration`), with any lock. Left: several of one
-  kind given in one `start` (flags repeat: last wins) and on setting locks;
-  setting locks' re-lock still lifts only their text/password locks; a
-  person checking the GUI's Add locks…, Extend timer… and unlock flow on
-  the laptop.
+  `TestRelockWholeConfiguration`), with any lock. Built 2026-11-21 (SPEC
+  §4.6 *(By Opus)*): a lock flag given twice is two locks (`lockSpecs`,
+  `splitSpecs`; `TestSeveralOfOneKindInOneStart`, hotkeys keep them,
+  `TestHotkeyKeepsRepeatedLockFlags`); setting locks stack
+  (`SettingLock.Queue`, `TestSettingLocksStack`) and re-lock their whole
+  configuration (`SettingLock.Config`, `TestSettingRelockWholeConfiguration`).
+  Left (owner/box): a person checking the GUI's Add locks…, Extend timer…
+  and unlock flow on the laptop.
 - **2.6 Factory reset protection** (M): code built 2026-11-21. Firmware
   lock via `/sys/class/firmware-attributes/` (`firmware-lock on|off`:
   USB/network boot and the one-time boot menu off, boot order lock on,
@@ -1058,7 +1061,9 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
 
 ## 5. Proposed, not agreed
 
-- PROPOSED 2026-11-20 (session, `2.8`, §1 "Layered sequential locks"):
+- DECIDED 2026-11-21 (By Opus; SPEC §4.6, §6): setting locks stack like a
+  block's, as proposed below; built (`2.5`).
+  PROPOSED 2026-11-20 (session, `2.8`, §1 "Layered sequential locks"):
   SPEC §4.6 and §6 2026-11-20 say a lock of a kind a *block* already has is
   added as a second lock, last, and that stacking has no exceptions; they
   don't say whether setting locks (browser, tamper, strict, bypass, freeze

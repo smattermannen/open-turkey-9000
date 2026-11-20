@@ -17,18 +17,33 @@
   locks (`PlacedLayers`; `Layers`/`LayersOn` append it); `AdvanceLayers`
   `promote`s the first once no placed lock is on. Once anything is queued,
   every new lock queues (order kept); every kind queues, range included
-  (`QueuedLock.Range*`). Setting locks: still one per kind.
+  (`QueuedLock.Range*`). Setting locks the same (`SettingLock.Queue`,
+  `Config`, `lock_queue`/`lock_config` in `setting_locks`, mapped through
+  `asBlock`/`fromBlock`; `strengthenSettingLock` mirrors
+  `strengthenLocks`; `advancedSettingLock` is what `settingLocks` diffs
+  against for the confirmation).
+- **Lock flags given twice** (§3.4): `orderedValue` keeps every `Set`
+  (`sets`); `lockOccurrences` lists each, `lockSpecs` turns them into one
+  `QueuedLock` per lock (`--lock-chars`, `--lock-words` with `--lock`,
+  `--range-invert` apply to all; one password read per password lock),
+  `splitSpecs` places each kind's first until the first repeat and queues
+  the rest. `lockArgs` keeps every occurrence (hotkeys);
+  `parseStartLocks` resets `startCmd`'s lock flags before stored ones are
+  parsed (hotkey actions, a mode's blocks); `clearLockOccurrences` in the
+  tests' `resetFlags`. Hotkeys and mode locks: one password lock at most.
 - **Re-lock** (§3.4, owner 2026-11-20): a block keeps every lock it was
   given, in order and as given (a duration, not an end), in
   `LockExtras.Config` (`lock_config`; `start` and `strengthenLocks` append
-  via `queuedLock`; a block without one gets `db.Snapshot` of its locks).
+  each spec; a block without one gets `db.Snapshot` of its locks).
   With `Relock` and a `Config` (`relocksConfig`), unlocking removes a lock
   as without re-lock; `AdvanceLayers` starts `LiftedUntil` once no lock is
   on, clears it if one is added meanwhile, and when it is over
   `restoreConfig` empties every place and queues `Config`, so the first
   lock is on and the rest wait (durations count from then). `--relock`
-  goes with any lock. Without a `Config` (setting locks, blocks locked
-  before this) the old lift of text/password locks (`LiftedKinds`) stays.
+  goes with any lock. Without a `Config` (blocks and settings locked
+  before they kept one) the old lift of text/password locks
+  (`LiftedKinds`) stays; a new lock gives them a `Config` (`Snapshot`).
+  `SettingLock.PendingRelock`/`RelockAt`: unlocked, re-lock time running.
 - **Extend** (`cli/extend.go`, §4.6: its own action): `kc9k extend B --for D`
   adds D, `--until T` moves the end later; to the running timer lock, else
   the waiting one (`TimerAfter`, `--for` only), else the first queued.
@@ -115,10 +130,12 @@ Not fixed by `SPEC.md`; the code is the truth.
   into a blacklist, record into a blacklist. Everything else weakens.
 - **Locks**: flags `--for`, `--until`, `--lock` (`--text-lock`),
   `--password-stdin`, `--restart`, `--delay`, `--range "DAYS HH:MM-HH:MM"`
-  (`--range-invert`; `LockExtras.InRange`), `--relock D` (text/password
-  only; re-locks unless stopped meanwhile). Browser setting locks: same kinds
-  minus delay (re-lock too: `SettingLock.LiftedUntil`, `unlockSetting`; also
-  strict mode, global ladder, tamper); added later only stronger; password can't be replaced;
+  (`--range-invert`; `LockExtras.InRange`), `--relock D` (with any lock;
+  re-locks unless stopped meanwhile); each given twice is two locks.
+  Browser setting locks: same kinds minus delay (re-lock too:
+  `SettingLock.LiftedUntil`, `unlockSetting`; also strict mode, global
+  ladder, tamper); a lock added later goes last, a kind already there is
+  another lock of it (never a change to the first);
   `kc9k browser unlock O` unlocks and turns off. While a browser setting is
   locked, strict mode and no-escape hold and uninstall is refused.
   `block-devtools` also can't go off while a block is locked or a freeze

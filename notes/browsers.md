@@ -1,6 +1,6 @@
 # Browser policies, extension guard, supported browsers, Chrome
 
-- Covers: `blocker/browser*.go`, `extguard.go`, `browserdetect.go`, `supported.go`, `remotecontrol*.go`, `librewolf*.go`, `chromesetup.go`, `webext/chrome.go`, `db/settinglocks.go`, `cli/browser*.go`, `cli/tamper.go`, `cli/installguard.go`, `enforce/browser.go`, `enforce/tamper.go`, `enforce/tampersettings.go`, `blocker/guest.go`
+- Covers: `blocker/browser*.go`, `extguard.go`, `browserdetect.go`, `supported.go`, `remotecontrol*.go`, `librewolf*.go`, `chromesetup.go`, `webext/chrome.go`, `db/settinglocks.go`, `cli/browser*.go`, `cli/tamper.go`, `enforce/browser.go`, `enforce/tamper.go`, `enforce/tampersettings.go`, `blocker/guest.go`
 - SPEC: §3.13, §4.10 Tamper protection / Browsers / Browser settings, R-LOCK-9
 - Connects to: [extension](extension.md), [locks](locks.md) (setting locks), [layers-net](layers-net.md), [device](device.md) (strict mode)
 

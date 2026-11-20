@@ -7,6 +7,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/smattermannen/kc9k/internal/db"
@@ -58,31 +59,38 @@ no-escape is on: then there is no way out but the locks themselves.`,
 		if err != nil {
 			return err
 		}
+		// Every password lock: in its place, waiting in the queue (several
+		// of one kind, §3.4) and in what re-lock brings back.
 		removed := 0
 		for _, b := range blocks {
 			e, err := database.GetLockExtras(b.Name)
-			if err != nil || e.PasswordHash == "" {
+			if err != nil {
 				continue
 			}
-			e.PasswordHash = ""
+			n := countPasswordLocks(e.PasswordHash, e.Queue)
+			if n == 0 && passwordLocks(e.Config) == 0 {
+				continue
+			}
+			e.PasswordHash, e.Queue, e.Config = "", withoutPasswordLocks(e.Queue), withoutPasswordLocks(e.Config)
 			if err := database.SetLockExtras(b.Name, e); err != nil {
 				return err
 			}
-			removed++
+			removed += n
 		}
 		locks, err := database.SettingLocks()
 		if err != nil {
 			return err
 		}
 		for _, l := range locks {
-			if l.PasswordHash == "" {
+			n := countPasswordLocks(l.PasswordHash, l.Queue)
+			if n == 0 && passwordLocks(l.Config) == 0 {
 				continue
 			}
-			l.PasswordHash = ""
+			l.PasswordHash, l.Queue, l.Config = "", withoutPasswordLocks(l.Queue), withoutPasswordLocks(l.Config)
 			if err := database.SetSettingLock(l); err != nil {
 				return err
 			}
-			removed++
+			removed += n
 		}
 		if access, _ := cmd.Flags().GetBool("access"); access {
 			for _, area := range accessAreas {
@@ -95,6 +103,21 @@ no-escape is on: then there is no way out but the locks themselves.`,
 		fmt.Printf("Settings password removed, and %d password locks.\n", removed)
 		return nil
 	}),
+}
+
+// countPasswordLocks counts the password locks on: the placed one and the
+// queued ones.
+func countPasswordLocks(placed string, queue []db.QueuedLock) int {
+	n := passwordLocks(queue)
+	if placed != "" {
+		n++
+	}
+	return n
+}
+
+// withoutPasswordLocks is q without its password locks.
+func withoutPasswordLocks(q []db.QueuedLock) []db.QueuedLock {
+	return slices.DeleteFunc(slices.Clone(q), func(l db.QueuedLock) bool { return l.Kind == db.LayerPassword })
 }
 
 func init() {

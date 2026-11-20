@@ -2,6 +2,7 @@ package db
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -21,7 +22,7 @@ func TestSettingLocks(t *testing.T) {
 	if err := d.SetSettingLock(want); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := d.GetSettingLock("safesearch"); err != nil || got != want {
+	if got, err := d.GetSettingLock("safesearch"); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("stored lock = %+v, %v; want %+v", got, err, want)
 	}
 

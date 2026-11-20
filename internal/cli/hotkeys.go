@@ -148,6 +148,9 @@ func addHotkey(cmd *cobra.Command, database *db.DB, accel string, actions []db.H
 			if req.extras.Relock > 0 && len(req.kinds) == 0 {
 				return 0, fmt.Errorf("--relock goes with a lock")
 			}
+			if passwordLocks(req.specs) > 1 {
+				return 0, fmt.Errorf("action %d: a hotkey keeps one password, so it can set one password lock", i+1)
+			}
 			password = password || req.password
 			locks = append(locks, pressLocks(a.Target, req)...)
 		} else if a.Locks() {
@@ -398,7 +401,7 @@ func runHotkeyAction(h db.Hotkey, a db.HotkeyAction) error {
 	switch a.Kind {
 	case db.HotkeyStart:
 		if len(a.LockArgs) > 0 {
-			if err := startCmd.ParseFlags(a.LockArgs); err != nil {
+			if err := parseStartLocks(a.LockArgs); err != nil {
 				return err
 			}
 			if err := startCmd.Flags().Set("yes", "true"); err != nil {

@@ -132,8 +132,10 @@ func TestLayeredSettingLocks(t *testing.T) {
 	if err := runCLI(t, "browser", "safesearch-google", "off"); err == nil {
 		t.Error("turned off while locked")
 	}
-	if err := runCLI(t, "browser", "safesearch-google", "on", "--for", "30m", "--yes"); err == nil {
-		t.Error("waiting timer shortened")
+	// Another timer lock is a second one, behind the first (§3.4).
+	mustRun(t, "browser", "safesearch-google", "on", "--for", "30m", "--yes")
+	if l, _ := d.GetSettingLock("safesearch-google"); l.TimerAfter != 3600 || len(l.Queue) != 1 || l.Queue[0].For != 1800 {
+		t.Errorf("another timer lock: %+v", l)
 	}
 	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch-google"); err != nil {
 		t.Fatal(err)

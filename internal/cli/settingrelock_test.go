@@ -8,9 +8,9 @@ import (
 	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
-// §3.4 re-lock on setting locks: unlocking lifts the text and password
-// locks for the re-lock time and leaves the setting on; then they are on
-// again by themselves, unless the setting was turned off meanwhile.
+// §3.4 re-lock on setting locks: once every lock is unlocked, the setting
+// stays on; after the re-lock time its whole configuration is on again by
+// itself, unless the setting was turned off meanwhile.
 func TestSettingRelock(t *testing.T) {
 	d := testDB(t)
 	notTerminal(t)
@@ -30,8 +30,8 @@ func TestSettingRelock(t *testing.T) {
 		return n
 	}
 
-	if err := runCLI(t, "browser", "web-only", "on", "--relock", "10m", "--for", "1h", "--yes"); err == nil {
-		t.Error("--relock without a text or password lock accepted")
+	if err := runCLI(t, "browser", "web-only", "on", "--relock", "10m", "--yes"); err == nil {
+		t.Error("--relock without a lock accepted")
 	}
 	if err := runWith(t, 0, []string{"pw"}, "browser", "safesearch-google", "on", "--password-stdin", "--relock", "30s", "--yes"); err == nil {
 		t.Error("--relock under a minute accepted")
@@ -83,7 +83,7 @@ func TestSettingRelock(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustRun(t, "browser", "safesearch-google", "off")
-	if l := lockOf("safesearch-google"); l != (db.SettingLock{Name: "safesearch-google"}) {
+	if l := lockOf("safesearch-google"); len(l.Layers()) != 0 || l.Relock != 0 || len(l.Config) != 0 {
 		t.Errorf("after off during the lift: %+v", l)
 	}
 
@@ -97,7 +97,9 @@ func TestSettingRelock(t *testing.T) {
 	if err := runWith(t, 0, []string{"new"}, "browser", "web-only", "on", "--password-stdin", "--yes"); err != nil {
 		t.Fatal(err)
 	}
-	if l := lockOf("web-only"); !l.TextOrPasswordLocked(trusted()) || l.Relock != 0 || !db.CheckPassword(l.PasswordHash, "new") {
+	// A lock added while the re-lock time runs holds at once and joins the
+	// configuration re-lock brings back (as on a block).
+	if l := lockOf("web-only"); !l.TextOrPasswordLocked(trusted()) || l.LiftedUntil != 0 || !db.CheckPassword(l.PasswordHash, "new") || len(l.Config) != 2 {
 		t.Errorf("new lock over a lifted one: %+v", l)
 	}
 }

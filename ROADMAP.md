@@ -32,7 +32,7 @@ of their group and a row here; a finished item loses its row.
 | A10 | Lock model: clock check against hardware clock and internet time (agreed, SPEC §6 2026-11-18) | §3.4, §4.10 | locks | agent, box |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
-| A13 | `install.sh`: LibreWolf step fails with "database is locked" on a fresh install | — | install, db-project | agent, vm |
+| A13 | `install.sh` DB race: fixed; confirm a fresh install in the VM | — | install, db-project | vm |
 | B1 | Notification before an allowance session ends (script it) | §3.6 | allowance, hotkeys | agent, box |
 | B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
 | B3 | Strict mode holes | §3.8 | device | vm |
@@ -776,6 +776,18 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   worked. Find why the 5 s `busy_timeout` did not cover it and fix it;
   prove it on a fresh install in the VM (snapshot `clean` has kc9k
   installed: remove it first, or start from a VM without it). (S)
+  Fixed 2026-11-20 (overnight, desktop): busy_timeout doesn't cover a
+  write after a read whose snapshot another process has changed (SQLITE_BUSY
+  at once), and two processes could both find a column missing and both
+  add it ("duplicate column"). The schema setup in `OpenDB` now runs under
+  an flock on `<db>.setup-lock`. `TestFreshDatabaseOpenedByManyAtOnce` (four
+  processes create one new DB; failed without the lock). On the desktop:
+  the installed build, DB deleted, daemon start + `install-librewolf` + two
+  `status` at once, 10 times: no error; `install.sh` with no DB: no error.
+  Left: a fresh install on the VM (`ci/vm.sh`), Unchecked. Not covered:
+  a deferred transaction that reads then writes (some migrations, runtime
+  code) can still get SQLITE_BUSY at once beside the daemon's writes;
+  `_txlock=immediate` would close that (not done: changes every `Begin`).
 
 ### 0.2 Not yet confirmed in real use
 

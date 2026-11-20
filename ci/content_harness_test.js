@@ -242,10 +242,11 @@ async function main() {
   // count, text far down does), and each frame on its own text: a frame
   // whose text a list blocks gets the block page; the page around it stays.
   const textPage = (body) => async (route) => route.fulfill({ status: 200, contentType: "text/html", body });
-  async function judge(top, frames) {
+  async function judge(top, frames, inner) {
     const t = await browser.newPage();
     await t.route("http://text.example/top", textPage(top));
     await t.route("http://frame.example/**", textPage(frames));
+    await t.route("http://inner.example/**", textPage(inner || ""));
     await t.addInitScript((stored) => {
       const listeners = { addListener() {} };
       window.sent = [];
@@ -279,6 +280,42 @@ async function main() {
   check("the frame judges its own text, and gets the block page",
     frameUrl.includes("kc9k-blocked") || (frameHits && frameHits.length === 1), { frameUrl, frameHits });
   await t.close();
+
+  // A frame's report, wherever it is: what the frame with that address sent.
+  const frameSent = async (t, host) => {
+    for (const f of t.frames()) {
+      if (f.url().includes(host)) {
+        return f.evaluate(() => window.sent.filter((m) => m.type === "frame-hits")).catch(() => null);
+      }
+    }
+    return null;
+  };
+  const blockedFrames = (t) => t.frames().filter((f) => f.url().includes("kc9k-blocked")).length;
+  // R-LIST-4 in a frame too: its hidden and collapsed text isn't read.
+  t = await judge("<!doctype html><p>Plain words.</p><iframe src=\"http://frame.example/h\"></iframe>",
+    "<!doctype html><p>Plain frame.</p><div style=\"display:none\">casino</div><details><summary>More</summary>casino</details>");
+  check("a frame's hidden text isn't read", blockedFrames(t) === 0 && ((await frameSent(t, "frame.example")) || []).length === 0,
+    await frameSent(t, "frame.example"));
+  await t.close();
+  // A frame inside a frame is judged on its own text; the frame around it
+  // and the page stay.
+  t = await judge("<!doctype html><p>Plain words.</p><iframe src=\"http://frame.example/o\"></iframe>",
+    "<!doctype html><p>Outer frame.</p><iframe src=\"http://inner.example/i\"></iframe>",
+    "<!doctype html><p>Play casino games</p>");
+  check("a frame in a frame judges its own text", blockedFrames(t) === 1 && t.frames().some((f) => f.url().includes("frame.example/o")),
+    t.frames().map((f) => f.url()));
+  check("and the frame around it reports nothing", ((await frameSent(t, "frame.example/o")) || []).length === 0,
+    await frameSent(t, "frame.example/o"));
+  check("nor the page", (await sentOf(t, "page-hits")).length === 0, await sentOf(t, "page-hits"));
+  await t.close();
+  // R-LIST-5 in a frame: look-alike letters (Cyrillic, small capitals) and
+  // an invisible character inside the word.
+  for (const word of ["саsіnо", "ᴄᴀsɪɴᴏ", "cas\u200Bino"]) {
+    t = await judge("<!doctype html><p>Plain words.</p><iframe src=\"http://frame.example/l\"></iframe>",
+      "<!doctype html><meta charset=\"utf-8\"><p>Play " + word + " games</p>");
+    check("a frame's look-alike " + JSON.stringify(word) + " is read as Latin", blockedFrames(t) === 1, t.frames().map((f) => f.url()));
+    await t.close();
+  }
 
   // Without no-images nothing is touched.
   const plain = await open(rules([{ action: "greyscale", distinct: 1, hits: 1 }]));

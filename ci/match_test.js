@@ -259,6 +259,41 @@ const failed0 = [];
   }
 }
 
+// R-LIST-5, more look-alikes: capitals read by their own look, small
+// capitals, Armenian, fullwidth and mathematical letters, and invisible
+// characters inside a word.
+{
+  const folds = {
+    "ΗΟΤ": "hot", "ΝΕΤFLΙΧ": "netflix", "ᴘᴏʀɴ": "porn", "ｐｏｒｎ": "porn", "𝐩𝐨𝐫𝐧": "porn",
+    "𝔭𝔬𝔯𝔫": "porn", "ⓟⓞⓡⓝ": "porn", "p\u200Bo\u00ADr\u2060n": "porn", "ﬁnance": "finance",
+    "İstanbul": "istanbul", "һօս": "hou", "саsіnо": "casino", "СОКЕ": "coke",
+  };
+  for (const [input, want] of Object.entries(folds)) {
+    if (kc9kFold(input) !== want) {
+      failed0.push("R-LIST-5 fold " + JSON.stringify(input) + " = " + JSON.stringify(kc9kFold(input)) + ", want " + want);
+    }
+  }
+  const list = kc9kCompileLists([{
+    id: 10, block: "b", name: "Words", url_terms: ["casino"], title: ["porn"], text: ["poker"],
+    actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [] },
+  }]);
+  const hit = (url, title, text) => kc9kListMatches(list, { url, title, text }).length > 0;
+  if (!hit("https://example.com/", "free ᴘᴏʀɴ here", "") || !hit("https://example.com/", "", "Ｐｏｋｅｒ night") ||
+    !hit("https://example.com/", "", "online p\u200Boker") || !hit("https://example.com/?q=%D1%81asino", "", "") ||
+    hit("https://example.com/", "pornhub", "") || hit("https://example.com/", "", "poke\u200Br\u200Bs") ||
+    hit("https://example.com/", "a normal page", "nothing to see")) {
+    failed0.push("R-LIST-5 look-alikes in a list");
+  }
+  // A term written with look-alikes is folded the same way.
+  const typed = kc9kCompileLists([{
+    id: 11, block: "b", name: "Words", url: [], title: [], text: ["ΡΟΚΕR"],
+    actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [] },
+  }]);
+  if (kc9kListMatches(typed, { url: "https://example.com/", title: "", text: "Poker!" }).length === 0) {
+    failed0.push("R-LIST-5 a term in look-alikes");
+  }
+}
+
 // Phrases: the examples of SPEC R-PHRASE-1 to 8.
 {
   const P = (sets, length) => ({ sets: sets.map((terms) => Array.isArray(terms) ? { terms, necessary: true } : terms), length });

@@ -147,6 +147,12 @@
   the later suites found local pages "blockedByPolicy", probably the
   earlier suites' trips carried over; each passes alone. No Node
   there: `cjs ci/match_test_cjs.js`.
+- Extension scripts with Node (cloud or box): `node ci/match_test.js`
+  (matching, folding), `node ci/background_test.js` (background script,
+  browser APIs stubbed: frame reports, the ad trigger),
+  `node ci/android_background_test.js`; with Playwright's Chromium (cloud
+  only): `node ci/content_harness_test.js`. Its "held up over 16 ms" check
+  is timing on a shared machine: rerun once before suspecting the code.
 - `ci/allowance_notify_test.sh` (box, real daemon, desktop unlocked; ~4
   min): an allowance session's advance notice arrives on the session bus
   and the session ends on time (B1).

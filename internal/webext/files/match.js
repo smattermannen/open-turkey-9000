@@ -209,16 +209,39 @@ const KC9K_WORD = "[\\p{L}\\p{N}]";
 
 // kc9kFold makes text and terms comparable (R-LIST-5): lower case, accents
 // dropped (é = e), and letters of other alphabets that look Latin read as
-// Latin (Cyrillic "раypal" = "paypal").
+// Latin (Cyrillic "раypal" = "paypal"). Also read as plain letters:
+// capitals that lower-case to a different look (Greek "Η" is "h", though
+// "η" looks like "n"), small capitals ("ᴘᴏʀɴ"), fullwidth and mathematical
+// letters ("ｐｏｒｎ", "𝐩𝐨𝐫𝐧": compatibility forms, NFKD), and invisible
+// characters inside words are dropped ("p\u200Born": zero-width spaces, soft
+// hyphens and other format characters).
+const KC9K_LOOKALIKES_UPPER = new Map(Object.entries({
+  "Α": "a", "Β": "b", "Ε": "e", "Ζ": "z", "Η": "h", "Ι": "i", "Κ": "k", "Μ": "m", "Ν": "n", "Ο": "o",
+  "Ρ": "p", "Τ": "t", "Υ": "y", "Χ": "x",
+  "А": "a", "В": "b", "Е": "e", "К": "k", "М": "m", "Н": "h", "О": "o", "Р": "p", "С": "c", "Т": "t",
+  "Х": "x", "Ѕ": "s", "І": "i", "Ј": "j", "Ү": "y", "Ԛ": "q", "Ԝ": "w",
+}));
 const KC9K_LOOKALIKES = new Map(Object.entries({
+  // Cyrillic
   "а": "a", "в": "b", "е": "e", "ё": "e", "к": "k", "м": "m", "н": "h", "о": "o", "р": "p", "с": "c",
   "т": "t", "у": "y", "х": "x", "і": "i", "ї": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "ӏ": "l", "һ": "h",
-  "ԛ": "q", "ԝ": "w", "α": "a", "β": "b", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p",
-  "τ": "t", "υ": "u", "χ": "x", "ϲ": "c", "ı": "i",
+  "ԛ": "q", "ԝ": "w", "ь": "b", "п": "n", "г": "r", "ү": "y", "ԑ": "e",
+  // Greek
+  "α": "a", "β": "b", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p",
+  "τ": "t", "υ": "u", "χ": "x", "ϲ": "c", "γ": "y", "η": "n", "ω": "w", "ϳ": "j",
+  // Armenian
+  "օ": "o", "ս": "u", "հ": "h", "ո": "n", "ց": "g",
+  // Latin letters that look like others, and small capitals
+  "ı": "i", "ɑ": "a", "ɡ": "g", "ɩ": "i", "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ꜰ": "f",
+  "ɢ": "g", "ʜ": "h", "ɪ": "i", "ᴊ": "j", "ᴋ": "k", "ʟ": "l", "ᴍ": "m", "ɴ": "n", "ᴏ": "o", "ᴘ": "p",
+  "ʀ": "r", "ꜱ": "s", "ᴛ": "t", "ᴜ": "u", "ᴠ": "v", "ᴡ": "w", "ʏ": "y", "ᴢ": "z",
 }));
+const KC9K_LOOKALIKE_UPPER_RE = new RegExp("[" + [...KC9K_LOOKALIKES_UPPER.keys()].join("") + "]", "g");
 const KC9K_LOOKALIKE_RE = new RegExp("[" + [...KC9K_LOOKALIKES.keys()].join("") + "]", "g");
 function kc9kFold(input) {
-  return String(input).toLowerCase().normalize("NFD").replace(/\p{M}+/gu, "")
+  return String(input)
+    .replace(KC9K_LOOKALIKE_UPPER_RE, (c) => KC9K_LOOKALIKES_UPPER.get(c))
+    .normalize("NFKD").toLowerCase().replace(/[\p{M}\p{Cf}]+/gu, "")
     .replace(KC9K_LOOKALIKE_RE, (c) => KC9K_LOOKALIKES.get(c));
 }
 

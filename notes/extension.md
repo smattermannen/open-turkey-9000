@@ -14,6 +14,13 @@
   script runs it READ_SLICE_MS at a time (`judgeOn`/`judged`; principle 9).
   Frames judge their own text (`scanFrame`, R-LIST-4) and ask the
   background (`frame-hits` → `frameHit`) for the block page.
+- Folding (R-LIST-5, `kc9kFold`): capitals that look Latin first
+  (`KC9K_LOOKALIKES_UPPER`: Greek "Η" is "h", not "η" = "n"), NFKD
+  (fullwidth, mathematical, circled letters, ligatures), lower case, marks
+  and format characters (zero-width, soft hyphen) dropped, then
+  `KC9K_LOOKALIKES` (Cyrillic, Greek, Armenian, small capitals). Terms are
+  folded the same way. `ci/match_test.js`; frames in Chromium
+  (`ci/content_harness_test.js`); `frameHit` in `ci/background_test.js`.
 - No flashing (R-PAGE-1, `content.js`): while a list could still act on the
   top page by its title or text (`mayActByText`), what its root holds stays
   at opacity 0 (`hidePage`; not the root itself, which takes the canvas and

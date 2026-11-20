@@ -1,5 +1,6 @@
 #!/bin/bash
 # Starts one ci/autopilot.sh worker per Claude account and waits for all.
+# On the owner's desktop ci/autopilot-desktop.sh runs this for you.
 #   ci/autopilot-team.sh ~/.claude-a ~/.claude-b
 # Each argument is a CLAUDE_CONFIG_DIR logged in to its own account
 # (`CLAUDE_CONFIG_DIR=~/.claude-b claude`, then /login); the worker is

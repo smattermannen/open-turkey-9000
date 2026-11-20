@@ -1,6 +1,6 @@
 # Testing
 
-- Covers: `ci/`, `*_test.go`, `cmd/try-challenge/`, `ci/autopilot.sh`, `ci/autopilot-team.sh`
+- Covers: `ci/`, `*_test.go`, `cmd/try-challenge/`, `ci/autopilot.sh`, `ci/autopilot-team.sh`, `ci/autopilot-desktop.sh`
 - SPEC: §5 (tests name the rule they prove)
 - Connects to: every note; first read [locks](locks.md) before a test that locks anything
 
@@ -37,6 +37,18 @@
   only one holds a box-only item (Needs without `agent`) at a time. The
   prompt sends network cuts, logout, shutdown, reboot and freezing to a VM
   (STUCK when none is set) and asks the session to remove its test blocks.
+- `ci/autopilot-desktop.sh` (the owner's desktop, one command): box mode;
+  passwordless sudo set up if missing; accounts are the logged-in
+  `~/.claude` and `~/.claude-*` (`.credentials.json`), else it makes
+  `~/.claude-a`/`-b` and opens `claude` in a window for `/login`
+  (`AUTOPILOT_ACCOUNTS` overrides); `AUTOPILOT_VM=kc9k-vm` when its
+  snapshot exists (empty `AUTOPILOT_VM`: none). Starts `autopilot-team.sh`
+  under `setsid` (session id in `desktop.sid`) and opens one terminal
+  window per worker running `watch <worker>`: the worker's `out.txt` and
+  its newest session log rendered (text, tool calls, errors, result);
+  closing a window stops nothing. `status`; `stop` sets `STOP`;
+  `stop --now` kills the whole session (`pkill -s`). Push and merge to
+  main stay on.
 - VM (`AUTOPILOT_VM=<libvirt domain>`, box mode only): Needs default
   `agent|box|vm`. Checked at start: the snapshot (`AUTOPILOT_VM_SNAPSHOT`,
   default `clean`) exists on `AUTOPILOT_VM_URI` (default

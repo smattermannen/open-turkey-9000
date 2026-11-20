@@ -1,6 +1,6 @@
 # Apps, window titles, polite close, behaviour settings
 
-- Covers: `blocker/process.go`, `scripts.go`, `titles.go`, `x11.go`, `polite.go`, `activity.go`, `cli/titles.go`, `cli/options.go`, `enforce/options.go`
+- Covers: `blocker/process.go`, `scripts.go`, `titles.go`, `x11.go`, `polite.go`, `activity.go`, `idle.go`, `cli/titles.go`, `cli/options.go`, `enforce/options.go`
 - SPEC: §3.1, R-TITLE-1, R-DESKTOP-1
 - Connects to: [enforce-daemon](enforce-daemon.md), [actions](actions.md) (trigger actions), [allowance](allowance.md) (app use)
 
@@ -20,6 +20,13 @@
   trusted only for the session user). Runs beside the cycle
   (`enforceTitles`). Browsers left to the extension.
 - `polite.go`: `polite-close` asks windows to close, kills a cycle later.
+- `activity.go`: focused app per desktop user (`xprop`), and who is at the
+  desktop (`awayFromDesktop`: Cinnamon screen locked, or idle past the
+  limit). Idle time from the X server first (`idle.go`, MIT-SCREEN-SAVER
+  QueryInfo over the x11.go client; not Xwayland, which sees only X11
+  input), else Cinnamon's `GetSessionIdleTime` (the session bus is the
+  user's own; cinnamon-screensaver 6, Mint 22, answers "not implemented",
+  so before 2026-11-20 idle time counted as use). Neither: counts as there.
 - **Behaviour settings** (`enforce/options.go`, `kc9k behaviour`, alias
   `option`): `polite-close`, `block-page-details`; never locked.
 

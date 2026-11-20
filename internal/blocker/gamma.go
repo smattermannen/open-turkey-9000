@@ -12,10 +12,9 @@ import (
 	"math"
 )
 
-// randrOpcode asks the server for the RandR extension and its version. It
-// returns the extension's major opcode.
-func (c *x11Conn) randrOpcode() (byte, error) {
-	const name = "RANDR"
+// extensionOpcode asks the server for an extension by name (QueryExtension)
+// and returns its major opcode.
+func (c *x11Conn) extensionOpcode(name string) (byte, error) {
 	var req bytes.Buffer
 	req.WriteByte(98) // QueryExtension
 	req.WriteByte(0)
@@ -29,9 +28,18 @@ func (c *x11Conn) randrOpcode() (byte, error) {
 		return 0, err
 	}
 	if head[8] == 0 {
-		return 0, fmt.Errorf("the X server has no RandR")
+		return 0, fmt.Errorf("the X server has no %s", name)
 	}
-	op := head[9]
+	return head[9], nil
+}
+
+// randrOpcode asks the server for the RandR extension and its version. It
+// returns the extension's major opcode.
+func (c *x11Conn) randrOpcode() (byte, error) {
+	op, err := c.extensionOpcode("RANDR")
+	if err != nil {
+		return 0, err
+	}
 	// QueryVersion 1.5: the server answers with what it has; 1.3 is needed
 	// for GetScreenResourcesCurrent.
 	version := make([]byte, 12)
@@ -39,7 +47,7 @@ func (c *x11Conn) randrOpcode() (byte, error) {
 	binary.LittleEndian.PutUint16(version[2:], 3)
 	binary.LittleEndian.PutUint32(version[4:], 1)
 	binary.LittleEndian.PutUint32(version[8:], 5)
-	head, _, err = c.request(version, true)
+	head, _, err := c.request(version, true)
 	if err != nil {
 		return 0, err
 	}

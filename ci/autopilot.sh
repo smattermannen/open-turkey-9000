@@ -8,7 +8,7 @@
 # items. Then, one worker at a time: rebase onto what the others landed (a
 # short session resolves conflicts), gate (build, vet, tests, SPEC.md
 # untouched, ROADMAP.md changed), fast-forward $AUTOPILOT_BRANCH in the
-# shared hub (and push to GitHub if AUTOPILOT_PUSH=1). A failure keeps the
+# shared hub and push it to GitHub (AUTOPILOT_PUSH=0: not). A failure keeps the
 # branch and tells the next session why.
 #
 # Several workers: one per Claude account, each with its own config dir
@@ -86,7 +86,7 @@ TIER3=${AUTOPILOT_TIER3:-opus xhigh}          # large
 TRIAGE_MODEL=${AUTOPILOT_TRIAGE_MODEL:-haiku}
 RESOLVER_EFFORT=${AUTOPILOT_RESOLVER_EFFORT:-max} # one careful chain, no agents
 PERM=${AUTOPILOT_PERMISSION_MODE:-bypassPermissions}
-PUSH=${AUTOPILOT_PUSH:-0}
+PUSH=${AUTOPILOT_PUSH:-1}                     # 1: every landing goes to GitHub
 RESOLVE=${AUTOPILOT_RESOLVE:-1}               # 0 = no resolver rounds
 PLAN=${AUTOPILOT_PLAN:-1}                     # 0 = stop when no item is left
 PLAN_MODEL=${AUTOPILOT_PLAN_MODEL:-opus}
@@ -172,6 +172,10 @@ cd "$REPO" || exit 1
 # Rebases and sessions commit here: an identity unless the user has one.
 git config user.email >/dev/null || git config user.email "kc9k-autopilot@localhost"
 git config user.name >/dev/null || git config user.name "kc9k-autopilot ($WORKER)"
+if [ "$PUSH" = 1 ]; then # no point working for hours if nothing can reach GitHub
+	git push -q --dry-run github "HEAD:refs/heads/$BRANCH" 2>/dev/null \
+		|| die "cannot push to $ORIGIN (git credentials for $(id -un)?); AUTOPILOT_PUSH=0 keeps work in the hub"
+fi
 
 # Index rows: ID <tab> item <tab> notes <tab> needs
 index_rows() {
@@ -697,6 +701,17 @@ sync_github() {
 
 # Under the land lock: onto the hub's $BRANCH (and the owner's pushes),
 # gate again if anything moved, fast-forward $BRANCH and $MAIN.
+# Pushes HEAD to $1 on GitHub; network errors are retried with backoff.
+gh_push() {
+	local i
+	for i in 2 4 8 16; do
+		git push -q github "HEAD:refs/heads/$1" && return 0
+		git fetch -q github "$1" 2>/dev/null && ! git merge-base --is-ancestor FETCH_HEAD HEAD && return 1 # moved on GitHub
+		sleep "$i"
+	done
+	return 1
+}
+
 land() { # $1 = attempt branch, $2 = its base (gated and reviewed against it)
 	local attempt=$1 tip rlog moved=
 	sync_github
@@ -719,11 +734,11 @@ land() { # $1 = attempt branch, $2 = its base (gated and reviewed against it)
 	fi
 	if [ -n "$moved" ]; then gate "$tip" || return 1; fi
 	git push -q origin "HEAD:refs/heads/$BRANCH" || { echo "push to hub failed"; return 1; }
-	if [ "$PUSH" = 1 ]; then git push -q github "HEAD:refs/heads/$BRANCH" || say "push of $BRANCH to GitHub failed"; fi
+	if [ "$PUSH" = 1 ]; then gh_push "$BRANCH" || say "push of $BRANCH to GitHub failed"; fi
 	if [ "$MERGE_MAIN" = 1 ] && [ -z "$MAIN_PAUSED" ]; then
 		git push -q origin "HEAD:refs/heads/$MAIN" || { say "hub $MAIN is not behind $BRANCH: not merged"; return 0; }
 		if [ "$PUSH" = 1 ]; then
-			git push -q github "HEAD:refs/heads/$MAIN" && say "MERGED into $MAIN on GitHub" \
+			gh_push "$MAIN" && say "MERGED into $MAIN on GitHub" \
 				|| say "push of $MAIN to GitHub failed (the owner pushed meanwhile?); next landing retries"
 		else
 			say "MERGED into the hub's $MAIN"

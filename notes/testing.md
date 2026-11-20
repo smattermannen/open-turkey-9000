@@ -89,8 +89,8 @@
   with no edit tools reads `base..HEAD` and writes `MERGE: yes|no` and
   reasons; `model_check` on its log. Yes: `land` rebases (a conflict
   session's result is reviewed again), gates again only if `$BRANCH`
-  moved, and fast-forwards `autopilot` and `main` (hub; GitHub with
-  `AUTOPILOT_PUSH=1`). No: a failed try with the reasons. `sync_github`
+  moved, and fast-forwards `autopilot` and `main` (hub and GitHub;
+  `AUTOPILOT_PUSH=0`: hub only; `gh_push` retries network errors). No: a failed try with the reasons. `sync_github`
   first builds on the owner's pushes to `main`; a conflict pauses
   merging to `main` for that landing. `AUTOPILOT_MERGE_MAIN=0` keeps
   `main` untouched. The clone gets a local git identity when the user

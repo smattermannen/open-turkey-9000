@@ -90,6 +90,9 @@
   `download_test`, `flash_test`: R-PAGE-1, records per animation frame
   whether a blocked word was painted). No Node
   there: `cjs ci/match_test_cjs.js`.
+- `ci/allowance_notify_test.sh` (box, real daemon, desktop unlocked; ~4
+  min): an allowance session's advance notice arrives on the session bus
+  and the session ends on time (B1).
 - GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
   `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
   never `show()`. `KC9K_DB` never applies layers nor sets desktop hotkeys.

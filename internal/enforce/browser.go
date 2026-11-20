@@ -200,6 +200,13 @@ func dedupUIDs(uids []uint64) []uint64 {
 // ExtensionRequiredNow is ExtensionRequired for the blocks in force now,
 // leaving out blocks on a Pomodoro break.
 func ExtensionRequiredNow(d *db.DB) (bool, error) {
+	return ExtensionRequiredNowFor(d, -1)
+}
+
+// ExtensionRequiredNowFor is ExtensionRequiredNow for the browsers of the
+// account uid (§3.2): false when only blocks for other accounts need it.
+// A negative uid: any account.
+func ExtensionRequiredNowFor(d *db.DB, uid int64) (bool, error) {
 	active, err := d.GetActiveBlocks()
 	if err != nil {
 		return false, err
@@ -208,7 +215,11 @@ func ExtensionRequiredNow(d *db.DB) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return ExtensionRequired(d, withMonk(d, enabledBlocks(d, active, trusted), trusted)), nil
+	required, uids := extensionUsers(d, withMonk(d, enabledBlocks(d, active, trusted), trusted))
+	if !required || uid < 0 || uids == nil {
+		return required, nil
+	}
+	return slices.Contains(uids, uint64(uid)), nil
 }
 
 // LastExtensionCheckIn returns when the extension last checked in, if ever.

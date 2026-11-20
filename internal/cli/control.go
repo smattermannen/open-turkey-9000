@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -852,9 +853,27 @@ func extensionStatus(database *db.DB) string {
 	return status + "; no check-in yet (open a supported browser)"
 }
 
-// runningSupportedBrowsers is blocker.RunningSupportedBrowsers, replaced in
-// tests.
-var runningSupportedBrowsers = blocker.RunningSupportedBrowsers
+// runningSupportedBrowsers is blocker.RunningSupportedBrowsers for the
+// account running the command (callerUID), replaced in tests.
+var runningSupportedBrowsers = func() map[string]time.Duration {
+	if uid := callerUID(); uid >= 0 {
+		return blocker.RunningSupportedBrowsersFor([]uint64{uint64(uid)})
+	}
+	return blocker.RunningSupportedBrowsers()
+}
+
+// callerUID is the account a command runs for: the one sudo was given by,
+// or the user running it; -1 for root itself (every account). Replaceable
+// in tests.
+var callerUID = func() int64 {
+	if os.Geteuid() == 0 {
+		if uid, err := strconv.ParseInt(os.Getenv("SUDO_UID"), 10, 64); err == nil && uid > 0 {
+			return uid
+		}
+		return -1
+	}
+	return int64(os.Getuid())
+}
 
 // extensionMissing reports whether the interface should say the extension
 // isn't running (§4.10 install dialog): no supported browser is installed,
@@ -868,7 +887,8 @@ func extensionMissing(database *db.DB) bool {
 	if !extensionBrowserInstalled() {
 		return true
 	}
-	required, err := enforce.ExtensionRequiredNow(database)
+	// §3.2: only when this account's browsers need it.
+	required, err := enforce.ExtensionRequiredNowFor(database, callerUID())
 	if err != nil || !required {
 		return false
 	}

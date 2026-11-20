@@ -22,5 +22,7 @@
   (`blockDomains` → `blocker.KillNamingFor`), the extension guard
   (`extensionUsers` → `ExtensionGuard.EnforceFor`: options, locks
   (R-LOCK-9), a block for everyone and block unsupported browsers need it
-  in every account). The GUI's "isn't running" dialog still looks at every
-  account's browsers.
+  in every account). The GUI's "isn't running" dialog
+  (`cli.extensionMissing`) asks `ExtensionRequiredNowFor(callerUID)` and
+  looks at that account's browsers (`RunningSupportedBrowsersFor`);
+  check-ins are kept per browser, not per account.

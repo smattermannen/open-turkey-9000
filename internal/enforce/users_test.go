@@ -35,6 +35,12 @@ func TestAffectedUsersTitlesAndGuard(t *testing.T) {
 	if !required || !slices.Equal(uids, []uint64{uid}) {
 		t.Errorf("a block for one account: required %v in %v", required, uids)
 	}
+	// The GUI's "isn't running" dialog asks for its own account only.
+	for who, want := range map[int64]bool{int64(uid): true, int64(uid) + 1: false, -1: true} {
+		if got, err := ExtensionRequiredNowFor(d, who); err != nil || got != want {
+			t.Errorf("ExtensionRequiredNowFor(%d) = %v, %v; want %v", who, got, err, want)
+		}
+	}
 	if got := blockDomains(active[0]); !slices.Contains(got, "youtube.com") {
 		t.Errorf("fetch tools: a block for some users still names its sites: %v", got)
 	}

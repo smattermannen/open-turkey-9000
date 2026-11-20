@@ -152,13 +152,17 @@ func (g *ExtensionGuard) EnforceFor(now, settingsChanged time.Time, unsupported 
 // RunningSupportedBrowsers returns the supported browsers running now in
 // regular users' sessions (SupportedBrowsers IDs), each with how long its
 // longest-running main process has run.
-func RunningSupportedBrowsers() map[string]time.Duration {
+func RunningSupportedBrowsers() map[string]time.Duration { return RunningSupportedBrowsersFor(nil) }
+
+// RunningSupportedBrowsersFor is RunningSupportedBrowsers in the sessions
+// of the users uids only (nil: every regular user).
+func RunningSupportedBrowsersFor(uids []uint64) map[string]time.Duration {
 	uptime := systemUptime()
 	parent, _ := processTree()
 	out := map[string]time.Duration{}
 	for pid := range parent {
 		id := supportedExe(pid)
-		if id == "" || exeName(parent[pid]) == exeName(pid) || !ownedByUser(pid) {
+		if id == "" || exeName(parent[pid]) == exeName(pid) || !ownedByAny(pid, uids) {
 			continue // not a supported browser, or one of its child processes
 		}
 		if age, ok := processAge(pid, uptime); ok && age >= out[id] {

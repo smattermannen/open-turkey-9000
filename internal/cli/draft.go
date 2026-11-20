@@ -54,7 +54,7 @@ func draftOf(database *db.DB, name string) string {
 var draftRefused = map[string]int{
 	"allowance start": 1, "allowance end": 1,
 	"schedule add": 1, "schedule remove": 1, "schedule break": 2, "schedule lock": 2,
-	"autostart": 2,
+	"autostart":   2,
 	"break start": 1, "break end": 1, "break request": 1,
 	"place rule": 1, "block users": 2, "automation": 3,
 	"schedule apply": 2, "schedule take-off": 2, // §3.6 Schedule (2026-11-17); a draft joins no mode (mode add)

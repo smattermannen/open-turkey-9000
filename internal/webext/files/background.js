@@ -690,8 +690,10 @@ browser.webRequest.onBeforeRequest.addListener(
       noteVisit(details.url);
     }
     if (details.type === "image" || details.type === "imageset" || details.type === "media") {
-      if (keywordNoImages.has(details.tabId) || carriedLook(details.tabId, "no-images") ||
-        (details.type === "media" && (keywordNoVideo.has(details.tabId) || carriedLook(details.tabId, "no-video")))) {
+      // A carried look only hides (the sheets): a cancelled picture would
+      // stay broken on a next page that turns out not to earn the look.
+      if (keywordNoImages.has(details.tabId) ||
+        (details.type === "media" && keywordNoVideo.has(details.tabId))) {
         return { cancel: true };
       }
       const looks = kc9kListActions(lists, { url: pageUrl(details) });

@@ -24,6 +24,13 @@
   (`data-kc9k-noimg` before/after/self, idle-time `scanPseudoImages`) and
   both sheets empty them; shadow roots get an adopted sheet. Page script
   harness (Node + Playwright, cloud only): `node ci/content_harness_test.js`.
+- Looks a page earned from its title or text are carried to the tab's next
+  address until that page is read (`carryLooks`, `page-judged`, ≤
+  `CARRY_MS`); carried, they only hide (the sheets). Picture and media
+  requests are cancelled only for the page's own no-images/no-video (its
+  address, or `keywordNoImages` for its own text): a cancelled picture
+  stays broken on a next page that doesn't earn the look
+  (`ci/extras_test.py`).
 - **Workarounds**: `kc9kUnwrap` reads addresses in query/path; `checkMirror`
   (content.js) reports canonical addresses/front-ends; `/hit` with `via`
   logs `EventWorkaround`.

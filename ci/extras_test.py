@@ -67,6 +67,10 @@ PAGES = {
     "/embedplain": "<!doctype html><title>Embed plain</title><p>nothing here</p>"
                    "<iframe id='f' src='FRAME/frame'></iframe>",
     "/frame": "<!doctype html><title>Player</title><video id='fv' src='/tone.wav' autoplay loop></video>",
+    # no-images from page text, then a page without the word: its picture
+    # shows once it is read (§3.9: looks change, don't block).
+    "/pics": "<!doctype html><title>Pics</title><p>kcninepicsword</p><img id='i' src='/dot.gif'>",
+    "/picsafter": "<!doctype html><title>After</title><p>nothing here</p><img id='i' src='/dot.gif?after'>",
 }
 
 
@@ -82,7 +86,9 @@ def tone():
     return out.getvalue()
 
 
-FILES = {"/tone.wav": ("audio/wav", tone())}
+# A 1x1 GIF.
+DOT_GIF = bytes.fromhex("47494638396101000100800000ff000000000021f90401000000002c00000000010001000002024401003b")
+FILES = {"/tone.wav": ("audio/wav", tone()), "/dot.gif": ("image/gif", DOT_GIF)}
 
 
 class Pages:
@@ -242,6 +248,27 @@ try:
         check("dark turns a light page over", "invert(1)" in css)
         check("no-video hides videos",
               driver.execute_script("return getComputedStyle(document.getElementById('v')).display") == "none")
+        ot("stop", "extralooks")
+
+        # no-images from page text is carried to the next page until it is
+        # read; a next page without the word then shows its pictures.
+        ot("list", "create", "extralooks", "Pics", "--text")
+        ot("list", "add", "extralooks", "Pics", "kcninepicsword")
+        ot("list", "action", "extralooks", "Pics", "no-images", "on")
+        ot("list", "action", "extralooks", "Pics", "block", "off")
+        ot("start", "extralooks")
+        time.sleep(6)
+        picture = ("const i = document.getElementById('i');"
+                   "return [i.complete && i.naturalWidth > 0, getComputedStyle(i).visibility];")
+        visit(driver, pages.base + "/pics", wait=6)
+        hidden = driver.execute_script(picture)
+        print("picture on the page with the word:", hidden)
+        check("no-images from page text hides a picture", hidden[1] == "hidden")
+        driver.execute_script("location.href = arguments[0];", pages.base + "/picsafter")
+        time.sleep(8)
+        shown = driver.execute_script(picture)
+        print("picture on the next page:", shown)
+        check("the next page without the word shows its picture once read", shown == [True, "visible"])
         ot("stop", "extralooks")
 
         # An embedded video plays on through no-video and mute from a word in

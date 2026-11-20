@@ -22,7 +22,7 @@ of their group and a row here; a finished item loses its row.
 
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
-| A1 | `no-images` GIF drawn by a pseudo-element: run in LibreWolf, the owner's site | §3.9 | extension | box |
+| A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text lifted on clicks: suites pass (2026-11-20); real use on the laptop | §3.9 | extension | owner |
 | A3 | `no-downloads` in Chrome | §3.9 | extension, browsers | box |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
@@ -445,6 +445,26 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     extras_test 27, flash_test 10, download_test 4, actions_test 14,
     quota_test 2); `ci/content_harness_test.js` passes in Playwright's
     Chromium. The owner's own site: still Unchecked.
+    2026-11-20 (desktop, LibreWolf 159.0.1, installed devmaster build,
+    headless, screenshots): no-images from an address entry and from a
+    page-text list on a local page with an animated GIF drawn by `::before`,
+    `::after`, own `content`, `image-set()`, `!important`, an open and a
+    closed shadow root, an element added after 3 s and a class added after
+    5 s, plus an `<img>`: all hidden at 4 s and 18 s (computed content `""`
+    or `normal`, `data-kc9k-noimg` set, no GIF pixels; text kept); without
+    the block all show. Real sites from an address list: en.wikipedia.org
+    /wiki/GIF (9 GIFs), commons File:Rotating_earth_(large).gif (12 GIFs),
+    giphy.com (24 pictures): 0 visible, 0 background images. Found: a page
+    that earned no-images from its text carried it to the next page
+    (≤ 15 s, `carryLooks`) by cancelling its picture requests, so a next
+    page without the word kept broken pictures. Fixed (extension 1.27.1):
+    a carried look only hides; `ci/extras_test.py` "the next page without
+    the word shows its picture once read" (failed before, 29/29 after).
+    Seen twice, cause not found: after address-matched → text-matched →
+    unmatched page of one local site (one GIF address, `no-store`), the
+    unmatched page's pseudo-element GIFs stay empty (its `<img>` shows);
+    text → unmatched and address → unmatched show them. Left: the owner's
+    own site (unknown here).
   - [ ] `A2` Looks from page text (greyscale, no-images, no-video) unreliable
     and lifted for a moment on every click inside a site (§3.9; owner
     2026-11-15). Causes found: `render` forgot the page's looks on a new
@@ -1196,3 +1216,9 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   decide: build it as decided (it stops only programs that don't look for
   the secret), give the secret to the extension some other way, or drop
   it.
+
+- OPEN 2026-11-20 (A1 check, desktop): a site entry misses an address with
+  a port: `127.0.0.1` doesn't match `http://127.0.0.1:47999/` in the
+  extension (`kc9kIndexTest` compares the host with its port);
+  `127.0.0.1:47999` does. SPEC is silent on ports. Proposed: a site entry
+  without a port matches any port, as browser match patterns do.

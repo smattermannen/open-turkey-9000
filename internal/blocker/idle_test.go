@@ -46,8 +46,9 @@ func TestX11IdleMillis(t *testing.T) {
 // screensaver 6 doesn't answer GetSessionIdleTime, and the session bus is
 // the user's own); when nothing can tell, the person counts as there.
 func TestAwayFromDesktopUsesX11Idle(t *testing.T) {
-	saved := x11IdleSeconds
-	t.Cleanup(func() { x11IdleSeconds = saved })
+	saved, savedLocked := x11IdleSeconds, screenLocked
+	t.Cleanup(func() { x11IdleSeconds, screenLocked = saved, savedLocked })
+	screenLocked = func(string) bool { return false }
 	u := &user.User{Uid: "1000", HomeDir: "/nonexistent"}
 	for _, c := range []struct {
 		idle uint64

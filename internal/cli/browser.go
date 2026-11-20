@@ -776,7 +776,7 @@ func unlockSetting(database *db.DB, name, label, notLocked string) (s settingLoc
 	case db.LayerText:
 		ok, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
 		if err != nil {
-			return s, false, nil, fmt.Errorf("failed to run the typing challenge: %w", err)
+			return s, false, nil, fmt.Errorf("failed to run the text lock's challenge: %w", err)
 		}
 		if !ok {
 			_ = refused(database, "", fmt.Errorf("failed the unlock challenge"))

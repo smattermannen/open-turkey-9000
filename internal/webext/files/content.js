@@ -728,7 +728,7 @@ function showTestPanel(report) {
     parent.appendChild(el);
     return el;
   };
-  add(box, "h1", "Keyword test mode");
+  add(box, "h1", "Test mode");
   add(box, "div", "These lists only show what they find. Nothing is done to the page.", "dim");
   for (const list of report) {
     add(box, "h2", list.name + " (" + list.block + ")");

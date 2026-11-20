@@ -84,6 +84,12 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     and `record start --preset` (old flags kept); every help text, message
     and GUI label says block preset, list preset, phrase set preset.
     `TestPresetCommandNames`, `ci/gui_lists_smoke.py` (import sources).
+    2026-11-21 (quality pass): the last ones shown: `break` help ("relock",
+    "typing challenge"), the text lock's challenge error, the old "word
+    combination" error for a term with brackets, the GUI's text break help,
+    the toolbar's "today's quota left" (now "of the allowance left", also
+    right for weekly and monthly allowances) and the page panel's "Keyword
+    test mode" (extension 1.31.0).
 
 - [ ] **Owner report 2026-11-20** (from real use; D1, D2, D4 built; D3 left).
   - [x] **D1** In an opened block, the bar from "← All blocks" down to Save

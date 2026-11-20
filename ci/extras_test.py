@@ -209,7 +209,7 @@ try:
         time.sleep(6)
         check("an address changed without loading is caught by a URL list", on_block_page(driver))
 
-        # Keyword test mode: the page stays, with the panel.
+        # Test mode: the page stays, with the panel.
         visit(driver, pages.base + "/words", wait=6)
         panel = driver.execute_script("return Boolean(document.getElementById('kc9k-test-panel'));")
         check("in test mode the page stays", "/words" in driver.current_url)

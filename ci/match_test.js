@@ -587,7 +587,7 @@ process.exit(failed ? 1 : 0);
   }
 }
 
-// Keyword test mode: a list in test mode never acts, and reports what it found.
+// Test mode: a list in test mode never acts, and reports what it found.
 {
   const compiled = kc9kCompileLists([{
     id: 7, block: "b", name: "Words", test: true, url: [], title: [], text: ["casino", "poker", "*bet*"],

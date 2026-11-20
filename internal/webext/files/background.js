@@ -1067,7 +1067,7 @@ async function updateBadges() {
 function leftSentence(left) {
   const time = kc9kTimeLeft(left.seconds);
   if (left.kind === "quota") {
-    return time + " of today's quota left for '" + left.block + "'";
+    return time + " of the allowance left for '" + left.block + "'";
   }
   if (left.kind === "break") {
     return time + " of break left; then '" + left.block + "' blocks this again";

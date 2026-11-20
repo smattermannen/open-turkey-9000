@@ -73,7 +73,7 @@ func checkPageKeywords(keywords []string) error {
 		limit := maxPageKeyword
 		if strings.ContainsAny(k, "()") {
 			if _, ok := pageCombination(k); !ok {
-				return fmt.Errorf("invalid word combination %q: write boxes side by side, each a list in brackets with an optional :N for how many of its words are needed, or one word, as in cars(red, big) or (car, lambo*) (big, small, nice):2 (sport, hello)", k)
+				return fmt.Errorf("invalid rendered term %q: brackets make a phrase, and phrases go in a phrase set ('kc9k phrase-set add', for example [eat, nice] [hello, grandpa])", k)
 			}
 			limit = maxWordCombination
 		}

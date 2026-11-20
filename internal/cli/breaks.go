@@ -32,8 +32,9 @@ when you choose with 'break start'; the block is lifted for that long and
 comes back by itself, locks and all. 'break end' ends a break early and
 keeps the rest.
 
-With relock set, unlocking the block (its typing challenge or password)
-doesn't end it: it lifts it for that long, then it is back with its locks.
+With a text break set ('break text'), unlocking the block (its text lock's
+challenge or password) doesn't end it: it lifts it for that long, then it is
+back with its locks.
 Unlocking once more during that break lifts its locks; the block stays on.
 
 Allowing more breaks weakens a block, so it is refused while the block is

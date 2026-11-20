@@ -7803,7 +7803,7 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(section(
             "Breaks that keep the locks", dim("A break after a challenge or a countdown; the block stays locked."),
             relock_row, delay_row,
-            help="Text break: passing the typing challenge or giving the password doesn't end the "
+            help="Text break: passing the text lock's challenge or giving the password doesn't end the "
                  "block's lock, it lifts the block for a while; unlocking again during that break ends "
                  "it. Delay break: asked for, it begins after the wait you chose."), False, False, 0)
         for row in (quota_row, sessions_row, pomodoro_row, long_row, allowance_row, keep_row, relock_row, delay_row):

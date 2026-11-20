@@ -44,7 +44,6 @@ of their group and a row here; a finished item loses its row.
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
 | B12 | Chrome: popup, extension can't be removed | §3.13 | browsers | box |
 | B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
-| B14 | Monk mode live: run `ci/monk_live_test.sh host` (written, never run), reboot mid-way | R-MONK-2 | device | vm |
 | B16 | New list dialog on a real screen | §3.2 | gui, lists | box |
 | B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
@@ -929,10 +928,17 @@ Script-tested, never by a person. Script what can be into `ci/`.
   chromium` installs Mint's chromium (`/usr/lib/chromium/chromium`, policy
   in `/etc/chromium/policies`) and works. Left: upgrade from
   `force-librewolf` keeping a lock; a portable LibreWolf.
-- [ ] `B14` Monk mode live, incl. reboot mid-way. `ci/monk_live_test.sh`
-  written 2026-11-20 (the VM checks itself while cut: three cuts, undoing
-  each put back, locked, restart, held after it, restored at the end);
-  never run: `ci/monk_live_test.sh host kc9k-vm` from the test machine.
+- [x] `B14` Monk mode live, incl. reboot mid-way (R-MONK-2). Built:
+  2026-11-20, kc9k-vm (Ubuntu 24.04, Cinnamon X11), this tree installed
+  `TAGS=devmaster`: `ci/monk_live_test.sh host kc9k-vm` PASS, 6 min. Before:
+  radio enabled, `enp1s0` up, online. Within 2 s of `kc9k monk --for 6m
+  --yes`: radio off, `enp1s0` down, firewall drops, 1.1.1.1 silent, loopback
+  and the rules server answer. Undone by hand (link up, `nmcli radio wifi
+  on`, `nft delete table inet kc9k`): each cut again within 3 s; `mode off
+  monk` refused (locked). Restart mid-way: 20 s after boot all three held
+  ("enp1s0 was brought back up; down again"). At the end (23:02:24, +4 s):
+  radio back on, `enp1s0` up, online, `kc9k monk` off. The VM has no Wi-Fi
+  card: the radio checked is NetworkManager's switch only.
 - [x] `B15` GUI design pass: seen by the owner on a real screen (2026-11-18: tremendous).
 - [ ] `B16` Lists without types (§3.2): checked 2026-11-15: `H` and `test` have
   one `Blocked` each; `H` blocks reddit.com by address and a page by its

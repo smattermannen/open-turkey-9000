@@ -536,22 +536,27 @@ def block_pills(block):
         out.append(("On", "on"))
     else:
         out.append(("Lifted now", "lifted"))
+    locks = []  # (kind, pill)
     if block.get("lock_seconds"):
-        out.append((f"Locked {fmt_seconds(block['lock_seconds'])}", "locked"))
+        locks.append(("timer", (f"Locked {fmt_seconds(block['lock_seconds'])}", "locked")))
     if block.get("char_locked"):
-        out.append(("Text lock", "locked"))
+        locks.append(("text", ("Text lock", "locked")))
     if block.get("password_locked"):
-        out.append(("Password lock", "locked"))
+        locks.append(("password", ("Password lock", "locked")))
     if block.get("restart_locked"):
-        out.append(("Until restart", "locked"))
+        locks.append(("restart", ("Until restart", "locked")))
     if block.get("delay_left"):
-        out.append((f"Unlocks in {fmt_seconds(block['delay_left'])}", "warn"))
+        locks.append(("delay", (f"Unlocks in {fmt_seconds(block['delay_left'])}", "warn")))
     elif block.get("delay_seconds"):
-        out.append((f"Delay {fmt_seconds(block['delay_seconds'])}", "locked"))
+        locks.append(("delay", (f"Delay {fmt_seconds(block['delay_seconds'])}", "locked")))
     if block.get("timer_after"):
-        out.append((f"Then locked {fmt_seconds(block['timer_after'])}", "locked"))
+        locks.append(("timer", (f"Then locked {fmt_seconds(block['timer_after'])}", "locked")))
     if block.get("range_lock"):
-        out.append((f"Range {block['range_lock']}", "locked" if block.get("range_on") else "off"))
+        locks.append(("range", (f"Range {block['range_lock']}", "locked" if block.get("range_on") else "off")))
+    # R-LOCK-6: in the order they are unlocked; locks not in it (off now) last.
+    order = block.get("lock_order") or []
+    locks.sort(key=lambda kp: order.index(kp[0]) if kp[0] in order else len(order))
+    out += [p for _k, p in locks]
     if block.get("schedule_lock"):
         out.append(("Schedule lock", "locked"))
     if block.get("paused_seconds"):
@@ -577,7 +582,7 @@ def page_box():
 
 
 LOCK_KIND_NAMES = {"timer": "timer lock", "text": "text lock", "password": "password lock",
-                   "restart": "restart lock", "delay": "delay lock"}
+                   "restart": "restart lock", "delay": "delay lock", "range": "range lock"}
 
 
 NOTICE_KINDS = (
@@ -608,12 +613,20 @@ def breaks_words(block):
     return "Breaks: " + ", ".join(parts) if parts else "No breaks"
 
 
+CARD_LOCK_WORDS = {"text": "text lock", "password": "password", "restart": "until restart",
+                   "range": "range lock", "delay": "delay lock", "timer": "timer lock"}
+
+
 def lock_words(block):
-    """A block's lock state, in short (§4.2 block list)."""
+    """A block's lock state, in short (§4.2 block list): the lock unlocked
+    next (R-LOCK-6), the first of its unlock order."""
     if not block.get("held"):
         return "Unlocked"
-    if block.get("lock_seconds"):
+    first = (block.get("lock_order") or [None])[0]
+    if block.get("lock_seconds") and first in (None, "timer"):
         return f"Locked, {fmt_seconds(block['lock_seconds'])} left"
+    if first in CARD_LOCK_WORDS:
+        return f"Locked: {CARD_LOCK_WORDS[first]}"
     for key, words in (("char_locked", "text lock"), ("password_locked", "password"),
                        ("restart_locked", "until restart"), ("range_lock", "range lock")):
         if block.get(key):
@@ -1649,6 +1662,25 @@ class LockPicker(Gtk.Box):
             out.append((["--range", spec] + (["--range-invert"] if outside else []),
                         f"range lock, {'outside ' if outside else ''}{spec}"))
         return out
+
+
+def waiting_words(chosen, before=()):
+    """R-LOCK-6, R-LOCK-12: behind a lock other than a timer lock (one
+    chosen above it, or one of before, the kinds already on), a timer lock
+    for a time counts from when the locks before it are unlocked and a
+    restart lock needs a restart after them; their confirmation lines say
+    so, as the CLI's do."""
+    others = any(kind != "timer" for kind in before)
+    out = []
+    for flags, text in chosen:
+        if others and flags[:1] == ["--for"]:
+            text = (text.split(" (")[0] + ", counting from when the locks before it are unlocked "
+                    "(time the computer is off doesn't count)")
+        elif others and flags[:1] == ["--restart"]:
+            text = "restart lock, until a restart after the locks before it are unlocked"
+        others = others or flags[:1] not in (["--for"], ["--until"])
+        out.append((flags, text))
+    return out
 
 
 class HotkeyFields(Gtk.Grid):
@@ -8302,6 +8334,7 @@ class Window(Gtk.ApplicationWindow):
             chosen = self.choose_lock_order(chosen)
             if chosen is None:
                 return
+        chosen = waiting_words(chosen, block.get("lock_order") or [])  # behind the locks it has
         locks = []
         for i, (flags, text) in enumerate(chosen):
             args += flags
@@ -8359,7 +8392,7 @@ class Window(Gtk.ApplicationWindow):
         dialog.show_all()
         answer = dialog.run()
         dialog.destroy()
-        return order if answer == Gtk.ResponseType.OK else None
+        return waiting_words(order) if answer == Gtk.ResponseType.OK else None
 
     def reveal_block(self, _button):
         """Asks a block's password and shows its contents until the window closes."""

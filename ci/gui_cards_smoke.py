@@ -192,6 +192,35 @@ check(not dialogs and win.blocks["plain"]["active"], "Start starts it at once, n
 check(win.start_button.get_label() == "Add locks…", "once on: Add locks…")
 check(not win.blocks["plain"].get("held"), "started without locks")
 
+# A6, R-LOCK-6/7/12: locks added to a running block, in the order given;
+# the card names the lock unlocked next, the pills follow the unlock
+# order, and a timer lock added behind them says it counts from then.
+for a in (["block", "create", "layers"], ["block", "add", "layers", "example.org"], ["start", "layers"]):
+    r = cli(*a); assert r.returncode == 0, (a, r.stderr)
+r = subprocess.run([W, "start", "layers", "--password-stdin", "--yes"], input="pw\n", capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+r = cli("start", "layers", "--lock", "--lock-chars", "5", "--yes"); assert r.returncode == 0, r.stderr
+settle()
+check(any(t == "Locked: password" for t in cards()["layers"][1]),
+      "the card names the first lock to unlock: %s" % cards()["layers"][1])
+pills = [t for t, kind in gui.block_pills(win.blocks["layers"]) if kind == "locked"]
+check(pills == ["Password lock", "Text lock"], "pills in the unlock order: %s" % pills)
+lines = []
+win.lock_dialog = lambda *a, **k: ([(["--for", "3m"], "timer lock for 3 minutes (it can't be stopped until then)")], [], "")
+win.confirm_lock = lambda locks, *a, **k: (lines.extend(locks), True)[1]
+win.selected = "layers"; win.add_locks(None); settle()
+check(lines and "counting from when the locks before it are unlocked" in lines[0],
+      "behind other locks, a timer lock counts from their unlocking: %s" % lines)
+order = next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == "layers").get("lock_order")
+check(order == ["password", "text", "timer"], "added last: %s" % order)
+summary = gui.block_summary(dict(win.blocks["layers"], lock_order=order + ["range"]))
+check("unlock order: password lock → text lock → timer lock → range lock" in summary, "the unlock order named: %s" % summary)
+waits = gui.waiting_words([(["--for", "1h"], "timer lock for 1 hour (x)"), (["--restart"], "restart lock, until the computer restarts"),
+                           (["--password-stdin"], "password lock"), (["--restart"], "restart lock, until the computer restarts")])
+check(waits[0][1] == "timer lock for 1 hour (x)" and waits[1][1].endswith("until the computer restarts")
+      and "after the locks before it" in waits[3][1],
+      "only behind a lock other than a timer lock: %s" % waits)
+
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")
 raise SystemExit(1 if fails else 0)

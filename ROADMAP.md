@@ -26,7 +26,6 @@ of their group and a row here; a finished item loses its row.
 | A2 | Looks from page text lifted on clicks: suites pass (2026-11-20); real use on the laptop | §3.9 | extension | owner |
 | A3 | `no-downloads` in Chrome | §3.9 | extension, browsers | box |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
-| A6 | Locking an enabled block: confirm | R-LOCK-7 | locks, gui | box |
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
@@ -531,11 +530,27 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     refresh can read the set before the command's result): it now empties
     the editor (`remove_loaded`; `ci/gui_phrase_smoke.py` "editor empty
     after Delete phrase", also refresh first); seen fixed on :0.
-  - [ ] `A6` Locking an enabled block refused password, restart, delay, range
+  - [x] `A6` Locking an enabled block refused password, restart, delay, range
     and word/own-text locks ("already active; … are set when it starts"),
     against R-LOCK-7. Fixed: `strengthenLocks` adds every kind last in the
     order given (`TestLockActiveBlock`). The GUI's lock dialog offers every
-    kind on a running block too (merged 2026-11-16); confirm on the laptop.
+    kind on a running block too (merged 2026-11-16). Checked 2026-11-20 on
+    the desktop (devmaster build, X11 :0): CLI, a started block without
+    locks, then `start B` with password, restart, delay 2m, range, word
+    lock, `--for 3m`, `--lock-text`, one at a time: each refused without
+    `--yes` (nothing written), then added last; `kc9k status` unlock order
+    password → restart (after it) → delay → range → text → timer (3m after
+    it) → another text. GUI, on a second started block, its card's
+    Unlocked → Add locks to B: all six kinds in one dialog, Unlock order
+    dialog (moved), Set these locks? listed 1 of 6 … 6 of 6; Cancel set
+    nothing, Lock set all six in that order; `kc9k unlock` lifted the
+    password lock first, then refused the range lock (on now). Fixed: the
+    card said "Locked: text lock" with a password lock first, Overview
+    pills were in a fixed order, the confirmation said a timer lock behind
+    others "can't be stopped until then" (it counts from their unlocking),
+    the unlock order said "range": now the lock unlocked next, pills in
+    unlock order, `waiting_words`, "range lock" (`ci/gui_cards_smoke.py`
+    "A6"); seen fixed on :0. `block info` shows no locks (status does).
   - [x] `A7` Phrase editor UI awkward (§4.3). Owner 2026-11-18: good now.
   - [x] R-PHRASE-1 (changed 2026-11-15): any word set necessary or optional,
     none allowed; length ≥ 2. Built in `db.Phrase`, `match.js`, GUI.

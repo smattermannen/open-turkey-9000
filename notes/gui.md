@@ -32,6 +32,12 @@
   `LockPicker` (every lock kind; `lock_dialog` reads it before closing).
   A block's Start runs `kc9k start` at once (`start_block`, D2); once on it
   is Add locks… (`add_locks`, the lock dialog; a card's lock state too).
+  Lock state follows the unlock order (`lock_order`, R-LOCK-6): a card
+  names the lock unlocked next (`lock_words`), `block_pills` puts lock
+  pills in that order. `waiting_words` (after `choose_lock_order`, and
+  in `add_locks` against the locks on) words a `--for` timer or restart
+  lock behind a non-timer lock as waiting for it, as the CLI's
+  confirmation does.
   Extend timer… (`extend_timer`, a `TimerLockField` without "none") runs
   `kc9k extend`, offered while `lock_order` has a timer lock
   (`ci/gui_extend_smoke.py`). `LockPicker(relock_any=True)` for blocks,

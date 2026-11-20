@@ -35,6 +35,11 @@ func (n *fakeNet) install() {
 func TestMain(m *testing.M) {
 	(&fakeNet{eth: map[string]bool{}}).install()
 	blocker.GraphicalSessions = func() map[string]bool { return map[string]bool{} }
+	// A freeze in a test never logs out, powers off, locks or closes apps.
+	freezeLogout = func() error { return nil }
+	freezePowerOff = func() error { return nil }
+	freezeLockScreen = func() error { return nil }
+	freezeCloseApps = func([]string) int { return 0 }
 	os.Exit(m.Run())
 }
 

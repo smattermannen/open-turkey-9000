@@ -77,10 +77,26 @@ Emergency exit: in GRUB, press e on the boot entry and add
 		if until <= current {
 			return fmt.Errorf("already frozen until %s; a freeze can only be extended", time.Unix(current, 0).Format("2006-01-02 15:04"))
 		}
+		if current > time.Now().Unix() {
+			running, err := database.FreezeMode()
+			if err != nil {
+				return err
+			}
+			if kept := freeze.ExtendMode(running, mode); kept != mode {
+				return refused(database, "", fmt.Errorf("a running %s freeze can't become 'allowed apps only', which lets programs run: extend it with --mode %s", running, running))
+			}
+		}
 		if err := database.SetFreeze(until, mode); err != nil {
 			return err
 		}
 		fmt.Printf("Frozen until %s\n", time.Unix(until, 0).Format("2006-01-02 15:04"))
+		if mode == freeze.ModeApps {
+			if apps := enforce.FreezeApps(database); len(apps) == 0 {
+				fmt.Println("Allowed apps only, with no allowed apps: every program you started is closed ('kc9k freeze apps').")
+			} else {
+				fmt.Printf("Allowed apps only: %s keep running.\n", strings.Join(apps, ", "))
+			}
+		}
 		// The daemon locks the screen again every half second during a
 		// lock freeze, so failing to lock it at once only warns. A test's
 		// database (KC9K_DB) never locks the real screen.

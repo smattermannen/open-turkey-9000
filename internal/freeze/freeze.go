@@ -39,6 +39,17 @@ func ValidMode(mode string) bool {
 	return mode == ModeLock || mode == ModeLogout || mode == ModeShutdown || mode == ModeApps
 }
 
+// ExtendMode is the mode a running freeze (running) keeps when it is
+// extended with next: never the weaker allowed apps only over a mode that
+// lets nothing run (lock, logout, shutdown), so extending can't weaken it.
+// With no freeze running, next.
+func ExtendMode(running, next string) string {
+	if running != "" && running != ModeApps && next == ModeApps {
+		return running
+	}
+	return next
+}
+
 // Validate checks a requested freeze length.
 func Validate(d time.Duration) error {
 	if d < MinDuration || d > MaxDuration {

@@ -16,6 +16,8 @@
 # by ci/autopilot-team.sh or as
 #   AUTOPILOT_WORKER=a CLAUDE_CONFIG_DIR=~/.claude-a ci/autopilot.sh
 #
+# On the owner's desktop: ci/autopilot-desktop.sh (box mode, both accounts,
+# a window per worker, stop/status) is the one command. Elsewhere:
 # Run it as a user that is NOT in group sudo (no root, no kc9k-bin via the
 # sudoers rule, so tests can never lock, freeze or cut the real computer):
 #   sudo adduser --disabled-password kc9k-bot

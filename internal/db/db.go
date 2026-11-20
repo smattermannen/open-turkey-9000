@@ -201,6 +201,8 @@ CREATE TABLE IF NOT EXISTS active_blocks (
 //     writes without locking. It's much better than the default (journal) mode
 //     for applications that read and write at the same time (e.g. daemon + CLI).
 //  4. Run the migrations to ensure the tables exist.
+//
+// Steps 3 and 4 run under setupLock, one process at a time.
 func OpenDB(dbPath string) (*DB, error) {
 	// "sqlite" is the name of the driver registered by modernc.org/sqlite.
 	// dbPath is the path of the .db file on disk.
@@ -222,6 +224,10 @@ func OpenDB(dbPath string) (*DB, error) {
 		conn.Close()
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
+
+	// One process at a time sets up the schema (see setupLock).
+	unlock := setupLock(dbPath)
+	defer unlock()
 
 	// WAL (Write-Ahead Logging) lets reads happen while a write is in
 	// progress. In the default (journal) mode, the database locks completely

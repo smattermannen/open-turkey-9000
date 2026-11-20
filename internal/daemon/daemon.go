@@ -81,6 +81,20 @@ func Run() error {
 		}
 	}()
 
+	// The clock check (§4.10): once per boot while a timer lock runs, the
+	// internet's time gives powered-off time back; tried every 5 minutes
+	// until it answers.
+	go func() {
+		defer reportCrash(database)
+		time.Sleep(30 * time.Second) // let the network come up after boot
+		enforce.CheckClock(database, time.Now())
+		check := time.NewTicker(5 * time.Minute)
+		defer check.Stop()
+		for now := range check.C {
+			enforce.CheckClock(database, now)
+		}
+	}()
+
 	// The circadian rhythm (§4.10) keeps its own pace beside the cycle.
 	go func() {
 		defer reportCrash(database)

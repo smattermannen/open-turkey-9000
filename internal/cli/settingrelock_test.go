@@ -135,12 +135,15 @@ func TestStrictRelock(t *testing.T) {
 	if err := runWith(t, 0, []string{"pw"}, "strict", "on", "--password-stdin", "--relock", "15m", "--yes"); err != nil {
 		t.Fatal(err)
 	}
+	// Trusted time before and after: under the race detector the password
+	// check alone can take seconds.
+	before, _ := d.TrustedNow(time.Now())
 	if err := runWith(t, 0, []string{"pw"}, "strict", "unlock"); err != nil {
 		t.Fatal(err)
 	}
 	trusted, _ := d.TrustedNow(time.Now())
 	l, _ := d.GetSettingLock(enforce.StrictLockName)
-	if v, _ := d.GetSetting(enforce.SettingStrict); v != "on" || !l.PendingRelock(trusted) || l.LiftedUntil != trusted+900 && l.LiftedUntil != trusted+899 {
-		t.Errorf("strict %q, lock %+v", v, l)
+	if v, _ := d.GetSetting(enforce.SettingStrict); v != "on" || !l.PendingRelock(trusted) || l.LiftedUntil < before+900 || l.LiftedUntil > trusted+900 {
+		t.Errorf("strict %q, lock %+v (re-lock between %d and %d)", v, l, before+900, trusted+900)
 	}
 }

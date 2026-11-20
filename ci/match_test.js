@@ -810,3 +810,49 @@ if (typeof kc9kSocialRedirect === "function") {
     process.exitCode = 1;
   }
 }
+
+// §3.9 ad trigger, edge cases: the host as requests give it (capitals, a
+// final dot), test mode, a list without actions, URL-term exceptions, and
+// lists whose block has exceptions by title or text, which the page itself
+// judges (kc9kAdsByPage, page.adHosts).
+{
+  const make = (extra, except) => kc9kCompileLists([Object.assign({
+    id: 30, block: "b", name: "Ads", url: [], title: [], text: [], ads: ["ExoClick.com"],
+    actions: [{ action: "block", distinct: 1, hits: 1 }],
+    except: Object.assign({ url: [], title: [], text: [] }, except || {}),
+  }, extra || {})]);
+  const ads = make();
+  const n = (compiled, host, page) => kc9kAdMatches(compiled, host, page).length;
+  const cases = [
+    [n(ads, "ADS.EXOCLICK.COM.", "https://tube.example/"), 1, "capitals and a final dot"],
+    [n(ads, "exoclick.com", "https://tube.example/"), 1, "the network itself"],
+    [n(ads, "", "https://tube.example/"), 0, "no host"],
+    [n(ads, "exoclick.com.evil.example", "https://tube.example/"), 0, "the name inside another domain"],
+    [n(ads, "exoclick.com", ""), 1, "no page address: no exception to check"],
+    [n(make({ test: true }), "exoclick.com", "https://tube.example/"), 0, "test mode doesn't run"],
+    [n(make({ actions: [] }), "exoclick.com", "https://tube.example/"), 0, "a list without actions"],
+    [n(make({}, { url_terms: ["school"] }), "exoclick.com", "https://news.example/school-trip"), 0, "a URL-term exception spares the page"],
+    [n(make({}, { url_terms: ["school"] }), "exoclick.com", "https://news.example/sports"), 1, "and only its pages"],
+    [n(make({}, { text: ["homework"] }), "exoclick.com", "https://news.example/"), 0, "a text exception: left to the page"],
+    [n(make({}, { title: ["Homework"] }), "exoclick.com", "https://news.example/"), 0, "a title exception: left to the page"],
+    [n(kc9kCompileLists([{ id: 31, block: "b", name: "None", url: ["x.example"], title: [], text: [],
+      actions: [{ action: "block" }], except: {} }]), "exoclick.com", "https://tube.example/"), 0, "a list without ads"],
+  ];
+  for (const [got, want, what] of cases) {
+    if (got !== want) {
+      console.error("FAIL ad trigger: " + what + ": " + got + ", want " + want);
+      process.exitCode = 1;
+    }
+  }
+  // The page judges a list with title/text exceptions: its ad hosts match
+  // unless an exception spares the page; other lists ignore page.adHosts
+  // (the background has them).
+  const byPage = make({}, { text: ["homework"] });
+  const page = (text, adHosts) => kc9kListMatches(byPage, { url: "https://news.example/", title: "", text, adHosts }).length;
+  if (page("today's news", ["cdn.exoclick.com"]) !== 1 || page("homework help", ["cdn.exoclick.com"]) !== 0 ||
+    page("today's news", ["cdn.other.example"]) !== 0 || page("today's news", undefined) !== 0 ||
+    kc9kListMatches(ads, { url: "https://news.example/", title: "", text: "x", adHosts: ["exoclick.com"] }).length !== 0) {
+    console.error("FAIL ad trigger judged with the page");
+    process.exitCode = 1;
+  }
+}

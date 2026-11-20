@@ -317,6 +317,36 @@ async function main() {
     await t.close();
   }
 
+  // §3.9 ad trigger for a block with text exceptions: the page itself sees
+  // the ad network it loaded from (resource timing) and judges it with the
+  // exceptions; a page they spare isn't taken.
+  async function judgeAds(body) {
+    const a = await browser.newPage();
+    await a.route("http://news.example/**", textPage(body));
+    await a.route("http://ads.example/**", (route) => route.fulfill({ status: 200, contentType: "text/javascript", body: "" }));
+    await a.addInitScript((stored) => {
+      const listeners = { addListener() {} };
+      window.sent = [];
+      window.browser = {
+        storage: { local: { get: async () => ({ page: stored }) }, onChanged: listeners },
+        runtime: { sendMessage: async (m) => { window.sent.push(m); return undefined; }, onMessage: listeners },
+      };
+    }, { lists: [{ id: 5, block: "b", name: "Ads", url: [], title: [], text: [], ads: ["ads.example"],
+      actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: ["homework"] } }] });
+    await a.addInitScript(script);
+    await a.goto("http://news.example/page");
+    await a.waitForTimeout(2000);
+    const hits = (await a.evaluate(() => window.sent)).filter((m) => m.type === "page-hits");
+    await a.close();
+    return hits;
+  }
+  let adHits = await judgeAds("<!doctype html><p>Today's news</p><script src=\"http://ads.example/ad.js\"></script>");
+  check("a page loading a listed ad network is judged by it", adHits.length === 1 && adHits[0].matches[0].id === 5, adHits);
+  adHits = await judgeAds("<!doctype html><p>Homework help</p><script src=\"http://ads.example/ad.js\"></script>");
+  check("and spared by the block's text exception", adHits.length === 0, adHits);
+  adHits = await judgeAds("<!doctype html><p>Today's news</p>");
+  check("no ad network: nothing", adHits.length === 0, adHits);
+
   // §3.1: a local file is judged by its text only while the rules say so
   // (tamper "allow file:// blocking"), and spared by a file exception.
   const os = require("os");

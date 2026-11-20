@@ -780,6 +780,7 @@ function* kc9kListMatchesSteps(compiled, page) {
       continue;
     }
     const whole = (file && kc9kFileMatch(list.files, page.url)) ||
+      (Array.isArray(page.adHosts) && kc9kAdsByPage(list) && page.adHosts.some((h) => kc9kAdHost(list, h))) ||
       (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       kc9kUrlTermsMatch(list.urlTerms, page.url) ||
       (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
@@ -1337,24 +1338,33 @@ function kc9kPageWords(text, max) {
   return Object.fromEntries(top);
 }
 
-// kc9kAdMatches is the ad trigger (§3.9): the lists one of whose ad
-// networks a page at pageUrl loads from host, each with every action (it
-// counts like an address match). A page its block's address exceptions
-// spare doesn't count; lists in test mode don't run.
-function kc9kAdMatches(compiled, host, pageUrl) {
+// kc9kAdHost reports whether a list's ad networks include host (or a
+// domain it is under). Hosts are compared in lower case, without a final dot.
+function kc9kAdHost(list, host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
-  if (!h) {
-    return [];
-  }
+  return h !== "" && Boolean(list.ads) && list.ads.some((d) => h === d || h.endsWith("." + d));
+}
+
+// kc9kAdsByPage reports whether a list's ad trigger is judged with the page
+// itself: its block has exceptions by title or text, which only the page
+// knows (the page's own judging gets the ad hosts it loaded, page.adHosts).
+function kc9kAdsByPage(list) {
+  return list.except.title.length > 0 || list.except.text.length > 0;
+}
+
+// kc9kAdMatches is the ad trigger (§3.9) as the background sees requests:
+// the lists one of whose ad networks a page at pageUrl loads from host, each
+// with every action (it counts like an address match). A page its block's
+// address or URL-term exceptions spare doesn't count; lists in test mode
+// don't run; lists judged with the page (kc9kAdsByPage) are left to it.
+function kc9kAdMatches(compiled, host, pageUrl) {
   const out = [];
   for (const list of compiled || []) {
-    if (list.test || !list.ads || list.ads.length === 0) {
+    if (list.test || !kc9kAdHost(list, host) || kc9kAdsByPage(list)) {
       continue;
     }
-    if (!list.ads.some((d) => h === d || h.endsWith("." + d))) {
-      continue;
-    }
-    if (pageUrl && list.except.url.match.length > 0 && kc9kMatches(list.except.url, pageUrl)) {
+    if (pageUrl && ((list.except.url.match.length > 0 && kc9kMatches(list.except.url, pageUrl)) ||
+      kc9kUrlTermsMatch(list.except.urlTerms, pageUrl))) {
       continue;
     }
     if (list.actions.length > 0) {

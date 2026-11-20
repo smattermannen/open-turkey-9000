@@ -1,7 +1,8 @@
 // Tests the extension's background script (internal/webext/files/
 // background.js) with Node, the browser APIs it uses stubbed:
 //   node ci/background_test.js
-// Frames (R-LIST-4): what a frame's report may get, frameHit.
+// Frames (R-LIST-4): what a frame's report may get, frameHit. The ad
+// trigger (§3.9): noteAdRequest.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -66,6 +67,45 @@ const list = (id, extra) => Object.assign({
   check("only web pages", frameHit({ url: "file:///home/u/x.html", matches: [{ id: 1, actions: ["block"] }] }, frame), null);
   check("a malformed report", frameHit({ url: "https://ads.example/f", matches: "block" }, frame), null);
   check("actions not a list", frameHit({ url: "https://ads.example/f", matches: [{ id: 1, actions: "block" }] }, frame), null);
+
+  // §3.9 ad trigger (noteAdRequest): a page's third-party request to a
+  // listed ad network matches that list once per page; what isn't an ad
+  // request of a web page is left alone.
+  apply({ lists: [
+    list(10, { text: [], ads: ["exoclick.com"] }),
+    list(11, { text: [], ads: ["trafficjunky.net"], except: { url: [], title: [], text: ["homework"] } }),
+  ] });
+  const hits = [];
+  globalThis.pageHit = (message, sender) => hits.push({ tab: sender.tab.id, ids: message.matches.map((m) => m.id) });
+  const settle = () => new Promise((done) => setTimeout(done, 10));
+  const ad = async (details) => {
+    hits.length = 0;
+    noteAdRequest(Object.assign({ tabId: 5, type: "script", url: "https://syndication.exoclick.com/ad.js",
+      documentUrl: "https://tube.example/v/1" }, details));
+    await settle();
+    return hits.map((h) => h.ids.join(","));
+  };
+  tabUrls[5] = "https://tube.example/v/1";
+  check("an ad network's script matches", await ad({}), ["10"]);
+  check("once per page", await ad({ url: "https://cdn.exoclick.com/x.js" }), []);
+  tabUrls[5] = "https://tube.example/v/2";
+  check("again on another page", await ad({ documentUrl: "https://tube.example/v/2" }), ["10"]);
+  check("Chrome's initiator stands for the page", await ad({ documentUrl: undefined, initiator: "https://other.example" }), ["10"]);
+  check("no page known: nothing", await ad({ tabId: 6, documentUrl: undefined }), []);
+  check("not from a tab", await ad({ tabId: -1, documentUrl: "https://x.example/" }), []);
+  check("a page load itself isn't an ad", await ad({ tabId: 7, type: "main_frame", documentUrl: "https://y.example/" }), []);
+  check("first-party: the site's own subdomain", await ad({ tabId: 8, url: "https://ads.tube.example/a.js",
+    documentUrl: "https://tube.example/" }), []);
+  check("the site itself", await ad({ tabId: 8, url: "https://syndication.exoclick.com/a.js",
+    documentUrl: "https://exoclick.com/" }), []);
+  check("only web pages", await ad({ tabId: 9, documentUrl: "moz-extension://id/blocked.html" }), []);
+  check("a malformed address", await ad({ tabId: 9, url: "not a url" }), []);
+  check("a list whose block has text exceptions is left to the page", await ad({ tabId: 12,
+    url: "https://ht.trafficjunky.net/x", documentUrl: "https://tube.example/" }), []);
+  adSeen.clear();
+  listeners.tabRemoved && listeners.tabRemoved(5);
+  apply({ lists: [list(12, { ads: [] })] });
+  check("no list has ads: nothing is looked at", await ad({ tabId: 13 }), []);
 
   console.log(failed ? `${failed} of ${passed + failed} failed` : `all ${passed} passed`);
   process.exit(failed ? 1 : 0);

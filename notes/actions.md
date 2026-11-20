@@ -21,7 +21,13 @@
   `in_ads`; not exception lists or phrase sets); `WebList.AdNetworks`
   expands industries (`AdIndustries`: adult, gambling, crypto, dating;
   `TestAdIndustries`: plain domains, one industry each); rules `ads`; background `noteAdRequest` →
-  `kc9kAdMatches` → `pageHit`.
+  `kc9kAdMatches` → `pageHit`, once per page and list (`adSeen`); address
+  and URL-term exceptions spare the page. A list whose block has
+  exceptions by title or text (`kc9kAdsByPage`) is left to the page: the
+  content script collects the other hosts it loaded (resource timing,
+  `noteResource`, `adHosts`) and `kc9kListMatchesSteps` matches them like
+  an address, after every exception. Tests: `ci/match_test.js`,
+  `ci/background_test.js`, `ci/content_harness_test.js`.
 - **Trigger actions** (`db/triggers.go`, `enforce/trigger.go`,
   `cli/triggers.go`; owner 2026-11-16): table `trigger_actions` (block,
   group `apps`|`titles`, JSON actions); no row = default (`close`). `kc9k

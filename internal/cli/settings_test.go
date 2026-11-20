@@ -31,8 +31,10 @@ func TestStrictModeLock(t *testing.T) {
 	if err := runCLI(t, "strict", "off"); err == nil || !strings.Contains(err.Error(), "locked until") {
 		t.Errorf("strict off under its own timer lock: %v", err)
 	}
-	if err := runCLI(t, "strict", "on", "--for", "10m", "--yes"); err == nil {
-		t.Error("strict mode's timer lock was shortened")
+	before, _ := d.GetSettingLock(enforce.StrictLockName)
+	mustRun(t, "strict", "on", "--for", "10m", "--yes") // another timer lock, after the first (§3.4)
+	if l, _ := d.GetSettingLock(enforce.StrictLockName); l.LockedUntil != before.LockedUntil || len(l.Queue) != 1 {
+		t.Errorf("strict mode's timer lock changed: %+v", l)
 	}
 	if locked, _ := enforce.AnySettingLocked(d, mustTrusted(t, d)); !locked {
 		t.Error("strict mode's lock doesn't count as a setting lock")
@@ -164,8 +166,9 @@ func TestTextLockStyles(t *testing.T) {
 	if s.Style != lock.StyleWords || s.LockChars != 40 {
 		t.Errorf("setting lock: %+v", s)
 	}
-	if err := runCLI(t, "browser", "safesearch-google", "on", "--lock", "--yes"); err == nil {
-		t.Error("a word lock became a character lock")
+	mustRun(t, "browser", "safesearch-google", "on", "--lock", "--yes") // another text lock (§3.4)
+	if s, _ := d.GetSettingLock("safesearch-google"); s.Style != lock.StyleWords || len(s.Queue) != 1 || s.Queue[0].Style != "" {
+		t.Errorf("a word lock changed: %+v", s)
 	}
 	if err := runCLI(t, "start", "b", "--lock-text", "café", "--yes"); err == nil {
 		t.Error("custom text with an accent accepted")

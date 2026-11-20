@@ -67,13 +67,16 @@ func TestUnsupportedBrowsersSetting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Its own timer lock: only extended, counts as a setting lock.
+	// Its own timer lock: never shortened (another is a second lock),
+	// counts as a setting lock.
 	mustRun(t, "tamper", "unsupported-browsers", "on", "--for", "1h", "--yes")
 	if err := runCLI(t, "tamper", "unsupported-browsers", "off"); err == nil || !strings.Contains(err.Error(), "locked until") {
 		t.Errorf("off under its own timer lock: %v", err)
 	}
-	if err := runCLI(t, "tamper", "unsupported-browsers", "on", "--for", "10m", "--yes"); err == nil {
-		t.Error("its timer lock was shortened")
+	first, _ := d.GetSettingLock(db.UnsupportedBrowsers)
+	mustRun(t, "tamper", "unsupported-browsers", "on", "--for", "10m", "--yes")
+	if l, _ := d.GetSettingLock(db.UnsupportedBrowsers); l.LockedUntil != first.LockedUntil || len(l.Queue) != 1 {
+		t.Errorf("its timer lock changed: %+v", l)
 	}
 	trusted := mustTrusted(t, d)
 	if locked, _ := enforce.AnySettingLocked(d, trusted); !locked {

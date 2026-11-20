@@ -301,8 +301,8 @@ func (s settingLockState) gui() guiSettingLock {
 	g := guiSettingLock{CharLocked: l.LayerOn(db.LayerText, t, boot), Password: l.LayerOn(db.LayerPassword, t, boot),
 		Restart: l.LayerOn(db.LayerRestart, t, boot), Relock: l.Relock, TimerAfter: l.TimerAfter,
 		LockOrder: l.LayersOn(t, boot)}
-	if l.PendingRelock(t) && l.LiftedUntil > t {
-		g.RelockIn = l.LiftedUntil - t
+	if at := l.RelockAt(t); at > 0 {
+		g.RelockIn = at - t
 	}
 	if l.LockedUntil > t {
 		g.Seconds = l.LockedUntil - t

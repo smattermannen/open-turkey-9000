@@ -29,10 +29,12 @@
   logs `EventWorkaround`.
 - **Social** (`db/social.go`, `cli/social.go`): `block_social`,
   `BlockDetail.Social`; `rules.social` → `webext/files/social.js`
-  (`KC9K_SOCIAL`). Playlist = preset `youtube:playlist=<id>` plus
-  exceptions `youtube.com/playlist?list=<id>`, `youtube.com/watch`; GUI:
-  `PlaylistBox` in the Exceptions card (`ci/gui_playlist_smoke.py`);
-  `checkPlaylistVideo`.
+  (`KC9K_SOCIAL`). Playlist = only its address in an exception list
+  (`youtube.com/playlist?list=<id>`; `kc9k social B playlist ID on|off`
+  adds/removes it); `db.withPlaylists` adds `youtube:playlist=<id>` and
+  the `youtube.com/watch` exception to the active block, unstored
+  (`migratePlaylistExceptions`, `OldPlaylists` for older projects);
+  `checkPlaylistVideo` (`ci/gui_playlist_smoke.py`).
   A redirect may take `query` (a regex on `?…`): matching it stops the
   redirect (`instagram:following-only` → `/?variant=following`).
 
@@ -47,7 +49,7 @@ Not fixed by `SPEC.md`; the code is the truth.
   (`?` optional, third set on; `:N` length). Exceptions by title/text leave
   that block's sites to the extension only (page flashes before blocking);
   address exceptions remove their domain from hosts/firewall.
-- **Social presets**: YouTube (no Shorts, no home feed → Subscriptions, no
+- **Social media settings**: YouTube (no Shorts, no home feed → Subscriptions, no
   recommendations, no comments); Instagram/Facebook/X (messages only, no
   Reels/Explore); Reddit (no Popular/All, no home feed); TikTok (Following
   only); LinkedIn (no feed, no news). Disabled parts redirect; leftovers

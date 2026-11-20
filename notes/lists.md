@@ -1,4 +1,4 @@
-# Website lists, phrase sets, import, clusters, presets, recording, drafts, blocks
+# Website lists, phrase sets, import, presets, recording, drafts, blocks
 
 - Covers: `db/weblists.go`, `listjoin.go`, `listcase.go`, `combinations.go`, `exceptions.go`, `phrases.go`, `clusters.go`, `presets.go`, `templates.go`, `recording.go`, `words.go`, `testmode.go`, `pagekeywords.go`, `enforce/recording.go`, `words.go`, `add.go`, `cli/weblists.go`, `lists.go`, `listtest.go`, `keywords.go`, `phrases.go`, `phraseexport.go`, `entryfile.go`, `clusters.go`, `presets.go`, `templates.go`, `record.go`, `draft.go`, `block.go`, `blockextra.go`
 - SPEC: §3.1, §3.2, §3.12, §4.2, §4.3, §4.4, R-LIST-1–6, R-PHRASE-1–10
@@ -55,7 +55,8 @@
   Hidden `kc9k list read FILE` (JSON) lets the GUI's one Import route a
   file (`import_into_phrase_set`, `choose_phrase_set`;
   `ci/gui_import_smoke.py`).
-- **Clusters** (`db/clusters.go`, `cli/clusters.go`): lists outside blocks,
+- **List and phrase set presets** (clusters in the code: `db/clusters.go`,
+  `cli/clusters.go`): lists outside blocks,
   never enforced. `cluster copy` goes through `listAdd` (gating applies).
 - **Presets** (§3.2 Preset, §4.4; owner 2026-11-17; `db/presets.go`,
   `cli/presets.go`, GUI page "Presets" = page `clusters`): block presets
@@ -107,7 +108,7 @@ Not fixed by `SPEC.md`; the code is the truth.
   `remove-site`, `remove-entry` are Blocked shortcuts. List/apps/titles
   files: one entry per line, `#` comments (`block export-list|import-list
   B apps|titles|blocked|exceptions`). Remove block: inactive and unlocked.
-- **Clusters**: copies are independent. `--exceptions`, `--as N`,
+- **List presets** (`cluster`): copies are independent. `--exceptions`, `--as N`,
   `--into L`. Export = plain entry file with a scope header (`list import`
   reads it).
 - **Recording**: domains without `www.`, pages and frames, private windows

@@ -25,11 +25,12 @@
 Not fixed by `SPEC.md`; the code is the truth.
 
 - **Project**: holds blocks (lists, apps, titles, schedules, schedule lock,
-  social, allowance, Pomodoro, breaks, ladders), clusters, browser and
+  social, allowance, Pomodoro, breaks, ladders), list and phrase set presets
+  (clusters) and block presets (templates; not the `presets` table), browser and
   behaviour settings, global ladder, freeze schedules, list images; backup
   adds places and place rules, and (`cli/projectbackup.go`) running locks
   (with range lock, queued locks and the configuration re-lock restores),
   password hashes, hotkeys, statistics: import adds only where nothing is
   here, confirms the locks, starts blocks that come with running locks. Clashing block → `name-2`; existing
-  clusters/places kept; browser settings only on; ladder replaced only by a
+  presets/places kept; browser settings only on; ladder replaced only by a
   stricter one. `--dry-run` lists additions and locks.

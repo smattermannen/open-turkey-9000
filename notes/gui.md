@@ -1,6 +1,6 @@
 # GUI
 
-- Covers: `gui/kc9k-gui.py`, `ci/gui_*.py`, `cli/duration.go`
+- Covers: `gui/kc9k-gui.py`, `gui/kc9k.desktop`, `ci/gui_*.py`, `cli/duration.go`
 - SPEC: §4.1–4.13, R-GUI-1–3
 - Connects to: every note (each GUI change runs a `kc9k` command); [testing](testing.md) (GUI smoke tests)
 

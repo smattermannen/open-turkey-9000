@@ -81,7 +81,7 @@ Before testing anything that locks, blocks or restarts the daemon, read
 | [browsers](notes/browsers.md) | Policies, extension guard, supported browsers, LibreWolf, Chrome, browser setting locks |
 | [extension](notes/extension.md) | `webext/files/` (`match.js`, `content.js`, `background.js`, `social.js`) |
 | [apps-titles](notes/apps-titles.md) | Process kill, scripts, window titles, X11, polite close, behaviour settings |
-| [lists](notes/lists.md) | Blocks, website lists, phrase sets, import, clusters, presets, recording, drafts, test mode |
+| [lists](notes/lists.md) | Blocks, website lists, phrase sets, import, presets, recording, drafts, test mode |
 | [actions](notes/actions.md) | Actions, ad trigger, trigger actions, consequences, bypass prevention, workarounds |
 | [locks](notes/locks.md) | Locks, layered locks, confirmation, text lock, settings/access/block passwords, no weakening |
 | [automation](notes/automation.md) | Automation, schedules, modes, places, autostart (`internal/schedule/`, `cli/modes.go`) |

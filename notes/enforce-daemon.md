@@ -1,6 +1,6 @@
 # Enforce, daemon, affected users
 
-- Covers: `internal/enforce/` (`enforce.go`, `enabled.go`), `internal/daemon/`, `db/users.go`, `cli/blockusers.go`
+- Covers: `internal/enforce/` (`enforce.go`, `enabled.go`), `internal/daemon/`, `cmd/kc9k/main.go`, `cli/root.go`, `cli/daemon.go`, `db/users.go`, `cli/blockusers.go`
 - SPEC: §3.2 (affected users), §3.3
 - Connects to: all notes; most often [automation](automation.md), [locks](locks.md), [layers-net](layers-net.md)
 

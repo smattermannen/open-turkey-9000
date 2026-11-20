@@ -1,6 +1,6 @@
 # Testing
 
-- Covers: `ci/`, `*_test.go`, `cmd/try-challenge/`, `ci/autopilot.sh`, `ci/autopilot-team.sh`, `ci/autopilot-desktop.sh`
+- Covers: `ci/`, `*_test.go`, `cmd/try-challenge/`, `try-challenge.sh`, `ci/autopilot.sh`, `ci/autopilot-team.sh`, `ci/autopilot-desktop.sh`
 - SPEC: §5 (tests name the rule they prove)
 - Connects to: every note; first read [locks](locks.md) before a test that locks anything
 

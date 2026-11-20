@@ -50,12 +50,12 @@
   add|list|remove`, `schedule create|rename|delete|apply|take-off`, `place
   rule`, `automation`; every change through `changeAutomation` /
   `changeSchedule` → `gateAutomation` (all blocks affected, refused as a
-  whole; monk: `monkComparable`, refused while `MonkAutomationOn`,
-  confirmation when time is added). `kc9k mode create|rename|delete|add|
-  take-out|on|off|show` (group switch runs `startCmd`/`stopCmd` per block).
-  Daemon: `runMonkAutomation` before `enforceMonk` keeps `monk.until` ahead
-  (window end; `monkPlaceStep` while places decide); `monkKeepsWifi` leaves
-  the radio on. Tests `TestSavedSchedules`, `TestModeBlocksShareAutomation`,
+  whole; monk: `monkComparable`, free to change while switched on, a
+  settings password to weaken, confirmation when time is added). `kc9k
+  mode create|rename|delete|add|take-out|on|off|show` (group switch runs
+  `startCmd`/`stopCmd` per block). Daemon: `enforceMonk` asks
+  `MonkAutomationOn` each cycle (nothing pushes `monk.until` ahead; only
+  `kc9k monk --for` sets it); `monkKeepsWifi` leaves the radio on. Tests `TestSavedSchedules`, `TestModeBlocksShareAutomation`,
   `TestMonkModeAutomation`, `TestMonkAutomation*`, `db/modes_test.go`.
 - **Autostart** (`db/autostart.go`, `enforce/autostart.go`, `cli/autostart.go`, §3.6):
   once/at/sign-in/next-window; daemon `runAutostarts` in `Tick` (first look
@@ -86,8 +86,9 @@ Not fixed by `SPEC.md`; the code is the truth.
   can't be removed on it (take the schedule off, or change it). `kc9k mode
   create|add|take-out|on|off|rename|delete|show`; a block in a mode refuses
   automation changes of its own. Monk mode: never enabled by default, no
-  blocks, switched on with `--yes`; running by its automation, off and any
-  weakening refused; announced 5 and 1 min before its windows. GUI: modes
+  blocks, switched on with `--yes`; switched on it can be switched off and
+  its automation changed; only a run for a set time (`kc9k monk --for`) is
+  locked; announced 5 and 1 min before its windows. GUI: modes
   above the block cards, the mode's view, Schedules and Places pages,
   Overview "Mode: X" in Start and "Monk mode today …".
 - **Places**: re-adding a name adds the BSSIDs now seen; needs at most what

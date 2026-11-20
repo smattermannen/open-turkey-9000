@@ -1121,11 +1121,6 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   on stdin would let any script do the same. Today a non-terminal stdin
   is read as one line (`runChallengeLine`, `internal/lock/lock.go`): that
   path goes too (tests keep a faked seam). SPEC §4.6 now has it.
-- FOR THE OWNER (doc audit 2026-11-20): SPEC lists circadian rhythm under
-  §4.10 Settings, but §6 2026-11-16 says it has "its own page only (not in
-  Settings)" (the GUI has its own page). To decide: move it out of §4.10
-  into a function of its own, or say in §4.10 that it is a page of its
-  own. No code change either way.
 - FOR THE OWNER: the rules server secret (`2.7`; SPEC §6 2026-11-14, its
   purpose as first written: "so other local programs can't read the
   lists, post statistics or fake a check-in"). As designed it can't do

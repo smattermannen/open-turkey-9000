@@ -468,7 +468,8 @@ GUI and CLI offer the same functions.
   - DNS: server asked for blocked sites' real addresses (firewall layer
     only). Default: the network's own server; Quad9 if it can't answer.
   - Use counting: strict use counting.
-  - **Circadian rhythm**:
+  - **Circadian rhythm** (its own page in the sidebar, not on the Settings
+    page; kept under §4.10 so its references stay):
     - automation clips (one set for all days) for backlight %, software
       brightness %, colour temperature K; add/move/remove points, bend the
       curve between points; presets;
@@ -646,6 +647,7 @@ Decisions not already written into §1–5:
 - 2026-11-20 (later): Stacking has no exceptions (§4.6): a new timer or delay lock is its own layer, not a change to the last one (extending stays a separate action); range locks stack in their order; text and password locks stack on a block, with or without re-lock; each hotkey press adds its locks again. Re-lock brings back the whole lock configuration the block had, every lock in its order (§3.4) (owner).
 - 2026-11-20 (later): Re-lock is optional on every lock; stacking never depends on it (§4.6) (owner).
 - 2026-11-20 (later): A project includes presets of every type only if the user chooses (§3.13); a backup always does (owner).
+- 2026-11-20 (later): Circadian rhythm is a page of its own, as decided 2026-11-16; §4.10 only holds its functions (owner).
 - 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
 
 ## 7. Open decisions

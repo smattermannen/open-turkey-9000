@@ -42,7 +42,8 @@ def widgets(root):
             out += widgets(c)
     return out
 src = next(w for w in widgets(win.block_cards) if isinstance(w, Gtk.Button) and w.get_label() == "Social")
-dst = win.mode_cards.get_children()[1]  # Evening (Monk mode first)
+dst = next(c for c in win.mode_cards.get_children()  # Monk mode and Frozen Chicken come first
+           if any(isinstance(w, Gtk.Label) and w.get_label() == "Evening" for w in widgets(c)))
 def screen_xy(widget):
     x, y = widget.translate_coordinates(win, widget.get_allocated_width() // 2, widget.get_allocated_height() // 2)
     wx, wy = win.get_window().get_origin()[1:]

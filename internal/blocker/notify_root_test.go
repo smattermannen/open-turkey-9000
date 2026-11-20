@@ -45,6 +45,14 @@ func TestNotifyDesktopReachesSessions(t *testing.T) {
 	if err := os.Chmod(outDir, 0777); err != nil {
 		t.Fatal(err)
 	}
+	// Every user appends to it: made beforehand, or the first to write
+	// (another person logged in) would own it and shut the others out.
+	if err := os.WriteFile(out, nil, 0666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(out, 0666); err != nil {
+		t.Fatal(err)
+	}
 	script := "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$(id -u)\" \"$DBUS_SESSION_BUS_ADDRESS\" \"$*\" >> " + out + "\n"
 	if err := os.WriteFile(filepath.Join(bin, "notify-send"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
@@ -55,16 +63,23 @@ func TestNotifyDesktopReachesSessions(t *testing.T) {
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 
 	NotifyDesktop("Frozen Chicken starts in 5 minutes", "Save your work.")
+	// On a real desktop the people logged in get it too, each on a line of
+	// their own: look for the test user's line.
+	want := func(line string) bool {
+		return strings.HasPrefix(line, uid+"|unix:path=/run/user/"+uid+"/bus|") &&
+			strings.Contains(line, "Frozen Chicken starts in 5 minutes Save your work.")
+	}
 	deadline := time.Now().Add(3 * time.Second)
 	var sent string
 	for time.Now().Before(deadline) {
 		data, _ := os.ReadFile(out)
-		if sent = string(data); sent != "" {
-			break
+		sent = string(data)
+		for _, line := range strings.Split(sent, "\n") {
+			if want(line) {
+				return
+			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if !strings.HasPrefix(sent, uid+"|unix:path=/run/user/"+uid+"/bus|") || !strings.Contains(sent, "Frozen Chicken starts in 5 minutes Save your work.") {
-		t.Fatalf("notification not delivered as the user on their bus: %q", sent)
-	}
+	t.Fatalf("notification not delivered as the user on their bus: %q", sent)
 }

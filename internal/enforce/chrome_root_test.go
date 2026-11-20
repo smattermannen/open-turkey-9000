@@ -69,6 +69,13 @@ func TestChromeRunsTheExtension(t *testing.T) {
 	if err := d.ActivateBlock("news", false, 0, 0, false); err != nil {
 		t.Fatal(err)
 	}
+	// The extension checks in on the fixed rules address: a running daemon
+	// would answer it instead of this test.
+	if l, err := net.Listen("tcp", RulesAddress); err != nil {
+		t.Fatalf("%s is taken (the kc9k daemon running? stop it for this test): %v", RulesAddress, err)
+	} else {
+		l.Close()
+	}
 	go func() { t.Error(ServeRules(d)) }()
 
 	id, _, err := chromeExtension()
@@ -99,7 +106,7 @@ func TestChromeRunsTheExtension(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() })
 
-	waitFor(t, 90*time.Second, "the extension to check in", func() bool {
+	waitUntil(t, 90*time.Second, "the extension to check in", func() bool {
 		_, ok := LastExtensionCheckIn(d)
 		return ok
 	})
@@ -108,12 +115,12 @@ func TestChromeRunsTheExtension(t *testing.T) {
 	// upgrade it to https).
 	blockPage := "chrome-extension://" + id + "/blocked.html?url="
 	openTab(t, "http://example.com/page")
-	waitFor(t, 15*time.Second, "the block page", func() bool {
+	waitUntil(t, 15*time.Second, "the block page", func() bool {
 		return hasTab(t, func(tab string) bool {
 			return strings.HasPrefix(tab, blockPage) && strings.HasSuffix(tab, url.QueryEscape("://example.com/page"))
 		})
 	})
-	waitFor(t, 10*time.Second, "the hit to be logged", func() bool {
+	waitUntil(t, 10*time.Second, "the hit to be logged", func() bool {
 		events, err := d.RecentEvents(0, 10)
 		if err != nil {
 			t.Fatal(err)
@@ -130,7 +137,7 @@ func TestChromeRunsTheExtension(t *testing.T) {
 	// takes it away.
 	page := "http://" + site.Addr().String() + "/words"
 	openTab(t, page)
-	waitFor(t, 15*time.Second, "the page with blocked text to go", func() bool {
+	waitUntil(t, 15*time.Second, "the page with blocked text to go", func() bool {
 		return hasTab(t, func(tab string) bool { return tab == blockPage+url.QueryEscape(page)+"&reason=keyword" })
 	})
 
@@ -138,7 +145,7 @@ func TestChromeRunsTheExtension(t *testing.T) {
 	// extension must still be there, with its rules, later on.
 	time.Sleep(45 * time.Second)
 	openTab(t, "http://www.example.com/later")
-	waitFor(t, 15*time.Second, "the block page after a while", func() bool {
+	waitUntil(t, 15*time.Second, "the block page after a while", func() bool {
 		return hasTab(t, func(tab string) bool {
 			return strings.HasPrefix(tab, blockPage) && strings.HasSuffix(tab, url.QueryEscape("://www.example.com/later"))
 		})
@@ -150,7 +157,7 @@ func TestChromeRunsTheExtension(t *testing.T) {
 	if err := d.DeactivateBlock("news"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, 20*time.Second, "the block pages to go back", func() bool {
+	waitUntil(t, 20*time.Second, "the block pages to go back", func() bool {
 		return !hasTab(t, func(tab string) bool {
 			return strings.HasPrefix(tab, blockPage) && !strings.HasSuffix(tab, "&reason=keyword")
 		})
@@ -197,7 +204,7 @@ func chromeTabs(t *testing.T) []string {
 	return out
 }
 
-func waitFor(t *testing.T, limit time.Duration, what string, done func() bool) {
+func waitUntil(t *testing.T, limit time.Duration, what string, done func() bool) {
 	t.Helper()
 	for end := time.Now().Add(limit); time.Now().Before(end); time.Sleep(500 * time.Millisecond) {
 		if done() {

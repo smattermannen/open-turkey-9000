@@ -44,7 +44,6 @@ of their group and a row here; a finished item loses its row.
 | B12 | Chrome: popup, extension can't be removed | §3.13 | browsers | box |
 | B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
 | B14 | Monk mode live: run `ci/monk_live_test.sh host` (written, never run), reboot mid-way | R-MONK-2 | device | vm |
-| B16 | New list dialog on a real screen | §3.2 | gui, lists | box |
 | B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
@@ -953,9 +952,18 @@ Script-tested, never by a person. Script what can be into `ci/`.
   each put back, locked, restart, held after it, restored at the end);
   never run: `ci/monk_live_test.sh host kc9k-vm` from the test machine.
 - [x] `B15` GUI design pass: seen by the owner on a real screen (2026-11-18: tremendous).
-- [ ] `B16` Lists without types (§3.2): checked 2026-11-15: `H` and `test` have
+- [x] `B16` Lists without types (§3.2): checked 2026-11-15: `H` and `test` have
   one `Blocked` each; `H` blocks reddit.com by address and a page by its
-  text in LibreWolf. Left: the New list dialog on a real screen.
+  text in LibreWolf. 2026-11-20, desktop (X11 :0, devmaster install of
+  06f44ac): throwaway block, Websites tab, "New blacklist…": a name and
+  URL/Title/Text/Ads boxes, no list type; OK greyed out without a name or
+  without a box. "Mixed" (URL + Text) made, `b16test.example *b16pat*
+  kcbsixteen` added in one field, Save edits: `block info` shows `Mixed
+  (blacklist) looks at: url, text` holding all three beside `Blocked`.
+  Started: /etc/hosts got b16test.example; headless LibreWolf blocked
+  b16test.example and 127.0.0.1/b16pat/ by address (policy, then the
+  block page) and a local page by the word in its text
+  (`reason=keyword`); a plain page opened. Block removed, hosts cleared.
 - [ ] `B17` Active vs enabled on the laptop: checked 2026-11-15 with a throwaway
   block: off it stays out of /etc/hosts in its window; on, it is in /etc/hosts
   in its window, and outside it shows "lifted by its schedule" and leaves

@@ -121,9 +121,11 @@ func commandLine(cmd *cobra.Command, args []string, draft, block string) []strin
 		}
 		line = append(line, a)
 	}
-	cmd.Flags().Visit(func(f *pflag.Flag) {
-		if rootCmd.PersistentFlags().Lookup(f.Name) != nil {
-			return // how the command was given (passwords on standard input), not what it sets
+	// VisitAll and Changed, not Visit: pflag's record of what was set
+	// outlives a run in one process (tests, runQueued).
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if !f.Changed || rootCmd.PersistentFlags().Lookup(f.Name) != nil {
+			return // not given, or how it was given (passwords on standard input), not what it sets
 		}
 		if slice, ok := f.Value.(pflag.SliceValue); ok {
 			for _, v := range slice.GetSlice() {

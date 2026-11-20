@@ -67,12 +67,12 @@ func lockCases() []lockCase {
 		{name: "block password lock", setup: blockWithSite, args: []string{"start", "b", "--password-stdin"}, lines: []string{"partner"}, isSet: blockActive},
 		{name: "block restart lock", setup: blockWithSite, args: []string{"start", "b", "--restart"}, isSet: blockActive},
 		{name: "block delay lock", setup: blockWithSite, args: []string{"start", "b", "--delay", "10m"}, isSet: blockActive},
-		{name: "block timer lock extended", setup: func(t *testing.T) {
+		{name: "second block timer lock", setup: func(t *testing.T) {
 			blockWithSite(t)
 			mustRun(t, "start", "b", "--for", "1h", "--yes")
 		}, args: []string{"start", "b", "--for", "2h"}, isSet: func(t *testing.T, d *db.DB) bool {
-			b, _ := d.GetBlock("b")
-			return b.LockedUntil > time.Now().Add(90*time.Minute).Unix()
+			e, _ := d.GetLockExtras("b")
+			return len(e.Queue) == 1
 		}},
 		{name: "text lock added to an active block", setup: func(t *testing.T) {
 			blockWithSite(t)

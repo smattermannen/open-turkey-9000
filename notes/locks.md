@@ -16,7 +16,12 @@
   in `LockExtras.Queue` (`lock_queue`, JSON `QueuedLock`) after all placed
   locks (`PlacedLayers`; `Layers`/`LayersOn` append it); `AdvanceLayers`
   `promote`s the first once no placed lock is on. Once anything is queued,
-  every new lock queues (order kept), except a range lock (one per block).
+  every new lock queues (order kept); every kind queues, range included
+  (`QueuedLock.Range*`). Re-lock: a promoted text/password lock whose place
+  holds a lifted one moves that one to `LockExtras.Relifted`
+  (`lock_relifted`); the re-lock time starts once no text/password lock is
+  on or queued; when it ends `relockAll` puts every one back in the order
+  given (each kind's first in its place, the rest first in the queue).
   Setting locks: still one per kind.
   `ensureEditable` refuses only weakening of locked blocks; `start` on an
   active block only strengthens. `gateEdit` (`loosen.go`) no longer queues;
@@ -58,14 +63,13 @@
 
 Not fixed by `SPEC.md`; the code is the truth.
 
-- **Starting on an active block** only strengthens: any lock kind can be
+- **Starting on an active block** only adds locks: any lock kind can be
   added, last in the unlock order (a duration timer or restart lock waits
-  behind locks on). A kind it already has is a second lock of it, queued
-  last; only when the timer or delay lock is the last lock (nothing queued)
-  is it extended in place, only later/longer (R-LOCK-4). Refused: another
-  range lock, a second text/password lock beside re-lock (or re-lock with
-  one queued). A hotkey press (`pressOnly`) never adds a kind the block
-  has. A challenge longer than the
+  behind locks on). A kind it already has, of any kind and also from a
+  hotkey press, is a second lock of it, queued last (`queuedLock`); a lock
+  already set is never changed. A second range lock replaces the first
+  only once the first is off (out of its times) with nothing before it on.
+  A challenge longer than the
   terminal is paged (Enter per page), accuracy over all.
 - **Trusted time** (`db/clock.go`): the clock; with `tamper clock` on and a
   timer lock running (blocks, setting locks, monk mode), only the boot

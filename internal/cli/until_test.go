@@ -107,13 +107,11 @@ func TestLongTimerLocks(t *testing.T) {
 	if left := detail.LockedUntil - trusted; left < 100000*60-120 || left > 100000*60+5 {
 		t.Errorf("--for 100000m locked for %d s", left)
 	}
+	// A second timer lock until 2099, after the first (§4.6).
 	mustRun(t, "start", "b", "--until", "2099-12-24 18:00", "--yes")
-	detail, _ = d.GetBlock("b")
-	if got := time.Unix(detail.LockedUntil, 0).Year(); got != 2099 {
-		t.Errorf("--until 2099-12-24 locked until year %d", got)
-	}
-	if err := runCLI(t, "start", "b", "--for", "3d", "--yes"); err == nil {
-		t.Error("a shorter timer lock replaced the one until 2099")
+	extras, _ := d.GetLockExtras("b")
+	if len(extras.Queue) != 1 || time.Unix(extras.Queue[0].Until, 0).Year() != 2099 {
+		t.Errorf("--until 2099-12-24: queue %+v", extras.Queue)
 	}
 
 	mustRun(t, "browser", "safesearch", "on", "--until", "2099-12-24", "--yes")

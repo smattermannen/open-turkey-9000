@@ -9,10 +9,12 @@
 // Each kind has one place (the block's columns); a lock of a kind already
 // there waits in LockExtras.Queue, after all the others, and takes its
 // kind's place once every lock before it is gone (§3.4, several locks of one
-// kind).
+// kind). A text or password lock re-lock has lifted that a later one
+// replaces waits in LockExtras.Relifted and comes back with the others.
 package db
 
 import (
+	"slices"
 	"strings"
 	"time"
 )
@@ -191,11 +193,23 @@ func placedOn(detail *BlockDetail, e LockExtras, trusted int64, bootID string) [
 func promote(detail *BlockDetail, e *LockExtras, trusted int64, bootID string) {
 	q := e.Queue[0]
 	e.Queue = e.Queue[1:]
+	if (q.Kind == LayerText || q.Kind == LayerPassword) && layerSet(q.Kind, detail, *e) {
+		// Its place holds a lock re-lock has lifted: that one waits to come
+		// back with the others, and the new one is on.
+		e.Relifted = append(e.Relifted, placed(q.Kind, detail, *e))
+		lifted := ParseLayerOrder(e.LiftedKinds)
+		if len(lifted) == 0 && e.LiftedUntil > trusted {
+			lifted = []string{LayerText, LayerPassword}
+		}
+		e.LiftedKinds = strings.Join(slices.DeleteFunc(lifted, func(k string) bool { return k == q.Kind }), ",")
+	}
 	switch q.Kind {
 	case LayerText:
 		detail.Locked, detail.LockChars, e.Style = true, q.Chars, q.Style
 	case LayerPassword:
 		e.PasswordHash = q.PasswordHash
+	case LayerRange:
+		e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert = q.RangeDays, q.RangeFrom, q.RangeTo, q.RangeInvert
 	case LayerTimer:
 		e.TimerAfter = 0
 		if q.For > 0 {
@@ -224,6 +238,7 @@ func promote(detail *BlockDetail, e *LockExtras, trusted int64, bootID string) {
 func AdvanceLayers(detail *BlockDetail, e *LockExtras, trusted int64, bootID string) bool {
 	changed := false
 	if e.LiftedKinds != "" && e.LiftedUntil != 0 && e.LiftedUntil <= trusted {
+		relockAll(detail, e)
 		e.LiftedKinds, e.LiftedUntil = "", 0
 		changed = true
 	}
@@ -256,8 +271,9 @@ func AdvanceLayers(detail *BlockDetail, e *LockExtras, trusted int64, bootID str
 }
 
 // LiftTextLayer unlocks a text or password lock (kind). Without re-lock it
-// is gone. With re-lock it is lifted: while the other of the two still
-// holds, until that one is unlocked too; then both for the re-lock time.
+// is gone. With re-lock it is lifted: while another text or password lock
+// still holds or waits, until those are unlocked too; then all of them for
+// the re-lock time.
 // The next layer is started (AdvanceLayers).
 func LiftTextLayer(detail *BlockDetail, e *LockExtras, kind string, trusted int64, bootID string) {
 	if e.Relock > 0 {
@@ -268,11 +284,10 @@ func LiftTextLayer(detail *BlockDetail, e *LockExtras, kind string, trusted int6
 		lifted = AppendLayers(lifted, kind)
 		e.LiftedKinds = strings.Join(lifted, ",")
 		e.LiftedUntil = 0
-		other := LayerPassword
-		if kind == LayerPassword {
-			other = LayerText
-		}
-		if !LayerOn(other, detail, *e, trusted, bootID) {
+		// The re-lock time starts once no text or password lock is on,
+		// placed or waiting.
+		if !LayerOn(LayerText, detail, *e, trusted, bootID) && !LayerOn(LayerPassword, detail, *e, trusted, bootID) &&
+			!slices.ContainsFunc(e.Queue, isTextOrPassword) {
 			e.LiftedUntil = trusted + e.Relock
 		}
 	} else if kind == LayerText {
@@ -325,4 +340,49 @@ func LayerName(kind string) string {
 		return "range lock"
 	}
 	return kind
+}
+
+func isTextOrPassword(q QueuedLock) bool { return q.Kind == LayerText || q.Kind == LayerPassword }
+
+// placed returns the lock in a text or password kind's place.
+func placed(kind string, detail *BlockDetail, e LockExtras) QueuedLock {
+	if kind == LayerText {
+		return QueuedLock{Kind: kind, Chars: detail.LockChars, Style: e.Style}
+	}
+	return QueuedLock{Kind: kind, PasswordHash: e.PasswordHash}
+}
+
+// relockAll puts back the text and password locks a later one of their
+// kind replaced while re-lock had them lifted (Relifted), in the order they
+// were given: each kind's first takes its place again, the rest wait first
+// in the queue. The caller then ends the lift.
+func relockAll(detail *BlockDetail, e *LockExtras) {
+	if len(e.Relifted) == 0 {
+		return
+	}
+	all := e.Relifted
+	var order []string
+	for _, k := range placedLayers(detail, *e) {
+		if k == LayerText || k == LayerPassword {
+			all = append(all, placed(k, detail, *e))
+		} else {
+			order = append(order, k)
+		}
+	}
+	var back []QueuedLock
+	for _, q := range all {
+		if hasKind(order, q.Kind) {
+			back = append(back, q)
+			continue
+		}
+		order = append(order, q.Kind)
+		if q.Kind == LayerText {
+			detail.Locked, detail.LockChars, e.Style = true, q.Chars, q.Style
+		} else {
+			e.PasswordHash = q.PasswordHash
+		}
+	}
+	e.Relifted = nil
+	e.Queue = append(back, e.Queue...)
+	e.Order = strings.Join(order, ",")
 }

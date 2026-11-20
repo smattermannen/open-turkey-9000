@@ -912,7 +912,7 @@ Only items not simply Built.
 | §3.2 Affected users | Partial | `block users B all|USER…` (GUI "Users:" button, gui-state `users`/`accounts`, projects): a block for some accounts stays out of hosts/firewall/policies (shared by every account) unless it covers them all; its lists reach only those users' extensions (`BuildRulesFor`, user from the socket uid) and its apps are closed only in their processes (`KillBlockedFor`). Fewer users weakens. Not per user yet: window titles, folders, fetch tools, the extension guard. Live: one account on the laptop, so only "every account" checked |
 | §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
 | §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. GUI: block start dialog and the setting lock dialogs |
-| §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI start and setting lock dialogs ask the order (Up/Down); one lock per kind |
+| §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI start and setting lock dialogs ask the order (Up/Down); several of one kind on blocks (any kind, also with re-lock and from hotkeys); setting locks one per kind |
 | §3.6 Break per block window | Built | `schedule break B N 10m|off`: one break each time window N is open (`break start` takes it, then reward); new/longer weakens; GUI window editor; projects |
 | §3.6 Allowance | Built | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). and rolling 24 hours (`--per rolling`, hourly buckets), and per window (`--per window`: each opening of a block window is a period, `enforce.QuotaPeriod`; outside windows nothing refills; an overnight span is two windows, so two periods) |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month|<time ≥ 1h>` (default one; a time keeps each part that long after it is earned, no upper limit, 2026-11-16; the 1-day cap on what is saved is gone, so is the 4 h cap on one break taken from it), GUI choice with a duration field, projects; longer keep, or period ↔ time, weakens. Ending a break early used to give back at most one break's worth also for an accumulating reward: fixed |
@@ -960,7 +960,11 @@ Only items not simply Built.
   order, `unlock` lifts only the first, status and GUI show the order).
   Several locks of one kind on a block built 2026-11-20 (owner: a second
   one is added, not the first strengthened): `LockExtras.Queue`,
-  `TestSeveralLocksOfOneKind`, `TestQueuePromotion`. Left: several of one
+  `TestSeveralLocksOfOneKind`, `TestQueuePromotion`. 2026-11-20 the build's
+  exceptions removed to match SPEC §4.6 (owner): a second timer/delay lock
+  is never an in-place extension, range locks queue, re-lock keeps every
+  text/password lock (`Relifted`, `TestRelockSeveralTextLocks`), hotkey
+  presses add a second lock. Left: several of one
   kind given in one `start` (flags repeat: last wins) and on setting locks;
   a person checking the GUI's Add locks… text and unlock flow.
 - **2.6 Factory reset protection** (M): firmware lock via
@@ -1053,9 +1057,10 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   until the first word recording turns it on; `record baseline off`
   forgets it, because specificity needs it, but gathering browsing words
   unasked goes beyond what SPEC asks.
-- SUPERSEDED by the owner's 2026-11-20 decision (SPEC §6: a second lock of
-  a kind is added, not the first strengthened):
-  DECIDED 2026-11-20 (By Opus): several locks of one kind (`2.5`; built:
+- DECIDED 2026-11-20 by the owner (SPEC §6: a second lock of a kind is
+  added, not the first strengthened; the build's exceptions for the last
+  timer/delay lock, range locks, re-lock and hotkeys removed the same day).
+  Overruled earlier answer, DECIDED 2026-11-20 (By Opus): several locks of one kind (`2.5`; built:
   one lock per kind) → allowed, each its own layer in the user's order
   (two partners' password locks; a timer lock, a text lock, then another
   timer lock). A lock given for a kind already on still strengthens one

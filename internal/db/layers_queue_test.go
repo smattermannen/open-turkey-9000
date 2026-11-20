@@ -37,3 +37,31 @@ func TestQueuePromotion(t *testing.T) {
 		t.Errorf("on after it = %v", on)
 	}
 }
+
+// §3.4, §4.6: with re-lock, text1, password1, text2 are unlocked in turn;
+// re-lock brings all three back, in that order.
+func TestRelockSeveralTextLocks(t *testing.T) {
+	const now, boot = 1_000_000, "boot-a"
+	detail := &BlockDetail{Active: true, Locked: true, LockChars: 10}
+	e := LockExtras{Order: "text,password", PasswordHash: "pw1", Relock: 600,
+		Queue: []QueuedLock{{Kind: LayerText, Chars: 20}}}
+	LiftTextLayer(detail, &e, LayerText, now, boot)
+	LiftTextLayer(detail, &e, LayerPassword, now, boot)
+	// The second text lock holds; the re-lock time hasn't started.
+	if detail.LockChars != 20 || e.LiftedUntil != 0 || len(e.Relifted) != 1 || e.Relifted[0].Chars != 10 {
+		t.Fatalf("after two unlocks: %+v %+v", detail, e)
+	}
+	if on := LayersOn(detail, e, now, boot); strings.Join(on, ",") != "text" {
+		t.Fatalf("on = %v", on)
+	}
+	LiftTextLayer(detail, &e, LayerText, now+10, boot)
+	if e.LiftedUntil != now+610 || len(LayersOn(detail, e, now+10, boot)) != 0 {
+		t.Fatalf("after the last unlock: %+v", e)
+	}
+	AdvanceLayers(detail, &e, now+611, boot)
+	on := LayersOn(detail, e, now+611, boot)
+	if strings.Join(on, ",") != "text,password,text" || detail.LockChars != 10 || e.PasswordHash != "pw1" ||
+		len(e.Queue) != 1 || e.Queue[0].Chars != 20 || len(e.Relifted) != 0 {
+		t.Fatalf("after re-lock: on %v, %+v %+v", on, detail, e)
+	}
+}

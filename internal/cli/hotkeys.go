@@ -405,10 +405,9 @@ func runHotkeyAction(h db.Hotkey, a db.HotkeyAction) error {
 				return err
 			}
 			presetPasswordHash = h.PasswordHash
-			// A press again on the running block adds what it lacks; it
-			// never stacks a second lock of a kind it has (§3.4).
-			pressOnly = true
-			defer func() { presetPasswordHash, pressOnly = "", false }()
+			// A press on the running block adds its locks like any start:
+			// a kind it already has is another lock of that kind (§4.6).
+			defer func() { presetPasswordHash = "" }()
 		}
 		return startCmd.RunE(startCmd, []string{a.Target})
 	case db.HotkeyStop:

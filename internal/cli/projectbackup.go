@@ -27,6 +27,13 @@ type blockLockExport struct {
 	Delay       int64  `json:"delay_seconds,omitempty"`
 	Relock      int64  `json:"relock_seconds,omitempty"`
 	Order       string `json:"order,omitempty"`
+	// Range lock (db.LockExtras.Range*) and locks waiting behind the others
+	// (several of one kind, §4.6).
+	RangeDays   int             `json:"range_days,omitempty"`
+	RangeFrom   int             `json:"range_from,omitempty"`
+	RangeTo     int             `json:"range_to,omitempty"`
+	RangeInvert bool            `json:"range_invert,omitempty"`
+	Queue       []db.QueuedLock `json:"queue,omitempty"`
 }
 
 // backupExtras is the part of a project file only a backup has.
@@ -69,7 +76,8 @@ func exportBackupExtras(database *db.DB) (*backupExtras, error) {
 		if !detail.Active || len(db.LayersOn(detail, e, trusted, boot)) == 0 {
 			continue
 		}
-		l := blockLockExport{Block: b.Name, TimerAfter: e.TimerAfter, Delay: e.Delay, Relock: e.Relock, Order: e.Order}
+		l := blockLockExport{Block: b.Name, TimerAfter: e.TimerAfter, Delay: e.Delay, Relock: e.Relock, Order: e.Order,
+			RangeDays: e.RangeDays, RangeFrom: e.RangeFrom, RangeTo: e.RangeTo, RangeInvert: e.RangeInvert, Queue: e.Queue}
 		if detail.LockedUntil > trusted {
 			l.LockedUntil = detail.LockedUntil
 		}
@@ -206,7 +214,8 @@ func importBackupExtras(database *db.DB, b *backupExtras, renamed map[string]str
 		if until <= trusted {
 			until = 0
 		}
-		e := db.LockExtras{PasswordHash: l.Password, Delay: l.Delay, Relock: l.Relock, Style: l.Style, Order: l.Order, TimerAfter: l.TimerAfter}
+		e := db.LockExtras{PasswordHash: l.Password, Delay: l.Delay, Relock: l.Relock, Style: l.Style, Order: l.Order, TimerAfter: l.TimerAfter,
+			RangeDays: l.RangeDays, RangeFrom: l.RangeFrom, RangeTo: l.RangeTo, RangeInvert: l.RangeInvert, Queue: l.Queue}
 		detail := &db.BlockDetail{Active: true, Locked: l.LockChars > 0, LockChars: l.LockChars, LockedUntil: until}
 		if len(db.LayersOn(detail, e, trusted, "")) == 0 {
 			continue

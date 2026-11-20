@@ -8253,8 +8253,8 @@ class Window(Gtk.ApplicationWindow):
         asked = self.lock_dialog(
             f"Add locks to {block['name']}" if active else f"Start {block['name']} with locks",
             "New locks come after the ones already on, unlocked last. A kind it already has is "
-            "a second lock of that kind (the last timer or delay lock is extended instead). "
-            "A lock that is on can only be made stronger." if active else
+            "a second lock of that kind, after the others. "
+            "A lock that is on is never changed." if active else
             "It starts with the locks below. Once on, a lock can only be made stronger.",
             "Add locks", picker, need_lock=True)
         if asked is None:

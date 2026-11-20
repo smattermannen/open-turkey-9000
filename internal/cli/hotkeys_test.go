@@ -77,10 +77,12 @@ func TestHotkeyEveryLockKind(t *testing.T) {
 	if presetPasswordHash != "" {
 		t.Error("the hotkey's password hash outlived its press")
 	}
-	// A second press on the running block only adds or extends: here
-	// everything is there already, so it is refused and nothing changes.
-	if err := runCLI(t, "hotkey", "run", fmt.Sprint(keys[0].ID)); err == nil {
-		t.Error("a second press set a second password lock")
+	// A second press on the running block adds its locks again, each a
+	// second lock of its kind, after the first ones (§4.6).
+	mustRun(t, "hotkey", "run", fmt.Sprint(keys[0].ID))
+	e, _ = d.GetLockExtras("b")
+	if got := fmt.Sprint(queuedKinds(e)); got != "[text password restart delay timer]" || !db.CheckPassword(e.Queue[1].PasswordHash, "partner") {
+		t.Errorf("after the second press: queue %s", got)
 	}
 }
 
@@ -197,4 +199,12 @@ func TestHotkeyPreset(t *testing.T) {
 	if len(keys) != 1 || keys[0].Keys != "<Primary><Alt>j" || len(keys[0].Actions) != 2 {
 		t.Errorf("from the preset: %+v", keys)
 	}
+}
+
+func queuedKinds(e db.LockExtras) []string {
+	var out []string
+	for _, q := range e.Queue {
+		out = append(out, q.Kind)
+	}
+	return out
 }

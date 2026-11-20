@@ -20,8 +20,8 @@ Not fixed by `SPEC.md`; the code is the truth.
 
 - **Hotkeys**: `ctrl|alt|shift|super+key`, F1–F24 alone; shown as
   "KC9K: …" in keyboard settings; notification on press; any lock `start`
-  takes, no upper limit; on an active block a press only adds or extends
-  locks, as `start`. Older hotkeys ask at each press. Hotkey actions (owner
+  takes, no upper limit; on an active block a press adds its locks, as
+  `start` (a kind the block has: a second lock of it). Older hotkeys ask at each press. Hotkey actions (owner
   2026-11-17; `db.HotkeyAction`, column `hotkeys.actions`, `Hotkey.Steps`;
   `cli/hotkeys.go`: `addHotkey`, `parseHotkeyAction` for `--do`,
   `runHotkeyAction`, `describeHotkey`): start/stop, mode-on/off,

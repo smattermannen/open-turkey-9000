@@ -55,6 +55,7 @@ func upgradeSchema(conn *sql.DB) error {
 		{"active_blocks", "range_to", "INTEGER NOT NULL DEFAULT 0"},
 		{"active_blocks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
 		{"active_blocks", "lock_queue", "TEXT NOT NULL DEFAULT ''"}, // §3.4 several locks of one kind
+		{"active_blocks", "lock_relifted", "TEXT NOT NULL DEFAULT ''"},
 		{"blocks", "view_password", "TEXT NOT NULL DEFAULT ''"},
 		{"blocks", "users", "TEXT NOT NULL DEFAULT ''"},       // §3.2 affected users
 		{"web_lists", "in_ads", "BOOLEAN NOT NULL DEFAULT 0"}, // §3.9 ad trigger
@@ -80,9 +81,9 @@ func upgradeSchema(conn *sql.DB) error {
 		{"setting_locks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
 		{"schedules", "break_seconds", "INTEGER NOT NULL DEFAULT 0"},
 		{"schedules", "break_taken", "TEXT NOT NULL DEFAULT ''"},
-		{"schedules", "source", "INTEGER NOT NULL DEFAULT 0"}, // §3.6 Schedule: 0 own, else the schedule's id
-		{"mode_blocks", "own", "TEXT NOT NULL DEFAULT ''"},    // R-MODE-1: a block's own automation, kept
-		{"modes", "custom", "TEXT NOT NULL DEFAULT ''"},       // §3.9: custom actions for when it becomes enabled
+		{"schedules", "source", "INTEGER NOT NULL DEFAULT 0"},      // §3.6 Schedule: 0 own, else the schedule's id
+		{"mode_blocks", "own", "TEXT NOT NULL DEFAULT ''"},         // R-MODE-1: a block's own automation, kept
+		{"modes", "custom", "TEXT NOT NULL DEFAULT ''"},            // §3.9: custom actions for when it becomes enabled
 		{"clock_state", "anchor_boot", "TEXT NOT NULL DEFAULT ''"}, // §4.10 clock check (clock.go)
 		{"clock_state", "anchor_boottime", "INTEGER NOT NULL DEFAULT 0"},
 		{"clock_state", "anchor_real", "INTEGER NOT NULL DEFAULT 0"},

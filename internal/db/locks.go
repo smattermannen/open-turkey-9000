@@ -51,17 +51,25 @@ type LockExtras struct {
 	// every lock before it is gone, then takes its kind's place
 	// (AdvanceLayers). Stored as JSON in lock_queue.
 	Queue []QueuedLock
+	// Relifted: text/password locks re-lock has lifted whose place a later
+	// lock of their kind has taken; they come back with it, before it, when
+	// re-lock puts the locks on again (AdvanceLayers). JSON in lock_relifted.
+	Relifted []QueuedLock
 }
 
 // QueuedLock is one lock waiting in LockExtras.Queue.
 type QueuedLock struct {
 	Kind         string `json:"kind"`
-	Chars        int    `json:"chars,omitempty"`    // text lock
-	Style        string `json:"style,omitempty"`    // text lock
-	PasswordHash string `json:"password,omitempty"` // password lock
-	For          int64  `json:"for,omitempty"`      // timer lock: seconds from when it starts
-	Until        int64  `json:"until,omitempty"`    // timer lock: until a date (trusted unix time)
-	Delay        int64  `json:"delay,omitempty"`    // delay lock: seconds
+	Chars        int    `json:"chars,omitempty"`      // text lock
+	Style        string `json:"style,omitempty"`      // text lock
+	PasswordHash string `json:"password,omitempty"`   // password lock
+	For          int64  `json:"for,omitempty"`        // timer lock: seconds from when it starts
+	Until        int64  `json:"until,omitempty"`      // timer lock: until a date (trusted unix time)
+	Delay        int64  `json:"delay,omitempty"`      // delay lock: seconds
+	RangeDays    int    `json:"range_days,omitempty"` // range lock (LockExtras.Range*)
+	RangeFrom    int    `json:"range_from,omitempty"`
+	RangeTo      int    `json:"range_to,omitempty"`
+	RangeInvert  bool   `json:"range_invert,omitempty"`
 }
 
 func encodeQueue(q []QueuedLock) string {
@@ -148,11 +156,11 @@ func (d *DB) GetLockExtras(name string) (LockExtras, error) {
 		return LockExtras{}, err
 	}
 	var e LockExtras
-	var queue string
+	var queue, relifted string
 	err = d.conn.QueryRow(`SELECT lock_password, restart_boot, lock_delay, stop_at, lock_style, delay_until, relock, lifted_until,
-		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert, lock_queue
+		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert, lock_queue, lock_relifted
 		FROM active_blocks WHERE block_id = ?`, blockID).Scan(&e.PasswordHash, &e.RestartBoot, &e.Delay, &e.StopAt, &e.Style, &e.DelayUntil,
-		&e.Relock, &e.LiftedUntil, &e.Order, &e.TimerAfter, &e.LiftedKinds, &e.RangeDays, &e.RangeFrom, &e.RangeTo, &e.RangeInvert, &queue)
+		&e.Relock, &e.LiftedUntil, &e.Order, &e.TimerAfter, &e.LiftedKinds, &e.RangeDays, &e.RangeFrom, &e.RangeTo, &e.RangeInvert, &queue, &relifted)
 	if err == sql.ErrNoRows {
 		return LockExtras{}, nil
 	}
@@ -160,6 +168,9 @@ func (d *DB) GetLockExtras(name string) (LockExtras, error) {
 		return LockExtras{}, fmt.Errorf("failed to read locks of '%s': %w", name, err)
 	}
 	if e.Queue, err = decodeQueue(queue); err != nil {
+		return LockExtras{}, fmt.Errorf("failed to read locks of '%s': %w", name, err)
+	}
+	if e.Relifted, err = decodeQueue(relifted); err != nil {
 		return LockExtras{}, fmt.Errorf("failed to read locks of '%s': %w", name, err)
 	}
 	return e, nil
@@ -173,10 +184,10 @@ func (d *DB) SetLockExtras(name string, e LockExtras) error {
 	}
 	_, err = d.conn.Exec(`UPDATE active_blocks SET lock_password = ?, restart_boot = ?, lock_delay = ?, stop_at = ?, lock_style = ?, delay_until = ?,
 		relock = ?, lifted_until = ?, lock_order = ?, timer_after = ?, lifted_kinds = ?,
-		range_days = ?, range_from = ?, range_to = ?, range_invert = ?, lock_queue = ? WHERE block_id = ?`,
+		range_days = ?, range_from = ?, range_to = ?, range_invert = ?, lock_queue = ?, lock_relifted = ? WHERE block_id = ?`,
 		e.PasswordHash, e.RestartBoot, e.Delay, e.StopAt, e.Style, e.DelayUntil,
 		e.Relock, e.LiftedUntil, e.Order, e.TimerAfter, e.LiftedKinds,
-		e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert, encodeQueue(e.Queue), blockID)
+		e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert, encodeQueue(e.Queue), encodeQueue(e.Relifted), blockID)
 	if err != nil {
 		return fmt.Errorf("failed to save locks of '%s': %w", name, err)
 	}

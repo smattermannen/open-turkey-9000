@@ -22,7 +22,11 @@ func TestBackupHoldsEverything(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "block", "create", "work")
 	mustRun(t, "block", "add", "work", "reddit.com")
-	if err := runWith(t, 0, []string{"pw"}, "start", "work", "--password-stdin", "--for", "2h", "--yes"); err != nil {
+	if err := runWith(t, 0, []string{"pw"}, "start", "work", "--password-stdin", "--for", "2h", "--range", "mon-sun 00:00-23:59", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	// A second password lock waits behind the others (§4.6).
+	if err := runWith(t, 0, []string{"pw2"}, "start", "work", "--password-stdin", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	mustRun(t, "browser", "safesearch", "on", "--for", "3h", "--yes")
@@ -54,7 +58,8 @@ func TestBackupHoldsEverything(t *testing.T) {
 	capture(t, "project", "import", file, "--yes")
 	detail, _ := d2.GetBlock("work")
 	e, _ := d2.GetLockExtras("work")
-	if !detail.Active || e.PasswordHash == "" || e.TimerAfter != 7200 || e.Order != "password,timer" {
+	if !detail.Active || e.PasswordHash == "" || e.TimerAfter != 7200 || e.Order != "password,timer,range" || e.RangeDays == 0 ||
+		len(e.Queue) != 1 || !db.CheckPassword(e.Queue[0].PasswordHash, "pw2") {
 		t.Errorf("block lock not restored: active %v, %+v", detail.Active, e)
 	}
 	if l, _ := d2.GetSettingLock("safesearch"); l.LockedUntil == 0 {

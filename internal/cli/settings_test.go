@@ -226,15 +226,15 @@ func TestTamperClockSetting(t *testing.T) {
 	}
 }
 
-// §3.4 re-lock: unlocking lifts the locks for a while, then they are on
-// again by themselves.
+// §3.4 re-lock: once unlocked, the block's locks come on again by
+// themselves after the re-lock time.
 func TestRelockOption(t *testing.T) {
 	d := testDB(t)
 	notTerminal(t)
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "reddit.com")
 	if err := runCLI(t, "start", "b", "--relock", "30m", "--yes"); err == nil {
-		t.Error("--relock without a text or password lock was accepted")
+		t.Error("--relock without a lock was accepted")
 	}
 	if err := runWith(t, 0, []string{"partner"}, "start", "b", "--password-stdin", "--relock", "30m", "--yes"); err != nil {
 		t.Fatal(err)
@@ -244,7 +244,8 @@ func TestRelockOption(t *testing.T) {
 	}
 	extras, _ := d.GetLockExtras("b")
 	trusted := mustTrusted(t, d)
-	if extras.PasswordHash == "" || extras.LiftedUntil < trusted+1700 || !extras.Lifted(trusted) {
+	// The lock is unlocked; the whole configuration waits to come back.
+	if len(extras.Config) != 1 || extras.LiftedUntil < trusted+1700 || !extras.Lifted(trusted) {
 		t.Fatalf("after unlock: %+v", extras)
 	}
 	if err := runCLI(t, "block", "remove-keyword", "b", "x"); err != nil && strings.Contains(err.Error(), "locked") {

@@ -62,8 +62,8 @@ Locks (optional and combinable; unlocked one at a time, in the order given):
   --delay DURATION   Delay lock: unlocking takes this long (1m to 40d).
   --range SPEC       Range lock: on at these times, e.g. "mon-fri 09:00-17:00"
                      (--range-invert: outside them instead).
-  --relock DURATION  Re-lock: the text and password locks come on again this
-                     long after unlocking.
+  --relock DURATION  Re-lock: this long after the block is unlocked, all its
+                     locks come on again, in their order.
 
 A timer lock can't be lifted early by anyone short of root; that is the point.
 
@@ -156,8 +156,16 @@ changed, shortened or removed this way.`,
 			}, trusted)
 		}
 
-		if extras.Relock > 0 && !useLock && !usePassword {
-			return fmt.Errorf("--relock goes with a text or password lock")
+		kinds := lockKindsInOrder(cmd)
+		if extras.Relock > 0 && len(kinds) == 0 {
+			return fmt.Errorf("--relock goes with a lock")
+		}
+		// Every lock as given, in order: what re-lock brings back (§3.4).
+		n := newLocks{style: style, chars: lockChars, until: lockedUntil, forSeconds: forSeconds, extras: extras}
+		for _, k := range kinds {
+			q, _, _ := queuedLock(k, n, trusted)
+			extras.Config = append(extras.Config, q)
+			hasExtras = true
 		}
 		chars := 0
 		if useLock {
@@ -166,7 +174,6 @@ changed, shortened or removed this way.`,
 		// Layered locks (R-LOCK-6): unlocked in the order given. A timer
 		// lock for a duration, or a restart lock, behind another lock
 		// waits for it.
-		kinds := lockKindsInOrder(cmd)
 		if len(kinds) > 1 {
 			extras.Order = strings.Join(kinds, ",")
 			if kinds[0] != db.LayerTimer && forSeconds > 0 {
@@ -219,10 +226,6 @@ changed, shortened or removed this way.`,
 // order (kinds), for confirmLocks (R-LOCK-12).
 func startLocks(name string, kinds []string, style string, chars int, until, trusted int64, extras db.LockExtras) []lockToSet {
 	target := "block '" + name + "'"
-	relock := ""
-	if extras.Relock > 0 {
-		relock = fmt.Sprintf(", re-lock %s after unlocking", humanDuration(time.Duration(extras.Relock)*time.Second))
-	}
 	var locks []lockToSet
 	for i, k := range kinds {
 		order := ""
@@ -241,9 +244,9 @@ func startLocks(name string, kinds []string, style string, chars int, until, tru
 			}
 			locks = append(locks, lockToSet{target, order + "timer lock", length})
 		case db.LayerText:
-			locks = append(locks, lockToSet{target, order + textLockKind(style, chars) + relock, after})
+			locks = append(locks, lockToSet{target, order + textLockKind(style, chars), after})
 		case db.LayerPassword:
-			locks = append(locks, lockToSet{target, order + "password lock" + relock, after})
+			locks = append(locks, lockToSet{target, order + "password lock", after})
 		case db.LayerRestart:
 			length := "until the computer restarts"
 			if extras.RestartBoot == db.RestartPending {
@@ -319,6 +322,9 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 		e.RestartBoot = ""
 	}
 	order := db.PlacedLayers(detail, e)
+	if len(e.Config) == 0 { // started before blocks kept their configuration
+		e.Config = db.Snapshot(detail, e)
+	}
 	// Whether a lock other than a timer lock holds now (or was just
 	// added): a timer lock for a duration or a restart lock then waits.
 	othersOn := false
@@ -353,8 +359,9 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 	}
 	has := func(kind string) bool { return slices.Contains(db.Layers(detail, e), kind) }
 	for _, kind := range n.kinds {
+		q, change, length := queuedLock(kind, n, trusted)
+		e.Config = append(e.Config, q)
 		if len(e.Queue) > 0 || has(kind) {
-			q, change, length := queuedLock(kind, n, trusted)
 			enqueue(q, change, length)
 			continue
 		}
@@ -397,12 +404,12 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 		case e.Relock == r:
 		case e.Relock != 0:
 			return fmt.Errorf("block '%s' already re-locks %s after unlocking; that can't be changed", name, time.Duration(e.Relock)*time.Second)
-		case !detail.Locked && e.PasswordHash == "" && !slices.ContainsFunc(e.Queue, func(q db.QueuedLock) bool { return q.Kind == db.LayerText || q.Kind == db.LayerPassword }):
-			return fmt.Errorf("--relock goes with a text or password lock")
+		case len(e.Config) == 0:
+			return fmt.Errorf("--relock goes with a lock")
 		default:
 			e.Relock = r
 			changes = append(changes, fmt.Sprintf("re-lock %s after unlocking", humanDuration(time.Duration(r)*time.Second)))
-			confirm = append(confirm, lockToSet{target, "re-lock of its text/password locks", fmt.Sprintf("%s after unlocking", humanDuration(time.Duration(r)*time.Second))})
+			confirm = append(confirm, relockToSet(target, r)...)
 		}
 	}
 	if len(changes) == 0 {
@@ -423,6 +430,23 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 		fmt.Printf("Unlock order: %s\n", describeLayers(layers, detail, e))
 	}
 	return nil
+}
+
+// relockToSet is re-lock as confirmLocks shows it (R-LOCK-12): nothing
+// when r is 0.
+func relockToSet(target string, r int64) []lockToSet {
+	if r <= 0 {
+		return nil
+	}
+	return []lockToSet{{target, "re-lock", fmt.Sprintf("all its locks come back, in their order, %s after it is unlocked", humanDuration(time.Duration(r)*time.Second))}}
+}
+
+// relockWhat names what a block's re-lock brings back.
+func relockWhat(e db.LockExtras) string {
+	if len(e.Config) > 0 {
+		return "all its locks are"
+	}
+	return "its text and password locks are"
 }
 
 // queuedLock is a new lock of a kind the block already has, as it waits in
@@ -634,8 +658,8 @@ var unlockCmd = &cobra.Command{
 		}
 		rest := db.LayersOn(detail, extras, hold.trusted, bootID)
 		if extras.Relock > 0 && extras.LiftedUntil > hold.trusted {
-			fmt.Printf("Block '%s': its %s is unlocked; its text and password locks are on again in %s (re-lock). 'kc9k stop %s' switches it off meanwhile.\n",
-				blockName, db.LayerName(hold.layers[0]), time.Duration(extras.Relock)*time.Second, blockName)
+			fmt.Printf("Block '%s': its %s is unlocked; %s on again in %s (re-lock). 'kc9k stop %s' switches it off meanwhile.\n",
+				blockName, db.LayerName(hold.layers[0]), relockWhat(extras), time.Duration(extras.LiftedUntil-hold.trusted)*time.Second, blockName)
 		} else {
 			fmt.Printf("Block '%s': its %s is unlocked.\n", blockName, db.LayerName(hold.layers[0]))
 		}

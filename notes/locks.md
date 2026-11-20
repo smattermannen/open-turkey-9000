@@ -1,6 +1,6 @@
 # Locks, weakening, passwords, access
 
-- Covers: `internal/lock/`, `db/locks.go`, `db/layers.go`, `cli/lockflags.go`, `layers.go`, `confirm.go`, `loosen.go`, `control.go`, `textlock.go`, `settingspassword.go`, `noweakening.go`, `access.go`, `blockpassword.go`, `enforce/lock.go`, `enforce/clockcheck.go`
+- Covers: `internal/lock/`, `db/locks.go`, `db/layers.go`, `cli/lockflags.go`, `layers.go`, `confirm.go`, `loosen.go`, `control.go`, `extend.go`, `textlock.go`, `settingspassword.go`, `noweakening.go`, `access.go`, `blockpassword.go`, `enforce/lock.go`, `enforce/clockcheck.go`
 - SPEC: §3.4, §3.5, §3.11, §4.6, R-LOCK-1–12, R-WEAK-1–5
 - Connects to: everything gated: [lists](lists.md), [automation](automation.md), [browsers](browsers.md), [hotkeys](hotkeys.md), [device](device.md); [testing](testing.md) (weakening audit)
 
@@ -17,12 +17,22 @@
   locks (`PlacedLayers`; `Layers`/`LayersOn` append it); `AdvanceLayers`
   `promote`s the first once no placed lock is on. Once anything is queued,
   every new lock queues (order kept); every kind queues, range included
-  (`QueuedLock.Range*`). Re-lock: a promoted text/password lock whose place
-  holds a lifted one moves that one to `LockExtras.Relifted`
-  (`lock_relifted`); the re-lock time starts once no text/password lock is
-  on or queued; when it ends `relockAll` puts every one back in the order
-  given (each kind's first in its place, the rest first in the queue).
-  Setting locks: still one per kind.
+  (`QueuedLock.Range*`). Setting locks: still one per kind.
+- **Re-lock** (§3.4, owner 2026-11-20): a block keeps every lock it was
+  given, in order and as given (a duration, not an end), in
+  `LockExtras.Config` (`lock_config`; `start` and `strengthenLocks` append
+  via `queuedLock`; a block without one gets `db.Snapshot` of its locks).
+  With `Relock` and a `Config` (`relocksConfig`), unlocking removes a lock
+  as without re-lock; `AdvanceLayers` starts `LiftedUntil` once no lock is
+  on, clears it if one is added meanwhile, and when it is over
+  `restoreConfig` empties every place and queues `Config`, so the first
+  lock is on and the rest wait (durations count from then). `--relock`
+  goes with any lock. Without a `Config` (setting locks, blocks locked
+  before this) the old lift of text/password locks (`LiftedKinds`) stays.
+- **Extend** (`cli/extend.go`, §4.6: its own action): `kc9k extend B --for D`
+  adds D, `--until T` moves the end later; to the running timer lock, else
+  the waiting one (`TimerAfter`, `--for` only), else the first queued.
+  Confirmed (`--yes`). `Config` keeps the duration as first given.
   `ensureEditable` refuses only weakening of locked blocks; `start` on an
   active block only strengthens. `gateEdit` (`loosen.go`) no longer queues;
   daemon still applies old queued edits (`pending.go`). `unlock` lifts

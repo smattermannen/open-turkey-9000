@@ -52,6 +52,7 @@ const settingAccessPrefix = db.AccessPasswordSetting
 var commandAreas = map[string][]string{
 	"status":        {areaDashboard, areaBlocks},
 	"start":         {areaDashboard, areaBlocks},
+	"extend":        {areaDashboard, areaBlocks},
 	"stop":          {areaDashboard, areaBlocks},
 	"toggle":        {areaDashboard, areaBlocks},
 	"notifications": {areaSettings},

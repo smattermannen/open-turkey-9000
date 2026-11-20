@@ -103,7 +103,7 @@ func ensureEditable(database *db.DB, name string, strengthens bool) error {
 }
 
 // strengtheningEdits lists, for error messages, the edits a held block allows.
-const strengtheningEdits = "add apps, window titles, blacklists or blacklist entries, tick more places or actions on a blacklist, lower its thresholds, remove exceptions, or extend its locks with 'start'"
+const strengtheningEdits = "add apps, window titles, blacklists or blacklist entries, tick more places or actions on a blacklist, lower its thresholds, remove exceptions, add locks with 'start', or extend its timer lock with 'extend'"
 
 // blockEmpty reports whether a block has nothing to enforce (see
 // db.BlockDetail.Empty).

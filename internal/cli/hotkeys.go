@@ -35,8 +35,8 @@ Pressing Ctrl+Alt+S then starts the block 'study' with a one-hour timer lock.
 A hotkey takes the same locks as 'kc9k start', in the same unlock order:
 --for, --until, --lock (and --lock-chars, --lock-words, --lock-text),
 --password-stdin (the password is given now), --restart, --delay, --range,
---relock. On a block that is already on, a press only adds or extends locks,
-as 'start' does. Keys are modifiers (ctrl, alt, shift, super) and a key
+--relock. On a block that is already on, a press adds its locks again, as
+'start' does: a kind the block has becomes a second lock of it. Keys are modifiers (ctrl, alt, shift, super) and a key
 joined with +; F1 to F24 also work alone. Hotkeys are set up as Cinnamon and
 GNOME keyboard shortcuts.
 
@@ -145,8 +145,8 @@ func addHotkey(cmd *cobra.Command, database *db.DB, accel string, actions []db.H
 			if err != nil {
 				return 0, fmt.Errorf("action %d: %w", i+1, err)
 			}
-			if req.extras.Relock > 0 && !req.text && !req.password {
-				return 0, fmt.Errorf("--relock goes with a text or password lock")
+			if req.extras.Relock > 0 && len(req.kinds) == 0 {
+				return 0, fmt.Errorf("--relock goes with a lock")
 			}
 			password = password || req.password
 			locks = append(locks, pressLocks(a.Target, req)...)

@@ -38,30 +38,42 @@ func TestQueuePromotion(t *testing.T) {
 	}
 }
 
-// §3.4, §4.6: with re-lock, text1, password1, text2 are unlocked in turn;
-// re-lock brings all three back, in that order.
-func TestRelockSeveralTextLocks(t *testing.T) {
+// §3.4, §4.6: with re-lock the block's whole configuration comes back:
+// text1, password1, text2 and a timer lock are unlocked in turn; once none
+// is on the re-lock time runs, then all four are on again, in their order.
+func TestRelockWholeConfiguration(t *testing.T) {
 	const now, boot = 1_000_000, "boot-a"
+	config := []QueuedLock{{Kind: LayerText, Chars: 10}, {Kind: LayerPassword, PasswordHash: "pw1"},
+		{Kind: LayerText, Chars: 20}, {Kind: LayerTimer, For: 300}}
 	detail := &BlockDetail{Active: true, Locked: true, LockChars: 10}
 	e := LockExtras{Order: "text,password", PasswordHash: "pw1", Relock: 600,
-		Queue: []QueuedLock{{Kind: LayerText, Chars: 20}}}
+		Queue: []QueuedLock{config[2], config[3]}, Config: config}
 	LiftTextLayer(detail, &e, LayerText, now, boot)
 	LiftTextLayer(detail, &e, LayerPassword, now, boot)
-	// The second text lock holds; the re-lock time hasn't started.
-	if detail.LockChars != 20 || e.LiftedUntil != 0 || len(e.Relifted) != 1 || e.Relifted[0].Chars != 10 {
+	if detail.LockChars != 20 || e.PasswordHash != "" || e.LiftedUntil != 0 {
 		t.Fatalf("after two unlocks: %+v %+v", detail, e)
 	}
-	if on := LayersOn(detail, e, now, boot); strings.Join(on, ",") != "text" {
-		t.Fatalf("on = %v", on)
-	}
 	LiftTextLayer(detail, &e, LayerText, now+10, boot)
-	if e.LiftedUntil != now+610 || len(LayersOn(detail, e, now+10, boot)) != 0 {
-		t.Fatalf("after the last unlock: %+v", e)
+	if detail.LockedUntil != now+310 || e.LiftedUntil != 0 {
+		t.Fatalf("the timer lock didn't start: %+v %+v", detail, e)
 	}
-	AdvanceLayers(detail, &e, now+611, boot)
-	on := LayersOn(detail, e, now+611, boot)
-	if strings.Join(on, ",") != "text,password,text" || detail.LockChars != 10 || e.PasswordHash != "pw1" ||
-		len(e.Queue) != 1 || e.Queue[0].Chars != 20 || len(e.Relifted) != 0 {
+	// The timer lock is over: nothing is on, the re-lock time runs.
+	if !AdvanceLayers(detail, &e, now+400, boot) || e.LiftedUntil != now+1000 || len(LayersOn(detail, e, now+400, boot)) != 0 {
+		t.Fatalf("re-lock time: %+v", e)
+	}
+	AdvanceLayers(detail, &e, now+1001, boot)
+	on := LayersOn(detail, e, now+1001, boot)
+	if strings.Join(on, ",") != "text,password,text,timer" || detail.LockChars != 10 || e.LiftedUntil != 0 ||
+		len(e.Queue) != 3 || e.Queue[0].PasswordHash != "pw1" || e.Queue[2].For != 300 || len(e.Config) != 4 {
 		t.Fatalf("after re-lock: on %v, %+v %+v", on, detail, e)
+	}
+	// A lock added during the re-lock time ends it: the time starts again
+	// only once nothing is on.
+	detail2 := &BlockDetail{Active: true}
+	e2 := LockExtras{Relock: 600, Config: []QueuedLock{{Kind: LayerDelay, Delay: 60}}, LiftedUntil: now + 300}
+	e2.Delay = 60
+	AdvanceLayers(detail2, &e2, now, boot)
+	if e2.LiftedUntil != 0 {
+		t.Errorf("re-lock time kept running with a lock on: %+v", e2)
 	}
 }

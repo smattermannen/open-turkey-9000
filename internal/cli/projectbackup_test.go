@@ -59,7 +59,7 @@ func TestBackupHoldsEverything(t *testing.T) {
 	detail, _ := d2.GetBlock("work")
 	e, _ := d2.GetLockExtras("work")
 	if !detail.Active || e.PasswordHash == "" || e.TimerAfter != 7200 || e.Order != "password,timer,range" || e.RangeDays == 0 ||
-		len(e.Queue) != 1 || !db.CheckPassword(e.Queue[0].PasswordHash, "pw2") {
+		len(e.Queue) != 1 || !db.CheckPassword(e.Queue[0].PasswordHash, "pw2") || len(e.Config) != 4 {
 		t.Errorf("block lock not restored: active %v, %+v", detail.Active, e)
 	}
 	if l, _ := d2.GetSettingLock("safesearch"); l.LockedUntil == 0 {

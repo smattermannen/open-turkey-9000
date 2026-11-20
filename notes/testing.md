@@ -155,7 +155,7 @@
   of every page, tab and ⋯ menu, once with dialogs cancelled and once
   answered OK as a person could (a greyed-out button isn't pressed); fails
   on a handler exception or a command the CLI can't read. Examples: `ci/gui_phrase_smoke.py`, `ci/gui_phrase_edit_smoke.py`,
-  `ci/gui_duration_smoke.py`, `ci/gui_hotkey_smoke.py`,
+  `ci/gui_duration_smoke.py`, `ci/gui_hotkey_smoke.py`, `ci/gui_extend_smoke.py`,
   `ci/gui_circadian_smoke.py` (`xvfb-run -a`).
 - Weakening audit: `cli/weakening_audit_test.go` tries every command that
   could weaken a locked block; add a new weakening command there.

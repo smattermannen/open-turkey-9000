@@ -54,8 +54,8 @@ func upgradeSchema(conn *sql.DB) error {
 		{"active_blocks", "range_from", "INTEGER NOT NULL DEFAULT 0"},
 		{"active_blocks", "range_to", "INTEGER NOT NULL DEFAULT 0"},
 		{"active_blocks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
-		{"active_blocks", "lock_queue", "TEXT NOT NULL DEFAULT ''"}, // §3.4 several locks of one kind
-		{"active_blocks", "lock_relifted", "TEXT NOT NULL DEFAULT ''"},
+		{"active_blocks", "lock_queue", "TEXT NOT NULL DEFAULT ''"},  // §3.4 several locks of one kind
+		{"active_blocks", "lock_config", "TEXT NOT NULL DEFAULT ''"}, // §3.4 re-lock: the whole configuration
 		{"blocks", "view_password", "TEXT NOT NULL DEFAULT ''"},
 		{"blocks", "users", "TEXT NOT NULL DEFAULT ''"},       // §3.2 affected users
 		{"web_lists", "in_ads", "BOOLEAN NOT NULL DEFAULT 0"}, // §3.9 ad trigger

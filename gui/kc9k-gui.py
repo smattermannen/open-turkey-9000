@@ -1393,6 +1393,13 @@ WEEKDAYS = (("mon", "Mon"), ("tue", "Tue"), ("wed", "Wed"), ("thu", "Thu"), ("fr
             ("sat", "Sat"), ("sun", "Sun"))
 
 
+def relock_lines(target, relock_flags):
+    """A block's re-lock as the lock confirmation shows it (R-LOCK-12)."""
+    if not relock_flags:
+        return []
+    return [f"{target}: re-lock, all its locks come back, in their order, {relock_flags[1]} after it is unlocked"]
+
+
 class LockPicker(Gtk.Box):
     """Every lock kind for a block or a setting (§3.4), the timer lock
     first (R-GUI-2), the rest behind More locks. chosen() gives the locks
@@ -1403,9 +1410,12 @@ class LockPicker(Gtk.Box):
 
     ALL_KINDS = ("timer", "password", "text", "restart", "delay", "range", "relock")
 
-    def __init__(self, verb="stop", done="stopped", kinds=ALL_KINDS):
+    def __init__(self, verb="stop", done="stopped", kinds=ALL_KINDS, relock_any=False):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.callbacks, self.verb, self.done, self.kinds = [], verb, done, tuple(kinds)
+        # §3.4: a block's re-lock brings back all its locks, so it goes with
+        # any lock; a setting's re-lock only with a password or text lock.
+        self.relock_any = relock_any
         self.only_chars = "relock" not in self.kinds and "password" not in self.kinds
         grid = Gtk.Grid(column_spacing=16, row_spacing=6)
         self.pack_start(grid, False, False, 0)
@@ -1525,7 +1535,9 @@ class LockPicker(Gtk.Box):
         if "relock" in self.kinds:
             label("Re-lock", row, more)
             more.attach(self.relock, 1, row, 1, 1)
-            more.attach(dim("With a password or text lock: unlocking lifts them only this long; then they "
+            more.attach(dim("This long after it is unlocked, all its locks come on again, in their order."
+                            if relock_any else
+                            "With a password or text lock: unlocking lifts them only this long; then they "
                             "come on again."), 1, row + 1, 1, 1)
 
         self.problem_label = Gtk.Label(xalign=0, wrap=True, no_show_all=True)
@@ -1579,7 +1591,7 @@ class LockPicker(Gtk.Box):
         self.custom_text.set_sensitive(on)
         for widget in self.range_widgets:
             widget.set_sensitive(self.range_on.get_active())
-        self.relock.set_sensitive(on or bool(self.password.get_text()))
+        self.relock.set_sensitive(self.relock_allowed())
         mark_problem(self.password_again, self.password.get_text() != self.password_again.get_text())
         problem = self.problem()
         self.problem_label.set_text(problem or "")
@@ -1597,10 +1609,16 @@ class LockPicker(Gtk.Box):
         args = ["--lock", "--lock-chars", str(self.chars.value)]
         return args + ["--lock-words"] if style == "words" else args
 
+    def relock_allowed(self):
+        """Whether re-lock goes with the locks chosen."""
+        if self.typing.get_active() or self.secret():
+            return True
+        return self.relock_any and bool(
+            self.timer.flags() or self.restart.get_active() or (self.delay is not None and self.delay.value)
+            or (self.range_on.get_active() and self.range_spec()))
+
     def relock_seconds(self):
-        if self.relock.value and (self.typing.get_active() or self.secret()):
-            return self.relock.value
-        return 0
+        return self.relock.value if self.relock.value and self.relock_allowed() else 0
 
     def relock_flags(self):
         seconds = self.relock_seconds()
@@ -1609,7 +1627,7 @@ class LockPicker(Gtk.Box):
     def chosen(self):
         """The locks asked for, as (flags, words), in the dialog's order."""
         relock = self.relock_seconds()
-        relock_note = f", re-lock {duration_words(relock)} after unlocking" if relock else ""
+        relock_note = f", re-lock {duration_words(relock)} after unlocking" if relock and not self.relock_any else ""
         out = []
         if self.timer.flags():
             out.append((self.timer.flags(), self.timer.describe() +
@@ -6608,11 +6626,15 @@ class Window(Gtk.ApplicationWindow):
         self.stop_button.connect("clicked", self.stop_block)
         self.unlock_button = Gtk.Button(label="Unlock…")
         self.unlock_button.connect("clicked", self.unlock_block)
+        # §4.6: extending a timer lock is its own action (kc9k extend).
+        self.extend_button = Gtk.Button(label="Extend timer…")
+        self.extend_button.connect("clicked", self.extend_timer)
         # §4.3 (owner 2026-11-17): Automation in the block's menu; greyed
         # out in a mode, which automates it.
         self.automation_button = Gtk.Button(label="Automation")
         self.automation_button.connect("clicked", lambda _b: self.open_automation())
-        for button in (self.start_button, self.stop_button, self.unlock_button, self.automation_button):
+        for button in (self.start_button, self.stop_button, self.unlock_button, self.extend_button,
+                       self.automation_button):
             actions.pack_start(button, False, False, 0)
         self.delete_button = Gtk.Button(label="Delete…")
         self.delete_button.get_style_context().add_class("destructive-action")
@@ -7478,7 +7500,7 @@ class Window(Gtk.ApplicationWindow):
         mode = self.find_mode(getattr(self, "shown_mode", None)) or {}
         if not mode.get("blocks") or mode.get("monk"):
             return
-        picker = LockPicker("switch the mode off", "switched off", LockPicker.ALL_KINDS)
+        picker = LockPicker("switch the mode off", "switched off", LockPicker.ALL_KINDS, relock_any=True)
         asked = self.lock_dialog(
             f"Lock {mode['name']}",
             f"Every block in it ({', '.join(mode['blocks'])}) gets these locks, after the ones it has. While "
@@ -7498,6 +7520,7 @@ class Window(Gtk.ApplicationWindow):
             order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
             locks.append(f"mode '{mode['name']}' (each of its blocks): {order}{text}")
         args += relock_flags
+        locks += relock_lines(f"mode '{mode['name']}' (each of its blocks)", relock_flags)
         if self.confirm_lock(locks):
             self.run(args + ["--yes"], secret + "\n" if secret else None)
 
@@ -7979,6 +8002,7 @@ class Window(Gtk.ApplicationWindow):
             (block["char_locked"] or block["password_locked"]
              or (block["delay_seconds"] > 0 and not block.get("delay_left")))
             and not block["lock_seconds"] and not block["restart_locked"])
+        self.extend_button.set_sensitive(block["active"] and "timer" in (block.get("lock_order") or []))
         self.delete_button.set_sensitive(not block["active"] and not block["held"])
 
         limit = block["quota_limit"]
@@ -8249,7 +8273,7 @@ class Window(Gtk.ApplicationWindow):
         active = block["active"]
         # R-LOCK-7: a running block takes any kind of lock, added after the
         # ones already on; those only get stronger.
-        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS)
+        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS, relock_any=True)
         asked = self.lock_dialog(
             f"Add locks to {block['name']}" if active else f"Start {block['name']} with locks",
             "New locks come after the ones already on, unlocked last. A kind it already has is "
@@ -8275,6 +8299,7 @@ class Window(Gtk.ApplicationWindow):
             order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
             locks.append(f"{target}: {order}{text}")
         args += relock_flags
+        locks += relock_lines(target, relock_flags)
         if not self.confirm_lock(locks):
             return
         if locks:
@@ -8363,6 +8388,39 @@ class Window(Gtk.ApplicationWindow):
             self.run(["schedule", "lock", self.selected, "on", "--lead", f"{lead}m", "--yes"])
         elif self.blocks.get(self.selected, {}).get("schedule_lock"):
             self.run(["schedule", "lock", self.selected, "off"])
+
+    def extend_timer(self, _button):
+        """§3.4, §4.6: extends the block's timer lock (kc9k extend): time
+        added, or a later end picked on a calendar (R-GUI-2)."""
+        block = self.blocks.get(self.selected)
+        if not block:
+            return
+        dialog = Gtk.Dialog(title=f"Extend the timer lock of {block['name']}", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        ok = dialog.add_button("Extend", Gtk.ResponseType.OK)
+        ok.get_style_context().add_class("suggested-action")
+        box = dialog.get_content_area()
+        box.set_spacing(8)
+        box.set_border_width(12)
+        box.pack_start(dim("For a time adds that much to the timer lock; Until a date moves its end "
+                           "later. A timer lock is never shortened. To add a second timer lock "
+                           "instead, use Add locks…."), False, False, 0)
+        field = TimerLockField(allow_none=False, mode="for", seconds=1800)
+        box.pack_start(field, False, False, 0)
+        field.on_change(lambda f: ok.set_sensitive(f.is_valid()))
+        ok.set_sensitive(field.is_valid())
+        self.extend_field = field  # for tests
+        dialog.show_all()
+        answer = dialog.run()
+        flags = field.flags()
+        what = (f"{duration_words(field.duration.value)} more" if flags[:1] == ["--for"]
+                else f"until {date_words(field.until())}" if flags else "")
+        dialog.destroy()
+        if answer != Gtk.ResponseType.OK or not flags:
+            return
+        if not self.confirm_lock([f"block '{block['name']}': timer lock extended, {what}"]):
+            return
+        self.run(["extend", block["name"], *flags, "--yes"])
 
     def unlock_block(self, _button):
         block = self.blocks.get(self.selected)
@@ -10586,9 +10644,9 @@ class Window(Gtk.ApplicationWindow):
             action["param"] = json.dumps([{i.split(" ", 1)[0]: i.split(" ", 1)[1]} for i in items])
             words = "; ".join(items)
         if k == "start":
-            picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS)
+            picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS, relock_any=True)
             asked = self.lock_dialog(f"Start {t}", "Locks each press sets (none: it just starts it). On a block "
-                                     "that is on, a press only adds or extends locks.", "OK", picker)
+                                     "that is on, a press adds its locks again (a kind it has: a second lock).", "OK", picker)
             if asked is None:
                 return None
             chosen, relock_flags, secret = asked
@@ -10700,10 +10758,10 @@ class Window(Gtk.ApplicationWindow):
             self.message("Make a block first: a hotkey starts one.", Gtk.MessageType.INFO)
             return
         fields = HotkeyFields(blocks, self.selected)
-        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS)
+        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS, relock_any=True)
         asked = self.lock_dialog(
             "Add a hotkey", "Pressing the keys starts the block with these locks (none: it just "
-            "starts). On a block that is already on, a press only adds or extends locks.",
+            "starts). On a block that is already on, a press adds its locks again (a kind it has: a second lock).",
             "Add", picker, extra=fields)
         if asked is None:
             return
@@ -10720,6 +10778,7 @@ class Window(Gtk.ApplicationWindow):
             order = f"{i + 1} of {len(chosen)}: " if len(chosen) > 1 else ""
             locks.append(f"block '{block}': {order}{text}, set each time {keys} is pressed")
         args += relock_flags
+        locks += relock_lines(f"block '{block}'", relock_flags)
         if locks:
             if not self.confirm_lock(locks, option="Run without confirmation (pressing the hotkey then "
                                                     "locks without asking again)"):

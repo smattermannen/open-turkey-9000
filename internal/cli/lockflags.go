@@ -26,7 +26,7 @@ func addStartLockFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
 	cmd.Flags().Bool("restart", false, "Restart lock: on until the computer restarts")
 	cmd.Flags().String("delay", "", "Delay lock: unlocking takes this long (1m to 40d)")
-	cmd.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m)")
+	cmd.Flags().String("relock", "", "Re-lock: this long after the block is unlocked, all its locks come on again in their order (e.g. 30m)")
 	cmd.Flags().String("for", "", "Timer lock: for this long (e.g. 90m, 2h, 3d, 1w)")
 	cmd.Flags().String("until", "", "Timer lock: until this time (HH:MM, or a date: YYYY-MM-DD HH:MM)")
 	cmd.Flags().String("range", "", `Range lock: locked at these times, e.g. "mon-fri 09:00-17:00" (22:00-06:00 runs past midnight)`)
@@ -164,10 +164,6 @@ func parseLockArgs(args []string, now time.Time) (lockRequest, error) {
 // for confirmLocks (R-LOCK-12) and the dialog shown at each press.
 func pressLocks(block string, r lockRequest) []lockToSet {
 	target := "block '" + block + "'"
-	relock := ""
-	if r.extras.Relock > 0 {
-		relock = fmt.Sprintf(", re-lock %s after unlocking", humanDuration(time.Duration(r.extras.Relock)*time.Second))
-	}
 	var locks []lockToSet
 	for i, k := range r.kinds {
 		order, after := "", ""
@@ -192,13 +188,13 @@ func pressLocks(block string, r lockRequest) []lockToSet {
 			}
 			locks = append(locks, lockToSet{target, order + "timer lock", length})
 		case db.LayerText:
-			locks = append(locks, lockToSet{target, order + textLockKind(r.style, r.chars) + relock, after})
+			locks = append(locks, lockToSet{target, order + textLockKind(r.style, r.chars), after})
 		case db.LayerPassword:
 			length := "the password given when the hotkey was added"
 			if after != "" {
 				length += ", " + after
 			}
-			locks = append(locks, lockToSet{target, order + "password lock" + relock, length})
+			locks = append(locks, lockToSet{target, order + "password lock", length})
 		case db.LayerRestart:
 			length := "until the computer restarts"
 			if after != "" {
@@ -215,7 +211,7 @@ func pressLocks(block string, r lockRequest) []lockToSet {
 			locks = append(locks, lockToSet{target, order + "delay lock", length})
 		}
 	}
-	return locks
+	return append(locks, relockToSet(target, r.extras.Relock)...)
 }
 
 // describeLockList joins locks into one line: "timer lock (1 hour from the

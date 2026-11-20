@@ -32,6 +32,11 @@
   `LockPicker` (every lock kind; `lock_dialog` reads it before closing).
   A block's Start runs `kc9k start` at once (`start_block`, D2); once on it
   is Add locks… (`add_locks`, the lock dialog; a card's lock state too).
+  Extend timer… (`extend_timer`, a `TimerLockField` without "none") runs
+  `kc9k extend`, offered while `lock_order` has a timer lock
+  (`ci/gui_extend_smoke.py`). `LockPicker(relock_any=True)` for blocks,
+  modes and hotkeys: re-lock goes with any lock (`relock_lines` in the
+  confirmation); setting locks keep it to text/password locks.
   `EditableList` has a `ResizeGrip` under it (drag down: taller; double-click:
   back), height kept in gui.json `list_heights` under `size_key` (website
   list, phrase set) or the list's title; `ci/gui_list_resize_smoke.py`.

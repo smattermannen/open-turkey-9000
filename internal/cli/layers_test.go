@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -402,19 +403,21 @@ func TestSeveralLocksOfOneKind(t *testing.T) {
 		t.Errorf("second range lock: layers %s, %+v", got, extras)
 	}
 
-	// Re-lock with two password locks: each is unlocked in turn, then both
-	// come back, in their order, after the re-lock time.
+	// Re-lock with two password locks and a timer lock: each is unlocked
+	// in turn; once none is on, the re-lock time runs, then the whole
+	// configuration comes back in its order (§3.4).
 	if err := runWith(t, 0, []string{"one"}, "start", "f", "--password-stdin", "--relock", "30m", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runWith(t, 0, []string{"two"}, "start", "f", "--password-stdin", "--yes"); err != nil {
 		t.Fatalf("a second password lock beside re-lock refused: %v", err)
 	}
+	mustRun(t, "start", "f", "--for", "10m", "--yes")
 	if err := runWith(t, 0, []string{"one"}, "unlock", "f"); err != nil {
 		t.Fatal(err)
 	}
 	extras, _ = d.GetLockExtras("f")
-	if extras.LiftedUntil != 0 || !db.CheckPassword(extras.PasswordHash, "two") || len(extras.Relifted) != 1 {
+	if extras.LiftedUntil != 0 || !db.CheckPassword(extras.PasswordHash, "two") || len(extras.Config) != 3 {
 		t.Fatalf("after the first password: %+v", extras)
 	}
 	if err := runCLI(t, "stop", "f"); err == nil {
@@ -423,12 +426,24 @@ func TestSeveralLocksOfOneKind(t *testing.T) {
 	if err := runWith(t, 0, []string{"two"}, "unlock", "f"); err != nil {
 		t.Fatal(err)
 	}
+	// The timer lock runs, then is over.
+	detail, _ = d.GetBlock("f")
 	extras, _ = d.GetLockExtras("f")
 	trusted = mustTrusted(t, d)
-	if extras.LiftedUntil < trusted+1790 {
-		t.Fatalf("re-lock time didn't start after the last password: %+v", extras)
+	if detail.LockedUntil < trusted+590 || extras.LiftedUntil != 0 {
+		t.Fatalf("the timer lock didn't start after the passwords: until %d, %+v", detail.LockedUntil, extras)
 	}
-	// The re-lock time is over: the first password is first again.
+	detail.LockedUntil = trusted - 1
+	if err := d.SaveLayers(detail, extras); err != nil {
+		t.Fatal(err)
+	}
+	status := capture(t, "status")
+	extras, _ = d.GetLockExtras("f")
+	if extras.LiftedUntil < trusted+1790 || !strings.Contains(status, "locks on again in") {
+		t.Fatalf("re-lock time didn't start once nothing was on: %+v\n%s", extras, status)
+	}
+	// The re-lock time is over: the first password is first again, then
+	// the second, then the timer lock.
 	extras.LiftedUntil = trusted - 1
 	detail, _ = d.GetBlock("f")
 	if err := d.SaveLayers(detail, extras); err != nil {
@@ -436,6 +451,11 @@ func TestSeveralLocksOfOneKind(t *testing.T) {
 	}
 	if err := runCLI(t, "stop", "f"); err == nil {
 		t.Error("stopped after re-lock brought the locks back")
+	}
+	detail, _ = d.GetBlock("f")
+	extras, _ = d.GetLockExtras("f")
+	if got := fmt.Sprint(db.Layers(detail, extras)); got != "[password password timer]" {
+		t.Errorf("after re-lock: %s", got)
 	}
 	if err := runWith(t, 0, []string{"two"}, "unlock", "f"); err == nil {
 		t.Error("the second password unlocked first after re-lock")
@@ -446,5 +466,68 @@ func TestSeveralLocksOfOneKind(t *testing.T) {
 	if err := runWith(t, 0, []string{"two"}, "unlock", "f"); err != nil {
 		t.Fatal(err)
 	}
-	mustRun(t, "stop", "f")
+	if err := runCLI(t, "stop", "f"); err == nil {
+		t.Error("stopped during the timer lock re-lock brought back")
+	}
+
+	// Re-lock goes with any lock, not only text or password locks.
+	mustRun(t, "block", "create", "k")
+	mustRun(t, "block", "add", "k", "reddit.com")
+	mustRun(t, "start", "k", "--delay", "5m", "--relock", "1h", "--yes")
+	if extras, _ = d.GetLockExtras("k"); extras.Relock != 3600 || len(extras.Config) != 1 {
+		t.Errorf("re-lock with a delay lock: %+v", extras)
+	}
+	if err := runCLI(t, "start", "k2", "--relock", "1h", "--yes"); err == nil {
+		t.Error("re-lock without a lock")
+	}
+}
+
+// §3.4, §4.6: extending a timer lock is its own action; it never adds a
+// lock and never shortens one.
+func TestExtendTimerLock(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	if err := runCLI(t, "extend", "b", "--for", "1h", "--yes"); err == nil {
+		t.Error("extended a block that is off")
+	}
+	mustRun(t, "start", "b")
+	if err := runCLI(t, "extend", "b", "--for", "1h", "--yes"); err == nil {
+		t.Error("extended a block with no timer lock")
+	}
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	detail, _ := d.GetBlock("b")
+	first := detail.LockedUntil
+	if err := runCLI(t, "extend", "b", "--for", "30m"); err == nil {
+		t.Error("extended without confirmation")
+	}
+	mustRun(t, "extend", "b", "--for", "30m", "--yes")
+	detail, _ = d.GetBlock("b")
+	extras, _ := d.GetLockExtras("b")
+	if detail.LockedUntil != first+1800 || len(extras.Queue) != 0 {
+		t.Errorf("extend --for: until %d (was %d), queue %+v", detail.LockedUntil, first, extras.Queue)
+	}
+	if err := runCLI(t, "extend", "b", "--until", "2020-01-01 10:00", "--yes"); err == nil {
+		t.Error("a timer lock shortened by extend --until")
+	}
+	mustRun(t, "extend", "b", "--until", "2099-12-24 18:00", "--yes")
+	detail, _ = d.GetBlock("b")
+	if time.Unix(detail.LockedUntil, 0).Year() != 2099 {
+		t.Errorf("extend --until: until %d", detail.LockedUntil)
+	}
+
+	// Waiting behind a password lock: only --for, added to its duration.
+	mustRun(t, "block", "create", "c")
+	mustRun(t, "block", "add", "c", "reddit.com")
+	if err := runWith(t, 0, []string{"pw"}, "start", "c", "--password-stdin", "--for", "1h", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(t, "extend", "c", "--until", "2099-12-24 18:00", "--yes"); err == nil {
+		t.Error("a waiting timer lock given a date")
+	}
+	mustRun(t, "extend", "c", "--for", "1h", "--yes")
+	if extras, _ = d.GetLockExtras("c"); extras.TimerAfter != 7200 {
+		t.Errorf("waiting timer lock: %+v", extras)
+	}
 }

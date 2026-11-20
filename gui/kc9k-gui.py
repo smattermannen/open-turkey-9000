@@ -15,6 +15,7 @@ import re
 import shlex
 import subprocess
 import threading
+import weakref
 
 import gi
 
@@ -1908,9 +1909,12 @@ def split_entries(text):
 class ResizeGrip(Gtk.EventBox):
     """A handle under a list: drag it down to make the list taller, up to
     make it shorter; a double-click puts it back. The height is remembered
-    in gui.json under key, so the list opens the same next time."""
+    in gui.json under key, so the list opens the same next time; the other
+    lists of that kind on screen take it at once (B6: a block's exception
+    list kept its old height while the card stayed)."""
 
     MIN = 80
+    live = weakref.WeakSet()
 
     def __init__(self, target, key, default):
         super().__init__(tooltip_text="Drag to make the list taller or shorter")
@@ -1927,6 +1931,8 @@ class ResizeGrip(Gtk.EventBox):
         self.connect("button-press-event", self._press)
         self.connect("motion-notify-event", self._motion)
         self.connect("button-release-event", self._release)
+        ResizeGrip.live.add(self)
+        self.connect("destroy", lambda w: ResizeGrip.live.discard(w))
         height = self._heights().get(key)
         if isinstance(height, int) and height >= self.MIN:
             target.set_size_request(-1, height)
@@ -1945,7 +1951,9 @@ class ResizeGrip(Gtk.EventBox):
         """Sets the list's height (None: back to its own) and remembers it."""
         if height is not None:
             height = max(self.MIN, int(height))
-        self.target.set_size_request(-1, -1 if height is None else height)
+        for grip in list(ResizeGrip.live):
+            if grip is self or (self.key and grip.key == self.key):
+                grip.target.set_size_request(-1, -1 if height is None else height)
         prefs = self._prefs()
         if prefs is not None and self.key:
             heights = dict(self._heights())

@@ -1,7 +1,8 @@
 """GUI smoke test for the grip under a list (owner 2026-11-19): dragging it
 down makes the list taller, up shorter (never below ResizeGrip.MIN); the
 height is kept in gui.json per kind of list, so a new list of the same kind
-opens as tall; a double-click puts it back. Loads gui/kc9k-gui.py as a
+opens as tall, and another one on screen takes it at once; a double-click
+puts it back. Loads gui/kc9k-gui.py as a
 module with a scratch XDG_CONFIG_HOME; runs no kc9k command. Needs an X
 display.
 
@@ -63,5 +64,21 @@ check(again.stack.get_size_request()[1] == -1 and abs(again.stack.get_preferred_
       "double-click: back to its own height")
 check("website list" not in json.load(open(gui.PREFS_PATH)).get("list_heights", {}), "and forgotten in gui.json")
 window2.destroy()
+
+# Two lists of the same kind on screen (a block's blacklist and its
+# exception list): dragging one gives the other the height too (B6, on the
+# desktop the exception list kept its old height until the GUI restarted).
+window3, first = make()
+window4, second = make()
+drag(first.grip, 150)
+check(abs(second.stack.get_allocated_height() - first.stack.get_allocated_height()) <= 2,
+      "the other list of that kind takes the height (%d, %d)"
+      % (first.stack.get_allocated_height(), second.stack.get_allocated_height()))
+other = gui.EditableList("", "x", lambda v: None, lambda v: None, size_key="phrase set")
+check(other.stack.get_size_request()[1] == -1, "a list of another kind keeps its own")
+second.grip.emit("button-press-event", event(Gdk.EventType._2BUTTON_PRESS, 100)); pump()
+check(first.stack.get_size_request()[1] == -1, "double-click on one puts both back")
+window3.destroy(); window4.destroy(); pump()
+check(not any(g.key == "website list" for g in gui.ResizeGrip.live), "closed lists are let go")
 print("FAILED: %d" % len(fails) if fails else "all passed")
 sys.exit(1 if fails else 0)

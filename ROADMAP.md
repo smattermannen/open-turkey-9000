@@ -35,7 +35,6 @@ of their group and a row here; a finished item loses its row.
 | B3 | Strict mode holes | §3.8 | device | vm |
 | B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | vm |
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
-| B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | box |
 | B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
 | B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
 | B9 | Mute and dark on real sites; polite close with a real app | §3.9 | extension, apps-titles | box |
@@ -908,12 +907,28 @@ Script-tested, never by a person. Script what can be into `ci/`.
 - [ ] `B3` Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
 - [ ] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock.
 - [ ] `B5` Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
-- [ ] `B6` Websites tab on a real screen. (Address change without load: a
+- [x] `B6` Websites tab on a real screen. (Address change without load: a
   `history.pushState` page is caught by a URL list in LibreWolf,
-  `extras_test.py`; on YouTube itself still Unchecked.) Lists are
-  taller by dragging the grip under them (owner 2026-11-19; height kept
-  per kind in gui.json, `ci/gui_list_resize_smoke.py` under Xvfb): try it
-  on a real screen.
+  `extras_test.py`.) Lists are taller by dragging the grip under them
+  (owner 2026-11-19; height kept per kind in gui.json,
+  `ci/gui_list_resize_smoke.py` under Xvfb). Built, checked 2026-11-20 on
+  the desktop (Mint 22.3, X11 :0, devmaster install of this tree).
+  Websites tab of a throwaway block (60 entries) in kc9k-gui, screenshots:
+  tabs, Test mode, the blacklist card, cover "60 entries hidden", grip
+  under the list. xdotool drag down: list 120 → 330 px, gui.json
+  `"website list": 330`; up: 254; back to All blocks and in again: 254.
+  Found: the block's exception list (same kind) stayed 120 until the GUI
+  restarted (its card is kept while the block is open again). Fixed:
+  `ResizeGrip.set_height` gives the height to every list of that kind on
+  screen (`ResizeGrip.live`); smoke test checks it (failed before). After
+  reinstall and a GUI restart: blacklist opens 254; drag to 160 → the
+  exception list 160 at once; double-click → both back to 120,
+  `list_heights` emptied. YouTube on the real site (LibreWolf headless,
+  Marionette, URL list entry `youtube.com/watch`): block off, clicking a
+  search result goes to `/watch?v=…` with a marker on `window` kept (no
+  load); block on, the same click → the block page ("Stopped by the list
+  Blocked of the block b6yt") at the first poll (< 0.25 s); the results
+  page itself opens. Block, gui.json as found.
 - [ ] `B7` One-off logout/shutdown from a list; Dashboard monk button. (Checked
   2026-11-15: a timer-locked global ladder refuses `bypass off` and a weaker
   ladder, and turns off once the lock ends.)

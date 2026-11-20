@@ -45,7 +45,9 @@
   confirmation); setting locks keep it to text/password locks.
   `EditableList` has a `ResizeGrip` under it (drag down: taller; double-click:
   back), height kept in gui.json `list_heights` under `size_key` (website
-  list, phrase set) or the list's title; `ci/gui_list_resize_smoke.py`.
+  list, phrase set) or the list's title; a new height goes to every list of
+  that key on screen too (`ResizeGrip.live`: a kept card, such as the
+  exception list of a block opened again); `ci/gui_list_resize_smoke.py`.
   CLI side: `cli/duration.go` (`parseUserDuration` with d/w,
   `humanDuration`, `untilToday` with dates).
 

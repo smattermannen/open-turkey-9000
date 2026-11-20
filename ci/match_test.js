@@ -856,3 +856,24 @@ if (typeof kc9kSocialRedirect === "function") {
     process.exitCode = 1;
   }
 }
+
+// Principle 9: a long text is folded a piece at a time (kc9kFoldSteps), the
+// same as folding it whole, pieces never parting a letter from its marks.
+{
+  const text = ("Café naïve ΡΟΚΕR p​orn été ".repeat(4000)) + "end";
+  const steps = kc9kFoldSteps(text);
+  let r;
+  let n = 0;
+  while (!(r = steps.next()).done) {
+    n++;
+  }
+  if (n < 2 || r.value !== kc9kFold(text) || kc9kFoldCached(text) !== r.value) {
+    console.error("FAIL kc9kFoldSteps: " + n + " pieces, same as whole: " + (r.value === kc9kFold(text)));
+    process.exitCode = 1;
+  }
+  const short = kc9kFoldSteps("Short Ünïcode");
+  if (short.next().value !== "short unicode") {
+    console.error("FAIL kc9kFoldSteps on a short text");
+    process.exitCode = 1;
+  }
+}

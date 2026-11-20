@@ -19,7 +19,8 @@
   (fullwidth, mathematical, circled letters, ligatures), lower case, marks
   and format characters (zero-width, soft hyphen) dropped, then
   `KC9K_LOOKALIKES` (Cyrillic, Greek, Armenian, small capitals). Terms are
-  folded the same way. `ci/match_test.js`; frames in Chromium
+  folded the same way; a long page text is folded in pieces between steps
+  (`kc9kFoldSteps`, cut after a blank; principle 9). `ci/match_test.js`; frames in Chromium
   (`ci/content_harness_test.js`); `frameHit` in `ci/background_test.js`.
 - **File pages** (§3.1): judged only when a rule has `file_pages`
   (tamper "allow file:// blocking"; `enforce.withFilePages`), by `files`

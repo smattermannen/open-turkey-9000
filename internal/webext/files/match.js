@@ -303,6 +303,34 @@ function kc9kFoldCached(input) {
   }
   return value;
 }
+// kc9kFoldSteps is kc9kFoldCached in steps (principle 9): a long text is
+// folded a piece at a time, each piece ending after a blank, so no
+// letter's marks are parted from it; the result is cached as one.
+const KC9K_FOLD_PIECE = 16384;
+function* kc9kFoldSteps(input) {
+  const key = String(input);
+  if (key.length <= KC9K_FOLD_PIECE || kc9kFoldCache.has(key)) {
+    return kc9kFoldCached(key);
+  }
+  const parts = [];
+  for (let at = 0; at < key.length;) {
+    let end = Math.min(key.length, at + KC9K_FOLD_PIECE);
+    if (end < key.length) {
+      const blank = key.slice(end).search(/\s/);
+      end = blank < 0 ? key.length : end + blank + 1;
+    }
+    parts.push(kc9kFold(key.slice(at, end)));
+    at = end;
+    yield;
+  }
+  const value = parts.join("");
+  if (kc9kFoldCache.size >= 4) {
+    kc9kFoldCache.delete(kc9kFoldCache.keys().next().value);
+  }
+  kc9kFoldCache.set(key, value);
+  return value;
+}
+
 // kc9kTermSource is the pattern for one word or phrase.
 function kc9kTermSource(term) {
   const value = kc9kFold(String(term).trim());
@@ -570,7 +598,7 @@ function* kc9kIndexCountsSteps(index, text) {
       counts.set(i, (counts.get(i) || 0) + 1);
     }
   };
-  const folded = kc9kFoldCached(text);
+  const folded = yield* kc9kFoldSteps(text);
   const re = /[\p{L}\p{N}]+/gu;
   let m;
   let w = 0;
@@ -634,6 +662,7 @@ function kc9kTextHits(matchers, text) {
 function* kc9kTextHitsSteps(matchers, text) {
   let distinct = 0;
   let total = 0;
+  yield* kc9kFoldSteps(text); // the matchers read it folded, from the cache
   if (matchers.index) {
     for (const n of (yield* kc9kIndexCountsSteps(matchers.index, text)).values()) {
       distinct++;
@@ -663,6 +692,9 @@ function* kc9kTextHitsSteps(matchers, text) {
 // kc9kSomeSteps reports, a matcher a step, whether one of matchers is in
 // text.
 function* kc9kSomeSteps(matchers, text) {
+  if (matchers.length > 0) {
+    yield* kc9kFoldSteps(text); // the matchers read it folded, from the cache
+  }
   for (const matcher of matchers) {
     yield;
     if (matcher.test(text)) {
@@ -824,7 +856,7 @@ function* kc9kPhrasesFoundSteps(list, page) {
   const scope = list.phraseScope;
   const found = [];
   if (scope.includes("text") && typeof page.text === "string" && list.phrases.length > 0) {
-    yield* kc9kPhraseTokenizedSteps(kc9kFoldCached(page.text)); // split once, in steps, as the phrases read it
+    yield* kc9kPhraseTokenizedSteps(yield* kc9kFoldSteps(page.text)); // split once, in steps, as the phrases read it
   }
   for (const p of list.phrases) {
     yield;

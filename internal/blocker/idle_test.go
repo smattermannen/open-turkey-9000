@@ -11,29 +11,34 @@ import (
 // has had no input (MIT-SCREEN-SAVER), and new input starts that again.
 func TestX11IdleMillis(t *testing.T) {
 	display, xauth := startX(t)
+	// One connection throughout: Xvfb starts afresh (idle time too) when its
+	// last client leaves.
+	c, err := openUserDisplay(display, xauth, fileOwner(t, xauth))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
 	idle := func() uint64 {
-		c, err := openUserDisplay(display, xauth, fileOwner(t, xauth))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer c.Close()
+		_ = c.conn.SetDeadline(time.Now().Add(x11Timeout))
 		ms, err := c.idleMillis()
 		if err != nil {
 			t.Fatal(err)
 		}
 		return ms
 	}
+	before := idle()
 	time.Sleep(1500 * time.Millisecond)
-	if ms := idle(); ms < 1000 {
-		t.Fatalf("idle %d ms after 1.5 s without input", ms)
+	after := idle()
+	if after < before+1000 {
+		t.Fatalf("idle went from %d to %d ms in 1.5 s without input", before, after)
 	}
 	if _, err := exec.LookPath("xdotool"); err != nil {
 		t.Skip("xdotool not installed: input not tried")
 	}
 	move := startClient(t, display, xauth, "xdotool", "mousemove", "40", "40")
 	move.Wait()
-	if ms := idle(); ms > 1000 {
-		t.Errorf("idle %d ms right after input", ms)
+	if ms := idle(); ms >= after {
+		t.Errorf("idle %d ms right after input (was %d)", ms, after)
 	}
 }
 

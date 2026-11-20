@@ -138,6 +138,23 @@ TAMPER_SETTINGS = (
     ("private", "Close private windows and Tor",
      "Private windows are turned off in every browser (open ones close when it restarts) and "
      "Tor Browser is closed.", ("tamper", "private")),
+    ("guest", "Close guest profiles",
+     "Guest browsing is turned off in every Chrome-like browser (Chrome and Chromium have it off "
+     "always) and the login screen offers no guest session.", ("tamper", "guest")),
+    ("extension-stop", "Close browsers if the extension stops",
+     "A browser whose Killer Chicken extension stops checking in is closed while a block needs "
+     "it. Off, only while something is locked.", ("tamper", "extension-stop")),
+    ("installer", "Block the installer",
+     "While anything is locked, reinstalling Killer Chicken 9000 or installing an older version "
+     "is refused, by the package manager and install.sh. Removing it always is.",
+     ("tamper", "installer")),
+    ("inactive-tabs", "Block inactive tabs",
+     "Tabs in the background are blocked at once. Off, a background tab is blocked when you "
+     "switch to it.", ("tamper", "inactive-tabs")),
+    ("embedded", "Block embedded content",
+     "A blocked site shown inside another page (a video, a frame) gets the block page. Off, "
+     "the extension leaves embedded pages alone; whole blocked domains stay blocked.",
+     ("tamper", "embedded")),
     ("file-urls", "Allow file:// blocking",
      "Blacklist entries such as file:///home/me/games/* block local files in the browsers. "
      "Each block's own file:// exceptions (file://* by default) still spare them.",
@@ -10689,6 +10706,11 @@ class Window(Gtk.ApplicationWindow):
                 "file-urls": bool(self.state.get("tamper_file_urls", False)),
                 "task-managers": bool(self.state.get("tamper_task_managers", False)),
                 "private": bool(self.state.get("tamper_private", False)),
+                "guest": bool(self.state.get("tamper_guest", False)),
+                "extension-stop": bool(self.state.get("tamper_extension_stop", True)),
+                "installer": bool(self.state.get("tamper_installer", False)),
+                "inactive-tabs": bool(self.state.get("tamper_inactive_tabs", True)),
+                "embedded": bool(self.state.get("tamper_embedded", True)),
                 "unsupported-browsers": bool(self.state.get("unsupported_browsers", False))}
 
     def setting_lock_info(self, name):

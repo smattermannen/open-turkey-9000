@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
 // R-LOCK-1, §3.5: a locked block can't be weakened, by any command. Every
@@ -274,5 +276,46 @@ func TestLockedDeviceProtectionRefusesWeakening(t *testing.T) {
 	}
 	if v, _ := d.GetSetting("no_escape"); v != "on" {
 		t.Error("no-escape turned off")
+	}
+}
+
+// R-LOCK-1, §3.6 places: on a locked block that two places turn on
+// (disabled by default), unticking one, needing more of its networks, or
+// forgetting it all lift the block somewhere: refused. Needing fewer
+// networks is free. (Unticking the last place makes the block continuous,
+// which is stronger.)
+func TestLockedBlockRefusesPlaceWeakening(t *testing.T) {
+	notTerminal(t)
+	d := testDB(t)
+	home := []db.Network{{BSSID: "AA:AA:AA:AA:AA:01"}, {BSSID: "AA:AA:AA:AA:AA:02"}, {BSSID: "AA:AA:AA:AA:AA:03"}}
+	office := []db.Network{{BSSID: "CC:CC:CC:CC:CC:01"}, {BSSID: "CC:CC:CC:CC:CC:02"}}
+	seen := home
+	oldScan := enforce.ScanWifi
+	enforce.ScanWifi = func(bool) ([]db.Network, error) { return seen, nil }
+	t.Cleanup(func() { enforce.ScanWifi = oldScan })
+	mustRun(t, "place", "add", "home")
+	seen = office
+	enforce.ForgetSeenNetworks()
+	mustRun(t, "place", "add", "office")
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "place", "rule", "b", "home", "on")
+	mustRun(t, "place", "rule", "b", "office", "on")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	for _, args := range [][]string{
+		{"place", "rule", "b", "home", "off"},
+		{"place", "need", "home", "3"},
+		{"place", "remove", "home"},
+	} {
+		if err := runCLI(t, args...); err == nil {
+			t.Errorf("%v: a locked block was weakened", args)
+		}
+	}
+	p, err := d.GetPlace("home")
+	if err != nil || !slices.Contains(p.Blocks, "b") || p.Needed() != 2 {
+		t.Errorf("the place changed: %+v %v", p, err)
+	}
+	if err := runCLI(t, "place", "need", "home", "1"); err != nil {
+		t.Errorf("needing fewer networks refused: %v", err)
 	}
 }

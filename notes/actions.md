@@ -34,7 +34,8 @@
   block trigger B apps|titles ACTION on|off [--for D]` (on/longer free,
   off/shorter weakens; monk needs `--no-confirm-ok`). Daemon:
   `appsTrigger` (close or `RunningApps`), titles via
-  `TitleGuard.EnforceWatch` (watch without closing); `fireTrigger` ≤ once
+  `TitleGuard.EnforceUsers` (`TitleTargets.Watch`: watch without closing;
+  per user, `titleTargets`); `fireTrigger` ≤ once
   a minute per block+group → `runAnnounced`. GUI `TriggerEditor`,
   gui-state `triggers`, projects `triggers`. A place rule has **no
   actions** (§3.6, owner 2026-11-16: they existed for a day;

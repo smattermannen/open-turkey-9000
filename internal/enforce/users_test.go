@@ -71,3 +71,21 @@ func TestAffectedUsersTitlesAndGuard(t *testing.T) {
 		t.Errorf("title targets with a block for everyone: %+v", targets)
 	}
 }
+
+// §3.6 places: nmcli's terse lines, with "\:" for a colon inside a field;
+// a line without a whole BSSID is skipped.
+func TestParseNmcli(t *testing.T) {
+	out := "aa\\:bb\\:cc\\:dd\\:ee\\:01:Home\n" +
+		"AA\\:BB\\:CC\\:DD\\:EE\\:02:Café\\: upstairs\n" +
+		"broken line\n" +
+		"aa\\:bb:Short\n" +
+		"AA\\:BB\\:CC\\:DD\\:EE\\:03:\n\n"
+	nets := parseNmcli(out)
+	if len(nets) != 3 || nets[0].BSSID != "AA:BB:CC:DD:EE:01" || nets[0].SSID != "Home" ||
+		nets[1].SSID != "Café: upstairs" || nets[2].BSSID != "AA:BB:CC:DD:EE:03" || nets[2].SSID != "" {
+		t.Errorf("parsed %+v", nets)
+	}
+	if len(parseNmcli("")) != 0 {
+		t.Error("nothing from nothing")
+	}
+}

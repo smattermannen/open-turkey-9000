@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout main)",
+      "Bash(git checkout -q main)",
+      "Bash(git merge:*)",
+      "Bash(git push origin main)",
+      "Bash(git push -q origin main)",
+      "Bash(git push -u origin main)"
+    ]
+  }
+}

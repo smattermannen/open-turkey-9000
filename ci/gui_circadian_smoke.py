@@ -116,16 +116,23 @@ pump(lambda: any(a[:3] == ["circadian", "preview", "kelvin"] and "--end" in a fo
 check(any(a[3:] == ["4000"] for a in previews), "the drag previewed 4000 K: " + str(previews[:3]))
 check(any("--end" in a for a in previews), "the preview is ended after the drag")
 reread(); editor = page.editors["kelvin"]
-# Bend the curve after the 14:00 point.
+# Bend the curve after the 14:00 point by its handle (D4).
 index = [p["minute"] for p in editor.points].index(840)
+check(len(editor.handles()) == len(editor.points), "a bend handle per segment, midnight's too")
 mid = (editor.points[index]["minute"] + editor.points[index + 1]["minute"]) / 2
-my = editor.y_of(gui.clip_value(editor.points, mid))
-event("pressed", editor.x_of(mid), my)
-check(editor.drag is not None and editor.drag[0] == "tension", "pressing the curve grabs its bend")
-event("motion", editor.x_of(mid), my - 40)
-event("released", editor.x_of(mid), my - 40)
+_i, hx, hy = editor.handles()[index]
+check(_i == index and abs(hx - editor.x_of(mid)) < 0.5 and abs(hy - editor.y_of(gui.clip_value(editor.points, mid))) < 0.5,
+      "the handle sits on the curve halfway between the points")
+off = editor.points[index]["minute"] + (mid - editor.points[index]["minute"]) / 3
+event("pressed", editor.x_of(off), editor.y_of(gui.clip_value(editor.points, off)))
+check(editor.drag is None, "pressing the curve away from its handle grabs nothing")
+event("released", editor.x_of(off), editor.y_of(gui.clip_value(editor.points, off)))
+event("pressed", hx, hy)
+check(editor.drag is not None and editor.drag[0] == "tension" and editor.drag[1] == index, "pressing the handle grabs its bend")
+event("motion", hx, hy - 40)
+event("released", hx, hy - 40)
 pump(lambda: any(p["minute"] == 840 and p["tension"] == 0.5 for p in show()["lanes"][2]["points"]))
-check(True, "dragging the curve up by 40 px stores tension 0.5")
+check(True, "dragging the handle up by 40 px stores tension 0.5")
 reread(); editor = page.editors["kelvin"]
 event("pressed", editor.x_of(840), editor.y_of(4000), button=3)
 pump(lambda: not any(p["minute"] == 840 for p in show()["lanes"][2]["points"]))

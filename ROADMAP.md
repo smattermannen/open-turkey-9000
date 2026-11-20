@@ -57,7 +57,6 @@ of their group and a row here; a finished item loses its row.
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | D2 | Start a block without the lock dialog (locks via "Add locks…" once on) | §4.3, R-LOCK-7 | gui, locks | agent, owner |
 | D3 | Instagram social setting "Following only" (no suggested posts) | §3.2 | extension, lists | agent, box |
-| D4 | Automation clips: a handle mid-segment, drag to bend | §4.10 | gui, circadian | agent |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
@@ -86,9 +85,11 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     `/` to `/?variant=following`, hide suggested units). `db/social.go`,
     `webext/files/social.js` (redirects match the path only today: needs a
     query check), test in `ci/match_test.js`; note `extension`.
-  - **D4** ClipEditor: a small circle in the middle of each segment
+  - [x] **D4** ClipEditor: a small circle in the middle of each segment
     between two points; left-drag it to change the bend (`tension`).
     Today the whole curve is the drag target (`on_curve`); note `gui`.
+    Built 2026-11-20 (`handles`, `handle_at`; `ci/gui_circadian_smoke.py`;
+    on a real screen: Unchecked).
 
 - [x] **Owner report 2026-11-17 (later)** (after testing the latest build;
   top priority; SPEC changed the same day, §6). In three steps, each

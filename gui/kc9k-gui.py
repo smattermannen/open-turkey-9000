@@ -3467,7 +3467,8 @@ SKY = ((0, .04, .06, .15), (5, .10, .16, .32), (6.5, .96, .64, .38), (8, .56, .7
 class ClipEditor(Gtk.DrawingArea):
     """One automation clip: a 24-hour curve of points. Right-click adds a
     point (on a point: removes it), dragging a point moves it, dragging the
-    curve bends it, double-click types exact values."""
+    small handle in the middle of a segment bends it (owner 2026-11-20,
+    D4), double-click types exact values."""
 
     LEFT, RIGHT, TOP, BOTTOM = 52, 12, 10, 30
     GRAB = 9
@@ -3482,7 +3483,8 @@ class ClipEditor(Gtk.DrawingArea):
         self.on_change, self.on_preview = on_change, on_preview
         self.drag = None  # ("point", index) or ("tension", index, start y, start tension)
         self.moved = False
-        self.hover = None
+        self.hover = None  # a point's index
+        self.hover_handle = None  # a segment's index (the point it starts at)
         self.set_size_request(-1, 190)
         self.set_has_tooltip(True)
         self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK | POINTER_EVENTS)
@@ -3526,17 +3528,27 @@ class ClipEditor(Gtk.DrawingArea):
                 return index
         return None
 
-    def on_curve(self, px, py):
-        """The index of the point whose curve passes under the pointer."""
-        if len(self.points) < 2:
-            return None
-        x, _y, w, _h = self.plot()
-        if px < x or px > x + w:
-            return None
-        minute = (px - x) / w * DAY_MINUTES
-        if abs(self.y_of(clip_value(self.points, minute)) - py) > self.GRAB:
-            return None
-        return clip_segment(self.points, minute)[0]
+    def handles(self):
+        """(segment index, x, y) of each segment's bend handle: on the
+        curve, halfway in time between its point and the next (the last
+        segment runs past midnight to the first point)."""
+        count = len(self.points)
+        if count < 2:
+            return []
+        found = []
+        for index, point in enumerate(self.points):
+            start = point["minute"]
+            end = self.points[(index + 1) % count]["minute"] + (DAY_MINUTES if index + 1 == count else 0)
+            mid = ((start + end) / 2) % DAY_MINUTES
+            found.append((index, self.x_of(mid), self.y_of(clip_value(self.points, mid))))
+        return found
+
+    def handle_at(self, px, py):
+        """The segment whose bend handle is under the pointer."""
+        for index, hx, hy in self.handles():
+            if abs(hx - px) <= self.GRAB and abs(hy - py) <= self.GRAB:
+                return index
+        return None
 
     def set_data(self, lane, minute, active):
         """Takes the stored clip over, unless a drag is under way."""
@@ -3641,6 +3653,16 @@ class ClipEditor(Gtk.DrawingArea):
             cr.line_to(play_x, y + h + 9)
             cr.stroke()
 
+        # The bend handles, small and hollow, one mid-segment.
+        for index, hx, hy in self.handles():
+            grabbed = self.hover_handle == index or (self.drag and self.drag[0] == "tension" and self.drag[1] == index)
+            cr.arc(hx, hy, 4.5 if grabbed else 3, 0, 2 * math.pi)
+            cr.set_source_rgba(1, 1, 1, 0.85 * alpha)
+            cr.fill_preserve()
+            cr.set_line_width(1.5)
+            cr.set_source_rgba(accent[0], accent[1], accent[2], 0.8 * alpha)
+            cr.stroke()
+
         # The points.
         for index, point in enumerate(self.points):
             px, py = self.x_of(point["minute"]), self.y_of(point["value"])
@@ -3667,6 +3689,11 @@ class ClipEditor(Gtk.DrawingArea):
             tip.set_text(f"{show_clock(point['minute'])}  {self.describe(point['value'])}\n"
                          "Drag to move · right-click to remove · double-click to type")
             return True
+        segment = self.handle_at(px, py)
+        if segment is not None:
+            tip.set_text(f"Bend {self.points[segment].get('tension', 0):+.2f}\n"
+                         "Drag up or down to bend this stretch · double-click to type")
+            return True
         if not self.points:
             return False
         minute = (px - x) / w * DAY_MINUTES
@@ -3690,15 +3717,15 @@ class ClipEditor(Gtk.DrawingArea):
             return True
         if event.button != 1:
             return False
+        segment = self.handle_at(event.x, event.y) if index is None else None
         if event.type == Gdk.EventType.DOUBLE_BUTTON_PRESS:
             self.drag = None
-            if index is not None:
-                self.type_point(index)
+            if index is not None or segment is not None:
+                self.type_point(index if index is not None else segment)
             return True
         if index is not None:
             self.drag, self.moved = ("point", index), False
         else:
-            segment = self.on_curve(event.x, event.y)
             if segment is not None:
                 self.drag, self.moved = ("tension", segment, event.y, self.points[segment].get("tension", 0)), False
         return True
@@ -3706,8 +3733,9 @@ class ClipEditor(Gtk.DrawingArea):
     def motion(self, _widget, event):
         if self.drag is None:
             hover = self.point_at(event.x, event.y)
-            if hover != self.hover:
-                self.hover = hover
+            handle = self.handle_at(event.x, event.y) if hover is None else None
+            if hover != self.hover or handle != self.hover_handle:
+                self.hover, self.hover_handle = hover, handle
                 self.queue_draw()
             self.trigger_tooltip_query()
             return False
@@ -3742,8 +3770,8 @@ class ClipEditor(Gtk.DrawingArea):
         return True
 
     def left(self, *_args):
-        if self.hover is not None and self.drag is None:
-            self.hover = None
+        if (self.hover is not None or self.hover_handle is not None) and self.drag is None:
+            self.hover = self.hover_handle = None
             self.queue_draw()
 
     def type_point(self, index):

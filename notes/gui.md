@@ -44,4 +44,5 @@ Not fixed by `SPEC.md`; the code is the truth.
   `~/.config/kc9k/gui.json`. Schedule grid: drag adds, click removes,
   filled = block window, outlined = allow window, one-click presets.
   ClipEditor: right-click add/remove point, drag (Shift = minute), drag
-  curve to bend, double-click to type.
+  the small handle mid-segment up or down to bend (`handles`, D4),
+  double-click (a point or handle) to type.

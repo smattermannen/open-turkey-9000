@@ -414,6 +414,17 @@ GUI and CLI offer the same functions.
   and settings (global ladder too). Layer order fixed while locked; new lock
   goes last. Timer locks always extendable; set for a duration or until a
   date picked on a calendar (R-GUI-2).
+  - Several locks of one kind may be layered, each its own layer (two
+    partners' password locks; a timer lock, a text lock, then another timer
+    lock). A further lock of a kind already on is added, last, only when the
+    user asks for a new lock; otherwise a lock given for that kind
+    strengthens one already on (a later timer, a longer text or delay lock).
+    *(By Opus)*
+  - The text lock's challenge is typed in the terminal the command runs in
+    or, without one, in a window the command itself opens on the user's
+    desktop (§6 2026-11-14); only keys typed there count. A paste, a drop or
+    an answer piped to the command is refused (R-LOCK-5); the GUI only runs
+    the command. *(By Opus)*
 - **4.7 Breaks and autostart**: all of §3.6. Break status also in the
   extension's toolbar button and popup.
 - **4.8 Frozen Chicken**: a mode among the blocks (no page of its own):
@@ -628,6 +639,8 @@ Decisions not already written into §1–5:
 - 2026-11-18: SafeSearch is lockable per engine: Google, Bing, DuckDuckGo and YouTube are each their own browser setting (§4.10).
 - 2026-11-18: When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
 - 2026-11-19: The autopilot's resolver may write decisions into this file, each change tagged as rule 1 says; only the owner's decisions are untagged (owner).
+- 2026-11-20 (By Opus): Layered sequential locks may hold several locks of one kind, each its own layer (§4.6): §3.4 says several locks, not several kinds, and the user decides how their locks work (2026-11-16). A new one of a kind already on is the user's explicit choice, so a lock given for that kind still strengthens the one on by default (principle 7).
+- 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
 
 ## 7. Open decisions
 

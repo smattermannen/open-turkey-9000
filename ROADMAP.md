@@ -51,9 +51,9 @@ of their group and a row here; a finished item loses its row.
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
 | 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
-| 2.5 | Several locks of one kind | §3.4 | locks | agent |
+| 2.5 | Several locks of one kind (decided 2026-11-20, §5) | §3.4, §4.6 | locks | agent |
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
-| 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
+| 2.7 | Hardening: the text lock's challenge in the command's own window (decided 2026-11-20, §5); rules server secret (for the owner, §5) | R-LOCK-5, §4.6 | browsers, locks | agent, owner |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | D1 | Block page: top bar (← All blocks … Save edits, Start) stays put while the block scrolls | §4.3, R-GUI-3 | gui | agent |
 | D2 | Start a block without the lock dialog (locks via "Add locks…" once on) | §4.3, R-LOCK-7 | gui, locks | agent, owner |
@@ -954,7 +954,8 @@ Only items not simply Built.
   the one `safesearch` setting. Left: a lock per engine (owner 2026-11-18: wanted; SPEC §6).
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
   order, `unlock` lifts only the first, status and GUI show the order). Left:
-  several locks of one kind (the order is chosen in the GUI now).
+  several locks of one kind (the order is chosen in the GUI now; how: SPEC
+  §4.6, decided 2026-11-20, §5).
 - **2.6 Factory reset protection** (M): firmware lock via
   `/sys/class/firmware-attributes/` (password given to a trusted person,
   no USB/network boot, fixed order); installer media guard (block OS image
@@ -968,9 +969,10 @@ Only items not simply Built.
   `audit_test.go` keeps it so (`env_reset` untouched). Left: rules server
   secret by policy (not rolled out overnight: if the extension can't read
   it, every check-in fails and the guard closes browsers; the policy files
-  are user-readable anyway); GTK window for the typing challenge (needs a
-  way to answer that keeps R-LOCK-5: a stdin answer would let scripts
-  type it).
+  are user-readable anyway; for the owner, §5); GTK window for the text
+  lock's challenge (a stdin answer would let scripts type it; decided
+  2026-11-20: the command opens the window and reads the keys itself,
+  SPEC §4.6, §5).
 - **2.8** Everything else Not built/Partial in §1.
 
 ## 3. Testers and Android (owner 2026-11-18)
@@ -1044,3 +1046,41 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   until the first word recording turns it on; `record baseline off`
   forgets it, because specificity needs it, but gathering browsing words
   unasked goes beyond what SPEC asks.
+- DECIDED 2026-11-20 (By Opus): several locks of one kind (`2.5`; built:
+  one lock per kind) → allowed, each its own layer in the user's order
+  (two partners' password locks; a timer lock, a text lock, then another
+  timer lock). A lock given for a kind already on still strengthens one
+  already on (a later timer, a longer text or delay lock), as today; a
+  further lock of that kind is added, last, only when the user asks for a
+  new lock. Why: §3.4 says several locks, not several kinds; the user
+  decides how their locks work (SPEC §6 2026-11-16); principle 7 keeps
+  today's default. Which one a strengthening applies to when several of
+  its kind are on is left to the build (notes `locks`). SPEC §4.6 now has
+  it.
+- DECIDED 2026-11-20 (By Opus): how the text lock's challenge window
+  (`2.7`; SPEC §6 2026-11-14) gets its answer without breaking R-LOCK-5 →
+  the command opens the window itself (as the signed-in user, on their
+  desktop) when it runs without a terminal, and only keys typed there
+  count; a paste, a drop or an answer piped to the command is refused; the
+  GUI runs the command (`kc9k unlock …`) and opens no terminal. Why: the
+  CLI decides all weakening (principle 10) and can tell typing from
+  pasting only in input it reads itself; a GUI handing the typed text over
+  on stdin would let any script do the same. Today a non-terminal stdin
+  is read as one line (`runChallengeLine`, `internal/lock/lock.go`): that
+  path goes too (tests keep a faked seam). SPEC §4.6 now has it.
+- FOR THE OWNER: the rules server secret (`2.7`; SPEC §6 2026-11-14, its
+  purpose as first written: "so other local programs can't read the
+  lists, post statistics or fake a check-in"). As designed it can't do
+  that: browsers run as the user, so the policy files that would carry the
+  secret are readable by every local program (written 0644). What already
+  holds without it: the server answers only its own address as host name
+  (no DNS rebinding) and counts check-ins and takes posts only with a
+  header of the extension's, which a web page can't send without a CORS
+  preflight the daemon never answers; a check-in counts only for the
+  browser whose own connection made it (`/proc/net/tcp`), so another
+  program can't fake one. The user's own programs can read `/rules` with
+  or without a secret. The risk: an extension that can't read the secret
+  fails every check-in, and the extension guard closes its browser. To
+  decide: build it as decided (it stops only programs that don't look for
+  the secret), give the secret to the extension some other way, or drop
+  it.

@@ -319,7 +319,7 @@ func migrateCombinations(conn *sql.DB) error {
 				return err
 			}
 		}
-		log.Printf("word combinations of cluster '%s' moved into phrases (%d)", name, len(texts))
+		log.Printf("word combinations of list preset '%s' moved into phrases (%d)", name, len(texts))
 	}
 	return tx.Commit()
 }

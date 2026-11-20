@@ -14,7 +14,7 @@ func TestClusters(t *testing.T) {
 	d := testDB(t)
 	mustRun(t, "cluster", "create", "academia")
 	if err := runCLI(t, "cluster", "create", "academia"); err == nil {
-		t.Error("two clusters got the same name")
+		t.Error("two list presets got the same name")
 	}
 	// Entries follow the same rules as a list's, and domains are normalized.
 	mustRun(t, "cluster", "add", "academia", "https://ArXiv.org/", "jstor.org", "scholar.google.com", "arxiv.org")
@@ -33,14 +33,14 @@ func TestClusters(t *testing.T) {
 		t.Error("removing a missing entry succeeded")
 	}
 	if err := runCLI(t, "cluster", "where", "academia", "url", "off"); err == nil {
-		t.Error("a cluster was left looking nowhere")
+		t.Error("a list preset was left looking nowhere")
 	}
 	// §3.2: clusters have no types: a rendered term joins the sites, and
 	// any scope fits.
 	mustRun(t, "cluster", "add", "academia", "homework")
 	mustRun(t, "cluster", "where", "academia", "title", "on")
 	if c, _ = d.GetCluster("academia"); c.Where != (db.Where{URL: true, Title: true}) || len(c.Entries) != 3 {
-		t.Errorf("mixed cluster = %+v", c)
+		t.Errorf("mixed list preset = %+v", c)
 	}
 	mustRun(t, "cluster", "where", "academia", "title", "off")
 	mustRun(t, "cluster", "remove", "academia", "homework")
@@ -72,17 +72,17 @@ func TestClusters(t *testing.T) {
 	// The copy is a copy: the cluster's later changes stay in the cluster.
 	mustRun(t, "cluster", "add", "school", "nature.com")
 	if got := list(t, d, "b", "school").Entries; len(got) != 2 {
-		t.Errorf("a cluster edit reached the block: %q", got)
+		t.Errorf("a list preset edit reached the block: %q", got)
 	}
 	mustRun(t, "cluster", "delete", "school")
 	if got := list(t, d, "b", "school").Entries; len(got) != 2 {
-		t.Errorf("deleting the cluster changed the block: %q", got)
+		t.Errorf("deleting the list preset changed the block: %q", got)
 	}
 
 	// A block's list saved as a cluster.
 	mustRun(t, "cluster", "save", "b", "Blocked", "mine")
 	if c, _ := d.GetCluster("mine"); len(c.Entries) != 3 || c.Where != (db.Where{URL: true}) {
-		t.Errorf("saved cluster = %+v", c)
+		t.Errorf("saved list preset = %+v", c)
 	}
 }
 
@@ -145,7 +145,7 @@ func TestClusterExportImport(t *testing.T) {
 		t.Error("an entry of only wildcards was imported")
 	}
 	if exists, _ := d.ClusterExists("bad"); exists {
-		t.Error("a failed import left a cluster behind")
+		t.Error("a failed import left a list preset behind")
 	}
 }
 
@@ -172,7 +172,7 @@ func TestRecording(t *testing.T) {
 	mustRun(t, "record")
 	mustRun(t, "record", "stop")
 	if c, _ := d.GetCluster("school"); !reflect.DeepEqual(c.Entries, []string{"login.school.example", "school.example"}) {
-		t.Errorf("cluster after recording = %q", c.Entries)
+		t.Errorf("list preset after recording = %q", c.Entries)
 	}
 	if r, _ := d.GetRecording(); r != nil {
 		t.Error("still recording after stop")
@@ -222,7 +222,7 @@ func TestWordRecording(t *testing.T) {
 		t.Error("a word recording didn't turn the baseline on")
 	}
 	if c, err := d.GetCluster("study"); err != nil || !c.Where.Text {
-		t.Fatalf("cluster for words: %+v %v", c, err)
+		t.Fatalf("list preset for words: %+v %v", c, err)
 	}
 	if err := runCLI(t, "record", "start", "--cluster", "other", "--words"); err == nil {
 		t.Error("a second recording started")
@@ -253,5 +253,43 @@ func TestWordRecording(t *testing.T) {
 	mustRun(t, "record", "baseline", "off")
 	if d.WordBaselineOn() || d.BaselinePages() != 0 {
 		t.Error("baseline off kept it")
+	}
+}
+
+// §3.14, §4.12: presets are named by the glossary (block-preset,
+// list-preset, --preset); the old names template, cluster, --template and
+// --cluster stay as aliases.
+func TestPresetCommandNames(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "block-preset", "save", "b", "P")
+	mustRun(t, "template", "save", "b", "T")
+	mustRun(t, "block", "create", "x", "--preset", "P")
+	mustRun(t, "block", "create", "y", "--template", "T")
+	for _, name := range []string{"x", "y"} {
+		if b, err := d.GetBlock(name); err != nil || len(b.Lists) == 0 {
+			t.Errorf("block %s from a block preset: %+v, %v", name, b, err)
+		}
+	}
+	mustRun(t, "list-preset", "create", "L")
+	mustRun(t, "phrase-set-preset", "create", "F", "--phrases")
+	mustRun(t, "cluster", "add", "L", "arxiv.org")
+	if c, err := d.GetCluster("L"); err != nil || len(c.Entries) != 1 {
+		t.Errorf("list preset L = %+v, %v", c, err)
+	}
+	out := capture(t, "block-preset")
+	if !strings.Contains(out, "P") || !strings.Contains(out, "T") {
+		t.Errorf("block-preset said %q", out)
+	}
+	for _, args := range [][]string{{"block-preset", "--help"}, {"list-preset", "--help"}, {"record", "start", "--help"}, {"block", "create", "--help"}} {
+		help := strings.ToLower(capture(t, args...))
+		if i := strings.Index(help, "aliases:"); i >= 0 { // the old names, listed as such
+			end := strings.Index(help[i:], "\n\n")
+			help = help[:i] + help[i+end:]
+		}
+		if strings.Contains(help, "cluster") || strings.Contains(help, "template") {
+			t.Errorf("%v shows a word to avoid: %s", args, help)
+		}
 	}
 }

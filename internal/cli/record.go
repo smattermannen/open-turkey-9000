@@ -1,7 +1,7 @@
 // record.go — link recording and word recording (§3.12).
 //
 //	kc9k record start <block> <list>     # record into a block's list
-//	kc9k record start --cluster <name>   # ... or into a cluster (made if needed)
+//	kc9k record start --preset <name>    # ... or into a list preset (made if needed)
 //	kc9k record start ... --words        # rendered words instead of sites
 //	kc9k record                          # what was recorded so far
 //	kc9k record stop [--discard] [--cut N]  # add them and stop
@@ -11,7 +11,7 @@
 // frame the browser opens, and the daemon keeps them. Nothing reaches the
 // target until 'stop', which adds them like 'kc9k list add' (so into an
 // exception list of a held block it is refused, and the recording stays) or
-// 'kc9k cluster add'.
+// 'kc9k list-preset add'.
 package cli
 
 import (
@@ -40,7 +40,7 @@ func recordingList(database *db.DB, r *db.Recording) (db.WebList, error) {
 
 func describeRecording(database *db.DB, r *db.Recording) string {
 	if r.Cluster != "" {
-		return fmt.Sprintf("cluster '%s'", r.Cluster)
+		return fmt.Sprintf("list preset '%s'", r.Cluster)
 	}
 	if l, err := recordingList(database, r); err == nil {
 		return fmt.Sprintf("the list '%s' of block '%s'", l.Name, r.Block)
@@ -50,14 +50,14 @@ func describeRecording(database *db.DB, r *db.Recording) string {
 
 var recordCmd = &cobra.Command{
 	Use:   "record",
-	Short: "Record the sites you open into a list or a cluster",
+	Short: "Record the sites you open into a list or a list preset",
 	Long: `Start a recording, browse, stop: every site opened in the browser in
 between (pages, and frames inside them, such as a login or a captcha from
-another site) is added to a block's list or to a cluster. It makes a list of
+another site) is added to a block's list or to a list preset. It makes a list of
 the sites a task really needs, e.g. a school's pages with their sign-in
 steps, to spare them in a block.
 
-  kc9k record start study Exceptions      # or: kc9k record start --cluster school
+  kc9k record start study Exceptions      # or: kc9k record start --preset school
   ... browse ...
   kc9k record                             # what was recorded so far
   kc9k record stop                        # add the sites and stop (--discard: drop them)
@@ -65,7 +65,7 @@ steps, to spare them in a block.
 The sites come from the extension in LibreWolf, private windows included,
 and are kept on this computer only. Pages that a block stops are recorded
 too. Nothing changes until 'stop', which follows the target's rules: into a
-blacklist or a cluster is always allowed; into an exception list weakens the
+blacklist or a list preset is always allowed; into an exception list weakens the
 block, so it is refused while the block is locked (the recording then stays,
 to stop later or discard). Without a subcommand, shows the recording.`,
 	Args: cobra.NoArgs,
@@ -75,7 +75,7 @@ to stop later or discard). Without a subcommand, shows the recording.`,
 			return err
 		}
 		if r == nil {
-			fmt.Println("Not recording. Start with 'kc9k record start <block> <list>' or 'kc9k record start --cluster <name>'.")
+			fmt.Println("Not recording. Start with 'kc9k record start <block> <list>' or 'kc9k record start --preset <name>'.")
 			return nil
 		}
 		if r.Words {
@@ -104,12 +104,12 @@ to stop later or discard). Without a subcommand, shows the recording.`,
 
 var recordStartCmd = &cobra.Command{
 	Use:   "start [block] [list]",
-	Short: "Start recording into a block's list, or with --cluster into a cluster",
+	Short: "Start recording into a block's list, or with --preset into a list preset",
 	Args:  cobra.RangeArgs(0, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
-		cluster, _ := cmd.Flags().GetString("cluster")
+		cluster, _ := cmd.Flags().GetString("preset")
 		if (cluster == "") == (len(args) != 2) {
-			return fmt.Errorf("give a block and one of its lists, or --cluster <name>")
+			return fmt.Errorf("give a block and one of its lists, or --preset <name>")
 		}
 		if r, err := database.GetRecording(); err != nil {
 			return err
@@ -131,20 +131,20 @@ var recordStartCmd = &cobra.Command{
 				if err := database.CreateCluster(cluster, where); err != nil {
 					return err
 				}
-				fmt.Printf("Cluster '%s' created (looks at: %s).\n", cluster, looks)
+				fmt.Printf("List preset '%s' created (looks at: %s).\n", cluster, looks)
 			}
 			c, err := database.GetCluster(cluster)
 			if err != nil {
 				return err
 			}
 			if c.Phrases {
-				return fmt.Errorf("cluster '%s' holds phrases, which take no part in recording (R-PHRASE-10)", cluster)
+				return fmt.Errorf("list preset '%s' holds phrases, which take no part in recording (R-PHRASE-10)", cluster)
 			}
 			if words && !c.Where.Text {
-				return fmt.Errorf("cluster '%s' doesn't look at page text; recorded words wouldn't match there", cluster)
+				return fmt.Errorf("list preset '%s' doesn't look at page text; recorded words wouldn't match there", cluster)
 			}
 			if !words && !c.Where.URL {
-				return fmt.Errorf("cluster '%s' doesn't look at the url; recorded sites wouldn't match there", cluster)
+				return fmt.Errorf("list preset '%s' doesn't look at the url; recorded sites wouldn't match there", cluster)
 			}
 			target.Cluster = cluster
 		} else {
@@ -293,7 +293,8 @@ forgets it.`,
 }
 
 func init() {
-	recordStartCmd.Flags().String("cluster", "", "Record into this cluster (made if there is none by that name)")
+	recordStartCmd.Flags().String("preset", "", "Record into this list preset (made if there is none by that name)")
+	flagAliases(recordStartCmd, map[string]string{"cluster": "preset"}) // §4.12
 	recordStartCmd.Flags().Bool("words", false, "Record the rendered words of the pages opened, with counts, instead of their sites (§3.12)")
 	recordStopCmd.Flags().Bool("discard", false, "Drop the recorded sites or words instead of adding them")
 	recordStopCmd.Flags().Int("cut", 0, "Word recording: drop the lowest N % of words by specificity before saving")

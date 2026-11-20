@@ -91,6 +91,6 @@ func TestImportLayouts(t *testing.T) {
 	// A file of phrases makes a phrase cluster without being told.
 	mustRun(t, "cluster", "import", "found", phrases)
 	if c, err := d.GetCluster("found"); err != nil || !c.Phrases || len(c.Entries) != 2 {
-		t.Errorf("cluster = %+v, %v", c, err)
+		t.Errorf("list preset = %+v, %v", c, err)
 	}
 }

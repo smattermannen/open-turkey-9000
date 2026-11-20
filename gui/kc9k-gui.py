@@ -8146,14 +8146,14 @@ class Window(Gtk.ApplicationWindow):
         templates = (self.state or {}).get("templates") or []
         template = None
         if templates:
-            # §3.2: start from one of your templates, or empty.
+            # §3.2: start from one of your block presets, or empty.
             dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
                                        buttons=Gtk.ButtonsType.OK_CANCEL, text="New block",
-                                       secondary_text="Start empty or from a template.")
+                                       secondary_text="Start empty or from a block preset.")
             combo = Gtk.ComboBoxText()
             combo.append("", "Empty")
             for name in templates:
-                combo.append(name, "Template: " + name)
+                combo.append(name, "Block preset: " + name)
             combo.set_active(0)
             dialog.get_message_area().pack_start(combo, False, False, 0)
             dialog.show_all()
@@ -8167,7 +8167,7 @@ class Window(Gtk.ApplicationWindow):
             self.selected = name
             self.blocks_stack.set_visible_child_name("detail")
             self.stack.set_visible_child_name("blocks")
-            self.run(["block", "create", name] + (["--template", template] if template else []))
+            self.run(["block", "create", name] + (["--preset", template] if template else []))
 
     def save_template(self, _button):
         if not self.selected:
@@ -8175,7 +8175,7 @@ class Window(Gtk.ApplicationWindow):
         name = self.ask_text("Save as block preset", "A name for a copy of this block, to make new blocks from.",
                              initial=self.selected)
         if name:
-            self.run(["template", "save", self.selected, name])
+            self.run(["block-preset", "save", self.selected, name])
 
     def choose_block_users(self, _button, answer=None):
         """§3.2: tick the accounts the block applies to; all ticked (or
@@ -8723,7 +8723,7 @@ class Window(Gtk.ApplicationWindow):
         if command[:2] == ["list", "import"]:
             answer = self.ask_import_source(
                 "Import into this list", "From a text file with one entry per line (a hosts file and "
-                "adblock rules are read too), or from other lists and clusters in Killer Chicken 9000; "
+                "adblock rules are read too), or from other lists and list presets in Killer Chicken 9000; "
                 "or the whole internet, or all searches containing some words.", more=True)
             if answer == "kc9k":
                 self.import_from_kc9k(command[2], command[3])
@@ -8774,9 +8774,9 @@ class Window(Gtk.ApplicationWindow):
                     sources.append((f"{other['name']}: {lst['name']}", ["list", "copy", other["name"], lst["name"], block, list_name]))
         for cluster in (self.state or {}).get("clusters") or []:
             if not cluster.get("phrases"):
-                sources.append((f"Cluster: {cluster['name']}", ["cluster", "copy", cluster["name"], block, "--into", list_name]))
+                sources.append((f"List preset: {cluster['name']}", ["list-preset", "copy", cluster["name"], block, "--into", list_name]))
         if not sources:
-            self.message("No other lists or clusters to import from.", Gtk.MessageType.INFO)
+            self.message("No other lists or list presets to import from.", Gtk.MessageType.INFO)
             return
         dialog = Gtk.Dialog(title="Import from Killer Chicken 9000", transient_for=self, modal=True)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
@@ -8919,7 +8919,7 @@ class Window(Gtk.ApplicationWindow):
             "Import into this phrase set",
             "From a text file, one per line: phrases such as [eat, nice] [hello, grandpa] are added to "
             "the set; rendered terms become one word set in the phrase editor. Or from lists and "
-            "clusters in Killer Chicken 9000: their entries become one word set.")
+            "list presets in Killer Chicken 9000: their entries become one word set.")
         if answer == "kc9k":
             terms = self.pick_kc9k_terms()
             if terms:
@@ -8962,9 +8962,9 @@ class Window(Gtk.ApplicationWindow):
                     sources.append((f"{other['name']}: {lst['name']}", lst["entries"]))
         for cluster in (self.state or {}).get("clusters") or []:
             if not cluster.get("phrases") and cluster.get("entries"):
-                sources.append((f"Cluster: {cluster['name']}", cluster["entries"]))
+                sources.append((f"List preset: {cluster['name']}", cluster["entries"]))
         if not sources:
-            self.message("No lists or clusters to import from.", Gtk.MessageType.INFO)
+            self.message("No lists or list presets to import from.", Gtk.MessageType.INFO)
             return []
         dialog = Gtk.Dialog(title="Import a word set from Killer Chicken 9000", transient_for=self, modal=True)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
@@ -9127,8 +9127,8 @@ class Window(Gtk.ApplicationWindow):
 
         self.cluster_entries = EditableList(
             "Entries", "reddit.com  *casino*",
-            lambda values: self.cluster_name() and self.run(["cluster", "add", self.cluster_name(), *values]),
-            lambda value, _n: self.cluster_name() and self.run(["cluster", "remove", self.cluster_name(), value]),
+            lambda values: self.cluster_name() and self.run(["list-preset", "add", self.cluster_name(), *values]),
+            lambda value, _n: self.cluster_name() and self.run(["list-preset", "remove", self.cluster_name(), value]),
             search=True, multi=True)
         box.pack_start(self.cluster_entries, True, True, 0)
 
@@ -9136,13 +9136,13 @@ class Window(Gtk.ApplicationWindow):
         record_row = Gtk.Box(spacing=6)
         self.record_start = Gtk.Button(label="Record into this preset")
         self.record_start.connect("clicked", lambda _b: self.cluster_name() and self.run(
-            ["record", "start", "--cluster", self.cluster_name()]))
+            ["record", "start", "--preset", self.cluster_name()]))
         # §3.12 word recording: the rendered words of the pages, ranked by
         # how specific they are; the least specific cut before adding.
         self.record_words = Gtk.Button(label="Record words")
         self.record_words.set_tooltip_text("Record the words shown on the pages you open (the preset must look at page text)")
         self.record_words.connect("clicked", lambda _b: self.cluster_name() and self.run(
-            ["record", "start", "--cluster", self.cluster_name(), "--words"]))
+            ["record", "start", "--preset", self.cluster_name(), "--words"]))
         self.record_cut = NumberField(0, 0, 95, width=4)
         self.record_cut.set_tooltip_text("Words: drop this percentage of the least specific before adding")
         self.record_stop = Gtk.Button(label="Stop and add")
@@ -9212,7 +9212,7 @@ class Window(Gtk.ApplicationWindow):
             new = target or self.ask_text(f"New block from {name}", "A short name for the new block.")
             if new:
                 self.selected = new
-                self.run(["block", "create", new, "--template", name])
+                self.run(["block", "create", new, "--preset", name])
             return
         if kind == "hotkey":
             # §4.13: added again, on keys typed now (blank: the preset's own).
@@ -9248,7 +9248,7 @@ class Window(Gtk.ApplicationWindow):
     def delete_preset(self, kind, name):
         if self.confirm(f"Delete the preset {name}?", "What was copied from it stays as it is.", "Delete",
                         destructive=True):
-            self.run(["template", "remove", name] if kind == "block" else ["preset", "delete", name, "--kind", kind])
+            self.run(["block-preset", "remove", name] if kind == "block" else ["preset", "delete", name, "--kind", kind])
 
     def save_preset(self, kind, source, mode=False, answer=None):
         """Saves a copy as a preset: lists (asks which and whether with
@@ -9316,7 +9316,7 @@ class Window(Gtk.ApplicationWindow):
         self.show_cluster()
         recording = self.state.get("recording")
         if recording:
-            target = (f"the cluster {recording['cluster']}" if recording.get("cluster")
+            target = (f"the list preset {recording['cluster']}" if recording.get("cluster")
                       else f"the list {recording.get('list')} of {recording.get('block')}")
             if recording.get("words"):
                 top = ", ".join(recording.get("top") or [])
@@ -9355,7 +9355,7 @@ class Window(Gtk.ApplicationWindow):
     def toggle_cluster_where(self, check, place):
         if self.updating or not self.cluster_name():
             return
-        self.run(["cluster", "scope", self.cluster_name(), place, "on" if check.get_active() else "off"])
+        self.run(["list-preset", "scope", self.cluster_name(), place, "on" if check.get_active() else "off"])
 
     def new_cluster(self, _button):
         dialog = Gtk.MessageDialog(
@@ -9373,20 +9373,20 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         if answer == Gtk.ResponseType.OK and name:
             self.cluster_wanted = name
-            self.run(["cluster", "create", name] + (["--phrases"] if as_phrases else []))
+            self.run(["list-preset", "create", name] + (["--phrases"] if as_phrases else []))
 
     def rename_cluster(self, _button):
         old = self.cluster_name()
         name = old and self.ask_text(f"Rename {old}", initial=old)
         if name and name != old:
             self.cluster_wanted = name
-            self.run(["cluster", "rename", old, name])
+            self.run(["list-preset", "rename", old, name])
 
     def delete_cluster(self, _button):
         name = self.cluster_name()
         if name and self.confirm(f"Delete the preset {name}?",
                                  "Lists copied from it into blocks stay as they are.", "Delete", destructive=True):
-            self.run(["cluster", "delete", name])
+            self.run(["list-preset", "delete", name])
 
     def copy_cluster(self, _button):
         name = self.cluster_name()
@@ -9415,21 +9415,21 @@ class Window(Gtk.ApplicationWindow):
         block, as_exceptions = combo.get_active_text(), exceptions.get_active()
         dialog.destroy()
         if answer == Gtk.ResponseType.OK and block:
-            self.run(["cluster", "copy", name, block] + (["--exceptions"] if as_exceptions else []),
+            self.run(["list-preset", "copy", name, block] + (["--exceptions"] if as_exceptions else []),
                      then=self.queued_note)
 
     def import_cluster(self, _button):
         name = self.cluster_name()
         path = name and self.choose_file("Import entries into the preset", Gtk.FileChooserAction.OPEN, "Import")
         if path:
-            self.run(["cluster", "import", name, path])
+            self.run(["list-preset", "import", name, path])
 
     def export_cluster(self, _button):
         name = self.cluster_name()
         path = name and self.choose_file("Export the preset", Gtk.FileChooserAction.SAVE, "Save")
         if not path:
             return
-        ok, output = cli_with_access(self.access_passwords, ["cluster", "export", name])
+        ok, output = cli_with_access(self.access_passwords, ["list-preset", "export", name])
         if not ok:
             self.message(output)
             return

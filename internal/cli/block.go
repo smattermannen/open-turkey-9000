@@ -156,9 +156,9 @@ var blockCreateCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		if template, _ := cmd.Flags().GetString("template"); template != "" {
+		if template, _ := cmd.Flags().GetString("preset"); template != "" {
 			if allowlist {
-				return fmt.Errorf("--template and --allowlist don't go together")
+				return fmt.Errorf("--preset and --allowlist don't go together")
 			}
 			return createFromTemplate(cmd, database, name, template) // §3.2
 		}
@@ -566,7 +566,8 @@ func init() {
 
 	// Flags for "block create".
 	blockCreateCmd.Flags().Bool("allowlist", false, "Block every website except what you add to its Exceptions list")
-	blockCreateCmd.Flags().String("template", "", "Create it from a saved template (kc9k template)")
+	blockCreateCmd.Flags().String("preset", "", "Create it from a block preset (kc9k block-preset)")
+	flagAliases(blockCreateCmd, map[string]string{"template": "preset"}) // §4.12
 
 	// Add every subcommand as a child of "block".
 	addNowFlag(blockRemoveAppCmd, blockRemoveCmd)

@@ -299,7 +299,7 @@ func TestWordCombinations(t *testing.T) {
 	}
 	mustRun(t, "cluster", "create", "words", "--text")
 	if err := runCLI(t, "cluster", "add", "words", "cars(red, big)"); err == nil {
-		t.Error("a cluster took a typed combination")
+		t.Error("a list preset took a typed combination")
 	}
 	// An address with brackets is still an address.
 	mustRun(t, "list", "add", "b", "Blocked", "en.wikipedia.org/wiki/Mercury_(planet)")

@@ -112,7 +112,7 @@ func TestProjectExportImport(t *testing.T) {
 		t.Errorf("bypass detection = %+v", n)
 	}
 	if c, err := fresh.GetCluster("papers"); err != nil || len(c.Entries) != 2 {
-		t.Errorf("cluster = %+v, %v", c, err)
+		t.Errorf("list preset = %+v, %v", c, err)
 	}
 	if !enforce.BrowserOn(fresh, "safesearch") || enforce.OptionOn(fresh, enforce.OptionPoliteClose) {
 		t.Error("browser option or behaviour option didn't come along")

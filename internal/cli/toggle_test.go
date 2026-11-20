@@ -270,7 +270,7 @@ func TestTemplates(t *testing.T) {
 	mustRun(t, "block", "create", "study", "--template", "focus")
 	b, err := d.GetBlock("study")
 	if err != nil || b.Active || len(b.Apps) != 1 {
-		t.Fatalf("from template: %+v, %v", b, err)
+		t.Fatalf("from block preset: %+v, %v", b, err)
 	}
 	found := false
 	for _, l := range b.Lists {
@@ -279,14 +279,14 @@ func TestTemplates(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("the template's entries are missing")
+		t.Error("the block preset's entries are missing")
 	}
 	if err := runCLI(t, "block", "create", "x", "--template", "nope"); err == nil {
-		t.Error("an unknown template accepted")
+		t.Error("an unknown block preset accepted")
 	}
 	mustRun(t, "template", "remove", "Focus")
 	if names, _ := d.Templates(); len(names) != 0 {
-		t.Errorf("templates = %v", names)
+		t.Errorf("block presets = %v", names)
 	}
 }
 

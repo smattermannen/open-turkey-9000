@@ -100,6 +100,7 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		{"bypass", "set", "--block", "b", "--count", "30", "--within", "10m", "--then", "warning"},
 		{"autostart", "b", "remove", "1"},
 		{"cluster", "copy", "c", "b", "--exceptions"},
+		{"list-preset", "copy", "c", "b", "--exceptions"}, // §4.12: the same command, by its name
 		// §3.6 Schedule, §3.2 Mode (2026-11-17): a first window lifts a
 		// continuous block outside it.
 		{"schedule", "apply", "b", "Weekly"},

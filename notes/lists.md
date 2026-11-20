@@ -47,17 +47,25 @@
   `PhraseEditor` (double-click loads a phrase); word sets bounded only by
   `db.MaxWordSets` (100). Files:
   `cli/phraseexport.go`; `db.AddPhraseSet`. Phrase clusters (`phrases`
-  set): `cluster copy` → phrase set, `cluster save` from one; no recording.
+  set): `list-preset copy` → phrase set, `list-preset save` from one; no recording.
 - **Import files** (`cli/entryfile.go`, §4.3): `readEntries` sorts lines
   into phrases, sites (hosts files, adblock `||x^` read as sites), rendered
   terms, unusable; `list import`, `block import-list`, `phrase-set import`,
-  `cluster import` take what fits and name the rest (`noteLeftOut`).
+  `list-preset import` take what fits and name the rest (`noteLeftOut`).
   Hidden `kc9k list read FILE` (JSON) lets the GUI's one Import route a
   file (`import_into_phrase_set`, `choose_phrase_set`;
   `ci/gui_import_smoke.py`).
 - **List and phrase set presets** (clusters in the code: `db/clusters.go`,
   `cli/clusters.go`): lists outside blocks,
-  never enforced. `cluster copy` goes through `listAdd` (gating applies).
+  never enforced. `list-preset copy` goes through `listAdd` (gating applies).
+- **Command names** (§3.14, §4.12): `block-preset` (old `template`),
+  `list-preset` (old `cluster`, also `phrase-set-preset`), `block create
+  --preset` (old `--template`), `record start --preset` (old `--cluster`).
+  Old names are cobra aliases; old flags via `flagAliases`
+  (`cli/templates.go`, a pflag normalize func). Export header `# kc9k list
+  preset, looks at:` (old `cluster`/`phrase cluster`/`term cluster`
+  headers still read). Code and DB keep "cluster"/"template".
+  `TestPresetCommandNames` (help shows neither word, aliases aside).
 - **Presets** (§3.2 Preset, §4.4; owner 2026-11-17; `db/presets.go`,
   `cli/presets.go`, GUI page "Presets" = page `clusters`): block presets
   are templates, list and phrase set presets clusters; table `presets`
@@ -108,7 +116,7 @@ Not fixed by `SPEC.md`; the code is the truth.
   `remove-site`, `remove-entry` are Blocked shortcuts. List/apps/titles
   files: one entry per line, `#` comments (`block export-list|import-list
   B apps|titles|blocked|exceptions`). Remove block: inactive and unlocked.
-- **List presets** (`cluster`): copies are independent. `--exceptions`, `--as N`,
+- **List presets** (`list-preset`): copies are independent. `--exceptions`, `--as N`,
   `--into L`. Export = plain entry file with a scope header (`list import`
   reads it).
 - **Recording**: domains without `www.`, pages and frames, private windows

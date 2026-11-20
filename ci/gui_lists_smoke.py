@@ -134,16 +134,22 @@ if len(card.entries.store):
     check(card.entries.entry.get_text() == first, "double-click moves the entry into the box: %r" % card.entries.entry.get_text())
 
 # §4.3 import from KC9K: copy another block's list in (the dialog ticked).
-r = cli("block", "create", "src"); r = cli("block", "add", "src", "copied.example"); settle()
+r = cli("block", "create", "src"); r = cli("block", "add", "src", "copied.example")
+r = cli("list-preset", "create", "pre"); r = cli("list-preset", "add", "pre", "preset.example"); settle()
 real_run = Gtk.Dialog.run
+labels = []
 def tick_all(dialog):
     for child in dialog.get_content_area().get_children():
-        if isinstance(child, Gtk.CheckButton) and "src" in child.get_label():
-            child.set_active(True)
+        if isinstance(child, Gtk.CheckButton):
+            labels.append(child.get_label())
+            if "src" in child.get_label():
+                child.set_active(True)
     return Gtk.ResponseType.OK
 Gtk.Dialog.run = tick_all
 win.selected = "b"; win.import_from_kc9k("b", "Blocked"); settle()
 Gtk.Dialog.run = real_run
+# §3.14: a list preset is called so, never a cluster.
+check("List preset: pre" in labels and not any("luster" in l for l in labels), "import sources named by the glossary: %s" % labels)
 check("copied.example" in [l for l in win.blocks["b"]["lists"] if l["name"] == "Blocked"][0]["entries"], "imported from another block")
 
 # §3.6 autostart from the block page.

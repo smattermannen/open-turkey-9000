@@ -50,6 +50,10 @@
   kc9k and LibreWolf installed, repo at `~/open-turkey-9000`; ssh alias
   `kc9k-vm` (key `~/.ssh/kc9k-vm`), IP 192.168.122.80 pinned, snapshot
   `clean` taken shut off.
+- `ci/monk_live_test.sh host [vm]` (R-MONK-2, VM only): ssh goes with the
+  cut, so the VM checks itself (`inside 1`, then a oneshot unit runs
+  `inside 2` after the restart it makes) into `/var/lib/kc9k-monk-live`;
+  the host waits for ssh and reads `verdict`. `MONK_MINUTES` (default 6).
 - Resolver round (`resolver_round`): when the open questions (§5 entries
   not `DECIDED`/`FOR THE OWNER`, SPEC §7, `skip.txt`) differ from the
   last run's (`resolver-seen.txt`), one worker (claim `RESOLVER`) runs a

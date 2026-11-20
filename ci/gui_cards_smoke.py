@@ -192,6 +192,18 @@ check(not dialogs and win.blocks["plain"]["active"], "Start starts it at once, n
 check(win.start_button.get_label() == "Add locks…", "once on: Add locks…")
 check(not win.blocks["plain"].get("held"), "started without locks")
 
+# R-LOCK-5, §4.6: a text lock's challenge is the command's own window; the
+# GUI only runs the command and opens no terminal.
+cli("start", "plain", "--lock", "--lock-chars", "20", "--yes"); settle()
+win.selected = "plain"; win.show_block()
+ran, popen = [], gui.subprocess.Popen
+gui.subprocess.Popen = lambda *a, **k: ran.append(("terminal", a))
+real_run = win.run
+win.run = lambda args, secret=None, then=None, timeout=120: ran.append((args, timeout))
+win.unlock_block(None)
+win.run, gui.subprocess.Popen = real_run, popen
+check(ran == [(["unlock", "plain"], gui.CHALLENGE_TIMEOUT)], "Unlock runs the command for the challenge: %s" % ran)
+
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")
 raise SystemExit(1 if fails else 0)

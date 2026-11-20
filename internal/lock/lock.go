@@ -25,13 +25,15 @@
 // To keep that friction real, the challenge is hard to skip:
 //
 //   - The input is read in raw terminal mode, one keypress at a time, and
-//     PASTING is detected and rejected (see readInputRaw).
+//     PASTING is detected and rejected (see readInputRaw). Without a
+//     terminal the command opens its own window and reads the keys typed
+//     there (window.go); an answer piped to the command is never read
+//     (R-LOCK-5).
 //   - A minimum length is enforced so "--lock-chars 0" or a negative value
 //     can't produce a trivially-empty challenge.
 package lock
 
 import (
-	"bufio"
 	"crypto/rand"
 	"fmt"
 	"math"
@@ -254,8 +256,8 @@ func RunStyled(style string, length int) (bool, error) {
 // whether they reached MinAccuracy.
 //
 // On a real terminal the challenge is typed in raw mode with paste detection.
-// When stdin is not a terminal (e.g. piped input in tests), it falls back to
-// reading one line — paste detection isn't meaningful there.
+// Without one it is typed in a window the command opens (runChallengeWindow);
+// standard input is never read for it.
 func RunChallenge(length int) (bool, error) {
 	return RunStyled(StyleChars, length)
 }
@@ -270,7 +272,7 @@ func runChallengeText(challenge string) (bool, error) {
 	if isTerminal(fd) {
 		return runChallengeRaw(fd, challenge)
 	}
-	return runChallengeLine(challenge)
+	return runChallengeWindow(challenge)
 }
 
 // runChallengeRaw has the challenge typed in raw mode. A challenge longer
@@ -283,8 +285,8 @@ func runChallengeRaw(fd int, challenge string) (bool, error) {
 
 	restore, err := makeRaw(fd)
 	if err != nil {
-		// Couldn't switch to raw mode — fall back to line reading.
-		return runChallengeLine(challenge)
+		// Couldn't switch to raw mode: the window instead.
+		return runChallengeWindow(challenge)
 	}
 	// Ask the terminal to bracket pasted text so we can detect it. finish
 	// undoes that and leaves raw mode; it's idempotent so the defer is safe
@@ -386,6 +388,7 @@ const (
 	outcomeDone inputOutcome = iota
 	outcomeCancel
 	outcomePaste
+	outcomeSynthetic // a key the window says wasn't typed on the keyboard
 )
 
 // readInputRaw reads the transcription, echoing it wrapped at width so it lines
@@ -477,24 +480,6 @@ func echoBackspace(typed []byte, width int) string {
 		return ansiClearLine + ansiUp + "\r" + string(typed[n-width:])
 	}
 	return ansiClearLine + string(typed[n-n%width:])
-}
-
-// runChallengeLine shows the whole challenge and reads a single line (used when
-// stdin isn't a terminal).
-func runChallengeLine(challenge string) (bool, error) {
-	fmt.Println(strings.Join(splitLines(challenge, maxLineWidth), "\n"))
-	fmt.Println()
-	fmt.Printf("Type the text above on one line, without the line breaks (%.0f%% accuracy needed): ", MinAccuracy*100)
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return false, fmt.Errorf("failed to read user input: %w", err)
-		}
-		return false, fmt.Errorf("empty input — no text was typed")
-	}
-	return reportAccuracy(score(scanner.Text(), challenge)), nil
 }
 
 // score returns the accuracy of typed against target: one minus the edit

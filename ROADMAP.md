@@ -52,7 +52,7 @@ of their group and a row here; a finished item loses its row.
 | 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
 | 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
-| 2.7 | Hardening: the text lock's challenge in the command's own window (decided 2026-11-20, §5); rules server secret (for the owner, §5) | R-LOCK-5, §4.6 | browsers, locks | agent, owner |
+| 2.7 | Hardening: rules server secret (for the owner, §5); the text lock's window on a real desktop (Unchecked) | R-LOCK-5, §4.6 | browsers, locks | owner, box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
@@ -1002,9 +1002,14 @@ Only items not simply Built.
   secret by policy (not rolled out overnight: if the extension can't read
   it, every check-in fails and the guard closes browsers; the policy files
   are user-readable anyway; for the owner, §5); GTK window for the text
-  lock's challenge (a stdin answer would let scripts type it; decided
-  2026-11-20: the command opens the window and reads the keys itself,
-  SPEC §4.6, §5).
+  lock's challenge: built 2026-11-20 (SPEC §4.6, §5 decision): without a
+  terminal the command opens its own window as the signed-in user and
+  reads the keys itself; stdin is never read for it; the GUI's Unlock runs
+  the command, no terminal. Checked on Xvfb with xdotool
+  (`TestChallengeWindowOnX`: human pace passes; a burst, Ctrl+V, Escape,
+  keys sent to an unfocused window don't). On the owner's real desktop
+  (Mint, Cinnamon: the window opens from the GUI under sudo, keeps focus,
+  a real keyboard): Unchecked.
 - **2.8** Everything else Not built/Partial in §1.
 
 ## 3. Testers and Android (owner 2026-11-18)

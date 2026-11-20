@@ -7,6 +7,9 @@
 ## Commands
 
 - `./try-challenge.sh [len]` (`cmd/try-challenge/`): unlock challenge alone.
+- The text lock's window for real: `KC9K_TEST_PYTHON=<python3 with GTK 3>
+  xvfb-run -a go test -run Window ./internal/lock/` (needs xdotool, xterm
+  for the focus case; skipped without `DISPLAY`).
 - Root Chrome test: `go test -tags roottest -run Chrome ./internal/enforce`,
   with the daemon stopped (it holds the rules port) and Playwright's
   Chromium under `/opt/pw-browsers/chromium-*/` (else skipped).

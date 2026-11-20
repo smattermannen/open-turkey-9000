@@ -12,7 +12,6 @@ import json
 import math
 import os
 import re
-import shlex
 import subprocess
 import threading
 
@@ -350,6 +349,7 @@ def dim(text, wrap=True):
 
 
 CHALLENGE_MIN, CHALLENGE_MAX, CHALLENGE_DEFAULT = 1, 5000, 300
+CHALLENGE_TIMEOUT = 6 * 3600  # seconds a challenge window may stay open (5000 characters: about an hour)
 
 # Appearance is a preference of whoever runs the interface, so it lives in
 # their own config, not in the KC9K database.
@@ -8435,11 +8435,14 @@ class Window(Gtk.ApplicationWindow):
             else:  # only a delay lock: unlocking starts its countdown
                 self.run(["unlock", block["name"]], then=lambda output: self.message(output, Gtk.MessageType.INFO))
             return
-        command = f"{CLI} unlock {shlex.quote(block['name'])}"
-        try:
-            subprocess.Popen(["x-terminal-emulator", "-e", command])
-        except OSError as error:
-            self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+        self.run_challenge(["unlock", block["name"]])
+
+    def run_challenge(self, command):
+        """A text lock's challenge (R-LOCK-5, SPEC §4.6): the command opens
+        its own window on this desktop and reads the keys typed there; the
+        GUI only runs it, and opens no terminal."""
+        self.run(command, then=lambda output: self.message(output, Gtk.MessageType.INFO),
+                 timeout=CHALLENGE_TIMEOUT)
 
     def delete_block(self, _button):
         """§4.2 (owner 2026-11-17): deleted, the page comes back to the block
@@ -9591,11 +9594,7 @@ class Window(Gtk.ApplicationWindow):
         if not info.get("char_locked"):
             self.message("Its first lock isn't a text or password lock: it ends by itself.", Gtk.MessageType.INFO)
             return
-        command = " ".join([CLI] + [shlex.quote(a) for a in unlock])
-        try:
-            subprocess.Popen(["x-terminal-emulator", "-e", command])
-        except OSError as error:
-            self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+        self.run_challenge(unlock)
 
     def update_device(self):
         self.freeze_schedules.set_items(self.state.get("freeze_schedules", []))
@@ -11064,11 +11063,7 @@ class Window(Gtk.ApplicationWindow):
             if password:
                 self.run(unlock, password + "\n")
             return
-        command = " ".join([CLI] + [shlex.quote(a) for a in unlock])
-        try:
-            subprocess.Popen(["x-terminal-emulator", "-e", command])
-        except OSError as error:
-            self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+        self.run_challenge(unlock)
 
     def strict_exempt_list(self):
         """§3.8: folders programs may still start from during strict mode's

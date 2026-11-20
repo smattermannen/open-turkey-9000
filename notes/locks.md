@@ -46,7 +46,20 @@
   `--no-confirm-ok` (`requireMonkAck`).
 - **Text lock** (`internal/lock/`): raw-mode, paste-resistant; 60% letters,
   35% digits, 5% symbols; 98% accuracy; default 300 chars;
-  `--lock-words`, `--lock-text`.
+  `--lock-words`, `--lock-text`. Without a terminal (the GUI, scripts) the
+  command opens its own window (`lock/window.go`, R-LOCK-5, SPEC §4.6):
+  `challenge_window.py` is embedded and run with `python3 -I -c`, as
+  `SUDO_UID` on the `DISPLAY`/`XAUTHORITY` sudo kept (never as root;
+  without root, as the user in their environment), `GDK_BACKEND=x11`. It
+  has no text field and only reports keys (`k code time`, `b`, `n` per
+  page, `p` paste/drop/middle click, `s` an XSendEvent key, `c` cancel);
+  `readWindowKeys` rebuilds the text, refuses more than `pasteBurst` keys
+  within `burstMillis` (5 ms), and scores. Standard input is never read
+  for it (`runChallengeLine` is gone): no window → refused. The GUI's
+  Unlock runs the command (`run_challenge`, 6 h timeout) instead of a
+  terminal. `lock.StartWindow` is the test seam
+  (`TestTextLockUnlocksOnlyFromItsWindow`); the real window:
+  `TestChallengeWindowOnX` (xdotool, under `xvfb-run`).
 - **Settings password** (`cli/settingspassword.go`):
   `requireSettingsPassword` in `gateEdit`, `ensureEditable`, stop/unlock,
   settings off, strict off, no-escape, prepare-uninstall;

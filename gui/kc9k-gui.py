@@ -2834,13 +2834,22 @@ class PhraseSetCard(ListCard):
         self.window.run(self.command("change", old["text"], new))
 
     def remove_loaded(self):
-        """Deletes the phrase loaded in the editor, after asking."""
+        """Deletes the phrase loaded in the editor, after asking; once it is
+        gone the editor is empty (the deleted phrase doesn't stay there as
+        a new, unsaved one)."""
         old = self.editing
         if old is None or not self.window.confirm(
                 "Delete this phrase?", old["text"] + "\n\nDeleting a phrase weakens the block.",
                 "Delete", destructive=True):
             return
-        self.window.run(self.command("remove", old["text"]))
+
+        def gone(_output):
+            # A periodic refresh may have read the set without it first:
+            # the editor then already holds it as a new phrase.
+            if self.editing is old or (self.editing is None and
+                                       phrase_key(self.editor.get_text()) == phrase_key(old["text"])):
+                self.edit_phrase(None, ask=False)
+        self.window.run(self.command("remove", old["text"]), then=gone)
 
     def save_numbers(self, _button):
         current = {a["action"]: a for a in self.data["actions"]}

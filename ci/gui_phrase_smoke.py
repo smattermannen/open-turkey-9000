@@ -119,13 +119,33 @@ check([r[0] for r in card.entries.store] == texts, "list shows the change: %s" %
 card.remove_loaded(); settle(); card = win.list_cards[-s["id"]]
 texts = [p["text"] for p in json.loads(cli("gui-state").stdout)["blocks"][0]["phrase_sets"][0]["phrases"]]
 check(copied not in texts and len(texts) == 3 and card.editing is None, "Delete phrase: %s" % texts)
+# ...and leaves the editor empty: not a new unsaved phrase that Cancel asks
+# about (desktop 2026-11-20).
+asked.clear(); card.edit_phrase(None)
+check(not card.editor.get_text() and not card.unsaved() and not asked, "editor empty after Delete phrase")
+# The same when a periodic refresh reads the set before the delete's own
+# result lands (as on the desktop: the GUI refreshes every few seconds).
+red = "[red] [car, truck] [big]? :3"
+card.edit_phrase(red)
+real_run = win.run
+def refresh_first(args, secret=None, then=None, timeout=120):
+    win.run = real_run
+    def late(output):
+        win.state_json = None; win.refresh(); pump(lambda: not win.busy)
+        then(output)
+    real_run(args, secret, late, timeout)
+win.run = refresh_first
+card.remove_loaded(); settle(); card = win.list_cards[-s["id"]]
+texts = [p["text"] for p in json.loads(cli("gui-state").stdout)["blocks"][0]["phrase_sets"][0]["phrases"]]
+asked.clear(); card.edit_phrase(None)
+check(red not in texts and not asked, "editor empty after Delete phrase, refresh first: %s" % texts)
 # A one-ended bridge from the card is refused, with a message.
 msgs = []
 win.message = lambda text, *a, **k: msgs.append(text)
 card = win.list_cards[-s["id"]]
 card.add_entries(["[-gorilla] [x]"]); pump(lambda: win.get_sensitive()); time.sleep(0.3)
 for _ in range(50): GLib.MainContext.default().iteration(False)
-check(len(json.loads(cli("gui-state").stdout)["blocks"][0]["phrase_sets"][0]["phrases"]) == 3, "one-ended bridge not stored")
+check(len(json.loads(cli("gui-state").stdout)["blocks"][0]["phrase_sets"][0]["phrases"]) == 2, "one-ended bridge not stored")
 print("messages:", msgs[-1:] if msgs else "(none captured)")
 # A phrase cluster: phrases typed whole, no recording into it.
 r = cli("cluster", "create", "Cats", "--phrases"); assert r.returncode == 0, r.stderr

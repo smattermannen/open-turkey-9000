@@ -53,3 +53,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   ClipEditor: right-click add/remove point, drag (Shift = minute), drag
   the small handle mid-segment up or down to bend (`handles`, D4),
   double-click (a point or handle) to type.
+- **Phrase editor** (`PhraseSetCard`): Save changes runs `phrase-set
+  change` and stays off until the new state is read; Cancel asks before
+  dropping unsaved work; Delete phrase asks, then empties the editor (also
+  when a periodic refresh read the set before the command's result,
+  `remove_loaded`). `ci/gui_phrase_smoke.py`, `ci/gui_phrase_edit_smoke.py`.

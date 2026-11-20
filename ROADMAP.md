@@ -26,7 +26,6 @@ of their group and a row here; a finished item loses its row.
 | A2 | Looks from page text lifted on clicks: suites pass (2026-11-20); real use on the laptop | §3.9 | extension | owner |
 | A3 | `no-downloads` in Chrome | §3.9 | extension, browsers | box |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
-| A5 | Phrase editor save: confirm | §4.3, R-WEAK-5 | lists, gui | box |
 | A6 | Locking an enabled block: confirm | R-LOCK-7 | locks, gui | box |
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
@@ -497,7 +496,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     (Strict lockdown's polkit rule also blocks the backlight helper and
     colord, which breaks the same controls while strict mode is on; fix
     done.)
-  - [ ] `A5` Phrase editor: saving a change said the set has no such phrase
+  - [x] `A5` Phrase editor: saving a change said the set has no such phrase
     (owner, again after the first fix: set 2's terms pasted into set 1 of a
     7-set phrase). Causes: phrases stored by older versions (migrated
     combinations, imports) differ from their shown form in case, spacing or
@@ -517,7 +516,21 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     `TestPhraseChangeOldRefusedForm`, `TestStoredPhrasesFoundByCanonicalForm`,
     `ci/gui_phrase_edit_smoke.py` (edit twice in a row, case-only edits,
     old stored rows, refresh and rename mid-edit, unicode, 100 word sets,
-    locked block, export/import). Confirm on the laptop.
+    locked block, export/import). Built: desktop 2026-11-20 (Mint 22.3,
+    X11, real DB, own GUI instance on :0 driven by xdotool, throwaway
+    block with a 7-set phrase and an old raw row `["Porn ", "XXX"]
+    ["Free  Video"]… "length":7`): loaded, set 2's terms pasted into set 1,
+    Save changes (opened the draft, one `phrase-set change`, rc 0, no
+    error); edited twice in a row and a double-clicked Save (one change
+    each, Save greyed between); same paste on the old raw row: changed in
+    place; Cancel with unsaved work asked, its Cancel kept the work, Drop
+    changes ran nothing; Delete phrase asked and removed it; Save edits
+    saved the draft. "The set has no such phrase" never shown. Fixed:
+    after Delete phrase the deleted phrase stayed in the editor as a new
+    unsaved one (Add phrase lit, Cancel asked to drop it; a periodic
+    refresh can read the set before the command's result): it now empties
+    the editor (`remove_loaded`; `ci/gui_phrase_smoke.py` "editor empty
+    after Delete phrase", also refresh first); seen fixed on :0.
   - [ ] `A6` Locking an enabled block refused password, restart, delay, range
     and word/own-text locks ("already active; … are set when it starts"),
     against R-LOCK-7. Fixed: `strengthenLocks` adds every kind last in the

@@ -239,6 +239,7 @@ type guiBlock struct {
 	HasPassword       bool           `json:"block_password,omitempty"` // §3.11
 	DraftOf           string         `json:"draft_of,omitempty"`       // §4.3: this is a draft of that block
 	Draft             string         `json:"draft,omitempty"`          // §4.3: this block's draft
+	DraftKept         []string       `json:"draft_kept,omitempty"`     // §4.3: Breaks & allowance, Bypass prevention settings kept for save
 	TodayWindows      []string       `json:"today_windows,omitempty"`  // §4.1: windows still to come or open today
 	Autostarts        []string       `json:"autostarts"`               // §3.6
 	Hidden            bool           `json:"hidden,omitempty"`         // contents left out until revealed
@@ -678,6 +679,9 @@ var guiStateCmd = &cobra.Command{
 			g.DraftOf = draftOf(database, b.Name)
 			if draftOf(database, draftName(b.Name)) == b.Name {
 				g.Draft = draftName(b.Name)
+				for _, e := range draftQueue(database, g.Draft) {
+					g.DraftKept = append(g.DraftKept, e.Text)
+				}
 			}
 			if hash, _ := database.BlockViewPassword(b.Name); hash != "" {
 				g.HasPassword = true

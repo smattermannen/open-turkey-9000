@@ -367,7 +367,10 @@ GUI and CLI offer the same functions.
     out in a mode, saying "Automated by *mode*"). These apply at once.
   - Save edits/Cancel: an opened block is always a draft; nothing changed in
     it applies until *Save edits*. Locked block: Save edits refuses
-    weakening changes and names them.
+    weakening changes and names them. This holds for every tab, Breaks &
+    allowance and Bypass prevention too; what is done rather than set
+    (taking a break, opening or ending an allowance session), like the
+    block's menu, applies at once *(By Opus)*.
   - Import *From KC9K* (other blocks' lists/phrase sets, presets; several)
     or *From file* (`.txt`, one entry per line); also *Whole internet* and
     *All searches containing…*. Export list/phrase set to `.txt`.
@@ -668,6 +671,7 @@ Decisions not already written into §1–5:
 - 2026-11-20 (later): Re-lock is optional on every lock; stacking never depends on it (§4.6) (owner).
 - 2026-11-20 (later): A project includes presets of every type only if the user chooses (§3.13); a backup always does (owner).
 - 2026-11-20 (later): Circadian rhythm is a page of its own, as decided 2026-11-16; §4.10 only holds its functions (owner).
+- 2026-11-21 (By Opus): The Breaks & allowance and Bypass prevention tabs are part of the draft (§4.3): what they set is kept with the draft, the last setting of each kind, shown in the tab as not saved yet, and applied at *Save edits* through the same checks as when set directly (weakening ones refused and named on a locked block). Taking a break or an allowance session still happens at once, as the block's menu does: those are things done now, not settings. SPEC already said "nothing changed in it applies until Save edits"; the 2026-11-17 session had left these two tabs out only as the larger change.
 - 2026-11-21 (By Opus): With "allow `file://` blocking" on, the extension judges local files as it does web pages (§4.10 Tamper protection): their `file://` address entries, and rendered terms and phrases in their title and text; the block's file exceptions spare them (`file://*` by default, so nothing changes until the user narrows it). A local HTML page is a way around a block as much as a website is; the setting and the exception keep it opt-in.
 - 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
 - 2026-11-21 (By Opus): The firmware lock sets the firmware's boot settings first and its password last, typed by the trusted person and never stored; removing it is refused while anything is locked and needs that password (§4.10). Making it a KC9K lock with kinds would add nothing: only the trusted person can lift it. Stronger blocking: the one-time boot menu goes off too, since a firmware password alone leaves it open on many computers.

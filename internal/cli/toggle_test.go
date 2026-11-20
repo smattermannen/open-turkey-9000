@@ -630,14 +630,29 @@ func TestDraftNeverRuns(t *testing.T) {
 		t.Error("a draft was switched on")
 	}
 	for _, args := range [][]string{
-		{"allowance", "set", draft, "30m"}, {"schedule", "add", draft, "--days", "mon", "--from", "09:00", "--to", "10:00"},
-		{"autostart", draft, "add", "at 08:00"}, {"pomodoro", "set", draft, "25m", "5m"},
-		{"break", "reward", draft, "10m", "--per", "1h"}, {"bypass", "set", "--count", "3", "--within", "10m", "--then", "warning", "--block", draft},
+		{"schedule", "add", draft, "--days", "mon", "--from", "09:00", "--to", "10:00"},
+		{"autostart", draft, "add", "at 08:00"}, {"allowance", "start", draft}, {"break", "start", draft},
 	} {
 		err := runCLI(t, args...)
 		if err == nil || !strings.Contains(err.Error(), "change this on 'b' itself") {
 			t.Errorf("%v on a draft: %v", args, err)
 		}
+	}
+	// The Breaks & allowance and Bypass prevention tabs' settings are kept
+	// on the draft for save: nothing runs, the block is unchanged.
+	for _, args := range [][]string{
+		{"allowance", "set", draft, "45m"}, {"pomodoro", "set", draft, "25m", "5m"},
+		{"break", "reward", draft, "10m", "--per", "1h"}, {"bypass", "set", "--count", "3", "--within", "10m", "--then", "warning", "--block", draft},
+	} {
+		if out := capture(t, args...); !strings.Contains(out, "Kept in the draft of 'b'") {
+			t.Errorf("%v on a draft: %s", args, out)
+		}
+	}
+	if q, _ := d.GetQuota("b"); q == nil || q.Limit != 30*60 {
+		t.Errorf("the draft's allowance changed the block: %+v", q)
+	}
+	if q, _ := d.GetQuota(draft); q != nil {
+		t.Errorf("the draft got an allowance: %+v", q)
 	}
 	if active, _ := d.IsBlockActive(draft); active {
 		t.Fatal("the draft is on")

@@ -467,6 +467,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("settings-line", false, "Internal: the settings password comes next on standard input, after the access passwords")
 	_ = rootCmd.PersistentFlags().MarkHidden("settings-line")
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		queueOnDraft() // §4.3: the Breaks & allowance and Bypass prevention commands on a draft
 		readSettingsLine(cmd)
 		if err := accessGate(cmd, args); err != nil {
 			return err

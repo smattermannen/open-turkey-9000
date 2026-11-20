@@ -58,6 +58,13 @@ DRAFT_EDITS = {
     "phrase-set": {sub: 2 for sub in ("create", "add", "remove", "change", "scope", "action", "threshold",
                                       "test", "rename", "delete", "import")},
     "social": 1,
+    # Breaks & allowance and Bypass prevention (2026-11-21): kept in the
+    # draft by the CLI and run at Save edits; "bypass" names the block by
+    # --block (draft_position).
+    "allowance": {"set": 2, "remove": 2},
+    "pomodoro": {"set": 2, "off": 2},
+    "break": {"reward": 2, "text": 2, "delay": 2},
+    "bypass": {"set": "--block", "off": "--block"},
 }
 # Reading what those tabs show: the draft's, when there is one.
 DRAFT_READS = {"block": {"export-list": 2}, "list": {"export": 2, "show": 2},
@@ -78,7 +85,10 @@ def draft_position(args, table):
     where = table[args[0]]
     if isinstance(where, int):
         return where
-    return where.get(args[1]) if len(args) > 1 else None
+    where = where.get(args[1]) if len(args) > 1 else None
+    if isinstance(where, str):  # the block comes after this flag
+        return args.index(where) + 1 if where in args else None
+    return where
 
 
 def draft_of_name(block):
@@ -6964,6 +6974,8 @@ class Window(Gtk.ApplicationWindow):
             "Settings counts everything, and both apply."), False, False, 0)
         self.block_nepsis_label = Gtk.Label(xalign=0, wrap=True)
         nepsis.pack_start(self.block_nepsis_label, False, False, 0)
+        self.nepsis_kept_label = Gtk.Label(xalign=0, wrap=True, no_show_all=True)
+        nepsis.pack_start(self.nepsis_kept_label, False, False, 0)
         row = Gtk.Box(spacing=6)
         change = Gtk.Button(label="Change…")
         change.connect("clicked", self.change_block_nepsis)
@@ -7638,6 +7650,9 @@ class Window(Gtk.ApplicationWindow):
         fields, one primary button."""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, margin=12)
         labels = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+        # §4.3: what was set here is kept in the draft until Save edits.
+        self.quota_kept_label = Gtk.Label(xalign=0, wrap=True, no_show_all=True)
+        box.pack_start(self.quota_kept_label, False, False, 0)
 
         def form_row(text, *widgets):
             row = Gtk.Box(spacing=8)
@@ -8026,6 +8041,13 @@ class Window(Gtk.ApplicationWindow):
         self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
                                                          if block["active"] else None))
         self.block_nepsis_off_button.set_visible(bool((block.get("nepsis") or {}).get("steps")))
+        # §4.3: settings of these two tabs kept in the draft until Save edits.
+        kept = block.get("draft_kept") or []
+        for label, items in ((self.quota_kept_label, [k for k in kept if not k.startswith("Bypass prevention")]),
+                             (self.nepsis_kept_label, [k for k in kept if k.startswith("Bypass prevention")])):
+            label.set_markup("<b>Not saved yet</b> (applies with Save edits): " +
+                             GLib.markup_escape_text("; ".join(items)) if items else "")
+            label.set_visible(bool(items))
 
     def update_lists(self, lists, phrase_sets=()):
         """Shows the selected block's lists and phrase sets, keeping the cards

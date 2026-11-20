@@ -90,15 +90,25 @@
   what changed in the draft since (base → draft) onto the block as it is
   now (an entry added meanwhile stays) via `listAdd`/`listWhere`/
   `listAction`…, `saveDraftPhraseSets`, `saveDraftTriggers` (each through
-  its gate) and names refusals; commands for anything else refuse a draft
-  (`draftRefused`, `refuseDraftEdit` in the root PreRun). GUI: no Edit as
+  its gate) and names refusals. The Breaks & allowance and Bypass
+  prevention commands (`draftQueued`) on a draft are kept, not run: the
+  root PreRun wraps their RunE once (`queueOnDraft`); `keepOnDraft` stores
+  the command line with the block's name (`draft.queue.<draft>`, the last
+  of each kind, `Text` for gui-state `draft_kept`); `saveDraft` runs each
+  (`runQueued`: flags reset, parsed, RunE) through its own gate. Other
+  commands for a draft are refused (`draftRefused`, `refuseDraftEdit` in
+  the root PreRun): taking a break or an allowance session, automation,
+  affected users. GUI: no Edit as
   draft; `Window.run` sends the commands of `DRAFT_EDITS` for the block
   opened on the Blocks page to its draft (`to_draft`, made at the first
   edit, `start_draft`), `DRAFT_READS` read it; `self.selected` stays the
   block; Websites and Apps show the draft (`show_block`: `content`), the
   bar says Unsaved edits with Save edits / Discard, leaving asks
   (`leave_block`, `ask_unsaved`), the card shows "Unsaved edits"; list
-  cards keep their widget by name when the draft takes over.
+  cards keep their widget by name when the draft takes over. Breaks &
+  allowance and Bypass prevention say what is kept ("Not saved yet",
+  `quota_kept_label`, `nepsis_kept_label`); `DRAFT_EDITS` "bypass" finds
+  the block after `--block` (`draft_position`).
 - **Test mode** (`db/testmode.go`): lists go out `test: true`; extension
   shows `kc9kTestReport`, skips them in `kc9kListMatches`.
 

@@ -111,6 +111,26 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		}
 	}
 
+	// §4.3: the same settings through the block's draft are kept there, and
+	// refused at Save edits.
+	mustRun(t, "block", "draft", "b")
+	for _, args := range [][]string{
+		{"allowance", "set", "b (draft)", "30m"},
+		{"pomodoro", "set", "b (draft)", "25m", "5m"},
+		{"break", "reward", "b (draft)", "10m", "--per", "1h"},
+		{"break", "text", "b (draft)", "5m"},
+		{"break", "delay", "b (draft)", "5m", "10m"},
+		{"bypass", "off", "--block", "b (draft)"},
+	} {
+		mustRun(t, args...)
+	}
+	if err := runCLI(t, "block", "draft", "b", "save"); err == nil {
+		t.Error("a draft's weakening settings were saved on a locked block")
+	}
+	if n, _ := d.BlockNepsis("b"); len(n.Steps) == 0 {
+		t.Error("bypass prevention went off through a draft")
+	}
+
 	after, err := d.GetBlock("b")
 	if err != nil {
 		t.Fatal(err)

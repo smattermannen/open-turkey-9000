@@ -255,7 +255,7 @@ Booting a USB stick still works unless the firmware is locked with a password.`,
 				return err
 			}
 			if locked {
-				return fmt.Errorf("no-escape can't be turned off during a lock")
+				return refused(database, "", fmt.Errorf("no-escape can't be turned off during a lock"))
 			}
 			if err := blocker.RemoveBootLock(); err != nil {
 				return err

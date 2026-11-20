@@ -212,3 +212,47 @@ func TestLockedScheduleAndAllowanceStrengthening(t *testing.T) {
 	mustRun(t, "allowance", "set", "u", "30m")
 	mustRun(t, "allowance", "set", "u", "45m")
 }
+
+// §3.4, §3.8: while anything is locked, device protection can't be taken
+// away (factory reset protection, no-escape); each refusal is logged and
+// never counted (R-WEAK-2, principle 5).
+func TestLockedDeviceProtectionRefusesWeakening(t *testing.T) {
+	notTerminal(t)
+	d := testDB(t)
+	fakeFirmwareRoot(t)
+	mustRun(t, "reset-guard", "on")
+	if err := runWith(t, 0, []string{"secret"}, "firmware-lock", "on", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetSetting("no_escape", "on"); err != nil { // the boot lock itself is never run here
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	for _, args := range [][]string{
+		{"reset-guard", "off"},
+		{"firmware-lock", "off"},
+		{"no-escape", "off"},
+	} {
+		if err := runWith(t, 0, []string{"secret"}, args...); err == nil {
+			t.Errorf("%v: weakened while locked", args)
+		}
+	}
+	events, _ := d.RecentEvents(0, 20)
+	refusals := 0
+	for _, e := range events {
+		if e.Kind == db.EventRefused {
+			refusals++
+		}
+	}
+	if refusals != 3 {
+		t.Errorf("%d refusals logged, want 3", refusals)
+	}
+	if n, _ := d.CountEvents("", 0); n != 0 {
+		t.Errorf("refusals counted by bypass prevention: %d", n)
+	}
+	if v, _ := d.GetSetting("no_escape"); v != "on" {
+		t.Error("no-escape turned off")
+	}
+}

@@ -38,7 +38,8 @@
   daemon still applies old queued edits (`pending.go`). `unlock` lifts
   text/password locks and starts delay countdown (`delay_until`).
 - **Lock confirmation** (`cli/confirm.go`, R-LOCK-12): every lock path builds
-  `lockToSet` items and calls `confirmLocks` before writing; terminal asks
+  `lockToSet` items and calls `confirmLocks` before writing (the firmware
+  lock too); terminal asks
   "yes", otherwise needs `--yes` (`addYesFlag`). Tests `confirm_test.go`
   (`lockCases`). GUI: `confirm_lock` then `--yes`. Hotkeys: confirmed at
   `hotkey add`, and at each press via `blocker.ConfirmDesktop` (zenity as

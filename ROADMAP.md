@@ -51,7 +51,7 @@ of their group and a row here; a finished item loses its row.
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test; the new industry domains in real ad requests (Unchecked) | §3.9 | actions, extension | box |
 | 2.4 | SafeSearch per engine: built; in real browsers (Unchecked) | §4.10 | browsers | box |
-| 2.6 | Factory reset protection | §4.10 | device | agent, vm |
+| 2.6 | Factory reset protection: built; PAM root guard in the VM (vm), firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
 | 2.7 | Hardening: rules server secret (for the owner, §5); the text lock's window on a real desktop (Unchecked) | R-LOCK-5, §4.6 | browsers, locks | owner, box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
@@ -941,7 +941,7 @@ Only items not simply Built.
 | §5 R-LOCK-12 | Partial | see 0.1 |
 | §3.8 Strict mode exempt folders | Built | `kc9k strict exempt add|remove DIR`, GUI list; exec bind mounts over the noexec folders (`noexecPlan`); adding weakens. Not in projects (import never weakens). Live: Unchecked (strict mode not run overnight) |
 | §3.8 Forgotten password recovery | Built | `kc9k-bin recover` (root, recovery boot, not with no-escape): settings password and password locks (`--access`: access passwords). Live: Unchecked (needs a recovery boot) |
-| §3.8 Factory reset protection | Partial | installer media guard built (`reset-guard on|off`, GUI switch under device protection): while anything is locked an in-memory block (`enforce/resetguard.go`) blocks OS image and USB writer download pages and closes image writers and Disks; checked live (hosts follow the lock). Firmware lock, PAM root guard, guided setup: Not built (2.6) |
+| §3.8 Factory reset protection | Built | installer media guard (`reset-guard on|off`, GUI switch under device protection): while anything is locked an in-memory block (`enforce/resetguard.go`) blocks OS image and USB writer download pages and closes image writers and Disks; checked live (hosts follow the lock). Firmware lock (`firmware-lock on|off`, GUI Firmware lock…; 2026-11-21) tested on generated firmware-attributes trees only: on real firmware Unchecked (`2.6`) |
 | §5 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`). R-LIST-4 checked in Chromium (2026-11-17, `ci/content_harness_test.js`): hidden (`display:none`, closed `<details>`, `visibility:hidden`) text isn't read, text far down is. Frames were never judged by their text (the content script read the top frame only, whose text holds none of its frames'): now each frame judges its own (`scanFrame`); what would take a page away gives that frame the block page (background `frameHit` decides from its own rules; no events, R-EVENT-1), its looks show in the frame; extension 1.25.0. Frames in LibreWolf: Unchecked |
 | §3.9 Ad trigger | Partial | scope `ads` on blacklists and clusters (`list create --ads`, `list where B L ads on`, GUI "Ads" box): entries are ad network domains or industries (`db.AdIndustries`: adult, crypto, dating, gambling); rules `ads`; the extension watches each tab's third-party requests (`noteAdRequest`) and a page loading a listed network matches with every action (`kc9kAdMatches`, unit-tested). Not in shared layers. Browser test: Not run (the owner was using the laptop; the browser test changes LibreWolf settings and would close their windows) |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
@@ -949,7 +949,7 @@ Only items not simply Built.
 | §4.10 SafeSearch | Built | a browser setting per engine (`safesearch-google`, `-bing`, `-duckduckgo`, `-youtube`), each its own lock; `browser safesearch` switches all four. Pinned in hosts (every browser) per engine, `safesearch_engines` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked: with Google's, Bing's or DuckDuckGo's, §5). In real browsers: Unchecked (`2.4`) |
 | §4.10 Tamper settings | Partial | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Not built as settings: guest profiles (Chrome guest mode is always off by policy), extension stop (the guard always does it), installer (dpkg prerm refuses removal while locked; install.sh reinstall not guarded), inactive tabs, embedded content (frames always get the block page) |
 | §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
-| §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
+| §4.10 Device protection: factory reset protection, guided setup | Built | 2026-11-21: firmware lock, guided setup (`kc9k guided-setup [--json]`, GUI Guided setup… with Do it…, `ci/gui_settings_smoke.py`), strict mode's PAM root guard (`login`, `su`, `su-l`, tested on generated files only). Live: Unchecked (`2.6`) |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Built | `make deb` (`packaging/build-deb.sh`): same paths as install.sh; postinst sets up sudoers, database folder, service; prerm runs prepare-uninstall, so removal is refused while locked (checked live); postrm removes sudoers. Installed on the laptop as 0.9.0~overnight (devmaster) |
 | §4.3 Draft Save/Cancel | Partial | `block draft B [save|cancel]`; GUI: an opened block is always a draft, made at the first change of the Websites or Apps tab, with Save edits/Cancel (§5 DECIDED 2026-11-17): a copy of the lists, phrase sets, apps and window titles that never runs; save applies each difference through its gate, refusing and naming weakening ones on a locked block; needs and keeps the block password; drafts stay out of the block list and projects. Not drafted (so not as SPEC §4.3 says): the Breaks & allowance and Bypass prevention tabs, which apply at once with their own buttons; on a draft those commands are refused (`draftRefused`) |
@@ -996,13 +996,22 @@ Only items not simply Built.
   setting locks' re-lock still lifts only their text/password locks; a
   person checking the GUI's Add locks…, Extend timer… and unlock flow on
   the laptop.
-- **2.6 Factory reset protection** (M): firmware lock via
-  `/sys/class/firmware-attributes/` (password given to a trusted person,
-  no USB/network boot, fixed order); installer media guard (block OS image
-  sites, close mintstick, balenaEtcher, Ventoy, Popsicle, Startup Disk
-  Creator, GNOME Disks restore); PAM root guard in `login`, `su`, `su-l`
-  via `ApplyLockdown`/`RemoveLockdown` (test on generated config); guided
-  setup checklist for strict/no-escape.
+- **2.6 Factory reset protection** (M): code built 2026-11-21. Firmware
+  lock via `/sys/class/firmware-attributes/` (`firmware-lock on|off`:
+  USB/network boot and the one-time boot menu off, boot order lock on,
+  then the password a trusted person types; SPEC §4.10 *(By Opus)*):
+  `TestFirmwareLockOnFakeFirmware`, `TestFirmwarePurposeNames`,
+  `TestFirmwareLockCommand`. Installer media guard: built earlier. PAM
+  root guard in `login`, `su`, `su-l` via `ApplyLockdown`/`RemoveLockdown`:
+  `TestApplyRemovePAMGuardOnGeneratedFiles`, `TestGuardPAMConfigPlacement`
+  (generated Mint/Ubuntu files, never the real `/etc/pam.d`). Guided setup:
+  `TestGuidedSetup`, GUI in `ci/gui_settings_smoke.py`. Unchecked (vm):
+  during a strict lock in the VM, `su -` and a root login on a text console
+  are refused, the user's own `su` to another account works, and all of it
+  comes back when the lock ends or with `kc9k.nofreeze`. Unchecked (owner,
+  real hardware): the firmware lock on a Dell, Lenovo or HP computer (the
+  VM has no firmware-attributes; vendors' names and how each driver clears
+  a password are untried).
 - **2.7 Hardening** (M each): sudo rule arguments audited 2026-11-15: caller
   paths are read as the caller (`readAsCaller`), direct reads only of
   KC9K's own files, writes only into KC9K's folders under hash names;

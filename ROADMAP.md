@@ -966,7 +966,12 @@ Only items not simply Built.
   text/password lock (`Relifted`, `TestRelockSeveralTextLocks`), hotkey
   presses add a second lock. Left: several of one
   kind given in one `start` (flags repeat: last wins) and on setting locks;
-  a person checking the GUI's Add locks… text and unlock flow.
+  a person checking the GUI's Add locks… text and unlock flow; removing
+  the build's four exceptions (owner 2026-11-20, §5: new timer/delay lock
+  is a new layer, range locks stack, text/password locks stack with
+  re-lock, hotkey presses stack; GUI Add locks… text and
+  `TestSeveralLocksOfOneKind` follow); re-lock bringing back the block's
+  whole lock configuration in its order (SPEC §3.4).
 - **2.6 Factory reset protection** (M): firmware lock via
   `/sys/class/firmware-attributes/` (password given to a trusted person,
   no USB/network boot, fixed order); installer media guard (block OS image
@@ -1057,20 +1062,22 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   until the first word recording turns it on; `record baseline off`
   forgets it, because specificity needs it, but gathering browsing words
   unasked goes beyond what SPEC asks.
-- DECIDED 2026-11-20 by the owner (SPEC §6: a second lock of a kind is
-  added, not the first strengthened; the build's exceptions for the last
-  timer/delay lock, range locks, re-lock and hotkeys removed the same day).
-  Overruled earlier answer, DECIDED 2026-11-20 (By Opus): several locks of one kind (`2.5`; built:
-  one lock per kind) → allowed, each its own layer in the user's order
-  (two partners' password locks; a timer lock, a text lock, then another
-  timer lock). A lock given for a kind already on still strengthens one
-  already on (a later timer, a longer text or delay lock), as today; a
-  further lock of that kind is added, last, only when the user asks for a
-  new lock. Why: §3.4 says several locks, not several kinds; the user
-  decides how their locks work (SPEC §6 2026-11-16); principle 7 keeps
-  today's default. Which one a strengthening applies to when several of
-  its kind are on is left to the build (notes `locks`). SPEC §4.6 now has
-  it.
+- DECIDED 2026-11-20 by the owner (SPEC §6 2026-11-20, §4.6): several
+  locks of one kind (`2.5`) → each its own layer; a lock of a kind a block
+  already has is added as a second lock of that kind, last in the unlock
+  order, not a strengthening of the first. It replaced the resolver's
+  decision of the same day, which had such a lock strengthen the one
+  already on unless the user asked for a new lock; SPEC no longer has
+  that. Built 2026-11-20 (§2 `2.5`), with exceptions: for the owner, the
+  next entry.
+- DECIDED 2026-11-20 by the owner (SPEC §6 2026-11-20 (later), §3.4,
+  §4.6): the build's four exceptions to stacking (`2.5`) all go. (a) A new
+  timer or delay lock is its own layer, not a change to the last one;
+  extending a timer lock stays a separate action. (b) Range locks stack,
+  unlocked in their order. (c) Text and password locks stack on a block
+  with re-lock; re-lock brings back the whole lock configuration the block
+  had, every lock in its order. (d) Each hotkey press adds its locks again
+  (R-LOCK-12 confirms). Code to change: §2 `2.5`.
 - DECIDED 2026-11-20 (By Opus): how the text lock's challenge window
   (`2.7`; SPEC §6 2026-11-14) gets its answer without breaking R-LOCK-5 →
   the command opens the window itself (as the signed-in user, on their

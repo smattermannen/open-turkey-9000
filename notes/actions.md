@@ -19,7 +19,8 @@
   skip them (`db.IsRemovedAction`).
 - **Ad trigger** (§3.9, `db/adnetworks.go`): scope `ads` (`Where.Ads`,
   `in_ads`; not exception lists or phrase sets); `WebList.AdNetworks`
-  expands industries; rules `ads`; background `noteAdRequest` →
+  expands industries (`AdIndustries`: adult, gambling, crypto, dating;
+  `TestAdIndustries`: plain domains, one industry each); rules `ads`; background `noteAdRequest` →
   `kc9kAdMatches` → `pageHit`.
 - **Trigger actions** (`db/triggers.go`, `enforce/trigger.go`,
   `cli/triggers.go`; owner 2026-11-16): table `trigger_actions` (block,

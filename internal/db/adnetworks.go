@@ -16,12 +16,13 @@ var AdIndustries = map[string][]string{
 	"adult": {"exoclick.com", "exosrv.com", "trafficjunky.net", "trafficjunky.com", "juicyads.com",
 		"ero-advertising.com", "adxpansion.com", "plugrush.com", "trafficstars.com", "tsyndicate.com",
 		"trafficfactory.biz", "adspyglass.com", "crakrevenue.com", "realsrv.com", "magsrv.com",
-		"twinrdsrv.com", "adsco.re", "clickadu.com", "hilltopads.net", "tubecorporate.com"},
+		"twinrdsrv.com", "adsco.re", "clickadu.com", "hilltopads.net", "tubecorporate.com",
+		"traffichaus.com", "trafficshop.com", "clickadilla.com"},
 	"gambling": {"income-access.com", "netrefer.com", "myaffiliates.com", "affiliatehub.com",
 		"cellxpert.com", "referon.com", "raventrack.com", "quintessence.media", "gamblingads.com",
 		"betpartners.com", "playtech.com", "gambling-affiliation.com"},
 	"crypto": {"coinzilla.com", "coinzilla.io", "bitmedia.io", "a-ads.com", "cointraffic.io",
-		"adshares.net", "adex.network"},
+		"adshares.net", "adex.network", "mellowads.com", "blockchain-ads.com", "hypelab.com"},
 	"dating": {"datingpartners.com", "adultfriendfinder.com", "sexsearchcom.com", "datingfactory.net"},
 }
 

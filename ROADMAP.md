@@ -49,7 +49,7 @@ of their group and a row here; a finished item loses its row.
 | B16 | New list dialog on a real screen | §3.2 | gui, lists | box |
 | B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
-| 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
+| 2.2 | Ad trigger: browser test; the new industry domains in real ad requests (Unchecked) | §3.9 | actions, extension | box |
 | 2.4 | SafeSearch per engine: built; in real browsers (Unchecked) | §4.10 | browsers | box |
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret (for the owner, §5); the text lock's window on a real desktop (Unchecked) | R-LOCK-5, §4.6 | browsers, locks | owner, box |
@@ -968,8 +968,11 @@ Only items not simply Built.
   System-following dark pages rely on `prefers-color-scheme`, which
   LibreWolf reports as light. In project files with its wallpapers
   (`cli/projectcircadian.go`; import only where none is set).
-- **2.2 Ad trigger** (M): built (scope `ads`); left: a browser test
-  (`ci/extras_test.py`), and growing the shipped industry lists.
+- **2.2 Ad trigger** (M): built (scope `ads`). Industry lists grown
+  2026-11-20 (adult: TrafficHaus, TrafficShop, ClickAdilla; crypto: Mellow
+  Ads, Blockchain-Ads, HypeLab; `TestAdIndustries`); networks named in
+  public ad-network roundups, domains not checked against live ad
+  requests: Unchecked. Left: a browser test (`ci/extras_test.py`, box).
 - **2.4 SafeSearch** (S): a lock per engine built 2026-11-20 (SPEC §6
   2026-11-18): four browser settings, the old one and its lock moved to
   each (`TestMigrateSafeSearch`, `TestSafeSearchPerEngine`,

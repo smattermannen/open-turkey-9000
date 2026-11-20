@@ -55,6 +55,10 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
+| D1 | Block page: top bar (← All blocks … Save edits, Start) stays put while the block scrolls | §4.3, R-GUI-3 | gui | agent |
+| D2 | Start a block without the lock dialog (locks via "Add locks…" once on) | §4.3, R-LOCK-7 | gui, locks | agent, owner |
+| D3 | Instagram social setting "Following only" (no suggested posts) | §3.2 | extension, lists | agent, box |
+| D4 | Automation clips: a handle mid-segment, drag to bend | §4.10 | gui, circadian | agent |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
@@ -67,6 +71,24 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
 2026-11-16): no Android work; its items below wait.
 
 ### 0.1 Code contradicting `SPEC.md`
+
+- [ ] **Owner report 2026-11-20** (from real use; not started).
+  - **D1** In an opened block, the bar from "← All blocks" down to Save
+    edits and the Start/Stop/Unlock/Automation/⋯ row stays at the top of
+    the window while the tabs below scroll (now all of `self.detail`
+    scrolls in one `ScrolledWindow`, `gui/kc9k-gui.py` ~6516).
+  - **D2** Start… opens a lock dialog (`start_block`, `LockPicker`);
+    remove it: Start runs `kc9k start <block>` at once. Locks are added
+    afterwards with "Add locks…" (R-LOCK-7, still confirmed, R-LOCK-12).
+    SPEC §4.3 to update with the owner if it describes the dialog.
+  - **D3** Instagram: a social setting `instagram:following-only`: the
+    feed shows only accounts followed, no suggested posts (e.g. redirect
+    `/` to `/?variant=following`, hide suggested units). `db/social.go`,
+    `webext/files/social.js` (redirects match the path only today: needs a
+    query check), test in `ci/match_test.js`; note `extension`.
+  - **D4** ClipEditor: a small circle in the middle of each segment
+    between two points; left-drag it to change the bend (`tension`).
+    Today the whole curve is the drag target (`on_curve`); note `gui`.
 
 - [x] **Owner report 2026-11-17 (later)** (after testing the latest build;
   top priority; SPEC changed the same day, §6). In three steps, each

@@ -32,7 +32,6 @@ of their group and a row here; a finished item loses its row.
 | A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
-| A13 | `install.sh` DB race: fixed; confirm a fresh install in the VM | — | install, db-project | vm |
 | B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
 | B3 | Strict mode holes | §3.8 | device | vm |
 | B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | vm |
@@ -845,7 +844,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   unanswered (screen locked) it times out after 60 s and nothing is locked;
   synthetic keys from other programs are ignored. Left: a person clicks
   Lock and Cancel on an unlocked screen. (S)
-- [ ] `A13` **`install.sh` races the daemon for the DB.** Seen 2026-11-19 on a
+- [x] `A13` **`install.sh` races the daemon for the DB.** Seen 2026-11-19 on a
   fresh Ubuntu 24.04 VM: step 3 (`kc9k-bin browser install-librewolf`)
   failed with `database is locked (SQLITE_BUSY)`, apparently while the
   just-started daemon created the database; running it again afterwards
@@ -860,7 +859,17 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   processes create one new DB; failed without the lock). On the desktop:
   the installed build, DB deleted, daemon start + `install-librewolf` + two
   `status` at once, 10 times: no error; `install.sh` with no DB: no error.
-  Left: a fresh install on the VM (`ci/vm.sh`), Unchecked. Not covered:
+  Checked 2026-11-20 on kc9k-vm (Ubuntu 24.04, Cinnamon X11): from
+  snapshot `clean`, `make uninstall`, `/var/lib/kc9k` and
+  `/usr/local/bin/kc9k*` removed (3 of 4 runs also LibreWolf and its
+  extrepo source), then `sudo TAGS=devmaster ./install.sh`; 4 runs,
+  reverted in between: exit 0, no SQLITE_BUSY, "database is locked" or
+  "duplicate column" in the output or the daemon's journal, step 3
+  "LibreWolf installed" (once "already installed"), `kc9k status` fine,
+  daemon active. A new DB's setup alone takes 8–13 s on that disk; the
+  daemon reached its loop 13–20 s after starting (beside
+  `install-librewolf`; the setup lock waits ≤ 30 s). Then 10 times: daemon stopped, DB deleted, daemon start +
+  `install-librewolf` + two `status` at once: all exit 0, no error. Not covered:
   a deferred transaction that reads then writes (some migrations, runtime
   code) can still get SQLITE_BUSY at once beside the daemon's writes;
   `_txlock=immediate` would close that (not done: changes every `Begin`).

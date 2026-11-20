@@ -52,6 +52,13 @@ build:
 # -------------------------------------------------------
 .PHONY: install
 install: build
+	@# Tamper protection "block the installer": the installed binary may
+	@# refuse a reinstall while anything is locked (an older one doesn't know
+	@# the command, which is no refusal).
+	@if [ -x $(INSTALL_PATH)/$(BINARY_INSTALLED) ]; then \
+		out=$$($(INSTALL_PATH)/$(BINARY_INSTALLED) prepare-install 2>&1) || \
+		case "$$out" in *"unknown command"*) ;; *) echo "$$out" >&2; exit 1;; esac; \
+	fi
 	@echo ">> Installing the real binary as $(BINARY_INSTALLED)..."
 	# The real binary gets a different name so that the wrapper
 	# script can take the "kc9k" name

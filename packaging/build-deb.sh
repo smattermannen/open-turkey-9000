@@ -63,7 +63,14 @@ cat > "$pkg/DEBIAN/prerm" <<'PRERM'
 #!/bin/sh
 set -e
 # Removal is refused while anything is locked (§4.11, R-LOCK-9); the
-# blocking layers are cleaned up first. An upgrade keeps everything.
+# blocking layers are cleaned up first. An upgrade keeps everything; a
+# reinstall or an older version may be refused while anything is locked
+# (tamper protection "block the installer", prepare-install).
+if [ "$1" = upgrade ] && ! dpkg --compare-versions "$2" gt "@VERSION@"; then
+	if ! out=$(/usr/local/bin/kc9k-bin prepare-install 2>&1); then
+		case "$out" in *"unknown command"*) ;; *) echo "$out" >&2; exit 1;; esac
+	fi
+fi
 if [ "$1" = remove ] || [ "$1" = deconfigure ]; then
 	/usr/local/bin/kc9k-bin prepare-uninstall
 	systemctl stop kc9k.service || true
@@ -82,6 +89,7 @@ if [ "$1" = purge ]; then
 	rm -rf /var/lib/kc9k
 fi
 POSTRM
+sed -i "s/@VERSION@/$version/" "$pkg/DEBIAN/prerm"
 chmod 755 "$pkg/DEBIAN/postinst" "$pkg/DEBIAN/prerm" "$pkg/DEBIAN/postrm"
 
 out="kc9k_${version}_${arch}.deb"

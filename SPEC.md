@@ -463,6 +463,16 @@ GUI and CLI offer the same functions.
     - block task managers while locked (System Monitor, htop);
     - clock: block time/date changes; check against hardware clock and
       internet time.
+    - Defaults: close browsers if the extension stops, block inactive tabs
+      and block embedded content were always done before they were
+      settings, so they are on until turned off; off, browsers without the
+      extension are closed only while anything is locked, a background tab
+      is blocked when switched to, and the extension leaves frames alone
+      (hosts and the firewall still block whole domains). The others are
+      off until turned on. Close guest profiles also turns off the login
+      screen's guest session. Block the installer refuses reinstalling and
+      installing an older version while anything is locked (the package
+      manager and `install.sh`); a newer version installs. *(By Opus)*
   - Browsers: supported browsers found, extension status, one-click install.
   - **Browser settings**, each lockable: SafeSearch on Google, Bing,
     DuckDuckGo, YouTube (Restricted Mode); *force-search* (Google only,
@@ -671,6 +681,7 @@ Decisions not already written into §1–5:
 - 2026-11-21 (By Opus): With "allow `file://` blocking" on, the extension judges local files as it does web pages (§4.10 Tamper protection): their `file://` address entries, and rendered terms and phrases in their title and text; the block's file exceptions spare them (`file://*` by default, so nothing changes until the user narrows it). A local HTML page is a way around a block as much as a website is; the setting and the exception keep it opt-in.
 - 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
 - 2026-11-21 (By Opus): The firmware lock sets the firmware's boot settings first and its password last, typed by the trusted person and never stored; removing it is refused while anything is locked and needs that password (§4.10). Making it a KC9K lock with kinds would add nothing: only the trusted person can lift it. Stronger blocking: the one-time boot menu goes off too, since a firmware password alone leaves it open on many computers.
+- 2026-11-21 (By Opus): Tamper protection settings that KC9K always enforced (close browsers if the extension stops, block inactive tabs, block embedded content) are on by default and can be turned off while nothing is locked; the new ones (close guest profiles, block the installer) are off by default (principle 7: behaviour changes are settings, not new defaults; principle 3: a new protection is chosen). Block the installer lets a newer version through, as §4.10 names only reinstalling, downgrading and removal.
 - 2026-11-21 (By Opus): The guided setup (§4.10) is a read-only checklist with each step's own command, no-escape last: the 2026-11-14 "no first-run wizard" decision rules out a wizard, and a checklist that shows what is left keeps the strictest setup deliberate (principle 3).
 
 ## 7. Open decisions

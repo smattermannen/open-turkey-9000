@@ -235,3 +235,82 @@ func TestTamperPrivate(t *testing.T) {
 		t.Error("private windows allowed again while locked")
 	}
 }
+
+// §4.10 (decided 2026-11-21 By Opus): close guest profiles, close browsers
+// if the extension stops, block the installer, block inactive tabs, block
+// embedded content. The ones KC9K always did are on until turned off; the
+// others off until turned on; off is refused while anything is locked.
+func TestTamperGuestExtensionInstallerTabsEmbedded(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	out := capture(t, "tamper")
+	for _, want := range []string{"guest off", "extension-stop on", "installer off", "inactive-tabs on", "embedded on"} {
+		if !strings.Contains(out, want+"\n") {
+			t.Errorf("defaults: %q missing from\n%s", want, out)
+		}
+	}
+	rules, err := enforce.BuildRules(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rules.InactiveTabsOff || rules.EmbeddedOff {
+		t.Error("the extension told inactive tabs or embedded content are off by default")
+	}
+	state := capture(t, "gui-state")
+	for _, want := range []string{`"tamper_guest":false`, `"tamper_extension_stop":true`, `"tamper_installer":false`,
+		`"tamper_inactive_tabs":true`, `"tamper_embedded":true`} {
+		if !strings.Contains(state, want) {
+			t.Errorf("gui-state lacks %s", want)
+		}
+	}
+
+	// Unlocked, all of them are free either way.
+	mustRun(t, "tamper", "inactive-tabs", "off")
+	mustRun(t, "tamper", "embedded", "off")
+	if rules, _ = enforce.BuildRules(d); !rules.InactiveTabsOff || !rules.EmbeddedOff {
+		t.Error("off not sent to the extension")
+	}
+	mustRun(t, "tamper", "inactive-tabs", "on")
+	mustRun(t, "tamper", "embedded", "on")
+	for _, name := range []string{"guest", "installer"} {
+		mustRun(t, "tamper", name, "on")
+	}
+
+	// Close browsers if the extension stops: an active block with websites
+	// needs the extension; off, only a lock does.
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com/r/*")
+	mustRun(t, "start", "b")
+	if req, _ := enforce.ExtensionRequiredNow(d); !req {
+		t.Fatal("an active block with websites doesn't need the extension")
+	}
+	mustRun(t, "tamper", "extension-stop", "off")
+	if req, _ := enforce.ExtensionRequiredNow(d); req {
+		t.Error("extension-stop off still requires the extension for an unlocked block")
+	}
+	mustRun(t, "stop", "b")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if req, _ := enforce.ExtensionRequiredNow(d); !req {
+		t.Error("a lock doesn't require the extension with extension-stop off (R-LOCK-9)")
+	}
+	mustRun(t, "tamper", "extension-stop", "on") // on is free while locked
+
+	// Block the installer: refused only while locked with it on.
+	if err := runCLI(t, "prepare-install"); err == nil {
+		t.Error("a reinstall allowed while locked with the installer blocked")
+	}
+	for _, name := range []string{"guest", "extension-stop", "installer", "inactive-tabs", "embedded"} {
+		if err := runCLI(t, "tamper", name, "off"); err == nil {
+			t.Errorf("tamper %s turned off while locked", name)
+		}
+	}
+	if err := d.DeactivateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "prepare-install")
+	mustRun(t, "tamper", "installer", "off")
+	if err := d.ActivateBlock("b", true, 0, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "prepare-install") // the setting is off: a reinstall is free
+}

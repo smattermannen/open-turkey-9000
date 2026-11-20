@@ -1035,6 +1035,17 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
 
 ## 5. Proposed, not agreed
 
+- PROPOSED 2026-11-20 (session, `2.8`, §1 "Layered sequential locks"):
+  SPEC §4.6 and §6 2026-11-20 say a lock of a kind a *block* already has is
+  added as a second lock, last, and that stacking has no exceptions; they
+  don't say whether setting locks (browser, tamper, strict, bypass, freeze
+  schedules) stack too. Built: one lock per kind on a setting, and a new
+  one strengthens it (timer extended, challenge lengthened). Proposed: the
+  same as blocks (a queue on `setting_locks`, as `LockExtras.Queue`),
+  because a setting lock is "a lock" in §3.4's sense and the owner's
+  examples (two partners' passwords) fit settings as well. Not built until
+  the owner agrees.
+
 - PROPOSED 2026-11-20 (session, building `2.4`): SPEC §4.10 and §6
   2026-11-18 name four engines with their own SafeSearch setting and are
   silent on the rest: Brave, Yahoo and SearXNG (kept strict from the

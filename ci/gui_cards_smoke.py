@@ -164,6 +164,22 @@ win.delete_block(None); settle()
 check("night" in win.blocks and win.blocks_stack.get_visible_child_name() == "detail" and win.selected == "night",
       "refused (it is locked), the block stays open: %s" % msgs)
 
+# D1 (owner 2026-11-20): the bar from "← All blocks" to the Start/Stop row
+# stays put; only the tabs scroll.
+def inside(widget, ancestor):
+    while widget is not None:
+        if widget is ancestor:
+            return True
+        widget = widget.get_parent()
+    return False
+
+
+win.open_block("plain"); settle()
+check(inside(win.block_tabs, win.detail_scroll), "the tabs scroll")
+check(not any(inside(w, win.detail_scroll) for w in (win.title_label, win.draft_bar, win.start_button, win.more_menu[0])),
+      "the top bar (title, Save edits, Start…, ⋯) stays outside the scrolled part")
+check(not isinstance(win.detail.get_parent(), Gtk.Viewport), "the page itself does not scroll")
+
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")
 raise SystemExit(1 if fails else 0)

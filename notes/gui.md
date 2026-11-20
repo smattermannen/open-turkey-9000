@@ -17,6 +17,8 @@
   commands with the mode's or schedule's name; sidebar pages Schedules
   (`build_schedules_page`, `open_schedule`) and Places
   (`build_places_page`); a block in a mode greys `block_auto_widgets`.
+  An opened block's top (← All blocks to the Start/⋯ row) stays put;
+  only its tabs scroll (`detail_scroll`).
   `ci/gui_cards_smoke.py`, `ci/gui_modes_smoke.py`. Design layer
   (R-GUI-3, `APP_CSS`): `page_header`, `section` (a card; `help=` puts
   long text behind a ? popover), `card`, `pill`/`block_pills`,

@@ -6515,12 +6515,12 @@ class Window(Gtk.ApplicationWindow):
 
         self.detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,
                               margin_start=20, margin_end=20, margin_top=16, margin_bottom=16)
-        # The details scroll, so the window fits small and scaled screens.
-        # Never wider than the window (R-GUI-3: nothing cut off at the
-        # right): the content wraps and reflows instead.
-        detail_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
-        detail_scroll.add(self.detail)
-        paned.pack2(detail_scroll, True, False)
+        # Owner 2026-11-20 (D1): the bar from "← All blocks" down to the
+        # Start/Stop/… row stays put; only the tabs below scroll, so the
+        # window fits small and scaled screens. Never wider than the window
+        # (R-GUI-3: nothing cut off at the right): the tabs wrap and reflow.
+        paned.pack2(self.detail, True, False)
+        self.detail_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
         back = Gtk.Button(label="← All blocks", halign=Gtk.Align.START, relief=Gtk.ReliefStyle.NONE)
         back.get_style_context().add_class("kc9k-link")
         back.connect("clicked", lambda _b: self.leave_block())
@@ -6622,7 +6622,8 @@ class Window(Gtk.ApplicationWindow):
 
         tabs = Gtk.Notebook(scrollable=True)
         self.block_tabs = tabs
-        self.detail.pack_start(tabs, True, True, 0)
+        self.detail_scroll.add(tabs)
+        self.detail.pack_start(self.detail_scroll, True, True, 0)
 
         websites = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin=12)
         intro = Gtk.Box(spacing=6)

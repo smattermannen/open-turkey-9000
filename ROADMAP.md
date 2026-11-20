@@ -55,7 +55,6 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| D1 | Block page: top bar (← All blocks … Save edits, Start) stays put while the block scrolls | §4.3, R-GUI-3 | gui | agent |
 | D2 | Start a block without the lock dialog (locks via "Add locks…" once on) | §4.3, R-LOCK-7 | gui, locks | agent, owner |
 | D3 | Instagram social setting "Following only" (no suggested posts) | §3.2 | extension, lists | agent, box |
 | D4 | Automation clips: a handle mid-segment, drag to bend | §4.10 | gui, circadian | agent |
@@ -73,10 +72,11 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
 ### 0.1 Code contradicting `SPEC.md`
 
 - [ ] **Owner report 2026-11-20** (from real use; not started).
-  - **D1** In an opened block, the bar from "← All blocks" down to Save
+  - [x] **D1** In an opened block, the bar from "← All blocks" down to Save
     edits and the Start/Stop/Unlock/Automation/⋯ row stays at the top of
-    the window while the tabs below scroll (now all of `self.detail`
-    scrolls in one `ScrolledWindow`, `gui/kc9k-gui.py` ~6516).
+    the window while the tabs below scroll (built 2026-11-20: only the tabs
+    are in `detail_scroll`; `ci/gui_cards_smoke.py`; on a real screen:
+    Unchecked).
   - **D2** Start… opens a lock dialog (`start_block`, `LockPicker`);
     remove it: Start runs `kc9k start <block>` at once. Locks are added
     afterwards with "Add locks…" (R-LOCK-7, still confirmed, R-LOCK-12).

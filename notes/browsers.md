@@ -1,6 +1,6 @@
 # Browser policies, extension guard, supported browsers, Chrome
 
-- Covers: `blocker/browser*.go`, `extguard.go`, `browserdetect.go`, `supported.go`, `remotecontrol*.go`, `librewolf*.go`, `chromesetup.go`, `webext/chrome.go`, `db/settinglocks.go`, `cli/browser*.go`, `cli/tamper.go`, `enforce/browser.go`, `enforce/tamper.go`
+- Covers: `blocker/browser*.go`, `extguard.go`, `browserdetect.go`, `supported.go`, `remotecontrol*.go`, `librewolf*.go`, `chromesetup.go`, `webext/chrome.go`, `db/settinglocks.go`, `cli/browser*.go`, `cli/tamper.go`, `cli/installguard.go`, `enforce/browser.go`, `enforce/tamper.go`, `enforce/tampersettings.go`, `blocker/guest.go`
 - SPEC: §3.13, §4.10 Tamper protection / Browsers / Browser settings, R-LOCK-9
 - Connects to: [extension](extension.md), [locks](locks.md) (setting locks), [layers-net](layers-net.md), [device](device.md) (strict mode)
 
@@ -29,6 +29,17 @@
   `statFile`/`runInstall`). LibreWolf: `block-devtools` policy;
   five prefs locked in librewolf.cfg, user overrides replaced by a cleaned
   copy (`librewolfprefs.go`).
+- **Tamper settings with defaults** (`enforce/tampersettings.go`,
+  `TamperOn`): stored on/off; `extension-stop`, `inactive-tabs`, `embedded`
+  are on when unset (`tamperDefaultOn`), the rest off. `cli/tamper.go`
+  `simpleTamper`/`tamperOrder`/`tamperMessages`; gui-state `tamper_*`.
+  `guest` → `blocker.SyncGuestOff` from `enforceBrowser`
+  (`kc9k-guest.json` beside each Chromium-family `kc9k.json`, LightDM
+  drop-in `lightdm.conf.d/90-kc9k-no-guest.conf` where `/etc/lightdm`
+  exists). `extension-stop` off: `extensionUsers` asks only `AnyLock`.
+  `inactive-tabs`/`embedded` off → rules `inactive_tabs_off`/`embedded_off`
+  (extension note). `installer` → hidden `prepare-install`
+  (`cli/installguard.go`; install note).
 - **Browser setting locks** (`db/settinglocks.go`, `cli/browser.go`): per
   option (time, challenge, password, restart); `enforce.AnyLock` counts
   them. The same code serves the tamper setting block unsupported browsers
@@ -70,6 +81,7 @@ Not fixed by `SPEC.md`; the code is the truth.
   check-in (`browsersWithoutExtension`, `runningSupportedBrowsers`).
   Required while an active block has a non-empty
   blacklist, web-only/force-search is on, or anything is locked (R-LOCK-9);
+  with tamper `extension-stop` off, only while anything is locked;
   unlocked app-only blocks leave browsers alone. With block unsupported browsers on, always: other browsers
   (Firefox too) close at once, supported ones after 60 s without a check-in.
   Nothing closed without LibreWolf, Chrome or Chromium installed (`status`

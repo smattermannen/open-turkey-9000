@@ -95,7 +95,9 @@ for b in win.state["browsers"]:
     check(install.get_visible() == (not b["installed"]), f"{b['name']} Install button only when missing")
 check(gui.browser_status({"installed": True, "checkin_seconds": 5}) == "Installed. Extension working.", "fresh check-in")
 check("not seen" in gui.browser_status({"installed": True, "checkin_seconds": -1}), "never checked in")
-check(win.tamper_summary.get_text() == "All off.", "tamper summary all off: " + win.tamper_summary.get_text())
+# A fresh setup: only what KC9K always did is on (§4.10, 2026-11-21 By Opus).
+check(win.tamper_summary.get_text() == "On: Close browsers if the extension stops; Block inactive tabs; Block embedded content",
+      "tamper summary of a fresh setup: " + win.tamper_summary.get_text())
 
 # The tamper protection window: Cancel changes nothing, OK applies.
 real_run = Gtk.Dialog.run

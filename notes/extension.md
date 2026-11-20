@@ -24,6 +24,12 @@
   (`data-kc9k-noimg` before/after/self, idle-time `scanPseudoImages`) and
   both sheets empty them; shadow roots get an adopted sheet. Page script
   harness (Node + Playwright, cloud only): `node ci/content_harness_test.js`.
+- **Tamper protection** (§4.10): rules `inactive_tabs_off` (then
+  `closeNewlyBlockedTabs` skips background tabs and `onActivated` runs
+  `judgeTab` on the tab switched to) and `embedded_off` (then sub-frame
+  requests aren't blocked by address and `frameHit` answers nothing);
+  absent = on (Android, older daemons). `node ci/tamper_tabs_test.js`
+  (stub browser, background script).
 - **Workarounds**: `kc9kUnwrap` reads addresses in query/path; `checkMirror`
   (content.js) reports canonical addresses/front-ends; `/hit` with `via`
   logs `EventWorkaround`.

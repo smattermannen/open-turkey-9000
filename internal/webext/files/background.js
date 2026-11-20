@@ -12,6 +12,10 @@ let lists = [];
 let webOnly = false;
 let safeSearch = false;
 let safeSearchEngines = null; // null: every engine (rules without the list)
+// Tamper protection (§4.10): "block inactive tabs" and "block embedded
+// content" are on unless the rules say they are off.
+let inactiveTabsOff = false;
+let embeddedOff = false;
 
 // Firefox for Android (IronFox) has no windows or idle API: there the tab in
 // front is the active one, and the phone counts as in use.
@@ -566,7 +570,7 @@ function mirrorHit(message, sender) {
 // taken from this script's own rules, never from the report.
 function frameHit(message, sender) {
   const tab = sender && sender.tab;
-  if (!tab || !sender.frameId || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
+  if (embeddedOff || !tab || !sender.frameId || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
     return null;
   }
   const matches = [];
@@ -702,7 +706,8 @@ browser.webRequest.onBeforeRequest.addListener(
       noteOrigin(details);
     }
     const outcome = addressOutcome(details.url);
-    if (kc9kTakesAway(outcome)) {
+    // Block embedded content off (§4.10): frames are left alone.
+    if (kc9kTakesAway(outcome) && !(embeddedOff && details.type !== "main_frame")) {
       // A frame only ever gets the block page: something embedded in a page
       // mustn't close the tab or the browser.
       if (details.type !== "main_frame") {
@@ -898,6 +903,8 @@ function apply(rules) {
   safeSearchEngines = Array.isArray(rules.safesearch_engines) ? rules.safesearch_engines : null;
   strictUse = Boolean(rules.strict_use);
   statsSkipPrivate = Boolean(rules.stats_skip_private);
+  inactiveTabsOff = Boolean(rules.inactive_tabs_off);
+  embeddedOff = Boolean(rules.embedded_off);
   if (recording !== Boolean(rules.recording)) {
     recording = Boolean(rules.recording);
     visited.clear();
@@ -907,23 +914,39 @@ function apply(rules) {
 async function closeNewlyBlockedTabs() {
   const tabs = await browser.tabs.query({});
   for (const tab of tabs) {
-    if (!tab.url || !/^https?:/i.test(tab.url)) {
+    // Block inactive tabs off (§4.10): a background tab waits until it is
+    // switched to (judgeTab from onActivated).
+    if (inactiveTabsOff && !tab.active) {
       continue;
     }
-    const outcome = addressOutcome(tab.url);
-    if (kc9kTakesAway(outcome)) {
-      act(tab.id, tab.url, outcome, "");
-    } else if (kc9kPlaylistBlocks(social, tab.url)) {
-      browser.tabs.update(tab.id, { url: blockedPage(tab.url, "playlist").redirectUrl });
-    } else if (kc9kSocialRedirect(social, tab.url)) {
-      browser.tabs.update(tab.id, { url: kc9kSocialRedirect(social, tab.url) });
-    } else {
-      blockTitledTab(tab);
-      applyMute(tab);
-      tellFrames(tab);
-    }
+    judgeTab(tab);
   }
 }
+
+// judgeTab acts on what a tab already shows, by the rules now.
+function judgeTab(tab) {
+  if (!tab || !tab.url || !/^https?:/i.test(tab.url)) {
+    return;
+  }
+  const outcome = addressOutcome(tab.url);
+  if (kc9kTakesAway(outcome)) {
+    act(tab.id, tab.url, outcome, "");
+  } else if (kc9kPlaylistBlocks(social, tab.url)) {
+    browser.tabs.update(tab.id, { url: blockedPage(tab.url, "playlist").redirectUrl });
+  } else if (kc9kSocialRedirect(social, tab.url)) {
+    browser.tabs.update(tab.id, { url: kc9kSocialRedirect(social, tab.url) });
+  } else {
+    blockTitledTab(tab);
+    applyMute(tab);
+    tellFrames(tab);
+  }
+}
+
+browser.tabs.onActivated.addListener((info) => {
+  if (inactiveTabsOff) {
+    browser.tabs.get(info.tabId).then(judgeTab, () => {});
+  }
+});
 
 async function poll() {
   try {

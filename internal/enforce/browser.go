@@ -131,6 +131,17 @@ func needsExtension(lists db.Lists, social []string, phrases bool) bool {
 // the blocks needing it name. Options, locks and blocks for everyone need
 // it in every account.
 func extensionUsers(d *db.DB, active []db.ActiveBlockDetail) (bool, []uint64) {
+	// Close browsers if the extension stops (§4.10) off: only a lock
+	// requires it.
+	if !TamperOn(d, SettingExtensionStop) {
+		now := time.Now()
+		trusted, err := d.TrustedNow(now)
+		if err != nil {
+			return false, nil
+		}
+		locked, err := AnyLock(d, now, trusted)
+		return err == nil && locked, nil
+	}
 	var some []uint64
 	partial := false
 	add := func(b db.ActiveBlockDetail) bool {
@@ -326,6 +337,12 @@ type Rules struct {
 	ExtensionVersion string `json:"extension_version"`
 	// Dark: the circadian rhythm's dark pages (§4.10), nil when off.
 	Dark *DarkRule `json:"dark,omitempty"`
+	// InactiveTabsOff: tamper protection "block inactive tabs" is off: a tab
+	// in the background is judged when it is switched to (§4.10). Absent
+	// (older daemons, Android): on.
+	InactiveTabsOff bool `json:"inactive_tabs_off,omitempty"`
+	// EmbeddedOff: "block embedded content" is off: frames are left alone.
+	EmbeddedOff bool `json:"embedded_off,omitempty"`
 }
 
 // ListRule is one blacklist: the entries it looks for in a page's address,
@@ -464,6 +481,8 @@ func BuildRulesFor(d *db.DB, user string) (Rules, error) {
 		SafeSearchEngines: SafeSearchOn(d),
 		StrictUse:         StrictUseOn(d),
 		Titles:            []string{},
+		InactiveTabsOff:   !TamperOn(d, SettingInactiveTabs),
+		EmbeddedOff:       !TamperOn(d, SettingEmbedded),
 
 		ExtensionVersion: webext.Version(),
 	}
@@ -768,6 +787,9 @@ func enforceBrowser(d *db.DB) {
 	}
 	if err := blocker.SyncSafeSearch(SafeSearchOn(d)); err != nil {
 		log.Printf("browser: safesearch: %v", err)
+	}
+	if err := blocker.SyncGuestOff(TamperOn(d, SettingTamperGuest)); err != nil {
+		log.Printf("browser: guest: %v", err)
 	}
 }
 

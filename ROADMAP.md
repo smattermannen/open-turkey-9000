@@ -8,7 +8,7 @@ on; write "Unchecked" rather than guess. Order: §0 first, top to bottom,
 then §2.
 
 Status: Built, Partial, Differs (built unlike SPEC), Not built, Unchecked.
-Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-17.
+Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-20 (docs against code: commands, rule IDs, paths, notes' Covers lines; §0.1 *Doc audit 2026-11-20*).
 
 ## Index
 
@@ -54,6 +54,8 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: the text lock's challenge in the command's own window (decided 2026-11-20, §5); rules server secret (for the owner, §5) | R-LOCK-5, §4.6 | browsers, locks | agent, owner |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
+| E1 | Projects: presets of every type as a choice (owner 2026-11-20) | §3.13 | db-project, lists | agent |
+| E2 | Words to avoid still shown: template, cluster (GUI, CLI names) | §3.14, §4.12 | gui, lists | agent |
 | D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
@@ -68,7 +70,37 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
 
 ### 0.1 Code contradicting `SPEC.md`
 
-- [ ] **Owner report 2026-11-20** (from real use; not started).
+- [ ] **Doc audit 2026-11-20** (docs and code compared; notes fixed in the
+  same session; what the code still gets wrong is below).
+  - [ ] **E1** Presets in projects are a choice (owner 2026-11-20, SPEC
+    §3.13, §6): `project export` (and the GUI's export) asks whether to
+    include presets; included means every type: block presets
+    (`templates`), list and phrase set presets (`clusters`) and the
+    `presets` table (lists, automation, schedule, hotkey). Today the code
+    differs both ways: templates and clusters always go in
+    (`cli/project.go` `Templates`, `Clusters`), the `presets` table never
+    does (export, import and `cli/projectbackup.go` all skip it). A backup
+    holds every preset always. Import adds presets as it adds blocks (only
+    adds; a clashing name gets a new one); tests in `project_test.go`,
+    `projectbackup_test.go`; update `notes/db-project.md`.
+  - [ ] **E2** Words to avoid (§3.14) still shown to the user; command
+    names follow the glossary, old ones stay as aliases (§4.12):
+    - GUI (`gui/kc9k-gui.py`): New block dialog "Start empty or from a
+      template." and "Template: X" (`new_block`, near `templates =`);
+      list Import "From KC9K" says "lists and clusters", "Cluster: X",
+      "No other lists or clusters to import from." (`import_from_kc9k`
+      area); the phrase import hint "clusters in Killer Chicken 9000".
+      Say block preset, list preset, phrase set preset.
+    - CLI: `template` and `cluster` are the commands' main names (help:
+      "Saved block definitions", "Manage clusters"); `block create
+      --template`, `record start … --cluster C`, `record` help "into a
+      list or a cluster", `project` help "the clusters". Make them
+      `preset …` (or name them presets) with `template`/`cluster`/
+      `--template`/`--cluster` kept as aliases; `ci/gui_*` smoke tests
+      that look for the old labels change with them.
+    - Code identifiers (`clusters` table, `build_clusters`) may stay.
+
+- [ ] **Owner report 2026-11-20** (from real use; D1, D2, D4 built; D3 left).
   - [x] **D1** In an opened block, the bar from "← All blocks" down to Save
     edits and the Start/Stop/Unlock/Automation/⋯ row stays at the top of
     the window while the tabs below scroll (built 2026-11-20: only the tabs
@@ -908,9 +940,9 @@ Only items not simply Built.
 | Item | Status | Notes |
 |---|---|---|
 | §3.1 File URL entries | Partial | built: with tamper `file-urls` on, blacklist `file:///…` entries go into Firefox/LibreWolf and Chrome policies unless the block's file exceptions spare them (checked live in LibreWolf); Chrome live: Unchecked; the extension doesn't judge file pages |
-| §3.2 Template | Built | your own saved definitions: `template save B T`, `template`, `template remove T`, `block create X --template T`; GUI "Save as template…" and a choice in New block; projects. None shipped |
+| §3.2 Block preset | Built | your own saved blocks: `template save B T`, `template`, `template remove T`, `block create X --template T` (names: E2); GUI ⋯ "Save as block preset…" and a choice in New block; Presets page; projects (always: E1). None shipped |
 | §3.2 Affected users | Partial | `block users B all|USER…` (GUI "Users:" button, gui-state `users`/`accounts`, projects): a block for some accounts stays out of hosts/firewall/policies (shared by every account) unless it covers them all; its lists reach only those users' extensions (`BuildRulesFor`, user from the socket uid) and its apps are closed only in their processes (`KillBlockedFor`). Fewer users weakens. Not per user yet: window titles, folders, fetch tools, the extension guard. Live: one account on the laptop, so only "every account" checked |
-| §3.3 Continuous/scheduled types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
+| §3.3 Continuous/automated types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
 | §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. GUI: block start dialog and the setting lock dialogs |
 | §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI start and setting lock dialogs ask the order (Up/Down); several of one kind on blocks (any kind, also with re-lock and from hotkeys); `extend` for timer locks; block re-lock brings back the whole configuration; setting locks one per kind, their re-lock text/password only |
 | §3.6 Break per block window | Built | `schedule break B N 10m|off`: one break each time window N is open (`break start` takes it, then reward); new/longer weakens; GUI window editor; projects |
@@ -929,14 +961,14 @@ Only items not simply Built.
 | §5 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`). R-LIST-4 checked in Chromium (2026-11-17, `ci/content_harness_test.js`): hidden (`display:none`, closed `<details>`, `visibility:hidden`) text isn't read, text far down is. Frames were never judged by their text (the content script read the top frame only, whose text holds none of its frames'): now each frame judges its own (`scanFrame`); what would take a page away gives that frame the block page (background `frameHit` decides from its own rules; no events, R-EVENT-1), its looks show in the frame; extension 1.25.0. Frames in LibreWolf: Unchecked |
 | §3.9 Ad trigger | Partial | scope `ads` on blacklists and clusters (`list create --ads`, `list where B L ads on`, GUI "Ads" box): entries are ad network domains or industries (`db.AdIndustries`: adult, crypto, dating, gambling); rules `ads`; the extension watches each tab's third-party requests (`noteAdRequest`) and a page loading a listed network matches with every action (`kc9kAdMatches`, unit-tested). Not in shared layers. Browser test: Not run (the owner was using the laptop; the browser test changes LibreWolf settings and would close their windows) |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
-| §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--cluster C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Clusters page "Record words" with cut % and the most specific words |
+| §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--cluster C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Presets page (list presets) "Record words" with cut % and the most specific words |
 | §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |
 | §4.10 Tamper settings | Partial | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Not built as settings: guest profiles (Chrome guest mode is always off by policy), extension stop (the guard always does it), installer (dpkg prerm refuses removal while locked; install.sh reinstall not guarded), inactive tabs, embedded content (frames always get the block page) |
 | §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
 | §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Built | `make deb` (`packaging/build-deb.sh`): same paths as install.sh; postinst sets up sudoers, database folder, service; prerm runs prepare-uninstall, so removal is refused while locked (checked live); postrm removes sudoers. Installed on the laptop as 0.9.0~overnight (devmaster) |
-| §4.3 Draft Save/Cancel | Partial | `block draft B [save|cancel]`, GUI "Edit as draft" with a Save/Cancel bar: a copy of the lists, phrase sets, apps and window titles that never runs; save applies each difference through its gate, refusing and naming weakening ones on a locked block; needs and keeps the block password; drafts stay out of the block list and projects. Not drafted: schedules, places, allowance and the other settings, changed on the block itself (refused on a draft, `draftRefused`) |
+| §4.3 Draft Save/Cancel | Partial | `block draft B [save|cancel]`; GUI: an opened block is always a draft, made at the first change of the Websites or Apps tab, with Save edits/Cancel (§5 DECIDED 2026-11-17): a copy of the lists, phrase sets, apps and window titles that never runs; save applies each difference through its gate, refusing and naming weakening ones on a locked block; needs and keeps the block password; drafts stay out of the block list and projects. Not drafted (so not as SPEC §4.3 says): the Breaks & allowance and Bypass prevention tabs, which apply at once with their own buttons; on a draft those commands are refused (`draftRefused`) |
 | §4.3 Ctrl+F, multi-select, double-click edit | Built | `EditableList`: Ctrl+F to its search, Ctrl/Shift-click and Ctrl+A in website lists, phrase sets, apps, titles, clusters, exempt folders; Delete/Backspace removes, selection moves on; double-click moves an entry into the box |
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters; Whole internet (`*.*`, asked first) and All searches containing… (the words as rendered terms, the list's URL scope on: a search's words are in its address, R-PHRASE-6; any other address with the word matches too, and the dialog says so) (2026-11-17, `ci/gui_import_smoke.py`) |
 | §4.5 Grid drag-move, copy to days, similar windows | Built | drag a window to move it (time; day for one-day windows); click to edit days (copy to days), times, its break, or remove; a window on several days is edited as one; other blocks' windows greyed |
@@ -1089,6 +1121,11 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   on stdin would let any script do the same. Today a non-terminal stdin
   is read as one line (`runChallengeLine`, `internal/lock/lock.go`): that
   path goes too (tests keep a faked seam). SPEC §4.6 now has it.
+- FOR THE OWNER (doc audit 2026-11-20): SPEC lists circadian rhythm under
+  §4.10 Settings, but §6 2026-11-16 says it has "its own page only (not in
+  Settings)" (the GUI has its own page). To decide: move it out of §4.10
+  into a function of its own, or say in §4.10 that it is a page of its
+  own. No code change either way.
 - FOR THE OWNER: the rules server secret (`2.7`; SPEC §6 2026-11-14, its
   purpose as first written: "so other local programs can't read the
   lists, post statistics or fake a check-in"). As designed it can't do

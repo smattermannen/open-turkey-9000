@@ -7,7 +7,7 @@
 ## Code
 
 - **Enforce** (`internal/enforce/`): active blocks → layer inputs (unioned).
-  `Apply` (CLI, on change) and `Tick` (daemon: due queued edits, schedule
+  `Apply` (CLI, on change) and `Tick` (daemon: due old queued edits (`applyDueEditsAt`; nothing queues now), schedule
   reconciliation, drift reapply). Single source of truth.
 - **Daemon** (`internal/daemon/`): `Tick` every 5 s; foreground-app
   sampling every 5 s; screen relock every 0.5 s during a lock freeze.

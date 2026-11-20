@@ -301,7 +301,7 @@ mode unless no-escape is on.
 | **Supported browser** | LibreWolf, Chrome or Chromium with the extension. KC9K shows which are installed, whether each has it, and installs it in one click. |
 | **Setting** | Configured outside blocks: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `block-devtools`, `no-private`), **tamper protection setting** (§4.10), **behaviour setting** (never locked, exempt from no-weakening: `polite-close`, `block-page-details`), **preference** (interface only). |
 | **Hotkey** | Desktop key that runs its hotkey actions (§3.9): starts a block with a lock, opens a set of sites, programs and folders, … |
-| **Project** | Whole setup in one file, presets included. *Backup*: everything. *Share*: without places and user names. Import previews, only adds, renames clashing blocks. |
+| **Project** | Whole setup in one file; presets (every type) included if the user chooses. *Backup*: everything. *Share*: without places and user names. Import previews, only adds, renames clashing blocks. |
 | **Circadian rhythm** | Time-of-day settings: brightness and colour temperature (each an **automation clip**: 24-hour curve of points), wallpaper, dark mode in apps and pages. Never locked, never overrides the user. |
 
 ### 3.14 Words to avoid
@@ -643,7 +643,9 @@ Decisions not already written into §1–5:
 - 2026-11-18: When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
 - 2026-11-19: The autopilot's resolver may write decisions into this file, each change tagged as rule 1 says; only the owner's decisions are untagged (owner).
 - 2026-11-20: A lock of a kind a block already has (§3.4) is added as a second lock of that kind, last in the unlock order, not a strengthening of the first (owner).
-- 2026-11-20 (later): Stacking has no exceptions (§4.6): a new timer or delay lock is its own layer, not a change to the last one (extending stays a separate action); range locks stack in their order; text and password locks stack on a block with re-lock; each hotkey press adds its locks again. Re-lock brings back the whole lock configuration the block had, every lock in its order (§3.4) (owner).
+- 2026-11-20 (later): Stacking has no exceptions (§4.6): a new timer or delay lock is its own layer, not a change to the last one (extending stays a separate action); range locks stack in their order; text and password locks stack on a block, with or without re-lock; each hotkey press adds its locks again. Re-lock brings back the whole lock configuration the block had, every lock in its order (§3.4) (owner).
+- 2026-11-20 (later): Re-lock is optional on every lock; stacking never depends on it (§4.6) (owner).
+- 2026-11-20 (later): A project includes presets of every type only if the user chooses (§3.13); a backup always does (owner).
 - 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
 
 ## 7. Open decisions

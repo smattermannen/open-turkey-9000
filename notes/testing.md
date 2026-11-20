@@ -25,7 +25,7 @@
   → `skip.txt`. A usage limit retries the round after the reset (the
   stream's `rate_limit_event` lines are not one); a session that ends
   without a result logs why (`session_error`);
-  `AUTOPILOT_ROUNDS=0` runs until `STOP`. State in
+  runs until `STOP` (`AUTOPILOT_ROUNDS=N`: N item rounds). State in
   `~/.local/state/kc9k-autopilot/`. Run as a non-sudo user, never on the
   test laptop, unless in box mode.
 - Box mode (`AUTOPILOT_BOX=1`, on the test machine): sessions may use
@@ -54,13 +54,26 @@
   cut, so the VM checks itself (`inside 1`, then a oneshot unit runs
   `inside 2` after the restart it makes) into `/var/lib/kc9k-monk-live`;
   the host waits for ssh and reads `verdict`. `MONK_MINUTES` (default 6).
-- Planner round (`planner_round`): when `claim_next` finds nothing
-  (NONE), one worker (claim `PLANNER`) runs a session
-  (`AUTOPILOT_PLAN_MODEL`/`_EFFORT`, default opus xhigh) that adds the next
-  Index rows and sections from SPEC.md, §1 and the failure notes; the gate
-  allows only ROADMAP.md. The loop ends on `STATUS: FINISHED`, or after two
-  planner rounds with nothing taken between them. `AUTOPILOT_PLAN=0` ends
-  at NONE as before.
+- Cycles and the planner (`planner_round`): each cycle starts with one
+  worker (claim `PLANNER`) running a planner session
+  (`AUTOPILOT_PLAN_MODEL`/`_EFFORT`, default opus xhigh), told why it runs
+  and what landed since the last `Planner:` commit; it orders, splits,
+  marks done and adds Index rows (top `AUTOPILOT_CYCLE` rows, default 4,
+  are the next batch, taken by the workers in parallel; the others wait
+  while a planner runs). The gate allows
+  only ROADMAP.md, then review and land as any round. A new cycle starts
+  when `cycle.txt` (rounds ended by all workers since the last planner,
+  `cycle_bump`) reaches `AUTOPILOT_CYCLE`, at NONE, or after
+  `AUTOPILOT_MAX_FAILS` failed rounds in a row (pause `IDLE_WAIT`, the
+  planner is told to re-scope). `STATUS: FINISHED`, or two NONE plans in a
+  row: `finished_wait` sleeps `AUTOPILOT_FINISHED_WAIT` (6h) and plans
+  again; `AUTOPILOT_END_WHEN_FINISHED=1` ends instead. `AUTOPILOT_PLAN=0`:
+  no planner, ends at NONE. `AUTOPILOT_ROUNDS` defaults to 0 (until `STOP`).
+- Notes gate (`notes_check`, item rounds): each changed code file
+  (`.go .js .py .sh .json .service .desktop`, `Makefile`; not `*_test.*`,
+  `testdata/`, `.md`) needs a changed note whose Covers line names it
+  (basename, directory token or glob); a file no note covers needs some
+  note changed. `AUTOPILOT_NOTES_GATE=0` turns it off.
 - Following main (`follow_main`, under `land.lock`, each round): GitHub's
   `$AUTOPILOT_FROM` into the hub's `autopilot`, fast-forward or a merge; a
   conflict is logged and left for the owner. `AUTOPILOT_FOLLOW=0` turns it

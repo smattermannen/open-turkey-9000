@@ -44,11 +44,18 @@
 # the tag "(By Opus)" (checked per hunk); the rules for the file above
 # SPEC.md's Index and the owner's §6 decisions are never changed.
 #
-# The planner: when no open item is left for this worker, a planner
-# session (AUTOPILOT_PLAN_MODEL/EFFORT) compares SPEC.md with ROADMAP.md and
-# adds the next items (Index rows and sections; only ROADMAP.md changes).
-# The loop ends when the planner says the project is finished, or when what
-# it planned still leaves nothing to take. AUTOPILOT_PLAN=0 turns it off.
+# The planner: each cycle starts with a planner session
+# (AUTOPILOT_PLAN_MODEL/EFFORT) that compares SPEC.md with ROADMAP.md and
+# orders, splits and adds Index rows (only ROADMAP.md changes); the workers
+# then take the top rows in parallel. A new cycle (a new planner) starts
+# after AUTOPILOT_CYCLE rounds of all workers, when no open item is left, or
+# after AUTOPILOT_MAX_FAILS failed rounds in a row. When the planner says
+# the project is finished, the loop sleeps AUTOPILOT_FINISHED_WAIT and plans
+# again (AUTOPILOT_END_WHEN_FINISHED=1: it ends). AUTOPILOT_PLAN=0: no
+# planner; the loop ends when no item is left.
+#
+# Notes: the gate fails a change to code whose note (notes/*.md, by its
+# Covers line) did not change in the same work.
 #
 # Following main: before each round, $AUTOPILOT_FROM on GitHub is brought
 # into $BRANCH (fast-forward, else a merge; a conflict is logged and left).
@@ -68,10 +75,10 @@ BRANCH=${AUTOPILOT_BRANCH:-autopilot}         # where passing work lands
 FROM=${AUTOPILOT_FROM:-main}                  # where $BRANCH starts if new
 WORKER=${AUTOPILOT_WORKER:-solo}              # one name per Claude account
 NEEDS=${AUTOPILOT_NEEDS:-agent}               # Index "Needs" this worker can do (regex)
-ROUNDS=${AUTOPILOT_ROUNDS:-20}                # 0 = run until stopped
+ROUNDS=${AUTOPILOT_ROUNDS:-0}                 # 0 = run until stopped
 LIMIT_WAIT=${AUTOPILOT_LIMIT_WAIT:-30m}       # usage limit, reset time unknown
 IDLE_WAIT=${AUTOPILOT_IDLE_WAIT:-15m}         # only other workers' items left
-MAX_FAILS=${AUTOPILOT_MAX_FAILS:-3}           # failed rounds in a row → stop
+MAX_FAILS=${AUTOPILOT_MAX_FAILS:-3}           # failed rounds in a row → pause, re-plan
 TRIES=${AUTOPILOT_TRIES:-2}                   # failed tries per item → skip it
 TURNS=${AUTOPILOT_TURNS:-300}
 BUDGET=${AUTOPILOT_BUDGET_USD:-}              # per session, empty = none
@@ -91,6 +98,10 @@ RESOLVE=${AUTOPILOT_RESOLVE:-1}               # 0 = no resolver rounds
 PLAN=${AUTOPILOT_PLAN:-1}                     # 0 = stop when no item is left
 PLAN_MODEL=${AUTOPILOT_PLAN_MODEL:-opus}
 PLAN_EFFORT=${AUTOPILOT_PLAN_EFFORT:-xhigh}
+CYCLE=${AUTOPILOT_CYCLE:-4}                   # rounds (all workers) per cycle, then a new planner
+FINISHED_WAIT=${AUTOPILOT_FINISHED_WAIT:-6h}  # nothing left: sleep, then plan again
+END_WHEN_FINISHED=${AUTOPILOT_END_WHEN_FINISHED:-0}
+NOTES_GATE=${AUTOPILOT_NOTES_GATE:-1}         # 0 = code may change without its note
 FOLLOW=${AUTOPILOT_FOLLOW:-1}                 # 0 = $BRANCH does not follow $FROM
 RESOLVER_MODEL=claude-opus-5-5                # the owner's rule: no other model decides or merges
 MERGE_MAIN=${AUTOPILOT_MERGE_MAIN:-1}         # 1: what the merge review passes goes to $MAIN too
@@ -116,6 +127,7 @@ REVIEW=$STATE/review.txt    # written by the merge review
 NOTES=$ROOT/notes.md        # what failed, read by the next sessions
 SKIP=$ROOT/skip.txt         # item IDs given up on, one per line
 CLAIMS=$ROOT/claims.txt     # ID <tab> worker <tab> pid
+CYCLEF=$ROOT/cycle.txt      # rounds ended since the last planner (all workers)
 TRIAGE=$ROOT/triage.txt     # ID <tab> hash of the item's text <tab> size <tab> risk
 SEEN=$ROOT/resolver-seen.txt # the questions the resolver last had (hash)
 export PATH="/usr/local/go/bin:$PATH"
@@ -256,6 +268,7 @@ gate() { # $1 = base commit; prints why it fails, returns 1
 		return 0
 	fi
 	if grep -qx 'SPEC.md' <<<"$changed"; then echo "SPEC.md changed (only the resolver may)"; return 1; fi
+	[ "$NOTES_GATE" = 1 ] && { notes_check <<<"$changed" || return 1; }
 	CGO_ENABLED=0 go build ./... 2>&1 | tail -30; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "build failed"; return 1; }
 	go vet ./... 2>&1 | tail -30; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "vet failed"; return 1; }
 	go test -count=1 ./... 2>&1 | grep -vE '^(ok|\?) ' | tail -60; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "go test failed"; return 1; }
@@ -270,6 +283,42 @@ gate() { # $1 = base commit; prints why it fails, returns 1
 	fi
 	[ "$BOX" = 1 ] && { root_tests || return 1; }
 	return 0
+}
+
+# Every changed code file's note (notes/*.md whose Covers line names the
+# file, its directory or a matching pattern) changed too; code no note
+# covers needs some note changed. Tests, docs and ROADMAP.md need none.
+notes_check() { # stdin: changed paths
+	python3 -I -c '
+import fnmatch, glob, os, re, sys
+changed = [l.strip() for l in sys.stdin if l.strip()]
+notes = {}
+for n in glob.glob("notes/*.md"):
+    for line in open(n):
+        if line.lstrip("- ").startswith("Covers:"):
+            notes[n] = re.findall(r"`([^`]+)`", line); break
+bad = []
+for f in changed:
+    if f.startswith("notes/") or re.search(r"_test\.\w+$", f) or f.endswith(".md") or "/testdata/" in f:
+        continue
+    if not re.search(r"(\.(go|js|py|sh|json|service|desktop)$|^Makefile$)", f):
+        continue
+    want = []
+    for n, toks in notes.items():
+        for t in toks:
+            if t.endswith("/"):
+                hit = f.startswith(t) or ("/" + t) in ("/" + f)
+            else:
+                hit = fnmatch.fnmatch(os.path.basename(f), os.path.basename(t)) and \
+                    (("/" not in t) or (os.path.dirname(t).split("/")[-1] in f.split("/")))
+            if hit: want.append(n); break
+    if want and not any(n in changed for n in want):
+        bad.append("%s: update %s" % (f, " or ".join(sorted(set(want)))))
+    elif not want and not any(c.startswith("notes/") for c in changed):
+        bad.append("%s: no note covers it; add it to a note\x27s Covers line" % f)
+if bad:
+    print("notes not updated with the code (CLAUDE.md: same commit):"); print("\n".join(bad)); sys.exit(1)
+'
 }
 
 # Box mode: the roottest tests, as root, in each package that has them.
@@ -475,7 +524,9 @@ $(if [ -n "$4" ]; then awk -F'\t' '{printf "   - `%s` %s (notes: %s)\n", $1, $2,
    root tests: sudo go test -tags roottest -run <name> ./<package>.
    Check on the real desktop what your item says needs it."; else echo " Never use sudo, install.sh, make install,
    kc9k/kc9k-bin outside tests, or the browser tests in ci/*_test.py."; fi)
-7. Update ROADMAP.md in the same commit as the code (status, "on the
+7. Update ROADMAP.md and the notes/*.md covering every code file you
+   changed (the gate checks their Covers lines) in the same commit as the
+   code. ROADMAP.md: status, "on the
    laptop: Unchecked" where real use is still needed, "Last checked").
    Commit on the current branch with a message like the existing ones.
    Leave no uncommitted files. Do not push, do not switch branches.
@@ -812,10 +863,15 @@ claim_planner() { # one planner at a time
 planner_prompt() {
 	cat <<PEOF
 You are the planner of an unattended loop working on this repository.
-Nobody is watching and nobody will answer questions. Worker sessions take
-ROADMAP.md Index rows one at a time; right now no open row is left that
-they can take (their Needs: $NEEDS; skipped: $(tr '\n' ' ' <"$SKIP")).
-Your job: plan the next work until the Linux project is finished.
+Nobody is watching and nobody will answer questions. Each cycle of the
+loop starts with you; then several worker sessions take the top ROADMAP.md
+Index rows in parallel, one row each (their Needs: $NEEDS; skipped:
+$(tr '\n' ' ' <"$SKIP")). Why you run now: $1.
+Your job: plan the next cycle, and the work after it, until the Linux
+project is finished.
+
+What landed since the last planner:
+$(last=$(git log -1 --format=%H --grep '^Planner:'); git log --oneline --no-merges -n 30 ${last:+"$last..HEAD"} | sed 's/^/   /')
 
 1. Read CLAUDE.md, ROADMAP.md (its Index, §0–§4 and §5) and SPEC.md's
    Index, then the SPEC.md sections you plan from. Respect the owner's
@@ -831,7 +887,11 @@ $(tail -60 "$NOTES" | sed 's/^/   /')
    rows of at most a day each. Needs as the Index explains (agent, box,
    vm, owner); a box or vm item says what to check on the desktop or in
    the VM. A skipped row you replace with smaller ones: remove it.
-   Order the Index so the most important work comes first.
+   Order the Index so the most important work comes first: the top
+   $CYCLE open rows are the next cycle's batch, so make them independent
+   of each other (different code areas) where you can. Mark rows that the
+   landed work finished as done; check that ROADMAP.md says what was
+   really verified.
 4. Where SPEC.md is silent, do not invent: add a §5 entry (the resolver
    decides it). Do not edit SPEC.md or any file but ROADMAP.md. Do not
    write code. No subagents needed beyond reading.
@@ -840,11 +900,12 @@ $(tail -60 "$NOTES" | sed 's/^/   /')
 6. Last, write exactly these lines to $RESULT:
    STATUS: PLANNED | FINISHED
    SUMMARY: <one line: what you added, or why nothing is left>
-   FINISHED only if nothing in SPEC.md for Linux is left for an agent.
+   PLANNED also when you only reordered or checked. FINISHED only if no
+   open row is left for an agent and nothing in SPEC.md for Linux is.
 PEOF
 }
 
-planner_round() { # returns 1 when the project is finished
+planner_round() { # $1 = why; returns 1 when the project is finished
 	local base attempt log code status why
 	MODE=planner
 	base=$(git rev-parse HEAD)
@@ -853,7 +914,7 @@ planner_round() { # returns 1 when the project is finished
 	log="$LOGS/$(basename "$attempt").jsonl"
 	say "planner: $attempt from $(git log -1 --format=%h "$base"), $PLAN_MODEL at $PLAN_EFFORT, log $log"
 	claude_args 200 "$PLAN_MODEL" "$PLAN_EFFORT"
-	planner_prompt | timeout 2h claude "${args[@]}" >"$log" 2>&1
+	planner_prompt "$1" | timeout 2h claude "${args[@]}" >"$log" 2>&1
 	code=$?
 	status=$(sed -n 's/^STATUS: *//p' "$RESULT" 2>/dev/null | head -1)
 	say "$(usage_line "$log")"
@@ -884,7 +945,17 @@ planner_round() { # returns 1 when the project is finished
 	return 0
 }
 
+cycle_bump() { echo $(( $(cat "$CYCLEF" 2>/dev/null || echo 0) + 1 )) >"$CYCLEF"; }
+
+# The planner found nothing left: sleep and plan again, or end.
+finished_wait() { # returns 1 to end the loop
+	if [ "$END_WHEN_FINISHED" = 1 ]; then say "the planner says the project is finished; done"; return 1; fi
+	say "nothing left to do; planning again in $FINISHED_WAIT"
+	sleep "$FINISHED_WAIT"; echo "$CYCLE" >"$CYCLEF"; return 0
+}
+
 trap release EXIT
+replan=
 MODE=item
 planned=0 # a planner ran and nothing was taken since
 MODEL_LOGS=()
@@ -898,18 +969,36 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 	if resolve_due && locked claims claim_resolver; then
 		resolver_round; release; MODE=item; continue
 	fi
+	if [ "$PLAN" = 1 ] && [ "$(cat "$CYCLEF" 2>/dev/null || echo "$CYCLE")" -ge "$CYCLE" ]; then
+		if locked claims claim_planner; then
+			why="a new cycle ($(cat "$CYCLEF" 2>/dev/null || echo 0) rounds since the last planner)"
+			[ -n "$replan" ] && why=$replan
+			echo 0 >"$CYCLEF"; replan=
+			if planner_round "$why"; then release; continue; fi
+			release; finished_wait && continue; break
+		fi
+	fi
+	# A cycle's batch is taken from the plan: wait while another worker plans.
+	if [ "$PLAN" = 1 ] && locked claims others | cut -f1 | grep -qx PLANNER; then
+		sleep 60; continue
+	fi
 	row=$(locked claims claim_next)
 	if [ "$row" = WAIT ]; then
 		say "only other workers' items left; waiting $IDLE_WAIT"; sleep "$IDLE_WAIT"; continue
 	elif [ "$row" = NONE ]; then
-		if [ "$PLAN" != 1 ] || [ "$planned" -ge 2 ]; then
-			say "nothing left in scope (Needs: $NEEDS); done"; break
+		if [ "$PLAN" != 1 ]; then say "nothing left in scope (Needs: $NEEDS); done"; break; fi
+		if [ "$planned" -ge 2 ]; then
+			say "two plans in a row left nothing in scope (Needs: $NEEDS)"
+			planned=0; finished_wait && continue; break
 		fi
 		if ! locked claims claim_planner; then
 			say "another worker is planning; waiting $IDLE_WAIT"; sleep "$IDLE_WAIT"; continue
 		fi
 		planned=$((planned + 1))
-		if ! planner_round; then release; say "the planner says the project is finished; done"; break; fi
+		echo 0 >"$CYCLEF"
+		if ! planner_round "no open row is left that the workers can take"; then
+			release; finished_wait && continue; break
+		fi
 		release; continue
 	fi
 	planned=0
@@ -974,6 +1063,11 @@ while [ "$ROUNDS" -eq 0 ] || [ "$round" -lt "$ROUNDS" ]; do
 		grep -qxF -- "$id" "$SKIP" || { echo "$id" >>"$SKIP"; say "STUCK, skipped from now on: \`$id\`"; }
 	fi
 	release
-	[ "$fails" -ge "$MAX_FAILS" ] && { say "$MAX_FAILS failed rounds in a row; stopping"; break; }
+	locked cycle cycle_bump
+	if [ "$fails" -ge "$MAX_FAILS" ]; then
+		say "$MAX_FAILS failed rounds in a row; pausing $IDLE_WAIT, then a new planner"
+		replan="$MAX_FAILS failed rounds in a row (see the failure notes): re-scope or split what fails"
+		echo "$CYCLE" >"$CYCLEF"; fails=0; sleep "$IDLE_WAIT"
+	fi
 done
 say "finished"

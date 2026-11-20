@@ -12,6 +12,12 @@
   the lock flags' order (`trackLockFlagOrder`), `LayersOn`, `unlock` lifts
   only the first; `TimerAfter`/`RestartPending` wait behind others;
   `AdvanceLayers` in `blockHold` and the daemon (`finishDelayedStops`).
+  Several of one kind (§3.4, owner 2026-11-20): a kind already there waits
+  in `LockExtras.Queue` (`lock_queue`, JSON `QueuedLock`) after all placed
+  locks (`PlacedLayers`; `Layers`/`LayersOn` append it); `AdvanceLayers`
+  `promote`s the first once no placed lock is on. Once anything is queued,
+  every new lock queues (order kept), except a range lock (one per block).
+  Setting locks: still one per kind.
   `ensureEditable` refuses only weakening of locked blocks; `start` on an
   active block only strengthens. `gateEdit` (`loosen.go`) no longer queues;
   daemon still applies old queued edits (`pending.go`). `unlock` lifts
@@ -54,9 +60,12 @@ Not fixed by `SPEC.md`; the code is the truth.
 
 - **Starting on an active block** only strengthens: any lock kind can be
   added, last in the unlock order (a duration timer or restart lock waits
-  behind locks on); longer `--lock-chars`, later `--for/--until`, longer
-  `--delay`; shorter/earlier, another password, another range or text-lock
-  kind refused. A challenge longer than the
+  behind locks on). A kind it already has is a second lock of it, queued
+  last; only when the timer or delay lock is the last lock (nothing queued)
+  is it extended in place, only later/longer (R-LOCK-4). Refused: another
+  range lock, a second text/password lock beside re-lock (or re-lock with
+  one queued). A hotkey press (`pressOnly`) never adds a kind the block
+  has. A challenge longer than the
   terminal is paged (Enter per page), accuracy over all.
 - **Trusted time** (`db/clock.go`): the clock; with `tamper clock` on and a
   timer lock running (blocks, setting locks, monk mode), only the boot

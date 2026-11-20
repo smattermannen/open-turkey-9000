@@ -51,7 +51,6 @@ of their group and a row here; a finished item loses its row.
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
 | 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
-| 2.5 | Several locks of one kind | §3.4 | locks | agent |
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: rules server secret, GTK typing challenge | R-LOCK-5 | browsers, locks | agent |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
@@ -958,8 +957,12 @@ Only items not simply Built.
 - **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under
   the one `safesearch` setting. Left: a lock per engine (owner 2026-11-18: wanted; SPEC §6).
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
-  order, `unlock` lifts only the first, status and GUI show the order). Left:
-  several locks of one kind (the order is chosen in the GUI now).
+  order, `unlock` lifts only the first, status and GUI show the order).
+  Several locks of one kind on a block built 2026-11-20 (owner: a second
+  one is added, not the first strengthened): `LockExtras.Queue`,
+  `TestSeveralLocksOfOneKind`, `TestQueuePromotion`. Left: several of one
+  kind given in one `start` (flags repeat: last wins) and on setting locks;
+  a person checking the GUI's Add locks… text and unlock flow.
 - **2.6 Factory reset protection** (M): firmware lock via
   `/sys/class/firmware-attributes/` (password given to a trusted person,
   no USB/network boot, fixed order); installer media guard (block OS image

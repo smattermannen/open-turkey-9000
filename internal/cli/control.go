@@ -30,6 +30,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -261,6 +262,10 @@ func startLocks(name string, kinds []string, style string, chars int, until, tru
 	return locks
 }
 
+// pressOnly is set while a hotkey press starts its block: on a running
+// block, kinds it already has are left as they are, not added again.
+var pressOnly bool
+
 // presetPasswordHash, when set, is the password lock's hash a start uses
 // instead of reading a password: a hotkey's, given when it was added.
 var presetPasswordHash string
@@ -316,7 +321,7 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 	if e.RestartBoot != "" && !db.LayerOn(db.LayerRestart, detail, e, trusted, bootID) {
 		e.RestartBoot = ""
 	}
-	order := db.Layers(detail, e)
+	order := db.PlacedLayers(detail, e)
 	// Whether a lock other than a timer lock holds now (or was just
 	// added): a timer lock for a duration or a restart lock then waits.
 	othersOn := false
@@ -335,24 +340,54 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 			othersOn = true
 		}
 	}
+	// §3.4 (owner 2026-11-20): a lock of a kind the block already has is a
+	// second one, last in the unlock order; it waits in the queue and takes
+	// its kind's place once every lock before it is gone. Once anything
+	// waits there, every new lock does, so the order stays as given.
+	enqueue := func(q db.QueuedLock, change, length string) {
+		e.Queue = append(e.Queue, q)
+		changes = append(changes, change+", after the locks before it")
+		if length != "" {
+			length += ", "
+		}
+		confirm = append(confirm, lockToSet{target, "another " + db.LayerName(q.Kind), length + "after the locks before it are unlocked"})
+		othersOn = true
+	}
+	queued := func() bool { return len(e.Queue) > 0 }
+	has := func(kind string) bool { return slices.Contains(db.Layers(detail, e), kind) }
+	// last reports whether kind is the last lock in the unlock order, with
+	// nothing queued: it can be extended in place instead (R-LOCK-4).
+	last := func(kind string) bool { return !queued() && len(order) > 0 && order[len(order)-1] == kind }
+	relockRefusal := func(kind string) error {
+		return fmt.Errorf("block '%s' re-locks its text and password locks; it can't take a second %s", name, db.LayerName(kind))
+	}
 	for _, kind := range n.kinds {
+		if pressOnly && has(kind) {
+			continue
+		}
 		switch kind {
 		case db.LayerText:
 			switch {
-			case !detail.Locked:
+			case !detail.Locked && !queued():
 				detail.Locked, detail.LockChars, e.Style = true, n.chars, n.style
 				add(kind, "text lock ("+lock.DescribeStyle(n.style, n.chars)+")", lockToSet{target, textLockKind(n.style, n.chars), ""})
-			case n.style != e.Style:
-				return fmt.Errorf("block '%s' already has a text lock (%s); it can't be changed into another kind", name, lock.DescribeStyle(e.Style, detail.LockChars))
-			case n.chars > detail.LockChars && n.charsGiven:
-				detail.LockChars = n.chars
-				changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", n.chars))
-				confirm = append(confirm, lockToSet{target, textLockKind(e.Style, n.chars), "lengthened"})
-			case n.chars < detail.LockChars && n.charsGiven:
-				return fmt.Errorf("block '%s' is already locked with a %d-character challenge; it can't be shortened", name, detail.LockChars)
+			case e.Relock > 0:
+				return relockRefusal(kind)
+			default:
+				enqueue(db.QueuedLock{Kind: kind, Chars: n.chars, Style: n.style},
+					"another text lock ("+lock.DescribeStyle(n.style, n.chars)+")", lock.DescribeStyle(n.style, n.chars))
 			}
 		case db.LayerTimer:
 			switch {
+			case queued() || (detail.LockedUntil != 0 || e.TimerAfter > 0) && !last(kind):
+				// Behind other locks: a second timer lock.
+				q := db.QueuedLock{Kind: kind, For: n.forSeconds}
+				length := humanDuration(time.Duration(n.forSeconds)*time.Second) + ", counting from when it starts"
+				if n.forSeconds == 0 {
+					q.Until = n.until
+					length = "until " + time.Unix(n.until, 0).Format("2006-01-02 15:04")
+				}
+				enqueue(q, "another timer lock", length)
 			case e.TimerAfter > 0:
 				// Waiting behind other locks: only a longer duration.
 				if n.forSeconds == 0 {
@@ -381,14 +416,19 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 					lockToSet{target, "timer lock", timerLength(trusted, n.until)})
 			}
 		case db.LayerPassword:
-			if e.PasswordHash != "" {
-				return fmt.Errorf("block '%s' already has a password lock; a password can't be replaced", name)
+			switch {
+			case e.PasswordHash == "" && !queued():
+				e.PasswordHash = n.extras.PasswordHash
+				add(kind, "password lock", lockToSet{target, "password lock", ""})
+			case e.Relock > 0:
+				return relockRefusal(kind)
+			default:
+				enqueue(db.QueuedLock{Kind: kind, PasswordHash: n.extras.PasswordHash}, "another password lock", "")
 			}
-			e.PasswordHash = n.extras.PasswordHash
-			add(kind, "password lock", lockToSet{target, "password lock", ""})
 		case db.LayerRestart:
-			if e.RestartBoot != "" {
-				continue // already on until a restart
+			if e.RestartBoot != "" || queued() {
+				enqueue(db.QueuedLock{Kind: kind}, "another restart lock", "until a restart after it starts")
+				continue
 			}
 			length := "until the computer restarts"
 			e.RestartBoot = bootID
@@ -399,16 +439,16 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 		case db.LayerDelay:
 			d := n.extras.Delay
 			switch {
-			case e.Delay == 0:
+			case e.Delay == 0 && !queued():
 				e.Delay = d
 				add(kind, fmt.Sprintf("delay lock of %s", time.Duration(d)*time.Second),
 					lockToSet{target, "delay lock", fmt.Sprintf("unlocking takes %s", humanDuration(time.Duration(d)*time.Second))})
+			case !last(kind) || e.DelayUntil != 0:
+				enqueue(db.QueuedLock{Kind: kind, Delay: d}, fmt.Sprintf("another delay lock of %s", time.Duration(d)*time.Second),
+					fmt.Sprintf("unlocking takes %s", humanDuration(time.Duration(d)*time.Second)))
 			case d < e.Delay:
 				return fmt.Errorf("block '%s' already has a delay lock of %s; it can only be lengthened", name, time.Duration(e.Delay)*time.Second)
 			case d > e.Delay:
-				if e.DelayUntil != 0 { // counting down: it takes the longer time
-					e.DelayUntil += d - e.Delay
-				}
 				e.Delay = d
 				changes = append(changes, fmt.Sprintf("delay lock lengthened to %s", time.Duration(d)*time.Second))
 				confirm = append(confirm, lockToSet{target, "delay lock", fmt.Sprintf("unlocking takes %s (lengthened)", humanDuration(time.Duration(d)*time.Second))})
@@ -419,7 +459,7 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 				if e.RangeDays == r.RangeDays && e.RangeFrom == r.RangeFrom && e.RangeTo == r.RangeTo && e.RangeInvert == r.RangeInvert {
 					continue
 				}
-				return fmt.Errorf("block '%s' already has a range lock (%s); it can't be changed", name, describeRange(e))
+				return fmt.Errorf("block '%s' already has a range lock (%s); it has one range lock, and it can't be changed", name, describeRange(e))
 			}
 			e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert = r.RangeDays, r.RangeFrom, r.RangeTo, r.RangeInvert
 			add(kind, "range lock ("+describeRange(e)+")", lockToSet{target, "range lock", describeRange(e) + " (can't be unlocked then)"})
@@ -432,6 +472,8 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 			return fmt.Errorf("block '%s' already re-locks %s after unlocking; that can't be changed", name, time.Duration(e.Relock)*time.Second)
 		case !detail.Locked && e.PasswordHash == "":
 			return fmt.Errorf("--relock goes with a text or password lock")
+		case slices.ContainsFunc(e.Queue, func(q db.QueuedLock) bool { return q.Kind == db.LayerText || q.Kind == db.LayerPassword }):
+			return fmt.Errorf("block '%s' has a second text or password lock waiting; re-lock can't be added to it", name)
 		default:
 			e.Relock = r
 			changes = append(changes, fmt.Sprintf("re-lock %s after unlocking", humanDuration(time.Duration(r)*time.Second)))
@@ -981,8 +1023,9 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 			if err := database.SaveLayers(detail, h.extras); err != nil {
 				return holdState{}, err
 			}
-			h.lockedUntil = detail.LockedUntil
 		}
+		// A queued lock may have just taken its kind's place.
+		h.lockedUntil, h.lockChars = detail.LockedUntil, detail.LockChars
 		h.layers = db.LayersOn(detail, h.extras, trusted, boot)
 		// Unlocked with re-lock: off until LiftedUntil, then on again.
 		h.charLocked = db.LayerOn(db.LayerText, detail, h.extras, trusted, boot)

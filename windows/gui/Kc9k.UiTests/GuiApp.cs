@@ -24,8 +24,11 @@ public sealed class GuiApp : IDisposable
     public string Log => Path.Combine(Dir, "commands.log");
     readonly string name;
 
-    public GuiApp(string name, string theme = "light", Action<string>? prepare = null)
+    readonly bool real_;
+
+    public GuiApp(string name, string theme = "light", Action<string>? prepare = null, bool real = false)
     {
+        real_ = real;
         this.name = name;
         Dir = Path.Combine(Path.GetTempPath(), "kc9k-ui-" + name + "-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(Dir);
@@ -34,7 +37,9 @@ public sealed class GuiApp : IDisposable
         File.WriteAllText(Path.Combine(Dir, "gui.json"), $$"""{"theme": "{{theme}}", "tray": false, "window_width": 1280, "window_height": 900}""");
         prepare?.Invoke(Dir);
         var exe = Environment.GetEnvironmentVariable("KC9K_GUI_EXE") ?? throw new InvalidOperationException("KC9K_GUI_EXE is not set");
-        var fake = Environment.GetEnvironmentVariable("KC9K_FAKE_EXE") ?? throw new InvalidOperationException("KC9K_FAKE_EXE is not set");
+        // KC9K_REAL_EXE: the real kc9k.exe (installed, its service running) instead of the fake.
+        var realExe = real_ ? Environment.GetEnvironmentVariable("KC9K_REAL_EXE") : null;
+        var fake = realExe ?? Environment.GetEnvironmentVariable("KC9K_FAKE_EXE") ?? throw new InvalidOperationException("KC9K_FAKE_EXE is not set");
         var info = new ProcessStartInfo(exe) { UseShellExecute = false };
         info.Environment["KC9K_CLI"] = fake;
         info.Environment["KC9K_FAKE_DIR"] = Dir;
@@ -45,7 +50,7 @@ public sealed class GuiApp : IDisposable
             TimeSpan.FromSeconds(60), TimeSpan.FromMilliseconds(500), throwOnTimeout: true).Result!;
         Window.SetForeground();
         // The first state is read in the background.
-        WaitFor(() => ById("Headline")?.Name is { Length: > 0 } || ById("CoverUnlock_dashboard") is not null, "the first state");
+        WaitFor(() => ById("Headline")?.Name is { Length: > 0 } || ById("CoverUnlock_dashboard") is not null, "the first state", real_ ? 60 : 20);
     }
 
     public AutomationElement? ById(string id, AutomationElement? root = null) =>

@@ -41,12 +41,29 @@ jobs:
         run: |
           Add-Type -AssemblyName System.Windows.Forms
           [System.Windows.Forms.Screen]::AllScreens | Format-List
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build and install the real kc9k.exe (Core)
+        continue-on-error: true
+        shell: pwsh
+        working-directory: .
+        run: |
+          $env:CGO_ENABLED = "0"
+          go build -o "${{ runner.temp }}\kc9k\kc9k.exe" ./cmd/kc9k
+          & "${{ runner.temp }}\kc9k\kc9k.exe" install
+          "KC9K_REAL_EXE=$env:ProgramFiles\KC9K\kc9k.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: UI Automation smoke tests
         env:
           KC9K_GUI_EXE: ${{ runner.temp }}\gui\kc9k-gui.exe
           KC9K_FAKE_EXE: ${{ runner.temp }}\fake\kc9k.exe
           KC9K_SCREENSHOTS: ${{ github.workspace }}\screenshots
         run: dotnet test Kc9k.UiTests -c Release --logger "console;verbosity=normal"
+      - name: Uninstall the real kc9k.exe
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: if ($env:KC9K_REAL_EXE -and (Test-Path $env:KC9K_REAL_EXE)) { & $env:KC9K_REAL_EXE uninstall --yes; & $env:KC9K_REAL_EXE uninstall }
       - name: GUI log
         if: always()
         run: |

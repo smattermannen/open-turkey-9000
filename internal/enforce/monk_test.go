@@ -40,6 +40,12 @@ func TestMain(m *testing.M) {
 	freezePowerOff = func() error { return nil }
 	freezeLockScreen = func() error { return nil }
 	freezeCloseApps = func([]string) int { return 0 }
+	// Nor touches sudoers, polkit, PAM or mounts (strict mode).
+	applyLockdown = func(string) error { return nil }
+	removeLockdown = func() error { return nil }
+	applyNoexec = func(...string) error { return nil }
+	removeNoexec = func() error { return nil }
+	kernelCmdline = func() string { return "" }
 	os.Exit(m.Run())
 }
 

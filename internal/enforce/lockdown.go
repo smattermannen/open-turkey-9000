@@ -172,7 +172,7 @@ func escapeHonoured(d *db.DB) bool {
 	if err != nil {
 		return false
 	}
-	return noEscape != "on" && freeze.Bypassed(blocker.KernelCmdline())
+	return noEscape != "on" && freeze.Bypassed(kernelCmdline())
 }
 
 // LockFreezeEngaged reports whether a lock-mode freeze is being enforced now.
@@ -184,6 +184,16 @@ func LockFreezeEngaged(d *db.DB, now time.Time) bool {
 	mode, err := d.FreezeMode()
 	return err != nil || mode == freeze.ModeLock
 }
+
+// Strict mode's lockdown and the kernel command line it reads; replaced in
+// tests (never the real sudoers, polkit, PAM or mounts).
+var (
+	kernelCmdline  = blocker.KernelCmdline
+	applyLockdown  = blocker.ApplyLockdown
+	removeLockdown = blocker.RemoveLockdown
+	applyNoexec    = blocker.ApplyNoexec
+	removeNoexec   = blocker.RemoveNoexec
+)
 
 // What a running freeze does to the device, by its freeze mode; replaced in
 // tests.
@@ -242,10 +252,10 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 		}
 	}
 	if !want {
-		if err := blocker.RemoveLockdown(); err != nil {
+		if err := removeLockdown(); err != nil {
 			log.Printf("daemon: lockdown: %v", err)
 		}
-		if err := blocker.RemoveNoexec(); err != nil {
+		if err := removeNoexec(); err != nil {
 			log.Printf("daemon: noexec: %v", err)
 		}
 		return
@@ -255,10 +265,10 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 		log.Printf("daemon: lockdown: %v", err)
 		return
 	}
-	if err := blocker.ApplyLockdown(user); err != nil {
+	if err := applyLockdown(user); err != nil {
 		log.Printf("daemon: lockdown: %v", err)
 	}
-	if err := blocker.ApplyNoexec(ExemptFolders(d)...); err != nil {
+	if err := applyNoexec(ExemptFolders(d)...); err != nil {
 		log.Printf("daemon: noexec: %v", err)
 	}
 }

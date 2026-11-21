@@ -148,7 +148,7 @@ public sealed class Device
         return i < 0 ? null : (picked, i + 1);
     }
 
-    static string? SelectedOf(EditableList list) => list.Selected;
+    static string? SelectedOf(EditableList list) => list.SelectedEntry;
 
     async Task LockSchedule()
     {

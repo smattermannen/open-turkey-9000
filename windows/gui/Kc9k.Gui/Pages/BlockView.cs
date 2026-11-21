@@ -256,12 +256,12 @@ public sealed class BlockView
         tabs.SelectedItem = tabViews["websites"].Item;
         tabs.Named("Tabs of the block", "BlockTabs");
 
-        var head = Ui.Column(8, back, title, pills, summary, modeBar, hiddenBar, draftBar, actions, tabs);
-        head.Padding = new Thickness(32, 20, 32, 0);
+        var top = Ui.Column(8, back, title, pills, summary, modeBar, hiddenBar, draftBar, actions, tabs);
+        top.Padding = new Thickness(32, 20, 32, 0);
         var grid = new Grid { MaxWidth = 1164 };
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(head);
+        grid.Children.Add(top);
         Grid.SetRow(tabScroll, 1);
         grid.Children.Add(tabScroll);
         View = grid;

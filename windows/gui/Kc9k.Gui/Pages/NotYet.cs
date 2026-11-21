@@ -13,7 +13,10 @@ public abstract class NotYetPage(string area, string title, string what) : IPage
     public virtual void Update(GuiState state) { }
 }
 
-public sealed class SchedulesPage(MainWindow window) : NotYetPage("blocks", "Schedules", "Schedules kept outside blocks, for blocks and modes to apply.");
+public sealed class SchedulesPage(MainWindow window) : NotYetPage("blocks", "Schedules", "Schedules kept outside blocks, for blocks and modes to apply.")
+{
+    public void Open(string name) { }
+}
 public sealed class PlacesPage(MainWindow window) : NotYetPage("blocks", "Places", "Places, known by their Wi-Fi networks, that switch blocks.");
 public sealed class HotkeysPage(MainWindow window) : NotYetPage("settings", "Hotkeys", "Keys that start blocks, optionally locked.");
 public sealed class PresetsPage(MainWindow window) : NotYetPage("blocks", "Presets", "Saved copies of lists, phrase sets, blocks, automations, schedules and hotkeys.");

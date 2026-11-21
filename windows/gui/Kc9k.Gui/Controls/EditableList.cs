@@ -35,6 +35,8 @@ public sealed partial class EditableList : StackPanel
 
     public string Title { get; }
     public IReadOnlyList<string> Items => items;
+    /// <summary>The entry selected (the first of several), or null.</summary>
+    public string? SelectedEntry => view.SelectedItem as string;
     public event Action<string>? Activated;
 
     public EditableList(string title, string placeholder, Func<IReadOnlyList<string>, Task> onAdd, Func<string, int, Task> onRemove,

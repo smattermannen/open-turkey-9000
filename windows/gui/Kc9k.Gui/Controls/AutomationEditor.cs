@@ -31,7 +31,6 @@ public sealed partial class AutomationEditor : StackPanel
     AutomationSettings settings = new();
     List<string> appliedNames = [];
     bool active;
-    public string Name => name;
 
     Controller C => window.Controller;
 

@@ -224,6 +224,13 @@ public sealed partial class MainWindow : Window
         Blocks.OpenBlock(name, tab);
     }
 
+    /// <summary>A schedule on the Schedules page (§3.6).</summary>
+    public void OpenSchedule(string name)
+    {
+        Show("schedules");
+        (pages["schedules"].Page as SchedulesPage)?.Open(name);
+    }
+
     public void OpenMode(string name)
     {
         Show("blocks");

@@ -74,6 +74,7 @@ public sealed class GuiApp : IDisposable
     public void Invoke(AutomationElement e)
     {
         if (e.Patterns.Invoke.IsSupported) e.Patterns.Invoke.Pattern.Invoke();
+        else if (e.Patterns.SelectionItem.IsSupported) e.Patterns.SelectionItem.Pattern.Select();
         else if (e.Patterns.ExpandCollapse.IsSupported) e.Patterns.ExpandCollapse.Pattern.Expand();
         else if (e.Patterns.Toggle.IsSupported) e.Patterns.Toggle.Pattern.Toggle();
         else e.Click();
@@ -92,6 +93,16 @@ public sealed class GuiApp : IDisposable
                 Window.FindFirstDescendant(c => c.ByControlType(ControlType.Button).And(c.ByName(text))) ??
                 Automation.GetDesktop().FindFirstDescendant(c => c.ByControlType(ControlType.Button).And(c.ByName(text)).And(c.ByProcessId(App.ProcessId))),
             TimeSpan.FromSeconds(seconds), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: $"no button {text}").Result!;
+
+    /// <summary>Types into a text box and presses Enter in it.</summary>
+    public void TypeEnter(string id, string text)
+    {
+        var box = Find(id).AsTextBox();
+        box.Focus();
+        box.Text = text;
+        Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.RETURN);
+        Wait.UntilInputIsProcessed();
+    }
 
     public void WaitFor(Func<bool> condition, string what, int seconds = 20)
     {

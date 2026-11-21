@@ -132,7 +132,7 @@ public sealed partial class WeekCalendar : Grid
         }
     }
 
-    static Windows.UI.Color Color(Windows.UI.Color c, byte alpha) => Windows.UI.Color.FromArgb(alpha, c.R, c.G, c.B);
+    static Windows.UI.Color Color(Windows.UI.Color c, int alpha) => Windows.UI.Color.FromArgb((byte)alpha, c.R, c.G, c.B);
 
     UIElement Box(int column, int start, int end, Brush fill, Brush? stroke, double thickness, string? label, bool gray = false, bool dashed = false, string source = "")
     {

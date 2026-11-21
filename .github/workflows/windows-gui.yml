@@ -81,3 +81,60 @@ jobs:
           name: kc9k-gui
           path: ${{ runner.temp }}\gui
           retention-days: 7
+
+  installer:
+    # W7: the MSI built (twice, to test a reinstall), installed, removed,
+    # and refused while locked, on a disposable runner.
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+      SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build kc9k.exe, the GUI and the custom actions
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = "0"
+          go build -o "$env:RUNNER_TEMP\kc9k\kc9k.exe" ./cmd/kc9k
+          dotnet publish windows/gui/Kc9k.Gui -c Release -r win-x64 -o "$env:RUNNER_TEMP\gui"
+          dotnet build windows/installer/Actions -c Release -o "$env:RUNNER_TEMP\actions"
+          Get-ChildItem "$env:RUNNER_TEMP\actions" -Filter *.CA.dll | Format-Table Name, Length
+      # Code signing (SPEC §6 2026-11-21 later): with the owner's certificate
+      # configured (secrets SIGNING_PFX_BASE64 and SIGNING_PFX_PASSWORD), the
+      # programs and the MSI are signed; without it the build is unsigned.
+      - name: Sign the programs
+        if: env.SIGNING_PFX_BASE64 != ''
+        shell: pwsh
+        run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\kc9k\kc9k.exe" "$env:RUNNER_TEMP\gui\kc9k-gui.exe"
+      - name: Build the MSI (twice)
+        shell: pwsh
+        run: |
+          $ca = (Get-ChildItem "$env:RUNNER_TEMP\actions" -Filter *.CA.dll | Select-Object -First 1).FullName
+          foreach ($n in "a", "b") {
+            dotnet build windows/installer -c Release -o "$env:RUNNER_TEMP\msi-$n" -p:GuiDir="$env:RUNNER_TEMP\gui" -p:Kc9kExe="$env:RUNNER_TEMP\kc9k\kc9k.exe" -p:ActionsDll="$ca" -p:Version=0.1.0
+          }
+          Get-ChildItem "$env:RUNNER_TEMP\msi-a" | Format-Table Name, Length
+      - name: Sign the MSI
+        if: env.SIGNING_PFX_BASE64 != ''
+        shell: pwsh
+        run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\msi-a\KillerChicken9000.msi"
+      - name: Install, remove, refuse while locked
+        shell: pwsh
+        run: pwsh windows/installer/test-msi.ps1 "$env:RUNNER_TEMP\msi-a\KillerChicken9000.msi" "$env:RUNNER_TEMP\msi-b\KillerChicken9000.msi"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kc9k-msi
+          path: |
+            ${{ runner.temp }}/msi-a/*.msi
+            ${{ runner.temp }}/msi-logs/
+          if-no-files-found: ignore

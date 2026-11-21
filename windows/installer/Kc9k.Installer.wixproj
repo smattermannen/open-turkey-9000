@@ -1,0 +1,18 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+  <!-- The MSI (W7): kc9k.exe (set up by `kc9k install`), the GUI, a Start
+       menu entry. Built on Windows (CI: windows-gui.yml) with:
+         dotnet build windows/installer -p:GuiDir=… -p:Kc9kExe=… -p:ActionsDll=… -p:Version=… -->
+  <PropertyGroup>
+    <OutputName>KillerChicken9000</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <Platform>x64</Platform>
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <DefineConstants>Version=$(Version);GuiDir=$(GuiDir);Kc9kExe=$(Kc9kExe);ActionsDll=$(ActionsDll)</DefineConstants>
+    <!-- Signing (SPEC §6 2026-11-21 later): the workflow signs kc9k.exe, the
+         GUI and this MSI when the owner's certificate is configured. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="6.0.2" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
+  </ItemGroup>
+</Project>

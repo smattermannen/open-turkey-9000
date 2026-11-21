@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Killer Chicken 9000 for Windows (W7, notes/install-windows.md).
+
+     Layout: Program Files\KC9K\kc9k.exe is put there by `kc9k install`
+     (Core's W1: the service, PATH, SYSTEM-owned folder); the MSI ships a
+     copy in Program Files\KC9K\gui\setup to run it from, and the GUI in
+     Program Files\KC9K\gui (the GUI finds kc9k.exe one folder up).
+
+     kc9k decides (custom actions as SYSTEM, its words shown on refusal):
+       install, repair, upgrade  kc9k install (upgrades in place)
+       reinstall or older over   kc9k prepare-install first: refused while
+         newer or same            locked with "block the installer" on
+       removal                    kc9k uninstall: refused while anything is
+                                  locked; the MSI then rolls back
+     A newer version always installs (§4.10). Your data stays on removal. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Killer Chicken 9000"
+           Manufacturer="Killer Chicken 9000"
+           Version="$(Version)"
+           UpgradeCode="fa22d6e5-b444-4953-a861-4aabffdf469d"
+           Scope="perMachine"
+           Compressed="yes">
+    <SummaryInformation Description="Killer Chicken 9000: blocks of sites, apps and words, with locks" />
+    <MajorUpgrade AllowDowngrades="yes" AllowSameVersionUpgrades="yes" Schedule="afterInstallExecute" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="kc9k.ico" SourceFile="$(GuiDir)\Assets\kc9k.ico" />
+    <Property Id="ARPPRODUCTICON" Value="kc9k.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/smattermannen/open-turkey-9000" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="KC9KFOLDER" Name="KC9K">
+        <Directory Id="GUIFOLDER" Name="gui">
+          <Directory Id="SETUPFOLDER" Name="setup" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <ComponentGroup Id="Gui" Directory="GUIFOLDER">
+      <Files Include="$(GuiDir)\**" />
+    </ComponentGroup>
+    <ComponentGroup Id="Setup" Directory="SETUPFOLDER">
+      <Component>
+        <File Id="SetupKc9k" Source="$(Kc9kExe)" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenu" Guid="7b3f5d1e-6a52-4c4f-9a2b-1c0b1e5c9e21">
+        <Shortcut Id="GuiShortcut" Name="Killer Chicken 9000" Description="Blocks of sites, apps and words, with locks"
+                  Target="[GUIFOLDER]kc9k-gui.exe" WorkingDirectory="GUIFOLDER" Icon="kc9k.ico" />
+        <RegistryValue Root="HKLM" Key="Software\KC9K\Installer" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Killer Chicken 9000" Level="1">
+      <ComponentGroupRef Id="Gui" />
+      <ComponentGroupRef Id="Setup" />
+      <ComponentRef Id="StartMenu" />
+    </Feature>
+
+    <!-- kc9k's custom actions -->
+    <Binary Id="Kc9kActions" SourceFile="$(ActionsDll)" />
+    <CustomAction Id="DetectSameOrNewer" BinaryRef="Kc9kActions" DllEntry="DetectSameOrNewer" Execute="immediate" Return="check" />
+    <CustomAction Id="Kc9kGuard" BinaryRef="Kc9kActions" DllEntry="RunKc9k" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="Kc9kInstall" BinaryRef="Kc9kActions" DllEntry="RunKc9k" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="Kc9kUninstall" BinaryRef="Kc9kActions" DllEntry="RunKc9k" Execute="deferred" Impersonate="no" Return="check" />
+    <SetProperty Id="Kc9kGuard" Value="optional|[KC9KFOLDER]kc9k.exe|prepare-install" Before="Kc9kGuard" Sequence="execute" />
+    <SetProperty Id="Kc9kInstall" Value="[SETUPFOLDER]kc9k.exe|install" Before="Kc9kInstall" Sequence="execute" />
+    <SetProperty Id="Kc9kUninstall" Value="optional|[KC9KFOLDER]kc9k.exe|uninstall" Before="Kc9kUninstall" Sequence="execute" />
+
+    <InstallExecuteSequence>
+      <Custom Action="DetectSameOrNewer" After="FindRelatedProducts" />
+      <!-- Before anything changes: a reinstall or an older version, judged by
+           the kc9k already installed. -->
+      <Custom Action="Kc9kGuard" After="InstallInitialize" Condition="KC9K_GUARD AND NOT (REMOVE~=&quot;ALL&quot;)" />
+      <Custom Action="Kc9kInstall" After="InstallFiles" Condition="NOT (REMOVE~=&quot;ALL&quot;)" />
+      <!-- Removal, not an upgrade's removal of the old version. -->
+      <Custom Action="Kc9kUninstall" After="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

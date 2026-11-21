@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The MSI's custom actions (W7): run kc9k.exe as SYSTEM and show its own
+       words when it refuses (removal while locked, a reinstall or an older
+       version while locked with "block the installer" on). DTF custom
+       actions run in the .NET Framework that comes with Windows. -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Dtf.CustomAction" Version="6.0.2" />
+  </ItemGroup>
+</Project>

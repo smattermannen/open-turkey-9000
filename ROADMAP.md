@@ -44,8 +44,8 @@ of their group and a row here; a finished item loses its row.
 | W0 | Windows build: platform split, cross-compile, CI on Windows | §1, §6 2026-11-21 | install, testing | agent, win-ci |
 | W1 | Windows service, session agent, named pipe, install/uninstall | §3.13 | enforce-daemon, install | agent, win-vm |
 | W2 | Windows web layers: hosts, firewall, browser policies, extension, extension guard | §3.13, §4.10 | layers-net, browsers | win-vm, laptop |
-| W3 | Windows apps and desktop: process kill, scripts, titles, polite close, monk mode, Frozen Chicken, allowed apps, hotkeys, notifications, use, logout/shutdown, network cut | §3.1, §3.7, §3.8, §4.8, §4.13 | apps-titles, device, hotkeys, allowance | win-vm, laptop |
-| W4 | Windows GUI: C# / WinUI 3, text lock window | §4.1–4.13, R-GUI-1–3, R-LOCK-5 | gui, locks | agent, win-ci, laptop |
+| W3 | Windows apps and desktop: process kill, scripts, titles, polite close, monk mode, Frozen Chicken, allowed apps, hotkeys, notifications, use, logout/shutdown, network cut, text lock window | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | apps-titles, device, hotkeys, allowance, locks | win-vm, laptop |
+| W4 | Windows GUI: C# / WinUI 3 | §4.1–4.13, R-GUI-1–3 | gui | agent, win-ci, laptop |
 | W5 | Windows tamper protection against an administrator | §3.10, §4.10 | device, browsers, install | win-vm, laptop |
 | W6 | Windows circadian rhythm and wallpapers | §4.10 | circadian | win-vm, laptop |
 | W7 | Windows installer (MSI) and release | §4.11 | install | agent, owner |
@@ -1472,6 +1472,23 @@ wallpapers and the text lock window run there and report to the service.
 Everything works on Windows Home: nothing uses Pro-only features (Group
 Policy Editor, AppLocker); policies are written to the registry directly.
 
+Two sessions build this at once (owner 2026-11-21), each in its own
+files. **Core** (`W0`, `W1`, `W2`, `W3`, `W5`, `W6`, in that order): all Go
+(`cmd/`, `internal/`, `go.mod`), `.github/workflows/windows.yml`, the
+`notes/` for those areas. **GUI** (`W4`, then `W7`): `windows/` (C#
+GUI, installer), `.github/workflows/windows-gui.yml`,
+`notes/gui-windows.md`, `notes/install-windows.md`. The GUI only runs
+`kc9k.exe` and reads its JSON (`gui-state`, `stats --json`); it never
+opens the pipe, the DB or the registry. GUI-only additions to the CLI's
+JSON or commands (`internal/cli/`, additive, with tests) are the GUI
+session's; everything else in Go is Core's. Shared files (`ROADMAP.md`,
+`SPEC.md` §6, `CLAUDE.md`): each edits only its own items and lines.
+Each works on its own branch (`windows-core`, `windows-gui`) and lands
+each finished step on `main`: rebase onto `origin/main`, run the gate
+(Linux tests unchanged, Windows build), push; in a conflict keep both
+sides. Neither touches the Linux GUI, the extension or Android, except
+where its item needs it and the Linux tests prove nothing changed.
+
 - [ ] `W0` Windows build (M). `//go:build linux` on Linux-only files;
   interfaces in `internal/blocker/` with `_linux.go`/`_windows.go`; on
   Windows every layer not yet built is a stub that says so. Done when
@@ -1503,12 +1520,14 @@ Policy Editor, AppLocker); policies are written to the registry directly.
   hotkeys (`RegisterHotKey`), toast notifications, use and idle
   (`GetLastInputInfo`, session lock events), statistics per user;
   logout, shutdown, network cut (WFP block-all), sleep hook (power events).
+  The text lock's challenge window (R-LOCK-5: typed keys only, opened by
+  the command itself) on Windows: a Go Win32 window in the user's
+  session, no CGo, embedded as the Python one is.
 - [ ] `W4` GUI (L). Native, C# on WinUI 3, .NET LTS, unpackaged and
   self-contained, in `windows/gui/` (SPEC §6: no browser, no web view).
   Reads `kc9k gui-state` and `kc9k stats --json`, runs `kc9k` commands
-  through the pipe; the same pages as the GTK GUI (§4.1–4.13). The text
-  lock's challenge window (R-LOCK-5: typed keys only, opened by the
-  command) is native too. Smoke tests through UI Automation on
+  (`kc9k.exe`, which forwards to the service); the same pages as the GTK
+  GUI (§4.1–4.13). Smoke tests through UI Automation on
   `windows-latest`, as `ci/gui_*.py` do on Linux.
 - [ ] `W5` Tamper protection against an administrator (L). An admin can
   always win in the end; the aim is that every way around is slow,

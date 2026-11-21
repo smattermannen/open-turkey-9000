@@ -45,10 +45,10 @@ of their group and a row here; a finished item loses its row.
 | W1 | Windows service, session agent, named pipe, install/uninstall: built; CI script, desktop parts Unchecked | §3.13 | windows | win-ci, win-vm |
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
 | W3 | Windows apps and desktop: built, Unchecked on a desktop | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
-| W4 | Windows GUI: C# / WinUI 3. Built in CI against the fake kc9k (2026-11-21); against the real kc9k.exe, Narrator, scaling and drag and drop by a person: Unchecked | §4.1–4.13, R-GUI-1–3 | gui-windows | win-ci, win-vm, laptop |
+| W4 | Windows GUI: C# / WinUI 3. Built, checked in CI against the fake kc9k and the real kc9k.exe with its service (2026-11-21); Narrator, scaling, drag and drop, a real desktop: Unchecked | §4.1–4.13, R-GUI-1–3 | gui-windows | win-vm, laptop |
 | W5 | Windows tamper protection: built; CI checks; boot/Safe Mode Unchecked; firmware lock not built | §3.10, §4.10 | windows | win-ci, win-vm, laptop |
 | W6 | Windows circadian rhythm and wallpapers: built, Unchecked | §4.10 | windows | win-vm, laptop |
-| W7 | Windows installer (MSI) and release | §4.11 | install | agent, owner |
+| W7 | Windows MSI: built, checked in CI (install, removal, refused while locked, reinstall guard, 2026-11-21); signing needs the owner's certificate; Apps & features by a person Unchecked | §4.11 | install-windows | owner, win-vm |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
@@ -1555,9 +1555,13 @@ where its item needs it and the Linux tests prove nothing changed.
     dark pages), mode wallpapers, Settings (all of §4.10's groups), the
     access-password covers, the settings password, the tray icon, Open at
     sign-in.
-  - Unchecked (needs win-vm or laptop): against the real `kc9k.exe` and its
-    service (Core's W1; the GUI is ready for `KC9K_CLI` or `kc9k.exe` next
-    to it); the text lock's challenge window opened by the CLI (W3); drag
+  - Checked against the real `kc9k.exe` and its service on `windows-latest`
+    (`RealTests`: Core's `kc9k install`, then a block made, an entry added
+    and saved, the block switched on and off, every page opened; it found
+    a new block opening before its state was read, fixed: a command now
+    returns once the state after it is read).
+  - Unchecked (needs win-vm or laptop): the text lock's challenge window
+    opened by the CLI (W3); drag
     and drop (block onto mode, calendar, clips, wallpaper bars), file
     dialogs, the tray menu and Open at sign-in by a person; Narrator, high
     contrast, 150–200 % scaling and a second screen.
@@ -1596,6 +1600,21 @@ where its item needs it and the Linux tests prove nothing changed.
   refuses removal and downgrade while locked, as the `.deb` does.
   Code-signed (SPEC §6 2026-11-21 later): the owner picks the certificate
   (Azure Artifact Signing is the cheapest serious one).
+  Built (2026-11-21, notes/install-windows.md, SPEC §6 2026-11-21 By
+  Opus): `windows/installer/` (WiX 6): one x64 MSI with the GUI and
+  `kc9k.exe`; `kc9k install`, `uninstall` and `prepare-install` run as
+  SYSTEM custom actions that show kc9k's own words when it refuses.
+  Checked on `windows-latest` (`windows-gui.yml` job `installer`,
+  `test-msi.ps1`): install (service running, files, Start menu entry,
+  `gui-state` through the service), removal (service and program gone),
+  removal refused while a block is locked (everything stays), a reinstall
+  refused with "block the installer" on while locked. Not done: signing
+  (Needs owner: a certificate; `sign.ps1` and the workflow's steps sign
+  once `SIGNING_PFX_BASE64`/`SIGNING_PFX_PASSWORD` are set, or swap in
+  Azure Artifact Signing); a release workflow publishing the MSI.
+  Unchecked (win-vm): installing and removing from Apps & features with
+  the full UI, an upgrade to a newer version over a locked install, an
+  older version refused.
 
 ## 5. Proposed, not agreed
 

@@ -235,14 +235,19 @@ func TestLockedScheduleAndAllowanceStrengthening(t *testing.T) {
 	mustRun(t, "allowance", "set", "u", "45m")
 }
 
-// §3.4, §3.8: while anything is locked, device protection can't be taken
-// away (factory reset protection, no-escape); each refusal is logged and
-// never counted (R-WEAK-2, principle 5).
+// §3.4, §3.8, §4.10: while anything is locked, device and tamper
+// protection can't be taken away (factory reset protection, no-escape,
+// every tamper protection setting, an allowed app for "allowed apps
+// only"); each refusal is logged and never counted (R-WEAK-2, principle 5).
 func TestLockedDeviceProtectionRefusesWeakening(t *testing.T) {
 	notTerminal(t)
 	d := testDB(t)
 	fakeFirmwareRoot(t)
 	mustRun(t, "reset-guard", "on")
+	for _, name := range tamperOrder {
+		mustRun(t, "tamper", name, "on")
+	}
+	mustRun(t, "tamper", "grace", "30")
 	if err := runWith(t, 0, []string{"secret"}, "firmware-lock", "on", "--yes"); err != nil {
 		t.Fatal(err)
 	}
@@ -252,24 +257,35 @@ func TestLockedDeviceProtectionRefusesWeakening(t *testing.T) {
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "reddit.com")
 	mustRun(t, "start", "b", "--for", "1h", "--yes")
-	for _, args := range [][]string{
+	weakenings := [][]string{
 		{"reset-guard", "off"},
 		{"firmware-lock", "off"},
 		{"no-escape", "off"},
-	} {
+		{"freeze", "apps", "add", "steam"},
+		{"tamper", "grace", "60"},
+	}
+	for _, name := range tamperOrder {
+		weakenings = append(weakenings, []string{"tamper", name, "off"})
+	}
+	for _, args := range weakenings {
 		if err := runWith(t, 0, []string{"secret"}, args...); err == nil {
 			t.Errorf("%v: weakened while locked", args)
 		}
 	}
-	events, _ := d.RecentEvents(0, 20)
+	for _, name := range tamperOrder {
+		if !enforce.TamperOn(d, simpleTamper[name]) {
+			t.Errorf("tamper %s went off", name)
+		}
+	}
+	events, _ := d.RecentEvents(0, 50)
 	refusals := 0
 	for _, e := range events {
 		if e.Kind == db.EventRefused {
 			refusals++
 		}
 	}
-	if refusals != 3 {
-		t.Errorf("%d refusals logged, want 3", refusals)
+	if refusals != len(weakenings) {
+		t.Errorf("%d refusals logged, want %d", refusals, len(weakenings))
 	}
 	if n, _ := d.CountEvents("", 0); n != 0 {
 		t.Errorf("refusals counted by bypass prevention: %d", n)

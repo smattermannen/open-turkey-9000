@@ -411,7 +411,11 @@ func TestRecover(t *testing.T) {
 	isRoot, inRecovery = func() bool { return true }, func() bool { return false }
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "reddit.com")
-	if err := runWith(t, 0, []string{"pw1"}, "start", "b", "--password-stdin", "--yes"); err != nil {
+	// Two password locks and re-lock: both, and what re-lock brings back.
+	if err := runWith(t, 0, []string{"pw1", "pw2"}, "start", "b", "--password-stdin", "--password-stdin", "--relock", "10m", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, []string{"pw3"}, "strict", "on", "--for", "1h", "--password-stdin", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runWith(t, 0, []string{"settings1"}, "password", "set"); err != nil {
@@ -430,8 +434,11 @@ func TestRecover(t *testing.T) {
 	if v, _ := d.GetSetting(SettingSettingsPassword); v != "" {
 		t.Error("settings password kept")
 	}
-	if e, _ := d.GetLockExtras("b"); e.PasswordHash != "" {
-		t.Error("password lock kept")
+	if e, _ := d.GetLockExtras("b"); e.PasswordHash != "" || len(e.Queue) != 0 || passwordLocks(e.Config) != 0 {
+		t.Errorf("password locks kept: %+v", e)
+	}
+	if l, _ := d.GetSettingLock(enforce.StrictLockName); l.PasswordHash != "" || len(l.Queue) != 0 || l.LockedUntil == 0 || passwordLocks(l.Config) != 0 {
+		t.Errorf("strict mode's lock after recover: %+v", l)
 	}
 	mustRun(t, "stop", "b")
 }

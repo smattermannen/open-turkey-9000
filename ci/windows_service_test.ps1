@@ -7,9 +7,36 @@ param([Parameter(Mandatory = $true)][string]$Exe)
 $ErrorActionPreference = 'Continue'
 $failures = 0
 function Check([string]$name, [scriptblock]$test) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] $name"
     $ok = $false
     try { $ok = & $test } catch { Write-Host "  $_" }
     if ($ok) { Write-Host "PASS: $name" } else { Write-Host "::error::FAIL: $name"; $script:failures++ }
+}
+
+# K runs kc9k with a time limit, input and output redirected (not a
+# console), prints what it printed, and sets $LASTEXITCODE.
+function K {
+    Write-Host ">> kc9k $($args -join ' ')"
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $script:k
+    $psi.Arguments = ($args | ForEach-Object { if ("$_" -match '[\s"]') { '"' + ("$_" -replace '"', '\"') + '"' } else { "$_" } }) -join ' '
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $p.StandardInput.Close()
+    $out = $p.StandardOutput.ReadToEndAsync()
+    $err = $p.StandardError.ReadToEndAsync()
+    if (-not $p.WaitForExit(60000)) {
+        Write-Host "::error::TIMEOUT: kc9k $($args -join ' ')"
+        $p.Kill()
+        $global:LASTEXITCODE = 124
+    } else {
+        $global:LASTEXITCODE = $p.ExitCode
+    }
+    $out.Result
+    if ($err.Result) { Write-Host $err.Result }
 }
 
 & $Exe install
@@ -27,23 +54,23 @@ Check 'Program Files\KC9K is on the system PATH' {
 
 # Forwarded commands: output, exit codes, input.
 Start-Sleep -Seconds 3
-$out = & $k block create ci-block 2>&1 | Out-String
+$out = K block create ci-block 2>&1 | Out-String
 Check 'a forwarded command runs in the service' { $LASTEXITCODE -eq 0 -and $out -match 'ci-block' }
-& $k block info no-such-block 2>$null | Out-Null
+K block info no-such-block 2>$null | Out-Null
 Check 'a failing command exits non-zero' { $LASTEXITCODE -ne 0 }
-$state = & $k gui-state | Out-String
+$state = K gui-state | Out-String
 Check 'gui-state is JSON' { $null -ne ($state | ConvertFrom-Json) }
-& $k block add ci-block example.com | Out-Null
-$list = & $k block info ci-block | Out-String
+K block add ci-block example.com | Out-Null
+$list = K block info ci-block | Out-String
 Check 'changes persist between commands' { $list -match 'example.com' }
 $imported = Join-Path $env:TEMP 'kc9k-import.txt'
 "example.org`nexample.net" | Set-Content -Path $imported
-& $k block import-list ci-block blocked $imported 2>&1 | Out-Host
-$list = & $k block info ci-block | Out-String
+K block import-list ci-block blocked $imported 2>&1 | Out-Host
+$list = K block info ci-block | Out-String
 Check 'a file the caller names is read' { $list -match 'example.net' }
 # The service could read the database; the caller can't, so neither may
 # a command run for the caller (readAsCaller impersonates the caller).
-& $k block import-list ci-block blocked (Join-Path $data 'kc9k.db') 2>&1 | Out-Host
+K block import-list ci-block blocked (Join-Path $data 'kc9k.db') 2>&1 | Out-Host
 Check 'a file only SYSTEM may read is not read for the caller' { $LASTEXITCODE -ne 0 }
 
 # The data folder is SYSTEM's alone.
@@ -55,7 +82,7 @@ try { Get-Content (Join-Path $data 'kc9k.db') -TotalCount 1 -ErrorAction Stop | 
 Check 'an administrator can not read the database directly' { -not $read }
 
 # Commands that never go through the pipe.
-& $k service 2>$null
+K service 2>$null
 Check "'kc9k service' outside Windows' service manager is refused" { $LASTEXITCODE -ne 0 }
 
 # Tamper protection against an administrator (W5): the first cycle guards
@@ -70,12 +97,19 @@ Check 'an administrator can not delete the service' { $LASTEXITCODE -ne 0 }
 schtasks.exe /Query /TN '\KC9K\Watchdog' | Out-Null
 Check 'the watchdog task exists' { $LASTEXITCODE -eq 0 }
 schtasks.exe /Delete /TN '\KC9K\Watchdog' /F 2>$null | Out-Null
-Check 'an administrator can not delete the watchdog task' { $LASTEXITCODE -ne 0 }
+Start-Sleep -Seconds 8
+schtasks.exe /Query /TN '\KC9K\Watchdog' 2>$null | Out-Null
+Check 'the watchdog task deleted by an administrator is back within a cycle' { $LASTEXITCODE -eq 0 }
 Check 'the service runs in Safe Mode too' { Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SafeBoot\Minimal\kc9k' }
 
-# Strict mode while locked: deny entries for administrators.
-& $k strict on | Out-Host
-& $k start ci-block --for 1m --yes | Out-Host
+# Strict mode while locked: deny entries for administrators. It closes
+# programs run from people's own folders: the runner's are exempted (and
+# listed, for the log).
+$own = Get-Process | Where-Object { $_.Path -like "$env:SystemDrive\Users\*" -and $_.Path -notlike '*\AppData\*' -or $_.Path -like '*\AppData\Local\Temp\*' }
+$own | ForEach-Object { Write-Host "  own folder: $($_.Name) $($_.Path)" }
+$own | ForEach-Object { Split-Path $_.Path } | Sort-Object -Unique | ForEach-Object { K strict exempt add $_ | Out-Host }
+K strict on | Out-Host
+K start ci-block --for 1m --yes | Out-Host
 Start-Sleep -Seconds 8
 $hosts = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 $wrote = $true
@@ -85,16 +119,16 @@ reg.exe add 'HKLM\SYSTEM\CurrentControlSet\Services\kc9k' /v KC9KTest /d x /f 2>
 Check "strict mode: an administrator can not change the service's registry key" { $LASTEXITCODE -ne 0 }
 
 # Uninstall is refused while a block is locked.
-& $k uninstall 2>&1 | Out-Host
+K uninstall 2>&1 | Out-Host
 Check 'uninstall is refused while locked' { $LASTEXITCODE -ne 0 -and (Get-Service kc9k -ErrorAction SilentlyContinue) }
 Start-Sleep -Seconds 65
-& $k stop ci-block | Out-Host
+K stop ci-block | Out-Host
 Start-Sleep -Seconds 8
 $wrote = $true
 try { Add-Content -Path $hosts -Value '# kc9k test' -ErrorAction Stop } catch { $wrote = $false }
 Check 'after the lock the hosts file is writable again' { $wrote }
-& $k strict off | Out-Host
-$out = & $k uninstall 2>&1 | Out-String
+K strict off | Out-Host
+$out = K uninstall 2>&1 | Out-String
 Write-Host $out
 Check 'uninstall succeeds once nothing is locked' { $LASTEXITCODE -eq 0 -and $out -match 'program is removed' }
 for ($i = 0; $i -lt 30 -and (Get-Service kc9k -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }

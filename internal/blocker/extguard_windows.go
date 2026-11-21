@@ -387,3 +387,7 @@ func accountName(pid uint32) string {
 }
 
 func errorf(format string, args ...any) error { return fmt.Errorf(format, args...) }
+
+// RemoteControlAllowed: browsers started for remote control never run
+// during website blocks on Windows (no testing build there).
+func RemoteControlAllowed() bool { return false }

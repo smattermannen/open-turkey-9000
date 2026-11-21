@@ -393,8 +393,13 @@ func LockdownInstalled() bool { return lockdownActive() }
 // escape).
 func KernelCmdline() string { return "" }
 
-// taskExists reports whether the scheduled task exists.
+// taskExists reports whether the scheduled task exists: its file in the
+// Tasks folder (no schtasks process each cycle), else schtasks' answer.
 func taskExists(name string) bool {
+	file := filepath.Join(systemRoot(), "System32", "Tasks", strings.TrimPrefix(name, `\`))
+	if _, err := os.Stat(file); err == nil {
+		return true
+	}
 	return exec.Command(filepath.Join(systemRoot(), "System32", "schtasks.exe"), "/Query", "/TN", name).Run() == nil
 }
 
@@ -572,21 +577,32 @@ func BootLockInstalled() bool {
 	return err == nil
 }
 
-// userProgram reports whether a process runs from a person's own files:
-// their profile, or a removable drive (strict mode closes these).
+// userProgram reports whether a process runs from where downloaded and
+// portable programs land: a profile's own folders (Downloads, Desktop,
+// Documents… anything but AppData), its temporary folder, or a removable
+// drive. Programs installed per user (AppData\Local\Programs, OneDrive,
+// Teams, a per-user Chrome) keep running: they were installed, not
+// brought along (SPEC §6 2026-11-21, By Opus).
 func userProgram(p *winProc, exempt []string) bool {
 	if p.Exe == "" {
 		return false
 	}
-	lower := strings.ToLower(p.Exe)
+	lower := strings.ToLower(filepath.Clean(p.Exe))
 	for _, e := range exempt {
-		if e != "" && strings.HasPrefix(lower, strings.ToLower(strings.TrimRight(e, `\/`))+`\`) {
+		if e != "" && strings.HasPrefix(lower, strings.ToLower(filepath.Clean(e))+`\`) {
 			return false
 		}
 	}
 	users := strings.ToLower(filepath.Join(filepath.VolumeName(systemRoot())+`\`, "Users")) + `\`
-	if strings.HasPrefix(lower, users) {
-		return true
+	if rest, ok := strings.CutPrefix(lower, users); ok {
+		parts := strings.Split(rest, `\`)
+		if len(parts) < 3 { // a program right in a profile folder
+			return len(parts) == 2
+		}
+		if parts[1] != "appdata" {
+			return true // Downloads, Desktop, Documents, …
+		}
+		return parts[2] == "local" && len(parts) > 3 && parts[3] == "temp"
 	}
 	vol := filepath.VolumeName(p.Exe)
 	if vol == "" {
@@ -602,8 +618,8 @@ func ApplyNoexec(exempt ...string) error { return nil }
 // RemoveNoexec: nothing to undo.
 func RemoveNoexec(exempt ...string) error { return nil }
 
-// CloseNoexecPrograms closes people's programs run from their own files
-// (their profile, removable drives), except in exempt folders.
+// CloseNoexecPrograms closes people's programs run from where downloaded
+// and portable programs land (userProgram), except in exempt folders.
 func CloseNoexecPrograms(exempt []string) int {
 	procs := processSnapshot()
 	protected := protectedPIDs(procs)

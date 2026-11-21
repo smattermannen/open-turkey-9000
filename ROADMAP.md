@@ -41,7 +41,6 @@ of their group and a row here; a finished item loses its row.
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings of 2026-11-21: guest, inactive-tabs, embedded checked in Chrome-family browsers (2026-11-21); inactive-tabs, embedded in LibreWolf (box); VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
-| W0 | Windows build: built; unit tests on `windows-latest` Unchecked | §1, §6 2026-11-21 | windows | win-ci |
 | W1 | Windows service, session agent, named pipe, install/uninstall: built; CI script, desktop parts Unchecked | §3.13 | windows | win-ci, win-vm |
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
 | W3 | Windows apps and desktop: built, Unchecked on a desktop | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
@@ -1489,14 +1488,13 @@ each finished step on `main`: rebase onto `origin/main`, run the gate
 sides. Neither touches the Linux GUI, the extension or Android, except
 where its item needs it and the Linux tests prove nothing changed.
 
-- [ ] `W0` Windows build (M). Built (2026-11-21): Linux-only files carry
-  `//go:build linux`, their Windows counterparts are `_windows.go`,
-  shared types in `blocker/shared.go`; what is not built yet is in
-  `blocker/stubs_windows.go`, each saying which item builds it
-  (notes/windows.md). `GOOS=windows go build ./...` and `go vet` pass, also
-  on `windows-latest` (`.github/workflows/windows.yml`, own workflow: the
-  Linux one stays unchanged). Unchecked: the unit tests on
-  `windows-latest` (the `unit` job; Linux-specific tests may need tags).
+- [x] `W0` Windows build (M). Built, checked (2026-11-21): Linux-only
+  files carry `//go:build linux`, their Windows counterparts are
+  `_windows.go`, shared types in `blocker/shared.go` (notes/windows.md);
+  every layer has its Windows version. `GOOS=windows go build ./...`,
+  `go vet` and the whole unit suite pass on `windows-latest`
+  (`.github/workflows/windows.yml`, `unit` job; the Linux workflow is
+  unchanged).
 - [ ] `W1` Service and agent (M). Built, Partial checked (2026-11-21):
   `kc9k install`/`uninstall`, the service (automatic, restarted after any
   failure, restarts itself on an upgrade), the command pipe (caller from

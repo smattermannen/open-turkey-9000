@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -119,7 +120,7 @@ func TestCircadianWallpapers(t *testing.T) {
 		t.Fatalf("wallpapers %+v", view.Wallpapers)
 	}
 	info, err := os.Stat(view.Wallpapers[0].Path)
-	if err != nil || info.Mode().Perm() != 0o644 || !strings.HasSuffix(view.Wallpapers[0].Path, ".png") {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o644) || !strings.HasSuffix(view.Wallpapers[0].Path, ".png") {
 		t.Fatalf("stored file: %v %v", info, err)
 	}
 	mustRun(t, "circadian", "wallpaper", "time", "1", "13:00", "14:00")

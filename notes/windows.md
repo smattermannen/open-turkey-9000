@@ -1,6 +1,6 @@
 # Windows (Core: the Go program)
 
-- Covers: every `*_windows.go` and `*_linux.go`, `blocker/stubs_windows.go`, `blocker/shared.go`, `.github/workflows/windows.yml`
+- Covers: every `*_windows.go` and `*_linux.go`, `blocker/shared.go`, `internal/platform/`, `internal/winapi/`, `internal/winsvc/`, `internal/winagent/`, `ci/windows_*.ps1`, `.github/workflows/windows.yml`
 - SPEC: §6 2026-11-21 (Windows decisions), §3.13
 - Connects to: [enforce-daemon](enforce-daemon.md), [install](install.md), [layers-net](layers-net.md), [browsers](browsers.md), [apps-titles](apps-titles.md), [device](device.md), [circadian](circadian.md), [testing](testing.md); the GUI's own notes are `gui-windows.md`, `install-windows.md`
 
@@ -19,11 +19,11 @@
   `browser_linux.go`), `hosts.go` (only `hostsPath` differs:
   `System32\drivers\etc\hosts`), `resolve.go` (the DNS client;
   network servers from resolv.conf or `GetAdaptersAddresses`).
-- `blocker/stubs_windows.go`: every layer function not built on Windows
-  yet, with the Linux signature. An action returns `not built on Windows
-  yet (ROADMAP Wn)`; a query answers "nothing there" (no browsers, no
-  users, not applied). Building a function moves it out of the stub file
-  into its own `_windows.go`; the file shrinks to nothing as W2–W6 land.
+- `blocker/stubs_windows.go` held every layer function not yet built on
+  Windows while W2–W6 were built; it is gone (2026-11-21): every function
+  has its Windows version. The firmware lock (`firmware.go`) is shared
+  file I/O on sysfs: on Windows the folder isn't there, so the firmware
+  counts as not available (the vendors' tools: not built).
 - Small per-system pieces: `db/bootclock_*.go` (boot ID: `BootId` under
   `PrefetchParameters`, raised at every boot; boot clock:
   `GetTickCount64`, counts sleep like `CLOCK_BOOTTIME`),
@@ -239,8 +239,10 @@
   its program path; restart on failure; Safe Mode registration
   (`SafeBoot\Minimal|Network\kc9k` = Service: the service runs in Safe Mode
   too); the watchdog task `\KC9K\Watchdog` (SYSTEM, at boot and every
-  minute, `kc9k watchdog` starts or recreates the service; its security
-  descriptor lets administrators read it, not delete it); the program and
+  minute, `kc9k watchdog` starts or recreates the service; the task's
+  XML asks that administrators only read it, but Task Scheduler lets an
+  elevated administrator delete it: it is made again within a cycle and
+  counted, checked on `windows-latest`); the program and
   data folders' security (not while strict mode holds them). A session
   agent ended while its session lasts counts too.
 - Strict mode (`ApplyLockdown`, from `enforceLockdown` as on Linux):
@@ -252,9 +254,11 @@
   `distribution` folders. The security found is kept in
   ProgramData\kc9k\lockdown.json and put back by `RemoveLockdown`; a deny
   entry removed while it holds is put back and counted
-  (`LockdownRepairs`). SYSTEM is never denied. People's own programs
-  (run from `C:\Users\…` or a removable drive) are closed
-  (`CloseNoexecPrograms`), except exempt folders; nothing is mounted
+  (`LockdownRepairs`). SYSTEM is never denied. People's downloaded and
+  portable programs (`userProgram`: a profile's folders other than
+  AppData, `AppData\Local\Temp`, removable drives) are closed
+  (`CloseNoexecPrograms`), except exempt folders; per-user installs in
+  AppData keep running; nothing is mounted
   (`ApplyNoexec` does nothing).
 - No-escape (`ApplyBootLock`): `reagentc /disable` (if it was on),
   `bcdedit /set {current} recoveryenabled No`, `bootstatuspolicy

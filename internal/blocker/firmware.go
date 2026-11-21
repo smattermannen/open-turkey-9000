@@ -1,5 +1,3 @@
-//go:build linux
-
 // firmware.go — factory reset protection's firmware lock (§3.8, §4.10).
 //
 // Linux exposes firmware (BIOS/UEFI) settings of Dell, Lenovo and HP

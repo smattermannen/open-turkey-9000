@@ -122,7 +122,7 @@ func TestProjectExportImport(t *testing.T) {
 
 	// A file that isn't a project, or is broken, changes nothing.
 	bad := filepath.Join(t.TempDir(), "bad.json")
-	os.WriteFile(bad, []byte(`{"kc9k_project":1,"blocks":[{"name":"x","apps":["python3"]}]}`), 0o644)
+	os.WriteFile(bad, []byte(`{"kc9k_project":1,"blocks":[{"name":"x","apps":["`+essentialTestApp+`"]}]}`), 0o644)
 	if err := runCLI(t, "project", "import", bad); err == nil {
 		t.Error("a project with a forbidden app was imported")
 	}

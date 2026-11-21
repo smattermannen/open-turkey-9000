@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -230,5 +231,27 @@ var watchdogCmd = &cobra.Command{
 }
 
 func init() {
+	// What strict mode and no-escape do on Windows (notes/windows.md W5).
+	strictCmd.Short = "Deny administrators what would stop KC9K while a block is locked"
+	strictCmd.Long = strings.Replace(strictCmd.Long, strictCmd.Long[:strings.Index(strictCmd.Long, "\n\nStrict mode is off")],
+		`With strict mode on, while a block or setting is locked or Frozen Chicken
+runs, administrators are denied what would stop Killer Chicken 9000: its
+service's registry key, its program folder, the hosts file, the browsers'
+policies, Safe Mode's settings, the boot configuration and the recovery
+environment's; programs run from your own folders (your profile, USB
+drives) are closed. Only kc9k itself keeps working. Everything comes back
+by itself when the lock ends.`, 1)
+	if i := strings.Index(strictCmd.Long, "\n\nIf something goes wrong"); i >= 0 {
+		strictCmd.Long = strictCmd.Long[:i]
+	}
+	strictCmd.Long = strings.Replace(strictCmd.Long, "sudo is taken away only while", "administrators are denied only while", 1)
+	noEscapeCmd.Long = `With no-escape on, the recovery environment is off (Reset this PC, Startup
+Repair and its command prompt), automatic repair doesn't start, and the boot
+menu is hidden. KC9K's service runs in Safe Mode too. It can't be turned off
+during a lock.
+
+Booting a USB stick still works unless the firmware is locked with a password.
+Test it in a virtual machine first.`
+
 	rootCmd.AddCommand(serviceCmd, agentCmd, installCmd, uninstallCmd, finishUninstallCmd, watchdogCmd)
 }

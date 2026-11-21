@@ -31,6 +31,7 @@ jobs:
           KC9K_TEST_WFP: "1"
         run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc' ./internal/blocker
       - name: Service, pipe, install and uninstall
+        timeout-minutes: 12
         shell: pwsh
         run: pwsh ci/windows_service_test.ps1 (Resolve-Path kc9k.exe)
       - name: Service log

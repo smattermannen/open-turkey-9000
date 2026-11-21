@@ -37,7 +37,7 @@ of their group and a row here; a finished item loses its row.
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
 | B12 | Chrome: a person opens the popup and tries to remove the extension (synthetic checked 2026-11-20) | §3.13 | browsers | owner |
 | B14 | Monk mode live: run `ci/monk_live_test.sh host` (written, never run), reboot mid-way | R-MONK-2 | device | vm |
-| 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
+| 2.1 | Circadian on a laptop backlight, external screens (ddcutil), several screens, GNOME/MATE | §4.10 | circadian | owner, vm |
 | 2.2 | Ad trigger: grow the shipped industry lists | §3.9 | actions | agent |
 | 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
@@ -1169,8 +1169,27 @@ Only items not simply Built.
 
 ## 2. Next features (after §0)
 
-- **2.1 Circadian rhythm** (§4.10): built. Untried on real hardware: laptop
-  backlight, GNOME/MATE, multiple screens. Wayland: no gamma ramps.
+- **2.1 Circadian rhythm** (§4.10): built. Checked 2026-11-20, desktop
+  (Mint 22.3 Cinnamon, X11, one screen HDMI-1 1920x1080, no backlight;
+  devmaster install of this fix), software and colour clips on (owner's
+  clips, 6500 K / 100 % then), `xrandr --verbose` per step: clips on →
+  `gamma ours`; `preview kelvin 3000` → Gamma 0.48:1.0:1.7, ran out → 1.0;
+  then `preview software 50` (0.50) and `--end` → 1.0 again, unpaused
+  (before: the screen stayed at 50 %, paused; the engine took over the
+  ramp mixed with the ended colour preview's 3000 K, so it took the real
+  one for someone else's and, switched off, never gave plain ramps back;
+  now each gamma preview notes the ramp it wrote, the engine takes over
+  the last one, `TestCircadianPreviewAfterAnEndedPreview`). Run out
+  without `--end`: same. `circadian off` during a preview at 60 % → plain
+  ramps once it ends. Daemon stopped during a preview at 70 %: the ramp
+  stays (nothing restores on stop), started within 30 s → 1.0. Cinnamon
+  night light on (1700 K) → `gamma other`, both clips paused until 18:00,
+  `night_light true`; off → plain ramps, pause lifted, ours again. `play
+  --seconds 6`: colours over the day, back to 1.0, no pause. Owner's
+  settings put back (off, both lanes off). Unchecked: laptop backlight,
+  external screens' brightness by ddcutil (backlight clip off here), several
+  screens, GNOME/MATE, dark mode and wallpapers on this desktop (owner
+  leaves them to the system). Wayland: no gamma ramps.
   System-following dark pages rely on `prefers-color-scheme`, which
   LibreWolf reports as light. In project files with its wallpapers
   (`cli/projectcircadian.go`; import only where none is set).

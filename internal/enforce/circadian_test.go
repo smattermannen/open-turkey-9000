@@ -664,6 +664,50 @@ func TestCircadianPreview(t *testing.T) {
 	}
 }
 
+// §4.10 (never overrides the user, off touches nothing): a colour preview
+// ends and is taken over, then a brightness preview runs and ends (the
+// desktop, 2026-11-20: kelvin 3000, then software 50 and --end). The engine
+// takes over the ramp the last preview wrote, not one mixed with the
+// earlier preview's colour: on, the clip carries on unpaused; switched off
+// right after, the plain ramps come back (the screen stayed at 50 %).
+func TestCircadianPreviewAfterAnEndedPreview(t *testing.T) {
+	for _, switchOff := range []bool{false, true} {
+		d, f := testDB(t), fakeCircadian(t)
+		circadianWith(t, d, testGamma, nil)
+		e := NewCircadian(d)
+		e.Step(at(9, 0, 0))
+		if err := PreviewCircadian(d, circadian.LaneKelvin, 3000, false, at(9, 0, 1)); err != nil {
+			t.Fatal(err)
+		}
+		e.Step(at(9, 0, 5))
+		e.Step(at(9, 0, 13)) // the colour preview ran out: taken over
+		if err := PreviewCircadian(d, circadian.LaneSoftware, 50, false, at(9, 0, 14)); err != nil {
+			t.Fatal(err)
+		}
+		if err := PreviewCircadian(d, circadian.LaneSoftware, 0, true, at(9, 0, 16)); err != nil {
+			t.Fatal(err)
+		}
+		wantRed, wantBlue := plain256(), plain256()
+		if switchOff {
+			c := CircadianConfig(d)
+			c.On = false
+			if err := SetCircadianConfig(d, c); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			kelvin, brightness, _ := gammaTarget(CircadianConfig(d), circadian.MinuteOfDay(at(9, 0, 18)))
+			wantRed, _, wantBlue = circadian.Ramp(256, kelvin, brightness)
+		}
+		e.Step(at(9, 0, 18))
+		if !near(f.red, wantRed) || !near(f.blue, wantBlue) {
+			t.Errorf("off %v: the preview's ramp stayed on the screen", switchOff)
+		}
+		if p := CircadianPauses(d, at(9, 0, 18)); len(p) != 0 {
+			t.Errorf("off %v: paused %v", switchOff, p)
+		}
+	}
+}
+
 // A database opened through KC9K_DB never reaches the hardware.
 func TestCircadianNothingAppliedForATestDatabase(t *testing.T) {
 	d, f := testDB(t), fakeCircadian(t)

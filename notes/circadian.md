@@ -18,7 +18,10 @@
   into signed-out users' dconf (`blocker.Reach`, `dbus-run-session`); who
   got it is in `circadian.applied` (`WallpaperUsers`), a later sign-in
   without it gets it at once.
-  `PreviewCircadian` drives hardware; engine adopts it. `circadian play`
+  `PreviewCircadian` drives hardware; engine adopts it: a gamma preview
+  notes the ramp it wrote (`Kelvin`, `Brightness`, `At`), the engine
+  takes over the one written last (`lastGammaPreview`), never one mixed
+  with an ended preview's value. `circadian play`
   (`PlayCircadian`: 24 h as previews in `--seconds`, wallpaper/dark mode at
   their times, `ReadDesktopLook`/`RestoreDesktopLook` put the desktop back;
   GUI "Play the day" with a playhead). GUI wallpapers: `WallpaperTimeline`

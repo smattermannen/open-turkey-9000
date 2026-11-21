@@ -238,6 +238,12 @@ type CircadianPreview struct {
 	Lane  string  `json:"lane"`
 	Value float64 `json:"value"`
 	Until int64   `json:"until"`
+	// For software brightness and colour temperature: the ramp the command
+	// wrote and when (unix ns), so the engine takes over exactly the ramp
+	// on the screens, not one mixed with an earlier preview's that ended.
+	Kelvin     float64 `json:"kelvin,omitempty"`
+	Brightness float64 `json:"brightness,omitempty"`
+	At         int64   `json:"at,omitempty"`
 }
 
 // circadianApplied is what the engine last gave the desktop, so it gives
@@ -482,14 +488,15 @@ func (e *Circadian) Step(now time.Time) {
 	// The notes are never cleared here (a new preview could be lost that
 	// way); one that ended is taken over once.
 	running, ended := previews(e.d, now)
+	written := lastGammaPreview(running, ended)
 	for lane, p := range ended {
 		if e.previewSeen[lane] != p {
-			e.adoptPreview(cfg, ended, lane, minute)
+			e.adoptPreview(cfg, ended, written, lane, minute)
 		}
 		e.previewSeen[lane] = p
 	}
 	for lane, p := range running {
-		e.adoptPreview(cfg, running, lane, minute)
+		e.adoptPreview(cfg, running, written, lane, minute)
 		e.previewSeen[lane] = p
 	}
 	gammaPreviewed := false
@@ -565,9 +572,25 @@ func (e *Circadian) Step(now time.Time) {
 	}
 }
 
+// lastGammaPreview is the colour or software brightness preview written
+// last (its ramp is the one on the screens), or none when no note says.
+func lastGammaPreview(groups ...map[string]CircadianPreview) CircadianPreview {
+	var last CircadianPreview
+	for _, group := range groups {
+		for lane, p := range group {
+			if lane != circadian.LaneBacklight && p.At > last.At {
+				last = p
+			}
+		}
+	}
+	return last
+}
+
 // adoptPreview notes what the preview of lane wrote as the engine's own, so
-// it isn't taken for a change by hand once the preview ends.
-func (e *Circadian) adoptPreview(cfg circadian.Config, all map[string]CircadianPreview, lane string, minute float64) {
+// it isn't taken for a change by hand once the preview ends. written is the
+// gamma preview written last (lastGammaPreview).
+func (e *Circadian) adoptPreview(cfg circadian.Config, all map[string]CircadianPreview, written CircadianPreview,
+	lane string, minute float64) {
 	if lane == circadian.LaneBacklight {
 		value := all[lane].Value
 		for _, b := range circadianBacklights() {
@@ -580,8 +603,12 @@ func (e *Circadian) adoptPreview(cfg circadian.Config, all map[string]CircadianP
 		}
 		return
 	}
-	kelvin, brightness, _ := gammaTarget(cfg, minute)
-	e.gammaKelvin, e.gammaBrightness = withPreviews(all, kelvin, brightness)
+	if written.At > 0 {
+		e.gammaKelvin, e.gammaBrightness = written.Kelvin, written.Brightness
+	} else { // a note from an older version
+		kelvin, brightness, _ := gammaTarget(cfg, minute)
+		e.gammaKelvin, e.gammaBrightness = withPreviews(all, kelvin, brightness)
+	}
 	e.gammaSet = true
 }
 
@@ -870,6 +897,14 @@ func PreviewCircadian(d *db.DB, lane string, value float64, end bool, now time.T
 		return fmt.Errorf("%s is paused", info.Title)
 	}
 	p := CircadianPreview{Lane: lane, Value: value, Until: now.Add(PreviewHold).Unix()}
+	if lane != circadian.LaneBacklight {
+		// The ramp: this value and any other preview still running.
+		running, _ := previews(d, now)
+		running[lane] = p
+		kelvin, brightness, _ := gammaTarget(cfg, circadian.MinuteOfDay(now))
+		p.Kelvin, p.Brightness = withPreviews(running, kelvin, brightness)
+		p.At = now.UnixNano()
+	}
 	// The note goes first, so the engine never sees the new level without it.
 	writeJSONSetting(d, key, p)
 	if circadianDry() {
@@ -884,10 +919,7 @@ func PreviewCircadian(d *db.DB, lane string, value float64, end bool, now time.T
 		}
 		return firstErr
 	}
-	running, _ := previews(d, now)
-	kelvin, brightness, _ := gammaTarget(cfg, circadian.MinuteOfDay(now))
-	kelvin, brightness = withPreviews(running, kelvin, brightness)
-	_, err := circadianSetGamma(rampFor(kelvin, brightness))
+	_, err := circadianSetGamma(rampFor(p.Kelvin, p.Brightness))
 	return err
 }
 
@@ -964,11 +996,17 @@ func PlayCircadian(d *db.DB, length time.Duration, now time.Time, frame func(min
 			frame(minute)
 		}
 		values := map[string]float64{}
-		until := time.Now().Add(PreviewHold).Unix()
+		at := time.Now()
+		until := at.Add(PreviewHold).Unix()
+		kelvin, brightness, _ := gammaTarget(cfg, minute)
 		for _, lane := range lanes {
 			if v, ok := cfg.Lanes[lane].ValueAt(minute); ok {
 				values[lane] = v
-				writeJSONSetting(d, settingCircadianPreview+"."+lane, CircadianPreview{Lane: lane, Value: v, Until: until})
+				p := CircadianPreview{Lane: lane, Value: v, Until: until}
+				if lane != circadian.LaneBacklight {
+					p.Kelvin, p.Brightness, p.At = kelvin, brightness, at.UnixNano()
+				}
+				writeJSONSetting(d, settingCircadianPreview+"."+lane, p)
 			}
 		}
 		if !circadianDry() {
@@ -985,7 +1023,6 @@ func PlayCircadian(d *db.DB, length time.Duration, now time.Time, frame func(min
 			_, kOK := values[circadian.LaneKelvin]
 			_, sOK := values[circadian.LaneSoftware]
 			if kOK || sOK {
-				kelvin, brightness, _ := gammaTarget(cfg, minute)
 				if _, err := circadianSetGamma(rampFor(kelvin, brightness)); err != nil && i == 0 {
 					log.Printf("circadian: playing the day: %v", err)
 				}

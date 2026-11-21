@@ -1,6 +1,6 @@
 # Apps, window titles, polite close, behaviour settings
 
-- Covers: `blocker/process.go`, `scripts.go`, `titles.go`, `x11.go`, `polite.go`, `activity.go`, `idle.go`, `cli/titles.go`, `cli/options.go`, `enforce/options.go`
+- Covers: `blocker/process.go`, `owners.go`, `scripts.go`, `titles.go`, `x11.go`, `polite.go`, `activity.go`, `idle.go`, `cli/titles.go`, `cli/options.go`, `enforce/options.go`
 - SPEC: §3.1, R-TITLE-1, R-DESKTOP-1
 - Connects to: [enforce-daemon](enforce-daemon.md), [actions](actions.md) (trigger actions), [allowance](allowance.md) (app use)
 
@@ -38,7 +38,9 @@ Not fixed by `SPEC.md`; the code is the truth.
   apps only); asked to close, killed with descendants a few seconds later.
 - **Apps**: hash match breaks on rebuild; `python3` itself and desktop
   essentials (`Xorg`, `cinnamon`, `pipewire`…) can't be added; system
-  folders (`/usr/bin/`) refused; only regular-user processes are killed.
+  folders (`/usr/bin/`) refused; only people's processes are killed
+  (`personUser`: uid ≥ 1000, or a LightDM guest, `guest-*` with home
+  `/tmp/guest-*`, a system uid; also logout, lock screen, desktop users).
   Fetch tools killed for blocked addresses: `yt-dlp`, `mpv`, `vlc`, `curl`,
   `wget`, `streamlink`…; never editors/shells.
 - **Options**: `polite-close` (on): windowed apps asked, killed ~5 s later;

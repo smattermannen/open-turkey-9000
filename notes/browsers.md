@@ -21,7 +21,9 @@
   started before the last protecting settings change
   (`noteSettingsChange`). Browsers known by name or engine
   (`browserdetect.go`: libxul.so or icudtl.dat/V8 snapshot mapped by a
-  user-owned exe, minus Electron). Decision in `closeReason`. With block
+  user-owned exe, minus Electron: an `.asar` mapped or open, or a renderer
+  child with `--app-path=`, an unpacked app; Chromium rewrites children's
+  cmdlines with spaces; judged once 15 s old). Decision in `closeReason`. With block
   unsupported browsers on, runs always and closes at once every browser
   whose exe isn't a root-owned package file of `SupportedBrowsers`
   (`supported.go`: LibreWolf, Chrome, Chromium; `InstallBrowser`, fakes

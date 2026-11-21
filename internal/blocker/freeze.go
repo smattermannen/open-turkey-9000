@@ -52,7 +52,8 @@ func lockCinnamon() error {
 	return firstErr
 }
 
-// desktopUsers lists the users (uid >= 1000) with a running session bus, read
+// desktopUsers lists the people (personUser: regular users and guests) with a
+// running session bus, read
 // from /run/user so the fast relock loop starts no process just to find them.
 func desktopUsers() []*user.User {
 	entries, err := os.ReadDir("/run/user")
@@ -62,7 +63,7 @@ func desktopUsers() []*user.User {
 	var users []*user.User
 	for _, e := range entries {
 		uid, err := strconv.ParseUint(e.Name(), 10, 32)
-		if err != nil || uid < 1000 {
+		if err != nil || !personUser(uid) {
 			continue
 		}
 		if _, err := os.Stat("/run/user/" + e.Name() + "/bus"); err != nil {

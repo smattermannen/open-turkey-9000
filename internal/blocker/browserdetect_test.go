@@ -50,3 +50,22 @@ func TestFirstRuleJumps(t *testing.T) {
 		t.Error("a chain with a longer name isn't ours")
 	}
 }
+
+// B3: an Electron app shipped unpacked holds no asar; its renderer's
+// --app-path switch shows it isn't a browser. Chromium's renderers have none.
+func TestElectronRendererCmdline(t *testing.T) {
+	cases := map[string]bool{
+		"/opt/el2/b3unpacked\x00--type=renderer\x00--user-data-dir=/home/t/.config/b3\x00--app-path=/opt/el2/resources/app\x00": true,
+		"/opt/chrome/chrome\x00--type=renderer\x00--lang=en-US\x00":                                                             false,
+		"/opt/el2/b3unpacked\x00--type=gpu-process\x00--app-path=/x\x00":                                                        false,
+		"/opt/el2/b3unpacked\x00--type=renderer-ish\x00--app-path=/x\x00":                                                       false,
+		// as Chromium leaves it after rewriting the process title (seen in the VM)
+		"/home/tester/b3el/dist/b3unpacked --type=renderer --user-data-dir=/home/tester/.config/b3unpacked --app-path=/home/tester/b3el/dist/resources/app --enable-sandbox\x00": true,
+		"/opt/chrome/chrome --type=renderer --lang=en-US\x00": false,
+	}
+	for cmd, want := range cases {
+		if got := electronRendererCmdline(cmd); got != want {
+			t.Errorf("%q: got %v, want %v", cmd, got, want)
+		}
+	}
+}

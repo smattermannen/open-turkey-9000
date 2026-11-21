@@ -1,10 +1,12 @@
 package blocker
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -81,7 +83,8 @@ func ApplyLockdown(user string) error {
 			return err
 		}
 	}
-	return LockPrivilegedSockets()
+	// Either failing leaves the other done.
+	return errors.Join(restrictUserNamespaces(), LockPrivilegedSockets())
 }
 
 // RemoveLockdown restores normal administrator rights.
@@ -91,10 +94,65 @@ func RemoveLockdown() error {
 			return err
 		}
 	}
-	return UnlockPrivilegedSockets()
+	return errors.Join(restoreUserNamespaces(), UnlockPrivilegedSockets())
 }
 
-// LogoutUsers ends the sessions of every regular user.
+// A user namespace lets a user mount a fresh tmpfs, which allows running
+// programs, and run anything copied there: `unshare -Urm` gets round the
+// noexec folders (B3). Ubuntu 24.04 stops it with AppArmor's
+// apparmor_restrict_unprivileged_userns (namespaces of programs without a
+// profile get no capabilities; browsers, Flatpak and the like have
+// profiles); Linux Mint 22 turns that off. During the lockdown it is on, and
+// the earlier value comes back after. A kernel without the setting is left
+// as it is.
+var (
+	usernsRestrictPath = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
+	usernsStatePath    = "/run/kc9k-userns-restrict"
+)
+
+// restrictUserNamespaces turns the restriction on, first remembering the
+// value it had (once: a later call doesn't overwrite it).
+func restrictUserNamespaces() error {
+	data, err := os.ReadFile(usernsRestrictPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	value := strings.TrimSpace(string(data))
+	if value == "1" {
+		return nil
+	}
+	if _, err := os.Stat(usernsStatePath); os.IsNotExist(err) {
+		if err := atomicWriteFile(usernsStatePath, []byte(value+"\n"), 0o600); err != nil {
+			return err
+		}
+	}
+	if err := os.WriteFile(usernsRestrictPath, []byte("1\n"), 0o644); err != nil {
+		return fmt.Errorf("restricting user namespaces: %w", err)
+	}
+	return nil
+}
+
+// restoreUserNamespaces puts back the value restrictUserNamespaces found.
+func restoreUserNamespaces() error {
+	data, err := os.ReadFile(usernsStatePath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if value := strings.TrimSpace(string(data)); value == "0" {
+		if err := os.WriteFile(usernsRestrictPath, []byte(value+"\n"), 0o644); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("restoring user namespaces: %w", err)
+		}
+	}
+	return os.Remove(usernsStatePath)
+}
+
+// LogoutUsers ends the sessions of every person (personUser), guests too.
 func LogoutUsers() error {
 	output, err := exec.Command("loginctl", "list-users", "--no-legend").Output()
 	if err != nil {
@@ -119,8 +177,11 @@ func usersToLogOut(listUsers string) []string {
 	var names []string
 	for _, line := range strings.Split(listUsers, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 2 || len(fields[0]) < 4 {
-			continue // no user, or a system account below uid 1000
+		if len(fields) < 2 {
+			continue
+		}
+		if uid, err := strconv.ParseUint(fields[0], 10, 32); err != nil || !personUser(uid) {
+			continue // a system account, not a person
 		}
 		if len(fields) >= 4 && fields[len(fields)-1] == "closing" {
 			continue

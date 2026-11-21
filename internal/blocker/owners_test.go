@@ -70,3 +70,51 @@ func TestEssentialApps(t *testing.T) {
 		t.Errorf("withoutEssentialApps = %v", got)
 	}
 }
+
+// useGuestPasswd points guest detection at a passwd file for one test.
+func useGuestPasswd(t *testing.T, passwd string) {
+	t.Helper()
+	path := t.TempDir() + "/passwd"
+	if err := os.WriteFile(path, []byte(passwd), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := passwdPath
+	passwdPath = path
+	t.Cleanup(func() {
+		passwdPath = old
+		guestCache.Lock()
+		guestCache.uids, guestCache.stamp = nil, ""
+		guestCache.Unlock()
+	})
+}
+
+const guestPasswd = "root:x:0:0:root:/root:/bin/bash\n" +
+	"lightdm:x:109:116:Light Display Manager:/var/lib/lightdm:/bin/false\n" +
+	"guest-331bld:x:999:988:Guest:/tmp/guest-331bld:/bin/bash\n" +
+	"guest-fake:x:998:987::/home/guest-fake:/bin/bash\n" +
+	"tester:x:1000:1000::/home/tester:/bin/bash\n"
+
+// B3, §3.8 strict mode: a LightDM guest session runs as a system account
+// (uid 999 here); it is a person all the same, so blocks reach its programs.
+// A guest-named account elsewhere, and system accounts, are not.
+func TestGuestIsPerson(t *testing.T) {
+	useGuestPasswd(t, guestPasswd)
+	cases := map[uint64]bool{999: true, 998: false, 109: false, 0: false, 1000: true}
+	for uid, want := range cases {
+		if got := personUser(uid); got != want {
+			t.Errorf("personUser(%d) = %v, want %v", uid, got, want)
+		}
+	}
+	if got := parsePasswdUsers(guestPasswd); len(got) != 1 || got[0] != "tester" {
+		t.Errorf("accounts to pick for a block = %v, want only tester (a guest comes and goes)", got)
+	}
+}
+
+// B3: a logout freeze ends the guest's session too.
+func TestUsersToLogOutGuest(t *testing.T) {
+	useGuestPasswd(t, guestPasswd)
+	out := "1000 tester no active\n 999 guest-331bld no active\n 109 lightdm no active\n"
+	if got := usersToLogOut(out); len(got) != 2 || got[0] != "tester" || got[1] != "guest-331bld" {
+		t.Errorf("usersToLogOut = %v, want [tester guest-331bld]", got)
+	}
+}

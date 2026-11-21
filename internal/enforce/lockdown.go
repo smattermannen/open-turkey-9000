@@ -249,7 +249,7 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 		if err := blocker.RemoveLockdown(); err != nil {
 			log.Printf("daemon: lockdown: %v", err)
 		}
-		if err := blocker.RemoveNoexec(); err != nil {
+		if err := blocker.RemoveNoexec(ExemptFolders(d)...); err != nil {
 			log.Printf("daemon: noexec: %v", err)
 		}
 		return
@@ -262,8 +262,12 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 	if err := blocker.ApplyLockdown(user); err != nil {
 		log.Printf("daemon: lockdown: %v", err)
 	}
-	if err := blocker.ApplyNoexec(ExemptFolders(d)...); err != nil {
+	exempt := ExemptFolders(d)
+	if err := blocker.ApplyNoexec(exempt...); err != nil {
 		log.Printf("daemon: noexec: %v", err)
+	}
+	if n := blocker.CloseNoexecPrograms(exempt); n > 0 {
+		log.Printf("daemon: strict mode closed %d processes run from people's own files", n)
 	}
 }
 

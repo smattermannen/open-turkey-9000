@@ -31,7 +31,6 @@ of their group and a row here; a finished item loses its row.
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
-| B3 | Strict mode holes | §3.8 | device | vm |
 | B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | vm |
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
 | B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | box |
@@ -905,7 +904,33 @@ Script-tested, never by a person. Script what can be into `ci/`.
   CPU. Shutdown: the VM powered off ~5 s into the window; booted during
   it twice, powered off 6 s and 1 s after the daemon started (17-18 s
   after `virsh start`); booted after it, stayed up with autologin.
-- [ ] `B3` Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
+- [x] `B3` Strict mode holes: Built, 2026-11-20, kc9k-vm (Ubuntu 24.04,
+  Cinnamon X11), throwaway block (app `b3app`) timer-locked 4-30 min,
+  strict on, a loop per account copying `true` to its writable folders
+  every 5 s. Before the fix: `unshare -Urm` mounted an exec tmpfs and ran
+  a copy with the AppArmor userns restriction at Mint's 0 (Ubuntu's 1
+  holds it); copies ran from `/run/user/<uid>` and `/var/crash` (all
+  accounts); a `--user` Flatpak (own busybox runtime) started before kept
+  running its `/app` helper (a fresh start was refused: "execvp b3test:
+  Permission denied"); a guest (`guest-account add`, uid 999) kept
+  `b3app` (43 s, others killed each cycle) and the bind hid a logged-in
+  guest's home (root-owned empty folder); an unpacked Electron app
+  (resources/app, no asar) was closed as a browser after 60 s, also with a
+  locked block off; lifting the lock unmounted every guest's home. Fixed:
+  strict sets the restriction to 1 (`unshare: write failed
+  /proc/self/uid_map`, back to 0 after); runtime folders and guest homes
+  noexec (both a guest logged in before and one 80 s into the lockdown);
+  the Flatpak and a `sleep` copy started from `~` before were killed in
+  the first cycle ("closed 3 processes"), a `sleep` copy in `/var/crash`
+  within 4 s; guest and other account's `b3app` killed; the Electron app
+  ran 100 s with no close, a renamed portable LibreWolf still judged a
+  browser; after the lock: both guests' homes mounted and running
+  programs, the exempt folder with no noexec copy left, `/run/user` exec,
+  sudo back. Cinnamon logged in again during the lockdown (lightdm
+  restart) with `/run/user/1000` noexec: panel, Nemo, gnome-terminal
+  fine. Known limit: a short program copied to a world-writable folder outside
+  the noexec ones still runs once; Electron apps in an exempt folder and
+  the restriction (§5).
 - [ ] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock.
 - [ ] `B5` Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
 - [ ] `B6` Websites tab on a real screen. (Address change without load: a
@@ -1170,3 +1195,15 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   decide: build it as decided (it stops only programs that don't look for
   the secret), give the secret to the extension some other way, or drop
   it.
+
+- FOR THE OWNER (B3, 2026-11-20): strict mode now turns on AppArmor's
+  `kernel.apparmor_restrict_unprivileged_userns` while it acts (Ubuntu's
+  default; Mint turns it off), or `unshare -Urm` mounts a tmpfs that runs
+  programs and nothing from `/home` is stopped. Programs with an AppArmor
+  profile (Chrome, LibreWolf, Firefox, Flatpak, Steam, Discord, Slack,
+  VS Code on Mint 22) are unaffected; an Electron or Chromium app without
+  one, run from an exempt folder (an AppImage or unpacked app), aborts
+  ("SUID sandbox helper binary ... not configured correctly") unless
+  started with `--no-sandbox`. To decide: keep it (as on stock Ubuntu),
+  or have KC9K load an AppArmor profile allowing user namespaces for the
+  exempt folders (they may already run anything).

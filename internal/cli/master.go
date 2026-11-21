@@ -89,7 +89,7 @@ var masterCmd = &cobra.Command{
 		if err := blocker.RemoveLockdown(); err != nil {
 			return err
 		}
-		if err := blocker.RemoveNoexec(); err != nil {
+		if err := blocker.RemoveNoexec(enforce.ExemptFolders(database)...); err != nil {
 			return err
 		}
 		if err := blocker.RemoveBootLock(); err != nil {

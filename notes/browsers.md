@@ -14,6 +14,13 @@
   Vivaldi): blocklist, allowlist, wildcards, DoH off.
   `file://` entries (`BlockFiles`, `FilePatterns`) only with tamper
   `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions.
+  URL lists hold at most 1,000 entries (the browsers ignore the rest):
+  `FirefoxPolicyLimit` (WebsiteFilter Block/Exceptions, Firefox and
+  LibreWolf), `ChromiumPolicyLimit` (URLBlocklist/URLAllowlist). Past it,
+  patterns, file URLs and sites past `MaxHostsDomains` first (`capSet`;
+  the allowlist's `*://*/*` always); exceptions cut (blocks more). Sets
+  built once per policy (`setsOf`, also `Empty`): the daemon checks drift
+  every cycle.
 - `extguard.go`: extension mandatory while `enforce.ExtensionRequired` and
   a supported browser is installed; closes browsers whose extension hasn't
   fetched `/rules` with `X-KC9K-Extension` within 60 s (traced via

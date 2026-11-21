@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func TestHugeSiteList(t *testing.T) {
 
 	oldLookup := lookupIPs
 	t.Cleanup(func() { lookupIPs = oldLookup })
-	lookupIPs = func(string) ([]string, []string) { return []string{"192.0.2.1"}, nil }
+	lookupIPs = func(string) ([]string, []string, bool) { return []string{"192.0.2.1"}, nil, false }
 	start = time.Now()
 	resolveAll(domains)
 	first := time.Since(start)
@@ -98,5 +99,94 @@ func TestChromiumPolicyLimit(t *testing.T) {
 	allow := chromiumAllowSet(BrowserPolicy{AllowMode: true, AllowDomains: domains})
 	if len(allow) != ChromiumPolicyLimit {
 		t.Errorf("allowlist %d entries", len(allow))
+	}
+}
+
+// Firefox and LibreWolf take only FirefoxPolicyLimit entries of
+// WebsiteFilter (checked 2026-11-21: of 200,004, the 1,001st on were
+// ignored). With 100,000 sites, Block holds what /etc/hosts can't block
+// first: patterns, file URLs, sites past MaxHostsDomains; at most the
+// limit, the same each time; the allowlist's catch-all always stays.
+func TestFirefoxPolicyLimit(t *testing.T) {
+	domains := make([]string, 100000)
+	for i := range domains {
+		domains[i] = fmt.Sprintf("site%d.example", i)
+	}
+	p := BrowserPolicy{BlockDomains: domains, BlockPatterns: []string{"*casino*"},
+		BlockFiles: []string{"file:///home/me/games/*"}}
+	set := firefoxBlockSet(p)
+	if len(set) != FirefoxPolicyLimit {
+		t.Fatalf("%d entries", len(set))
+	}
+	inHosts := map[string]bool{}
+	for _, d := range hostsDomains(domains) {
+		inHosts[fmt.Sprintf("*://%s/*", d)] = true
+		inHosts[fmt.Sprintf("*://*.%s/*", d)] = true
+	}
+	patterns, _ := translated(p.BlockPatterns)
+	for _, want := range append(patterns, FilePatterns(p.BlockFiles)...) {
+		if !slices.Contains(set, want) {
+			t.Errorf("%s left out", want)
+		}
+	}
+	for _, e := range set {
+		if inHosts[e] {
+			t.Fatalf("%s is in /etc/hosts, yet took a place", e)
+		}
+	}
+	if strings.Join(set, ",") != strings.Join(firefoxBlockSet(p), ",") {
+		t.Error("not the same each time")
+	}
+	// Fewer sites than /etc/hosts holds: they fill the places.
+	if got := firefoxBlockSet(BrowserPolicy{BlockDomains: domains[:5000]}); len(got) != FirefoxPolicyLimit {
+		t.Errorf("5,000 sites: %d entries", len(got))
+	}
+	small := firefoxBlockSet(BrowserPolicy{BlockDomains: domains[:10]})
+	if len(small) != 20 {
+		t.Errorf("a small list was cut: %d", len(small))
+	}
+	many := make([]string, 2*FirefoxPolicyLimit)
+	for i := range many {
+		many[i] = fmt.Sprintf("*casino%d*", i)
+	}
+	all := firefoxBlockSet(BrowserPolicy{AllowMode: true, BlockPatterns: many})
+	if len(all) != FirefoxPolicyLimit || !slices.Contains(all, "*://*/*") {
+		t.Error("the allowlist's catch-all was left out")
+	}
+	allow := firefoxExceptionSet(BrowserPolicy{AllowMode: true, AllowDomains: domains})
+	if len(allow) != FirefoxPolicyLimit {
+		t.Errorf("exceptions %d entries", len(allow))
+	}
+}
+
+// Principle 9: the daemon's drift check builds a policy's sets once, not
+// every cycle; any change to the policy builds them again (a stale set
+// could leave a newly blocked site out).
+func TestPolicySetsFollowThePolicy(t *testing.T) {
+	domains := make([]string, 100000)
+	for i := range domains {
+		domains[i] = fmt.Sprintf("site%d.example", i)
+	}
+	p := BrowserPolicy{BlockDomains: domains}
+	setsOf(p)
+	start := time.Now()
+	setsOf(p)
+	if took := time.Since(start); took > 100*time.Millisecond {
+		t.Errorf("the same policy again took %s", took)
+	}
+	small := BrowserPolicy{BlockDomains: []string{"a.example"}}
+	if got := setsOf(small).ffBlock; !slices.Contains(got, "*://a.example/*") {
+		t.Errorf("first policy: %v", got)
+	}
+	small.BlockDomains[0] = "b.example" // same length, changed in place
+	if got := setsOf(small).ffBlock; !slices.Contains(got, "*://b.example/*") || slices.Contains(got, "*://a.example/*") {
+		t.Errorf("changed in place: %v", got)
+	}
+	small.AllowMode = true
+	if got := setsOf(small).crBlock; !slices.Contains(got, "*") {
+		t.Errorf("allowlist mode: %v", got)
+	}
+	if !setsOf(BrowserPolicy{}).empty {
+		t.Error("an empty policy isn't empty")
 	}
 }

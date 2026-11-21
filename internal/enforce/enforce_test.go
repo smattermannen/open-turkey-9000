@@ -1,6 +1,7 @@
 package enforce
 
 import (
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -326,5 +327,62 @@ func TestExtensionRequiredWhileLocked(t *testing.T) {
 	active, _ = d.GetActiveBlocks()
 	if !ExtensionRequired(d, active) {
 		t.Error("not required while a block is locked")
+	}
+}
+
+// Principle 9: the daemon works out the layer inputs once for the same
+// blocks (100,000 sites took 150 ms every cycle); any change works them out
+// again, an entry changed in place, an action or the file URL setting too.
+func TestInputsKeptForTheSameBlocks(t *testing.T) {
+	t.Cleanup(func() { fileURLsOn.Store(false) })
+	sites := make([]string, 100000)
+	for i := range sites {
+		sites[i] = fmt.Sprintf("site%d.example", i)
+	}
+	big := []db.ActiveBlockDetail{{BlockName: "big", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, sites...)}}}
+	Inputs(big)
+	start := time.Now()
+	hosts, _, _ := Inputs(big)
+	if took := time.Since(start); took > 100*time.Millisecond || len(hosts) != len(sites) {
+		t.Errorf("the same blocks again: %d hosts in %s", len(hosts), took)
+	}
+	hosts[0] = "changed.by.a.caller"
+	if again, _, _ := Inputs(big); again[0] == "changed.by.a.caller" {
+		t.Error("a caller's change reached the kept result")
+	}
+
+	small := []db.ActiveBlockDetail{{BlockName: "b", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, "a.example", "file:///home/me/x")}}}
+	if hosts, _, _ := Inputs(small); !reflect.DeepEqual(hosts, []string{"a.example"}) {
+		t.Fatalf("hosts %v", hosts)
+	}
+	small[0].Lists[0].Entries[0] = "b.example" // changed in place
+	if hosts, _, _ := Inputs(small); !reflect.DeepEqual(hosts, []string{"b.example"}) {
+		t.Errorf("entry changed in place: %v", hosts)
+	}
+	small[0].Lists[0].Actions = []db.ListAction{{Name: db.ActionGreyscale, Distinct: 1, Hits: 1}}
+	if hosts, _, _ := Inputs(small); len(hosts) != 0 {
+		t.Errorf("no block action: %v", hosts)
+	}
+	small[0].Lists[0].Actions = []db.ListAction{{Name: db.ActionBlock, Distinct: 1, Hits: 1}}
+	if _, _, bp := Inputs(small); len(bp.BlockFiles) != 0 {
+		t.Fatalf("files with the setting off: %v", bp.BlockFiles)
+	}
+	small[0].Lists = append(small[0].Lists, exceptionList("Exceptions", db.Where{URL: true}))
+	fileURLsOn.Store(true)
+	if _, _, bp := Inputs(small); !reflect.DeepEqual(bp.BlockFiles, []string{"file:///home/me/x"}) {
+		t.Errorf("file URL setting turned on: %v", bp.BlockFiles)
+	}
+	// The daemon asks for all blocks and for each alone every cycle: each
+	// set is kept.
+	fileURLsOn.Store(false)
+	both := append(append([]db.ActiveBlockDetail{}, big...), small...)
+	for range 2 {
+		start = time.Now()
+		Inputs(both)
+		Inputs(big)
+		Inputs(small)
+	}
+	if took := time.Since(start); took > 100*time.Millisecond {
+		t.Errorf("all blocks, then each alone, again: %s", took)
 	}
 }

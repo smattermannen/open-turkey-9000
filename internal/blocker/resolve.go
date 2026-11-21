@@ -26,6 +26,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -147,21 +148,38 @@ const (
 // /etc/hosts. It returns the first resolver's answer; if none respond, both
 // slices are empty.
 func resolveIPs(domain string) (ipv4 []string, ipv6 []string) {
+	ipv4, ipv6, _ = resolveName(domain)
+	return ipv4, ipv6
+}
+
+// resolveName is resolveIPs, and noName: a server answered that the name
+// doesn't exist.
+func resolveName(domain string) (ipv4 []string, ipv6 []string, noName bool) {
 	for _, server := range dnsServers() {
-		v4 := realAddresses(queryDNS(server, domain, dnsTypeA))
-		v6 := realAddresses(queryDNS(server, domain, dnsTypeAAAA))
+		a, noName := queryDNS(server, domain, dnsTypeA)
+		if noName {
+			// The name doesn't exist: the next server won't know it either.
+			// Huge lists hold many such sites; asking Quad9 too tripled the
+			// lookups and it stopped answering (2026-11-21, desktop).
+			return nil, nil, true
+		}
+		aaaa, _ := queryDNS(server, domain, dnsTypeAAAA)
+		v4, v6 := realAddresses(a), realAddresses(aaaa)
 		if len(v4) > 0 || len(v6) > 0 {
-			return v4, v6
+			return v4, v6, false
 		}
 	}
-	return nil, nil
+	return nil, nil, false
 }
 
 // resolveWorkers is how many lookups resolveAll runs at once.
 const resolveWorkers = 16
 
 // Lookups are kept for a while, so the daemon re-applying the firewall
-// (a list changed, a block started) asks again only for new domains.
+// (a list changed, a block started) asks again only for new domains. A
+// name that doesn't exist is an answer: kept as long as addresses (100,000
+// such sites asked again every 2 minutes kept the daemon looking up for
+// good; 2026-11-21, desktop). No answer at all is asked again soon.
 const (
 	resolveKeep       = 30 * time.Minute
 	resolveKeepFailed = 2 * time.Minute
@@ -174,61 +192,90 @@ var resolveCache = struct {
 
 type resolved struct {
 	v4, v6 []string
+	noName bool
 	until  time.Time
 }
 
-// lookupIPs is resolveIPs; a variable for tests.
-var lookupIPs = resolveIPs
+// lookupIPs is resolveName; a variable for tests.
+var lookupIPs = resolveName
 
 // resolveAll looks up every domain's real addresses, several at once and
 // from the cache where it can, and returns them without duplicates, sorted.
 func resolveAll(domains []string) (ipv4, ipv6 []string) {
-	now := time.Now()
-	results := make([]resolved, len(domains))
-	var todo []int
-	resolveCache.Lock()
+	results, due := fromCache(domains, time.Now())
+	found := lookupAll(due)
 	for i, domain := range domains {
-		if r, ok := resolveCache.entries[domain]; ok && now.Before(r.until) {
+		if r, ok := found[domain]; ok {
 			results[i] = r
-		} else {
-			todo = append(todo, i)
 		}
 	}
-	resolveCache.Unlock()
+	return mergeAddresses(results)
+}
 
+// fromCache returns each domain's last lookup, an expired one too (its
+// addresses stand until it is looked up again), and the domains due for a
+// lookup: never looked up, or expired.
+func fromCache(domains []string, now time.Time) (results []resolved, due []string) {
+	results = make([]resolved, len(domains))
+	resolveCache.Lock()
+	defer resolveCache.Unlock()
+	for i, domain := range domains {
+		r, ok := resolveCache.entries[domain]
+		if ok {
+			results[i] = r
+		}
+		if !ok || !now.Before(r.until) {
+			due = append(due, domain)
+		}
+	}
+	return results, due
+}
+
+// lookupAll looks up domains, resolveWorkers at once, and keeps the answers
+// in the cache. They count from when the last lookup ends, so a long run
+// (100,000 sites) has every answer fresh at its end.
+func lookupAll(domains []string) map[string]resolved {
+	results := make([]resolved, len(domains))
 	jobs := make(chan int)
 	var wg sync.WaitGroup
-	for w := 0; w < min(resolveWorkers, len(todo)); w++ {
+	for w := 0; w < min(resolveWorkers, len(domains)); w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for i := range jobs {
-				v4, v6 := lookupIPs(domains[i])
-				keep := resolveKeep
-				if len(v4)+len(v6) == 0 {
-					keep = resolveKeepFailed
-				}
-				results[i] = resolved{v4: v4, v6: v6, until: time.Now().Add(keep)}
+				results[i].v4, results[i].v6, results[i].noName = lookupIPs(domains[i])
 			}
 		}()
 	}
-	for _, i := range todo {
+	for i := range domains {
 		jobs <- i
 	}
 	close(jobs)
 	wg.Wait()
 
+	now := time.Now()
+	found := make(map[string]resolved, len(domains))
 	resolveCache.Lock()
-	for _, i := range todo {
-		resolveCache.entries[domains[i]] = results[i]
-	}
+	defer resolveCache.Unlock()
 	for domain, r := range resolveCache.entries {
 		if now.After(r.until) {
 			delete(resolveCache.entries, domain)
 		}
 	}
-	resolveCache.Unlock()
+	for i, domain := range domains {
+		r := results[i]
+		r.until = now.Add(resolveKeep)
+		if len(r.v4)+len(r.v6) == 0 && !r.noName {
+			r.until = now.Add(resolveKeepFailed)
+		}
+		resolveCache.entries[domain] = r
+		found[domain] = r
+	}
+	return found
+}
 
+// mergeAddresses returns the lookups' addresses without duplicates, sorted.
+func mergeAddresses(results []resolved) (ipv4, ipv6 []string) {
 	seen4, seen6 := map[string]bool{}, map[string]bool{}
 	for _, r := range results {
 		for _, ip := range r.v4 {
@@ -249,6 +296,65 @@ func resolveAll(domains []string) (ipv4, ipv6 []string) {
 	return ipv4, ipv6
 }
 
+// background is the one lookup run knownAddresses keeps going.
+var background struct {
+	sync.Mutex
+	running bool
+}
+
+// knownAddresses is resolveAll without waiting on the network (principle 9):
+// it returns the addresses looked up so far, and whether every domain was
+// looked up; the rest are looked up in the background, one run at a time
+// (LookupsRunning). 100,000 sites take half an hour or more over a slow
+// network (2026-11-21, desktop): the daemon's cycle and every kc9k command
+// would wait that long.
+func knownAddresses(domains []string) (ipv4, ipv6 []string, complete bool) {
+	results, due := fromCache(domains, time.Now())
+	ipv4, ipv6 = mergeAddresses(results)
+	if len(due) == 0 {
+		return ipv4, ipv6, true
+	}
+	background.Lock()
+	defer background.Unlock()
+	if !background.running {
+		background.running = true
+		go func() {
+			start := time.Now()
+			found := lookupAll(due)
+			named := 0
+			for _, r := range found {
+				if len(r.v4)+len(r.v6) > 0 {
+					named++
+				}
+			}
+			log.Printf("firewall: looked up %d sites in %s, %d with addresses", len(due), time.Since(start).Round(time.Second), named)
+			background.Lock()
+			background.running = false
+			background.Unlock()
+		}()
+	}
+	return ipv4, ipv6, false
+}
+
+// LookupsRunning reports whether knownAddresses' background lookups run.
+func LookupsRunning() bool {
+	background.Lock()
+	defer background.Unlock()
+	return background.running
+}
+
+// ForgetFailedLookups drops the lookups that got no answer, so the next
+// apply asks again (the network is back after monk mode's cut).
+func ForgetFailedLookups() {
+	resolveCache.Lock()
+	defer resolveCache.Unlock()
+	for domain, r := range resolveCache.entries {
+		if len(r.v4)+len(r.v6) == 0 && !r.noName {
+			delete(resolveCache.entries, domain)
+		}
+	}
+}
+
 // realAddresses drops answers that point nowhere or at this computer, as a
 // resolver that reads /etc/hosts would give for a blocked site.
 func realAddresses(ips []string) []string {
@@ -262,33 +368,40 @@ func realAddresses(ips []string) []string {
 }
 
 // queryDNS sends a single UDP DNS query for one record type to one server and
-// returns the addresses found. Any error (timeout, malformed response, etc.)
+// returns the addresses found, and whether the server answered that the name
+// doesn't exist (NXDOMAIN). Any error (timeout, malformed response, etc.)
 // yields an empty slice — resolution is best-effort.
-func queryDNS(server, domain string, qtype uint16) []string {
+func queryDNS(server, domain string, qtype uint16) (ips []string, noName bool) {
 	query, err := buildQuery(domain, qtype)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 
 	conn, err := net.DialTimeout("udp", server, 3*time.Second)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer conn.Close()
 
 	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 
 	if _, err := conn.Write(query); err != nil {
-		return nil
+		return nil, false
 	}
 
 	resp := make([]byte, 1500)
 	n, err := conn.Read(resp)
 	if err != nil || n < 2 || resp[0] != query[0] || resp[1] != query[1] {
-		return nil // no answer, or not the answer to this query
+		return nil, false // no answer, or not the answer to this query
 	}
 
-	return parseResponse(resp[:n], qtype)
+	return parseResponse(resp[:n], qtype), responseNoName(resp[:n])
+}
+
+// responseNoName reports whether a DNS response says the name doesn't exist
+// (response code 3, NXDOMAIN).
+func responseNoName(msg []byte) bool {
+	return len(msg) >= 12 && msg[2]&0x80 != 0 && msg[3]&0x0F == 3
 }
 
 // buildQuery assembles a minimal DNS query packet: a 12-byte header with the

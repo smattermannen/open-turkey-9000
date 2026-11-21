@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -92,6 +93,23 @@ func TestParseResponseA(t *testing.T) {
 	}
 }
 
+// Principle 9: a server's NXDOMAIN ends a lookup (resolveIPs asks no other
+// server); a plain answer doesn't.
+func TestResponseNoName(t *testing.T) {
+	msg := []byte{0x12, 0x34, 0x81, 0x80, 0, 1, 0, 0, 0, 0, 0, 0}
+	if responseNoName(msg) {
+		t.Error("NOERROR read as NXDOMAIN")
+	}
+	msg[3] = 0x83
+	if !responseNoName(msg) {
+		t.Error("NXDOMAIN not read")
+	}
+	msg[2] = 0x01 // a query, not a response
+	if responseNoName(msg) || responseNoName(msg[:4]) {
+		t.Error("a query or a short message read as NXDOMAIN")
+	}
+}
+
 func TestParseResponseTruncatedIsSafe(t *testing.T) {
 	// A deliberately too-short / malformed message must not panic and must
 	// return no addresses.
@@ -159,7 +177,7 @@ func TestResolveAllParallelCachedDeduped(t *testing.T) {
 	running, most := 0, 0
 	old := lookupIPs
 	t.Cleanup(func() { lookupIPs = old; SetDNSChoice("x"); SetDNSChoice("") })
-	lookupIPs = func(domain string) ([]string, []string) {
+	lookupIPs = func(domain string) ([]string, []string, bool) {
 		mu.Lock()
 		calls[domain]++
 		running++
@@ -170,9 +188,9 @@ func TestResolveAllParallelCachedDeduped(t *testing.T) {
 		running--
 		mu.Unlock()
 		if domain == "gone.example" {
-			return nil, nil
+			return nil, nil, false
 		}
-		return []string{"192.0.2.1", "192.0.2." + strconv.Itoa(len(domain))}, []string{"2001:db8::1"}
+		return []string{"192.0.2.1", "192.0.2." + strconv.Itoa(len(domain))}, []string{"2001:db8::1"}, false
 	}
 	SetDNSChoice("fresh") // empties the cache
 	var domains []string
@@ -258,5 +276,79 @@ func TestR_MONK_2_FirewallCutIsRead(t *testing.T) {
 	}
 	if iptablesChainCuts("-N KC9K\n-A KC9K -d 192.0.2.1/32 -j DROP\n") {
 		t.Error("iptablesChainCuts saw a cut in an ordinary chain")
+	}
+}
+
+// Principle 9 (huge lists never slow the computer): the daemon's firewall
+// apply never waits for lookups; they run in the background, one run at a
+// time, and the next apply has their answers.
+func TestPrinciple9_LookupsInBackground(t *testing.T) {
+	var mu sync.Mutex
+	calls := map[string]int{}
+	release := make(chan struct{})
+	old := lookupIPs
+	t.Cleanup(func() {
+		for LookupsRunning() {
+			time.Sleep(time.Millisecond)
+		}
+		lookupIPs = old
+		SetDNSChoice("x")
+		SetDNSChoice("")
+	})
+	lookupIPs = func(domain string) ([]string, []string, bool) {
+		<-release
+		mu.Lock()
+		calls[domain]++
+		mu.Unlock()
+		switch domain {
+		case "gone.example": // no answer
+			return nil, nil, false
+		case "none.example": // no such name
+			return nil, nil, true
+		}
+		return []string{"192.0.2.1"}, nil, false
+	}
+	SetDNSChoice("fresh") // empties the cache
+	domains := []string{"a.example", "gone.example", "none.example"}
+
+	start := time.Now()
+	v4, _, complete := knownAddresses(domains)
+	if complete || len(v4) != 0 || !LookupsRunning() {
+		t.Fatalf("first call: complete %v, %v, running %v", complete, v4, LookupsRunning())
+	}
+	// A second call while the run goes on starts no other run.
+	if _, _, complete := knownAddresses(domains); complete {
+		t.Fatal("complete while the lookups run")
+	}
+	if time.Since(start) > 100*time.Millisecond {
+		t.Errorf("knownAddresses waited for the lookups: %s", time.Since(start))
+	}
+	close(release)
+	for LookupsRunning() {
+		time.Sleep(time.Millisecond)
+	}
+	v4, _, complete = knownAddresses(domains)
+	if !complete || len(v4) != 1 || v4[0] != "192.0.2.1" || LookupsRunning() {
+		t.Errorf("after the run: complete %v, %v, running %v", complete, v4, LookupsRunning())
+	}
+	if calls["a.example"] != 1 || calls["gone.example"] != 1 || calls["none.example"] != 1 {
+		t.Errorf("lookups %v, want one each", calls)
+	}
+	// A name that doesn't exist is kept as long as addresses; no answer is
+	// asked again soon.
+	_, due := fromCache(domains, time.Now().Add(resolveKeepFailed+time.Second))
+	if !slices.Equal(due, []string{"gone.example"}) {
+		t.Errorf("due after %s: %v", resolveKeepFailed, due)
+	}
+	// After monk mode's cut, lookups without an answer are asked again.
+	ForgetFailedLookups()
+	if _, _, complete := knownAddresses(domains); complete {
+		t.Error("a forgotten failed lookup counted as looked up")
+	}
+	for LookupsRunning() {
+		time.Sleep(time.Millisecond)
+	}
+	if calls["gone.example"] != 2 || calls["none.example"] != 1 {
+		t.Errorf("after forgetting: lookups %v", calls)
 	}
 }

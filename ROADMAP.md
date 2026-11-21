@@ -28,7 +28,6 @@ of their group and a row here; a finished item loses its row.
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
-| A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
 | A13 | `install.sh` DB race: fixed; confirm a fresh install in the VM | — | install, db-project | vm |
 | B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
@@ -867,7 +866,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   3–5 ms (`ci/match_test.js`); in Chromium the page was held up at most
   12 ms at a time, 150 ms before (`ci/content_harness_test.js`, which
   fails on the old code). Extension 1.24.0. In LibreWolf: Unchecked.
-- [ ] `A11` **Gigantic URL lists** (principle 9). Extension: done (`kc9kIndex`,
+- [x] `A11` **Gigantic URL lists** (principle 9). Extension: done (`kc9kIndex`,
   timed at 100,000 in `ci/match_test.js`). Firewall: done (nft sets,
   iptables fallback); the CLI no longer fills it (`deferFirewall`), the
   daemon does within a cycle with its 30 min lookup cache, so `start`
@@ -880,8 +879,34 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   blocked, the 1,500th and 50,000th not), so past 1,000 the policy holds
   what /etc/hosts can't block first (patterns, file URLs, sites past its
   cap), at most 1,000 (`ChromiumPolicyLimit`, `TestChromiumPolicyLimit`);
-  an allowlist past 1,000 exceptions blocks the rest in Chrome. Firefox
-  and LibreWolf with 100,000 entries: Unchecked. (M)
+  an allowlist past 1,000 exceptions blocks the rest in Chrome.
+  Built, checked 2026-11-21 (desktop, Firefox 146, LibreWolf 159): block
+  of 100,000 `.invalid` sites (`block import-list`). Found and fixed:
+  every `kc9k` command took 1–4 min (the list join at each open read and
+  deduplicated every entry one by one; now only a name pair's,
+  `TestPrinciple9_OpenWithHugeList`), so the GUI's polls piled up to 430
+  processes; import one transaction per call (100,000 in 10 s); the
+  daemon used half a core for good (each cycle read the entries several
+  times without an index and rebuilt 200,004 policy patterns): now an
+  entries index, `entryCache` (versions set by triggers), `Inputs` and
+  policy sets kept per key, hosts check kept (`TestPrinciple9_EntryCache…`,
+  `TestInputsKeptForTheSameBlocks`, `TestPolicySetsFollowThePolicy`).
+  Firefox and LibreWolf take only the first 1,000 WebsiteFilter entries
+  (200,004 written: the 1,000th blocked, the 1,001st not) and its 7.4 MB
+  slowed LibreWolf's start (6–8.5 s against 3.8–4.2): capped like Chrome
+  (`FirefoxPolicyLimit`, `TestFirefoxPolicyLimit`; 38 KB, the sites just
+  past the hosts cap). Firewall lookups never hold the cycle (background,
+  `ApplyFirewallKnown`); an NXDOMAIN is kept 30 min (at 2 min the daemon
+  looked up for good). Now: `start` 1.5 s, other commands 0.2 s; /etc/hosts
+  20,000 sites; LibreWolf: 1st blocked (policy/hosts, then extension),
+  50,000th and 100,000th by the extension (ready ~10 s after the start, as
+  with 1,500 sites); Firefox (no extension): 1st by hosts, 20,001st–21,000th
+  by policy, a site past both (example.org) dropped by the firewall.
+  Browser memory as without the list (LibreWolf 1.1–1.2 GB, Firefox
+  0.9 GB). Daemon: 4 % of a core (1.5 % without the list), 70–90 MB;
+  13–17 % during the background lookup run after each daemon start
+  (100,000 names: 11 min; the firewall holds those sites only after it).
+  Block removed: policies (sha1 5e3f0e900db3) and /etc/hosts as before. (M)
 - [ ] `A12` **R-LOCK-12 gaps**: manual `kc9k monk` now confirmed (`--yes`), and
   `project import` refuses monk steps/actions without `--no-confirm-ok`
   (`projectMonk`); both in `confirm_test.go`. `block import` the same. The

@@ -48,7 +48,8 @@ func ResolveDBPath() string {
 // We wrap it instead of exposing *sql.DB directly to control which operations
 // are allowed and keep the public interface clean.
 type DB struct {
-	conn *sql.DB
+	conn    *sql.DB
+	entries entryCache // lists' entries by version (getBlockLists)
 }
 
 // Block modes from before website lists, read once by migrateWebLists. An
@@ -455,7 +456,7 @@ func (d *DB) GetBlock(name string) (*BlockDetail, error) {
 		return nil, fmt.Errorf("failed to fetch block '%s': %w", name, err)
 	}
 
-	if detail.Lists, err = getBlockLists(d.conn, detail.ID); err != nil {
+	if detail.Lists, err = cachedBlockLists(d.conn, detail.ID, &d.entries); err != nil {
 		return nil, err
 	}
 
@@ -661,7 +662,7 @@ func (d *DB) GetActiveBlocks() ([]ActiveBlockDetail, error) {
 	// The child lookups below open their own queries, so we must finish reading
 	// (and let the deferred Close run) before issuing them; gather rows first.
 	for i := range activeBlocks {
-		if activeBlocks[i].Lists, err = getBlockLists(d.conn, ids[i]); err != nil {
+		if activeBlocks[i].Lists, err = cachedBlockLists(d.conn, ids[i], &d.entries); err != nil {
 			return nil, err
 		}
 		if activeBlocks[i].Apps, err = d.getBlockApps(ids[i]); err != nil {

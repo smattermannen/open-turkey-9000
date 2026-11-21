@@ -16,7 +16,9 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
+	"sync"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 )
@@ -92,7 +94,8 @@ CREATE TABLE IF NOT EXISTS web_list_actions (
     minutes      INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (list_id, action),
     FOREIGN KEY (list_id) REFERENCES web_lists(id) ON DELETE CASCADE
-);`
+);
+CREATE INDEX IF NOT EXISTS web_list_entries_list ON web_list_entries (list_id);`
 
 // Where holds the places a list looks.
 type Where struct {
@@ -363,26 +366,35 @@ type querier interface {
 }
 
 func getBlockLists(q querier, blockID int) (Lists, error) {
-	rows, err := q.Query(`SELECT id, kind, name, in_url, in_title, in_text, in_ads FROM web_lists
+	return cachedBlockLists(q, blockID, nil)
+}
+
+// cachedBlockLists is getBlockLists, taking entries from cache when they
+// haven't changed.
+func cachedBlockLists(q querier, blockID int, cache *entryCache) (Lists, error) {
+	rows, err := q.Query(`SELECT id, kind, name, in_url, in_title, in_text, in_ads, entries_version FROM web_lists
 		WHERE block_id = ? ORDER BY CASE kind WHEN 'blacklist' THEN 0 ELSE 1 END, id`, blockID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch website lists: %w", err)
 	}
 	var lists Lists
+	var versions []int64
 	for rows.Next() {
 		var l WebList
-		if err := rows.Scan(&l.ID, &l.Kind, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text, &l.Where.Ads); err != nil {
+		var version int64
+		if err := rows.Scan(&l.ID, &l.Kind, &l.Name, &l.Where.URL, &l.Where.Title, &l.Where.Text, &l.Where.Ads, &version); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("failed to read a website list: %w", err)
 		}
 		lists = append(lists, l)
+		versions = append(versions, version)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	for i := range lists {
-		if lists[i].Entries, err = listEntries(q, lists[i].ID); err != nil {
+		if lists[i].Entries, err = cache.entries(q, lists[i].ID, versions[i]); err != nil {
 			return nil, err
 		}
 		if !lists[i].IsExceptions() {
@@ -392,6 +404,80 @@ func getBlockLists(q querier, blockID int) (Lists, error) {
 		}
 	}
 	return lists, nil
+}
+
+// entryCache keeps lists' entries by their entries_version, which triggers
+// set to a new random number whenever a list's entries change, in whatever
+// program (entryVersionTriggers). The daemon reads the active blocks
+// several times a cycle: a 100,000-site list took 100 ms each time
+// (principle 9; 2026-11-21, desktop).
+type entryCache struct {
+	sync.Mutex
+	lists map[int]cachedEntries
+}
+
+type cachedEntries struct {
+	version int64
+	entries []string
+}
+
+// entries returns a list's entries, from the cache when its version is
+// the one cached. A nil cache always reads. Version 0 (not set yet) is
+// never cached.
+func (c *entryCache) entries(q querier, listID int, version int64) ([]string, error) {
+	if c != nil && version != 0 {
+		c.Lock()
+		hit, ok := c.lists[listID]
+		c.Unlock()
+		if ok && hit.version == version {
+			return slices.Clone(hit.entries), nil
+		}
+	}
+	// Read after the version: the entries are at least that new, so a
+	// change in between is read again next time, never missed.
+	entries, err := listEntries(q, listID)
+	if err != nil || c == nil || version == 0 {
+		return entries, err
+	}
+	c.Lock()
+	if c.lists == nil {
+		c.lists = map[int]cachedEntries{}
+	}
+	c.lists[listID] = cachedEntries{version: version, entries: slices.Clone(entries)}
+	c.Unlock()
+	return entries, nil
+}
+
+// entryVersionTriggers keep web_lists.entries_version new: any insert,
+// change or removal of an entry gives its list a new random version, and so
+// does a new list. Random, not counted up: a database put back from a copy
+// never repeats a version the cache holds.
+const entryVersionTriggers = `
+CREATE TRIGGER IF NOT EXISTS web_list_entries_ins AFTER INSERT ON web_list_entries BEGIN
+    UPDATE web_lists SET entries_version = random() WHERE id = NEW.list_id;
+END;
+CREATE TRIGGER IF NOT EXISTS web_list_entries_del AFTER DELETE ON web_list_entries BEGIN
+    UPDATE web_lists SET entries_version = random() WHERE id = OLD.list_id;
+END;
+CREATE TRIGGER IF NOT EXISTS web_list_entries_upd AFTER UPDATE ON web_list_entries BEGIN
+    UPDATE web_lists SET entries_version = random() WHERE id IN (OLD.list_id, NEW.list_id);
+END;
+CREATE TRIGGER IF NOT EXISTS web_lists_new AFTER INSERT ON web_lists BEGIN
+    UPDATE web_lists SET entries_version = random() WHERE id = NEW.id;
+END;`
+
+// migrateEntryVersions adds the triggers and gives lists from before them a
+// version.
+func migrateEntryVersions(conn *sql.DB) error {
+	if _, err := conn.Exec(entryVersionTriggers); err != nil {
+		return fmt.Errorf("entry versions: %w", err)
+	}
+	var unset int
+	if err := conn.QueryRow("SELECT COUNT(*) FROM web_lists WHERE entries_version = 0").Scan(&unset); err != nil || unset == 0 {
+		return err
+	}
+	_, err := conn.Exec("UPDATE web_lists SET entries_version = random() WHERE entries_version = 0")
+	return err
 }
 
 func listEntries(q querier, listID int) ([]string, error) {
@@ -591,18 +677,34 @@ func addListEntries(q querier, listID int, entries []string) error {
 }
 
 // AddListEntries adds entries to a list, skipping ones it has (ignoring case).
+// One transaction: written one by one, 5,000 entries took 215 s on a
+// spinning disk (2026-11-21, desktop), the daemon meanwhile finding the
+// database locked.
 func (d *DB) AddListEntries(listID int, entries []string) error {
-	return addListEntries(d.conn, listID, entries)
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := addListEntries(tx, listID, entries); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-// RemoveListEntries removes entries from a list.
+// RemoveListEntries removes entries from a list, in one transaction.
 func (d *DB) RemoveListEntries(listID int, entries []string) error {
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	for _, e := range entries {
-		if _, err := d.conn.Exec("DELETE FROM web_list_entries WHERE list_id = ? AND entry = ?", listID, e); err != nil {
+		if _, err := tx.Exec("DELETE FROM web_list_entries WHERE list_id = ? AND entry = ?", listID, e); err != nil {
 			return fmt.Errorf("failed to remove %q: %w", e, err)
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // SetListAction turns one of a blacklist's actions on or off. Turning one on

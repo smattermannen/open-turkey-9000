@@ -9,6 +9,12 @@
 - **Enforce** (`internal/enforce/`): active blocks → layer inputs (unioned).
   `Apply` (CLI, on change) and `Tick` (daemon: due old queued edits (`applyDueEditsAt`; nothing queues now), schedule
   reconciliation, drift reapply). Single source of truth.
+  The firewall is filled only by `Tick` (`deferFirewall`), never waiting
+  on lookups (`blocker.ApplyFirewallKnown`): applied again when the
+  background run ends (`firewallLookups`). Waiting held the cycle and the
+  apply lock, so every `kc9k` command, half an hour and more at 5,000
+  unknown sites (2026-11-21, desktop). `Inputs` keeps its last result for
+  the same blocks (`lastInputs`, sha256 of what it reads, `inputsKey`).
 - **Daemon** (`internal/daemon/`): `Tick` every 5 s; foreground-app
   sampling every 5 s; screen relock every 0.5 s during a lock freeze.
 - **Affected users** (`db/users.go`, `cli/blockusers.go`, §3.2):

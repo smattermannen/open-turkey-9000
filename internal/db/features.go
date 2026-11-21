@@ -89,11 +89,15 @@ func upgradeSchema(conn *sql.DB) error {
 		{"clock_state", "anchor_real", "INTEGER NOT NULL DEFAULT 0"},
 		{"clock_state", "anchor_trusted", "INTEGER NOT NULL DEFAULT 0"},
 		{"clock_state", "anchor_rtc", "INTEGER NOT NULL DEFAULT 0"},
+		{"web_lists", "entries_version", "INTEGER NOT NULL DEFAULT 0"}, // principle 9: entryCache
 	}
 	for _, a := range adds {
 		if err := addColumnIfMissing(conn, a.table, a.col, a.def); err != nil {
 			return err
 		}
+	}
+	if err := migrateEntryVersions(conn); err != nil {
+		return err
 	}
 	if err := migrateScheduleLocks(conn); err != nil {
 		return err

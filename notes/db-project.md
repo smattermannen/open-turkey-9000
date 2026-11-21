@@ -18,7 +18,8 @@
   `<db>.setup-lock` (`openlock.go`; waits ≤ 30 s, then unlocked): on a
   fresh install the daemon and `install-librewolf` create the DB at once,
   and busy_timeout doesn't cover a stale-snapshot write or two processes
-  adding one column (`TestFreshDatabaseOpenedByManyAtOnce`).
+  adding one column (`TestFreshDatabaseOpenedByManyAtOnce`). `DB` keeps
+  lists' entries between reads (`entries`; [lists](lists.md), Huge lists).
 
 ## Built behaviour
 

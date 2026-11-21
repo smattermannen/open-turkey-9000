@@ -109,12 +109,14 @@ func findJoinPairs(q querier) (lists, clusters []joinPair, err error) {
 		_ = json.Unmarshal([]byte(raw), &testing)
 	}
 
-	all, err := readJoinables(q, `SELECT id, block_id, kind, name, in_url, in_title, in_text FROM web_lists ORDER BY id`,
-		"SELECT entry FROM web_list_entries WHERE list_id = ?", true)
+	all, err := readJoinables(q, `SELECT id, block_id, kind, name, in_url, in_title, in_text FROM web_lists ORDER BY id`)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, p := range pairUp(all) {
+		if err := readJoinEntries(q, "SELECT entry FROM web_list_entries WHERE list_id = ?", true, &p.url, &p.terms); err != nil {
+			return nil, nil, err
+		}
 		if p.url.kind == p.terms.kind && slices.Equal(p.url.entries, p.terms.entries) &&
 			slices.Equal(p.url.actions, p.terms.actions) &&
 			!slices.Contains(testing, p.url.id) && !slices.Contains(testing, p.terms.id) &&
@@ -123,12 +125,14 @@ func findJoinPairs(q querier) (lists, clusters []joinPair, err error) {
 		}
 	}
 
-	all, err = readJoinables(q, `SELECT id, 0, '', name, in_url, in_title, in_text FROM clusters WHERE phrases = 0 ORDER BY id`,
-		"SELECT entry FROM cluster_entries WHERE cluster_id = ?", false)
+	all, err = readJoinables(q, `SELECT id, 0, '', name, in_url, in_title, in_text FROM clusters WHERE phrases = 0 ORDER BY id`)
 	if err != nil {
 		return nil, nil, err
 	}
 	for _, p := range pairUp(all) {
+		if err := readJoinEntries(q, "SELECT entry FROM cluster_entries WHERE cluster_id = ?", false, &p.url, &p.terms); err != nil {
+			return nil, nil, err
+		}
 		if slices.Equal(p.url.entries, p.terms.entries) && !busyClusters[strings.ToLower(p.terms.name)] {
 			clusters = append(clusters, p)
 		}
@@ -157,44 +161,48 @@ func pairUp(all []joinable) []joinPair {
 	return out
 }
 
-// readJoinables reads lists or clusters with their entries (and, for
-// blacklists, actions).
-func readJoinables(q querier, query, entriesQuery string, withActions bool) ([]joinable, error) {
+// readJoinables reads lists or clusters, without their entries.
+func readJoinables(q querier, query string) ([]joinable, error) {
 	rows, err := q.Query(query)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	var out []joinable
 	for rows.Next() {
 		var j joinable
 		if err := rows.Scan(&j.id, &j.owner, &j.kind, &j.name, &j.where.URL, &j.where.Title, &j.where.Text); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		out = append(out, j)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	for i := range out {
-		entries, err := legacyStrings(q, entriesQuery, out[i].id)
+	return out, rows.Err()
+}
+
+// readJoinEntries reads the entries (lower case, sorted, once each) and, for
+// blacklists, actions of the lists of a pair. Only a pair's: this runs at
+// every open, and reading every list of a 100,000-site block (deduplicated
+// one by one) held every kc9k command up for a minute and more (principle
+// 9; 2026-11-21, desktop).
+func readJoinEntries(q querier, entriesQuery string, withActions bool, js ...*joinable) error {
+	for _, j := range js {
+		entries, err := legacyStrings(q, entriesQuery, j.id)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		for _, e := range entries {
-			if e = strings.ToLower(e); !slices.Contains(out[i].entries, e) {
-				out[i].entries = append(out[i].entries, e)
-			}
+		j.entries = make([]string, len(entries))
+		for i, e := range entries {
+			j.entries[i] = strings.ToLower(e)
 		}
-		slices.Sort(out[i].entries)
-		if withActions && out[i].kind == ListBlacklist {
-			if out[i].actions, err = listActions(q, out[i].id); err != nil {
-				return nil, err
+		slices.Sort(j.entries)
+		j.entries = slices.Compact(j.entries)
+		if withActions && j.kind == ListBlacklist {
+			if j.actions, err = listActions(q, j.id); err != nil {
+				return err
 			}
 		}
 	}
-	return out, nil
+	return nil
 }
 
 // joinBusy returns the lists named by queued edits and the clusters (lower

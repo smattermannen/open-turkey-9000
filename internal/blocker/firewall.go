@@ -99,7 +99,25 @@ func ApplyFirewallCut(domains []string, cut bool) error {
 	if !cut {
 		ipv4, ipv6 = resolveAll(valid)
 	}
+	return applyAddresses(ipv4, ipv6, cut)
+}
 
+// ApplyFirewallKnown is ApplyFirewall without waiting for lookups: it drops
+// the addresses looked up so far and reports whether that was every
+// domain's; the others are looked up in the background (knownAddresses).
+// Apply it again once LookupsRunning is false. The daemon uses it.
+func ApplyFirewallKnown(domains []string) (complete bool, err error) {
+	valid := ValidDomains(domains)
+	if len(valid) == 0 {
+		return true, RemoveFirewall()
+	}
+	ipv4, ipv6, complete := knownAddresses(valid)
+	return complete, applyAddresses(ipv4, ipv6, false)
+}
+
+// applyAddresses fills the firewall with these addresses (and with cut,
+// drops everything but loopback).
+func applyAddresses(ipv4, ipv6 []string, cut bool) error {
 	// nftables first: one set answers for any number of addresses, and a
 	// drop in our own table is final whatever other tables accept. The
 	// iptables chain below is the fallback where nft is missing.

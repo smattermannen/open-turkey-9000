@@ -14,12 +14,14 @@
 package enforce
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -42,7 +44,61 @@ import (
 // read a page before deciding, so those layers would block pages the
 // exceptions spare. Greyscale and no-images only go to the extension (see
 // BuildRules). Apps are blocked whatever the lists do.
+//
+// Results are kept for the same blocks (inputsKey): the daemon asks every
+// cycle, for all blocks and for each alone, and working it out from 100,000
+// sites took 150 ms each time (principle 9; 2026-11-21, desktop).
 func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp blocker.BrowserPolicy) {
+	key := inputsKey(active)
+	keptInputs.Lock()
+	defer keptInputs.Unlock()
+	r, ok := keptInputs.byKey[key]
+	if !ok {
+		r.hosts, r.apps, r.bp = inputs(active)
+		if keptInputs.byKey == nil || len(keptInputs.byKey) >= keptInputsMax {
+			keptInputs.byKey = map[uint64]inputsResult{}
+		}
+		keptInputs.byKey[key] = r
+	}
+	bp = r.bp
+	bp.BlockDomains, bp.BlockPatterns = slices.Clone(bp.BlockDomains), slices.Clone(bp.BlockPatterns)
+	bp.AllowDomains, bp.Exceptions = slices.Clone(bp.AllowDomains), slices.Clone(bp.Exceptions)
+	bp.BlockFiles = slices.Clone(bp.BlockFiles)
+	return slices.Clone(r.hosts), slices.Clone(r.apps), bp
+}
+
+// inputsResult is one result of inputs.
+type inputsResult struct {
+	hosts, apps []string
+	bp          blocker.BrowserPolicy
+}
+
+// keptInputs holds Inputs' results by inputsKey, emptied when it reaches
+// keptInputsMax (a cycle asks for one set per active block and one for
+// them all).
+var keptInputs struct {
+	sync.Mutex
+	byKey map[uint64]inputsResult
+}
+
+const keptInputsMax = 32
+
+// inputsKey sums up everything inputs reads: the file URL setting, and per
+// block whether it is for everyone, its apps and its lists (kind, places,
+// actions, entries).
+func inputsKey(active []db.ActiveBlockDetail) uint64 {
+	lists := [][]string{}
+	for _, b := range active {
+		lists = append(lists, []string{strconv.FormatBool(forEveryone(b))}, b.Apps)
+		for _, l := range b.Lists {
+			lists = append(lists, []string{fmt.Sprintf("%s %+v %+v", l.Kind, l.Where, l.Actions)}, l.Entries)
+		}
+	}
+	return blocker.ListsKey(fileURLsOn.Load(), lists...)
+}
+
+// inputs is Inputs, worked out.
+func inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp blocker.BrowserPolicy) {
 	var blockDomains, hostDomains, patterns, exceptions, appList, files []string
 
 	for _, b := range active {
@@ -425,18 +481,28 @@ func Tick(d *db.DB, now time.Time) error {
 	case monk:
 		// enforceMonk holds the firewall, which drops everything. Whatever
 		// comes after starts afresh: the addresses in it weren't looked up.
-		firewallDomains = firewallCutKey
+		firewallDomains, firewallLookups = firewallCutKey, false
 	case len(hosts) > 0:
 		// The firewall holds resolved IPs, so also reapply when the domain set
 		// changed (otherwise a stopped block's rules would linger).
+		// Lookups run in the background (principle 9): applied with the
+		// addresses known so far, and again once they end.
 		key := strings.Join(hosts, ",")
 		refresh := !firewallRefresh.IsZero() && now.After(firewallRefresh)
-		if !blocker.IsFirewallApplied() || key != firewallDomains || refresh {
-			log.Println("daemon: firewall drifted or domains changed, reapplying")
-			if err := blocker.ApplyFirewall(hosts); err != nil {
+		looked := firewallLookups && !blocker.LookupsRunning()
+		if !blocker.IsFirewallApplied() || key != firewallDomains || refresh || looked {
+			if !looked {
+				log.Println("daemon: firewall drifted or domains changed, reapplying")
+			}
+			if refresh {
+				blocker.ForgetFailedLookups()
+			}
+			complete, err := blocker.ApplyFirewallKnown(hosts)
+			if err != nil {
 				log.Printf("daemon: error applying firewall: %v", err)
 			} else {
 				firewallDomains = key
+				firewallLookups = !complete
 				if refresh {
 					firewallRefresh = time.Time{}
 				}
@@ -444,6 +510,7 @@ func Tick(d *db.DB, now time.Time) error {
 		}
 	default:
 		firewallDomains = ""
+		firewallLookups = false
 		firewallRefresh = time.Time{}
 		if blocker.IsFirewallApplied() {
 			if err := blocker.RemoveFirewall(); err != nil {
@@ -627,6 +694,10 @@ func ScheduleFrozen(d *db.DB, blockName string, now time.Time, lead time.Duratio
 
 // firewallDomains is the domain set the daemon last applied to the firewall.
 var firewallDomains string
+
+// firewallLookups is set while that apply left lookups to the background:
+// the firewall is applied again when they end.
+var firewallLookups bool
 
 // firewallCutKey stands in firewallDomains while monk mode cuts the
 // connection; no domain set equals it.

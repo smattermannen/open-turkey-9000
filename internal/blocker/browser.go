@@ -36,9 +36,11 @@ package blocker
 import (
 	"encoding/json"
 	"fmt"
+	"hash/maphash"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 )
 
 // firefoxPolicyPath is Firefox's shared policy file.
@@ -78,8 +80,12 @@ type BrowserPolicy struct {
 	BlockFiles []string
 }
 
-// empty reports whether the policy would block nothing.
-func (p BrowserPolicy) Empty() bool {
+// Empty reports whether the policy would block nothing (kept with its sets:
+// the daemon asks every cycle).
+func (p BrowserPolicy) Empty() bool { return setsOf(p).empty }
+
+// isEmpty is Empty, worked out.
+func isEmpty(p BrowserPolicy) bool {
 	return !p.AllowMode && len(ValidDomains(p.BlockDomains)) == 0 && len(ValidPatterns(p.BlockPatterns)) == 0 &&
 		len(FilePatterns(p.BlockFiles)) == 0
 }
@@ -102,18 +108,17 @@ func (p BrowserPolicy) Empty() bool {
 // With an empty (nothing-to-block) policy, the files are removed instead of
 // written empty, so an apps-only block leaves no policy files behind.
 func ApplyBrowserPolicies(p BrowserPolicy) error {
-	if p.Empty() {
+	sets := setsOf(p)
+	if sets.empty {
 		return RemoveBrowserPolicies()
 	}
 
-	if err := applyFirefoxPolicy(firefoxBlockSet(p), firefoxExceptionSet(p)); err != nil {
+	if err := applyFirefoxPolicy(sets.ffBlock, sets.ffExceptions); err != nil {
 		return fmt.Errorf("failed to apply Firefox policy: %w", err)
 	}
 
-	block := chromiumBlockSet(p)
-	allow := chromiumAllowSet(p)
 	for _, path := range chromiumPolicyPaths {
-		if err := applyChromiumPolicy(path, block, allow); err != nil {
+		if err := applyChromiumPolicy(path, sets.crBlock, sets.crAllow); err != nil {
 			return fmt.Errorf("failed to apply policy at %s: %w", path, err)
 		}
 	}
@@ -121,19 +126,55 @@ func ApplyBrowserPolicies(p BrowserPolicy) error {
 	return nil
 }
 
+// FirefoxPolicyLimit is how many entries Firefox and LibreWolf take from
+// WebsiteFilter's Block and Exceptions: the rest are ignored (checked
+// 2026-11-21 on the desktop, Firefox 146 and LibreWolf 159, 200,004
+// entries: the 1,000th blocked, the 1,001st and on not).
+const FirefoxPolicyLimit = 1000
+
 // firefoxBlockSet builds Firefox's WebsiteFilter.Block array for a policy.
+// Past FirefoxPolicyLimit, as chromiumBlockSet: patterns and file URLs
+// first, then sites past MaxHostsDomains, then the sites in /etc/hosts.
+// Writing more only slowed the browsers' start and the daemon's drift check
+// (100,000 sites: a 7.4 MB file, half a core in the daemon).
 func firefoxBlockSet(p BrowserPolicy) []string {
-	if p.AllowMode {
-		// Block all http/https URLs; allowed sites go in Exceptions.
-		ffPatterns, _ := translated(p.BlockPatterns)
-		return dedupSort(append(append([]string{"*://*/*"}, ffPatterns...), FilePatterns(p.BlockFiles)...))
-	}
 	ffPatterns, _ := translated(p.BlockPatterns)
-	return dedupSort(append(append(firefoxPatterns(ValidDomains(p.BlockDomains)), ffPatterns...), FilePatterns(p.BlockFiles)...))
+	first := append(ffPatterns, FilePatterns(p.BlockFiles)...)
+	if p.AllowMode {
+		// Block all http/https URLs; allowed sites go in Exceptions. The
+		// catch-all stays whatever the limit leaves out.
+		return capSet([]string{"*://*/*"}, first, FirefoxPolicyLimit)
+	}
+	valid := ValidDomains(p.BlockDomains)
+	inHosts := min(len(valid), MaxHostsDomains)
+	// Each site takes two patterns: patterns for twice the room left are
+	// enough, so a huge list isn't turned into patterns in full.
+	room := 2 * FirefoxPolicyLimit
+	outside := valid[inHosts:]
+	outside = outside[:min(len(outside), room)]
+	inside := valid[:min(inHosts, max(0, room-len(outside)))]
+	return capSet(nil, append(append(first, firefoxPatterns(outside)...), firefoxPatterns(inside)...), FirefoxPolicyLimit)
 }
 
-// firefoxExceptionSet builds Firefox's WebsiteFilter.Exceptions array (only
-// meaningful in allowlist mode).
+// capSet returns keep and then entries, without duplicates, at most limit
+// of them (keep always), sorted.
+func capSet(keep, entries []string, limit int) []string {
+	seen := make(map[string]bool, len(keep)+len(entries))
+	out := make([]string, 0, min(limit, len(keep)+len(entries)))
+	for i, e := range append(append([]string{}, keep...), entries...) {
+		if seen[e] || (i >= len(keep) && len(out) >= limit) {
+			continue
+		}
+		seen[e] = true
+		out = append(out, e)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// firefoxExceptionSet builds Firefox's WebsiteFilter.Exceptions array, at
+// most FirefoxPolicyLimit entries: an exception left out blocks more, never
+// less.
 func firefoxExceptionSet(p BrowserPolicy) []string {
 	set, _ := translated(p.Exceptions)
 	if p.AllowMode {
@@ -142,7 +183,11 @@ func firefoxExceptionSet(p BrowserPolicy) []string {
 	if len(set) == 0 {
 		return nil
 	}
-	return dedupSort(set)
+	set = dedupSort(set)
+	if len(set) > FirefoxPolicyLimit {
+		set = set[:FirefoxPolicyLimit]
+	}
+	return set
 }
 
 // ChromiumPolicyLimit is how many entries Chrome and Chromium take from
@@ -213,6 +258,72 @@ func dedupSort(in []string) []string {
 	return out
 }
 
+// policySets are the entries a policy writes for each browser.
+type policySets struct {
+	empty                 bool
+	ffBlock, ffExceptions []string
+	crBlock, crAllow      []string
+}
+
+// lastSets keeps the sets of the last policy: the daemon checks the same
+// policy every cycle, and building them from 100,000 sites took half a
+// second each time (principle 9).
+var lastSets struct {
+	sync.Mutex
+	key  uint64
+	sets *policySets
+}
+
+// keySeed seeds ListsKey: random per run, so no list can be made to sum to
+// another's key.
+var keySeed = maphash.MakeSeed()
+
+// ListsKey sums up a flag and lists of strings, each list and string with
+// its length before it, for keeping work done for the same lists. sha256
+// took 50 ms a cycle at 100,000 sites on the desktop (no SHA instructions).
+func ListsKey(flag bool, lists ...[]string) uint64 {
+	var h maphash.Hash
+	h.SetSeed(keySeed)
+	var n [8]byte
+	put := func(v int) {
+		for i := range n {
+			n[i] = byte(v >> (8 * i))
+		}
+		h.Write(n[:])
+	}
+	if flag {
+		put(1)
+	} else {
+		put(0)
+	}
+	for _, list := range lists {
+		put(len(list))
+		for _, s := range list {
+			put(len(s))
+			h.WriteString(s)
+		}
+	}
+	return h.Sum64()
+}
+
+// setsOf returns a policy's sets, built once per policy.
+func setsOf(p BrowserPolicy) policySets {
+	key := ListsKey(p.AllowMode, p.BlockDomains, p.BlockPatterns, p.AllowDomains, p.Exceptions, p.BlockFiles)
+
+	lastSets.Lock()
+	defer lastSets.Unlock()
+	if lastSets.sets != nil && lastSets.key == key {
+		return *lastSets.sets
+	}
+	sets := policySets{empty: isEmpty(p)}
+	if !sets.empty {
+		sets.ffBlock, sets.ffExceptions = firefoxBlockSet(p), firefoxExceptionSet(p)
+		sets.crBlock, sets.crAllow = chromiumBlockSet(p), chromiumAllowSet(p)
+	}
+	lastSets.key, lastSets.sets = key, &sets
+	return sets
+}
+
 // RemoveBrowserPolicies removes our blocking policies from every browser.
 //
 // Firefox's file may hold other policies, so we strip only our keys (and
@@ -235,24 +346,20 @@ func RemoveBrowserPolicies() error {
 // tampered blocklist, or a missing DoH-off setting makes it return false so the
 // daemon reapplies. With no domains, "applied" means our policies are absent.
 func IsBrowserPoliciesApplied(p BrowserPolicy) bool {
-	if p.Empty() {
+	sets := setsOf(p)
+	if sets.empty {
 		return !BrowserPoliciesPresent()
 	}
 
-	ffBlock := firefoxBlockSet(p)
-	ffExceptions := firefoxExceptionSet(p)
-	crBlock := chromiumBlockSet(p)
-	crAllow := chromiumAllowSet(p)
-
 	if dirExists(filepath.Dir(firefoxPolicyPath)) {
-		if !checkFirefoxPolicy(ffBlock, ffExceptions) {
+		if !checkFirefoxPolicy(sets.ffBlock, sets.ffExceptions) {
 			return false
 		}
 	}
 
 	for _, path := range chromiumPolicyPaths {
 		if dirExists(filepath.Dir(path)) {
-			if !checkChromiumPolicy(path, crBlock, crAllow) {
+			if !checkChromiumPolicy(path, sets.crBlock, sets.crAllow) {
 				return false
 			}
 		}

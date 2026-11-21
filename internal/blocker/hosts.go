@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 // hostsPath is the path of the Linux hosts file.
@@ -187,7 +188,7 @@ func HostsSectionPresent() bool {
 // "0.0.0.0 facebook.com" to point at a real IP), it returns false so the
 // daemon reapplies.
 func IsHostsApplied(domains []string) bool {
-	valid := hostsDomains(domains)
+	valid, expected := expectedHosts(domains)
 	if len(valid) == 0 {
 		// No domains to enforce: "applied" means our section is absent.
 		return !HostsSectionPresent()
@@ -210,15 +211,6 @@ func IsHostsApplied(domains []string) bool {
 	// count for "facebook.com" and a changed address is caught) and none
 	// extra (a domain whose block was turned off must not linger). A set,
 	// so a huge list is checked in one pass (principle 9).
-	expected := map[string]bool{}
-	for _, domain := range valid {
-		expected["0.0.0.0 "+domain] = true
-		if strings.HasPrefix(domain, "www.") {
-			expected["0.0.0.0 "+strings.TrimPrefix(domain, "www.")] = true
-		} else {
-			expected["0.0.0.0 www."+domain] = true
-		}
-	}
 	seen := map[string]bool{}
 	for _, line := range strings.Split(extractKC9KSection(text), "\n") {
 		if line = strings.TrimSpace(line); line == "" {
@@ -236,8 +228,8 @@ func IsHostsApplied(domains []string) bool {
 // computer reads the file line by line: 100,000 sites cost each lookup about
 // 15 ms on the test laptop, 20,000 about 3 ms (principle 9: huge lists
 // never slow the computer). Sites past the cap are still blocked by the
-// extension and the firewall, by Firefox's and LibreWolf's policy, and by
-// Chrome's as far as its ChromiumPolicyLimit entries go (they go to these
+// extension and the firewall, and by the browsers' policies as far as their
+// FirefoxPolicyLimit and ChromiumPolicyLimit entries go (they go to these
 // sites first).
 const MaxHostsDomains = 20000
 
@@ -249,6 +241,40 @@ func hostsDomains(domains []string) []string {
 		valid = valid[:MaxHostsDomains]
 	}
 	return valid
+}
+
+// lastHosts keeps expectedHosts' last answer: the daemon checks the same
+// sites every cycle, and sorting 100,000 took 60 ms each time (principle 9).
+var lastHosts struct {
+	sync.Mutex
+	key      uint64
+	set      bool
+	valid    []string
+	expected map[string]bool
+}
+
+// expectedHosts returns hostsDomains(domains) and the lines the section
+// must hold for them, worked out once for the same domains. Callers only
+// read them.
+func expectedHosts(domains []string) ([]string, map[string]bool) {
+	key := ListsKey(false, domains)
+	lastHosts.Lock()
+	defer lastHosts.Unlock()
+	if lastHosts.set && lastHosts.key == key {
+		return lastHosts.valid, lastHosts.expected
+	}
+	valid := hostsDomains(domains)
+	expected := make(map[string]bool, 2*len(valid))
+	for _, domain := range valid {
+		expected["0.0.0.0 "+domain] = true
+		if strings.HasPrefix(domain, "www.") {
+			expected["0.0.0.0 "+strings.TrimPrefix(domain, "www.")] = true
+		} else {
+			expected["0.0.0.0 www."+domain] = true
+		}
+	}
+	lastHosts.key, lastHosts.set, lastHosts.valid, lastHosts.expected = key, true, valid, expected
+	return valid, expected
 }
 
 // containsLine reports whether text has a line equal to want (ignoring

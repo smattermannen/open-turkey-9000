@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -634,5 +635,156 @@ func TestWordsListRenamed(t *testing.T) {
 	both, _ := d.GetBlock("both")
 	if _, ok := both.Lists.Find("Page words"); !ok {
 		t.Error("renamed onto a list the block already had")
+	}
+}
+
+// Principle 9 (huge lists never slow the computer): every kc9k command opens
+// the database, and the open looks for split lists to join. With a
+// 100,000-site list it read and deduplicated every entry one by one: over a
+// minute per command (2026-11-21, desktop). Now only a pair's entries are
+// read; a pair of huge lists still joins.
+func TestPrinciple9_OpenWithHugeList(t *testing.T) {
+	d, path := openTest(t)
+	if err := d.CreateBlock("big"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := d.GetBlock("big")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sites := make([]string, 100000)
+	for i := range sites {
+		sites[i] = fmt.Sprintf("site%d.example", i)
+	}
+	if err := d.AddListEntries(b.Lists[0].ID, sites); err != nil {
+		t.Fatal(err)
+	}
+	// A split pair of 20,000 entries each, in a different order and case.
+	url, err := d.CreateList("big", ListBlacklist, "Pair", Where{URL: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	terms, err := d.CreateList("big", ListBlacklist, "Pair terms", Where{Text: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair := sites[:20000]
+	upper := make([]string, len(pair))
+	for i, s := range pair {
+		upper[len(pair)-1-i] = strings.ToUpper(s)
+	}
+	if err := d.AddListEntries(url, pair); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddListEntries(terms, upper); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+
+	start := time.Now()
+	d2, err := OpenDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d2.Close()
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("opening took %s", took)
+	}
+	if _, err := d2.GetList(terms); err == nil {
+		t.Error("the pair of 20,000 entries wasn't joined")
+	}
+	start = time.Now()
+	d3, err := OpenDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d3.Close()
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("opening again took %s", took)
+	}
+}
+
+// Principle 9: the daemon keeps lists' entries between reads (entryCache),
+// and a change written by another program (the CLI) is seen at the next
+// read: added, removed, a list removed and another made.
+func TestPrinciple9_EntryCacheFollowsChanges(t *testing.T) {
+	daemon, path := openTest(t)
+	cli, err := OpenDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cli.Close()
+	if err := cli.CreateBlock("b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cli.ActivateBlock("b", false, 0, 0, false); err != nil {
+		t.Fatal(err)
+	}
+	entries := func() []string {
+		t.Helper()
+		active, err := daemon.GetActiveBlocks()
+		if err != nil || len(active) != 1 {
+			t.Fatalf("%v %v", active, err)
+		}
+		var out []string
+		for _, l := range active[0].Lists {
+			if !l.IsExceptions() {
+				out = append(out, l.Entries...)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	b, _ := cli.GetBlock("b")
+	blocked := b.Lists[0].ID
+	if err := cli.AddListEntries(blocked, []string{"a.example", "b.example"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := entries(); !slices.Equal(got, []string{"a.example", "b.example"}) {
+		t.Fatalf("first read %v", got)
+	}
+	got := entries()
+	got[0] = "changed by a caller" // a caller's change stays its own
+	if got := entries(); !slices.Equal(got, []string{"a.example", "b.example"}) {
+		t.Fatalf("cached read %v", got)
+	}
+	if err := cli.AddListEntries(blocked, []string{"c.example"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := entries(); !slices.Contains(got, "c.example") {
+		t.Errorf("added: %v", got)
+	}
+	if err := cli.RemoveListEntries(blocked, []string{"a.example"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := entries(); slices.Contains(got, "a.example") {
+		t.Errorf("removed: %v", got)
+	}
+	extra, err := cli.CreateList("b", ListBlacklist, "Extra", Where{URL: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cli.AddListEntries(extra, []string{"e.example"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := entries(); !slices.Contains(got, "e.example") {
+		t.Errorf("new list: %v", got)
+	}
+	if err := cli.DeleteList(extra); err != nil {
+		t.Fatal(err)
+	}
+	other, err := cli.CreateList("b", ListBlacklist, "Other", Where{URL: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cli.AddListEntries(other, []string{"d.example"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := entries(); !slices.Equal(got, []string{"b.example", "c.example", "d.example"}) {
+		t.Errorf("list removed, another made: %v", got)
+	}
+	var unset int
+	if err := daemon.conn.QueryRow("SELECT COUNT(*) FROM web_lists WHERE entries_version = 0").Scan(&unset); err != nil || unset != 0 {
+		t.Errorf("%d lists without a version (%v)", unset, err)
 	}
 }

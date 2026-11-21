@@ -52,9 +52,20 @@
   into phrases, sites (hosts files, adblock `||x^` read as sites), rendered
   terms, unusable; `list import`, `block import-list`, `phrase-set import`,
   `cluster import` take what fits and name the rest (`noteLeftOut`).
-  Hidden `kc9k list read FILE` (JSON) lets the GUI's one Import route a
+  `AddListEntries`/`RemoveListEntries` write in one transaction (one
+  commit per entry: 5,000 took 215 s on the desktop's disk; 100,000 now
+  10 s). Hidden `kc9k list read FILE` (JSON) lets the GUI's one Import route a
   file (`import_into_phrase_set`, `choose_phrase_set`;
   `ci/gui_import_smoke.py`).
+- **Huge lists** (principle 9): entries indexed by list
+  (`web_list_entries_list`). `GetBlock`/`GetActiveBlocks` take a list's
+  entries from `DB.entries` (`entryCache`) while its
+  `web_lists.entries_version` is the one cached: triggers give a list a
+  new random version on any entry insert, change or removal and when it
+  is made (`entryVersionTriggers`, `migrateEntryVersions`), so a change by
+  any program is read again. The join at open (`listjoin.go`) reads only
+  the entries of a name pair (`readJoinEntries`): reading all, deduplicated
+  one by one, held every command over a minute at 100,000.
 - **List and phrase set presets** (clusters in the code: `db/clusters.go`,
   `cli/clusters.go`): lists outside blocks,
   never enforced. `cluster copy` goes through `listAdd` (gating applies).

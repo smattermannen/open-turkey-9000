@@ -50,7 +50,7 @@ of their group and a row here; a finished item loses its row.
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | E1 | Projects: presets of every type as a choice (owner 2026-11-20) | §3.13 | db-project, lists | agent |
 | E2 | Words to avoid still shown: template, cluster (GUI, CLI names) | §3.14, §4.12 | gui, lists | agent |
-| D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
+| D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
@@ -108,9 +108,15 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   - **D3** Instagram: social setting `instagram:following-only`: `/`
     goes to `/?variant=following`, Instagram's feed of accounts followed
     (no suggested posts). Built 2026-11-20 (`social.js` redirects take a
-    `query` that stops them; `ci/match_test.js`). Left (box): on the real
-    site, incl. clicking the logo; nothing hides suggested units yet (CSS
-    can't match their text).
+    `query` that stops them; `ci/match_test.js`). Real site, 2026-11-20,
+    desktop, LibreWolf (headless, own profile, logged out; scratch block):
+    `/` → `/?variant=following` at once, no reload in the next 15 s;
+    `/?hl=sv` → `/?variant=following`; `/?variant=following` and
+    `/instagram/` left alone; clicking the logo on `/instagram/` → `/`,
+    then `/?variant=following` 3 s later, then still; `history.pushState`
+    to `/` → `/?variant=following` within 1 s; no loop. Left (owner,
+    Unchecked): logged in, the feed shows only accounts followed; nothing
+    hides suggested units (CSS can't match their text).
   - [x] **D4** ClipEditor: a small circle in the middle of each segment
     between two points; left-drag it to change the bend (`tension`).
     Was: the whole curve was the drag target (`on_curve`, gone).

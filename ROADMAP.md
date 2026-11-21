@@ -49,7 +49,7 @@ of their group and a row here; a finished item loses its row.
 | B16 | New list dialog on a real screen | §3.2 | gui, lists | box |
 | B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
-| 2.2 | Ad trigger: browser test; the new industry domains in real ad requests (Unchecked) | §3.9 | actions, extension | box |
+| 2.2 | Ad trigger: browser test; industry domains checked against real ad requests 2026-11-21 (gambling and dating: none seen live) | §3.9 | actions, extension | box |
 | 2.4 | SafeSearch per engine: built; checked in Chrome (2026-11-21); in LibreWolf (Unchecked) | §4.10 | browsers | box |
 | 2.6 | Factory reset protection: built; PAM root guard: run `ci/strict_pam_vm_test.sh host kc9k-vm` (written 2026-11-21, never run) (vm); firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
 | 2.7 | Hardening: the text lock's window on a real desktop (Unchecked); rules server secret dropped (§5, 2026-11-21) | R-LOCK-5, §4.6 | browsers, locks | box |
@@ -987,9 +987,33 @@ Only items not simply Built.
   (`cli/projectcircadian.go`; import only where none is set).
 - **2.2 Ad trigger** (M): built (scope `ads`). Industry lists grown
   2026-11-20 (adult: TrafficHaus, TrafficShop, ClickAdilla; crypto: Mellow
-  Ads, Blockchain-Ads, HypeLab; `TestAdIndustries`); networks named in
-  public ad-network roundups, domains not checked against live ad
-  requests: Unchecked. Left: a browser test (`ci/extras_test.py`, box).
+  Ads, Blockchain-Ads, HypeLab; `TestAdIndustries`). Checked against real
+  ad requests 2026-11-21 (cloud container, Chrome 158.0.8127.36; SPEC §6
+  *(By Opus)*): every domain against EasyList (with its ad-server and
+  adult lists), AdGuard DNS, Peter Lowe's and StevenBlack's lists, and a
+  crawl of 60 real pages (crypto, gambling and adult publishers, the last
+  also where dating ads run; third-party request hosts only, matched as
+  `kc9kAdHost` does). Seen in
+  real pages' requests: ExoClick (`ads.exoclick.com`, `a.magsrv.com`,
+  `a.pemsrv.com`, `a.orbsrv.com`), TrafficStars (`cdn.tsyndicate.com`),
+  TwinRed (`twinrdengine.com`), `sexad.net`, `adspector.io`, Coinzilla
+  (`cdn.coinzilla.com`, `coinzillatag.com`, `czilladx.com`). Added the
+  serving domains seen and listed (`pemsrv.com`, `orbsrv.com`,
+  `twinrdengine.com`, `sexad.net`, `adspector.io`, `coinzillatag.com`,
+  `czilladx.com`; `TestAdIndustriesSeenLive`). Removed what no list names
+  and no page loaded: affiliate platforms whose tracking runs on the
+  operator's own domains (`income-access.com`, `cellxpert.com`,
+  `referon.com`, `raventrack.com`, `crakrevenue.com`), a game maker
+  (`playtech.com`), `affiliatehub.com` (doesn't resolve),
+  `quintessence.media`, `gamblingads.com`, `betpartners.com`,
+  `adex.network`, `datingpartners.com`, `datingfactory.net`. Gambling and
+  dating keep only list-named domains (`netrefer.com`, `myaffiliates.com`,
+  `gambling-affiliation.com`; `adultfriendfinder.com`, `sexsearchcom.com`):
+  no page in the crawl loaded them. Gambling sites' own ads came through
+  general exchanges (Google, Xandr, Flashtalking, Bannerflow), which no
+  industry can name. Many adult and some crypto sites showed an age or bot
+  check to the container and loaded nothing. Left: a browser test
+  (`ci/extras_test.py`, box).
 - **2.4 SafeSearch** (S): a lock per engine built 2026-11-20 (SPEC §6
   2026-11-18): four browser settings, the old one and its lock moved to
   each (`TestMigrateSafeSearch`, `TestSafeSearchPerEngine`,

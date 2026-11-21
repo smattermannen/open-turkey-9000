@@ -20,7 +20,9 @@
 - **Ad trigger** (§3.9, `db/adnetworks.go`): scope `ads` (`Where.Ads`,
   `in_ads`; not exception lists or phrase sets); `WebList.AdNetworks`
   expands industries (`AdIndustries`: adult, gambling, crypto, dating;
-  `TestAdIndustries`: plain domains, one industry each); rules `ads`; background `noteAdRequest` →
+  `TestAdIndustries`: plain domains, one industry each; only domains ad
+  filter lists name or real pages loaded, the ones seen live in
+  `TestAdIndustriesSeenLive`); rules `ads`; background `noteAdRequest` →
   `kc9kAdMatches` → `pageHit`, once per page and list (`adSeen`); address
   and URL-term exceptions spare the page. A list whose block has
   exceptions by title or text (`kc9kAdsByPage`) is left to the page: the

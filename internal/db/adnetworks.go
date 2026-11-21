@@ -11,19 +11,24 @@ import (
 	"github.com/smattermannen/kc9k/internal/blocker"
 )
 
-// AdIndustries are ad networks that serve mostly one industry's ads.
+// AdIndustries are ad networks that serve mostly one industry's ads: the
+// domains their ad requests go to (a page's requests to a subdomain count).
+// Checked 2026-11-21: each is named as an ad host by EasyList, AdGuard DNS,
+// Peter Lowe's or StevenBlack's list, or was seen in a real page's requests
+// (coinzilla.com); those seen live are in TestAdIndustriesSeenLive. Left out:
+// affiliate platforms whose tracking runs on the operator's own domains
+// (Income Access, Cellxpert, Referon, RavenTrack, CrakRevenue), a game maker
+// (Playtech), and domains no list names and no page loaded.
 var AdIndustries = map[string][]string{
 	"adult": {"exoclick.com", "exosrv.com", "trafficjunky.net", "trafficjunky.com", "juicyads.com",
 		"ero-advertising.com", "adxpansion.com", "plugrush.com", "trafficstars.com", "tsyndicate.com",
-		"trafficfactory.biz", "adspyglass.com", "crakrevenue.com", "realsrv.com", "magsrv.com",
-		"twinrdsrv.com", "adsco.re", "clickadu.com", "hilltopads.net", "tubecorporate.com",
-		"traffichaus.com", "trafficshop.com", "clickadilla.com"},
-	"gambling": {"income-access.com", "netrefer.com", "myaffiliates.com", "affiliatehub.com",
-		"cellxpert.com", "referon.com", "raventrack.com", "quintessence.media", "gamblingads.com",
-		"betpartners.com", "playtech.com", "gambling-affiliation.com"},
-	"crypto": {"coinzilla.com", "coinzilla.io", "bitmedia.io", "a-ads.com", "cointraffic.io",
-		"adshares.net", "adex.network", "mellowads.com", "blockchain-ads.com", "hypelab.com"},
-	"dating": {"datingpartners.com", "adultfriendfinder.com", "sexsearchcom.com", "datingfactory.net"},
+		"trafficfactory.biz", "adspyglass.com", "realsrv.com", "magsrv.com", "pemsrv.com", "orbsrv.com",
+		"twinrdsrv.com", "twinrdengine.com", "adsco.re", "clickadu.com", "hilltopads.net", "tubecorporate.com",
+		"traffichaus.com", "trafficshop.com", "clickadilla.com", "sexad.net", "adspector.io"},
+	"gambling": {"netrefer.com", "myaffiliates.com", "gambling-affiliation.com"},
+	"crypto": {"coinzilla.com", "coinzilla.io", "coinzillatag.com", "czilladx.com", "bitmedia.io", "a-ads.com",
+		"cointraffic.io", "adshares.net", "mellowads.com", "blockchain-ads.com", "hypelab.com"},
+	"dating": {"adultfriendfinder.com", "sexsearchcom.com"},
 }
 
 // AdIndustryNames lists the industries, sorted.

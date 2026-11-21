@@ -1,6 +1,8 @@
 package db
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -25,5 +27,24 @@ func TestAdIndustries(t *testing.T) {
 	got := l.AdNetworks()
 	if len(got) != len(AdIndustries["crypto"])+1 {
 		t.Errorf("crypto plus one network = %v", got)
+	}
+}
+
+// §3.9: the ad hosts real pages loaded (2026-11-21, Chrome, ROADMAP 2.2)
+// are their industry's networks.
+func TestAdIndustriesSeenLive(t *testing.T) {
+	seen := map[string][]string{
+		"adult": {"ads.exoclick.com", "a.magsrv.com", "s.magsrv.com", "a.pemsrv.com", "a.orbsrv.com",
+			"cdn.tsyndicate.com", "ad.twinrdengine.com", "as.sexad.net", "a.adspector.io"},
+		"crypto": {"cdn.coinzilla.com", "coinzillatag.com", "request-global.czilladx.com"},
+	}
+	for industry, hosts := range seen {
+		for _, host := range hosts {
+			if !slices.ContainsFunc(AdIndustries[industry], func(d string) bool {
+				return host == d || strings.HasSuffix(host, "."+d)
+			}) {
+				t.Errorf("%s: %s is no network of it", industry, host)
+			}
+		}
 	}
 }

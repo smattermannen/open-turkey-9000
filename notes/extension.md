@@ -91,7 +91,10 @@ Not fixed by `SPEC.md`; the code is the truth.
   playlist panel.
 - **Toolbar button**: time left (allowance, break, schedule within 2 h); red
   in the last 5 min; `!` when the daemon is unreachable; popup lists covering
-  blocks and adds the site to Blocked.
+  blocks and adds the site to Blocked. The popup sends its own window's
+  front tab (`popupTab`; a non-web tab: the background's `frontTab`): in
+  Chrome the window isn't the focused one while the panel is open. Test:
+  `node ci/popup_background_test.js`.
 - **Workarounds**: proxied addresses in `?url=`, base64, or after a slash;
   searches for an address don't count. Front-ends: Invidious, Piped, Nitter,
   Redlib, ProxiTok….

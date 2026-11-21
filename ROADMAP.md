@@ -35,7 +35,7 @@ of their group and a row here; a finished item loses its row.
 | B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
 | B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
-| B12 | Chrome: popup, extension can't be removed | §3.13 | browsers | box |
+| B12 | Chrome: a person opens the popup and tries to remove the extension (synthetic checked 2026-11-20) | §3.13 | browsers | owner |
 | B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
 | B14 | Monk mode live: run `ci/monk_live_test.sh host` (written, never run), reboot mid-way | R-MONK-2 | device | vm |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
@@ -1055,9 +1055,22 @@ Script-tested, never by a person. Script what can be into `ci/`.
 - [ ] `B11` Social media settings beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
 - [ ] `B12` Chrome on the laptop. Checked 2026-11-15: the extension checks in from
   Chrome and Chromium, both show the block page; the policy force-installs
-  and pins it, turns off incognito, guest and developer mode. Left (needs
-  a person): the popup, and that the extension really can't be removed in
-  the Extensions page.
+  and pins it, turns off incognito, guest and developer mode. 2026-11-20,
+  desktop (Google Chrome 158, fresh profile on :0 driven over CDP, xdotool
+  clicks): in 3 s the extension runs; `chrome://policy` all OK; Extensions
+  page: "Installed by enterprise policy", on/off switch greyed, no Remove
+  (card and details), a click on the switch leaves it on;
+  `management.setEnabled(false)` and `management.uninstall` from that page:
+  "cannot be modified by user"; unpinning ignored; the button's right-click
+  menu: "Installed/Pinned by your administrator", no Remove. Popup: a click
+  on the button over example.com showed "Nothing to show for this page."
+  (Chrome's window isn't the focused one while its panel is open, and the
+  background's front tab asks for a focused window). Fixed in 1.27.6: the
+  popup sends its own window's front tab (`popupTab`; `node
+  ci/popup_background_test.js`, fails before); then Chrome and LibreWolf
+  show "example.com", "No block covers this site right now." and the add
+  menu. Left (owner): a person clicks the button and tries to remove the
+  extension.
 - [ ] `B13` Block unsupported browsers (`kc9k tamper unsupported-browsers`).
   Checked 2026-11-15: Firefox is closed within ~2 s with the reason logged;
   LibreWolf with the extension stays (browser_test); `kc9k browsers install

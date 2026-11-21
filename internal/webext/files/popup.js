@@ -12,8 +12,25 @@ function line(parent, text, cls) {
   parent.appendChild(p);
 }
 
+// popupTab is the tab in front of the window this panel opened in. The
+// panel asks for it itself: in Chrome the window stops being the focused
+// one while its panel is open, so the background script's front tab would
+// be none (B12, 2026-11-21). Not a web page (opened as a tab of its own,
+// Firefox for Android): the background script picks.
+async function popupTab() {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    return tab && /^https?:/i.test(tab.url || "") ? tab : undefined;
+  } catch (e) {
+    return undefined;
+  }
+}
+
 async function show() {
-  const state = await browser.runtime.sendMessage({ type: "popup" });
+  const tab = await popupTab();
+  const state = await browser.runtime.sendMessage(tab
+    ? { type: "popup", url: tab.url, title: tab.title || "" }
+    : { type: "popup" });
   const status = document.getElementById("status");
   status.textContent = "";
   document.getElementById("site").textContent = state.site || "Killer Chicken 9000";

@@ -39,7 +39,7 @@ of their group and a row here; a finished item loses its row.
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
 | B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | box |
 | B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
-| B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
+| B8 | Use counting with input and idle (simulated input); LockedHint under Cinnamon: `ci/lockedhint_check.sh` script written, never run | §3.7 | allowance | box |
 | B9 | Mute and dark on real sites; polite close with a real app | §3.9 | extension, apps-titles | box |
 | B10 | No-video on a real embedded player | §3.9 | extension | box |
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
@@ -901,6 +901,12 @@ Script-tested, never by a person. Script what can be into `ci/`.
   that cinnamon-screensaver sets `LockedHint` on the desktop (Needs: box,
   `loginctl show-session <id> -p LockedHint` with the screen locked; if it
   doesn't, a locked screen counts as there until idle, 3 min).
+  2026-11-21: `ci/lockedhint_check.sh` (box: run as yourself from a
+  terminal on the Cinnamon desktop) locks the screen, reads `LockedHint`
+  for your x11/wayland sessions, waits for you to unlock and prints
+  PASS/FAIL per check (no while unlocked, yes while locked, no again).
+  Script written, never run (tried here only against fake `loginctl` and
+  `cinnamon-screensaver-command`: both outcomes reported right).
 - [ ] `B9` Mute and dark on real sites; polite close with a real app.
 - [ ] `B10` No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
 - [ ] `B11` Social media settings beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.

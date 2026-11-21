@@ -175,6 +175,11 @@
 - `ci/allowance_notify_test.sh` (box, real daemon, desktop unlocked; ~4
   min): an allowance session's advance notice arrives on the session bus
   and the session ends on time (B1).
+- `ci/lockedhint_check.sh` (box, as the desktop's user from a terminal in
+  it; never run yet): locks the screen with
+  `cinnamon-screensaver-command --lock` and checks logind's `LockedHint`
+  for the user's x11/wayland sessions before, while locked and after the
+  person unlocks (B8: `blocker.lockedByLogind` relies on it).
 - Race check: the `internal/cli` package takes ~14 min under `-race`, past
   go test's 10-minute default: `CGO_ENABLED=1 go test -race -timeout 30m
   ./internal/...`. Clean 2026-11-21.

@@ -14,6 +14,9 @@
   itself keeps su; `UnguardPAMConfig` takes out only the marked lines);
   no exec from `/home`, `/tmp`, `/var/tmp`, `/dev/shm`. Boot param
   `kc9k.nofreeze` skips freeze and lockdown for that boot.
+  `enforceLockdown` reaches them through `enforce` vars `applyLockdown`,
+  `removeLockdown`, `applyNoexec`, `removeNoexec`, `kernelCmdline`, faked
+  in `TestMain` (`TestEnforceLockdownWhen`).
 - **Firmware lock** (`blocker/firmware.go`, `cli/firmware.go`): everything
   through `FirmwareRoot` (`/sys/class/firmware-attributes`; tests point it
   at a generated tree; a `KC9K_DB` database with the real root reads

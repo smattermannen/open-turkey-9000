@@ -18,7 +18,10 @@ func fakeLockdown(t *testing.T, cmdline string) *[]string {
 	})
 	applyLockdown = func(user string) error { did = append(did, "lockdown "+user); return nil }
 	removeLockdown = func() error { did = append(did, "remove"); return nil }
-	applyNoexec = func(exempt ...string) error { did = append(did, "noexec "+slices.Concat(exempt, []string{""})[0]); return nil }
+	applyNoexec = func(exempt ...string) error {
+		did = append(did, "noexec "+slices.Concat(exempt, []string{""})[0])
+		return nil
+	}
 	removeNoexec = func() error { did = append(did, "remove noexec"); return nil }
 	kernelCmdline = func() string { return cmdline }
 	return &did

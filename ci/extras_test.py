@@ -21,7 +21,8 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 
 failures = 0
-BLOCKS = ("extras", "extrawords", "extrasoon", "extraadd", "extralooks", "extrasocial", "extraplay", "extraembed")
+BLOCKS = ("extras", "extrawords", "extrasoon", "extraadd", "extralooks", "extrasocial", "extraplay", "extraembed",
+          "extraads")
 REMOTE_CONTROL_MARKER = "/var/lib/kc9k/allow-remote-control"
 
 
@@ -71,7 +72,20 @@ PAGES = {
     # shows once it is read (§3.9: looks change, don't block).
     "/pics": "<!doctype html><title>Pics</title><p>kcninepicsword</p><img id='i' src='/dot.gif'>",
     "/picsafter": "<!doctype html><title>After</title><p>nothing here</p><img id='i' src='/dot.gif?after'>",
+    # Ad trigger (§3.9): pages that load a picture from an ad network's host
+    # (the browser resolves these names to this server, AD_HOSTS), and one
+    # that loads from another site that is no ad network.
+    "/adnet": "<!doctype html><title>Ad net</title><p>an article</p>"
+              "<img id='ad' src='http://cdn.kcnine-ads.test:PORT/dot.gif'>",
+    "/adindustry": "<!doctype html><title>Ad industry</title><p>an article</p>"
+                   "<img id='ad' src='http://cdn.coinzilla.com:PORT/dot.gif'>",
+    "/adnone": "<!doctype html><title>No ads</title><p>an article</p>"
+               "<img id='ad' src='http://localhost:PORT/dot.gif'>",
 }
+
+# Names the test browser resolves to this machine: an ad network of the
+# test's own, and one of the networks shipped for the "crypto" industry.
+AD_HOSTS = ("cdn.kcnine-ads.test", "cdn.coinzilla.com")
 
 
 def tone():
@@ -99,7 +113,8 @@ class Pages:
             def do_GET(self):
                 path = self.path.split("?")[0]
                 kind, body = FILES.get(path) or ("text/html", PAGES.get(path, "<!doctype html><title>?</title>")
-                                                 .replace("FRAME", frame_base).encode())
+                                                 .replace("FRAME", frame_base)
+                                                 .replace("PORT", str(self.server.server_address[1])).encode())
                 self.send_response(200)
                 self.send_header("Content-Type", kind)
                 self.send_header("Content-Length", str(len(body)))
@@ -122,6 +137,8 @@ def start():
     # Let embedded players start on their own, sound and all.
     options.set_preference("media.autoplay.default", 0)
     options.set_preference("media.autoplay.blocking_policy", 0)
+    # The ad trigger's networks are served here, never asked for on the net.
+    options.set_preference("network.dns.localDomains", ",".join(AD_HOSTS))
     service = Service(os.path.join(os.environ["GECKOWEBDRIVER"], "geckodriver"),
                       service_args=["--allow-system-access"])
     browser = webdriver.Firefox(options=options, service=service)
@@ -231,6 +248,35 @@ try:
         check("with the option off the block page gives no reason",
               on_block_page(driver) and (text_of(driver, "why") or "") == "")
         ot("behaviour", "block-page-details", "on")
+
+        # Ad trigger (§3.9): a list that looks at ads matches a page that
+        # loads one of its ad networks (or a subdomain of one); an industry
+        # stands for the networks shipped for it.
+        ot("block", "create", "extraads")
+        ot("list", "create", "extraads", "Adnets", "--ads")
+        ot("list", "add", "extraads", "Adnets", "kcnine-ads.test")
+        ot("list", "create", "extraads", "Industry", "--ads")
+        ot("list", "add", "extraads", "Industry", "crypto")
+        ot("start", "extraads")
+        time.sleep(6)
+        visit(driver, pages.base + "/adnone", wait=6)
+        check("a page loading from a site that is no listed ad network opens",
+              "/adnone" in driver.current_url and not on_block_page(driver))
+        visit(driver, pages.base + "/adnet", wait=6)
+        why = text_of(driver, "why") or "" if on_block_page(driver) else ""
+        print("ad network page:", driver.current_url[:100], "|", why[:100])
+        check("a page loading from a listed ad network's subdomain is blocked",
+              on_block_page(driver) and "extraads" in why and "Adnets" in why)
+        visit(driver, pages.base + "/adindustry", wait=6)
+        why = text_of(driver, "why") or "" if on_block_page(driver) else ""
+        print("ad industry page:", driver.current_url[:100], "|", why[:100])
+        check("a page loading from a network of a listed industry is blocked",
+              on_block_page(driver) and "extraads" in why and "Industry" in why)
+        ot("stop", "extraads")
+        time.sleep(6)
+        visit(driver, pages.base + "/adnet", wait=6)
+        check("with the block off the ad network page opens", "/adnet" in driver.current_url
+              and not on_block_page(driver))
 
         # Actions that change the page: dark, no video.
         ot("block", "create", "extralooks")

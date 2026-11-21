@@ -20,7 +20,9 @@
 - **Ad trigger** (§3.9, `db/adnetworks.go`): scope `ads` (`Where.Ads`,
   `in_ads`; not exception lists or phrase sets); `WebList.AdNetworks`
   expands industries; rules `ads`; background `noteAdRequest` →
-  `kc9kAdMatches` → `pageHit`.
+  `kc9kAdMatches` → `pageHit`. Browser test in `ci/extras_test.py`
+  (block `extraads`; ad hosts resolved to the test server through
+  `network.dns.localDomains`).
 - **Trigger actions** (`db/triggers.go`, `enforce/trigger.go`,
   `cli/triggers.go`; owner 2026-11-16): table `trigger_actions` (block,
   group `apps`|`titles`, JSON actions); no row = default (`close`). `kc9k

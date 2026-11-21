@@ -43,7 +43,7 @@ of their group and a row here; a finished item loses its row.
 | B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
 | B14 | Monk mode live: run `ci/monk_live_test.sh host` (written, never run), reboot mid-way | R-MONK-2 | device | vm |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
-| 2.2 | Ad trigger: browser test, industry lists | §3.9 | actions, extension | agent, box |
+| 2.2 | Ad trigger: grow the shipped industry lists | §3.9 | actions | agent |
 | 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
 | 2.6 | Factory reset protection | §4.10 | device | agent, vm |
 | 2.7 | Hardening: the text lock's challenge in the command's own window (decided 2026-11-20, §5); rules server secret (for the owner, §5) | R-LOCK-5, §4.6 | browsers, locks | agent, owner |
@@ -1088,8 +1088,14 @@ Only items not simply Built.
   System-following dark pages rely on `prefers-color-scheme`, which
   LibreWolf reports as light. In project files with its wallpapers
   (`cli/projectcircadian.go`; import only where none is set).
-- **2.2 Ad trigger** (M): built (scope `ads`); left: a browser test
-  (`ci/extras_test.py`), and growing the shipped industry lists.
+- **2.2 Ad trigger** (M): built (scope `ads`). Browser test built
+  2026-11-20, desktop (Mint 22.3, LibreWolf headless, devmaster install of
+  d3a7b1b): `ci/extras_test.py`, block `extraads`, a list `--ads` with
+  `kcnine-ads.test` and one with industry `crypto`; pages load a picture
+  from `cdn.kcnine-ads.test` / `cdn.coinzilla.com` (resolved to the test
+  server): both blocked, the block page naming the list; a page loading
+  from another site opens; with the block off it opens. Suite run alone:
+  33/33 pass (4 new). Left: growing the shipped industry lists.
 - **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under
   the one `safesearch` setting. Left: a lock per engine (owner 2026-11-18: wanted; SPEC §6).
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored

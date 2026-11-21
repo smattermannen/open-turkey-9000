@@ -81,3 +81,22 @@ public class SettingsStatsTests
         gui.WaitFor(() => gui.Ran("tamper", "private", "on"), "kc9k tamper private on");
     }
 }
+
+[Collection("gui")]
+public class CircadianTests
+{
+    [Fact]
+    public void ClipsWallpapersAndDarkMode()
+    {
+        using var gui = new GuiApp("circadian");
+        gui.Page("circadian");
+        gui.Find("Clip_kelvin");
+        gui.Find("WallpaperSet1");
+        gui.Shot("circadian");
+        gui.Invoke("CircadianUsePreset");
+        gui.Invoke(gui.FindButton("Replace"));
+        gui.WaitFor(() => gui.Ran("circadian", "preset", "natural"), "kc9k circadian preset natural");
+        gui.Invoke("Dark_dark");
+        gui.WaitFor(() => gui.Ran("circadian", "dark", "dark"), "kc9k circadian dark dark");
+    }
+}

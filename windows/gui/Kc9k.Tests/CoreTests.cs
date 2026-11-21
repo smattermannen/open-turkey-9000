@@ -104,6 +104,23 @@ public class WordsTests
     }
 }
 
+public class CircadianTests
+{
+    [Fact]
+    public void ReadsTheRealView()
+    {
+        var v = CircadianView.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "circadian.json")));
+        Assert.Equal(["backlight", "software", "kelvin"], v.Lanes.Select(l => l.Name));
+        Assert.Contains(v.Presets, p => p.Name == "natural");
+        Assert.Equal("sky.png", Assert.Single(v.Wallpapers).Name);
+        Assert.Equal("system", v.Dark.Mode);
+        var kelvin = v.Lanes[2];
+        Assert.Equal(6500, Clips.Value(kelvin.Points, 12 * 60));
+        Assert.Equal(2300, Clips.Value(kelvin.Points, 2 * 60));
+        Assert.StartsWith("04:30=2300.0 06:00=3400.0~0.50", Clips.Text(kelvin.Points));
+    }
+}
+
 public class SeriesTests
 {
     [Fact]

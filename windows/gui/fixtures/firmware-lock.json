@@ -1,0 +1,15 @@
+{
+ "drivers": [],
+ "password": false,
+ "settings": [],
+ "pending_reboot": false,
+ "available": false,
+ "locked": false,
+ "set_by_kc9k": false,
+ "missing": [
+  "USB boot",
+  "network boot",
+  "one-time boot menu",
+  "boot order lock"
+ ]
+}

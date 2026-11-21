@@ -58,6 +58,10 @@ public static class FakeCli
         if (rest.Count > 0 && rest[0] == "gui-state") return (0, File.ReadAllText(Path.Combine(dir, "gui-state.json")));
         if (rest.Count > 0 && rest[0] == "stats" && rest.Contains("--json")) return (0, File.ReadAllText(Path.Combine(dir, "stats.json")));
         if (rest.Count > 0 && rest[0] == "--version") return (0, "kc9k (fake)");
+        // Other reads the GUI makes, each from its fixture.
+        foreach (var (want, file) in new[] { (new[] { "circadian", "show", "--json" }, "circadian.json"),
+                     (["guided-setup", "--json"], "guided-setup.json"), (["firmware-lock", "--json"], "firmware-lock.json") })
+            if (rest.SequenceEqual(want) && File.Exists(Path.Combine(dir, file))) return (0, File.ReadAllText(Path.Combine(dir, file)));
         return (0, "Done (fake kc9k): kc9k " + string.Join(' ', rest));
     }
 

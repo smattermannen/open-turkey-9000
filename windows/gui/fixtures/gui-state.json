@@ -496,7 +496,7 @@
    "autostarts": [],
    "lifted": false,
    "enabled": true,
-   "lock_seconds": 259200,
+   "lock_seconds": 259199,
    "quota_limit": 0,
    "quota_used": 0,
    "quota_open": false,
@@ -688,7 +688,7 @@
    "autostarts": [],
    "lifted": true,
    "enabled": false,
-   "lock_seconds": 7200,
+   "lock_seconds": 7199,
    "quota_limit": 0,
    "quota_used": 0,
    "quota_open": false,
@@ -903,7 +903,17 @@
    "custom": [],
    "run_left": 0,
    "today_windows": [],
-   "wallpapers": []
+   "wallpapers": [
+    {
+     "index": 1,
+     "image": "497790947d4666760ce38f3c00e852c71fdb66cae849bae8e9ede352719e1581.png",
+     "name": "sky.png",
+     "path": "/tmp/tmp.DL6AT87eOw/wallpapers/497790947d4666760ce38f3c00e852c71fdb66cae849bae8e9ede352719e1581.png",
+     "from": "09:00",
+     "to": "17:00",
+     "active": false
+    }
+   ]
   }
  ],
  "wallpaper": {

@@ -1,0 +1,559 @@
+{
+ "on": false,
+ "minute": 1218.44,
+ "lanes": [
+  {
+   "name": "backlight",
+   "title": "Backlight",
+   "unit": "%",
+   "min": 1,
+   "max": 100,
+   "neutral": 100,
+   "detail": "The screen's real brightness: the laptop's backlight, and external screens through DDC/CI (ddcutil). Saves power and is easiest on the eyes.",
+   "on": false,
+   "points": [
+    {
+     "minute": 390,
+     "value": 50,
+     "tension": 0.5
+    },
+    {
+     "minute": 510,
+     "value": 100,
+     "tension": 0
+    },
+    {
+     "minute": 1110,
+     "value": 100,
+     "tension": -0.3
+    },
+    {
+     "minute": 1290,
+     "value": 60,
+     "tension": 0
+    },
+    {
+     "minute": 1410,
+     "value": 35,
+     "tension": 0
+    }
+   ],
+   "value": 70.9,
+   "has_value": true,
+   "paused_until": 0,
+   "available": true
+  },
+  {
+   "name": "software",
+   "title": "Software brightness",
+   "unit": "%",
+   "min": 10,
+   "max": 100,
+   "neutral": 100,
+   "detail": "Darkens the picture itself through the graphics card. Works on every screen, and goes darker than the backlight can.",
+   "on": false,
+   "points": [
+    {
+     "minute": 360,
+     "value": 85,
+     "tension": 0.4
+    },
+    {
+     "minute": 450,
+     "value": 100,
+     "tension": 0
+    },
+    {
+     "minute": 1290,
+     "value": 100,
+     "tension": 0
+    },
+    {
+     "minute": 1410,
+     "value": 85,
+     "tension": 0
+    }
+   ],
+   "value": 100,
+   "has_value": true,
+   "paused_until": 0,
+   "available": true
+  },
+  {
+   "name": "kelvin",
+   "title": "Colour temperature",
+   "unit": "K",
+   "min": 1000,
+   "max": 10000,
+   "neutral": 6500,
+   "detail": "6500 K is neutral. Lower is warmer (less blue light, as by a fire), higher is cooler (like a clear morning sky).",
+   "on": false,
+   "points": [
+    {
+     "minute": 270,
+     "value": 2300,
+     "tension": 0
+    },
+    {
+     "minute": 360,
+     "value": 3400,
+     "tension": 0.5
+    },
+    {
+     "minute": 480,
+     "value": 6500,
+     "tension": 0
+    },
+    {
+     "minute": 1080,
+     "value": 6500,
+     "tension": -0.4
+    },
+    {
+     "minute": 1260,
+     "value": 3400,
+     "tension": 0
+    },
+    {
+     "minute": 1380,
+     "value": 2300,
+     "tension": 0
+    }
+   ],
+   "value": 3797.6,
+   "has_value": true,
+   "paused_until": 0,
+   "available": true
+  }
+ ],
+ "presets": [
+  {
+   "name": "natural",
+   "title": "Natural day",
+   "detail": "Bright and cool from mid-morning, warming from early evening, dim and warm at night.",
+   "lanes": {
+    "backlight": [
+     {
+      "minute": 390,
+      "value": 50,
+      "tension": 0.5
+     },
+     {
+      "minute": 510,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1110,
+      "value": 100,
+      "tension": -0.3
+     },
+     {
+      "minute": 1290,
+      "value": 60,
+      "tension": 0
+     },
+     {
+      "minute": 1410,
+      "value": 35,
+      "tension": 0
+     }
+    ],
+    "kelvin": [
+     {
+      "minute": 270,
+      "value": 2300,
+      "tension": 0
+     },
+     {
+      "minute": 360,
+      "value": 3400,
+      "tension": 0.5
+     },
+     {
+      "minute": 480,
+      "value": 6500,
+      "tension": 0
+     },
+     {
+      "minute": 1080,
+      "value": 6500,
+      "tension": -0.4
+     },
+     {
+      "minute": 1260,
+      "value": 3400,
+      "tension": 0
+     },
+     {
+      "minute": 1380,
+      "value": 2300,
+      "tension": 0
+     }
+    ],
+    "software": [
+     {
+      "minute": 360,
+      "value": 85,
+      "tension": 0.4
+     },
+     {
+      "minute": 450,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1290,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1410,
+      "value": 85,
+      "tension": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "early-bird",
+   "title": "Early bird",
+   "detail": "Up at dawn: a cool, bright morning that wakes you, and an early warm evening.",
+   "lanes": {
+    "backlight": [
+     {
+      "minute": 300,
+      "value": 60,
+      "tension": 0.5
+     },
+     {
+      "minute": 390,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1050,
+      "value": 100,
+      "tension": -0.3
+     },
+     {
+      "minute": 1200,
+      "value": 55,
+      "tension": 0
+     },
+     {
+      "minute": 1290,
+      "value": 30,
+      "tension": 0
+     }
+    ],
+    "kelvin": [
+     {
+      "minute": 240,
+      "value": 2300,
+      "tension": 0
+     },
+     {
+      "minute": 300,
+      "value": 4500,
+      "tension": 0.5
+     },
+     {
+      "minute": 390,
+      "value": 7000,
+      "tension": 0
+     },
+     {
+      "minute": 600,
+      "value": 6500,
+      "tension": 0
+     },
+     {
+      "minute": 1020,
+      "value": 6500,
+      "tension": -0.4
+     },
+     {
+      "minute": 1170,
+      "value": 3200,
+      "tension": 0
+     },
+     {
+      "minute": 1260,
+      "value": 2200,
+      "tension": 0
+     }
+    ],
+    "software": [
+     {
+      "minute": 300,
+      "value": 90,
+      "tension": 0.4
+     },
+     {
+      "minute": 360,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1200,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1290,
+      "value": 80,
+      "tension": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "night-owl",
+   "title": "Night owl",
+   "detail": "A late start and a long evening, still winding down well before sleep.",
+   "lanes": {
+    "backlight": [
+     {
+      "minute": 510,
+      "value": 50,
+      "tension": 0.5
+     },
+     {
+      "minute": 630,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1200,
+      "value": 100,
+      "tension": -0.3
+     },
+     {
+      "minute": 1380,
+      "value": 65,
+      "tension": 0
+     },
+     {
+      "minute": 90,
+      "value": 40,
+      "tension": 0
+     }
+    ],
+    "kelvin": [
+     {
+      "minute": 390,
+      "value": 2300,
+      "tension": 0
+     },
+     {
+      "minute": 480,
+      "value": 3400,
+      "tension": 0.5
+     },
+     {
+      "minute": 600,
+      "value": 6500,
+      "tension": 0
+     },
+     {
+      "minute": 1200,
+      "value": 6500,
+      "tension": -0.4
+     },
+     {
+      "minute": 1380,
+      "value": 3400,
+      "tension": 0
+     },
+     {
+      "minute": 60,
+      "value": 2300,
+      "tension": 0
+     }
+    ],
+    "software": [
+     {
+      "minute": 480,
+      "value": 85,
+      "tension": 0.4
+     },
+     {
+      "minute": 570,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1380,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 90,
+      "value": 85,
+      "tension": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "gentle",
+   "title": "Gentle evenings",
+   "detail": "Leaves the day alone and only warms the screen a little in the evening.",
+   "lanes": {
+    "backlight": [
+     {
+      "minute": 0,
+      "value": 100,
+      "tension": 0
+     }
+    ],
+    "kelvin": [
+     {
+      "minute": 420,
+      "value": 4500,
+      "tension": 0.4
+     },
+     {
+      "minute": 510,
+      "value": 6500,
+      "tension": 0
+     },
+     {
+      "minute": 1140,
+      "value": 6500,
+      "tension": -0.3
+     },
+     {
+      "minute": 1320,
+      "value": 4500,
+      "tension": 0
+     }
+    ],
+    "software": [
+     {
+      "minute": 0,
+      "value": 100,
+      "tension": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "candlelight",
+   "title": "Candlelight",
+   "detail": "Strong: deep amber and dim from late evening, as if the room were lit by candles.",
+   "lanes": {
+    "backlight": [
+     {
+      "minute": 390,
+      "value": 40,
+      "tension": 0.5
+     },
+     {
+      "minute": 510,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1080,
+      "value": 100,
+      "tension": -0.4
+     },
+     {
+      "minute": 1260,
+      "value": 45,
+      "tension": 0
+     },
+     {
+      "minute": 1380,
+      "value": 20,
+      "tension": 0
+     }
+    ],
+    "kelvin": [
+     {
+      "minute": 300,
+      "value": 1900,
+      "tension": 0
+     },
+     {
+      "minute": 390,
+      "value": 3000,
+      "tension": 0.5
+     },
+     {
+      "minute": 510,
+      "value": 6500,
+      "tension": 0
+     },
+     {
+      "minute": 1050,
+      "value": 6500,
+      "tension": -0.5
+     },
+     {
+      "minute": 1230,
+      "value": 2700,
+      "tension": 0
+     },
+     {
+      "minute": 1350,
+      "value": 1900,
+      "tension": 0
+     }
+    ],
+    "software": [
+     {
+      "minute": 390,
+      "value": 75,
+      "tension": 0.4
+     },
+     {
+      "minute": 480,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1260,
+      "value": 100,
+      "tension": 0
+     },
+     {
+      "minute": 1380,
+      "value": 70,
+      "tension": 0
+     }
+    ]
+   }
+  }
+ ],
+ "wallpapers": [
+  {
+   "index": 1,
+   "image": "497790947d4666760ce38f3c00e852c71fdb66cae849bae8e9ede352719e1581.png",
+   "name": "sky.png",
+   "path": "/tmp/tmp.DL6AT87eOw/wallpapers/497790947d4666760ce38f3c00e852c71fdb66cae849bae8e9ede352719e1581.png",
+   "from": "07:00",
+   "to": "19:00",
+   "active": false
+  }
+ ],
+ "override_modes": false,
+ "dark": {
+  "mode": "system",
+  "light_from": "07:00",
+  "light_to": "20:00",
+  "now": "system"
+ },
+ "dark_pages": false,
+ "dark_exempt": [],
+ "hardware": {
+  "daemon": false,
+  "backlights": [],
+  "external": [],
+  "ddcutil": false,
+  "gamma": "unknown",
+  "night_light": false
+ }
+}

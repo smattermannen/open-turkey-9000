@@ -1,0 +1,64 @@
+[
+ {
+  "id": "settings-password",
+  "title": "Settings password",
+  "state": "todo",
+  "detail": "Needed to weaken anything. Best typed by someone else, or written down away from the computer.",
+  "command": "kc9k password set"
+ },
+ {
+  "id": "no-weakening",
+  "title": "No weakening during active locks",
+  "state": "todo",
+  "detail": "While anything is locked, no setting (strict mode included) can be weakened.",
+  "command": "kc9k no-weakening on"
+ },
+ {
+  "id": "tamper",
+  "title": "Tamper protection",
+  "state": "todo",
+  "detail": "Clock changes, task managers, private windows and Tor, unsupported browsers. Off: task-managers, private, unsupported-browsers.",
+  "command": "kc9k tamper task-managers on; kc9k tamper private on; kc9k tamper unsupported-browsers on"
+ },
+ {
+  "id": "strict",
+  "title": "Strict mode",
+  "state": "todo",
+  "detail": "While anything is locked: no sudo or pkexec, no root login or su to root, nothing runs from /home or /tmp, no containers or virtual machines.",
+  "command": "kc9k strict on"
+ },
+ {
+  "id": "strict-lock",
+  "title": "Strict mode's own lock",
+  "state": "todo",
+  "detail": "Keeps strict mode switched on even while nothing else is locked.",
+  "command": "kc9k strict on --for 30d",
+  "optional": true
+ },
+ {
+  "id": "root-password",
+  "title": "No root password",
+  "state": "unknown",
+  "detail": "Can't read /etc/shadow (run as root to check)."
+ },
+ {
+  "id": "reset-guard",
+  "title": "Installer media guard",
+  "state": "todo",
+  "detail": "While anything is locked: operating system and USB writer download pages blocked, image writers and Disks closed.",
+  "command": "kc9k reset-guard on"
+ },
+ {
+  "id": "firmware",
+  "title": "Firmware lock",
+  "state": "by-hand",
+  "detail": "This computer's firmware can't be changed from Linux. Do it in the firmware's own setup (press F2, F1, F10 or Del while the computer starts): turn off booting from USB and the network, lock the boot order, and set a firmware (setup) password that a trusted person types and keeps."
+ },
+ {
+  "id": "no-escape",
+  "title": "No-escape",
+  "state": "todo",
+  "detail": "Last: kc9k.nofreeze and recovery mode stop working, and the boot menu gets a password nobody knows. Until then they are the way out of a bug (R-ESCAPE-1); try it in a virtual machine first.",
+  "command": "kc9k no-escape on --yes"
+ }
+]

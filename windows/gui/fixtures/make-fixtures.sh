@@ -65,7 +65,14 @@ k notifications advance 2,5
 k tamper clock on
 k bypass set --count 5 --within 10m --then warning
 
+# Wallpapers (§4.10, R-MODE-5): a tiny picture for circadian rhythm and a mode.
+python3 -c 'import base64,sys; open(sys.argv[1],"wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="))' "$WORK/sky.png"
+k circadian wallpaper add "$WORK/sky.png" 07:00 19:00
+k mode wallpaper Study add "$WORK/sky.png" 09:00 17:00
 "$KC9K" gui-state | python3 -m json.tool --indent 1 >"$OUT/gui-state.json"
+"$KC9K" circadian show --json | python3 -m json.tool --indent 1 >"$OUT/circadian.json"
+"$KC9K" guided-setup --json | python3 -m json.tool --indent 1 >"$OUT/guided-setup.json"
+"$KC9K" firmware-lock --json | python3 -m json.tool --indent 1 >"$OUT/firmware-lock.json" || echo '{"available": false}' >"$OUT/firmware-lock.json"
 
 # Statistics (§4.9): a week of use, written straight into the test DB (the
 # daemon records it on a real machine).

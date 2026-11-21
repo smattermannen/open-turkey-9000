@@ -18,7 +18,9 @@ public sealed class ModeView
     readonly ToggleSwitch toggle;
     readonly Button lockButton, menuButton, takeOutButton;
     readonly StackPanel blockCards = Ui.Column(10);
-    readonly UIElement blocksSection, monkBox, customSection, automationSection, freezeSection;
+    readonly UIElement blocksSection, monkBox, customSection, automationSection, freezeSection, wallpaperSection;
+    readonly WallpaperEditor wallpapers;
+    readonly ToggleSwitch overrideCircadian;
     readonly TextBlock freezeLocked = Ui.Dim("Frozen Chicken is locked by an access password: open it under Settings or with its password.");
     readonly CustomEditor custom;
     readonly AutomationEditor modeEditor, monkEditor;
@@ -68,12 +70,19 @@ public sealed class ModeView
         custom = new CustomEditor(window, id: "ModeCustom");
         custom.Changed += items => _ = SetCustom(items);
         customSection = Ui.Section("When it becomes enabled", Ui.Dim("Open sites, files and folders, or run programs, each time the mode becomes enabled (also once at sign-in, when it is enabled then)."), custom);
+        // R-MODE-5: the mode's wallpapers, laid out as circadian rhythm's.
+        wallpapers = new WallpaperEditor(window, () => ["mode", "wallpaper", name], "Mode");
+        overrideCircadian = Ui.Switch("Override circadian rhythm wallpapers", false, on => { if (!filling) _ = C.Run(["wallpaper", "priority", on ? "modes" : "circadian"]); }, "OverrideCircadian");
+        wallpaperSection = Ui.Section("Wallpapers",
+            "Drag a bar to move it, or an end to change when it starts or stops (Shift: to the minute). Of several enabled modes, the one enabled last shows its wallpaper. Override circadian rhythm wallpapers is one setting for all modes, the same as Override modes on the circadian rhythm page the other way round. A mode switched by places shows its wallpaper once Killer Chicken knows where you are; until then the wallpaper default in Settings shows.",
+            Ui.Dim("While the mode is enabled, each picture is the wallpaper between its two times."), wallpapers,
+            Ui.SettingRow("Override circadian rhythm wallpapers", "", overrideCircadian));
         modeEditor = new AutomationEditor(window, "mode");
         monkEditor = new AutomationEditor(window, "monk");
         automationSection = Ui.Section("Automation", "Its windows (its own, and those of schedules applied to it) and its places. Disabled by default: they turn its blocks on, and they are lifted otherwise; enabled by default: they turn them off. With windows and places, either or both at once. Monk mode is always disabled by default.",
             modeEditor, monkEditor);
         View = Ui.Page(Ui.Column(18, Ui.Link("← All blocks", () => page.ShowCards(), "ModeBack"), head, status,
-            blocksSection, monkBox, freezeSection, customSection, automationSection));
+            blocksSection, monkBox, freezeSection, customSection, wallpaperSection, automationSection));
     }
 
     public void Open(string mode)
@@ -99,6 +108,11 @@ public sealed class ModeView
         Shown(freezeSection, m.Freeze);
         Shown(automationSection, !m.Freeze);
         Shown(customSection, !m.Freeze);
+        Shown(wallpaperSection, !m.Freeze);
+        filling = true;
+        Ui.Set(overrideCircadian, !s.Wallpaper.OverrideModes);
+        filling = false;
+        wallpapers.Fill(m.Wallpapers);
         Shown(blocksSection, !m.Monk && !m.Freeze);
         Shown(monkBox, m.Monk);
         Shown(menuButton, !m.Monk && !m.Freeze);

@@ -66,10 +66,20 @@ set -e
 # blocking layers are cleaned up first. An upgrade keeps everything; a
 # reinstall or an older version may be refused while anything is locked
 # (tamper protection "block the installer", prepare-install).
-if [ "$1" = upgrade ] && ! dpkg --compare-versions "$2" gt "@VERSION@"; then
+guard() {
 	if ! out=$(/usr/local/bin/kc9k-bin prepare-install 2>&1); then
 		case "$out" in *"unknown command"*) ;; *) echo "$out" >&2; exit 1;; esac
 	fi
+}
+# upgrade: the installed package asked; $2 is the version coming in.
+if [ "$1" = upgrade ] && ! dpkg --compare-versions "$2" gt "@VERSION@"; then
+	guard
+fi
+# failed-upgrade: the installed package's prerm refused, and dpkg asks the
+# incoming package's instead (this one); going on here would install it
+# anyway. $2 is the installed version.
+if [ "$1" = failed-upgrade ] && ! dpkg --compare-versions "@VERSION@" gt "$2"; then
+	guard
 fi
 if [ "$1" = remove ] || [ "$1" = deconfigure ]; then
 	/usr/local/bin/kc9k-bin prepare-uninstall

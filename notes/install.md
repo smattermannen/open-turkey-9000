@@ -24,5 +24,9 @@
   anything is locked. `make install` (so `install.sh`) runs the installed
   binary's `prepare-install` before copying; the `.deb`'s prerm runs it on
   `upgrade` to the same or an older version (`@VERSION@` filled in by
-  `build-deb.sh`; a newer version passes). An installed binary without the
-  command ("unknown command") doesn't refuse. Live: Unchecked (vm).
+  `build-deb.sh`; a newer version passes), and on `failed-upgrade` (dpkg
+  asks the incoming package's prerm when the installed one refused: it
+  must refuse too, or the install goes on; `.deb`s built before 2026-11-21
+  don't). An installed binary without the
+  command ("unknown command") doesn't refuse. Live: Unchecked (vm,
+  `ci/tamper_vm_test.sh`).

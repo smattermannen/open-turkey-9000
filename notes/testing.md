@@ -69,6 +69,22 @@
   cut, so the VM checks itself (`inside 1`, then a oneshot unit runs
   `inside 2` after the restart it makes) into `/var/lib/kc9k-monk-live`;
   the host waits for ssh and reads `verdict`. `MONK_MINUTES` (default 6).
+- VM checks with a verdict (`ci/<name>.sh host [domain] [ssh-alias]`,
+  default `kc9k-vm`), sharing `ci/vm_check_lib.sh`: the host reverts the
+  VM to `clean` (running), rsyncs the tree to `~/open-turkey-9000`, builds
+  `.deb`s of it (`9000.N~vmcheck`) and installs the first, starts `inside
+  1` as root (`systemd-run`: it outlives ssh and a lockdown's loss of
+  sudo), waits through restarts (a oneshot unit runs `inside 2`) for
+  `/var/lib/kc9k-vmcheck-*/verdict` (readable without sudo), prints the
+  log's PASS/FAIL lines and reverts the VM shut off. kc9k runs as the VM's
+  user through the wrapper (strict mode records `SUDO_USER`); status
+  checks as root call `kc9k-bin`. `ci/strict_pam_vm_test.sh` (2.6: sets a
+  root password and an account `kc9kother`; root login and su driven on a
+  pseudo-terminal by an inline Python helper; one boot with
+  `kc9k.nofreeze` via a `/etc/default/grub.d` drop-in),
+  `ci/tamper_vm_test.sh` (2.9: installer guard with dpkg and `install.sh`,
+  which needs Go in the VM; LightDM's `HasGuestAccount` over D-Bus, a
+  guest session allowed first if the VM has none). Both never run yet.
 - Cycles and the planner (`planner_round`): each cycle starts with one
   worker (claim `PLANNER`) running a planner session
   (`AUTOPILOT_PLAN_MODEL`/`_EFFORT`, default opus xhigh), told why it runs

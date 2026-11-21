@@ -51,10 +51,10 @@ of their group and a row here; a finished item loses its row.
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test; the new industry domains in real ad requests (Unchecked) | §3.9 | actions, extension | box |
 | 2.4 | SafeSearch per engine: built; checked in Chrome (2026-11-21); in LibreWolf (Unchecked) | §4.10 | browsers | box |
-| 2.6 | Factory reset protection: built; PAM root guard in the VM (vm), firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
+| 2.6 | Factory reset protection: built; PAM root guard in the VM: `ci/strict_pam_vm_test.sh` script written, never run (vm); firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
 | 2.7 | Hardening: the text lock's window on a real desktop (Unchecked); rules server secret dropped (§5, 2026-11-21) | R-LOCK-5, §4.6 | browsers, locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| 2.9 | Tamper settings of 2026-11-21 (guest, extension-stop, installer, inactive-tabs, embedded): live checks | §4.10 | browsers, extension, install | box, vm |
+| 2.9 | Tamper settings of 2026-11-21 (guest, extension-stop, installer, inactive-tabs, embedded): live checks; VM parts: `ci/tamper_vm_test.sh` script written, never run | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
@@ -1032,7 +1032,12 @@ Only items not simply Built.
   `TestGuidedSetup`, GUI in `ci/gui_settings_smoke.py`. Unchecked (vm):
   during a strict lock in the VM, `su -` and a root login on a text console
   are refused, the user's own `su` to another account works, and all of it
-  comes back when the lock ends or with `kc9k.nofreeze`. Unchecked (owner,
+  comes back when the lock ends or with `kc9k.nofreeze`: 2026-11-21
+  `ci/strict_pam_vm_test.sh host kc9k-vm` checks all of it (snapshot
+  `clean` before and after; root login through the `login` PAM service on
+  a pseudo-terminal; refused means before a password is asked), script
+  written, never run (its terminal driver was tried in a container with
+  the guard lines added by hand: refused and allowed as expected). Unchecked (owner,
   real hardware): the firmware lock on a Dell, Lenovo or HP computer (the
   VM has no firmware-attributes; vendors' names and how each driver clears
   a password are untried).
@@ -1061,7 +1066,16 @@ Only items not simply Built.
   plays it. Unchecked (vm): the LightDM guest session gone after a restart
   with `guest` on; during a lock with `installer` on, `sudo dpkg -i` of the
   same `.deb` and `sudo ./install.sh` are refused and a newer `.deb`
-  installs.
+  installs. 2026-11-21: `ci/tamper_vm_test.sh host kc9k-vm` checks these
+  VM parts (also an older `.deb` refused, the same one installing again
+  after the lock), script written, never run. Found writing it, fixed
+  2026-11-21: when the installed package's prerm refused, dpkg asked the
+  incoming package's prerm (`failed-upgrade`), which let the same or an
+  older version install anyway; it now refuses too
+  (`packaging/build-deb.sh`; checked in a container with the real `.deb`s
+  and a refusing stub binary: same and older refused, nothing unpacked;
+  newer installs; same again once unrefused). A `.deb` built before the fix
+  still gets in that way.
 
 ## 3. Testers and Android (owner 2026-11-18)
 

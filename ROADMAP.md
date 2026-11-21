@@ -29,7 +29,6 @@ of their group and a row here; a finished item loses its row.
 | A5 | Phrase editor save: confirm | §4.3, R-WEAK-5 | lists, gui | box |
 | A6 | Locking an enabled block: confirm | R-LOCK-7 | locks, gui | box |
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
-| A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
 | B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
@@ -767,7 +766,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   (`TestLockedScheduleAndAllowanceStrengthening`). The old `block.go`
   commands called `os.Exit`, so they couldn't be tested in-process: they
   return errors now (same message).
-- [ ] `A10` **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
+- [x] `A10` **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
   (`kc9k schedule lock B on --lead D`) replaces built-in schedule/place
   protection, 2 h edit freeze and 24 h allow-window queue (upgrade gives
   scheduled/placed blocks a 2 h-lead schedule lock); freeze schedules have
@@ -796,9 +795,15 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   `TestClockCheckEndsLockAfterPoweredOffTime`,
   `TestClockAnchorDoesNotShortenNextLock`, `TestAgreedTime`,
   `TestCheckClockAsksOnlyWhenDue`). The live query answered here (1.6 s
-  off, RTC exact). Unchecked: a real power-off during a timer lock (needs a
-  VM: shut it down for an hour mid-lock, boot, `journalctl -u kc9k | grep
-  'clock check'`, the lock's end in `kc9k status`). (L)
+  off, RTC exact). Real power-off checked 2026-11-21, kc9k-vm (Ubuntu
+  24.04, Cinnamon X11), `tamper clock on`, a block timer-locked `--for 20m
+  --yes`, anchor taken within 5 min, `virsh shutdown`: off 25 min, booted
+  past the lock's end, still locked until the check 30 s after the daemon
+  started ("clock check: 25m53s of powered-off time counted"), then no
+  timer lock in `kc9k status`. No internet after boot (link cut from the
+  host, off 15 min): two checks failed ("no two sources agree", 0
+  answered), lock held 9 min past its real end (trusted 05:11 at real
+  05:28); link back, next check counted 17m13s and the lock ended. Built. (L)
 - [x] **Android extension can be switched off** (§3.13): built (5 s grace
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unit tests run in the cloud 2026-11-16:

@@ -33,7 +33,6 @@ Emergency exit: in GRUB, press e on the boot entry and add
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		forDur, _ := cmd.Flags().GetString("for")
-		yes, _ := cmd.Flags().GetBool("yes")
 		mode, _ := cmd.Flags().GetString("mode")
 		if !freeze.ValidMode(mode) {
 			return fmt.Errorf("unknown mode %q (use lock, logout, shutdown or apps)", mode)
@@ -56,8 +55,13 @@ Emergency exit: in GRUB, press e on the boot entry and add
 		if err := freeze.Validate(d); err != nil {
 			return err
 		}
-		if !yes {
-			return fmt.Errorf("this locks the computer for %s and cannot be cancelled; add --yes to confirm", d)
+		// R-LOCK-12: confirmed like every lock (a terminal asks; --yes for
+		// the interface and scripts).
+		effect := map[string]string{freeze.ModeLock: "the screen locked", freeze.ModeLogout: "every session logged out",
+			freeze.ModeShutdown: "the computer shut down at every start", freeze.ModeApps: "only allowed apps running"}[mode]
+		if err := confirmLocks(cmd, lockToSet{Target: "the computer", Kind: "Frozen Chicken (" + effect + ", can't be cancelled)",
+			Length: humanDuration(d)}); err != nil {
+			return err
 		}
 
 		database, err := openDB()

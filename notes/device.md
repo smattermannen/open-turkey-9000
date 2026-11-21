@@ -64,7 +64,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   its sections `build_device` in the mode view): `freeze --for D|--until T --mode lock|logout|shutdown|apps --yes`
   (`apps`: allowed apps only, `freeze apps add|remove`);
   `freeze schedule add --days … --from --to [--mode] [--lock-lead D]`,
-  `list`, `remove N`, `lock N on --lead D`. Back-to-back windows run on; a
+  `list`, `remove N`, `lock N on --lead D`. `freeze` is confirmed as a lock
+  (`confirmLocks`: a terminal asks, else `--yes`). Back-to-back windows run on; a
   longer running freeze is never shortened; ≤ a week; time counts while off;
   only extendable; shutdown mode powers off at each boot. Devmaster
   `master` works from a TTY in lock mode only.

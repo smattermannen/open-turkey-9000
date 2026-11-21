@@ -114,6 +114,10 @@ func lockCases() []lockCase {
 				s, _ := d.ListFreezeSchedules()
 				return len(s) == 1
 			}},
+		{name: "Frozen Chicken", args: []string{"freeze", "--for", "1h", "--mode", "logout"}, isSet: func(t *testing.T, d *db.DB) bool {
+			until, _ := d.FreezeUntil()
+			return until > time.Now().Unix()
+		}},
 		{name: "block range lock", setup: blockWithSite, args: []string{"start", "b", "--range", "mon 03:00-03:05"}, isSet: blockActive},
 		{name: "several of one kind in one start", setup: blockWithSite, args: []string{"start", "b", "--for", "1h", "--for", "2h"}, isSet: blockActive},
 		{name: "another timer lock on a setting", setup: func(t *testing.T) {

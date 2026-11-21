@@ -60,7 +60,12 @@ PAGES = {
     "/words": "<!doctype html><title>Words</title><p>kcninewordone and kcninewordtwo, kcninewordone again</p>",
     "/go": "<!doctype html><title>Proxy</title><p>a proxy page</p>",
     "/looks": "<!doctype html><title>Looks</title><body style='background:#fff'><aside id='side'>side</aside>"
-              "<p>kcninelooksword here</p><video id='v'></video></body>",
+              "<p>kcninelooksword here</p><video id='v'></video>"
+              # Pictures dark must show as they are, each turned back once,
+              # and a logo drawn in SVG, turned with the page.
+              "<img id='photo' src='/dot.gif'><picture><img id='inpicture' src='/dot.gif?p'></picture>"
+              "<div style='background-image:url(/dot.gif)'><img id='overbg' src='/dot.gif?o'></div>"
+              "<img id='logo' src='/logo.svg'></body>",
     # A page with an embedded player from another site (localhost against
     # 127.0.0.1), with and without a word that takes its video away.
     "/embed": "<!doctype html><title>Embed</title><p>kcnineembedword</p>"
@@ -102,7 +107,9 @@ def tone():
 
 # A 1x1 GIF.
 DOT_GIF = bytes.fromhex("47494638396101000100800000ff000000000021f90401000000002c00000000010001000002024401003b")
-FILES = {"/tone.wav": ("audio/wav", tone()), "/dot.gif": ("image/gif", DOT_GIF)}
+LOGO_SVG = b'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10"><text y="9">Logo</text></svg>'
+FILES = {"/tone.wav": ("audio/wav", tone()), "/dot.gif": ("image/gif", DOT_GIF),
+         "/logo.svg": ("image/svg+xml", LOGO_SVG)}
 
 
 class Pages:
@@ -292,6 +299,15 @@ try:
             "const s = document.getElementById('kc9k-page-style'); return s ? s.textContent : '';")
         check("the page stays for actions that only change it", "/looks" in driver.current_url)
         check("dark turns a light page over", "invert(1)" in css)
+        turns = driver.execute_script(
+            "const n = (id) => { let c = 0;"
+            " for (let e = document.getElementById(id); e; e = e.parentElement) {"
+            "  if (getComputedStyle(e).filter.includes('invert')) c++; } return c; };"
+            "return ['photo', 'inpicture', 'overbg', 'logo'].map(n);")
+        print("times turned over (photo, in <picture>, over a background image, SVG logo):", turns)
+        check("dark shows pictures as they are, a <picture>'s and one over a background image too",
+              turns[:3] == [2, 2, 2])
+        check("dark turns an SVG logo with the page", turns[3] == 1)
         check("no-video hides videos",
               driver.execute_script("return getComputedStyle(document.getElementById('v')).display") == "none")
         ot("stop", "extralooks")

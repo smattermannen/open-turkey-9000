@@ -31,6 +31,12 @@
   address, or `keywordNoImages` for its own text): a cancelled picture
   stays broken on a next page that doesn't earn the look
   (`ci/extras_test.py`).
+- `dark` (and dark pages) in `render`: only light pages (`pageIsLight`);
+  `html` inverted, `DARK_MEDIA` (pictures, video, canvas, frames,
+  background images) inverted back once; nested inside a background image:
+  `filter: none` (else turned over twice; `picture` not listed, its img
+  is). SVG `img` turn with the page (logos: a black wordmark stays
+  readable). `ci/extras_test.py` counts the turns.
 - **Workarounds**: `kc9kUnwrap` reads addresses in query/path; `checkMirror`
   (content.js) reports canonical addresses/front-ends; `/hit` with `via`
   logs `EventWorkaround`.

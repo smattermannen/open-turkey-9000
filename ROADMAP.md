@@ -36,7 +36,6 @@ of their group and a row here; a finished item loses its row.
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
 | B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
 | B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
-| B9 | Mute and dark on real sites; polite close with a real app | §3.9 | extension, apps-titles | box |
 | B10 | No-video on a real embedded player | §3.9 | extension | box |
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
 | B12 | Chrome: popup, extension can't be removed | §3.13 | browsers | box |
@@ -998,7 +997,22 @@ Script-tested, never by a person. Script what can be into `ci/`.
   locked" is asked only on the session bus (`GetActive`), so a program
   holding `org.cinnamon.ScreenSaver` that says "locked" stops allowance use
   being counted; check the lock another way (logind `LockedHint`?).
-- [ ] `B9` Mute and dark on real sites; polite close with a real app.
+- [x] `B9` Mute and dark on real sites; polite close with a real app.
+  Checked 2026-11-20, desktop (Mint 22.3, LibreWolf 159, devmaster),
+  a throwaway block (lists by url, block action off). Mute (youtube.com):
+  "Me at the zoo" plays (13 s in), not blocked, not dark; the tab muted
+  by `blocker@kc9k`, not audible, no LibreWolf sink input in `pactl list
+  sink-inputs` over 12 s; block off: unmuted, audible, one sink input;
+  nothing in /etc/hosts. Dark (wikipedia.org): page turned over, photos
+  as they are, block off: light again. Found and fixed: a picture in a
+  `<picture>` was turned over three times (a negative; theguardian.com
+  photos) and SVG logos turned back (Wikipedia's black wordmark vanished
+  on the dark page); now each picture turns back once, SVG `img` turn with
+  the page (extension 1.27.2; `ci/extras_test.py` counts the turns; checked
+  again on wikipedia.org, theguardian.com, bbc.com). Polite close
+  (`polite-close` on for the test): xed with unsaved text asked, its save
+  dialog opened, killed (SIGKILL) ~5 s later; gnome-calculator asked and
+  closed itself (exit 0) in 3.5 s.
 - [ ] `B10` No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
 - [ ] `B11` Social media settings beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
 - [ ] `B12` Chrome on the laptop. Checked 2026-11-15: the extension checks in from

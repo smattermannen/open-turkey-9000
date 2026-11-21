@@ -14,6 +14,10 @@ let shownFor = null;
 let keywordLooks = new Set();
 // The actions that change how a page looks or sounds rather than take it away.
 const LOOKS = ["greyscale", "no-images", "mute", "no-video", "dark"];
+// What dark turns back over the turned-over page so it shows as it is:
+// pictures (not SVG ones), videos, frames.
+const DARK_MEDIA = "img:not([src*=\".svg\" i]):not([src^=\"data:image/svg\" i]), video, canvas, iframe, " +
+  "svg image, [style*=\"background-image\"]";
 // Whether the page at lightFor has a light background (dark only acts on those).
 let lightFor = null;
 let light = true;
@@ -226,10 +230,14 @@ function render() {
     document.documentElement.toggleAttribute("data-kc9k-dark", dark);
   }
   if (dark) {
-    // Turn the page over, then turn pictures and videos back.
+    // Turn the page over, then turn pictures and videos back, once: one
+    // inside another that is turned back already (a <picture>'s img, a
+    // picture over a background image) would be turned over again. SVG
+    // pictures are mostly logos and drawings, dark lines on nothing: they
+    // turn with the page, or a black wordmark vanishes on the dark page.
     filters.push("invert(1) hue-rotate(180deg)");
-    css += "img, picture, video, canvas, iframe, svg image, [style*=\"background-image\"] " +
-      "{ filter: invert(1) hue-rotate(180deg) !important; }\n" +
+    css += DARK_MEDIA + " { filter: invert(1) hue-rotate(180deg) !important; }\n" +
+      "[style*=\"background-image\"] :is(" + DARK_MEDIA + ") { filter: none !important; }\n" +
       "html { background: #fff !important; }\n";
   }
   if (on("greyscale")) {

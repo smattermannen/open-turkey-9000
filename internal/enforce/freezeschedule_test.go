@@ -70,3 +70,30 @@ func TestFreezeScheduleHeld(t *testing.T) {
 		t.Error("a schedule without a lock was held")
 	}
 }
+
+// R-FREEZE-2: a logout freeze refuses new logins while it runs and ends the
+// sessions there are; after it, logins are let in again.
+func TestR_FREEZE_2_LogoutFreezeHoldsLogins(t *testing.T) {
+	did := fakeDevice(t)
+	var held []time.Time
+	released := 0
+	oldHold, oldRelease := holdLogins, releaseLogins
+	holdLogins = func(until time.Time) error { held = append(held, until); return nil }
+	releaseLogins = func() error { released++; return nil }
+	t.Cleanup(func() { holdLogins, releaseLogins = oldHold, oldRelease })
+
+	d := testDB(t)
+	now := time.Now()
+	end := now.Add(time.Hour).Truncate(time.Second)
+	if err := d.SetFreeze(end.Unix(), "logout"); err != nil {
+		t.Fatal(err)
+	}
+	enforceFreeze(d, now)
+	if len(held) != 1 || !held[0].Equal(end) || joinDid(did) != "logout" || released != 0 {
+		t.Fatalf("during: held %v, did %q, released %d", held, joinDid(did), released)
+	}
+	enforceFreeze(d, end.Add(time.Second))
+	if len(held) != 1 || joinDid(did) != "logout" || released != 1 {
+		t.Fatalf("after: held %v, did %q, released %d", held, joinDid(did), released)
+	}
+}

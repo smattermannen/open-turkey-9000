@@ -25,18 +25,11 @@ of their group and a row here; a finished item loses its row.
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text lifted on clicks: suites pass (2026-11-20); real use on the laptop | §3.9 | extension | owner |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
-| A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
-| A13 | `install.sh` DB race: fixed; confirm a fresh install in the VM | — | install, db-project | vm |
-| B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
-| B3 | Strict mode holes | §3.8 | device | vm |
-| B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | vm |
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
-| B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
 | B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
 | B12 | Chrome: a person opens the popup and tries to remove the extension (synthetic checked 2026-11-20) | §3.13 | browsers | owner |
-| B14 | Monk mode live: run `ci/monk_live_test.sh host` (written, never run), reboot mid-way | R-MONK-2 | device | vm |
 | 2.1 | Circadian on a laptop backlight, external screens (ddcutil), several screens, GNOME/MATE | §4.10 | circadian | owner, vm |
 | 2.2 | Ad trigger: grow the shipped industry lists | §3.9 | actions | agent |
 | 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
@@ -839,7 +832,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   (`TestLockedScheduleAndAllowanceStrengthening`). The old `block.go`
   commands called `os.Exit`, so they couldn't be tested in-process: they
   return errors now (same message).
-- [ ] `A10` **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
+- [x] `A10` **Lock model** (§3.3, §3.4, R-LOCK-1–11). Done: schedule lock
   (`kc9k schedule lock B on --lead D`) replaces built-in schedule/place
   protection, 2 h edit freeze and 24 h allow-window queue (upgrade gives
   scheduled/placed blocks a 2 h-lead schedule lock); freeze schedules have
@@ -868,9 +861,15 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   `TestClockCheckEndsLockAfterPoweredOffTime`,
   `TestClockAnchorDoesNotShortenNextLock`, `TestAgreedTime`,
   `TestCheckClockAsksOnlyWhenDue`). The live query answered here (1.6 s
-  off, RTC exact). Unchecked: a real power-off during a timer lock (needs a
-  VM: shut it down for an hour mid-lock, boot, `journalctl -u kc9k | grep
-  'clock check'`, the lock's end in `kc9k status`). (L)
+  off, RTC exact). Real power-off checked 2026-11-21, kc9k-vm (Ubuntu
+  24.04, Cinnamon X11), `tamper clock on`, a block timer-locked `--for 20m
+  --yes`, anchor taken within 5 min, `virsh shutdown`: off 25 min, booted
+  past the lock's end, still locked until the check 30 s after the daemon
+  started ("clock check: 25m53s of powered-off time counted"), then no
+  timer lock in `kc9k status`. No internet after boot (link cut from the
+  host, off 15 min): two checks failed ("no two sources agree", 0
+  answered), lock held 9 min past its real end (trusted 05:11 at real
+  05:28); link back, next check counted 17m13s and the lock ended. Built. (L)
 - [x] **Android extension can be switched off** (§3.13): built (5 s grace
   once checked in, pauses doubling 2 min → 1 h, reset after 10 min unbroken;
   `ExtensionGuard`). Unit tests run in the cloud 2026-11-16:
@@ -941,7 +940,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   unanswered (screen locked) it times out after 60 s and nothing is locked;
   synthetic keys from other programs are ignored. Left: a person clicks
   Lock and Cancel on an unlocked screen. (S)
-- [ ] `A13` **`install.sh` races the daemon for the DB.** Seen 2026-11-19 on a
+- [x] `A13` **`install.sh` races the daemon for the DB.** Seen 2026-11-19 on a
   fresh Ubuntu 24.04 VM: step 3 (`kc9k-bin browser install-librewolf`)
   failed with `database is locked (SQLITE_BUSY)`, apparently while the
   just-started daemon created the database; running it again afterwards
@@ -956,7 +955,17 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
   processes create one new DB; failed without the lock). On the desktop:
   the installed build, DB deleted, daemon start + `install-librewolf` + two
   `status` at once, 10 times: no error; `install.sh` with no DB: no error.
-  Left: a fresh install on the VM (`ci/vm.sh`), Unchecked. Not covered:
+  Checked 2026-11-20 on kc9k-vm (Ubuntu 24.04, Cinnamon X11): from
+  snapshot `clean`, `make uninstall`, `/var/lib/kc9k` and
+  `/usr/local/bin/kc9k*` removed (3 of 4 runs also LibreWolf and its
+  extrepo source), then `sudo TAGS=devmaster ./install.sh`; 4 runs,
+  reverted in between: exit 0, no SQLITE_BUSY, "database is locked" or
+  "duplicate column" in the output or the daemon's journal, step 3
+  "LibreWolf installed" (once "already installed"), `kc9k status` fine,
+  daemon active. A new DB's setup alone takes 8–13 s on that disk; the
+  daemon reached its loop 13–20 s after starting (beside
+  `install-librewolf`; the setup lock waits ≤ 30 s). Then 10 times: daemon stopped, DB deleted, daemon start +
+  `install-librewolf` + two `status` at once: all exit 0, no error. Not covered:
   a deferred transaction that reads then writes (some migrations, runtime
   code) can still get SQLITE_BUSY at once beside the daemon's writes;
   `_txlock=immediate` would close that (not done: changes every `Begin`).
@@ -974,9 +983,69 @@ Script-tested, never by a person. Script what can be into `ci/`.
   and the app closed after 177 s. Looking at the bubble on a screen: not
   needed (notify-send's text is what was checked).
 
-- [ ] `B2` Scheduled Frozen Chicken in logout/shutdown modes.
-- [ ] `B3` Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
-- [ ] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock.
+- [x] `B2` Scheduled Frozen Chicken in logout/shutdown modes (§3.8): Built.
+  2026-11-20, kc9k-vm (Ubuntu 24.04, Cinnamon X11), `TAGS=devmaster`,
+  `freeze schedule add --days daily --from … --to … --mode …` 2 min ahead.
+  Logout: at the window the session ended within 1 s, greeter shown. Found:
+  a login during the freeze (greeter, then ssh) was ended again every
+  cycle, and once the ssh session closed logind spun at 100% CPU (systemd
+  255): after the freeze an ssh login took 2 min ("Failed to create
+  session"), `loginctl` timed out, until a reboot.
+  Fixed: a logout freeze writes `/run/nologin` (pam_nologin) and ends only
+  users not already closing. Again: greeter login refused ("Failed to
+  authenticate"), ssh refused with "Frozen Chicken until 06:26", the file
+  gone at the end, a greeter login then opened the desktop, logind at 0 s
+  CPU. Shutdown: the VM powered off ~5 s into the window; booted during
+  it twice, powered off 6 s and 1 s after the daemon started (17-18 s
+  after `virsh start`); booted after it, stayed up with autologin.
+- [x] `B3` Strict mode holes: Built, 2026-11-20, kc9k-vm (Ubuntu 24.04,
+  Cinnamon X11), throwaway block (app `b3app`) timer-locked 4-30 min,
+  strict on, a loop per account copying `true` to its writable folders
+  every 5 s. Before the fix: `unshare -Urm` mounted an exec tmpfs and ran
+  a copy with the AppArmor userns restriction at Mint's 0 (Ubuntu's 1
+  holds it); copies ran from `/run/user/<uid>` and `/var/crash` (all
+  accounts); a `--user` Flatpak (own busybox runtime) started before kept
+  running its `/app` helper (a fresh start was refused: "execvp b3test:
+  Permission denied"); a guest (`guest-account add`, uid 999) kept
+  `b3app` (43 s, others killed each cycle) and the bind hid a logged-in
+  guest's home (root-owned empty folder); an unpacked Electron app
+  (resources/app, no asar) was closed as a browser after 60 s, also with a
+  locked block off; lifting the lock unmounted every guest's home. Fixed:
+  strict sets the restriction to 1 (`unshare: write failed
+  /proc/self/uid_map`, back to 0 after); runtime folders and guest homes
+  noexec (both a guest logged in before and one 80 s into the lockdown);
+  the Flatpak and a `sleep` copy started from `~` before were killed in
+  the first cycle ("closed 3 processes"), a `sleep` copy in `/var/crash`
+  within 4 s; guest and other account's `b3app` killed; the Electron app
+  ran 100 s with no close, a renamed portable LibreWolf still judged a
+  browser; after the lock: both guests' homes mounted and running
+  programs, the exempt folder with no noexec copy left, `/run/user` exec,
+  sudo back. Cinnamon logged in again during the lockdown (lightdm
+  restart) with `/run/user/1000` noexec: panel, Nemo, gnome-terminal
+  fine. Known limit: a short program copied to a world-writable folder outside
+  the noexec ones still runs once; Electron apps in an exempt folder and
+  the restriction (§5).
+- [x] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock. Built.
+  2026-11-20, kc9k-vm (Ubuntu 24.04, Cinnamon X11), `TAGS=devmaster`.
+  Lock mode: `freeze --for 25m --mode lock` locked at once; five unlocks
+  (`cinnamon-screensaver-command --deactivate`) locked again after 0.42,
+  0.62, 0.34, 0.64, 0.34 s (state polled every 50 ms); reboot during it:
+  autologin session at 14.2 s after the kernel, screensaver up 14.98 s,
+  locked 15.42 s. Shutdown mode: switched on mid-session, "System is
+  powering down" 3 s later; at each boot the daemon's first cycle powered
+  off before any login (unit started → powering down: 10.8 → 13.7 s,
+  17.9 → 22.9 s, 22.4 → 24.0 s after the kernel; `virsh start` → off
+  25.3 s, BIOS and GRUB included). Daemon start → first cycle 0.5 s on a
+  running system, up to 4.7 s while booting. `kc9k.nofreeze` added in
+  GRUB (e, end of the `linux` line, F10): stayed up, screen not locked,
+  `mode show freeze` "on (shutdown) until 10:16; it can't end early"; the
+  next plain boot powered off again; the first boot after 10:16 stayed up,
+  "Frozen Chicken is off" (time counted while off). A power-off with a
+  session open took 90 s more: the test's own monitor script held the
+  session scope (systemd's stop timeout), not kc9k. Found: extending a
+  running lock freeze with `--mode apps` switches it to allowed apps only
+  and the screen stays unlocked (6 checks over 12 s), so from a text
+  console a lock freeze can be weakened (§5).
 - [ ] `B5` Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
 - [x] `B6` Websites tab on a real screen. (Address change without load: a
   `history.pushState` page is caught by a URL list in LibreWolf,
@@ -1000,9 +1069,26 @@ Script-tested, never by a person. Script what can be into `ci/`.
   load); block on, the same click → the block page ("Stopped by the list
   Blocked of the block b6yt") at the first poll (< 0.25 s); the results
   page itself opens. Block, gui.json as found.
-- [ ] `B7` One-off logout/shutdown from a list; Dashboard monk button. (Checked
+- [x] `B7` One-off logout/shutdown from a list; Dashboard monk button. (Checked
   2026-11-15: a timer-locked global ladder refuses `bypass off` and a weaker
-  ladder, and turns off once the lock ends.)
+  ladder, and turns off once the lock ends.) Built: 2026-11-20, kc9k-vm
+  (Ubuntu 24.04, Cinnamon X11), this tree installed `TAGS=devmaster`; a block
+  with `example.net` in its Blocked list, action logout (once), then shutdown
+  (once), tripped by typing the address in LibreWolf on :0 (xdotool). Logout:
+  the extension closed the browser at once, the daemon logged the user out
+  60 s after the hit (10:37:48 → 10:38:48). Shutdown: off 60 s after the hit
+  (10:41:37 → 10:42:37, powered off by 10:42:39). The 60 s notice (R-WARN-1)
+  first never showed: `NotifyDesktop` needed `notify-send`, which Ubuntu's
+  Cinnamon lacks (libnotify-bin only a Recommends of the .deb). Fixed: else
+  `busctl --user` calls the notification service
+  (`TestR_WARN_1_NotifyWithoutNotifySend`); then "you will be logged out in
+  60 seconds" / "the computer will shut down in 60 seconds" showed on screen
+  and on the session bus. Overview's "Monk mode…" (xdotool): 2m, OK, then
+  "Set this lock?" (R-LOCK-12) with target, kind and end; Cancel left monk
+  mode off; Lock started it within 1 s (link down, 1.1.1.1 silent, card
+  "Monk mode 1 min"), ended 10:36:30 and the network came back. The GUI's
+  confirmation is a plain dialog: synthetic clicks count (only hotkey
+  confirmations ignore them).
 - [ ] `B8` Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
   2026-11-20 (overnight, desktop, Mint 22.3): idle was never seen there:
   cinnamon-screensaver 6.6 answers `GetSessionIdleTime` with "not
@@ -1092,10 +1178,17 @@ Script-tested, never by a person. Script what can be into `ci/`.
   exe on FUSE or closed to root is the user's (`TestUserPlacedExe`,
   roottest `TestGuardJudgesAppImageBrowser` with the real AppImage: fails
   before, passes).
-- [ ] `B14` Monk mode live, incl. reboot mid-way. `ci/monk_live_test.sh`
-  written 2026-11-20 (the VM checks itself while cut: three cuts, undoing
-  each put back, locked, restart, held after it, restored at the end);
-  never run: `ci/monk_live_test.sh host kc9k-vm` from the test machine.
+- [x] `B14` Monk mode live, incl. reboot mid-way (R-MONK-2). Built:
+  2026-11-20, kc9k-vm (Ubuntu 24.04, Cinnamon X11), this tree installed
+  `TAGS=devmaster`: `ci/monk_live_test.sh host kc9k-vm` PASS, 6 min. Before:
+  radio enabled, `enp1s0` up, online. Within 2 s of `kc9k monk --for 6m
+  --yes`: radio off, `enp1s0` down, firewall drops, 1.1.1.1 silent, loopback
+  and the rules server answer. Undone by hand (link up, `nmcli radio wifi
+  on`, `nft delete table inet kc9k`): each cut again within 3 s; `mode off
+  monk` refused (locked). Restart mid-way: 20 s after boot all three held
+  ("enp1s0 was brought back up; down again"). At the end (23:02:24, +4 s):
+  radio back on, `enp1s0` up, online, `kc9k monk` off. The VM has no Wi-Fi
+  card: the radio checked is NetworkManager's switch only.
 - [x] `B15` GUI design pass: seen by the owner on a real screen (2026-11-18: tremendous).
 - [x] `B16` Lists without types (§3.2): checked 2026-11-15: `H` and `test` have
   one `Blocked` each; `H` blocks reddit.com by address and a page by its
@@ -1358,3 +1451,26 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   extension (`kc9kIndexTest` compares the host with its port);
   `127.0.0.1:47999` does. SPEC is silent on ports. Proposed: a site entry
   without a port matches any port, as browser match patterns do.
+
+- FOR THE OWNER (B3, 2026-11-20): strict mode now turns on AppArmor's
+  `kernel.apparmor_restrict_unprivileged_userns` while it acts (Ubuntu's
+  default; Mint turns it off), or `unshare -Urm` mounts a tmpfs that runs
+  programs and nothing from `/home` is stopped. Programs with an AppArmor
+  profile (Chrome, LibreWolf, Firefox, Flatpak, Steam, Discord, Slack,
+  VS Code on Mint 22) are unaffected; an Electron or Chromium app without
+  one, run from an exempt folder (an AppImage or unpacked app), aborts
+  ("SUID sandbox helper binary ... not configured correctly") unless
+  started with `--no-sandbox`. To decide: keep it (as on stock Ubuntu),
+  or have KC9K load an AppArmor profile allowing user namespaces for the
+  exempt folders (they may already run anything).
+- (B4, 2026-11-20) Changing a running freeze's mode: `freeze --for D
+  --mode M` extends a running freeze and takes M as its mode, and a
+  scheduled freeze whose window ends later does the same; SPEC says a
+  running freeze can't end (R-FREEZE-2) but not whether its mode may
+  change. Seen in the VM: a lock freeze extended with `--mode apps` (an
+  allowed app listed before) stopped locking the screen; a text console
+  login is open during a lock freeze, so anyone there can do it.
+  Proposed: while a freeze runs, a mode only changes to a stronger one
+  (allowed apps only < lock screen < logout < shutdown); a weaker one is
+  refused (`refused()`, not a bypass), and an extension that names none
+  keeps the running mode.

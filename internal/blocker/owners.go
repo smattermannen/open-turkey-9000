@@ -17,6 +17,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // regularUser reports whether uid belongs to a person rather than the
@@ -28,6 +29,61 @@ func regularUser(uid uint64) bool {
 		return false
 	}
 	return uid < 61184 || uid > 65519
+}
+
+// personUser reports whether uid belongs to a person: a regular user, or a
+// guest account. LightDM's guest session (guest-account, Mint's "Guest
+// session") logs a person in as a system account (uid below 1000) named
+// guest-XXXXXX with its home in /tmp/guest-XXXXXX, so the uid alone would
+// leave the guest's programs, windows and logins out of every block (B3).
+func personUser(uid uint64) bool {
+	return regularUser(uid) || guestUIDs()[uid]
+}
+
+// passwdPath is read for guest accounts (replaced in tests).
+var passwdPath = "/etc/passwd"
+
+var guestCache struct {
+	sync.Mutex
+	stamp string
+	uids  map[uint64]bool
+}
+
+// guestUIDs returns the user IDs of LightDM guest accounts, read from
+// /etc/passwd again only when it changes.
+func guestUIDs() map[uint64]bool {
+	info, err := os.Stat(passwdPath)
+	if err != nil {
+		return nil
+	}
+	stamp := info.ModTime().String() + "/" + strconv.FormatInt(info.Size(), 10)
+	guestCache.Lock()
+	defer guestCache.Unlock()
+	if guestCache.uids != nil && guestCache.stamp == stamp {
+		return guestCache.uids
+	}
+	data, err := os.ReadFile(passwdPath)
+	if err != nil {
+		return nil
+	}
+	guestCache.stamp, guestCache.uids = stamp, parseGuestUIDs(string(data))
+	return guestCache.uids
+}
+
+// parseGuestUIDs picks the guest accounts out of /etc/passwd content: named
+// guest-* with their home in /tmp/guest-*, as guest-account makes them.
+func parseGuestUIDs(passwd string) map[uint64]bool {
+	out := map[uint64]bool{}
+	for _, line := range strings.Split(passwd, "\n") {
+		f := strings.Split(line, ":")
+		if len(f) < 7 || !strings.HasPrefix(f[0], "guest-") || f[5] != "/tmp/"+f[0] {
+			continue
+		}
+		if uid, err := strconv.ParseUint(f[2], 10, 32); err == nil && uid != 0 {
+			out[uid] = true
+		}
+	}
+	return out
 }
 
 // parseStatusUIDs reads the real and effective user IDs from
@@ -60,19 +116,19 @@ func processUIDs(pid int) (real, effective uint64, ok bool) {
 	return parseStatusUIDs(string(data))
 }
 
-// ownedByUser reports whether a process runs as a regular user, by both its
-// real and effective user ID: a setuid program a user started (sudo,
-// passwd) is running with system rights and is left alone.
+// ownedByUser reports whether a process runs as a person (personUser), by
+// both its real and effective user ID: a setuid program a user started
+// (sudo, passwd) is running with system rights and is left alone.
 func ownedByUser(pid int) bool {
 	real, effective, ok := processUIDs(pid)
-	return ok && regularUser(real) && regularUser(effective)
+	return ok && personUser(real) && personUser(effective)
 }
 
-// ownedBy reports whether a process runs as the regular user uid, by both
-// its real and effective user ID.
+// ownedBy reports whether a process runs as the person uid, by both its
+// real and effective user ID.
 func ownedBy(pid int, uid uint64) bool {
 	real, effective, ok := processUIDs(pid)
-	return ok && regularUser(uid) && real == uid && effective == uid
+	return ok && personUser(uid) && real == uid && effective == uid
 }
 
 // essentialApps are programs the desktop session can't do without (names in

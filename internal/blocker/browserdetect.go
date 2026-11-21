@@ -13,6 +13,10 @@
 // owns are judged by their engine; root-owned ones are judged by name, as
 // before. Electron apps keep their app.asar open or mapped, which no browser
 // does, so a user-installed Electron app isn't mistaken for a browser either.
+// An Electron app shipped unpacked (resources/app, no archive) holds no
+// asar; its renderers carry Electron's --app-path switch, which Chromium's
+// never do (B3). A process is judged once it has had electronSettle to start
+// them.
 package blocker
 
 import (
@@ -23,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // geckoMarkers and chromiumMarkers are files only a browser engine maps.
@@ -116,7 +121,63 @@ func engineBrowser(pid int) bool {
 		return false
 	}
 	// Electron reads its app.asar through an open file or a memory map.
-	return !strings.Contains(string(maps), ".asar") && !holdsAsar(pid)
+	return !strings.Contains(string(maps), ".asar") && !holdsAsar(pid) && !electronRenderer(pid, 3)
+}
+
+// electronSettle is how long a new process with a browser engine is given to
+// start its renderers before it is judged.
+const electronSettle = 15 * time.Second
+
+// electronRenderer reports whether a renderer with Electron's --app-path
+// switch runs among pid's descendants, depth levels down (Electron's
+// renderers are children of its zygote, a child of the main process).
+func electronRenderer(pid, depth int) bool {
+	if depth == 0 {
+		return false
+	}
+	for _, child := range childPIDs(pid) {
+		if cmd, err := os.ReadFile("/proc/" + strconv.Itoa(child) + "/cmdline"); err == nil && electronRendererCmdline(string(cmd)) {
+			return true
+		}
+		if electronRenderer(child, depth-1) {
+			return true
+		}
+	}
+	return false
+}
+
+// electronRendererCmdline reports whether /proc/<pid>/cmdline content is an
+// Electron renderer's: --type=renderer with --app-path=. Chromium rewrites
+// its children's process titles, joining the arguments with spaces.
+func electronRendererCmdline(cmdline string) bool {
+	renderer, appPath := false, false
+	for _, arg := range strings.FieldsFunc(cmdline, func(r rune) bool { return r == 0 || r == ' ' }) {
+		renderer = renderer || arg == "--type=renderer"
+		appPath = appPath || strings.HasPrefix(arg, "--app-path=")
+	}
+	return renderer && appPath
+}
+
+// childPIDs lists a process's children, from each of its threads.
+func childPIDs(pid int) []int {
+	dir := "/proc/" + strconv.Itoa(pid) + "/task"
+	tasks, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []int
+	for _, t := range tasks {
+		data, err := os.ReadFile(dir + "/" + t.Name() + "/children")
+		if err != nil {
+			continue
+		}
+		for _, f := range strings.Fields(string(data)) {
+			if child, err := strconv.Atoi(f); err == nil {
+				out = append(out, child)
+			}
+		}
+	}
+	return out
 }
 
 // browserVerdict caches whether a process is a guarded browser, keyed by its
@@ -154,6 +215,11 @@ func (c *browserCache) guarded(pid int) bool {
 		return v.guarded
 	}
 	verdict := engineBrowser(pid)
+	if verdict {
+		if age, ok := processAge(pid, systemUptime()); !ok || age < electronSettle {
+			return false // judged again once it has had time to start its renderers
+		}
+	}
 	c.mu.Lock()
 	c.verdicts[pid] = browserVerdict{start: start, guarded: verdict}
 	c.mu.Unlock()

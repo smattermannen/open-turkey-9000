@@ -39,7 +39,7 @@ of their group and a row here; a finished item loses its row.
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
 | B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | box |
 | B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
-| B8 | Use counting with input and idle (simulated input); LockedHint under Cinnamon: `ci/lockedhint_check.sh` script written, never run | §3.7 | allowance | box |
+| B8 | Use counting with input and idle (simulated input); LockedHint under Cinnamon: run `ci/lockedhint_check.sh` on the desktop (written 2026-11-21, never run) | §3.7 | allowance | box |
 | B9 | Mute and dark on real sites; polite close with a real app | §3.9 | extension, apps-titles | box |
 | B10 | No-video on a real embedded player | §3.9 | extension | box |
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
@@ -51,10 +51,10 @@ of their group and a row here; a finished item loses its row.
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test; the new industry domains in real ad requests (Unchecked) | §3.9 | actions, extension | box |
 | 2.4 | SafeSearch per engine: built; checked in Chrome (2026-11-21); in LibreWolf (Unchecked) | §4.10 | browsers | box |
-| 2.6 | Factory reset protection: built; PAM root guard in the VM: `ci/strict_pam_vm_test.sh` script written, never run (vm); firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
+| 2.6 | Factory reset protection: built; PAM root guard: run `ci/strict_pam_vm_test.sh host kc9k-vm` (written 2026-11-21, never run) (vm); firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
 | 2.7 | Hardening: the text lock's window on a real desktop (Unchecked); rules server secret dropped (§5, 2026-11-21) | R-LOCK-5, §4.6 | browsers, locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| 2.9 | Tamper settings of 2026-11-21 (guest, extension-stop, installer, inactive-tabs, embedded): live checks; VM parts: `ci/tamper_vm_test.sh` script written, never run | §4.10 | browsers, extension, install | box, vm |
+| 2.9 | Tamper settings of 2026-11-21 (guest, extension-stop, installer, inactive-tabs, embedded): live checks; VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |

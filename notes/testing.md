@@ -180,6 +180,12 @@
   `cinnamon-screensaver-command --lock` and checks logind's `LockedHint`
   for the user's x11/wayland sessions before, while locked and after the
   person unlocks (B8: `blocker.lockedByLogind` relies on it).
+- X11 tests (`startX`) need `/tmp/.X11-unix` owned by root and sticky
+  (`trustedX11Socket` refuses anything else, on purpose). In a fresh
+  cloud container the first Xvfb run by the test user creates it as that
+  user and `TestX11IdleMillis`, `TestTitleGuardPerUser`,
+  `TestX11ListsAndClosesWindows` fail ("has no X server of root's"): as
+  root, `chown root:root /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix`.
 - Race check: the `internal/cli` package takes ~14 min under `-race`, past
   go test's 10-minute default: `CGO_ENABLED=1 go test -race -timeout 30m
   ./internal/...`. Clean 2026-11-21.

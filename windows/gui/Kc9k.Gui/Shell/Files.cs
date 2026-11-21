@@ -165,7 +165,7 @@ public static class Files
                 var words = (text ?? "").Split(',').Select(w => w.Trim()).Where(w => w.Length > 0).ToList();
                 if (words.Count == 0) return;
                 var where = c.State?.FindBlock(block)?.Lists.FirstOrDefault(l => l.Name == list)?.Where ?? [];
-                var steps = new List<List<string>> { ["list", "add", block, list, .. words] };
+                List<List<string>> steps = [["list", "add", block, list, .. words]];
                 if (!where.Contains("url")) steps.Add(["list", "scope", block, list, "url", "on"]);
                 await RunSteps(window, steps);
                 return;
@@ -177,8 +177,9 @@ public static class Files
                 var found = await ReadImport(window, path);
                 if (found is null) return;
                 var steps = new List<List<string>>();
-                if (found.Phrases.Count > 0 && await ChoosePhraseSet(window, block, found.Phrases.Count) is var (name, isNew))
+                if (found.Phrases.Count > 0 && await ChoosePhraseSet(window, block, found.Phrases.Count) is { } target)
                 {
+                    var (name, isNew) = target;
                     if (isNew) steps.Add(["phrase-set", "create", block, name]);
                     steps.Add(["phrase-set", "import", block, name, path]);
                 }

@@ -1,0 +1,62 @@
+name: Windows GUI
+
+# W4 (GUI) and W7 (installer): build and test windows/ on windows-latest.
+# The GUI runs against the fake kc9k (fixtures from the real CLI); the
+# screenshots are uploaded for a person to look at.
+on:
+  push:
+    paths:
+      - "windows/**"
+      - "internal/cli/**"
+      - ".github/workflows/windows-gui.yml"
+  workflow_dispatch:
+
+jobs:
+  gui:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: windows/gui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Unit tests
+        run: dotnet test Kc9k.Tests -c Release --logger "console;verbosity=normal"
+      - name: Build the GUI
+        run: dotnet publish Kc9k.Gui -c Release -r win-x64 -o ${{ runner.temp }}\gui
+      - name: Build the fake kc9k
+        run: dotnet publish FakeKc9k -c Release -r win-x64 --self-contained false -o ${{ runner.temp }}\fake
+      - name: Screen
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::AllScreens | Format-List
+      - name: UI Automation smoke tests
+        env:
+          KC9K_GUI_EXE: ${{ runner.temp }}\gui\kc9k-gui.exe
+          KC9K_FAKE_EXE: ${{ runner.temp }}\fake\kc9k.exe
+          KC9K_SCREENSHOTS: ${{ github.workspace }}\screenshots
+        run: dotnet test Kc9k.UiTests -c Release --logger "console;verbosity=normal"
+      - name: GUI log
+        if: always()
+        run: |
+          $log = Join-Path $env:LOCALAPPDATA "kc9k\gui.log"
+          if (Test-Path $log) { Get-Content $log -Tail 200 } else { "no log" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-gui-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kc9k-gui
+          path: ${{ runner.temp }}\gui
+          retention-days: 7

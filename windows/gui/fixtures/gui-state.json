@@ -1,0 +1,939 @@
+{
+ "freeze_seconds": 0,
+ "freeze_mode": "",
+ "freeze_apps": [],
+ "strict": false,
+ "no_escape": false,
+ "reset_guard": false,
+ "stats": true,
+ "stats_skip_private": false,
+ "accounts": [
+  "ubuntu",
+  "kctest"
+ ],
+ "librewolf": "",
+ "chrome": true,
+ "extension_status": "needed now: browsers without it are closed after 60 seconds; no check-in yet (open a supported browser)",
+ "extension_missing": false,
+ "extension_missing_in": [],
+ "settings_password": false,
+ "freeze_schedules": [],
+ "freeze_schedule_locks": [],
+ "browser": {
+  "block-devtools": true,
+  "force-search": false,
+  "no-private": false,
+  "safesearch-bing": false,
+  "safesearch-duckduckgo": false,
+  "safesearch-google": true,
+  "safesearch-youtube": true,
+  "web-only": false
+ },
+ "browser_locks": {
+  "block-devtools": {
+   "lock_seconds": 0,
+   "char_locked": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "guards_blocks": true
+  },
+  "force-search": {
+   "lock_seconds": 0,
+   "char_locked": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "guards_blocks": false
+  },
+  "no-private": {
+   "lock_seconds": 0,
+   "char_locked": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "guards_blocks": false
+  },
+  "safesearch-bing": {
+   "lock_seconds": 0,
+   "char_locked": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "guards_blocks": false
+  },
+  "safesearch-duckduckgo": {
+   "lock_seconds": 0,
+   "char_locked": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "guards_blocks": false
+  },
+  "safesearch-google": {
+   "lock_seconds": 0,
+   "char_locked": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "guards_blocks": false
+  },
+  "safesearch-youtube": {
+   "lock_seconds": 0,
+   "char_locked": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "guards_blocks": false
+  },
+  "web-only": {
+   "lock_seconds": 0,
+   "char_locked": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "guards_blocks": false
+  }
+ },
+ "blocks": [
+  {
+   "triggers": {
+    "apps": [
+     {
+      "name": "close"
+     }
+    ],
+    "titles": [
+     {
+      "name": "close"
+     }
+    ]
+   },
+   "automation": {
+    "default_on": false,
+    "need_both": false
+   },
+   "continuous": false,
+   "mode": "",
+   "applied_schedules": [],
+   "name": "Evening",
+   "lists": [
+    {
+     "id": 5,
+     "name": "Blocked",
+     "kind": "blacklist",
+     "where": [
+      "url"
+     ],
+     "actions": [
+      {
+       "action": "block",
+       "distinct": 1,
+       "hits": 1
+      }
+     ],
+     "entries": [
+      "netflix.com",
+      "twitch.tv"
+     ],
+     "test": false
+    },
+    {
+     "id": 6,
+     "name": "Exceptions",
+     "kind": "exceptions",
+     "where": [
+      "url"
+     ],
+     "actions": [],
+     "entries": [
+      "file://*"
+     ],
+     "test": false
+    }
+   ],
+   "phrase_sets": [],
+   "apps": [],
+   "titles": [],
+   "nepsis": {},
+   "nepsis_count": 0,
+   "schedules": [
+    "weekdays 18:00-23:00"
+   ],
+   "schedule_windows": [
+    {
+     "days": 62,
+     "start": 1080,
+     "end": 1380,
+     "allow": false
+    }
+   ],
+   "users": [],
+   "active": true,
+   "held": false,
+   "char_locked": false,
+   "pomodoro_on": 1500,
+   "pomodoro_off": 300,
+   "pomodoro_long": 0,
+   "pomodoro_every": 0,
+   "on_break": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "delay_seconds": 0,
+   "stop_seconds": 0,
+   "delay_left": 0,
+   "scheduled": true,
+   "autostarts": [],
+   "lifted": true,
+   "enabled": false,
+   "lock_seconds": 0,
+   "quota_limit": 0,
+   "quota_used": 0,
+   "quota_open": false,
+   "quota_next": -1,
+   "keyword_test": false,
+   "places": [],
+   "loosen_delay": 86400,
+   "schedule_lock": false,
+   "schedule_lead": 0,
+   "social": [],
+   "break_allowance": 0,
+   "break_per": 0,
+   "break_balance": 0,
+   "relock": 0,
+   "paused_seconds": 0
+  },
+  {
+   "triggers": {
+    "apps": [
+     {
+      "name": "close"
+     }
+    ],
+    "titles": [
+     {
+      "name": "close"
+     }
+    ]
+   },
+   "automation": {
+    "default_on": false,
+    "need_both": false
+   },
+   "continuous": false,
+   "mode": "Study",
+   "applied_schedules": [],
+   "name": "Games",
+   "lists": [
+    {
+     "id": 7,
+     "name": "Blocked",
+     "kind": "blacklist",
+     "where": [
+      "url"
+     ],
+     "actions": [
+      {
+       "action": "block",
+       "distinct": 1,
+       "hits": 1
+      }
+     ],
+     "entries": [],
+     "test": false
+    },
+    {
+     "id": 8,
+     "name": "Exceptions",
+     "kind": "exceptions",
+     "where": [
+      "url"
+     ],
+     "actions": [],
+     "entries": [
+      "file://*"
+     ],
+     "test": false
+    }
+   ],
+   "phrase_sets": [],
+   "apps": [
+    "epicgameslauncher.exe",
+    "steam.exe"
+   ],
+   "titles": [],
+   "nepsis": {},
+   "nepsis_count": 0,
+   "schedules": [
+    "weekdays 09:00-17:00"
+   ],
+   "schedule_windows": [
+    {
+     "days": 62,
+     "start": 540,
+     "end": 1020,
+     "allow": false
+    }
+   ],
+   "users": [],
+   "active": true,
+   "held": false,
+   "char_locked": false,
+   "pomodoro_on": 0,
+   "pomodoro_off": 0,
+   "pomodoro_long": 0,
+   "pomodoro_every": 0,
+   "on_break": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "delay_seconds": 0,
+   "stop_seconds": 0,
+   "delay_left": 0,
+   "scheduled": true,
+   "autostarts": [],
+   "lifted": true,
+   "enabled": false,
+   "lock_seconds": 0,
+   "quota_limit": 3600,
+   "quota_used": 0,
+   "quota_open": false,
+   "quota_next": -1,
+   "quota_refill": "00:00",
+   "keyword_test": false,
+   "places": [],
+   "loosen_delay": 86400,
+   "schedule_lock": false,
+   "schedule_lead": 0,
+   "social": [],
+   "break_allowance": 0,
+   "break_per": 0,
+   "break_balance": 0,
+   "relock": 0,
+   "paused_seconds": 0
+  },
+  {
+   "triggers": {
+    "apps": [
+     {
+      "name": "close"
+     }
+    ],
+    "titles": [
+     {
+      "name": "close"
+     }
+    ]
+   },
+   "automation": {
+    "default_on": true,
+    "need_both": false
+   },
+   "continuous": false,
+   "mode": "",
+   "applied_schedules": [],
+   "name": "Social media",
+   "lists": [
+    {
+     "id": 9,
+     "name": "Blocked",
+     "kind": "blacklist",
+     "where": [
+      "url"
+     ],
+     "actions": [
+      {
+       "action": "block",
+       "distinct": 1,
+       "hits": 1
+      }
+     ],
+     "entries": [
+      "facebook.com",
+      "instagram.com",
+      "x.com",
+      "tiktok.com"
+     ],
+     "test": false
+    },
+    {
+     "id": 10,
+     "name": "Exceptions",
+     "kind": "exceptions",
+     "where": [
+      "url"
+     ],
+     "actions": [],
+     "entries": [
+      "file://*"
+     ],
+     "test": false
+    }
+   ],
+   "phrase_sets": [],
+   "apps": [],
+   "titles": [],
+   "nepsis": {},
+   "nepsis_count": 0,
+   "schedules": [
+    "allow weekends 10:00-12:00"
+   ],
+   "schedule_windows": [
+    {
+     "days": 65,
+     "start": 600,
+     "end": 720,
+     "allow": true
+    }
+   ],
+   "users": [],
+   "active": true,
+   "held": true,
+   "char_locked": false,
+   "pomodoro_on": 0,
+   "pomodoro_off": 0,
+   "pomodoro_long": 0,
+   "pomodoro_every": 0,
+   "on_break": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "delay_seconds": 3600,
+   "stop_seconds": 0,
+   "delay_left": 0,
+   "lock_order": [
+    "timer",
+    "delay"
+   ],
+   "scheduled": true,
+   "autostarts": [],
+   "lifted": false,
+   "enabled": true,
+   "lock_seconds": 259200,
+   "quota_limit": 0,
+   "quota_used": 0,
+   "quota_open": false,
+   "quota_next": -1,
+   "keyword_test": false,
+   "places": [],
+   "loosen_delay": 86400,
+   "schedule_lock": false,
+   "schedule_lead": 0,
+   "social": [],
+   "break_allowance": 0,
+   "break_per": 0,
+   "break_balance": 0,
+   "relock": 0,
+   "paused_seconds": 0
+  },
+  {
+   "triggers": {
+    "apps": [
+     {
+      "name": "close"
+     }
+    ],
+    "titles": [
+     {
+      "name": "close"
+     }
+    ]
+   },
+   "automation": {
+    "default_on": false,
+    "need_both": false
+   },
+   "continuous": false,
+   "mode": "Study",
+   "applied_schedules": [],
+   "name": "Work",
+   "lists": [
+    {
+     "id": 1,
+     "name": "Blocked",
+     "kind": "blacklist",
+     "where": [
+      "url"
+     ],
+     "actions": [
+      {
+       "action": "block",
+       "distinct": 1,
+       "hits": 1
+      }
+     ],
+     "entries": [
+      "youtube.com",
+      "reddit.com",
+      "news.ycombinator.com"
+     ],
+     "test": false
+    },
+    {
+     "id": 3,
+     "name": "Rendered terms on page",
+     "kind": "blacklist",
+     "where": [
+      "text"
+     ],
+     "actions": [
+      {
+       "action": "block",
+       "distinct": 1,
+       "hits": 1
+      }
+     ],
+     "entries": [
+      "breaking news"
+     ],
+     "test": false
+    },
+    {
+     "id": 4,
+     "name": "Shopping",
+     "kind": "blacklist",
+     "where": [
+      "url"
+     ],
+     "actions": [
+      {
+       "action": "block",
+       "distinct": 1,
+       "hits": 1
+      }
+     ],
+     "entries": [
+      "amazon.com",
+      "ebay.com"
+     ],
+     "test": false
+    },
+    {
+     "id": 2,
+     "name": "Exceptions",
+     "kind": "exceptions",
+     "where": [
+      "url"
+     ],
+     "actions": [],
+     "entries": [
+      "file://*",
+      "music.youtube.com"
+     ],
+     "test": false
+    }
+   ],
+   "phrase_sets": [
+    {
+     "id": 1,
+     "name": "Gossip",
+     "where": [
+      "text"
+     ],
+     "actions": [
+      {
+       "action": "block",
+       "distinct": 1,
+       "hits": 1
+      }
+     ],
+     "test": false,
+     "phrases": [
+      {
+       "sets": [
+        {
+         "terms": [
+          "celebrity",
+          "star"
+         ],
+         "necessary": true
+        },
+        {
+         "terms": [
+          "divorce",
+          "scandal"
+         ],
+         "necessary": true
+        }
+       ],
+       "text": "[celebrity, star] [divorce, scandal]"
+      }
+     ]
+    }
+   ],
+   "apps": [
+    "steam.exe"
+   ],
+   "titles": [
+    "Solitaire"
+   ],
+   "nepsis": {},
+   "nepsis_count": 0,
+   "schedules": [
+    "weekdays 09:00-17:00"
+   ],
+   "schedule_windows": [
+    {
+     "days": 62,
+     "start": 540,
+     "end": 1020,
+     "allow": false
+    }
+   ],
+   "users": [],
+   "active": true,
+   "held": true,
+   "char_locked": false,
+   "pomodoro_on": 0,
+   "pomodoro_off": 0,
+   "pomodoro_long": 0,
+   "pomodoro_every": 0,
+   "on_break": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "delay_seconds": 0,
+   "stop_seconds": 0,
+   "delay_left": 0,
+   "lock_order": [
+    "timer"
+   ],
+   "scheduled": true,
+   "autostarts": [],
+   "lifted": true,
+   "enabled": false,
+   "lock_seconds": 7200,
+   "quota_limit": 0,
+   "quota_used": 0,
+   "quota_open": false,
+   "quota_next": -1,
+   "keyword_test": false,
+   "places": [],
+   "loosen_delay": 86400,
+   "schedule_lock": false,
+   "schedule_lead": 0,
+   "social": [],
+   "break_allowance": 600,
+   "break_per": 3600,
+   "break_balance": 0,
+   "relock": 0,
+   "paused_seconds": 0
+  }
+ ],
+ "hotkeys": [
+  {
+   "id": 1,
+   "keys": "<Primary><Alt>w",
+   "block": "Work",
+   "no_confirm": false,
+   "actions": [
+    {
+     "kind": "start",
+     "target": "Work"
+    }
+   ],
+   "lock": "",
+   "kinds": "",
+   "does": "starts 'Work'"
+  }
+ ],
+ "nepsis": {
+  "steps": [
+   {
+    "count": 5,
+    "minutes": 10,
+    "actions": [
+     {
+      "action": "warning"
+     }
+    ]
+   }
+  ]
+ },
+ "nepsis_count": 0,
+ "nepsis_lock": {
+  "lock_seconds": 0,
+  "char_locked": false,
+  "password_locked": false,
+  "restart_locked": false,
+  "guards_blocks": false
+ },
+ "strict_lock": {
+  "lock_seconds": 0,
+  "char_locked": false,
+  "password_locked": false,
+  "restart_locked": false,
+  "guards_blocks": false
+ },
+ "no_weakening": false,
+ "password_for_locks": false,
+ "dns": "",
+ "tamper_clock": true,
+ "tamper_file_urls": false,
+ "tamper_task_managers": false,
+ "tamper_private": false,
+ "tamper_guest": false,
+ "tamper_extension_stop": true,
+ "tamper_installer": false,
+ "tamper_inactive_tabs": true,
+ "tamper_embedded": true,
+ "tamper_grace": 60,
+ "anything_locked": true,
+ "notifications": {
+  "advance": [
+   2,
+   5
+  ]
+ },
+ "strict_use": false,
+ "strict_exempt": [],
+ "templates": [
+  "Work preset"
+ ],
+ "presets": [
+  {
+   "kind": "schedule",
+   "name": "Weekend preset",
+   "what": "weekends 00:00-24:00"
+  }
+ ],
+ "unsupported_browsers": false,
+ "unsupported_browsers_lock": {
+  "lock_seconds": 0,
+  "char_locked": false,
+  "password_locked": false,
+  "restart_locked": false,
+  "guards_blocks": true
+ },
+ "browsers": [
+  {
+   "id": "librewolf",
+   "name": "LibreWolf",
+   "installed": false,
+   "checkin_seconds": -1
+  },
+  {
+   "id": "chrome",
+   "name": "Google Chrome",
+   "installed": true,
+   "checkin_seconds": -1
+  },
+  {
+   "id": "chromium",
+   "name": "Chromium",
+   "installed": false,
+   "checkin_seconds": -1
+  }
+ ],
+ "monk_seconds": 0,
+ "options": {
+  "block-page-details": true,
+  "polite-close": true
+ },
+ "clusters": [],
+ "recording": null,
+ "places": [],
+ "modes": [
+  {
+   "name": "Monk mode",
+   "monk": true,
+   "active": false,
+   "blocks": [],
+   "windows": [],
+   "schedules": [],
+   "places": [],
+   "automation": {
+    "default_on": false,
+    "need_both": false
+   },
+   "continuous": true,
+   "running": false,
+   "on": 0,
+   "locked": 0,
+   "monk_left": 0,
+   "freeze": false,
+   "freeze_left": 0,
+   "freeze_mode": "",
+   "custom": [],
+   "run_left": 0,
+   "today_windows": [],
+   "wallpapers": []
+  },
+  {
+   "name": "Frozen Chicken",
+   "monk": false,
+   "active": false,
+   "blocks": [],
+   "windows": [],
+   "schedules": [],
+   "places": [],
+   "automation": {
+    "default_on": false,
+    "need_both": false
+   },
+   "continuous": true,
+   "running": false,
+   "on": 0,
+   "locked": 0,
+   "monk_left": 0,
+   "freeze": true,
+   "freeze_left": 0,
+   "freeze_mode": "",
+   "custom": [],
+   "run_left": 0,
+   "today_windows": [],
+   "wallpapers": []
+  },
+  {
+   "name": "Study",
+   "monk": false,
+   "active": false,
+   "blocks": [
+    "Games",
+    "Work"
+   ],
+   "windows": [
+    {
+     "days": 62,
+     "start": 540,
+     "end": 1020,
+     "allow": false
+    }
+   ],
+   "schedules": [],
+   "places": [],
+   "automation": {
+    "default_on": false,
+    "need_both": false
+   },
+   "continuous": false,
+   "running": false,
+   "on": 2,
+   "locked": 1,
+   "monk_left": 0,
+   "freeze": false,
+   "freeze_left": 0,
+   "freeze_mode": "",
+   "custom": [],
+   "run_left": 0,
+   "today_windows": [],
+   "wallpapers": []
+  }
+ ],
+ "wallpaper": {
+  "override_modes": false,
+  "default": "latest",
+  "custom_name": "",
+  "custom_path": ""
+ },
+ "schedules": [
+  {
+   "name": "Weekend",
+   "windows": [
+    {
+     "days": 65,
+     "start": 0,
+     "end": 1440,
+     "allow": false
+    }
+   ],
+   "blocks": [],
+   "modes": []
+  }
+ ],
+ "social_presets": [
+  {
+   "name": "youtube:no-shorts",
+   "site": "YouTube",
+   "title": "No Shorts"
+  },
+  {
+   "name": "youtube:no-home",
+   "site": "YouTube",
+   "title": "No home feed (opens Subscriptions)"
+  },
+  {
+   "name": "youtube:no-recommendations",
+   "site": "YouTube",
+   "title": "No recommendations beside and after videos"
+  },
+  {
+   "name": "youtube:no-comments",
+   "site": "YouTube",
+   "title": "No comments"
+  },
+  {
+   "name": "instagram:messages-only",
+   "site": "Instagram",
+   "title": "Messages only"
+  },
+  {
+   "name": "instagram:following-only",
+   "site": "Instagram",
+   "title": "Following only (no suggested posts)"
+  },
+  {
+   "name": "instagram:no-reels",
+   "site": "Instagram",
+   "title": "No Reels"
+  },
+  {
+   "name": "instagram:no-explore",
+   "site": "Instagram",
+   "title": "No Explore page"
+  },
+  {
+   "name": "facebook:no-feed",
+   "site": "Facebook",
+   "title": "No news feed"
+  },
+  {
+   "name": "facebook:no-reels",
+   "site": "Facebook",
+   "title": "No Reels or Watch"
+  },
+  {
+   "name": "facebook:messages-only",
+   "site": "Facebook",
+   "title": "Messages only"
+  },
+  {
+   "name": "x:no-explore",
+   "site": "X",
+   "title": "No Explore page or trends"
+  },
+  {
+   "name": "x:messages-only",
+   "site": "X",
+   "title": "Messages only"
+  },
+  {
+   "name": "reddit:no-popular",
+   "site": "Reddit",
+   "title": "No Popular or All"
+  },
+  {
+   "name": "reddit:no-home",
+   "site": "Reddit",
+   "title": "No home feed"
+  },
+  {
+   "name": "tiktok:following-only",
+   "site": "TikTok",
+   "title": "Following only (no For You)"
+  },
+  {
+   "name": "tiktok:no-explore",
+   "site": "TikTok",
+   "title": "No Explore page"
+  },
+  {
+   "name": "linkedin:no-feed",
+   "site": "LinkedIn",
+   "title": "No feed"
+  },
+  {
+   "name": "linkedin:no-news",
+   "site": "LinkedIn",
+   "title": "No news and suggestions column"
+  }
+ ],
+ "access": {
+  "app": "none",
+  "blocks": "none",
+  "dashboard": "none",
+  "device": "none",
+  "settings": "none",
+  "stats": "none"
+ },
+ "access_unused": []
+}

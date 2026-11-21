@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A stand-in kc9k for tests (W4): replays gui-state and stats fixtures
+       captured from the real CLI and records each command the GUI runs. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>kc9k</AssemblyName>
+    <RootNamespace>FakeKc9k</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\fixtures\*.json" LinkBase="fixtures" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

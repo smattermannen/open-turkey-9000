@@ -1,0 +1,1103 @@
+{
+ "enabled": true,
+ "since": "2026-11-08",
+ "until": "2026-11-21",
+ "rows": [
+  {
+   "day": "2026-11-08",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 6742
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 6631
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 6087
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 5825
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 4838
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 4024
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 3336
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 3123
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 1611
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 1598
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 7
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 2
+  },
+  {
+   "day": "2026-11-08",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 0
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 5220
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 5089
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 4682
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 4598
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 4028
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 3381
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 3019
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 2408
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 458
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 274
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 19
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 8
+  },
+  {
+   "day": "2026-11-09",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 1
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 7048
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 6218
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 5710
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 5255
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 4800
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 4027
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 3619
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 2985
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 1560
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 1415
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 18
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 9
+  },
+  {
+   "day": "2026-11-10",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 4
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 5485
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 5373
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 5370
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 4999
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 4730
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 4410
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 4200
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 3983
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 1469
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 1232
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 8
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 3
+  },
+  {
+   "day": "2026-11-11",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 0
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 6034
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 4169
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 3221
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 2979
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 2882
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 2623
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 2231
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 599
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 277
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 83
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 20
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 9
+  },
+  {
+   "day": "2026-11-12",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 4
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 5870
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 5086
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 4859
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 4724
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 4049
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 3885
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 2900
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 2486
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 2123
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 407
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 18
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 5
+  },
+  {
+   "day": "2026-11-13",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 3
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 5895
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 4254
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 3992
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 3824
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 3448
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 3276
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 2580
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 2505
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 2197
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 1679
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 17
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 9
+  },
+  {
+   "day": "2026-11-14",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 2
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 7045
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 6781
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 6233
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 5640
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 5370
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 5037
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 3896
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 3761
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 1948
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 1024
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 11
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 5
+  },
+  {
+   "day": "2026-11-15",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 2
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 6774
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 6584
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 5706
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 5384
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 4252
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 3257
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 3153
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 3080
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 1563
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 1002
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 11
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 11
+  },
+  {
+   "day": "2026-11-16",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 6
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 6387
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 5469
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 3896
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 3869
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 3144
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 2367
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 1966
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 1901
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 1363
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 1054
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 5
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 4
+  },
+  {
+   "day": "2026-11-17",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 1
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 7192
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 6986
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 6603
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 6310
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 5737
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 4838
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 4573
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 4496
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 3855
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 1365
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 8
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 2
+  },
+  {
+   "day": "2026-11-18",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 0
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 6799
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 6688
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 6613
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 6510
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 5898
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 5323
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 3747
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 3059
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 2982
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 524
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 5
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 5
+  },
+  {
+   "day": "2026-11-19",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 4
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 7027
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 4521
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 4146
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 3569
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 1749
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 1671
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 1532
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 685
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 637
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 591
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 13
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 8
+  },
+  {
+   "day": "2026-11-20",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 5
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "app",
+   "name": "explorer.exe",
+   "seconds": 6618
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "app",
+   "name": "steam.exe",
+   "seconds": 6297
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "site",
+   "name": "wikipedia.org",
+   "seconds": 4937
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "site",
+   "name": "mail.proton.me",
+   "seconds": 4484
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "app",
+   "name": "code.exe",
+   "seconds": 3838
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "app",
+   "name": "firefox.exe",
+   "seconds": 3610
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "site",
+   "name": "youtube.com",
+   "seconds": 2877
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "site",
+   "name": "github.com",
+   "seconds": 2811
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "site",
+   "name": "news.ycombinator.com",
+   "seconds": 1262
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "site",
+   "name": "reddit.com",
+   "seconds": 317
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "blocked-block",
+   "name": "Work",
+   "seconds": 11
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "blocked",
+   "name": "reddit.com",
+   "seconds": 7
+  },
+  {
+   "day": "2026-11-21",
+   "kind": "blocked",
+   "name": "youtube.com",
+   "seconds": 2
+  }
+ ],
+ "users": [
+  "alex",
+  "sam"
+ ]
+}

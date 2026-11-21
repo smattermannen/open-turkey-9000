@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Everything the GUI knows that isn't a widget: gui-state and stats
+       models, running kc9k, words, typed values. No Windows APIs, so it
+       builds and is tested on Linux too. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Kc9k.Core</RootNamespace>
+  </PropertyGroup>
+</Project>

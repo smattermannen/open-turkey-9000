@@ -1,0 +1,14 @@
+<Project>
+  <!-- Shared by every project under windows/ (W4, W7). -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Version>0.1.0</Version>
+    <Company>Killer Chicken 9000</Company>
+    <Product>Killer Chicken 9000</Product>
+    <Copyright>MIT License</Copyright>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+</Project>

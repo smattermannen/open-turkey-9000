@@ -13,7 +13,9 @@
 - Browser policies (Firefox, Chrome, Chromium, Brave, Edge, Opera,
   Vivaldi): blocklist, allowlist, wildcards, DoH off.
   `file://` entries (`BlockFiles`, `FilePatterns`) only with tamper
-  `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions;
+  `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions
+  (Chromium family without the trailing `*`, `chromiumFilePatterns`: Chrome
+  reads a policy path as a prefix and `*` literally);
   the same setting has the extension judge file pages (`withFilePages`,
   [extension](extension.md)).
 - Rules server (`enforce.ServeRules`, `RulesAddress`): its addresses are

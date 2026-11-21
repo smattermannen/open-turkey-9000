@@ -2,7 +2,7 @@
 // background.js) with Node, the browser APIs it uses stubbed:
 //   node ci/background_test.js
 // Frames (R-LIST-4): what a frame's report may get, frameHit. The ad
-// trigger (§3.9): noteAdRequest.
+// trigger (§3.9): noteAdRequest. Local files' block page reason (§3.1).
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -106,6 +106,20 @@ const list = (id, extra) => Object.assign({
   listeners.tabRemoved && listeners.tabRemoved(5);
   apply({ lists: [list(12, { ads: [] })] });
   check("no list has ads: nothing is looked at", await ad({ tabId: 13 }), []);
+
+  // §3.1: a local file is judged in the background by its address and
+  // title (no request for it reaches onBeforeRequest); the block page names
+  // the address when that alone took it.
+  const sent = [];
+  browser.tabs.update = async (id, props) => { sent.push(props.url); };
+  apply({ lists: [list(20, { title: ["casino"], text: [], files: ["file:///home/u/games/*"], file_pages: true })] });
+  blockTitledTab({ id: 21, url: "file:///home/u/games/chess.html", title: "Chess" });
+  blockTitledTab({ id: 22, url: "file:///home/u/notes/casino.html", title: "Casino night" });
+  blockTitledTab({ id: 23, url: "file:///home/u/notes/plan.html", title: "Plan" });
+  check("local files: by address, by title, neither", sent, [
+    "moz-extension://id/blocked.html?url=" + encodeURIComponent("file:///home/u/games/chess.html"),
+    "moz-extension://id/blocked.html?url=" + encodeURIComponent("file:///home/u/notes/casino.html") + "&reason=title",
+  ]);
 
   console.log(failed ? `${failed} of ${passed + failed} failed` : `all ${passed} passed`);
   process.exit(failed ? 1 : 0);

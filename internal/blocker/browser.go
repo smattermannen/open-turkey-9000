@@ -39,6 +39,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // firefoxPolicyPath is Firefox's shared policy file.
@@ -158,7 +159,7 @@ const ChromiumPolicyLimit = 1000
 // and the firewall block every site whatever the policy holds.
 func chromiumBlockSet(p BrowserPolicy) []string {
 	_, crPatterns := translated(p.BlockPatterns)
-	files := FilePatterns(p.BlockFiles)
+	files := chromiumFilePatterns(FilePatterns(p.BlockFiles))
 	if p.AllowMode {
 		return dedupSort(append(append([]string{"*"}, crPatterns...), files...))
 	}
@@ -179,6 +180,21 @@ func chromiumBlockSet(p BrowserPolicy) []string {
 		}
 	}
 	return dedupSort(append(first, rest...)[:ChromiumPolicyLimit])
+}
+
+// chromiumFilePatterns turns local file entries (§3.1) into Chrome's URL
+// filter format, where a path is a plain prefix and a "*" in it is a
+// literal star (checked 2026-11-21 in Chrome for Testing 153: a policy entry
+// "file:///a/*" blocked nothing, "file:///a/" blocked /a/x.html): the
+// trailing "*" is dropped, so "file:///a/*" is "file:///a/" and "file:///*"
+// is "file:///", every file. An entry without "*" also blocks longer paths
+// that start with it, never less than the file.
+func chromiumFilePatterns(files []string) []string {
+	out := make([]string, 0, len(files))
+	for _, f := range files {
+		out = append(out, strings.TrimSuffix(f, "*"))
+	}
+	return out
 }
 
 // chromiumAllowSet builds the URLAllowlist array (only meaningful in allowlist

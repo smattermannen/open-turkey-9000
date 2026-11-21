@@ -326,7 +326,10 @@ function blockTitledTab(tab) {
   }
   const outcome = kc9kOutcome(kc9kListMatches(lists, { url: tab.url, title: tab.title || "" }));
   if (kc9kTakesAway(outcome)) {
-    act(tab.id, tab.url, outcome, "title");
+    // A local file never reaches onBeforeRequest, so its address is judged
+    // here too: the block page names it when the address alone did it.
+    const byAddress = kc9kTakesAway(kc9kOutcome(kc9kListMatches(lists, { url: tab.url, title: "" })));
+    act(tab.id, tab.url, outcome, byAddress ? "" : "title");
     return;
   }
   if (outcome.custom) {

@@ -34,7 +34,9 @@
   `*` only at the end) and the list's terms; `kc9kJudgedAddress` is the
   one check for "is this address judged" (match, content `judgedHere`,
   background `pageHit`, `frameHit`, `blockTitledTab`,
-  `closeNewlyBlockedTabs`). `*.*` never matches a file.
+  `closeNewlyBlockedTabs`). `*.*` never matches a file. Chrome sends no
+  request events for files: `blockTitledTab` judges their address and
+  title, and leaves `reason=title` off when the address alone did it.
 - No flashing (R-PAGE-1, `content.js`): while a list could still act on the
   top page by its title or text (`mayActByText`), what its root holds stays
   at opacity 0 (`hidePage`; not the root itself, which takes the canvas and

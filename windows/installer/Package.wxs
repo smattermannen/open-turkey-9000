@@ -28,7 +28,6 @@
     <Icon Id="kc9k.ico" SourceFile="$(GuiDir)\Assets\kc9k.ico" />
     <Property Id="ARPPRODUCTICON" Value="kc9k.ico" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/smattermannen/open-turkey-9000" />
-    <Property Id="ARPNOMODIFY" Value="1" />
 
     <ui:WixUI Id="WixUI_Minimal" />
     <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />

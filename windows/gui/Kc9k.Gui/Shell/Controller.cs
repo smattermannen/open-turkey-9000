@@ -118,7 +118,8 @@ public sealed class Controller
         else if (then is not null) await then(result.Output);
         else if (!quiet) QueuedNote(result.Output);
         StateJson = ""; // show it again even if it looks unchanged
-        Refresh();
+        // What runs after a command sees its effect: wait for the state read after it.
+        await RefreshAsync();
         return result.Ok;
     }
 
@@ -189,6 +190,13 @@ public sealed class Controller
     {
         running += change;
         BusyChanged?.Invoke(running > 0);
+    }
+
+    /// <summary>Reads the state now (after a read already running) and waits for it.</summary>
+    public async Task RefreshAsync()
+    {
+        while (reading) await Task.Delay(40);
+        await ReadState();
     }
 
     public void Refresh()

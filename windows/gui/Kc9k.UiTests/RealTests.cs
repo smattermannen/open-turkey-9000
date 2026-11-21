@@ -30,6 +30,8 @@ public class RealTests
         gui.TypeEnter("List_Blocked_Entries_Entry", "example.com");
         gui.Find("SaveEdits", 60);
         gui.Invoke("SaveEdits");
+        gui.WaitFor(() => gui.FindButtonOrNull("Save edits") is null, "the edits saved", 60);
+        gui.Shot("saved");
         gui.Invoke("BackToBlocks");
         gui.Invoke(gui.Find("BlockSwitch_CI block", 60));
         gui.WaitFor(() => gui.Find("BlockSwitch_CI block").Patterns.Toggle.Pattern.ToggleState.Value == FlaUI.Core.Definitions.ToggleState.On, "the block on", 60);

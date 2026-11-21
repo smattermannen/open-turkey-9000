@@ -36,13 +36,18 @@ independently of any block, when it is turned on:
   --lock-chars N    Challenge length in characters (default 300, 10 to 5000).
   --password-stdin  Password ('kc9k browser unlock <setting>') to turn it off.
   --restart         Stays on until the computer restarts.
-  --relock D        With a text or password lock: unlocking lifts them for D
-                    only, the setting stays on; turning it off meanwhile ends it.
+  --range SPEC      Range lock: on at these times, e.g. "mon-fri 09:00-17:00".
+  --relock D        Re-lock: D after its last lock is unlocked, every lock it
+                    had comes on again, in order; turning it off meanwhile
+                    ends it.
 
-Locks can be added to a setting that is already on, and only made stronger: a
-timer lock can only be extended and a challenge only lengthened. unlock runs the
-challenge and asks for the password, then turns the setting off; time and
-restart locks can't be unlocked, only waited out.
+Locks are unlocked one at a time, in the order their options were given. An
+option given twice is two locks (two partners' passwords). Locks added to a
+setting that is already on go last; a kind it already has is another lock
+of that kind, after the others; a lock that is on is never changed. unlock
+lifts the first lock still on (the challenge, the password), and turns the
+setting off once none is left; time, restart and range locks can't be
+unlocked, only waited out.
 
 SafeSearch is a setting per engine: safesearch-google, safesearch-bing,
 safesearch-duckduckgo and safesearch-youtube (Restricted Mode), each with
@@ -343,7 +348,7 @@ func relockRequested(cmd *cobra.Command) (int64, error) {
 // addRelockFlag adds --relock to commands that lock a setting.
 func addRelockFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m), unless it is turned off meanwhile")
+		c.Flags().String("relock", "", "Re-lock: this long after its last lock is unlocked, every lock comes on again in its order (e.g. 30m), unless it is turned off meanwhile")
 	}
 }
 

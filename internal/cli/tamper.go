@@ -81,10 +81,13 @@ unsupported-browsers can also be locked when turned on, like a browser setting:
   --lock-chars N    Challenge length in characters (default 300).
   --password-stdin  Password lock.
   --restart         Stays on until the computer restarts.
-  --relock D        With a text or password lock: unlocking lifts them for D only.
+  --range SPEC      Range lock: on at these times.
+  --relock D        Re-lock: D after its last lock is unlocked, every lock comes
+                    on again, in order.
 
-Locks can only be made stronger. unlock runs the challenge and asks for the
-password, then turns it off if nothing else is locked.`,
+Locks stack as on a block: an option given twice is two locks, a lock added
+later goes last, and a lock that is on is never changed. unlock lifts the
+first lock still on, then turns it off if nothing else is locked.`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if len(args) == 0 {

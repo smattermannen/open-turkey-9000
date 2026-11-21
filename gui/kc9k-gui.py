@@ -8322,7 +8322,7 @@ class Window(Gtk.ApplicationWindow):
             "New locks come after the ones already on, unlocked last. A kind it already has is "
             "a second lock of that kind, after the others. "
             "A lock that is on is never changed." if active else
-            "It starts with the locks below. Once on, a lock can only be made stronger.",
+            "It starts with the locks below. Once on, a lock is never changed; more can be added.",
             "Add locks", picker, need_lock=True)
         if asked is None:
             return
@@ -9601,8 +9601,8 @@ class Window(Gtk.ApplicationWindow):
         text, number = chosen
         picker = LockPicker("remove it", "removed", ("timer", "password", "text", "restart", "range", "relock"))
         asked = self.lock_dialog(f"Lock the freeze schedule {text}",
-                                 "It can't be removed until the locks end. Locks can be added later, but "
-                                 "only made stronger.", "Lock", picker, need_lock=True)
+                                 "It can't be removed until the locks end. More locks can be added later, "
+                                 "after these; a lock that is on is never changed.", "Lock", picker, need_lock=True)
         if asked is None:
             return
         locks, relock_flags, secret = asked
@@ -11233,8 +11233,8 @@ class Window(Gtk.ApplicationWindow):
                             ("timer", "password", "text", "restart", "range", "relock"))
         asked = self.lock_dialog(
             f"Lock: {title}",
-            "The setting is turned on and can't be turned off until the lock ends. Locks can be "
-            "added later, but only made stronger.", "Turn on and lock", picker, need_lock=True)
+            "The setting is turned on and can't be turned off until the locks end. More locks can be "
+            "added later, after these; a lock that is on is never changed.", "Turn on and lock", picker, need_lock=True)
         if asked is None:
             return
         chosen, relock_flags, secret = asked

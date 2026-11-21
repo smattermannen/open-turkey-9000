@@ -18,8 +18,8 @@
 //     protects nothing (R-LOCK-10).
 //
 // Locks can be strengthened while held ("start" on an active block adds any
-// kind of lock, lengthens a char or delay lock, extends a time lock), never
-// weakened. A
+// kind of lock, last; a kind it already has is another lock of that kind,
+// §3.4; 'extend' extends a timer lock), never weakened. A
 // lock added to a block its schedule activated outlives the schedule: the
 // daemon won't deactivate a locked block (see enforce.reconcileSchedules).
 //

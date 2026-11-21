@@ -76,7 +76,7 @@ In short: everything Cold Turkey does, plus user-shaped bypass prevention,
 more triggers and actions, several lists per block, layered sequential
 locks, project export, monk mode, lockable SafeSearch, circadian rhythm.
 
-After the Android app: Windows support.
+Windows support, built now (owner 2026-11-21, §6); the Android app after.
 
 ## 2. Principles
 
@@ -295,8 +295,8 @@ mode unless no-escape is on.
 
 | Term | Meaning |
 |---|---|
-| **Daemon** | systemd service re-applying everything every few seconds. |
-| **Layer** | `/etc/hosts`, firewall, browser policy, closing apps. The extension works on top. |
+| **Daemon** | Service re-applying everything every few seconds: a systemd service on Linux, a Windows service on Windows. |
+| **Layer** | Hosts file, firewall, browser policy, closing apps. The extension works on top. |
 | **Extension** | Bundled browser extension. Required while anything is locked or uses websites; browsers without it are closed. |
 | **Supported browser** | LibreWolf, Chrome or Chromium with the extension. KC9K shows which are installed, whether each has it, and installs it in one click. |
 | **Setting** | Configured outside blocks: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `block-devtools`, `no-private`), **tamper protection setting** (§4.10), **behaviour setting** (never locked, exempt from no-weakening: `polite-close`, `block-page-details`), **preference** (interface only). |
@@ -708,6 +708,7 @@ Decisions not already written into §1–5:
 - 2026-11-21 (By Opus): The rules server has no secret; this replaces the secret of 2026-11-14, which the owner asked to have decided. Browsers run as the user, so a secret given by policy sits in files every local program can read, and the lists are in `/etc/hosts` and the browser policy files anyway; an extension that couldn't read the secret would fail every check-in, and the extension guard would close its browser. What holds without it, for every address the server answers: only requests addressed to its own address (no DNS rebinding); posts only with the extension's own header, which a web page can't send without a CORS preflight that is never answered; no CORS header in any answer; a check-in counts only for the browser whose own connection made it (`/proc/net/tcp`). No post weakens a block (principle 10). Settles ROADMAP §5 "rules server secret".
 - 2026-11-21 (By Opus): With block embedded content off (§4.10), a blacklist's paths and patterns stay out of the browser policies too, not only out of the extension's frame checks: Chrome's URL blocklist (and Firefox's website filter) block frames as well as pages, and no policy limits them to pages, so with the setting off a path-blocked embedded video stayed blocked. Whole sites stay in the policies, as hosts and the firewall block them in frames anyway; the extension still blocks the paths and patterns in pages. Monk mode's and factory reset protection's own lists keep theirs.
 - 2026-11-21 (By Opus): The ad trigger's industries (§3.9) ship only domains an ad request really goes to: named as ad hosts by the big ad-filter lists (EasyList, AdGuard, Peter Lowe's, StevenBlack's) or seen in a real page's requests. An entry no request ever reaches can't trigger anything, and an affiliate platform's or game maker's own site could only trigger falsely (a broker's site using the same platform counted as gambling). Gambling and dating ads mostly come through general ad exchanges, so those industries stay small.
+- 2026-11-21: Windows is built now, before the Android app and alongside the open Linux work; this replaces the order of 2026-11-18 (owner). KC9K on Windows is built for an **administrator account**: the user is an admin, so its bypass prevention has to hold against one. The GUI on Windows is a native Windows app, not a browser window or a web view (owner); the most serious choice is taken (owner left it to the agent): C# on WinUI 3. The extension reaches Chrome on Windows through an unlisted Chrome Web Store listing, since Chrome there force-installs only store extensions (owner). Windows is tested in the cloud (CI), in a VM, and on the owner's laptop, which runs Windows (owner).
 
 ## 7. Open decisions
 

@@ -1,6 +1,7 @@
 # Killer Chicken 9000 (KC9K)
 
-Linux productivity blocker: CLI + systemd daemon + browser extension + GTK GUI.
+Productivity blocker: CLI + daemon + browser extension + GUI. Linux: systemd
+daemon, GTK GUI. Windows: being built (`ROADMAP.md` §4; nothing built yet).
 
 ## Documents
 

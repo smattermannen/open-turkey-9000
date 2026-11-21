@@ -1,6 +1,10 @@
 package blocker
 
-import "testing"
+import (
+	"io/fs"
+	"syscall"
+	"testing"
+)
 
 func TestMapsBrowserEngine(t *testing.T) {
 	cases := []struct {
@@ -48,5 +52,31 @@ func TestFirstRuleJumps(t *testing.T) {
 	}
 	if firstRuleJumps("-A OUTPUT -j KC9K-OTHER\n", "OUTPUT") {
 		t.Error("a chain with a longer name isn't ours")
+	}
+}
+
+// Block unsupported browsers and the extension guard (§4.10): an AppImage's
+// files sit on FUSE, shown as root's and closed to root itself, so a browser
+// run from one (a portable LibreWolf, or one repacked under another name) is
+// the user's, judged by its engine and never a supported browser.
+func TestUserPlacedExe(t *testing.T) {
+	const ext4 = 0xef53
+	cases := []struct {
+		name   string
+		uid    uint32
+		fsType int64
+		err    error
+		want   bool
+	}{
+		{"installed by root", 0, ext4, nil, false},
+		{"user's copy", 1000, ext4, nil, true},
+		{"AppImage, root's on FUSE", 0, fuseMagic, nil, true},
+		{"AppImage, root refused", 0, 0, &fs.PathError{Op: "stat", Path: "/proc/1/exe", Err: syscall.EACCES}, true},
+		{"process gone", 0, 0, &fs.PathError{Op: "stat", Path: "/proc/1/exe", Err: syscall.ENOENT}, false},
+	}
+	for _, c := range cases {
+		if got := userPlacedExe(c.uid, c.fsType, c.err); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
 	}
 }

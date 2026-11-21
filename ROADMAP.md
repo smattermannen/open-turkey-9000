@@ -36,7 +36,6 @@ of their group and a row here; a finished item loses its row.
 | B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
 | B12 | Chrome: a person opens the popup and tries to remove the extension (synthetic checked 2026-11-20) | §3.13 | browsers | owner |
-| B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
 | B14 | Monk mode live: run `ci/monk_live_test.sh host` (written, never run), reboot mid-way | R-MONK-2 | device | vm |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: grow the shipped industry lists | §3.9 | actions | agent |
@@ -1071,12 +1070,28 @@ Script-tested, never by a person. Script what can be into `ci/`.
   show "example.com", "No block covers this site right now." and the add
   menu. Left (owner): a person clicks the button and tries to remove the
   extension.
-- [ ] `B13` Block unsupported browsers (`kc9k tamper unsupported-browsers`).
+- [x] `B13` Block unsupported browsers (`kc9k tamper unsupported-browsers`).
   Checked 2026-11-15: Firefox is closed within ~2 s with the reason logged;
   LibreWolf with the extension stays (browser_test); `kc9k browsers install
   chromium` installs Mint's chromium (`/usr/lib/chromium/chromium`, policy
-  in `/etc/chromium/policies`) and works. Left: upgrade from
-  `force-librewolf` keeping a lock; a portable LibreWolf.
+  in `/etc/chromium/policies`) and works. Built, checked 2026-11-20:
+  upgrade in `kc9k-vm` (desktop: A6's restart locks would hold the setting
+  on): fresh DB, `install.sh` of c19f40e (before b4304c7), `kc9k browser
+  force-librewolf on --for 7m`, then `install.sh` of this tree: `tamper`
+  "unsupported-browsers on (locked: until 13:58)", `off` (and the
+  `force-librewolf` alias) refused until then; after it, `off` worked and
+  no lock row was left. Same with the old binary on a scratch DB on the
+  desktop. Portable LibreWolf (official tarball 146.0.1, AppImage):
+  reads its own `distribution/policies.json`, never gets the extension. In
+  the VM, setting on: both closed within ~2 s ("not a supported browser"),
+  the installed LibreWolf with the extension stayed. Desktop, setting off,
+  blocks locked: closed after ~62 s ("no Killer Chicken extension").
+  Found: an AppImage's files sit on FUSE, shown as root's and closed to
+  root, so its exe counted as installed by root: never judged by engine (a
+  browser repacked under another name ran without the extension); now an
+  exe on FUSE or closed to root is the user's (`TestUserPlacedExe`,
+  roottest `TestGuardJudgesAppImageBrowser` with the real AppImage: fails
+  before, passes).
 - [ ] `B14` Monk mode live, incl. reboot mid-way. `ci/monk_live_test.sh`
   written 2026-11-20 (the VM checks itself while cut: three cuts, undoing
   each put back, locked, restart, held after it, restored at the end);

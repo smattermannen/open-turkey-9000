@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -88,5 +90,54 @@ func TestGuardRestartsBrowsersOlderThanSettings(t *testing.T) {
 	}
 	if !alive(after) {
 		t.Fatal("the browser started after the change was closed")
+	}
+}
+
+// Block unsupported browsers and the extension guard (§4.10): a browser run
+// from an AppImage (files on FUSE, shown as root's, closed to root) is the
+// user's, so it is judged by its engine whatever its name, and is never a
+// supported browser. KC9K_TEST_APPIMAGE names a browser AppImage (e.g. the
+// official LibreWolf one); it runs as SUDO_UID.
+func TestGuardJudgesAppImageBrowser(t *testing.T) {
+	image := os.Getenv("KC9K_TEST_APPIMAGE")
+	uid, _ := strconv.Atoi(os.Getenv("SUDO_UID"))
+	if image == "" || uid < 1000 {
+		t.Skip("set KC9K_TEST_APPIMAGE and run through sudo")
+	}
+	home := t.TempDir()
+	if err := os.Chown(home, uid, uid); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(image, "--headless", "--no-remote", "--profile", home, "about:blank")
+	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(uid)}}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); _, _ = cmd.Process.Wait() })
+	var pid int
+	for deadline := time.Now().Add(20 * time.Second); pid == 0 && time.Now().Before(deadline); time.Sleep(500 * time.Millisecond) {
+		parent, _ := processTree()
+		for p := range parent {
+			exe, _ := os.Readlink("/proc/" + strconv.Itoa(p) + "/exe")
+			if pgid, _ := syscall.Getpgid(p); pgid == cmd.Process.Pid && strings.HasPrefix(exe, "/tmp/.mount_") &&
+				exeName(parent[p]) != exeName(p) {
+				if maps, err := os.ReadFile("/proc/" + strconv.Itoa(p) + "/maps"); err == nil && mapsBrowserEngine(string(maps)) {
+					pid = p
+				}
+			}
+		}
+	}
+	if pid == 0 {
+		t.Fatal("no browser process from the AppImage")
+	}
+	if !exeOwnedByUser(pid) {
+		t.Error("the AppImage's browser counts as installed by root")
+	}
+	if !engineBrowser(pid) {
+		t.Error("the AppImage's browser isn't recognised by its engine")
+	}
+	if id := supportedExe(pid); id != "" {
+		t.Errorf("the AppImage's browser counts as supported %s", id)
 	}
 }

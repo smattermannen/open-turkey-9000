@@ -16,6 +16,8 @@
 package blocker
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"strconv"
 	"strings"
@@ -67,16 +69,40 @@ func holdsAsar(pid int) bool {
 	return false
 }
 
-// exeOwnedByUser reports whether the process runs an executable that belongs
-// to an ordinary user rather than root. Stat through /proc/<pid>/exe reaches
-// the real file even when it sits in another mount namespace.
+// fuseMagic is the statfs type of a FUSE file system, such as the one an
+// AppImage mounts its files on.
+const fuseMagic = 0x65735546
+
+// exeOwnedByUser reports whether the process runs an executable the user put
+// in place rather than one root installed. Stat through /proc/<pid>/exe
+// reaches the real file even when it sits in another mount namespace.
 func exeOwnedByUser(pid int) bool {
-	info, err := os.Stat("/proc/" + strconv.Itoa(pid) + "/exe")
-	if err != nil {
-		return false
+	exe := "/proc/" + strconv.Itoa(pid) + "/exe"
+	var uid uint32
+	info, err := os.Stat(exe)
+	if err == nil {
+		if st, ok := info.Sys().(*syscall.Stat_t); ok {
+			uid = st.Uid
+		}
 	}
-	st, ok := info.Sys().(*syscall.Stat_t)
-	return ok && st.Uid != 0
+	var fsInfo syscall.Statfs_t
+	if err == nil {
+		err = syscall.Statfs(exe, &fsInfo)
+	}
+	return userPlacedExe(uid, int64(fsInfo.Type), err)
+}
+
+// userPlacedExe judges an executable by its owner and file system type, or
+// by the error reading them. A file on a FUSE file system counts as the
+// user's whatever owner it shows: an AppImage (a portable LibreWolf, or a
+// browser repacked under another name) mounts its files there, shown as
+// root's, and root itself is refused access to them (permission denied).
+// Any other error means the process is gone.
+func userPlacedExe(uid uint32, fsType int64, err error) bool {
+	if err != nil {
+		return errors.Is(err, fs.ErrPermission)
+	}
+	return uid != 0 || fsType == fuseMagic
 }
 
 // engineBrowser reports whether pid runs a browser engine from an executable

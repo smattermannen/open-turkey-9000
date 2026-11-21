@@ -28,10 +28,11 @@
   started before the last protecting settings change
   (`noteSettingsChange`). Browsers known by name or engine
   (`browserdetect.go`: libxul.so or icudtl.dat/V8 snapshot mapped by a
-  user-owned exe, minus Electron). Decision in `closeReason`. With block
-  unsupported browsers on, runs always and closes at once every browser
-  whose exe isn't a root-owned package file of `SupportedBrowsers`
-  (`supported.go`: LibreWolf, Chrome, Chromium; `InstallBrowser`, fakes
+  user-owned exe, minus Electron). An exe on FUSE (an AppImage's: shown as
+  root's, closed to root) counts as user-owned (`userPlacedExe`). Decision
+  in `closeReason`. With block unsupported browsers on, runs always and
+  closes at once every browser whose exe isn't a root-owned package file
+  of `SupportedBrowsers` (`supported.go`: LibreWolf, Chrome, Chromium; `InstallBrowser`, fakes
   `statFile`/`runInstall`). LibreWolf: `block-devtools` policy;
   five prefs locked in librewolf.cfg, user overrides replaced by a cleaned
   copy (`librewolfprefs.go`).

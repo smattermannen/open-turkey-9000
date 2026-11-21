@@ -6,6 +6,10 @@
 
 ## Commands
 
+- AppImage browser judged by engine, never supported (`blocker`
+  roottest, daemon stopped): `sudo KC9K_TEST_APPIMAGE=<browser AppImage>
+  go test -tags roottest -run AppImage ./internal/blocker` (runs it as
+  `SUDO_UID`; skipped without).
 - `./try-challenge.sh [len]` (`cmd/try-challenge/`): unlock challenge alone.
 - Root Chrome test: `go test -tags roottest -run Chrome ./internal/enforce`,
   with the daemon stopped (it holds the rules port) and Playwright's

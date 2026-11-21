@@ -79,7 +79,7 @@ public sealed partial class WeekCalendar : Grid
         return null;
     }
 
-    Brush B(string key) => Theme.Brush(key);
+    Brush B(string key) => Theme.Brush(key, this);
 
     void Draw()
     {
@@ -140,7 +140,7 @@ public sealed partial class WeekCalendar : Grid
         var r = new Rectangle
         {
             Width = Math.Max(ColumnWidth - 4, 2), Height = height, RadiusX = 3, RadiusY = 3,
-            Fill = gray ? Theme.Brush("ControlStrongFillColorDisabledBrush") : fill,
+            Fill = gray ? B("ControlStrongFillColorDisabledBrush") : fill,
             Stroke = stroke, StrokeThickness = thickness, IsHitTestVisible = false,
         };
         if (gray) r.Opacity = 0.35;

@@ -65,7 +65,7 @@ public sealed partial class TopChart : Grid
             {
                 Height = 12,
                 CornerRadius = new CornerRadius(0, 6, 6, 0),
-                Background = ColorOf(name) ?? Theme.Brush("AccentFillColorDefaultBrush"),
+                Background = ColorOf(name) ?? Theme.Brush("AccentFillColorDefaultBrush", this),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
             };

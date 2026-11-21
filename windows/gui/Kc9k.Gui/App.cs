@@ -21,6 +21,9 @@ public sealed partial class App : Application, IXamlMetadataProvider
     public App(string[] args)
     {
         Args = args;
+        // Brushes looked up in code follow the app's theme: start in the one chosen.
+        if (Prefs.Current.Theme == "dark") RequestedTheme = ApplicationTheme.Dark;
+        else if (Prefs.Current.Theme == "light") RequestedTheme = ApplicationTheme.Light;
         UnhandledException += (_, e) =>
         {
             Log.Write("unhandled: " + e.Exception);

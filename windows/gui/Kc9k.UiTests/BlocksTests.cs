@@ -44,7 +44,7 @@ public class BlocksTests
     {
         using var gui = new GuiApp("locks");
         gui.Page("blocks");
-        gui.Invoke("BlockCard_Work");
+        gui.Invoke("BlockCard_Social media");
         gui.Invoke("BlockStart"); // on already: Add locks…
         gui.Invoke("AddLocks_Timer_For");
         var length = gui.Find("AddLocks_Timer_Length").AsTextBox();
@@ -53,9 +53,9 @@ public class BlocksTests
         gui.Invoke(gui.FindButton("Add locks"));
         gui.FindName("Set this lock?");
         gui.Shot("lock-confirm");
-        Assert.False(gui.Ran("start", "Work", "--for"));
+        Assert.False(gui.Ran("start", "Social media", "--for"));
         gui.Invoke(gui.FindButton("Lock"));
-        gui.WaitFor(() => gui.Ran("start", "Work", "--for", "120m", "--yes"), "kc9k start Work --for 120m --yes");
+        gui.WaitFor(() => gui.Ran("start", "Social media", "--for", "120m", "--yes"), "kc9k start Social media --for 120m --yes");
     }
 
     [Fact]

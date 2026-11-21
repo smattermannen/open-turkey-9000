@@ -61,6 +61,16 @@ public static class Theme
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
+  <Style x:Key="Kc9kPillOn" TargetType="Border"><Setter Property="Background" Value="{ThemeResource Kc9kPillOnBackground}"/></Style>
+  <Style x:Key="Kc9kPillLocked" TargetType="Border"><Setter Property="Background" Value="{ThemeResource Kc9kPillLockedBackground}"/></Style>
+  <Style x:Key="Kc9kPillLifted" TargetType="Border"><Setter Property="Background" Value="{ThemeResource Kc9kPillLiftedBackground}"/></Style>
+  <Style x:Key="Kc9kPillOff" TargetType="Border"><Setter Property="Background" Value="{ThemeResource Kc9kPillOffBackground}"/></Style>
+  <Style x:Key="Kc9kPillWarn" TargetType="Border"><Setter Property="Background" Value="{ThemeResource Kc9kPillWarnBackground}"/></Style>
+  <Style x:Key="Kc9kPillOnText" TargetType="TextBlock"><Setter Property="Foreground" Value="{ThemeResource Kc9kPillOnForeground}"/></Style>
+  <Style x:Key="Kc9kPillLockedText" TargetType="TextBlock"><Setter Property="Foreground" Value="{ThemeResource Kc9kPillLockedForeground}"/></Style>
+  <Style x:Key="Kc9kPillLiftedText" TargetType="TextBlock"><Setter Property="Foreground" Value="{ThemeResource Kc9kPillLiftedForeground}"/></Style>
+  <Style x:Key="Kc9kPillOffText" TargetType="TextBlock"><Setter Property="Foreground" Value="{ThemeResource Kc9kPillOffForeground}"/></Style>
+  <Style x:Key="Kc9kPillWarnText" TargetType="TextBlock"><Setter Property="Foreground" Value="{ThemeResource Kc9kPillWarnForeground}"/></Style>
   <Style x:Key="Kc9kCard" TargetType="Border">
     <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
     <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
@@ -102,6 +112,26 @@ public static class Theme
     public static Style Style(string key) => (Style)Application.Current.Resources[key];
 
     public static Brush Brush(string key) => (Brush)Application.Current.Resources[key];
+
+    /// <summary>A brush for the theme an element shows now (a lookup in code
+    /// otherwise follows the app's theme, not the window's).</summary>
+    public static Brush Brush(string key, FrameworkElement element)
+    {
+        string[] names = Microsoft.UI.Xaml.Application.Current is null ? [] :
+            new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast ? ["HighContrast"]
+            : element.ActualTheme == ElementTheme.Dark ? ["Dark", "Default"] : ["Light"];
+        foreach (var name in names)
+            if (Find(Application.Current!.Resources, key, name) is Brush b) return b;
+        return Brush(key);
+    }
+
+    static object? Find(ResourceDictionary d, string key, string theme)
+    {
+        if (d.ThemeDictionaries.TryGetValue(theme, out var td) && td is ResourceDictionary r && r.TryGetValue(key, out var v)) return v;
+        foreach (var m in d.MergedDictionaries)
+            if (Find(m, key, theme) is { } found) return found;
+        return null;
+    }
 
     /// <summary>The theme for the window's content from the preference.</summary>
     public static ElementTheme Requested(string choice) => choice switch

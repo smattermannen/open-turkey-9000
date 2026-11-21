@@ -19,7 +19,7 @@ public sealed partial class EditableList : StackPanel
 {
     readonly Func<IReadOnlyList<string>, Task> onAdd;
     readonly Func<string, int, Task> onRemove;
-    readonly Func<string, List<string>> split;
+    Func<string, List<string>> split;
     readonly ListView view;
     readonly TextBox? search;
     readonly TextBox entry;
@@ -36,6 +36,10 @@ public sealed partial class EditableList : StackPanel
     public string Title { get; }
     public IReadOnlyList<string> Items => items;
     /// <summary>The entry selected (the first of several), or null.</summary>
+    /// <summary>How typed text becomes entries (a phrase preset takes one phrase per line).</summary>
+    public Func<string, List<string>> Splitter { get => split; set => split = value; }
+    public string Placeholder { get => entry.PlaceholderText; set => entry.PlaceholderText = value; }
+
     public string? SelectedEntry => view.SelectedItem as string;
     public event Action<string>? Activated;
 

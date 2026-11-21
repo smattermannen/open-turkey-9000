@@ -142,18 +142,11 @@ public static class Ui
     /// <summary>A status pill: on, locked, lifted, off or warn.</summary>
     public static Border Pill(Pill pill)
     {
-        var (bg, fg) = pill.Kind switch
-        {
-            PillKind.On => ("Kc9kPillOnBackground", "Kc9kPillOnForeground"),
-            PillKind.Locked => ("Kc9kPillLockedBackground", "Kc9kPillLockedForeground"),
-            PillKind.Lifted => ("Kc9kPillLiftedBackground", "Kc9kPillLiftedForeground"),
-            PillKind.Warn => ("Kc9kPillWarnBackground", "Kc9kPillWarnForeground"),
-            _ => ("Kc9kPillOffBackground", "Kc9kPillOffForeground"),
-        };
-        var text = new TextBlock { Text = pill.Text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Theme.Brush(fg) };
+        var kind = pill.Kind.ToString();
+        var text = new TextBlock { Text = pill.Text, FontSize = 12, FontWeight = FontWeights.SemiBold, Style = Theme.Style($"Kc9kPill{kind}Text") };
         var border = new Border
         {
-            Background = Theme.Brush(bg),
+            Style = Theme.Style($"Kc9kPill{kind}"),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(9, 2, 9, 3),
             Child = text,
@@ -260,7 +253,7 @@ public static class Glyphs
         Add = "", Delete = "", Edit = "", Play = "", Stop = "", Next = "",
         Back = "", Help = "", Search = "", More = "", Clock = "", Save = "",
         Cancel = "", Info = "", Warning = "", Accept = "", Copy = "", Rename = "",
-        Import = "", Export = "", Globe = "", App = "", Shield = "", Snow = "",
+        Import = "", Export = "", Globe = "", App = "", Shield = "", Snow = "\uE7E8",
         Monk = "", Brightness = "", Picture = "", Record = "", Filter = "",
         Refresh = "", Coffee = "", Timer = "", Sync = "", Browser = "";
 }

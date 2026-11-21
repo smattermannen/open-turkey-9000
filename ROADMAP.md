@@ -34,7 +34,6 @@ of their group and a row here; a finished item loses its row.
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
 | B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
 | B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
-| B10 | No-video on a real embedded player | §3.9 | extension | box |
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
 | B12 | Chrome: popup, extension can't be removed | §3.13 | browsers | box |
 | B13 | Block unsupported browsers: upgrade keeping a lock; portable LibreWolf | §4.10 | browsers | box |
@@ -1036,7 +1035,23 @@ Script-tested, never by a person. Script what can be into `ci/`.
   (`polite-close` on for the test): xed with unsaved text asked, its save
   dialog opened, killed (SIGKILL) ~5 s later; gnome-calculator asked and
   closed itself (exit 0) in 3.5 s.
-- [ ] `B10` No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
+- [x] `B10` No-video from page text on a real embedded player (YouTube/Vimeo iframe), in LibreWolf and Chrome (`extras_test.py` checks a local one in LibreWolf).
+  2026-11-20 (desktop, LibreWolf 159 over WebDriver and Google Chrome 158
+  over CDP, headed on :0, fresh profiles): a local page embedding the real
+  YouTube and Vimeo players (autoplay, muted), a text list with no-video
+  and a word on the page. Without the word both play (YouTube 0.9 → 36.7
+  s, Vimeo 0.4 → 25.8 s in 40 s). With it, both browsers: both frames
+  `display: none`, the videos inside paused at 0 s, 20 s on. The word
+  added 30 s after load: within 5 s both frames hidden and paused (YouTube
+  stopped at 28.6 s LibreWolf, 2.4 s Chrome), and stayed so. Found in
+  Chrome: the page after one that earned no-video kept its players hidden
+  (a user sheet left in the document). Cause: Chrome stacks a sheet
+  inserted twice (the frame's ask, then the load events) and `removeCSS`
+  takes one copy. Fixed in 1.27.5 (`cssGiven`; `node
+  ci/looks_background_test.js`, fails before): the next page shows and
+  plays both players at once. `ci/extras_test.py` 35/35 in LibreWolf after
+  the fix. Vimeo shows a bot check to WebDriver-driven LibreWolf after a few
+  loads (not KC9K).
 - [ ] `B11` Social media settings beyond Shorts (`social.js` selectors written from memory); playlist videos playing; block following places; text break returning.
 - [ ] `B12` Chrome on the laptop. Checked 2026-11-15: the extension checks in from
   Chrome and Chromium, both show the block page; the policy force-installs

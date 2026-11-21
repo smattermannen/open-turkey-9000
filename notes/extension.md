@@ -46,6 +46,12 @@
   address, or `keywordNoImages` for its own text): a cancelled picture
   stays broken on a next page that doesn't earn the look
   (`ci/extras_test.py`).
+- Frame looks (no-video, no-images, greyscale) are also a user sheet in
+  every frame (`LOOK_CSS`, `syncLookCss`). Chrome stacks the same sheet
+  inserted twice into a document and `removeCSS` takes one copy away, so
+  each tab counts what it was given (`cssGiven`) and removal repeats that
+  often; the new sheet goes in before the old one goes. Test:
+  `node ci/looks_background_test.js` (fake APIs with Chrome's stacking).
 - `dark` (and dark pages) in `render`: only light pages (`pageIsLight`);
   `html` inverted, `DARK_MEDIA` (pictures, video, canvas, frames,
   background images) inverted back once; nested inside a background image:

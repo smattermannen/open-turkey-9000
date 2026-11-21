@@ -432,6 +432,13 @@ const LOOK_CSS = {
     "iframe[src*=\"player\"], iframe[src*=\"embed\"] { display: none !important; }\n",
 };
 const lookCss = new Map(); // tab id → the CSS last inserted in all its frames
+// Chrome stacks a user sheet inserted twice into one document (the frame's
+// own "tab-looks" ask, then the tab's load events) and removeCSS takes one
+// copy away per call: a look that ended stayed on (B10: the page after one
+// that earned no-video kept its players hidden). So each tab counts how
+// often it was given each sheet, and taking a sheet away removes it that
+// often. Firefox keeps one copy; the other removals do nothing.
+const cssGiven = new Map(); // tab id → Map(css → insertions)
 
 function cssFor(looks) {
   return looks.map((name) => LOOK_CSS[name] || "").join("");
@@ -441,6 +448,9 @@ function insertCss(tabId, frameId, css) {
   if (!css) {
     return;
   }
+  const given = cssGiven.get(tabId) || new Map();
+  given.set(css, (given.get(css) || 0) + 1);
+  cssGiven.set(tabId, given);
   if (browser.scripting && browser.scripting.insertCSS) {
     const target = frameId === undefined ? { tabId, allFrames: true } : { tabId, frameIds: [frameId] };
     browser.scripting.insertCSS({ target, css, origin: "USER" }).catch(() => {});
@@ -455,27 +465,36 @@ function insertCss(tabId, frameId, css) {
   browser.tabs.insertCSS(tabId, details).catch(() => {});
 }
 
-function removeCss(tabId, css) {
-  if (!css) {
-    return;
+// removeCss takes every sheet the tab was given away from all its frames,
+// except keep.
+function removeCss(tabId, keep) {
+  const given = cssGiven.get(tabId);
+  for (const [css, times] of given ? [...given] : []) {
+    if (css === keep) {
+      continue;
+    }
+    given.delete(css);
+    for (let i = 0; i < times; i++) {
+      if (browser.scripting && browser.scripting.removeCSS) {
+        browser.scripting.removeCSS({ target: { tabId, allFrames: true }, css, origin: "USER" }).catch(() => {});
+      } else {
+        browser.tabs.removeCSS(tabId, { code: css, cssOrigin: "user", allFrames: true, matchAboutBlank: true })
+          .catch(() => {});
+      }
+    }
   }
-  if (browser.scripting && browser.scripting.removeCSS) {
-    browser.scripting.removeCSS({ target: { tabId, allFrames: true }, css, origin: "USER" }).catch(() => {});
-    return;
-  }
-  browser.tabs.removeCSS(tabId, { code: css, cssOrigin: "user", allFrames: true, matchAboutBlank: true }).catch(() => {});
 }
 
 function syncLookCss(tabId, looks) {
   const css = cssFor(looks);
   const old = lookCss.get(tabId) || "";
-  if (css === old) {
-    insertCss(tabId, undefined, css); // documents loaded since may lack it
-    return;
+  insertCss(tabId, undefined, css); // unchanged: documents loaded since may lack it
+  if (css !== old) {
+    // The new sheet goes in before the old one goes, so nothing both hide
+    // shows in between.
+    removeCss(tabId, css);
+    lookCss.set(tabId, css);
   }
-  removeCss(tabId, old);
-  insertCss(tabId, undefined, css);
-  lookCss.set(tabId, css);
 }
 
 // tellFrames sends every frame of the tab its looks when they changed.
@@ -531,6 +550,7 @@ browser.tabs.onRemoved.addListener((tabId) => {
   keywordGreyscale.delete(tabId);
   carried.delete(tabId);
   lookCss.delete(tabId);
+  cssGiven.delete(tabId);
   sentLooks.delete(tabId);
   mutedHere.delete(tabId);
   cameFrom.delete(tabId);

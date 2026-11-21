@@ -7,6 +7,9 @@
     <InstallerPlatform>x64</InstallerPlatform>
     <Platform>x64</Platform>
     <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <!-- ICE03: some of the Windows App SDK's files carry a language ID the
+         check rejects; harmless for installing. -->
+    <SuppressIces>ICE03</SuppressIces>
     <DefineConstants>Version=$(Version);GuiDir=$(GuiDir);Kc9kExe=$(Kc9kExe);ActionsDll=$(ActionsDll)</DefineConstants>
     <!-- Signing (SPEC §6 2026-11-21 later): the workflow signs kc9k.exe, the
          GUI and this MSI when the owner's certificate is configured. -->

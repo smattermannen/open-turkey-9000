@@ -93,6 +93,10 @@ public sealed class GuiApp : IDisposable
                 Automation.GetDesktop().FindFirstDescendant(c => c.ByControlType(ControlType.MenuItem).And(c.ByName(text)).And(c.ByProcessId(App.ProcessId))),
             TimeSpan.FromSeconds(seconds), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: $"no menu item {text}").Result!;
 
+    public AutomationElement? FindButtonOrNull(string text) =>
+        Window.FindFirstDescendant(c => c.ByControlType(ControlType.Button).And(c.ByName(text))) ??
+        Automation.GetDesktop().FindFirstDescendant(c => c.ByControlType(ControlType.Button).And(c.ByName(text)).And(c.ByProcessId(App.ProcessId)));
+
     public AutomationElement FindButton(string text, int seconds = 15) =>
         Retry.WhileNull(() =>
                 Window.FindFirstDescendant(c => c.ByControlType(ControlType.Button).And(c.ByName(text))) ??

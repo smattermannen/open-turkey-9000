@@ -144,7 +144,11 @@ public sealed partial class MainWindow : Window
                 AppWindow.Hide();
             }
         };
-        Closed += (_, _) => tray?.Dispose();
+        Closed += (_, _) =>
+        {
+            Controller.Stop();
+            tray?.Dispose();
+        };
 
         nav.SelectedItem = items["dashboard"];
         Controller.Start();
@@ -246,7 +250,7 @@ public sealed partial class MainWindow : Window
         var text = none
             ? "No supported browser is installed. Install Google Chrome, Microsoft Edge or LibreWolf, then open it once."
             : $"{(names.Count > 0 ? string.Join(" and ", names) : "A supported browser")} has run for a while without it checking in, and your blocks need it. Close and open the browser again, or see under Settings > Browsers which have it.";
-        if (await Controller.Dialogs.Confirm("The Killer Chicken extension isn't running", text, "Show browsers"))
+        if (await Controller.Dialogs.Confirm("The Killer Chicken extension isn't running", text, "Show browsers", cancel: "Later"))
         {
             Show("settings");
             (pages["settings"].Page as SettingsPage)?.ShowBrowsers();

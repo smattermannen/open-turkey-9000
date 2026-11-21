@@ -18,6 +18,9 @@ public class RealTests
         if (!Ready) return; // only where the workflow installed KC9K
         using var gui = new GuiApp("real", real: true);
         gui.Shot("overview");
+        // Once per session when no supported browser runs the extension (the runner has none).
+        var later = FlaUI.Core.Tools.Retry.WhileNull(() => gui.FindButtonOrNull("Later"), TimeSpan.FromSeconds(8), TimeSpan.FromMilliseconds(250)).Result;
+        if (later is not null) gui.Invoke(later);
         gui.Page("blocks");
         gui.Invoke("NewBlock");
         gui.Find("AskText").AsTextBox().Text = "CI block";

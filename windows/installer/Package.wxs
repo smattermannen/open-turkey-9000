@@ -22,7 +22,7 @@
            Scope="perMachine"
            Compressed="yes">
     <SummaryInformation Description="Killer Chicken 9000: blocks of sites, apps and words, with locks" />
-    <MajorUpgrade AllowDowngrades="yes" AllowSameVersionUpgrades="yes" Schedule="afterInstallExecute" />
+    <MajorUpgrade AllowDowngrades="yes" Schedule="afterInstallExecute" />
     <MediaTemplate EmbedCab="yes" />
 
     <Icon Id="kc9k.ico" SourceFile="$(GuiDir)\Assets\kc9k.ico" />

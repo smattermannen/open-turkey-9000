@@ -62,9 +62,9 @@ public sealed class Dialogs(Func<XamlRoot?> root, Func<ElementTheme> theme)
         await Show(new ContentDialog { Title = title, Content = Scrolling(body), CloseButtonText = "OK" });
     }
 
-    public async Task<bool> Confirm(string title, string detail, string ok = "OK", bool destructive = false)
+    public async Task<bool> Confirm(string title, string detail, string ok = "OK", bool destructive = false, string cancel = "Cancel")
     {
-        var d = New(title, Scrolling(Ui.Text(detail)), ok);
+        var d = New(title, Scrolling(Ui.Text(detail)), ok, cancel);
         if (!destructive) d.PrimaryButtonStyle = Theme.Style("AccentButtonStyle");
         return await Show(d) == ContentDialogResult.Primary;
     }

@@ -68,6 +68,15 @@ public sealed class Controller
     }
 
     public bool Busy => running > 0;
+    bool stopped;
+
+    /// <summary>The window closed: no more reads, nothing more shown.</summary>
+    public void Stop()
+    {
+        stopped = true;
+        refreshTimer.Stop();
+        statsTimer.Stop();
+    }
 
     public void NoteInput() => lastInput = DateTime.Now;
 
@@ -213,7 +222,7 @@ public sealed class Controller
             Banner?.Invoke($"Can't read the state: {read.Result.Output}");
             return;
         }
-        if (read.Json == StateJson) return;
+        if (stopped || read.Json == StateJson) return;
         StateJson = read.Json;
         State = read.State;
         Session.SettingsPasswordSet = State.SettingsPassword;
@@ -233,7 +242,7 @@ public sealed class Controller
     public async Task RefreshStats()
     {
         var (stats, _) = await Session.ReadStatsAsync(StatsArgs());
-        if (stats is null) return;
+        if (stats is null || stopped) return;
         Stats = stats;
         try { StatsChanged?.Invoke(stats); }
         catch (Exception e) { Log.Write("stats: " + e); }

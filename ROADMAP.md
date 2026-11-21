@@ -1469,6 +1469,8 @@ on Linux, so no UAC prompt per command. Services can't reach the desktop
 `CreateProcessAsUser`) in each logged-in session and restarts it if it
 ends: window titles, polite close, hotkeys, notifications, idle, gamma,
 wallpapers and the text lock window run there and report to the service.
+Everything works on Windows Home: nothing uses Pro-only features (Group
+Policy Editor, AppLocker); policies are written to the registry directly.
 
 - [ ] `W0` Windows build (M). `//go:build linux` on Linux-only files;
   interfaces in `internal/blocker/` with `_linux.go`/`_windows.go`; on
@@ -1487,7 +1489,8 @@ wallpapers and the text lock window run there and report to the service.
   filters owned by the service (Windows Firewall rules are what an admin
   turns off first); DNS resolving shared with Linux; browser policies in
   `HKLM\SOFTWARE\Policies\…` (Chrome, Chromium, Edge, Brave, Vivaldi,
-  Opera) and `policies.json` (Firefox, LibreWolf); the extension in Chrome
+  Opera) and `policies.json` (Firefox, LibreWolf); Edge is a supported
+  browser (SPEC §6 2026-11-21 later); the extension in Chrome
   and Edge by `ExtensionInstallForcelist` from the unlisted Chrome Web
   Store listing (SPEC §6), in LibreWolf from the bundled `.xpi`; the
   extension guard and supported-browser detection by install paths and
@@ -1519,7 +1522,10 @@ wallpapers and the text lock window run there and report to the service.
   and the tools that stop services or change those settings (Services,
   `sc`, Registry Editor, Group Policy Editor, `bcdedit`); clock check;
   firmware lock with the vendors' Windows tools (Dell Command | Configure,
-  Lenovo's WMI, HP BCU). Strict mode has no Windows equivalent yet (§5).
+  Lenovo's WMI, HP BCU). Strict mode (SPEC §6 2026-11-21 later): while
+  anything is locked, deny-entries for Administrators on the service, its
+  files and registry keys, and boot and recovery settings, held by the
+  service and put back each tick.
   Nothing hides from Windows Defender: if it flags KC9K, that is solved by
   signing and reporting a false positive, never by evasion.
 - [ ] `W6` Circadian rhythm and wallpapers (M). Dark mode (registry
@@ -1529,20 +1535,11 @@ wallpapers and the text lock window run there and report to the service.
   (`SystemParametersInfo`), mode wallpapers.
 - [ ] `W7` Installer and release (M). MSI (WiX), with the service, the
   agent and the GUI; `installer` tamper setting (`prepare-install`)
-  refuses removal and downgrade while locked, as the `.deb` does. Code
-  signing: §5.
+  refuses removal and downgrade while locked, as the `.deb` does.
+  Code-signed (SPEC §6 2026-11-21 later): the owner picks the certificate
+  (Azure Artifact Signing is the cheapest serious one).
 
 ## 5. Proposed, not agreed
-
-- PROPOSED 2026-11-21 (session, Windows plan): open questions for the
-  owner before their items. (1) Strict mode on Windows (`W5`): the PAM root
-  guard has no equivalent; candidates are denying the admin account's
-  rights to services and boot settings while locked, or no strict mode on
-  Windows. (2) Edge is on every Windows computer and can't be removed:
-  make it a supported browser on Windows (`W2`)? (3) Code signing (`W7`):
-  without it SmartScreen warns and Defender is likelier to flag KC9K;
-  signing costs money (SPEC §1 *Free*). (4) The laptop's Windows edition
-  (Home or Pro: Pro has Group Policy and AppLocker).
 
 - DECIDED 2026-11-21 (By Opus; SPEC §4.6, §6): setting locks stack like a
   block's, as proposed below; built (`2.5`).

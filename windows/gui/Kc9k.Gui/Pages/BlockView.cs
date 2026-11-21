@@ -149,7 +149,7 @@ public sealed class BlockView
             help: "Any app whose window title contains one of these words is found while the block is on. Browsers are never matched by title: their tabs are judged by the lists (R-TITLE-1). Separate words with spaces.",
             searchBox: true, hidden: true, multi: true, id: "Titles");
         appTriggers = new TriggerEditor(window, "apps", "close", "Close the app",
-            "When one of these apps runs (signing out, shutting down and locking the screen come with a minute's warning):");
+            "When one of these apps runs (logging out, shutting down and locking the screen come with a minute's warning):");
         titleTriggers = new TriggerEditor(window, "titles", "close", "Close the window", "When a window with one of these titles is open:");
         var appsTab = Ui.Column(16,
             Ui.Wrap(6,

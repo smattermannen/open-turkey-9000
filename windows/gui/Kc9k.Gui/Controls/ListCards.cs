@@ -162,7 +162,7 @@ public abstract partial class ActionCard : UserControl
                 var (title, detail, minimum, initial) = name switch
                 {
                     "monk" => ("Monk mode", "The browser closes and every website is blocked, locked, and the internet connection is cut, for this long.", 1, 60),
-                    "logout" => ("Log out", "The browser closes and you are signed out. With a time, you stay signed out that long; with 0, just once.", 0, 0),
+                    "logout" => ("Log out", "The browser closes and you are logged out. With a time, you stay logged out that long; with 0, just once.", 0, 0),
                     _ => ("Shut down", "The browser closes and the computer shuts down. With a time, it stays off that long; with 0, just once.", 0, 0),
                 };
                 var rule = new DurationRule

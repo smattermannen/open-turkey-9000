@@ -41,6 +41,7 @@ of their group and a row here; a finished item loses its row.
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings of 2026-11-21: guest, inactive-tabs, embedded checked in Chrome-family browsers (2026-11-21); inactive-tabs, embedded in LibreWolf (box); VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
+<<<<<<< HEAD
 | W0 | Windows build: built; unit tests on `windows-latest` Unchecked | §1, §6 2026-11-21 | windows | win-ci |
 | W1 | Windows service, session agent, named pipe, install/uninstall: built; CI script, desktop parts Unchecked | §3.13 | windows | win-ci, win-vm |
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
@@ -48,6 +49,15 @@ of their group and a row here; a finished item loses its row.
 | W4 | Windows GUI: C# / WinUI 3. Partial: shell, Overview, CI (2026-11-21); Blocks, automation, the other pages next | §4.1–4.13, R-GUI-1–3 | gui-windows | agent, win-ci, laptop |
 | W5 | Windows tamper protection: built; CI checks; boot/Safe Mode Unchecked; firmware lock not built | §3.10, §4.10 | windows | win-ci, win-vm, laptop |
 | W6 | Windows circadian rhythm and wallpapers: built, Unchecked | §4.10 | windows | win-vm, laptop |
+=======
+| W0 | Windows build: platform split, cross-compile, CI on Windows | §1, §6 2026-11-21 | install, testing | agent, win-ci |
+| W1 | Windows service, session agent, named pipe, install/uninstall | §3.13 | enforce-daemon, install | agent, win-vm |
+| W2 | Windows web layers: hosts, firewall, browser policies, extension, extension guard | §3.13, §4.10 | layers-net, browsers | win-vm, laptop |
+| W3 | Windows apps and desktop: process kill, scripts, titles, polite close, monk mode, Frozen Chicken, allowed apps, hotkeys, notifications, use, logout/shutdown, network cut, text lock window | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | apps-titles, device, hotkeys, allowance, locks | win-vm, laptop |
+| W4 | Windows GUI: C# / WinUI 3. Built in CI against the fake kc9k (2026-11-21); against the real kc9k.exe, Narrator, scaling and drag and drop by a person: Unchecked | §4.1–4.13, R-GUI-1–3 | gui-windows | win-ci, win-vm, laptop |
+| W5 | Windows tamper protection against an administrator | §3.10, §4.10 | device, browsers, install | win-vm, laptop |
+| W6 | Windows circadian rhythm and wallpapers | §4.10 | circadian | win-vm, laptop |
+>>>>>>> 7810c92 (W4: every page of the GTK GUI built; notes/gui-windows.md and ROADMAP W4 say what is checked; glossary's log out)
 | W7 | Windows installer (MSI) and release | §4.11 | install | agent, owner |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
@@ -1537,6 +1547,7 @@ where its item needs it and the Linux tests prove nothing changed.
   (`kc9k.exe`, which forwards to the service); the same pages as the GTK
   GUI (§4.1–4.13). Smoke tests through UI Automation on
   `windows-latest`, as `ci/gui_*.py` do on Linux.
+<<<<<<< HEAD
   Partial (2026-11-21, notes/gui-windows.md):
   - Built, checked on `windows-latest` (`windows-gui.yml`: unit tests,
     publish, UI Automation smoke tests, screenshots looked at): the shell
@@ -1578,6 +1589,58 @@ where its item needs it and the Linux tests prove nothing changed.
   screens (DDC/CI, dxva2), the sleep hook by power events. Needs win-vm
   (gamma, wallpaper, dark mode) and laptop (panel, external screens,
   Night light).
+=======
+  Built in CI (2026-11-21, notes/gui-windows.md), Unchecked on a real
+  machine:
+  - Built, checked on `windows-latest` (`windows-gui.yml`: 33 Core tests,
+    publish, UI Automation smoke tests against the fake kc9k replaying
+    the real CLI's JSON, screenshots looked at in light and dark): every
+    page of the GTK GUI: Overview, Blocks (cards, modes with drag and drop
+    and a keyboard way, the block editor's four tabs with drafts and Save
+    edits, list and phrase set cards, imports and exports, locks with the
+    one confirmation R-LOCK-12 and the unlock order R-LOCK-6, Extend
+    timer, users, presets), automation (week calendar, windows, schedules
+    applied, places, schedule lock, autostarts), monk mode, Frozen Chicken
+    (freeze now and until a date, scheduled freezes and their locks,
+    allowed apps), Schedules, Places, Hotkeys, Presets and recording,
+    Statistics (frames, users, top, search, block filter, JSON export),
+    Circadian rhythm (clips, presets, Play the day, wallpapers, dark mode,
+    dark pages), mode wallpapers, Settings (all of §4.10's groups), the
+    access-password covers, the settings password, the tray icon, Open at
+    sign-in.
+  - Unchecked (needs win-vm or laptop): against the real `kc9k.exe` and its
+    service (Core's W1; the GUI is ready for `KC9K_CLI` or `kc9k.exe` next
+    to it); the text lock's challenge window opened by the CLI (W3); drag
+    and drop (block onto mode, calendar, clips, wallpaper bars), file
+    dialogs, the tray menu and Open at sign-in by a person; Narrator, high
+    contrast, 150–200 % scaling and a second screen.
+  - Windows wording the CLI's output will have (W1–W6) may differ from the
+    help texts here; those are the GUI's own and change with Core.
+
+- [ ] `W5` Tamper protection against an administrator (L). An admin can
+  always win in the end; the aim is that every way around is slow,
+  visible, and counted as a bypass with its consequences (§3.10). The
+  service's security descriptor refuses Administrators stop, pause,
+  reconfigure and delete; a SYSTEM scheduled task brings back the service
+  and the agent; files and registry keys owned by SYSTEM; the service also
+  runs in Safe Mode, and while anything is locked Safe Mode boot and the
+  recovery environment are off (`bcdedit`, `reagentc`: factory reset
+  protection); `tamper task-managers` closes Task Manager and the like,
+  and the tools that stop services or change those settings (Services,
+  `sc`, Registry Editor, Group Policy Editor, `bcdedit`); clock check;
+  firmware lock with the vendors' Windows tools (Dell Command | Configure,
+  Lenovo's WMI, HP BCU). Strict mode (SPEC §6 2026-11-21 later): while
+  anything is locked, deny-entries for Administrators on the service, its
+  files and registry keys, and boot and recovery settings, held by the
+  service and put back each tick.
+  Nothing hides from Windows Defender: if it flags KC9K, that is solved by
+  signing and reporting a false positive, never by evasion.
+- [ ] `W6` Circadian rhythm and wallpapers (M). Dark mode (registry
+  `AppsUseLightTheme`/`SystemUsesLightTheme`), colour temperature by gamma
+  ramp in the agent, brightness (WMI on laptop panels, DDC/CI for external
+  screens), Night light off while ours runs, wallpapers
+  (`SystemParametersInfo`), mode wallpapers.
+>>>>>>> 7810c92 (W4: every page of the GTK GUI built; notes/gui-windows.md and ROADMAP W4 say what is checked; glossary's log out)
 - [ ] `W7` Installer and release (M). MSI (WiX), with the service, the
   agent and the GUI; `installer` tamper setting (`prepare-install`)
   refuses removal and downgrade while locked, as the `.deb` does.

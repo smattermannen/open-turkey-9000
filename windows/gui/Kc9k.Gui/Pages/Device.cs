@@ -63,7 +63,7 @@ public sealed class Device
     {
         schedules.SetItems(s.FreezeSchedules);
         apps.SetItems(s.FreezeApps);
-        var ways = new Dictionary<string, string> { ["lock"] = "locking the screen", ["logout"] = "signing out", ["shutdown"] = "shutting down", ["apps"] = "allowing only the allowed apps" };
+        var ways = new Dictionary<string, string> { ["lock"] = "locking the screen", ["logout"] = "logging out", ["shutdown"] = "shutting down", ["apps"] = "allowing only the allowed apps" };
         status.Text = s.FreezeSeconds > 0
             ? $"On for {Words.Seconds(s.FreezeSeconds)} more, {ways.GetValueOrDefault(s.FreezeMode, "")}. Starting again can only extend it."
             : "Off.";
@@ -80,7 +80,7 @@ public sealed class Device
         var effect = Key(mode) switch
         {
             "lock" => "The screen locks now and keeps locking again until the time is up.",
-            "logout" => "Every session is signed out now, and signing in again ends at once.",
+            "logout" => "Every session is logged out now, and logging in again ends at once.",
             "shutdown" => "The computer shuts down now, and again whenever it starts.",
             _ => "Every program of yours that isn't an allowed app is closed now, and again when it starts.",
         };

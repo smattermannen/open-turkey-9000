@@ -53,10 +53,44 @@
   ordinary elements (Narrator reads each row). Dialogs (`Ui/Dialogs.cs`)
   are ContentDialogs, one at a time; `ConfirmLock` is R-LOCK-12's one
   confirmation before `--yes`.
-- **Pages**: the GTK GUI's sidebar (`Tables.Pages`), Settings at the
-  bottom as Windows apps have it; each page under a cover while its access
-  area is closed (§3.11). Built: Overview (§4.1). Not yet:
-  `Pages/NotYet.cs` says so on the page.
+- **Pages** (`Pages/`): the GTK GUI's sidebar (`Tables.Pages`), Settings
+  at the bottom as Windows apps have it; each page under a cover while its
+  access area is closed (§3.11). `OverviewPage` (§4.1); `BlocksPage`
+  (§4.2: mode and block cards, drag a block card onto a mode card, or its
+  context menu, Shift+F10), with three views: `BlockView` (§4.3: the head
+  stays put, `SelectorBar` tabs Websites, Apps, Breaks & allowance, Bypass
+  prevention scroll; Start applies at once, once on it is Add locks…;
+  Unlock…, Extend timer…, ⋯ rename, duplicate, block preset, users,
+  delete), `AutomationView` (§4.5: `AutomationEditor` kind block, schedule
+  lock, autostarts, automation presets), `ModeView` (modes, monk mode,
+  and Frozen Chicken through `Device`: freeze now, scheduled freezes with
+  locks, allowed apps); `SchedulesPage`, `PlacesPage` (`SchedulesPlaces.cs`),
+  `HotkeysPage` (§4.13), `PresetsPage` (§4.4, recording), `StatsPage`
+  (§4.9, its own `stats --json` read with the page's frame and filters,
+  JSON export), `CircadianPage` (§4.10, `circadian show --json`),
+  `SettingsPage` (§4.10 in SPEC's order, worded for Windows; `Startup`
+  makes the Startup-folder shortcut for Open at sign-in).
+- **Controls** (`Controls/`): `EditableList` (§4.3 keys: Enter adds,
+  Delete/Backspace removes and the selection moves on, Ctrl+A, Ctrl+F,
+  double-click or Enter edits; hidden entries behind a cover; a grip makes
+  it taller, kept per kind of list in gui.json), `ListCard` and
+  `PhraseSetCard` with `PhraseEditor` (`ListCards.cs`), `LockPicker` and
+  `TimerLockField` (`Locks.cs`, on `Core.LockSpec`), `LockDialogs.ChooseOrder`
+  (R-LOCK-6), `NepsisDialog` (the bypass prevention ladder as
+  `--step-json`), `TriggerEditor` and `AppPicker` (Start menu shortcuts
+  resolved through WScript.Shell, and running programs: an app is added by
+  its program file's name), `CustomEditor`, `WeekCalendar` (drawn on a
+  Canvas; its windows are also a list in `AutomationEditor`, the keyboard's
+  way), `AutomationEditor` with `PlaceRules`, `ClipEditor` (Points… is the
+  keyboard's way), `WallpaperEditor` (timeline plus rows), charts
+  (`TopChart`, `DailyChart` in `StatsPage.cs`: elements, not pixels).
+  `Shell/Files.cs`: Windows' file dialogs, list imports (`list read`
+  routes phrases to a phrase set) and exports. `Shell/Tray.cs`: the
+  notification-area icon through `Shell_NotifyIcon` on the window's own
+  handle (a comctl32 subclass gets its messages); Quit leaves blocks on.
+- **Dialogs over dialogs**: WinUI shows one ContentDialog at a time, so a
+  dialog that asks a second question (Add action… in a hotkey, Add… in a
+  clip's points) hides itself, asks, and opens again with what was typed.
 - **Preferences** (`Prefs.cs`): `%APPDATA%\kc9k\gui.json` (`KC9K_GUI_PREFS`
   for tests): theme, darkness, clock, first weekday, tray, list heights,
   window size. Static field order matters: `Options` is set before
@@ -82,3 +116,8 @@
 Not fixed by `SPEC.md`; the code is the truth.
 
 - Hotkeys are worded with win+ (the CLI also takes super+).
+- Colours drawn in code (calendar, clips, charts) are looked up for the
+  theme the window shows (`Theme.Brush(key, element)`); the app starts in
+  the chosen theme, and pills use styles, so a theme change applies live.
+- Statistics can be saved as JSON (§4.9 JSON export) with the page's time
+  frame and filters; the GTK GUI has no such button.

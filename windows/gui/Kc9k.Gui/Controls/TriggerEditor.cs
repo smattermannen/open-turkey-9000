@@ -15,7 +15,7 @@ public sealed partial class TriggerEditor : StackPanel
     static readonly (string Key, string Label, long? Seconds)[] Consequences =
     [
         ("close-browser", "Close the browsers", null), ("lock-screen", "Lock the screen for", 30 * 60),
-        ("logout", "Sign out", 0), ("shutdown", "Shut down", 0), ("monk", "Start monk mode for", 60 * 60),
+        ("logout", "Log out", 0), ("shutdown", "Shut down", 0), ("monk", "Start monk mode for", 60 * 60),
         ("mode", "Run a mode, locked, for", 60 * 60), ("custom", "Custom action", null),
     ];
 

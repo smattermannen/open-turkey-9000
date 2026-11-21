@@ -14,7 +14,7 @@ public sealed class HotkeysPage : IPage
     [
         ("start", "Start a block"), ("stop", "Switch a block off"), ("mode-on", "Switch a mode on"), ("mode-off", "Switch a mode off"),
         ("mode-run", "Run a mode, locked, for"), ("monk", "Monk mode for"), ("freeze", "Frozen Chicken for"),
-        ("close-browser", "Close the browsers"), ("lock-screen", "Lock the screen"), ("logout", "Sign out"),
+        ("close-browser", "Close the browsers"), ("lock-screen", "Lock the screen"), ("logout", "Log out"),
         ("shutdown", "Shut down"), ("custom", "Custom action"),
     ];
 

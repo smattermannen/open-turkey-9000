@@ -113,19 +113,36 @@ func RelockUnlocked() {
 }
 
 // NotifyDesktop shows a notification in every desktop session, as its user.
-// It is best-effort: without notify-send or a session, nothing happens.
+// It is best-effort: without a session, nothing happens.
 func NotifyDesktop(title, body string) {
-	path, err := exec.LookPath("notify-send")
-	if err != nil {
+	name, args := notifyCommand(exec.LookPath, title, body)
+	if name == "" {
 		return
 	}
 	for _, u := range desktopUsers() {
-		// "--" so a title starting with "-" (a block name) isn't an option.
-		cmd := asUser(u, path, "--app-name=Killer Chicken 9000", "--icon=dialog-warning", "--", title, body)
+		cmd := asUser(u, name, args...)
 		if err := cmd.Start(); err == nil {
 			go cmd.Wait() //nolint:errcheck // reap it; the result doesn't matter
 		}
 	}
+}
+
+// notifyCommand is the command that shows a notification: notify-send, or,
+// where it isn't installed (Ubuntu's Cinnamon has no libnotify-bin, and
+// install.sh doesn't add it), the notification service called directly with
+// systemd's busctl. Without either, "". "--" so a title starting with "-" (a
+// block name) isn't an option.
+func notifyCommand(lookPath func(string) (string, error), title, body string) (string, []string) {
+	if path, err := lookPath("notify-send"); err == nil {
+		return path, []string{"--app-name=Killer Chicken 9000", "--icon=dialog-warning", "--", title, body}
+	}
+	if path, err := lookPath("busctl"); err == nil {
+		// Notify(app, replaces id, icon, summary, body, actions, hints, timeout)
+		return path, []string{"--user", "--", "call", "org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+			"org.freedesktop.Notifications", "Notify", "susssasa{sv}i",
+			"Killer Chicken 9000", "0", "dialog-warning", title, body, "0", "0", "-1"}
+	}
+	return "", nil
 }
 
 // NologinPath is pam_nologin's file: while it exists, every login but root's

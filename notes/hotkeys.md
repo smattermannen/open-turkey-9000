@@ -31,7 +31,10 @@ Not fixed by `SPEC.md`; the code is the truth.
   settings): Add hotkey… (`add_hotkey_actions`, `ask_hotkey_action`),
   Start a block… (`add_hotkey`: `HotkeyFields`, the `LockPicker`), Save as
   preset….
-- **Notifications** (`notify-send`, `enforce/notices.go`, `kc9k notifications`):
+- **Notifications** (`blocker.NotifyDesktop` in `blocker/freeze.go`, as each
+  person on their session bus: `notify-send`, else `busctl --user` calling
+  the notification service, as Ubuntu's Cinnamon has no libnotify-bin;
+  `enforce/notices.go`, `kc9k notifications`):
   user picks kinds (window start/end, timer lock end, Pomodoro, allowance,
   app closed) and advance minutes (default 5; each advance once); windows
   only of blocks that are on; scheduled freeze always (5 and 1 min).

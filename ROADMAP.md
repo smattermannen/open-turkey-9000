@@ -33,7 +33,6 @@ of their group and a row here; a finished item loses its row.
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
 | B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | box |
-| B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
 | B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
 | B9 | Mute and dark on real sites; polite close with a real app | §3.9 | extension, apps-titles | box |
 | B10 | No-video on a real embedded player | §3.9 | extension | box |
@@ -958,9 +957,26 @@ Script-tested, never by a person. Script what can be into `ci/`.
   taller by dragging the grip under them (owner 2026-11-19; height kept
   per kind in gui.json, `ci/gui_list_resize_smoke.py` under Xvfb): try it
   on a real screen.
-- [ ] `B7` One-off logout/shutdown from a list; Dashboard monk button. (Checked
+- [x] `B7` One-off logout/shutdown from a list; Dashboard monk button. (Checked
   2026-11-15: a timer-locked global ladder refuses `bypass off` and a weaker
-  ladder, and turns off once the lock ends.)
+  ladder, and turns off once the lock ends.) Built: 2026-11-20, kc9k-vm
+  (Ubuntu 24.04, Cinnamon X11), this tree installed `TAGS=devmaster`; a block
+  with `example.net` in its Blocked list, action logout (once), then shutdown
+  (once), tripped by typing the address in LibreWolf on :0 (xdotool). Logout:
+  the extension closed the browser at once, the daemon logged the user out
+  60 s after the hit (10:37:48 → 10:38:48). Shutdown: off 60 s after the hit
+  (10:41:37 → 10:42:37, powered off by 10:42:39). The 60 s notice (R-WARN-1)
+  first never showed: `NotifyDesktop` needed `notify-send`, which Ubuntu's
+  Cinnamon lacks (libnotify-bin only a Recommends of the .deb). Fixed: else
+  `busctl --user` calls the notification service
+  (`TestR_WARN_1_NotifyWithoutNotifySend`); then "you will be logged out in
+  60 seconds" / "the computer will shut down in 60 seconds" showed on screen
+  and on the session bus. Overview's "Monk mode…" (xdotool): 2m, OK, then
+  "Set this lock?" (R-LOCK-12) with target, kind and end; Cancel left monk
+  mode off; Lock started it within 1 s (link down, 1.1.1.1 silent, card
+  "Monk mode 1 min"), ended 10:36:30 and the network came back. The GUI's
+  confirmation is a plain dialog: synthetic clicks count (only hotkey
+  confirmations ignore them).
 - [ ] `B8` Use counting with a person: focused tab/app count, idle not; other browser closed during a website session.
   2026-11-20 (overnight, desktop, Mint 22.3): idle was never seen there:
   cinnamon-screensaver 6.6 answers `GetSessionIdleTime` with "not

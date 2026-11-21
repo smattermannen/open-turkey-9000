@@ -18,6 +18,36 @@ func TestUsersToLogOut(t *testing.T) {
 	}
 }
 
+// R-WARN-1: the minute's notice before a logout or shutdown reaches the desktop
+// without notify-send too (Ubuntu's Cinnamon has none): busctl calls the
+// notification service, a title starting with "-" kept as text.
+func TestR_WARN_1_NotifyWithoutNotifySend(t *testing.T) {
+	has := func(names ...string) func(string) (string, error) {
+		return func(name string) (string, error) {
+			for _, n := range names {
+				if n == name {
+					return "/usr/bin/" + name, nil
+				}
+			}
+			return "", os.ErrNotExist
+		}
+	}
+	name, args := notifyCommand(has("notify-send", "busctl"), "-b: logout", "Save.")
+	if name != "/usr/bin/notify-send" || !reflect.DeepEqual(args[len(args)-3:], []string{"--", "-b: logout", "Save."}) {
+		t.Errorf("with notify-send: %s %q", name, args)
+	}
+	name, args = notifyCommand(has("busctl"), "-b: logout", "Save.")
+	want := []string{"--user", "--", "call", "org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+		"org.freedesktop.Notifications", "Notify", "susssasa{sv}i",
+		"Killer Chicken 9000", "0", "dialog-warning", "-b: logout", "Save.", "0", "0", "-1"}
+	if name != "/usr/bin/busctl" || !reflect.DeepEqual(args, want) {
+		t.Errorf("without notify-send: %s %q", name, args)
+	}
+	if name, _ = notifyCommand(has(), "t", "b"); name != "" {
+		t.Errorf("with neither: %q", name)
+	}
+}
+
 // R-FREEZE-2: during a logout freeze no one logs in again; the file is
 // removed after it, and the system's own nologin file is left alone.
 func TestR_FREEZE_2_HoldLogins(t *testing.T) {

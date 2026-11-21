@@ -24,10 +24,3 @@ public sealed class SettingsPage(MainWindow window) : NotYetPage("settings", "Se
     public void ShowBrowsers() { }
 }
 
-public sealed class BlocksPage(MainWindow window) : NotYetPage("blocks", "Blocks", "Your blocks and modes.")
-{
-    public string? OpenedBlock => null;
-    public void ShowCards() { }
-    public void OpenBlock(string name, string? tab = null) { }
-    public void OpenMode(string name) { }
-}

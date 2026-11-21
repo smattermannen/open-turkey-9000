@@ -50,7 +50,7 @@ of their group and a row here; a finished item loses its row.
 | B17 | GUI "lifted by its schedule now" on a real screen | §3.3 | gui, automation | box |
 | 2.1 | Circadian on real hardware (laptop backlight, screens) | §4.10 | circadian | box |
 | 2.2 | Ad trigger: browser test; the new industry domains in real ad requests (Unchecked) | §3.9 | actions, extension | box |
-| 2.4 | SafeSearch per engine: built; in real browsers (Unchecked) | §4.10 | browsers | box |
+| 2.4 | SafeSearch per engine: built; checked in Chrome (2026-11-21); in LibreWolf (Unchecked) | §4.10 | browsers | box |
 | 2.6 | Factory reset protection: built; PAM root guard in the VM (vm), firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
 | 2.7 | Hardening: the text lock's window on a real desktop (Unchecked); rules server secret dropped (§5, 2026-11-21) | R-LOCK-5, §4.6 | browsers, locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
@@ -957,7 +957,7 @@ Only items not simply Built.
 | §3.9 Ad trigger | Built | scope `ads` on blacklists and clusters (`list create --ads`, `list where B L ads on`, GUI "Ads" box): entries are ad network domains or industries (`db.AdIndustries`: adult, crypto, dating, gambling); rules `ads`; the extension watches each tab's third-party requests (`noteAdRequest`) and a page loading a listed network matches with every action (`kc9kAdMatches`, unit-tested). Not in shared layers. 2026-11-21: URL-term exceptions spare a page from it too (they didn't); a list whose block has exceptions by title or text is judged with the page (`kc9kAdsByPage`: the content script's resource timing, `page.adHosts`), so those exceptions hold (R-LIST-1). Edge cases unit-tested (`ci/match_test.js`, `ci/background_test.js`: hosts with capitals or a final dot, test mode, no actions, first-party, non-web pages, once per page) and in Chromium (`ci/content_harness_test.js`); extension 1.30.0. Browser test: Not run (the owner was using the laptop; the browser test changes LibreWolf settings and would close their windows) |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
 | §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--preset C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Presets page (list presets) "Record words" with cut % and the most specific words |
-| §4.10 SafeSearch | Built | a browser setting per engine (`safesearch-google`, `-bing`, `-duckduckgo`, `-youtube`), each its own lock; `browser safesearch` switches all four. Pinned in hosts (every browser) per engine, `safesearch_engines` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked: with Google's, Bing's or DuckDuckGo's, SPEC §4.10 *(By Opus)*, §5 decided 2026-11-21). In real browsers: Unchecked (`2.4`) |
+| §4.10 SafeSearch | Built | a browser setting per engine (`safesearch-google`, `-bing`, `-duckduckgo`, `-youtube`), each its own lock; `browser safesearch` switches all four. Pinned in hosts (every browser) per engine, `safesearch_engines` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked: with Google's, Bing's or DuckDuckGo's, SPEC §4.10 *(By Opus)*, §5 decided 2026-11-21). Checked live in Chrome 2026-11-21 (`2.4`); in LibreWolf: Unchecked |
 | §4.10 Tamper settings | Built | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Built 2026-11-21 (SPEC §4.10 *(By Opus)*): `tamper guest` (guest browsing off in every Chromium-family policy, LightDM guest session off), `extension-stop`, `inactive-tabs`, `embedded` (on until turned off: what KC9K always did), `installer` (`prepare-install` from `make install`/`install.sh` and the `.deb`'s prerm for a reinstall or older version; removal always refused). `TestTamperGuestExtensionInstallerTabsEmbedded`, `TestSyncGuestOff`, `ci/tamper_tabs_test.js`, GUI tamper window. Live: Unchecked (box: Chrome-family guest windows, a background tab and an embedded frame with each setting off in LibreWolf and Chrome; vm: the LightDM guest session, `dpkg -i` of the same version and `install.sh` refused during a lock) |
 | §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
 | §4.10 Device protection: factory reset protection, guided setup | Built | 2026-11-21: firmware lock, guided setup (`kc9k guided-setup [--json]`, GUI Guided setup… with Do it…, `ci/gui_settings_smoke.py`), strict mode's PAM root guard (`login`, `su`, `su-l`, tested on generated files only). Live: Unchecked (`2.6`) |
@@ -987,10 +987,20 @@ Only items not simply Built.
 - **2.4 SafeSearch** (S): a lock per engine built 2026-11-20 (SPEC §6
   2026-11-18): four browser settings, the old one and its lock moved to
   each (`TestMigrateSafeSearch`, `TestSafeSearchPerEngine`,
-  `ci/match_test.js`, `ci/gui_settings_smoke.py`). Unchecked (box): in
-  LibreWolf and Chrome, with only one engine on, that engine's searches
-  are strict and the others' are not; the hosts section changes with the
-  settings; YouTube Restricted Mode alone.
+  `ci/match_test.js`, `ci/gui_settings_smoke.py`). Built in Chrome
+  (2026-11-21, cloud container, Chrome 158.0.8127.36, the daemon running
+  as root, real `/etc/hosts` and policies): each engine on alone, then all
+  four (`browser safesearch on`), then off. Each alone made only its own
+  searches strict: Google got `safe=active` and connected to
+  forcesafesearch's 216.239.38.120 (the results page itself is Google's
+  CAPTCHA for the container's address); Bing got `adlt=strict` and
+  strict.bing.com's address; DuckDuckGo went to `safe.duckduckgo.com` with
+  `kp=1` and the page's own `settings_url_params={"kp":1}`; YouTube said
+  "Restricted Mode is enabled by your network administrator". The other
+  three stayed as with all off. The hosts section held only the engines on
+  (Google 4 names, Bing 2, DuckDuckGo 2, YouTube 6) and was gone with all
+  off; it is written by the daemon's next tick (about 30 s), not by the
+  command. Unchecked (box): the same in LibreWolf.
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
   order, `unlock` lifts only the first, status and GUI show the order).
   Several locks of one kind on a block built 2026-11-20 (owner: a second

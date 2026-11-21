@@ -24,6 +24,15 @@
   (`data-kc9k-noimg` before/after/self, idle-time `scanPseudoImages`) and
   both sheets empty them; shadow roots get an adopted sheet. Page script
   harness (Node + Playwright, cloud only): `node ci/content_harness_test.js`.
+- No downloads (§3.9, background `downloadSources`, `downloadBlocked`,
+  `downloads` permission): a download is cancelled (finished: its file
+  removed) when its referrer, its address or a page it may come from
+  matched no-downloads (address, or text hits kept in `downloadPages`).
+  Chrome gives a file from another host only the origin as referrer and a
+  page may send none: then the tabs of that origin, or with no referrer the
+  tabs in front, stand in. Tests: `ci/download_test.py` (LibreWolf),
+  `node ci/download_background_test.js` (fake APIs: origin referrer, none,
+  `blob:`, a worker restart).
 - Looks a page earned from its title or text are carried to the tab's next
   address until that page is read (`carryLooks`, `page-judged`, ≤
   `CARRY_MS`); carried, they only hide (the sheets). Picture and media

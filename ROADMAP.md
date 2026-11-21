@@ -24,7 +24,6 @@ of their group and a row here; a finished item loses its row.
 |---|---|---|---|---|
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text lifted on clicks: suites pass (2026-11-20); real use on the laptop | §3.9 | extension | owner |
-| A3 | `no-downloads` in Chrome | §3.9 | extension, browsers | box |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
@@ -487,7 +486,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     2026-11-20 (overnight, desktop): `extras_test` 27/27 and `browser_test`
     20/20 pass in LibreWolf 159 (local pages, not real sites). Left: real
     use on the laptop.
-  - [ ] `A3` `no-downloads` doesn't block downloads (§3.9). Checked 2026-11-16
+  - [x] `A3` `no-downloads` doesn't block downloads (§3.9). Checked 2026-11-16
     in LibreWolf: a link on the page, a file from another host (only the
     origin as referrer) and a file the page makes itself (`blob:`) are all
     cancelled (`ci/download_test.py`, four cases). Likely cause in Chrome:
@@ -495,6 +494,17 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     forbid downloads (each page reports once). Fixed in 1.21.0: the pages
     are kept in session storage; a download that finishes before it can be
     cancelled has its file removed. Unchecked in Chrome (not run here). S
+    2026-11-20 (desktop, Google Chrome 158, policy-installed extension,
+    fresh profile driven over CDP): link and `blob:` cancelled, but a file
+    from another host went through (Chrome names only the origin as
+    referrer). Fixed in 1.27.3: with an origin-only referrer the open tabs
+    of that origin stand in, with none the tabs in front
+    (`downloadSources`; `node ci/download_background_test.js`, 9 cases).
+    Then 8/8: link, other host, `blob:` cancelled and a plain page's file
+    kept, with the worker running and again after it was stopped in
+    `chrome://serviceworker-internals`; in a 10-min idle wait the worker
+    was never stopped (keepalive alarm), 8/8 after it too.
+    `ci/download_test.py` 4/4 in LibreWolf after the fix.
   - [ ] `A4` Desktop brightness slider gone from the menu; blue-light filter
     toggles on and off; desktop night light turns itself off while its
     switch shows on, **also with circadian off and strict mode off** (§4.10

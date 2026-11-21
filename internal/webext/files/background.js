@@ -1300,21 +1300,48 @@ function noteDownloadPage(url, actions) {
     downloadStore.set({ [DOWNLOAD_PAGES_KEY]: Array.from(downloadPages.keys()) }).catch(() => {});
   }
 }
-function downloadBlocked(item) {
-  for (const url of [item.referrer, item.url, item.finalUrl]) {
-    if (typeof url !== "string" || !url) {
-      continue;
+// downloadSources are the addresses a download may come from. Chrome gives a
+// file from another host (a CDN) only the page's origin as referrer
+// ("https://site/"), and a page may send none: then the open tabs it can
+// have come from stand in, those of that origin, or with no referrer the
+// tabs in front.
+async function downloadSources(item) {
+  const urls = [item.referrer, item.url, item.finalUrl].filter((url) => typeof url === "string" && url);
+  const referrer = typeof item.referrer === "string" ? item.referrer : "";
+  let origin = "";
+  try {
+    const parsed = new URL(referrer);
+    if (/^https?:$/.test(parsed.protocol) && referrer === parsed.origin + "/") {
+      origin = parsed.origin;
     }
-    if (downloadPages.has(url) || kc9kListActions(lists, { url })["no-downloads"]) {
-      return true;
-    }
+  } catch (error) {
+    // No referrer.
   }
-  return false;
+  if ((referrer && !origin) || !browser.tabs || !browser.tabs.query) {
+    return urls;
+  }
+  try {
+    for (const tab of await browser.tabs.query(origin ? {} : { active: true })) {
+      try {
+        if (typeof tab.url === "string" && (!origin || new URL(tab.url).origin === origin)) {
+          urls.push(tab.url);
+        }
+      } catch (error) {
+        // Not an address.
+      }
+    }
+  } catch (error) {
+    // No tabs to look at.
+  }
+  return urls;
+}
+function downloadBlocked(urls) {
+  return urls.some((url) => downloadPages.has(url) || kc9kListActions(lists, { url })["no-downloads"]);
 }
 if (browser.downloads && browser.downloads.onCreated) {
   browser.downloads.onCreated.addListener((item) => {
-    downloadPagesLoaded.then(() => {
-      if (!downloadBlocked(item)) {
+    downloadPagesLoaded.then(() => downloadSources(item)).then((urls) => {
+      if (!downloadBlocked(urls)) {
         return;
       }
       // A small file may be done before it can be cancelled: then its file

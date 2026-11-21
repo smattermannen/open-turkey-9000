@@ -7,8 +7,7 @@
 ## Code
 
 - **Actions** (`db/actions.go`, Param/Minutes): block, greyscale,
-  no-images, mute (`applyMute`), no-video, dark, no-downloads (background
-  `downloadBlocked`, `downloads` permission; `ci/download_test.py`), redirect, image
+  no-images, mute (`applyMute`), no-video, dark, no-downloads ([extension](extension.md)), redirect, image
   (`db.ImagesDir`, served `/image/`), close-tab; device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
   picks the strongest, closes tab/browser itself, POSTs `/hit`
   (`enforce/hits.go`, header required) so the daemon logs and runs

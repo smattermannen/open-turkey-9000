@@ -11,6 +11,10 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Packed into the .CA.dll: tells the custom action host to load .NET 4. -->
+    <Content Include="CustomAction.config" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="WixToolset.Dtf.CustomAction" Version="6.0.2" />
   </ItemGroup>
 </Project>

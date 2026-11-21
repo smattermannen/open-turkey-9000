@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // KernelCmdline returns the kernel command line, or "" if it can't be read.
@@ -124,4 +125,39 @@ func NotifyDesktop(title, body string) {
 			go cmd.Wait() //nolint:errcheck // reap it; the result doesn't matter
 		}
 	}
+}
+
+// NologinPath is pam_nologin's file: while it exists, every login but root's
+// is refused (LightDM, its autologin, sshd and the text console all ask
+// pam_nologin), and its text is shown as the reason. A variable for tests.
+var NologinPath = "/run/nologin"
+
+// nologinMark starts the text kc9k writes, so ReleaseLogins never removes the
+// file systemd writes while the computer shuts down.
+const nologinMark = "Killer Chicken 9000"
+
+// HoldLogins refuses new logins until `until` (a logout freeze): logging in
+// again during it does nothing, instead of opening a session that is ended
+// within seconds. /run is emptied at boot; the daemon writes it again then.
+func HoldLogins(until time.Time) error {
+	text := fmt.Sprintf("%s: Frozen Chicken until %s. No one can log in until then.\n",
+		nologinMark, until.Format("2006-01-02 15:04"))
+	if data, err := os.ReadFile(NologinPath); err == nil {
+		if string(data) == text || !strings.HasPrefix(string(data), nologinMark) {
+			return nil // already held, or the system's own (shutting down)
+		}
+	}
+	return os.WriteFile(NologinPath, []byte(text), 0o644)
+}
+
+// ReleaseLogins lets logins in again: it removes the file if kc9k wrote it.
+func ReleaseLogins() error {
+	data, err := os.ReadFile(NologinPath)
+	if err != nil || !strings.HasPrefix(string(data), nologinMark) {
+		return nil
+	}
+	if err := os.Remove(NologinPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }

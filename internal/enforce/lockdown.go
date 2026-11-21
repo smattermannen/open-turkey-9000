@@ -180,6 +180,12 @@ func LockFreezeEngaged(d *db.DB, now time.Time) bool {
 	return err != nil || mode == freeze.ModeLock
 }
 
+// What a logout freeze does to logins (replaced in tests).
+var (
+	holdLogins    = blocker.HoldLogins
+	releaseLogins = blocker.ReleaseLogins
+)
+
 func enforceFreeze(d *db.DB, now time.Time) {
 	until, err := d.FreezeUntil()
 	if err != nil {
@@ -187,6 +193,9 @@ func enforceFreeze(d *db.DB, now time.Time) {
 		return
 	}
 	if now.Unix() >= until || escapeHonoured(d) {
+		if err := releaseLogins(); err != nil {
+			log.Printf("daemon: freeze: %v", err)
+		}
 		return
 	}
 	mode, err := d.FreezeMode()
@@ -194,11 +203,20 @@ func enforceFreeze(d *db.DB, now time.Time) {
 		log.Printf("daemon: freeze state error: %v", err)
 		mode = freeze.ModeLock
 	}
+	if mode != freeze.ModeLogout {
+		if err := releaseLogins(); err != nil {
+			log.Printf("daemon: freeze: %v", err)
+		}
+	}
 	switch mode {
 	case freeze.ModeLogout:
-		err = blocker.LogoutUsers()
+		// Refuse new logins first, then end the sessions there are.
+		if err := holdLogins(time.Unix(until, 0)); err != nil {
+			log.Printf("daemon: freeze: %v", err)
+		}
+		err = logoutUsers()
 	case freeze.ModeShutdown:
-		err = blocker.PowerOff()
+		err = powerOff()
 	case freeze.ModeApps:
 		blocker.CloseAllExcept(FreezeApps(d)) // R-FREEZE-1
 	default:

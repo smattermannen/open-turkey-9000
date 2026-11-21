@@ -101,16 +101,33 @@ func LogoutUsers() error {
 		return fmt.Errorf("loginctl list-users: %w", err)
 	}
 	var firstErr error
-	for _, line := range strings.Split(string(output), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 || len(fields[0]) < 4 {
-			continue // no user, or a system account below uid 1000
-		}
-		if err := exec.Command("loginctl", "terminate-user", fields[1]).Run(); err != nil && firstErr == nil {
+	for _, name := range usersToLogOut(string(output)) {
+		if err := exec.Command("loginctl", "terminate-user", name).Run(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
 	return firstErr
+}
+
+// usersToLogOut reads `loginctl list-users --no-legend` (UID USER, and on
+// newer systemd LINGER STATE) and returns the regular users to end. A user
+// already "closing" is left alone: terminating it again while its sessions
+// end gains nothing, and on systemd 255 (Ubuntu 24.04) a session ended twice
+// over while it was still opening left logind spinning at 100% CPU, so no
+// one could log in after the freeze (B2, 2026-11-20).
+func usersToLogOut(listUsers string) []string {
+	var names []string
+	for _, line := range strings.Split(listUsers, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || len(fields[0]) < 4 {
+			continue // no user, or a system account below uid 1000
+		}
+		if len(fields) >= 4 && fields[len(fields)-1] == "closing" {
+			continue
+		}
+		names = append(names, fields[1])
+	}
+	return names
 }
 
 // PowerOff shuts the computer down.

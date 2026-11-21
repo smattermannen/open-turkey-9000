@@ -35,8 +35,15 @@ Not fixed by `SPEC.md`; the code is the truth.
   `freeze schedule add --days … --from --to [--mode] [--lock-lead D]`,
   `list`, `remove N`, `lock N on --lead D`. Back-to-back windows run on; a
   longer running freeze is never shortened; ≤ a week; time counts while off;
-  only extendable; shutdown mode powers off at each boot. Devmaster
-  `master` works from a TTY in lock mode only.
+  only extendable; shutdown mode powers off at each boot. Logout mode
+  (`enforceFreeze`): `HoldLogins` writes `/run/nologin` (marked "Killer
+  Chicken 9000", until when) so pam_nologin refuses every login but root's
+  (LightDM greeter: "Failed to authenticate"; ssh prints the text), then
+  `LogoutUsers` ends each user not already "closing"; the file goes
+  (`ReleaseLogins`, only ours) once the freeze ends or isn't logout. Ending
+  sessions that came in during the freeze, again every cycle, left
+  systemd 255's logind spinning at 100% CPU: no login after it (B2).
+  Devmaster `master` works from a TTY in lock mode only.
 - **Strict mode** triggers on any lock, a running freeze or an on schedule
   lock (not allowances or unlocked schedules). Doesn't stop recovery mode,
   other OSes or a separately set root password. Warns if the user is in

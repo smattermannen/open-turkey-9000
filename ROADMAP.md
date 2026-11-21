@@ -31,7 +31,6 @@ of their group and a row here; a finished item loses its row.
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
-| B2 | Scheduled Frozen Chicken in logout/shutdown modes | §3.8 | device | vm |
 | B3 | Strict mode holes | §3.8 | device | vm |
 | B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | vm |
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
@@ -891,7 +890,21 @@ Script-tested, never by a person. Script what can be into `ci/`.
   and the app closed after 177 s. Looking at the bubble on a screen: not
   needed (notify-send's text is what was checked).
 
-- [ ] `B2` Scheduled Frozen Chicken in logout/shutdown modes.
+- [x] `B2` Scheduled Frozen Chicken in logout/shutdown modes (§3.8): Built.
+  2026-11-20, kc9k-vm (Ubuntu 24.04, Cinnamon X11), `TAGS=devmaster`,
+  `freeze schedule add --days daily --from … --to … --mode …` 2 min ahead.
+  Logout: at the window the session ended within 1 s, greeter shown. Found:
+  a login during the freeze (greeter, then ssh) was ended again every
+  cycle, and once the ssh session closed logind spun at 100% CPU (systemd
+  255): after the freeze an ssh login took 2 min ("Failed to create
+  session"), `loginctl` timed out, until a reboot.
+  Fixed: a logout freeze writes `/run/nologin` (pam_nologin) and ends only
+  users not already closing. Again: greeter login refused ("Failed to
+  authenticate"), ssh refused with "Frozen Chicken until 06:26", the file
+  gone at the end, a greeter login then opened the desktop, logind at 0 s
+  CPU. Shutdown: the VM powered off ~5 s into the window; booted during
+  it twice, powered off 6 s and 1 s after the daemon started (17-18 s
+  after `virsh start`); booted after it, stayed up with autologin.
 - [ ] `B3` Strict mode holes: `unshare -Urm` (`kernel.apparmor_restrict_unprivileged_userns`), `--user` Flatpaks killed, Electron not taken for browsers, other accounts and guest blocked.
 - [ ] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock.
 - [ ] `B5` Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.

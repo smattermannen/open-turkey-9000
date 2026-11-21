@@ -35,6 +35,8 @@ func (n *fakeNet) install() {
 func TestMain(m *testing.M) {
 	(&fakeNet{eth: map[string]bool{}}).install()
 	blocker.GraphicalSessions = func() map[string]bool { return map[string]bool{} }
+	holdLogins = func(time.Time) error { return nil }
+	releaseLogins = func() error { return nil }
 	os.Exit(m.Run())
 }
 

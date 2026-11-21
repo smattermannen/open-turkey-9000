@@ -151,11 +151,17 @@
   (matching, folding), `node ci/background_test.js` (background script,
   browser APIs stubbed: frame reports, the ad trigger),
   `node ci/android_background_test.js`; with Playwright's Chromium (cloud
-  only): `node ci/content_harness_test.js`. Its "held up over 16 ms" check
-  is timing on a shared machine: rerun once before suspecting the code.
+  only): `node ci/content_harness_test.js`. Its principle 9 check times
+  each of the extension's own callbacks (idle time, timers, observers,
+  events) on a huge page, at most 16 ms; how long the page as a whole was
+  held up (the browser's own layout of 40,000 words included) is printed,
+  not checked.
 - `ci/allowance_notify_test.sh` (box, real daemon, desktop unlocked; ~4
   min): an allowance session's advance notice arrives on the session bus
   and the session ends on time (B1).
+- Race check: the `internal/cli` package takes ~14 min under `-race`, past
+  go test's 10-minute default: `CGO_ENABLED=1 go test -race -timeout 30m
+  ./internal/...`. Clean 2026-11-21.
 - GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
   `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
   never `show()`. `KC9K_DB` never applies layers nor sets desktop hotkeys.

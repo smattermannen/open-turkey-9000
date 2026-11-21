@@ -903,9 +903,13 @@ setInterval(() => {
     queueScan();
   }
 }, 250);
+// The first read waits for idle time (principle 9): read at once, its
+// first visibility check made the browser lay out a whole big page inside
+// this event, holding the page up; in idle time that layout is done. The
+// page stays hidden meanwhile (R-PAGE-1).
 document.addEventListener("DOMContentLoaded", () => {
   textChanged = true;
-  scanKeywords();
+  queueScan();
 });
 
 browser.storage.local.get("page").then((stored) => load(stored.page));

@@ -20,7 +20,13 @@
   and format characters (zero-width, soft hyphen) dropped, then
   `KC9K_LOOKALIKES` (Cyrillic, Greek, Armenian, small capitals). Terms are
   folded the same way; a long page text is folded in pieces between steps
-  (`kc9kFoldSteps`, cut after a blank; principle 9). `ci/match_test.js`; frames in Chromium
+  (`kc9kFoldSteps`, cut after a blank; principle 9). A term's regular
+  expression is made at its first use (`kc9kKeywordMatcher`): one-word
+  terms are counted by the word index, and making 1,000 at load was a
+  70 ms long task. The first read waits for idle time after
+  DOMContentLoaded (`queueScan`): read at once, its first visibility check
+  forced the browser's layout of the whole page inside the event.
+  `ci/match_test.js`; frames in Chromium
   (`ci/content_harness_test.js`); `frameHit` in `ci/background_test.js`.
 - **File pages** (§3.1): judged only when a rule has `file_pages`
   (tamper "allow file:// blocking"; `enforce.withFilePages`), by `files`

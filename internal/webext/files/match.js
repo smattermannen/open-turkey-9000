@@ -480,17 +480,30 @@ function kc9kCombinationMatcher(boxes) {
 }
 
 // kc9kKeywordMatcher turns a keyword into { test(text), count(text) }:
-// whether it occurs in a text, and how many times.
+// whether it occurs in a text, and how many times. Its regular expression
+// is made at its first use (principle 9): one-word terms are counted
+// through the word index and never need one, and making a thousand at once
+// held a page up for a long task when the rules loaded.
 function kc9kKeywordMatcher(keyword) {
   const boxes = kc9kCombination(keyword);
   if (boxes) {
     return kc9kCombinationMatcher(boxes);
   }
-  const source = kc9kTermSource(keyword);
-  const regex = new RegExp(source, "iu");
+  let source = null;
+  let regex = null;
+  const compiled = () => {
+    if (regex === null) {
+      source = kc9kTermSource(keyword);
+      regex = new RegExp(source, "iu");
+    }
+    return regex;
+  };
   return {
-    test: (text) => regex.test(kc9kFoldCached(text)),
-    count: (text) => (kc9kFoldCached(text).match(new RegExp(source, "giu")) || []).length,
+    test: (text) => compiled().test(kc9kFoldCached(text)),
+    count: (text) => {
+      compiled();
+      return (kc9kFoldCached(text).match(new RegExp(source, "giu")) || []).length;
+    },
   };
 }
 

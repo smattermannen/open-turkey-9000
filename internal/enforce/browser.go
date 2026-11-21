@@ -611,17 +611,36 @@ func ServeRules(d *db.DB) error {
 		return err
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/rules", rulesHandler(d, checkInRecorder(d)))
-	mux.HandleFunc("/usage", usageHandler(d))
-	mux.HandleFunc("/hit", hitHandler(d))
-	mux.HandleFunc("/visit", visitHandler(d))
-	mux.HandleFunc("/words", wordsHandler(d))
-	mux.HandleFunc("/add", addHandler(d))
-	mux.HandleFunc("/dark-exempt", darkExemptHandler(d))
-	mux.HandleFunc("/image/", imageHandler)
-	mux.HandleFunc(chromeUpdatePath, chromeUpdateHandler)
-	mux.HandleFunc("/chrome/", chromeExtensionHandler)
+	for _, route := range rulesRoutes(d, checkInRecorder(d)) {
+		mux.HandleFunc(route.path, route.handler)
+	}
 	return http.Serve(listener, mux)
+}
+
+// rulesRoute is one address the rules server answers.
+type rulesRoute struct {
+	path    string
+	handler http.HandlerFunc
+}
+
+// rulesRoutes lists every address of the rules server, so a test can hold
+// each one to the server's guards (SPEC §6 2026-11-21 (By Opus), no
+// secret): only requests addressed to RulesAddress, posts only with the
+// extension's own header (which a web page can't send without a CORS
+// preflight, never answered), and no CORS header in any answer.
+func rulesRoutes(d *db.DB, checkIn func(remoteAddr string)) []rulesRoute {
+	return []rulesRoute{
+		{"/rules", rulesHandler(d, checkIn)},
+		{"/usage", usageHandler(d)},
+		{"/hit", hitHandler(d)},
+		{"/visit", visitHandler(d)},
+		{"/words", wordsHandler(d)},
+		{"/add", addHandler(d)},
+		{"/dark-exempt", darkExemptHandler(d)},
+		{"/image/", imageHandler},
+		{chromeUpdatePath, chromeUpdateHandler},
+		{"/chrome/", chromeExtensionHandler},
+	}
 }
 
 // Chrome installs the extension from the daemon: it reads chromeUpdatePath

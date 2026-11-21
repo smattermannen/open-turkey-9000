@@ -16,6 +16,11 @@
   `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions;
   the same setting has the extension judge file pages (`withFilePages`,
   [extension](extension.md)).
+- Rules server (`enforce.ServeRules`, `RulesAddress`): its addresses are
+  `rulesRoutes`; each answers only its own host name, posts only with the
+  extension's header (`ExtensionHeader`; `/usage`: `X-KC9K-Usage`), no
+  CORS. No secret (SPEC §6 2026-11-21 *(By Opus)*);
+  `TestRulesServerGuardsEveryRoute` holds every route to it.
 - `extguard.go`: extension mandatory while `enforce.ExtensionRequired` and
   a supported browser is installed, in the accounts that need it
   (`EnforceFor`, `enforce.extensionUsers`, §3.2); closes browsers whose extension hasn't
@@ -65,7 +70,7 @@
   plus `safesearch_engines`; the extension's `kc9kSafeSearch(url, form,
   engines)` (no list: all, for Android and older rules); Brave, Yahoo,
   SearXNG and blocked engines go with Google's, Bing's or DuckDuckGo's
-  (ROADMAP §5); the YouTube-Restrict header with YouTube's.
+  (SPEC §4.10 *(By Opus)*); the YouTube-Restrict header with YouTube's.
 - **Chrome** (`webext/chrome.go`, `blocker/chromesetup.go`): `PackChrome`
   builds MV3 manifest + service worker (`chrome-worker.js`), signs CRX3 with
   a per-computer key (`webext.ChromeKeyPath`); daemon serves

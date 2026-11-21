@@ -52,7 +52,7 @@ of their group and a row here; a finished item loses its row.
 | 2.2 | Ad trigger: browser test; the new industry domains in real ad requests (Unchecked) | §3.9 | actions, extension | box |
 | 2.4 | SafeSearch per engine: built; in real browsers (Unchecked) | §4.10 | browsers | box |
 | 2.6 | Factory reset protection: built; PAM root guard in the VM (vm), firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
-| 2.7 | Hardening: rules server secret (for the owner, §5); the text lock's window on a real desktop (Unchecked) | R-LOCK-5, §4.6 | browsers, locks | owner, box |
+| 2.7 | Hardening: the text lock's window on a real desktop (Unchecked); rules server secret dropped (§5, 2026-11-21) | R-LOCK-5, §4.6 | browsers, locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings of 2026-11-21 (guest, extension-stop, installer, inactive-tabs, embedded): live checks | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
@@ -957,7 +957,7 @@ Only items not simply Built.
 | §3.9 Ad trigger | Built | scope `ads` on blacklists and clusters (`list create --ads`, `list where B L ads on`, GUI "Ads" box): entries are ad network domains or industries (`db.AdIndustries`: adult, crypto, dating, gambling); rules `ads`; the extension watches each tab's third-party requests (`noteAdRequest`) and a page loading a listed network matches with every action (`kc9kAdMatches`, unit-tested). Not in shared layers. 2026-11-21: URL-term exceptions spare a page from it too (they didn't); a list whose block has exceptions by title or text is judged with the page (`kc9kAdsByPage`: the content script's resource timing, `page.adHosts`), so those exceptions hold (R-LIST-1). Edge cases unit-tested (`ci/match_test.js`, `ci/background_test.js`: hosts with capitals or a final dot, test mode, no actions, first-party, non-web pages, once per page) and in Chromium (`ci/content_harness_test.js`); extension 1.30.0. Browser test: Not run (the owner was using the laptop; the browser test changes LibreWolf settings and would close their windows) |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
 | §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--preset C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Presets page (list presets) "Record words" with cut % and the most specific words |
-| §4.10 SafeSearch | Built | a browser setting per engine (`safesearch-google`, `-bing`, `-duckduckgo`, `-youtube`), each its own lock; `browser safesearch` switches all four. Pinned in hosts (every browser) per engine, `safesearch_engines` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked: with Google's, Bing's or DuckDuckGo's, §5). In real browsers: Unchecked (`2.4`) |
+| §4.10 SafeSearch | Built | a browser setting per engine (`safesearch-google`, `-bing`, `-duckduckgo`, `-youtube`), each its own lock; `browser safesearch` switches all four. Pinned in hosts (every browser) per engine, `safesearch_engines` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked: with Google's, Bing's or DuckDuckGo's, SPEC §4.10 *(By Opus)*, §5 decided 2026-11-21). In real browsers: Unchecked (`2.4`) |
 | §4.10 Tamper settings | Built | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Built 2026-11-21 (SPEC §4.10 *(By Opus)*): `tamper guest` (guest browsing off in every Chromium-family policy, LightDM guest session off), `extension-stop`, `inactive-tabs`, `embedded` (on until turned off: what KC9K always did), `installer` (`prepare-install` from `make install`/`install.sh` and the `.deb`'s prerm for a reinstall or older version; removal always refused). `TestTamperGuestExtensionInstallerTabsEmbedded`, `TestSyncGuestOff`, `ci/tamper_tabs_test.js`, GUI tamper window. Live: Unchecked (box: Chrome-family guest windows, a background tab and an embedded frame with each setting off in LibreWolf and Chrome; vm: the LightDM guest session, `dpkg -i` of the same version and `install.sh` refused during a lock) |
 | §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
 | §4.10 Device protection: factory reset protection, guided setup | Built | 2026-11-21: firmware lock, guided setup (`kc9k guided-setup [--json]`, GUI Guided setup… with Do it…, `ci/gui_settings_smoke.py`), strict mode's PAM root guard (`login`, `su`, `su-l`, tested on generated files only). Live: Unchecked (`2.6`) |
@@ -1029,10 +1029,11 @@ Only items not simply Built.
 - **2.7 Hardening** (M each): sudo rule arguments audited 2026-11-15: caller
   paths are read as the caller (`readAsCaller`), direct reads only of
   KC9K's own files, writes only into KC9K's folders under hash names;
-  `audit_test.go` keeps it so (`env_reset` untouched). Left: rules server
-  secret by policy (not rolled out overnight: if the extension can't read
-  it, every check-in fails and the guard closes browsers; the policy files
-  are user-readable anyway; for the owner, §5); GTK window for the text
+  `audit_test.go` keeps it so (`env_reset` untouched). Rules server
+  secret: dropped 2026-11-21 (By Opus, §5, SPEC §6); instead every
+  address the server answers is held to its guards (own host name, the
+  extension's header on posts, no CORS answer, nothing read before a
+  refusal) by `TestRulesServerGuardsEveryRoute` (`rulesRoutes`). GTK window for the text
   lock's challenge: built 2026-11-20 (SPEC §4.6, §5 decision): without a
   terminal the command opens its own window as the signed-in user and
   reads the keys itself; stdin is never read for it; the GUI's Unlock runs
@@ -1080,7 +1081,15 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   examples (two partners' passwords) fit settings as well. Not built until
   the owner agrees.
 
-- PROPOSED 2026-11-20 (session, building `2.4`): SPEC §4.10 and §6
+- DECIDED 2026-11-21 (By Opus; SPEC §4.10, §6): keep what was built: the
+  other engines go with any of Google's, Bing's or DuckDuckGo's SafeSearch,
+  not YouTube's, and get no setting of their own. Why: each of them is a
+  way around whichever engine is kept strict, so a setting of their own
+  could only open that hole; tied to Google's alone they would be open
+  while only Bing's or DuckDuckGo's is on; YouTube Restricted Mode is about
+  video, not search. Nothing to build: the GUI (under Google's setting)
+  and `kc9k browser --help` already say it.
+  PROPOSED 2026-11-20 (session, building `2.4`): SPEC §4.10 and §6
   2026-11-18 name four engines with their own SafeSearch setting and are
   silent on the rest: Brave, Yahoo and SearXNG (kept strict from the
   address) and the engines that can't be kept strict (Startpage, Ecosia,
@@ -1174,7 +1183,19 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   on stdin would let any script do the same. Today a non-terminal stdin
   is read as one line (`runChallengeLine`, `internal/lock/lock.go`): that
   path goes too (tests keep a faked seam). SPEC §4.6 now has it.
-- FOR THE OWNER: the rules server secret (`2.7`; SPEC §6 2026-11-14, its
+- DECIDED 2026-11-21 (By Opus; SPEC §6; the owner asked for a decision):
+  drop the secret. Why: it can't keep local programs out (the policy files
+  carrying it are readable by every program the user runs, and the lists
+  are in `/etc/hosts` and the policy files anyway), and an extension that
+  can't read it fails every check-in, so the guard would close browsers:
+  a real risk for no protection. What it was meant to stop is stopped
+  without it, as below; built 2026-11-21: `rulesRoutes` lists every address
+  the server answers and `TestRulesServerGuardsEveryRoute` holds each to
+  the guards (rebound host name refused, posts without the extension's
+  header refused, CORS preflight refused, no CORS header, nothing read
+  before a refusal), so a new address can't forget one. No change to what
+  the extension sends: check-ins can't fail because of it.
+  Was: FOR THE OWNER: the rules server secret (`2.7`; SPEC §6 2026-11-14, its
   purpose as first written: "so other local programs can't read the
   lists, post statistics or fake a check-in"). As designed it can't do
   that: browsers run as the user, so the policy files that would carry the

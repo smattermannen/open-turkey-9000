@@ -491,6 +491,11 @@ GUI and CLI offer the same functions.
     others blocked, browser search box uses Google); *web-only* (Google web
     results only: no images, shopping, AI answers); block developer tools;
     no private windows.
+    While SafeSearch on Google, Bing or DuckDuckGo is on, Brave, Yahoo and
+    SearXNG searches are kept strict too and search engines that can't be
+    kept strict (Startpage, Ecosia, Mojeek, Yandex, Marginalia) are blocked;
+    they have no setting of their own. YouTube Restricted Mode alone does
+    neither. *(By Opus)*
   - DNS: server asked for blocked sites' real addresses (firewall layer
     only). Default: the network's own server; Quad9 if it can't answer.
   - Use counting: strict use counting.
@@ -698,6 +703,9 @@ Decisions not already written into §1–5:
 - 2026-11-21 (By Opus): Setting locks stack like a block's (§4.6) and their re-lock brings back the whole configuration: a setting lock is a lock in §3.4's sense, the owner's examples (two partners' passwords) fit settings as well, and one rule for both is simpler to learn. A lock option given twice in one command is two locks (it used to keep the last), so several locks of one kind need no second command. Settles ROADMAP §5 "setting locks stacking".
 - 2026-11-21 (By Opus): Extending a running freeze never switches it to allowed apps only (§4.8): from a text console during a lock-screen freeze, `kc9k freeze --mode apps` would otherwise open the desktop's programs again; the reverse (allowed apps only to lock screen) strengthens and stays free.
 - 2026-11-21 (By Opus): The guided setup (§4.10) is a read-only checklist with each step's own command, no-escape last: the 2026-11-14 "no first-run wizard" decision rules out a wizard, and a checklist that shows what is left keeps the strictest setup deliberate (principle 3).
+
+- 2026-11-21 (By Opus): SafeSearch on the other search engines (§4.10) goes with Google's, Bing's or DuckDuckGo's: any one of them on keeps Brave, Yahoo and SearXNG strict and blocks the engines that can't be kept strict. Each of these engines is a way around whichever engine is kept strict, so a setting of their own could only open that hole; tying them to Google's alone would leave them open while only Bing's or DuckDuckGo's is on. YouTube Restricted Mode is about video, not search, so alone it blocks no search engine. The per-engine settings (2026-11-18) still let one of the three be lifted while another holds. Settles ROADMAP §5 "SafeSearch for the other engines".
+- 2026-11-21 (By Opus): The rules server has no secret; this replaces the secret of 2026-11-14, which the owner asked to have decided. Browsers run as the user, so a secret given by policy sits in files every local program can read, and the lists are in `/etc/hosts` and the browser policy files anyway; an extension that couldn't read the secret would fail every check-in, and the extension guard would close its browser. What holds without it, for every address the server answers: only requests addressed to its own address (no DNS rebinding); posts only with the extension's own header, which a web page can't send without a CORS preflight that is never answered; no CORS header in any answer; a check-in counts only for the browser whose own connection made it (`/proc/net/tcp`). No post weakens a block (principle 10). Settles ROADMAP §5 "rules server secret".
 
 ## 7. Open decisions
 

@@ -45,7 +45,7 @@ of their group and a row here; a finished item loses its row.
 | W1 | Windows service, session agent, named pipe, install/uninstall | §3.13 | enforce-daemon, install | agent, win-vm |
 | W2 | Windows web layers: hosts, firewall, browser policies, extension, extension guard | §3.13, §4.10 | layers-net, browsers | win-vm, laptop |
 | W3 | Windows apps and desktop: process kill, scripts, titles, polite close, monk mode, Frozen Chicken, allowed apps, hotkeys, notifications, use, logout/shutdown, network cut, text lock window | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | apps-titles, device, hotkeys, allowance, locks | win-vm, laptop |
-| W4 | Windows GUI: C# / WinUI 3 | §4.1–4.13, R-GUI-1–3 | gui | agent, win-ci, laptop |
+| W4 | Windows GUI: C# / WinUI 3. Partial: shell, Overview, CI (2026-11-21); Blocks, automation, the other pages next | §4.1–4.13, R-GUI-1–3 | gui-windows | agent, win-ci, laptop |
 | W5 | Windows tamper protection against an administrator | §3.10, §4.10 | device, browsers, install | win-vm, laptop |
 | W6 | Windows circadian rhythm and wallpapers | §4.10 | circadian | win-vm, laptop |
 | W7 | Windows installer (MSI) and release | §4.11 | install | agent, owner |
@@ -1529,6 +1529,20 @@ where its item needs it and the Linux tests prove nothing changed.
   (`kc9k.exe`, which forwards to the service); the same pages as the GTK
   GUI (§4.1–4.13). Smoke tests through UI Automation on
   `windows-latest`, as `ci/gui_*.py` do on Linux.
+  Partial (2026-11-21, notes/gui-windows.md):
+  - Built, checked on `windows-latest` (`windows-gui.yml`: unit tests,
+    publish, UI Automation smoke tests, screenshots looked at): the shell
+    (sidebar, access-password covers, Frozen Chicken banner, busy bar,
+    light/dark/high-contrast styles, Mica), running kc9k with the
+    settings and access passwords and drafts (`Kc9k.Core`, ported from
+    the GTK GUI with tests), the Overview page (§4.1), dialogs (lock
+    confirmation R-LOCK-12, durations R-GUI-1), monk mode from Overview.
+  - Not built yet: Blocks (cards, modes, the block editor), automation,
+    Schedules, Places, Hotkeys, Presets, Statistics, Circadian rhythm,
+    Settings, tray; each such page says so in the GUI.
+  - Unchecked (needs laptop): against the real `kc9k.exe` and service
+    (Core's W1); Narrator, high contrast, 150–200 % scaling and a second
+    screen by a person.
 - [ ] `W5` Tamper protection against an administrator (L). An admin can
   always win in the end; the aim is that every way around is slow,
   visible, and counted as a bypass with its consequences (§3.10). The

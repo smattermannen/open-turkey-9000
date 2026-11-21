@@ -31,7 +31,6 @@ of their group and a row here; a finished item loses its row.
 | A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A11 | Gigantic URL lists: Firefox/LibreWolf with 100,000 entries | §2 principle 9 | browsers, layers-net | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
-| B4 | Shutdown mode and `kc9k.nofreeze`; fast relock | §3.8 | device | vm |
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
 | B6 | Websites tab on a real screen; YouTube address change | §4.3 | gui, extension | box |
 | B7 | One-off logout/shutdown from a list; Dashboard monk button | §3.9 | actions, device | vm |
@@ -931,7 +930,27 @@ Script-tested, never by a person. Script what can be into `ci/`.
   fine. Known limit: a short program copied to a world-writable folder outside
   the noexec ones still runs once; Electron apps in an exempt folder and
   the restriction (§5).
-- [ ] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock.
+- [x] `B4` Shutdown mode and `kc9k.nofreeze`; measure fast relock. Built.
+  2026-11-20, kc9k-vm (Ubuntu 24.04, Cinnamon X11), `TAGS=devmaster`.
+  Lock mode: `freeze --for 25m --mode lock` locked at once; five unlocks
+  (`cinnamon-screensaver-command --deactivate`) locked again after 0.42,
+  0.62, 0.34, 0.64, 0.34 s (state polled every 50 ms); reboot during it:
+  autologin session at 14.2 s after the kernel, screensaver up 14.98 s,
+  locked 15.42 s. Shutdown mode: switched on mid-session, "System is
+  powering down" 3 s later; at each boot the daemon's first cycle powered
+  off before any login (unit started → powering down: 10.8 → 13.7 s,
+  17.9 → 22.9 s, 22.4 → 24.0 s after the kernel; `virsh start` → off
+  25.3 s, BIOS and GRUB included). Daemon start → first cycle 0.5 s on a
+  running system, up to 4.7 s while booting. `kc9k.nofreeze` added in
+  GRUB (e, end of the `linux` line, F10): stayed up, screen not locked,
+  `mode show freeze` "on (shutdown) until 10:16; it can't end early"; the
+  next plain boot powered off again; the first boot after 10:16 stayed up,
+  "Frozen Chicken is off" (time counted while off). A power-off with a
+  session open took 90 s more: the test's own monitor script held the
+  session scope (systemd's stop timeout), not kc9k. Found: extending a
+  running lock freeze with `--mode apps` switches it to allowed apps only
+  and the screen stays unlocked (6 checks over 12 s), so from a text
+  console a lock freeze can be weakened (§5).
 - [ ] `B5` Rendered terms on real sites for days; hotkey on a real keyboard; hotkey under GNOME.
 - [ ] `B6` Websites tab on a real screen. (Address change without load: a
   `history.pushState` page is caught by a URL list in LibreWolf,
@@ -1207,3 +1226,14 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   started with `--no-sandbox`. To decide: keep it (as on stock Ubuntu),
   or have KC9K load an AppArmor profile allowing user namespaces for the
   exempt folders (they may already run anything).
+- (B4, 2026-11-20) Changing a running freeze's mode: `freeze --for D
+  --mode M` extends a running freeze and takes M as its mode, and a
+  scheduled freeze whose window ends later does the same; SPEC says a
+  running freeze can't end (R-FREEZE-2) but not whether its mode may
+  change. Seen in the VM: a lock freeze extended with `--mode apps` (an
+  allowed app listed before) stopped locking the screen; a text console
+  login is open during a lock freeze, so anyone there can do it.
+  Proposed: while a freeze runs, a mode only changes to a stronger one
+  (allowed apps only < lock screen < logout < shutdown); a weaker one is
+  refused (`refused()`, not a bypass), and an extension that names none
+  keeps the running mode.

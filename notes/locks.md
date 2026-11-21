@@ -105,7 +105,7 @@ Not fixed by `SPEC.md`; the code is the truth.
 - **Starting on an active block** only adds locks: any lock kind can be
   added, last in the unlock order (a duration timer or restart lock waits
   behind locks on). A kind it already has, of any kind and also from a
-  hotkey press, is a second lock of it, queued last (`queuedLock`); a lock
+  hotkey press, is a second lock of it, queued last (`db.QueuedLock`); a lock
   already set is never changed. A second range lock replaces the first
   only once the first is off (out of its times) with nothing before it on.
   A challenge longer than the

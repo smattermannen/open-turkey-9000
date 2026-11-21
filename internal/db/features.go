@@ -79,6 +79,8 @@ func upgradeSchema(conn *sql.DB) error {
 		{"setting_locks", "range_from", "INTEGER NOT NULL DEFAULT 0"},
 		{"setting_locks", "range_to", "INTEGER NOT NULL DEFAULT 0"},
 		{"setting_locks", "range_invert", "BOOLEAN NOT NULL DEFAULT 0"},
+		{"setting_locks", "lock_queue", "TEXT NOT NULL DEFAULT ''"},  // §3.4 several locks of one kind on a setting
+		{"setting_locks", "lock_config", "TEXT NOT NULL DEFAULT ''"}, // §3.4 re-lock of a setting: its whole configuration
 		{"schedules", "break_seconds", "INTEGER NOT NULL DEFAULT 0"},
 		{"schedules", "break_taken", "TEXT NOT NULL DEFAULT ''"},
 		{"schedules", "source", "INTEGER NOT NULL DEFAULT 0"},      // §3.6 Schedule: 0 own, else the schedule's id
@@ -112,6 +114,9 @@ func upgradeSchema(conn *sql.DB) error {
 		return err
 	}
 	if err := migrateForceLibreWolf(conn); err != nil {
+		return err
+	}
+	if err := migrateSafeSearch(conn); err != nil {
 		return err
 	}
 	if err := migrateWebLists(conn); err != nil {

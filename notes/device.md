@@ -1,6 +1,6 @@
 # Monk mode, Frozen Chicken, strict mode, no-escape
 
-- Covers: `enforce/monk.go`, `lockdown.go`, `resetguard.go`, `db/monk.go`, `freeze*.go`, `internal/freeze/`, `blocker/netcut.go`, `sockets.go`, `lockdown.go`, `noexec.go`, `bootlock.go`, `freeze.go`, `allowedapps.go`, `cli/freeze*.go`, `strict*.go`, `resetguard.go`
+- Covers: `enforce/monk.go`, `lockdown.go`, `resetguard.go`, `db/monk.go`, `freeze*.go`, `internal/freeze/`, `blocker/netcut.go`, `sockets.go`, `lockdown.go`, `pamguard.go`, `firmware.go`, `noexec.go`, `bootlock.go`, `freeze.go`, `allowedapps.go`, `cli/freeze*.go`, `strict*.go`, `resetguard.go`, `firmware.go`, `guidedsetup.go`
 - SPEC: §3.8, §4.8, §4.10 Device protection, R-MONK-1–3, R-FREEZE-1–3, R-STRICT-1, R-ESCAPE-1
 - Connects to: [automation](automation.md) (monk automation), [locks](locks.md), [layers-net](layers-net.md), [install](install.md)
 
@@ -8,7 +8,11 @@
 
 - `sockets.go`: strict mode closes docker/lxd/incus/libvirt sockets.
   Strict lockdown: `/etc/sudoers.d/zz-kc9k-lockdown`,
-  `/etc/polkit-1/rules.d/00-kc9k-lockdown.rules`; no exec from `/home`,
+  `/etc/polkit-1/rules.d/00-kc9k-lockdown.rules`, the PAM root guard
+  (`pamguard.go`: a marked `auth requisite pam_succeed_if.so uid ne 0`
+  in `login`, `su`, `su-l` under `PAMDir`, after `pam_rootok` so root
+  itself keeps su; `UnguardPAMConfig` takes out only the marked lines);
+  no exec from `/home`,
   `/tmp`, `/var/tmp`, `/dev/shm` (`noexec.go`: each `--rbind` onto itself,
   remounted noexec; mounts inside, made before or after, such as a guest's
   home, and people's `/run/user/<uid>` made noexec in place,
@@ -25,8 +29,38 @@
   `.flatpak-info` app or runtime path is in a noexec folder, and, in the
   daemon's mount namespace, processes whose exe a person owns in a noexec
   or runtime folder or below a world-writable folder (`forbiddenPlace`,
-  `worldWritableAbove`), exempt folders excepted. Boot param
+  `worldWritableAbove`), exempt folders excepted.
+  Boot param
   `kc9k.nofreeze` skips freeze and lockdown for that boot.
+  `enforceLockdown` reaches them through `enforce` vars `applyLockdown`,
+  `removeLockdown`, `applyNoexec`, `removeNoexec`, `closeNoexecPrograms`,
+  `kernelCmdline`, faked
+  in `TestMain` (`TestEnforceLockdownWhen`).
+- **Firmware lock** (`blocker/firmware.go`, `cli/firmware.go`): everything
+  through `FirmwareRoot` (`/sys/class/firmware-attributes`; tests point it
+  at a generated tree; a `KC9K_DB` database with the real root reads
+  nothing and changes nothing, `firmwareDeviceless`). Settings are found by
+  folded name (`firmwarePurposes`: USB boot, network boot, one-time boot
+  menu off; boot order lock on) and set from `possible_values`; then the
+  admin password (`authentication/Admin` or `Setup Password`,
+  `new_password`). With a password already set each change writes
+  `current_password` first. Settings `device.firmware-lock`,
+  `device.firmware-before` (what it changed, put back by `off`).
+- **Allowed apps only** (`blocker/allowedapps.go`): `readAppProcesses`
+  (replaceable) lists processes; `appsToClose` (pure) keeps system and
+  desktop programs, allowed ones and their descendants (≤ 64 parents),
+  leaves root's, other system users' and unreadable programs alone;
+  `killApp` (replaceable) ends them. The daemon's freeze effects are
+  `enforce` vars `freezeLogout`, `freezePowerOff`, `freezeLockScreen`,
+  `freezeCloseApps`, faked in `TestMain`. `freeze.ExtendMode`: a running
+  lock/logout/shutdown freeze keeps its mode when extended to `apps` (CLI
+  refuses and logs; `reconcileFreezeSchedules` keeps the running mode).
+- **Guided setup** (`cli/guidedsetup.go`): `guidedSetup` builds the steps
+  (`setupStep`: id, state done/todo/by-hand/info/unknown, command); reads
+  `shadowPath` (root password) and `grubCfgPath` (other systems), both
+  replaced in tests. GUI: Device protection's Firmware lock… and Guided
+  setup… (`show_guided_setup`, Do it… → `guided_action`, the same handler
+  as the step's own switch).
 - **Monk mode** (`enforce/monk.go`, `db/monk.go`, `blocker/netcut.go`,
   `ApplyFirewallCut`): settings `monk.until` (trusted time), `monk.net`
   (`db.MonkNet`, saved once, `SaveMonkNetIfNone`). `monkBlock()` built in
@@ -49,7 +83,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   its sections `build_device` in the mode view): `freeze --for D|--until T --mode lock|logout|shutdown|apps --yes`
   (`apps`: allowed apps only, `freeze apps add|remove`);
   `freeze schedule add --days … --from --to [--mode] [--lock-lead D]`,
-  `list`, `remove N`, `lock N on --lead D`. Back-to-back windows run on; a
+  `list`, `remove N`, `lock N on --lead D`. `freeze` is confirmed as a lock
+  (`confirmLocks`: a terminal asks, else `--yes`). Back-to-back windows run on; a
   longer running freeze is never shortened; ≤ a week; time counts while off;
   only extendable; shutdown mode powers off at each boot. Logout mode
   (`enforceFreeze`): `HoldLogins` writes `/run/nologin` (marked "Killer
@@ -77,4 +112,14 @@ Not fixed by `SPEC.md`; the code is the truth.
   with `--no-sandbox` (ROADMAP §5).
 - **No-escape** (`no-escape on --yes`): disables `kc9k.nofreeze`, hides
   recovery, random GRUB password. Can't stop USB boot without a firmware
-  password.
+  password. `off` while locked is refused and logged.
+- **Firmware lock**: `kc9k firmware-lock [--json]` shows it; `on` (lock
+  confirmation, `--yes`; password on stdin, twice on a terminal; settings
+  password first if `password locks on`); `off` (settings password,
+  refused and logged while anything is locked, firmware password). It is
+  no KC9K lock: it never holds strict mode or anything else. Live on real
+  firmware: Unchecked.
+- **Guided setup**: `kc9k guided-setup [--json]`, read only: settings
+  password, no weakening, tamper protection, strict mode, its lock
+  (optional), root-equivalent groups, root password, installer media
+  guard, firmware lock, other systems (info), no-escape last.

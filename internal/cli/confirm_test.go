@@ -89,15 +89,20 @@ func lockCases() []lockCase {
 			return on
 		}},
 		{name: "strict mode lock", args: []string{"strict", "on", "--for", "1h"}, isSet: settingLocked(enforce.StrictLockName)},
-		{name: "browser setting timer lock", args: []string{"browser", "safesearch", "on", "--for", "1h"}, isSet: settingLocked("safesearch")},
-		{name: "browser setting text lock", args: []string{"browser", "safesearch", "on", "--lock"}, isSet: settingLocked("safesearch")},
-		{name: "browser setting password lock", args: []string{"browser", "safesearch", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked("safesearch")},
-		{name: "browser setting restart lock", args: []string{"browser", "safesearch", "on", "--restart"}, isSet: settingLocked("safesearch")},
+		{name: "browser setting timer lock", args: []string{"browser", "safesearch-google", "on", "--for", "1h"}, isSet: settingLocked("safesearch-google")},
+		{name: "browser setting text lock", args: []string{"browser", "safesearch-google", "on", "--lock"}, isSet: settingLocked("safesearch-google")},
+		{name: "browser setting password lock", args: []string{"browser", "safesearch-google", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked("safesearch-google")},
+		{name: "browser setting restart lock", args: []string{"browser", "safesearch-google", "on", "--restart"}, isSet: settingLocked("safesearch-google")},
 		{name: "unsupported browsers timer lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--for", "1h"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "unsupported browsers text lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--lock"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "unsupported browsers password lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--password-stdin"}, lines: []string{"partner"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "unsupported browsers restart lock", setup: supportedInstalled, args: []string{"tamper", "unsupported-browsers", "on", "--restart"}, isSet: settingLocked(db.UnsupportedBrowsers)},
 		{name: "unsupported browsers lock by the old name", setup: supportedInstalled, args: []string{"browser", "force-librewolf", "on", "--for", "1h"}, isSet: settingLocked(db.UnsupportedBrowsers)},
+		{name: "firmware lock", setup: func(t *testing.T) { fakeFirmwareRoot(t) }, args: []string{"firmware-lock", "on"},
+			lines: []string{"partner"}, isSet: func(t *testing.T, d *db.DB) bool {
+				v, _ := d.GetSetting(SettingFirmwareLock)
+				return v == "on"
+			}},
 		{name: "monk mode", args: []string{"monk", "--for", "30m"}, isSet: func(t *testing.T, d *db.DB) bool {
 			trusted, _ := d.TrustedNow(time.Now())
 			return enforce.MonkOn(d, trusted)
@@ -109,6 +114,53 @@ func lockCases() []lockCase {
 				s, _ := d.ListFreezeSchedules()
 				return len(s) == 1
 			}},
+		{name: "Frozen Chicken", args: []string{"freeze", "--for", "1h", "--mode", "logout"}, isSet: func(t *testing.T, d *db.DB) bool {
+			until, _ := d.FreezeUntil()
+			return until > time.Now().Unix()
+		}},
+		{name: "block range lock", setup: blockWithSite, args: []string{"start", "b", "--range", "mon 03:00-03:05"}, isSet: blockActive},
+		{name: "several of one kind in one start", setup: blockWithSite, args: []string{"start", "b", "--for", "1h", "--for", "2h"}, isSet: blockActive},
+		{name: "another timer lock on a setting", setup: func(t *testing.T) {
+			mustRun(t, "browser", "web-only", "on", "--for", "1h", "--yes")
+		}, args: []string{"browser", "web-only", "on", "--for", "1h"}, isSet: func(t *testing.T, d *db.DB) bool {
+			l, _ := d.GetSettingLock("web-only")
+			return len(l.Queue) == 1
+		}},
+		{name: "browser setting range lock", args: []string{"browser", "web-only", "on", "--range", "mon 03:00-03:05"},
+			isSet: func(t *testing.T, d *db.DB) bool {
+				l, _ := d.GetSettingLock("web-only")
+				return l.RangeDays != 0
+			}},
+		{name: "SafeSearch on every engine, locked", args: []string{"browser", "safesearch", "on", "--for", "1h"}, isSet: settingLocked("safesearch-bing")},
+		{name: "extend a timer lock", setup: func(t *testing.T) {
+			blockWithSite(t)
+			mustRun(t, "start", "b", "--for", "1h", "--yes")
+		}, args: []string{"extend", "b", "--for", "1h"}, isSet: func(t *testing.T, d *db.DB) bool {
+			b, _ := d.GetBlock("b")
+			trusted, _ := d.TrustedNow(time.Now())
+			return b.LockedUntil > trusted+3700
+		}},
+		{name: "mode lock", setup: func(t *testing.T) {
+			blockWithSite(t)
+			mustRun(t, "mode", "create", "M")
+			mustRun(t, "mode", "add", "M", "b")
+		}, args: []string{"mode", "lock", "M", "--for", "1h"}, isSet: blockActive},
+		{name: "mode run", setup: func(t *testing.T) {
+			blockWithSite(t)
+			mustRun(t, "mode", "create", "M")
+			mustRun(t, "mode", "add", "M", "b")
+		}, args: []string{"mode", "run", "M", "--for", "1h"}, isSet: func(t *testing.T, d *db.DB) bool {
+			trusted, _ := d.TrustedNow(time.Now())
+			locked, _ := enforce.BlocksLocked(d, time.Now(), trusted)
+			return locked
+		}},
+		{name: "hotkey that locks", setup: func(t *testing.T) {
+			fakeDesktopHotkeys(t)
+			blockWithSite(t)
+		}, args: []string{"hotkey", "add", "ctrl+alt+z", "b", "--for", "1h"}, isSet: func(t *testing.T, d *db.DB) bool {
+			keys, _ := d.Hotkeys()
+			return len(keys) == 1
+		}},
 		{name: "freeze schedule lock", setup: func(t *testing.T) {
 			mustRun(t, "freeze", "schedule", "add", "--from", from, "--to", to, "--yes")
 		}, args: []string{"freeze", "schedule", "lock", "1", "on", "--lead", "1h"}, isSet: func(t *testing.T, d *db.DB) bool {
@@ -183,7 +235,7 @@ func TestRLOCK12_NoLockNoQuestion(t *testing.T) {
 	notTerminal(t)
 	blockWithSite(t)
 	mustRun(t, "start", "b")
-	mustRun(t, "browser", "safesearch", "on")
+	mustRun(t, "browser", "safesearch-google", "on")
 	mustRun(t, "strict", "on")
 	if !blockActive(t, d) {
 		t.Error("the block didn't start")

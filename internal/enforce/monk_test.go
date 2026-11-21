@@ -37,6 +37,18 @@ func TestMain(m *testing.M) {
 	blocker.GraphicalSessions = func() map[string]bool { return map[string]bool{} }
 	holdLogins = func(time.Time) error { return nil }
 	releaseLogins = func() error { return nil }
+	// A freeze in a test never logs out, powers off, locks or closes apps.
+	freezeLogout = func() error { return nil }
+	freezePowerOff = func() error { return nil }
+	freezeLockScreen = func() error { return nil }
+	freezeCloseApps = func([]string) int { return 0 }
+	// Nor touches sudoers, polkit, PAM or mounts (strict mode).
+	applyLockdown = func(string) error { return nil }
+	removeLockdown = func() error { return nil }
+	applyNoexec = func(...string) error { return nil }
+	removeNoexec = func(...string) error { return nil }
+	closeNoexecPrograms = func([]string) int { return 0 }
+	kernelCmdline = func() string { return "" }
 	os.Exit(m.Run())
 }
 

@@ -12,7 +12,7 @@ const templatesSchema = `CREATE TABLE IF NOT EXISTS templates (
 // SaveTemplate stores (or replaces) a template.
 func (d *DB) SaveTemplate(name, data string) error {
 	if _, err := d.conn.Exec("INSERT OR REPLACE INTO templates (name, data) VALUES (?, ?)", name, data); err != nil {
-		return fmt.Errorf("failed to save template '%s': %w", name, err)
+		return fmt.Errorf("failed to save block preset '%s': %w", name, err)
 	}
 	return nil
 }
@@ -21,7 +21,7 @@ func (d *DB) SaveTemplate(name, data string) error {
 func (d *DB) Template(name string) (string, error) {
 	var data string
 	if err := d.conn.QueryRow("SELECT data FROM templates WHERE name = ?", name).Scan(&data); err != nil {
-		return "", fmt.Errorf("no template '%s' (see 'kc9k template list')", name)
+		return "", fmt.Errorf("no block preset '%s' (see 'kc9k block-preset')", name)
 	}
 	return data, nil
 }
@@ -51,7 +51,7 @@ func (d *DB) RemoveTemplate(name string) error {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("no template '%s'", name)
+		return fmt.Errorf("no block preset '%s'", name)
 	}
 	return nil
 }

@@ -780,6 +780,9 @@ func lockMode(cmd *cobra.Command, m db.Mode, locks []string, passwordHash string
 	if err != nil {
 		return err
 	}
+	if passwordLocks(req.specs) > 1 {
+		return fmt.Errorf("a mode's blocks are locked with one password, so give one password lock")
+	}
 	database, err := openDB()
 	if err != nil {
 		return err
@@ -809,7 +812,7 @@ func lockMode(cmd *cobra.Command, m db.Mode, locks []string, passwordHash string
 	defer func() { presetPasswordHash = "" }()
 	var failed []string
 	for _, b := range m.Blocks {
-		if err := startCmd.ParseFlags(locks); err != nil {
+		if err := parseStartLocks(locks); err != nil {
 			return err
 		}
 		if err := startCmd.Flags().Set("yes", "true"); err != nil {

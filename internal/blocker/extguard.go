@@ -105,6 +105,16 @@ func (g *ExtensionGuard) CheckIn(remoteAddr string) (bool, string) {
 // that isn't an installed supported browser (see SupportedBrowsers) is
 // closed at once: it can never run the extension.
 func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time, unsupported bool) int {
+	return g.EnforceFor(now, settingsChanged, unsupported, nil)
+}
+
+// EnforceFor is Enforce for the browsers of the users uids only (§3.2
+// affected users: a block for some accounts needs the extension in theirs
+// alone); nil: every regular user. An empty, non-nil uids closes nothing.
+func (g *ExtensionGuard) EnforceFor(now, settingsChanged time.Time, unsupported bool, uids []uint64) int {
+	if uids != nil && len(uids) == 0 {
+		return 0
+	}
 	if now.Sub(g.started) < ExtensionGrace() {
 		return 0 // the daemon just started: give running browsers time to check in
 	}
@@ -116,7 +126,7 @@ func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time, unsupported boo
 	var targets []int
 	for pid := range parent {
 		name := exeName(pid)
-		if exeName(parent[pid]) == name || !ownedByUser(pid) || !g.browsers.guarded(pid) {
+		if exeName(parent[pid]) == name || !ownedByAny(pid, uids) || !g.browsers.guarded(pid) {
 			continue // a child process of a browser, a system program, or not a browser
 		}
 		p := guardedProcess{remote: remoteControlled(pid) && !remoteControlAllowed(), supported: supportedExe(pid) != ""}
@@ -142,13 +152,17 @@ func (g *ExtensionGuard) Enforce(now, settingsChanged time.Time, unsupported boo
 // RunningSupportedBrowsers returns the supported browsers running now in
 // regular users' sessions (SupportedBrowsers IDs), each with how long its
 // longest-running main process has run.
-func RunningSupportedBrowsers() map[string]time.Duration {
+func RunningSupportedBrowsers() map[string]time.Duration { return RunningSupportedBrowsersFor(nil) }
+
+// RunningSupportedBrowsersFor is RunningSupportedBrowsers in the sessions
+// of the users uids only (nil: every regular user).
+func RunningSupportedBrowsersFor(uids []uint64) map[string]time.Duration {
 	uptime := systemUptime()
 	parent, _ := processTree()
 	out := map[string]time.Duration{}
 	for pid := range parent {
 		id := supportedExe(pid)
-		if id == "" || exeName(parent[pid]) == exeName(pid) || !ownedByUser(pid) {
+		if id == "" || exeName(parent[pid]) == exeName(pid) || !ownedByAny(pid, uids) {
 			continue // not a supported browser, or one of its child processes
 		}
 		if age, ok := processAge(pid, uptime); ok && age >= out[id] {

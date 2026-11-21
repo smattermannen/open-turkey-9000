@@ -81,17 +81,17 @@ func migrateJoinLists(conn *sql.DB) error {
 	for _, p := range clusters {
 		if _, err := tx.Exec("UPDATE clusters SET in_title = ?, in_text = ? WHERE id = ?",
 			p.terms.where.Title, p.terms.where.Text, p.url.id); err != nil {
-			return fmt.Errorf("joining clusters: %w", err)
+			return fmt.Errorf("joining list presets: %w", err)
 		}
 		for _, q := range []string{
 			"DELETE FROM cluster_entries WHERE cluster_id = ?",
 			"DELETE FROM clusters WHERE id = ?",
 		} {
 			if _, err := tx.Exec(q, p.terms.id); err != nil {
-				return fmt.Errorf("joining clusters: %w", err)
+				return fmt.Errorf("joining list presets: %w", err)
 			}
 		}
-		log.Printf("clusters '%s' and '%s' joined into '%s'", p.url.name, p.terms.name, p.url.name)
+		log.Printf("list presets '%s' and '%s' joined into '%s'", p.url.name, p.terms.name, p.url.name)
 	}
 	return tx.Commit()
 }

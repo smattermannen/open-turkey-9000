@@ -2,6 +2,7 @@ package db
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -63,10 +64,10 @@ func TestMigrateForceLibreWolf(t *testing.T) {
 					want = *c.lock
 					want.Name = UnsupportedBrowsers
 				}
-				if lock != want {
+				if !reflect.DeepEqual(lock, want) {
 					t.Errorf("open %d: lock = %+v; want %+v", i, lock, want)
 				}
-				if old, _ := d.GetSettingLock(oldForceLibreWolf); old != (SettingLock{Name: oldForceLibreWolf}) {
+				if old, _ := d.GetSettingLock(oldForceLibreWolf); !reflect.DeepEqual(old, SettingLock{Name: oldForceLibreWolf}) {
 					t.Errorf("open %d: the old lock is still there: %+v", i, old)
 				}
 				d.Close()

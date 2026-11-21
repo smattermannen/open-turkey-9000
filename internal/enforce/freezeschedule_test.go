@@ -77,10 +77,12 @@ func TestR_FREEZE_2_LogoutFreezeHoldsLogins(t *testing.T) {
 	did := fakeDevice(t)
 	var held []time.Time
 	released := 0
-	oldHold, oldRelease := holdLogins, releaseLogins
+	oldHold, oldRelease, oldLogout := holdLogins, releaseLogins, freezeLogout
 	holdLogins = func(until time.Time) error { held = append(held, until); return nil }
 	releaseLogins = func() error { released++; return nil }
-	t.Cleanup(func() { holdLogins, releaseLogins = oldHold, oldRelease })
+	// The freeze's own logout (enforce var), recorded as the consequences' is.
+	freezeLogout = func() error { return logoutUsers() }
+	t.Cleanup(func() { holdLogins, releaseLogins, freezeLogout = oldHold, oldRelease, oldLogout })
 
 	d := testDB(t)
 	now := time.Now()

@@ -66,6 +66,7 @@ function pageIsLight() {
 let reportedHits = new Set();
 let keywordsFor = null;
 let textChanged = true;
+const adHosts = new Set(); // other sites this page loaded from (see noteResource)
 // Only so much of a page's text is read, so a huge page can't slow it down.
 const MAX_TEXT = 2000000;
 // Principle 9: the page is read whole once per address, then only what is
@@ -130,8 +131,14 @@ function styled() {
   return true;
 }
 
+// judgedHere reports whether this document's address is one the lists
+// judge: web pages, and local files while the rules say so (§3.1).
+function judgedHere() {
+  return /^https?:$/.test(location.protocol) || (location.protocol === "file:" && kc9kJudgedAddress(lists, location.href));
+}
+
 function hidePage() {
-  if (window !== window.top || !/^https?:$/.test(location.protocol)) {
+  if (window !== window.top || !judgedHere()) {
     return;
   }
   if (!hidden) {
@@ -167,7 +174,9 @@ function showPage() {
 // what it shows: one that reads the title or text (or whose exceptions do),
 // not in test mode, and not spared by an address exception.
 function mayActByText(url) {
+  const file = /^file:/i.test(url || "");
   return Boolean(lists) && lists.some((list) => !list.test && kc9kReadsPage([list]) &&
+    (!file || (list.filePages && !kc9kFileMatch(list.except.files, url))) &&
     !(list.except.url.match.length > 0 && kc9kMatches(list.except.url, url)) &&
     !kc9kUrlTermsMatch(list.except.urlTerms, url));
 }
@@ -448,7 +457,7 @@ function scanKeywords() {
   // Lists that only look at addresses need no reading: this still catches a
   // page that changed address without loading (the background script only
   // sees real loads).
-  let page = { url };
+  let page = { url, adHosts: [...adHosts] };
   if (kc9kReadsPage(lists) || testing) {
     const text = readPageText(body);
     if (text === null) {
@@ -457,7 +466,7 @@ function scanKeywords() {
       queueScan();
       return;
     }
-    page = { url, title: document.title || "", text };
+    page = { url, title: document.title || "", text, adHosts: page.adHosts };
   }
   if (testing) {
     showTestPanel(kc9kTestReport(lists, page));
@@ -539,8 +548,7 @@ let frameJudging = null; // { url, lists, steps } while a frame is judged
 let frameBlocked = false;
 
 function scanFrame() {
-  if (!lists || frameBlocked || !/^https?:$/.test(location.protocol) || !document.body || !kc9kReadsPage(lists) ||
-    !styled()) {
+  if (!lists || frameBlocked || !judgedHere() || !document.body || !kc9kReadsPage(lists) || !styled()) {
     return;
   }
   enterAddress(topUrl()); // as render() keeps it: a frame's looks follow the tab's address
@@ -762,7 +770,7 @@ function showTestPanel(report) {
     parent.appendChild(el);
     return el;
   };
-  add(box, "h1", "Keyword test mode");
+  add(box, "h1", "Test mode");
   add(box, "div", "These lists only show what they find. Nothing is done to the page.", "dim");
   for (const list of report) {
     add(box, "h2", list.name + " (" + list.block + ")");
@@ -885,6 +893,37 @@ new MutationObserver((records) => {
     }
   }
 }).observe(document.documentElement || document, { childList: true, subtree: true, characterData: true });
+// §3.9 ad trigger for lists whose block has exceptions by title or text
+// (kc9kAdsByPage): the background can't know those when an ad loads, so the
+// page's own judging counts the other sites it loaded from (resource
+// timing, adHosts), with every exception. A host one of them lists reads
+// the page again.
+function noteResource(name) {
+  let host;
+  try {
+    host = new URL(name).hostname.toLowerCase();
+  } catch (error) {
+    return;
+  }
+  const own = location.hostname.toLowerCase();
+  if (!host || host === own || host.endsWith("." + own) || adHosts.has(host) || adHosts.size >= 2000) {
+    return;
+  }
+  adHosts.add(host);
+  if (lists && lists.some((list) => kc9kAdsByPage(list) && kc9kAdHost(list, host))) {
+    textChanged = true;
+    queueScan();
+  }
+}
+if (window === window.top && typeof PerformanceObserver === "function") {
+  try {
+    new PerformanceObserver((entries) => entries.getEntries().forEach((e) => noteResource(e.name)))
+      .observe({ type: "resource", buffered: true });
+  } catch (error) {
+    // no resource timing here: the background's ad trigger alone
+  }
+}
+
 let scanQueued = false;
 function queueScan() {
   if (scanQueued) {
@@ -906,9 +945,13 @@ setInterval(() => {
     queueScan();
   }
 }, 250);
+// The first read waits for idle time (principle 9): read at once, its
+// first visibility check made the browser lay out a whole big page inside
+// this event, holding the page up; in idle time that layout is done. The
+// page stays hidden meanwhile (R-PAGE-1).
 document.addEventListener("DOMContentLoaded", () => {
   textChanged = true;
-  scanKeywords();
+  queueScan();
 });
 
 browser.storage.local.get("page").then((stored) => load(stored.page));

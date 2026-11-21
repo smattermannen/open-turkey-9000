@@ -18,8 +18,8 @@
 //     protects nothing (R-LOCK-10).
 //
 // Locks can be strengthened while held ("start" on an active block adds any
-// kind of lock, lengthens a char or delay lock, extends a time lock), never
-// weakened. A
+// kind of lock, last; a kind it already has is another lock of that kind,
+// §3.4; 'extend' extends a timer lock), never weakened. A
 // lock added to a block its schedule activated outlives the schedule: the
 // daemon won't deactivate a locked block (see enforce.reconcileSchedules).
 //
@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,7 +72,11 @@ On a block that is already on, start only adds locks: any kind of lock
 can be added, last in the unlock order. A kind the block already has is a
 second lock of that kind, unlocked after the first (a second --for 1h on a
 block timer-locked for 1h holds it 2h in all). Locks already set are never
-changed, shortened or removed this way.`,
+changed, shortened or removed this way.
+
+A lock option given twice is two locks of its kind, in the order given:
+--for 1h --lock --for 2h is a timer lock, a text lock, then another timer
+lock; --password-stdin twice reads two passwords (two partners').`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		blockName := args[0]
@@ -101,30 +106,31 @@ changed, shortened or removed this way.`,
 		if err != nil {
 			return err
 		}
-		usePassword, useRestart, useLock, style, lockChars := req.password, req.restart, req.text, req.style, req.chars
-		extras := req.extras
-		if useRestart {
-			boot, err := db.BootID()
+		// One password for each password lock, in order (§3.4: several
+		// locks of one kind, two partners' passwords).
+		specs := slices.Clone(req.specs)
+		count, nth := passwordLocks(specs), 0
+		for i := range specs {
+			if specs[i].Kind != db.LayerPassword {
+				continue
+			}
+			nth++
+			if presetPasswordHash != "" {
+				specs[i].PasswordHash = presetPasswordHash // a hotkey's or a mode's, given when it was set up
+				continue
+			}
+			prompt := "Block password"
+			if count > 1 {
+				prompt = fmt.Sprintf("Block password %d of %d", nth, count)
+			}
+			password, err := readPasswordStdin(prompt)
 			if err != nil {
 				return err
 			}
-			extras.RestartBoot = boot
-		}
-		if usePassword {
-			if presetPasswordHash != "" {
-				extras.PasswordHash = presetPasswordHash // a hotkey's, given when it was added
-			} else {
-				password, err := readPasswordStdin("Block password")
-				if err != nil {
-					return err
-				}
-				if extras.PasswordHash, err = db.HashPassword(password); err != nil {
-					return err
-				}
+			if specs[i].PasswordHash, err = db.HashPassword(password); err != nil {
+				return err
 			}
 		}
-		hasExtras := usePassword || useRestart || extras.Delay > 0 || style != "" || extras.Relock > 0 || extras.RangeDays != 0
-		lockedUntil, forSeconds := req.until, req.forSeconds
 		now := req.now
 
 		database, err := openDB()
@@ -137,8 +143,10 @@ changed, shortened or removed this way.`,
 		if err != nil {
 			return err
 		}
-		if lockedUntil != 0 {
-			lockedUntil += trusted - now.Unix()
+		for i := range specs { // timer locks until a time: in trusted time
+			if specs[i].Until != 0 {
+				specs[i].Until += trusted - now.Unix()
+			}
 		}
 
 		detail, err := database.GetBlock(blockName)
@@ -149,28 +157,48 @@ changed, shortened or removed this way.`,
 			return fmt.Errorf("block '%s' has nothing to enforce. Add websites to a list, apps or window titles first", blockName)
 		}
 		if detail.Active {
-			return strengthenLocks(cmd, database, detail, newLocks{
-				kinds: lockKindsInOrder(cmd), text: useLock, style: style, chars: lockChars,
-				charsGiven: cmd.Flags().Changed("lock-chars"), until: lockedUntil, forSeconds: forSeconds,
-				restart: useRestart, extras: extras,
-			}, trusted)
+			return strengthenLocks(cmd, database, detail, newLocks{specs: specs, relock: req.extras.Relock}, trusted)
 		}
 
-		kinds := lockKindsInOrder(cmd)
-		if extras.Relock > 0 && len(kinds) == 0 {
+		if req.extras.Relock > 0 && len(specs) == 0 {
 			return fmt.Errorf("--relock goes with a lock")
 		}
+		// Each kind's first lock takes its place; from the first second
+		// lock of a kind on, the locks wait in the queue, in order (§3.4).
+		placed, queued := splitSpecs(specs)
+		extras := db.LockExtras{Relock: req.extras.Relock, Queue: slices.Clone(queued)}
+		var kinds []string
+		useLock, style, chars := false, "", 0
+		var lockedUntil, forSeconds int64
+		for _, q := range placed {
+			kinds = append(kinds, q.Kind)
+			switch q.Kind {
+			case db.LayerText:
+				useLock, style, chars = true, q.Style, q.Chars
+				extras.Style = q.Style
+			case db.LayerTimer:
+				if q.For > 0 {
+					forSeconds, lockedUntil = q.For, trusted+q.For
+				} else {
+					lockedUntil = q.Until
+				}
+			case db.LayerPassword:
+				extras.PasswordHash = q.PasswordHash
+			case db.LayerRestart:
+				boot, err := db.BootID()
+				if err != nil {
+					return err
+				}
+				extras.RestartBoot = boot
+			case db.LayerDelay:
+				extras.Delay = q.Delay
+			case db.LayerRange:
+				extras.RangeDays, extras.RangeFrom, extras.RangeTo, extras.RangeInvert = q.RangeDays, q.RangeFrom, q.RangeTo, q.RangeInvert
+			}
+		}
 		// Every lock as given, in order: what re-lock brings back (§3.4).
-		n := newLocks{style: style, chars: lockChars, until: lockedUntil, forSeconds: forSeconds, extras: extras}
-		for _, k := range kinds {
-			q, _, _ := queuedLock(k, n, trusted)
-			extras.Config = append(extras.Config, q)
-			hasExtras = true
-		}
-		chars := 0
-		if useLock {
-			chars = lockChars
-		}
+		extras.Config = slices.Clone(specs)
+		hasExtras := len(specs) > 0 || extras.Relock > 0
 		// Layered locks (R-LOCK-6): unlocked in the order given. A timer
 		// lock for a duration, or a restart lock, behind another lock
 		// waits for it.
@@ -179,13 +207,24 @@ changed, shortened or removed this way.`,
 			if kinds[0] != db.LayerTimer && forSeconds > 0 {
 				extras.TimerAfter, lockedUntil = forSeconds, 0
 			}
-			if kinds[0] != db.LayerRestart && useRestart {
+			if kinds[0] != db.LayerRestart && extras.RestartBoot != "" {
 				extras.RestartBoot = db.RestartPending
 			}
 			hasExtras = true
 		}
 		// R-LOCK-12: nothing is locked until the user confirms.
-		if err := confirmLocks(cmd, startLocks(blockName, kinds, style, chars, lockedUntil, trusted, extras)...); err != nil {
+		confirm := startLocks(blockName, kinds, len(specs), style, chars, lockedUntil, trusted, extras)
+		for i, q := range queued {
+			_, length := describeQueued(q)
+			if length != "" {
+				length += ", "
+			}
+			confirm = append(confirm, lockToSet{"block '" + blockName + "'",
+				fmt.Sprintf("%d of %d: another %s", len(placed)+i+1, len(specs), db.LayerName(q.Kind)),
+				length + "after the locks before it are unlocked"})
+		}
+		confirm = append(confirm, relockToSet("block '"+blockName+"'", extras.Relock)...)
+		if err := confirmLocks(cmd, confirm...); err != nil {
 			return err
 		}
 		if err := database.ActivateBlock(blockName, useLock, chars, lockedUntil, false); err != nil {
@@ -217,6 +256,11 @@ changed, shortened or removed this way.`,
 			msg += fmt.Sprintf(" [timer lock until %s]", time.Unix(lockedUntil, 0).Format("2006-01-02 15:04"))
 		}
 		fmt.Println(msg)
+		if len(queued) > 0 {
+			if d, err := database.GetBlock(blockName); err == nil {
+				fmt.Printf("Unlock order: %s\n", describeLayers(db.Layers(d, extras), d, extras))
+			}
+		}
 		notify("Killer Chicken 9000", fmt.Sprintf("Block '%s' is now active", blockName))
 		return nil
 	},
@@ -224,13 +268,13 @@ changed, shortened or removed this way.`,
 
 // startLocks lists the locks a start of an inactive block sets, in unlock
 // order (kinds), for confirmLocks (R-LOCK-12).
-func startLocks(name string, kinds []string, style string, chars int, until, trusted int64, extras db.LockExtras) []lockToSet {
+func startLocks(name string, kinds []string, total int, style string, chars int, until, trusted int64, extras db.LockExtras) []lockToSet {
 	target := "block '" + name + "'"
 	var locks []lockToSet
 	for i, k := range kinds {
 		order := ""
-		if len(kinds) > 1 {
-			order = fmt.Sprintf("%d of %d: ", i+1, len(kinds))
+		if total > 1 {
+			order = fmt.Sprintf("%d of %d: ", i+1, total)
 		}
 		after := ""
 		if i > 0 {
@@ -280,18 +324,12 @@ func startLockRequested(cmd *cobra.Command) bool {
 	return false
 }
 
-// newLocks is what a start on an active block asks for: the lock kinds in
-// the order their flags were given, and their settings.
+// newLocks is what a start on an active block asks for: every lock in the
+// order its flag was given (timer ends in trusted time, password hashes
+// read), and re-lock.
 type newLocks struct {
-	kinds      []string
-	text       bool
-	style      string
-	chars      int
-	charsGiven bool
-	until      int64 // timer lock end (0: none)
-	forSeconds int64 // timer lock given as a duration
-	restart    bool
-	extras     db.LockExtras // password hash, delay, range, re-lock
+	specs  []db.QueuedLock
+	relock int64
 }
 
 // strengthenLocks handles "start" on a block that is already active: every
@@ -302,7 +340,7 @@ type newLocks struct {
 // on waits for them (R-LOCK-6).
 func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail, n newLocks, trusted int64) error {
 	name := detail.Name
-	if len(n.kinds) == 0 && n.extras.Relock == 0 {
+	if len(n.specs) == 0 && n.relock == 0 {
 		return fmt.Errorf("block '%s' is already active (add a lock to strengthen it, such as --lock, --for or --password-stdin)", name)
 	}
 	bootID, err := db.BootID()
@@ -358,8 +396,9 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 		othersOn = true
 	}
 	has := func(kind string) bool { return slices.Contains(db.Layers(detail, e), kind) }
-	for _, kind := range n.kinds {
-		q, change, length := queuedLock(kind, n, trusted)
+	for _, q := range n.specs {
+		kind := q.Kind
+		change, length := describeQueued(q)
 		e.Config = append(e.Config, q)
 		if len(e.Queue) > 0 || has(kind) {
 			enqueue(q, change, length)
@@ -367,20 +406,24 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 		}
 		switch kind {
 		case db.LayerText:
-			detail.Locked, detail.LockChars, e.Style = true, n.chars, n.style
-			add(kind, "text lock ("+lock.DescribeStyle(n.style, n.chars)+")", lockToSet{target, textLockKind(n.style, n.chars), ""})
+			detail.Locked, detail.LockChars, e.Style = true, q.Chars, q.Style
+			add(kind, "text lock ("+lock.DescribeStyle(q.Style, q.Chars)+")", lockToSet{target, textLockKind(q.Style, q.Chars), ""})
 		case db.LayerTimer:
-			if othersOn && n.forSeconds > 0 {
-				e.TimerAfter = n.forSeconds
-				add(kind, fmt.Sprintf("timer lock of %s after the locks before it", time.Duration(n.forSeconds)*time.Second),
-					lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", humanDuration(time.Duration(n.forSeconds)*time.Second))})
+			if othersOn && q.For > 0 {
+				e.TimerAfter = q.For
+				add(kind, fmt.Sprintf("timer lock of %s after the locks before it", time.Duration(q.For)*time.Second),
+					lockToSet{target, "timer lock", fmt.Sprintf("%s, counting from when the locks before it are unlocked", humanDuration(time.Duration(q.For)*time.Second))})
 			} else {
-				detail.LockedUntil = n.until
-				add(kind, fmt.Sprintf("timer lock until %s", time.Unix(n.until, 0).Format("2006-01-02 15:04")),
-					lockToSet{target, "timer lock", timerLength(trusted, n.until)})
+				until := q.Until
+				if q.For > 0 {
+					until = trusted + q.For
+				}
+				detail.LockedUntil = until
+				add(kind, fmt.Sprintf("timer lock until %s", time.Unix(until, 0).Format("2006-01-02 15:04")),
+					lockToSet{target, "timer lock", timerLength(trusted, until)})
 			}
 		case db.LayerPassword:
-			e.PasswordHash = n.extras.PasswordHash
+			e.PasswordHash = q.PasswordHash
 			add(kind, "password lock", lockToSet{target, "password lock", ""})
 		case db.LayerRestart:
 			length := "until the computer restarts"
@@ -390,16 +433,15 @@ func strengthenLocks(cmd *cobra.Command, database *db.DB, detail *db.BlockDetail
 			}
 			add(kind, "restart lock", lockToSet{target, "restart lock", length})
 		case db.LayerDelay:
-			e.Delay = n.extras.Delay
+			e.Delay = q.Delay
 			add(kind, fmt.Sprintf("delay lock of %s", time.Duration(e.Delay)*time.Second),
 				lockToSet{target, "delay lock", fmt.Sprintf("unlocking takes %s", humanDuration(time.Duration(e.Delay)*time.Second))})
 		case db.LayerRange:
-			r := n.extras
-			e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert = r.RangeDays, r.RangeFrom, r.RangeTo, r.RangeInvert
+			e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert = q.RangeDays, q.RangeFrom, q.RangeTo, q.RangeInvert
 			add(kind, "range lock ("+describeRange(e)+")", lockToSet{target, "range lock", describeRange(e) + " (can't be unlocked then)"})
 		}
 	}
-	if r := n.extras.Relock; r > 0 {
+	if r := n.relock; r > 0 {
 		switch {
 		case e.Relock == r:
 		case e.Relock != 0:
@@ -449,38 +491,31 @@ func relockWhat(e db.LockExtras) string {
 	return "its text and password locks are"
 }
 
-// queuedLock is a new lock of a kind the block already has, as it waits in
-// the queue (§3.4), with what it says it adds and how long it holds.
-func queuedLock(kind string, n newLocks, trusted int64) (q db.QueuedLock, change, length string) {
-	q.Kind = kind
-	switch kind {
+// describeQueued says what a lock waiting in the queue (§3.4) adds and how
+// long it holds once it starts.
+func describeQueued(q db.QueuedLock) (change, length string) {
+	switch q.Kind {
 	case db.LayerText:
-		q.Chars, q.Style = n.chars, n.style
-		return q, "another text lock (" + lock.DescribeStyle(n.style, n.chars) + ")", lock.DescribeStyle(n.style, n.chars)
+		return "another text lock (" + lock.DescribeStyle(q.Style, q.Chars) + ")", lock.DescribeStyle(q.Style, q.Chars)
 	case db.LayerPassword:
-		q.PasswordHash = n.extras.PasswordHash
-		return q, "another password lock", ""
+		return "another password lock", ""
 	case db.LayerTimer:
-		if n.forSeconds > 0 {
-			q.For = n.forSeconds
-			return q, fmt.Sprintf("another timer lock of %s", time.Duration(n.forSeconds)*time.Second),
-				humanDuration(time.Duration(n.forSeconds)*time.Second) + ", counting from when it starts"
+		if q.For > 0 {
+			return fmt.Sprintf("another timer lock of %s", time.Duration(q.For)*time.Second),
+				humanDuration(time.Duration(q.For)*time.Second) + ", counting from when it starts"
 		}
-		q.Until = n.until
-		at := time.Unix(n.until, 0).Format("2006-01-02 15:04")
-		return q, "another timer lock until " + at, "until " + at
+		at := time.Unix(q.Until, 0).Format("2006-01-02 15:04")
+		return "another timer lock until " + at, "until " + at
 	case db.LayerRestart:
-		return q, "another restart lock", "until a restart after it starts"
+		return "another restart lock", "until a restart after it starts"
 	case db.LayerDelay:
-		q.Delay = n.extras.Delay
-		d := time.Duration(n.extras.Delay) * time.Second
-		return q, fmt.Sprintf("another delay lock of %s", d), fmt.Sprintf("unlocking takes %s", humanDuration(d))
+		d := time.Duration(q.Delay) * time.Second
+		return fmt.Sprintf("another delay lock of %s", d), fmt.Sprintf("unlocking takes %s", humanDuration(d))
 	case db.LayerRange:
-		r := n.extras
-		q.RangeDays, q.RangeFrom, q.RangeTo, q.RangeInvert = r.RangeDays, r.RangeFrom, r.RangeTo, r.RangeInvert
-		return q, "another range lock (" + describeRange(r) + ")", describeRange(r) + " (can't be unlocked then)"
+		r := db.LockExtras{RangeDays: q.RangeDays, RangeFrom: q.RangeFrom, RangeTo: q.RangeTo, RangeInvert: q.RangeInvert}
+		return "another range lock (" + describeRange(r) + ")", describeRange(r) + " (can't be unlocked then)"
 	}
-	return q, "another " + db.LayerName(kind), ""
+	return "another " + db.LayerName(q.Kind), ""
 }
 
 // ============================================================================
@@ -852,9 +887,27 @@ func extensionStatus(database *db.DB) string {
 	return status + "; no check-in yet (open a supported browser)"
 }
 
-// runningSupportedBrowsers is blocker.RunningSupportedBrowsers, replaced in
-// tests.
-var runningSupportedBrowsers = blocker.RunningSupportedBrowsers
+// runningSupportedBrowsers is blocker.RunningSupportedBrowsers for the
+// account running the command (callerUID), replaced in tests.
+var runningSupportedBrowsers = func() map[string]time.Duration {
+	if uid := callerUID(); uid >= 0 {
+		return blocker.RunningSupportedBrowsersFor([]uint64{uint64(uid)})
+	}
+	return blocker.RunningSupportedBrowsers()
+}
+
+// callerUID is the account a command runs for: the one sudo was given by,
+// or the user running it; -1 for root itself (every account). Replaceable
+// in tests.
+var callerUID = func() int64 {
+	if os.Geteuid() == 0 {
+		if uid, err := strconv.ParseInt(os.Getenv("SUDO_UID"), 10, 64); err == nil && uid > 0 {
+			return uid
+		}
+		return -1
+	}
+	return int64(os.Getuid())
+}
 
 // extensionMissing reports whether the interface should say the extension
 // isn't running (§4.10 install dialog): no supported browser is installed,
@@ -868,7 +921,8 @@ func extensionMissing(database *db.DB) bool {
 	if !extensionBrowserInstalled() {
 		return true
 	}
-	required, err := enforce.ExtensionRequiredNow(database)
+	// §3.2: only when this account's browsers need it.
+	required, err := enforce.ExtensionRequiredNowFor(database, callerUID())
 	if err != nil || !required {
 		return false
 	}

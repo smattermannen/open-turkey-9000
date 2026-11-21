@@ -13,8 +13,14 @@
 // draft, each as the matching command would, on the block as it is now: a
 // change made to the block meanwhile (an entry from the browser's popup, a
 // recording) stays. On a locked block the weakening changes are refused
-// and named; the rest apply. Everything else (automation, breaks,
-// allowance, locks) is changed on the block itself, at once.
+// and named; the rest apply.
+//
+// What the Breaks & allowance and Bypass prevention tabs set (allowance,
+// Pomodoro, reward, text and delay breaks, the block's bypass prevention)
+// is kept on the draft as the commands given (draftQueued), the last of
+// each kind, and run at save through their own gates (2026-11-21, SPEC
+// §4.3). Taking a break or an allowance session, the automation, the
+// affected users and locks are changed on the block itself, at once.
 package cli
 
 import (
@@ -23,9 +29,11 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // draftName is the name of block's draft.
@@ -44,12 +52,193 @@ func draftOf(database *db.DB, name string) string {
 // change anything (fewer only show). On a draft such a change would be lost
 // at save, or (an allowance, an autostart) switch the draft on: refused.
 var draftRefused = map[string]int{
-	"allowance set": 1, "allowance start": 1, "allowance end": 1, "allowance remove": 1,
+	"allowance start": 1, "allowance end": 1,
 	"schedule add": 1, "schedule remove": 1, "schedule break": 2, "schedule lock": 2,
-	"autostart": 2, "pomodoro set": 1, "pomodoro off": 1,
-	"break reward": 2, "break text": 2, "break delay": 2, "break start": 1, "break end": 1, "break request": 1,
+	"autostart":   2,
+	"break start": 1, "break end": 1, "break request": 1,
 	"place rule": 1, "block users": 2, "automation": 3,
 	"schedule apply": 2, "schedule take-off": 2, // §3.6 Schedule (2026-11-17); a draft joins no mode (mode add)
+}
+
+// draftQueued are the commands of the Breaks & allowance and Bypass
+// prevention tabs: on a draft they are kept, the last of each kind, and run
+// on the block at save (§4.3). Each with its kind and how many arguments it
+// takes before it changes anything ("bypass" names its block by --block).
+var draftQueued = map[string]struct {
+	kind string
+	args int
+}{
+	"allowance set": {"Allowance", 2}, "allowance remove": {"Allowance", 1},
+	"pomodoro set": {"Pomodoro", 3}, "pomodoro off": {"Pomodoro", 1},
+	"break reward": {"Reward", 2}, "break text": {"Text break", 2}, "break delay": {"Delay break", 2},
+	"bypass set": {"Bypass prevention", 0}, "bypass off": {"Bypass prevention", 0},
+}
+
+// queuedEdit is one command kept on a draft until save.
+type queuedEdit struct {
+	Kind string   `json:"kind"`
+	Args []string `json:"args"` // the command, naming the block (not its draft)
+	Text string   `json:"text"` // what it sets, for the interface
+}
+
+// settingDraftQueue + draft name holds its queued edits (JSON).
+const settingDraftQueue = "draft.queue."
+
+// draftQueue returns the edits kept on a draft.
+func draftQueue(database *db.DB, draft string) []queuedEdit {
+	raw, _ := database.GetSetting(settingDraftQueue + draft)
+	var q []queuedEdit
+	if raw != "" {
+		_ = json.Unmarshal([]byte(raw), &q)
+	}
+	return q
+}
+
+// queuedTarget returns the block a command of draftQueued changes, or "".
+func queuedTarget(cmd *cobra.Command, args []string) (string, string) {
+	path := strings.TrimPrefix(cmd.CommandPath(), rootCmd.Name()+" ")
+	q, ok := draftQueued[path]
+	if !ok {
+		return "", ""
+	}
+	if strings.HasPrefix(path, "bypass ") {
+		block, _ := cmd.Flags().GetString("block")
+		return path, block
+	}
+	if len(args) < q.args || len(args) == 0 {
+		return "", ""
+	}
+	return path, args[0]
+}
+
+// commandLine writes a command back as arguments, with block in place of
+// draft: its path, arguments and the flags given.
+func commandLine(cmd *cobra.Command, args []string, draft, block string) []string {
+	line := strings.Fields(strings.TrimPrefix(cmd.CommandPath(), rootCmd.Name()+" "))
+	for _, a := range args {
+		if a == draft {
+			a = block
+		}
+		line = append(line, a)
+	}
+	// VisitAll and Changed, not Visit: pflag's record of what was set
+	// outlives a run in one process (tests, runQueued).
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if !f.Changed || rootCmd.PersistentFlags().Lookup(f.Name) != nil {
+			return // not given, or how it was given (passwords on standard input), not what it sets
+		}
+		if slice, ok := f.Value.(pflag.SliceValue); ok {
+			for _, v := range slice.GetSlice() {
+				line = append(line, "--"+f.Name+"="+v)
+			}
+			return
+		}
+		v := f.Value.String()
+		if v == draft {
+			v = block
+		}
+		line = append(line, "--"+f.Name+"="+v)
+	})
+	return line
+}
+
+// queueOnDraft wraps the commands of draftQueued: on a draft the command
+// is kept for save instead of run.
+var queueOnce sync.Once
+
+func queueOnDraft() {
+	queueOnce.Do(func() {
+		var wrap func(c *cobra.Command)
+		wrap = func(c *cobra.Command) {
+			path := strings.TrimPrefix(c.CommandPath(), rootCmd.Name()+" ")
+			if _, ok := draftQueued[path]; ok && c.RunE != nil {
+				run := c.RunE
+				c.RunE = func(cmd *cobra.Command, args []string) error {
+					if kept, err := keepOnDraft(cmd, args); kept || err != nil {
+						return err
+					}
+					return run(cmd, args)
+				}
+			}
+			for _, sub := range c.Commands() {
+				wrap(sub)
+			}
+		}
+		wrap(rootCmd)
+	})
+}
+
+// keepOnDraft keeps a command of draftQueued given for a draft, replacing
+// the one of its kind kept before; it reports whether it did.
+func keepOnDraft(cmd *cobra.Command, args []string) (bool, error) {
+	path, draft := queuedTarget(cmd, args)
+	if draft == "" {
+		return false, nil
+	}
+	database, err := openDB()
+	if err != nil {
+		return false, nil // the command says why
+	}
+	defer database.Close()
+	block := draftOf(database, draft)
+	if block == "" {
+		return false, nil
+	}
+	line := commandLine(cmd, args, draft, block)
+	// What it sets, in words: "1h, per week, refill 04:00".
+	rest := []string{}
+	for _, a := range line[len(strings.Fields(path)):] {
+		name, value, flag := strings.Cut(strings.TrimPrefix(a, "--"), "=")
+		switch {
+		case a == block || a == "--block="+block || (flag && value == "true" && (name == "yes" || name == "no-confirm-ok")):
+		case strings.HasPrefix(a, "--") && flag:
+			rest = append(rest, name+" "+value)
+		default:
+			rest = append(rest, a)
+		}
+	}
+	text := draftQueued[path].kind + ": " + strings.Join(rest, ", ")
+	if strings.HasSuffix(path, " off") || strings.HasSuffix(path, " remove") || (len(rest) > 0 && rest[0] == "off") {
+		text = draftQueued[path].kind + ": off"
+	}
+	q := slices.DeleteFunc(draftQueue(database, draft), func(e queuedEdit) bool { return e.Kind == draftQueued[path].kind })
+	q = append(q, queuedEdit{Kind: draftQueued[path].kind, Args: line, Text: text})
+	raw, err := json.Marshal(q)
+	if err != nil {
+		return true, err
+	}
+	if err := database.SetSetting(settingDraftQueue+draft, string(raw)); err != nil {
+		return true, err
+	}
+	fmt.Printf("Kept in the draft of '%s' (%s): it applies with 'kc9k block draft %s save'.\n", block, text, block)
+	return true, nil
+}
+
+// runQueued runs a kept command on the block, as it was given.
+func runQueued(line []string) error {
+	c, rest, err := rootCmd.Find(line)
+	if err != nil {
+		return err
+	}
+	c.Flags().VisitAll(func(f *pflag.Flag) {
+		if slice, ok := f.Value.(pflag.SliceValue); ok {
+			_ = slice.Replace(nil)
+		} else {
+			_ = f.Value.Set(f.DefValue)
+		}
+		f.Changed = false
+	})
+	if err := c.ParseFlags(rest); err != nil {
+		return err
+	}
+	args := c.Flags().Args()
+	if err := c.ValidateArgs(args); err != nil {
+		return err
+	}
+	if c.RunE == nil {
+		return fmt.Errorf("'%s' can't be run", strings.Join(line, " "))
+	}
+	return c.RunE(c, args)
 }
 
 // refuseDraftEdit refuses a command of draftRefused on a draft, naming the
@@ -59,8 +248,6 @@ func refuseDraftEdit(cmd *cobra.Command, args []string) error {
 	block := ""
 	if n, ok := draftRefused[path]; ok && len(args) >= n && len(args) > 0 {
 		block = args[0]
-	} else if path == "bypass set" {
-		block, _ = cmd.Flags().GetString("block")
 	}
 	if block == "" {
 		return nil
@@ -71,8 +258,8 @@ func refuseDraftEdit(cmd *cobra.Command, args []string) error {
 	}
 	defer database.Close()
 	if of := draftOf(database, block); of != "" {
-		return fmt.Errorf("'%s' is a draft of '%s': a draft holds only what the Websites and Apps tabs show "+
-			"until it is saved, so change this on '%s' itself", block, of, of)
+		return fmt.Errorf("'%s' is a draft of '%s': a draft holds what the block's tabs set until it is saved; "+
+			"its automation, affected users and taking a break apply at once, so change this on '%s' itself", block, of, of)
 	}
 	return nil
 }
@@ -145,6 +332,9 @@ func dropDraft(database *db.DB, draft string) error {
 		}
 	}
 	if err := database.SetSetting(settingDraftBase+draft, ""); err != nil {
+		return err
+	}
+	if err := database.SetSetting(settingDraftQueue+draft, ""); err != nil {
 		return err
 	}
 	return database.SetSetting(settingDraftOf+draft, "")
@@ -435,6 +625,11 @@ func saveDraft(cmd *cobra.Command, database *db.DB, block, draft string) ([]stri
 	}
 	if err := saveDraftPhraseSets(database, block, base.PhraseSets, next.PhraseSets, try); err != nil {
 		return refusedChanges, err
+	}
+	// The Breaks & allowance and Bypass prevention tabs: each kept command
+	// runs now, through its own gate.
+	for _, e := range draftQueue(database, draft) {
+		try(e.Text, runQueued(e.Args))
 	}
 	if err := reapplyIfActive(database, block); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)

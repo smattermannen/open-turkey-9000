@@ -8,7 +8,7 @@ on; write "Unchecked" rather than guess. Order: §0 first, top to bottom,
 then §2.
 
 Status: Built, Partial, Differs (built unlike SPEC), Not built, Unchecked.
-Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-20 (docs against code: commands, rule IDs, paths, notes' Covers lines; §0.1 *Doc audit 2026-11-20*).
+Sizes: S < 1 day, M days, L ≥ week. Last checked: 2026-11-21 (device, locks, tamper, install: notes' Covers lines, help texts against the stacking rule; earlier, 2026-11-20, all docs against code: §0.1 *Doc audit 2026-11-20*).
 
 ## Index
 
@@ -27,17 +27,16 @@ of their group and a row here; a finished item loses its row.
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
 | B5 | Rendered terms on real sites (box); hotkeys on a real keyboard (owner); GNOME (vm) | §3.1, §4.13 | extension, hotkeys | box, vm, owner |
-| B8 | Use counting with input and idle (simulated input) | §3.7 | allowance | box |
+| B8 | Use counting with input and idle (simulated input); LockedHint under Cinnamon: run `ci/lockedhint_check.sh` on the desktop (written 2026-11-21, never run) | §3.7 | allowance | box |
 | B11 | Social media settings beyond Shorts; playlists; places; text break | §3.2, §3.6 | extension, automation | box |
 | B12 | Chrome: a person opens the popup and tries to remove the extension (synthetic checked 2026-11-20) | §3.13 | browsers | owner |
 | 2.1 | Circadian on a laptop backlight, external screens (ddcutil), several screens, GNOME/MATE | §4.10 | circadian | owner, vm |
-| 2.2 | Ad trigger: grow the shipped industry lists | §3.9 | actions | agent |
-| 2.4 | SafeSearch: a lock per engine (SPEC §6 2026-11-18) | §4.10 | browsers | agent, box |
-| 2.6 | Factory reset protection | §4.10 | device | agent, vm |
-| 2.7 | Hardening: the text lock's challenge in the command's own window (decided 2026-11-20, §5); rules server secret (for the owner, §5) | R-LOCK-5, §4.6 | browsers, locks | agent, owner |
+| 2.2 | Ad trigger: gambling and dating industry domains (none seen live, 2026-11-21); browser test built (2026-11-20) | §3.9 | actions | agent |
+| 2.4 | SafeSearch per engine: built; checked in Chrome (2026-11-21); in LibreWolf (Unchecked) | §4.10 | browsers | box |
+| 2.6 | Factory reset protection: built; PAM root guard: run `ci/strict_pam_vm_test.sh host kc9k-vm` (written 2026-11-21, never run) (vm); firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
+| 2.7 | Hardening: the text lock's window on a real desktop (Unchecked); rules server secret dropped (§5, 2026-11-21) | R-LOCK-5, §4.6 | browsers, locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| E1 | Projects: presets of every type as a choice (owner 2026-11-20) | §3.13 | db-project, lists | agent |
-| E2 | Words to avoid still shown: template, cluster (GUI, CLI names) | §3.14, §4.12 | gui, lists | agent |
+| 2.9 | Tamper settings of 2026-11-21: guest, inactive-tabs, embedded checked in Chrome-family browsers (2026-11-21); inactive-tabs, embedded in LibreWolf (box); VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
@@ -52,35 +51,27 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
 
 ### 0.1 Code contradicting `SPEC.md`
 
-- [ ] **Doc audit 2026-11-20** (docs and code compared; notes fixed in the
+- [x] **Doc audit 2026-11-20** (docs and code compared; notes fixed in the
   same session; what the code still gets wrong is below).
-  - [ ] **E1** Presets in projects are a choice (owner 2026-11-20, SPEC
-    §3.13, §6): `project export` (and the GUI's export) asks whether to
-    include presets; included means every type: block presets
-    (`templates`), list and phrase set presets (`clusters`) and the
-    `presets` table (lists, automation, schedule, hotkey). Today the code
-    differs both ways: templates and clusters always go in
-    (`cli/project.go` `Templates`, `Clusters`), the `presets` table never
-    does (export, import and `cli/projectbackup.go` all skip it). A backup
-    holds every preset always. Import adds presets as it adds blocks (only
-    adds; a clashing name gets a new one); tests in `project_test.go`,
-    `projectbackup_test.go`; update `notes/db-project.md`.
-  - [ ] **E2** Words to avoid (§3.14) still shown to the user; command
-    names follow the glossary, old ones stay as aliases (§4.12):
-    - GUI (`gui/kc9k-gui.py`): New block dialog "Start empty or from a
-      template." and "Template: X" (`new_block`, near `templates =`);
-      list Import "From KC9K" says "lists and clusters", "Cluster: X",
-      "No other lists or clusters to import from." (`import_from_kc9k`
-      area); the phrase import hint "clusters in Killer Chicken 9000".
-      Say block preset, list preset, phrase set preset.
-    - CLI: `template` and `cluster` are the commands' main names (help:
-      "Saved block definitions", "Manage clusters"); `block create
-      --template`, `record start … --cluster C`, `record` help "into a
-      list or a cluster", `project` help "the clusters". Make them
-      `preset …` (or name them presets) with `template`/`cluster`/
-      `--template`/`--cluster` kept as aliases; `ci/gui_*` smoke tests
-      that look for the old labels change with them.
-    - Code identifiers (`clusters` table, `build_clusters`) may stay.
+  - [x] **E1** Presets in projects are a choice (owner 2026-11-20, SPEC
+    §3.13, §6): built 2026-11-20. A backup (`project export`) holds every
+    preset (block presets, list and phrase set presets, the `presets`
+    table); `--share` only with `--presets` (a terminal asks; the GUI's
+    Share… asks). Import adds them like blocks (same content skipped, a
+    taken name gets `name-2`). `TestProjectPresetsAreAChoice`; the GUI
+    question on a real screen: Unchecked.
+  - [x] **E2** Words to avoid (§3.14) still shown to the user: built
+    2026-11-20. Commands `block-preset` and `list-preset` (aliases
+    `template`, `cluster`, `phrase-set-preset`), `block create --preset`
+    and `record start --preset` (old flags kept); every help text, message
+    and GUI label says block preset, list preset, phrase set preset.
+    `TestPresetCommandNames`, `ci/gui_lists_smoke.py` (import sources).
+    2026-11-21 (quality pass): the last ones shown: `break` help ("relock",
+    "typing challenge"), the text lock's challenge error, the old "word
+    combination" error for a term with brackets, the GUI's text break help,
+    the toolbar's "today's quota left" (now "of the allowance left", also
+    right for weekly and monthly allowances) and the page panel's "Keyword
+    test mode" (extension 1.31.0).
 
 - [ ] **Owner report 2026-11-20** (from real use; D1, D2, D4 built; D3 left).
   - [x] **D1** In an opened block, the bar from "← All blocks" down to Save
@@ -1100,10 +1091,20 @@ Script-tested, never by a person. Script what can be into `ci/`.
   simulated input: `ci/allowance_notify_test.sh` (B1). Left: with a person
   (real keyboard), and a website session. The X server's idle time now
   comes before the session bus's (the user's own: an answer there saying
-  "idle" stopped use being counted). Still open (found in review): "screen
-  locked" is asked only on the session bus (`GetActive`), so a program
-  holding `org.cinnamon.ScreenSaver` that says "locked" stops allowance use
-  being counted; check the lock another way (logind `LockedHint`?).
+  "idle" stopped use being counted). "Screen locked" was asked only on the
+  session bus (`GetActive`), so a program holding `org.cinnamon.ScreenSaver`
+  that said "locked" stopped allowance use being counted: fixed 2026-11-21,
+  the lock now comes from logind's `LockedHint` (`lockedByLogind`,
+  `TestScreenLockedByLogind`); the session bus isn't asked. Unchecked:
+  that cinnamon-screensaver sets `LockedHint` on the desktop (Needs: box,
+  `loginctl show-session <id> -p LockedHint` with the screen locked; if it
+  doesn't, a locked screen counts as there until idle, 3 min).
+  2026-11-21: `ci/lockedhint_check.sh` (box: run as yourself from a
+  terminal on the Cinnamon desktop) locks the screen, reads `LockedHint`
+  for your x11/wayland sessions, waits for you to unlock and prints
+  PASS/FAIL per check (no while unlocked, yes while locked, no again).
+  Script written, never run (tried here only against fake `loginctl` and
+  `cinnamon-screensaver-command`: both outcomes reported right).
 - [x] `B9` Mute and dark on real sites; polite close with a real app.
   Checked 2026-11-20, desktop (Mint 22.3, LibreWolf 159, devmaster),
   a throwaway block (lists by url, block action off). Mute (youtube.com):
@@ -1222,12 +1223,12 @@ Only items not simply Built.
 
 | Item | Status | Notes |
 |---|---|---|
-| §3.1 File URL entries | Partial | built: with tamper `file-urls` on, blacklist `file:///…` entries go into Firefox/LibreWolf and Chrome policies unless the block's file exceptions spare them (checked live in LibreWolf); Chrome live: Unchecked; the extension doesn't judge file pages |
-| §3.2 Block preset | Built | your own saved blocks: `template save B T`, `template`, `template remove T`, `block create X --template T` (names: E2); GUI ⋯ "Save as block preset…" and a choice in New block; Presets page; projects (always: E1). None shipped |
-| §3.2 Affected users | Partial | `block users B all|USER…` (GUI "Users:" button, gui-state `users`/`accounts`, projects): a block for some accounts stays out of hosts/firewall/policies (shared by every account) unless it covers them all; its lists reach only those users' extensions (`BuildRulesFor`, user from the socket uid) and its apps are closed only in their processes (`KillBlockedFor`). Fewer users weakens. Not per user yet: window titles, folders, fetch tools, the extension guard. Live: one account on the laptop, so only "every account" checked |
-| §3.3 Continuous/automated types | Partial | type follows the block's windows/place rules (no explicit type field); schedules and allowance sessions lift, never switch |
-| §3.4 Range lock | Partial | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked. GUI: block start dialog and the setting lock dialogs |
-| §3.4 Layered sequential locks | Partial | blocks and setting locks built (CLI flag order); GUI start and setting lock dialogs ask the order (Up/Down); several of one kind on blocks (any kind, also with re-lock and from hotkeys); `extend` for timer locks; block re-lock brings back the whole configuration; setting locks one per kind, their re-lock text/password only |
+| §3.1 File URL entries | Built | built: with tamper `file-urls` on, blacklist `file:///…` entries go into Firefox/LibreWolf and Chrome policies unless the block's file exceptions spare them (checked live in LibreWolf). Chrome live 2026-11-21 (cloud container, Chrome 158.0.8127.36, daemon as root): Chrome reads a policy path as a plain prefix and `*` in it literally, so `file:///…/games/*` in URLBlocklist had never blocked anything (Chrome for Testing 153 with a test policy: `…/d1/*` loaded, `…/d2/`, `…/d3` and an exact file were refused; `file:///*` loaded, `file:///` and `file://*` refused); only the extension caught the page. Fixed: Chromium-family policies get the entry without its trailing `*` (`chromiumFilePatterns`, `TestFilePatterns`); then `games/game.html` was refused by Chrome itself (`ERR_BLOCKED_BY_ADMINISTRATOR`), `notes/ok.html` opened, a file exception `file:///…/games/*` took the entry out of the policy and the page opened, and with `file-urls` off every file opened. The extension's block page named the title for a file taken by its address (Chrome sends no request event for files, so `blockTitledTab` judges both); fixed, extension 1.34.0 (`ci/background_test.js`), seen live: no `reason=title` for the address, `reason=title` for a file whose title had the blocked word. The extension judges file pages too (2026-11-21, SPEC §6): rules `file_pages`, `files`, `except.files` (`withFilePages`); `kc9kFileMatch`, `kc9kJudgedAddress`; by address, title and text (`ci/match_test.js`, `TestRulesFilePages`, a real `file://` page in Chromium in `ci/content_harness_test.js`). In LibreWolf: Unchecked (Needs: box). Chrome runs no content script on files unless the user allows it (no policy for that): there only the address and title (background) |
+| §3.2 Block preset | Built | your own saved blocks: `block-preset save B P`, `block-preset`, `block-preset remove P`, `block create X --preset P` (old names `template`, `--template` kept as aliases); GUI ⋯ "Save as block preset…" and a choice in New block; Presets page; projects (a choice, always in a backup). None shipped |
+| §3.2 Affected users | Built | `block users B all|USER…` (GUI "Users:" button, gui-state `users`/`accounts`, projects): a block for some accounts stays out of hosts/firewall/policies (shared by every account) unless it covers them all; its lists reach only those users' extensions (`BuildRulesFor`, user from the socket uid) and its apps are closed only in their processes (`KillBlockedFor`), its window titles and folder entries judge only their windows (`TitlesByUser`, Xvfb-tested), its sites close only their fetch tools (`KillNamingFor`), and the extension guard closes only their browsers unless something needs it everywhere (`extensionUsers`, 2026-11-21). Fewer users weakens. The GUI's "isn't running" dialog asks for its own account (`ExtensionRequiredNowFor`, `callerUID`: sudo's user; its browsers only), though browsers' check-ins are kept per browser, not per account. Live: one account on the laptop, so only "every account" checked (Unchecked; Needs: a second account on the test machine) |
+| §3.3 Continuous/automated types | Built | the type follows the block's windows and place rules (SPEC defines it so; no field to set), in a mode its mode's (the mode's automation is written into its blocks); breaks, allowance sessions and schedules lift, never switch; gui-state `continuous`, the card's "Continuous block"/"Automated block". `TestBlockTypeContinuousOrAutomated` (2026-11-21) |
+| §3.4 Range lock | Built | blocks (`start --range "mon-fri 09:00-17:00" [--range-invert]`) and setting locks (browser settings, tamper, strict, bypass, freeze schedules: `--range`); a layer that holds while in range and can't be unlocked; several stack (2026-11-21, also given twice in one command). GUI: block start dialog and the setting lock dialogs |
+| §3.4 Layered sequential locks | Built | blocks and setting locks (CLI flag order); GUI start and setting lock dialogs ask the order (Up/Down); several of one kind on blocks and settings (any kind, also with re-lock and from hotkeys; a flag given twice in one command is two locks, 2026-11-21); `extend` for timer locks; re-lock brings back the whole configuration on blocks and settings (SPEC §4.6 *(By Opus)*). The GUI flow on a real screen: Unchecked (`2.5`) |
 | §3.6 Break per block window | Built | `schedule break B N 10m|off`: one break each time window N is open (`break start` takes it, then reward); new/longer weakens; GUI window editor; projects |
 | §3.6 Allowance | Built | per day, week or month with a refill time (`allowance set B 5h --per week --refill 04:00`, GUI, projects). and rolling 24 hours (`--per rolling`, hourly buckets), and per window (`--per window`: each opening of a block window is a period, `enforce.QuotaPeriod`; outside windows nothing refills; an overnight span is two windows, so two periods) |
 | §3.6 Reward | Built | `break reward B 10m --per 1h --keep one|window|day|week|month|<time ≥ 1h>` (default one; a time keeps each part that long after it is earned, no upper limit, 2026-11-16; the 1-day cap on what is saved is gone, so is the 4 h cap on one break taken from it), GUI choice with a duration field, projects; longer keep, or period ↔ time, weakens. Ending a break early used to give back at most one break's worth also for an accumulating reward: fixed |
@@ -1236,22 +1237,22 @@ Only items not simply Built.
 | §3.6 Autostart | Built | `kc9k autostart B add once DATE HH:MM / at HH:MM [DAYS] / sign-in / next-window`, GUI list, projects; removing weakens. `at` checked live; sign-in/wake: Unchecked |
 | §3.7 Strict use counting | Built | `kc9k use-counting strict|normal`, GUI switch; every open tab (`rules.strict_use`) and running apps (`RunningApps`) count; normal weakens. Live: Unchecked |
 | §3.8 Scheduled freeze lock kinds beyond lead | Built | `freeze schedule lock N --for/--lock/--password-stdin/--restart [--relock]`, `freeze schedule unlock N`; setting lock `freeze:<id>`; removal refused while on; counts as a lock. GUI (2026-11-17): Lock…/Unlock… for the schedule picked in the list (every kind, unlock order, confirmed; a password asked; a text lock in a terminal), the list says "locked (timer, password)" (gui-state `freeze_schedule_locks`); `ci/gui_freeze_lock_smoke.py` |
-| §3.8 Allowed apps only | Partial | freeze mode `apps` (`freeze --mode apps`, schedules too, GUI choice), list `kc9k freeze apps add|remove`; closes every regular-user process but allowed apps, their children and system/desktop helpers (`allowedAppKeep`, unit-tested). GUI list editor on the Frozen Chicken page. Live: never run (no freeze overnight) |
+| §3.8 Allowed apps only | Built | freeze mode `apps` (`freeze --mode apps`, schedules too, GUI choice), list `kc9k freeze apps add|remove`; closes every regular-user process but allowed apps, their children and system/desktop helpers (`allowedAppKeep`; 2026-11-21: which processes on a made-up tree, `TestAppsToClose`, `TestCloseAllExcept`; the daemon by mode, `TestEnforceFreezeByMode`); a running lock/logout/shutdown freeze can't be extended into it (SPEC §4.8 *(By Opus)*, `TestFreezeExtendKeepsStrongerMode`, `TestScheduledAppsFreezeKeepsRunningLock`). GUI list editor on the Frozen Chicken page. Live: Unchecked (vm: an apps freeze with an allowed app and its children, everything else closed; B2) |
 | §5 R-LOCK-12 | Partial | see 0.1 |
 | §3.8 Strict mode exempt folders | Built | `kc9k strict exempt add|remove DIR`, GUI list; exec bind mounts over the noexec folders (`noexecPlan`); adding weakens. Not in projects (import never weakens). Live: Unchecked (strict mode not run overnight) |
 | §3.8 Forgotten password recovery | Built | `kc9k-bin recover` (root, recovery boot, not with no-escape): settings password and password locks (`--access`: access passwords). Live: Unchecked (needs a recovery boot) |
-| §3.8 Factory reset protection | Partial | installer media guard built (`reset-guard on|off`, GUI switch under device protection): while anything is locked an in-memory block (`enforce/resetguard.go`) blocks OS image and USB writer download pages and closes image writers and Disks; checked live (hosts follow the lock). Firmware lock, PAM root guard, guided setup: Not built (2.6) |
-| §5 R-LIST-4/5 | Partial | case, accents and common Cyrillic/Greek look-alikes folded (`kc9kFold`). R-LIST-4 checked in Chromium (2026-11-17, `ci/content_harness_test.js`): hidden (`display:none`, closed `<details>`, `visibility:hidden`) text isn't read, text far down is. Frames were never judged by their text (the content script read the top frame only, whose text holds none of its frames'): now each frame judges its own (`scanFrame`); what would take a page away gives that frame the block page (background `frameHit` decides from its own rules; no events, R-EVENT-1), its looks show in the frame; extension 1.25.0. Frames in LibreWolf: Unchecked |
-| §3.9 Ad trigger | Partial | scope `ads` on blacklists and clusters (`list create --ads`, `list where B L ads on`, GUI "Ads" box): entries are ad network domains or industries (`db.AdIndustries`: adult, crypto, dating, gambling); rules `ads`; the extension watches each tab's third-party requests (`noteAdRequest`) and a page loading a listed network matches with every action (`kc9kAdMatches`, unit-tested). Not in shared layers. Browser test: Not run (the owner was using the laptop; the browser test changes LibreWolf settings and would close their windows) |
+| §3.8 Factory reset protection | Built | installer media guard (`reset-guard on|off`, GUI switch under device protection): while anything is locked an in-memory block (`enforce/resetguard.go`) blocks OS image and USB writer download pages and closes image writers and Disks; checked live (hosts follow the lock). Firmware lock (`firmware-lock on|off`, GUI Firmware lock…; 2026-11-21) tested on generated firmware-attributes trees only: on real firmware Unchecked (`2.6`) |
+| §5 R-LIST-4/5 | Built | case, accents and look-alikes folded (`kc9kFold`; 2026-11-21: also capitals by their own look, small capitals, Armenian, fullwidth/mathematical/circled letters, ligatures, and zero-width characters and soft hyphens inside words; extension 1.28.0, `ci/match_test.js`). R-LIST-4 checked in Chromium (2026-11-17, `ci/content_harness_test.js`): hidden (`display:none`, closed `<details>`, `visibility:hidden`) text isn't read, text far down is. Frames were never judged by their text (the content script read the top frame only, whose text holds none of its frames'): now each frame judges its own (`scanFrame`); what would take a page away gives that frame the block page (background `frameHit` decides from its own rules; no events, R-EVENT-1), its looks show in the frame; extension 1.25.0. Checked in Chromium (2026-11-21, `ci/content_harness_test.js`): a frame's hidden text isn't read, a frame inside a frame is judged alone (the frame around it and the page stay), look-alikes in a frame are read; `frameHit` edge cases (looks alone, actions the list hasn't, test mode, the top frame, non-web addresses) in `ci/background_test.js`. Frames in LibreWolf: Unchecked (Needs: box) |
+| §3.9 Ad trigger | Built | scope `ads` on blacklists and clusters (`list create --ads`, `list where B L ads on`, GUI "Ads" box): entries are ad network domains or industries (`db.AdIndustries`: adult, crypto, dating, gambling); rules `ads`; the extension watches each tab's third-party requests (`noteAdRequest`) and a page loading a listed network matches with every action (`kc9kAdMatches`, unit-tested). Not in shared layers. 2026-11-21: URL-term exceptions spare a page from it too (they didn't); a list whose block has exceptions by title or text is judged with the page (`kc9kAdsByPage`: the content script's resource timing, `page.adHosts`), so those exceptions hold (R-LIST-1). Edge cases unit-tested (`ci/match_test.js`, `ci/background_test.js`: hosts with capitals or a final dot, test mode, no actions, first-party, non-web pages, once per page) and in Chromium (`ci/content_harness_test.js`); extension 1.30.0. Browser test: Not run (the owner was using the laptop; the browser test changes LibreWolf settings and would close their windows) |
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
-| §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--cluster C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Presets page (list presets) "Record words" with cut % and the most specific words |
-| §4.10 SafeSearch | Partial | Google, Bing, DuckDuckGo, YouTube Restricted pinned in hosts (every browser) and `rules.safesearch` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked); one setting for all, not one lock each |
-| §4.10 Tamper settings | Partial | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Not built as settings: guest profiles (Chrome guest mode is always off by policy), extension stop (the guard always does it), installer (dpkg prerm refuses removal while locked; install.sh reinstall not guarded), inactive tabs, embedded content (frames always get the block page) |
+| §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--preset C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Presets page (list presets) "Record words" with cut % and the most specific words |
+| §4.10 SafeSearch | Built | a browser setting per engine (`safesearch-google`, `-bing`, `-duckduckgo`, `-youtube`), each its own lock; `browser safesearch` switches all four. Pinned in hosts (every browser) per engine, `safesearch_engines` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked: with Google's, Bing's or DuckDuckGo's, SPEC §4.10 *(By Opus)*, §5 decided 2026-11-21). Checked live in Chrome 2026-11-21 (`2.4`); in LibreWolf: Unchecked |
+| §4.10 Tamper settings | Built | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Built 2026-11-21 (SPEC §4.10 *(By Opus)*): `tamper guest` (guest browsing off in every Chromium-family policy, LightDM guest session off), `extension-stop`, `inactive-tabs`, `embedded` (on until turned off: what KC9K always did), `installer` (`prepare-install` from `make install`/`install.sh` and the `.deb`'s prerm for a reinstall or older version; removal always refused). `TestTamperGuestExtensionInstallerTabsEmbedded`, `TestSyncGuestOff`, `ci/tamper_tabs_test.js`, GUI tamper window. Live (2026-11-21, `2.9`): guest windows in Brave/Edge/Vivaldi, a background tab and an embedded frame in Chrome: Built; with `embedded` off the browser policies hold only whole sites (SPEC §6 *(By Opus)*). Unchecked (box: the background tab and embedded frame in LibreWolf; vm: the LightDM guest session, `dpkg -i` of the same version and `install.sh` refused during a lock) |
 | §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
-| §4.10 Device protection: factory reset protection, guided setup | Not built | 2.6 |
+| §4.10 Device protection: factory reset protection, guided setup | Built | 2026-11-21: firmware lock, guided setup (`kc9k guided-setup [--json]`, GUI Guided setup… with Do it…, `ci/gui_settings_smoke.py`), strict mode's PAM root guard (`login`, `su`, `su-l`, tested on generated files only). Live: Unchecked (`2.6`) |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Built | `make deb` (`packaging/build-deb.sh`): same paths as install.sh; postinst sets up sudoers, database folder, service; prerm runs prepare-uninstall, so removal is refused while locked (checked live); postrm removes sudoers. Installed on the laptop as 0.9.0~overnight (devmaster) |
-| §4.3 Draft Save/Cancel | Partial | `block draft B [save|cancel]`; GUI: an opened block is always a draft, made at the first change of the Websites or Apps tab, with Save edits/Cancel (§5 DECIDED 2026-11-17): a copy of the lists, phrase sets, apps and window titles that never runs; save applies each difference through its gate, refusing and naming weakening ones on a locked block; needs and keeps the block password; drafts stay out of the block list and projects. Not drafted (so not as SPEC §4.3 says): the Breaks & allowance and Bypass prevention tabs, which apply at once with their own buttons; on a draft those commands are refused (`draftRefused`) |
+| §4.3 Draft Save/Cancel | Built | `block draft B [save|cancel]`; GUI: an opened block is always a draft, made at the first change of the Websites or Apps tab, with Save edits/Cancel (§5 DECIDED 2026-11-17): a copy of the lists, phrase sets, apps and window titles that never runs; save applies each difference through its gate, refusing and naming weakening ones on a locked block; needs and keeps the block password; drafts stay out of the block list and projects. The Breaks & allowance and Bypass prevention tabs are drafted too (2026-11-21, SPEC §6): their commands on a draft are kept (`draftQueued`, `keepOnDraft`; the last of each kind), shown in the tab ("Not saved yet", gui-state `draft_kept`) and run at save through their own gates (`runQueued`); taking a break or an allowance session, the automation and affected users still apply at once (`draftRefused`). `TestDraftKeepsBreaksAndBypass`, the weakening audit, `ci/gui_lists_smoke.py`. On a real screen: Unchecked (Needs: box) |
 | §4.3 Ctrl+F, multi-select, double-click edit | Built | `EditableList`: Ctrl+F to its search, Ctrl/Shift-click and Ctrl+A in website lists, phrase sets, apps, titles, clusters, exempt folders; Delete/Backspace removes, selection moves on; double-click moves an entry into the box |
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters; Whole internet (`*.*`, asked first) and All searches containing… (the words as rendered terms, the list's URL scope on: a search's words are in its address, R-PHRASE-6; any other address with the word matches too, and the dialog says so) (2026-11-17, `ci/gui_import_smoke.py`) |
 | §4.5 Grid drag-move, copy to days, similar windows | Built | drag a window to move it (time; day for one-day windows); click to edit days (copy to days), times, its break, or remove; a window on several days is edited as one; other blocks' windows greyed |
@@ -1286,16 +1287,59 @@ Only items not simply Built.
   System-following dark pages rely on `prefers-color-scheme`, which
   LibreWolf reports as light. In project files with its wallpapers
   (`cli/projectcircadian.go`; import only where none is set).
-- **2.2 Ad trigger** (M): built (scope `ads`). Browser test built
+- **2.2 Ad trigger** (M): built (scope `ads`). Industry lists grown
+  2026-11-20 (adult: TrafficHaus, TrafficShop, ClickAdilla; crypto: Mellow
+  Ads, Blockchain-Ads, HypeLab; `TestAdIndustries`). Checked against real
+  ad requests 2026-11-21 (cloud container, Chrome 158.0.8127.36; SPEC §6
+  *(By Opus)*): every domain against EasyList (with its ad-server and
+  adult lists), AdGuard DNS, Peter Lowe's and StevenBlack's lists, and a
+  crawl of 60 real pages (crypto, gambling and adult publishers, the last
+  also where dating ads run; third-party request hosts only, matched as
+  `kc9kAdHost` does). Seen in
+  real pages' requests: ExoClick (`ads.exoclick.com`, `a.magsrv.com`,
+  `a.pemsrv.com`, `a.orbsrv.com`), TrafficStars (`cdn.tsyndicate.com`),
+  TwinRed (`twinrdengine.com`), `sexad.net`, `adspector.io`, Coinzilla
+  (`cdn.coinzilla.com`, `coinzillatag.com`, `czilladx.com`). Added the
+  serving domains seen and listed (`pemsrv.com`, `orbsrv.com`,
+  `twinrdengine.com`, `sexad.net`, `adspector.io`, `coinzillatag.com`,
+  `czilladx.com`; `TestAdIndustriesSeenLive`). Removed what no list names
+  and no page loaded: affiliate platforms whose tracking runs on the
+  operator's own domains (`income-access.com`, `cellxpert.com`,
+  `referon.com`, `raventrack.com`, `crakrevenue.com`), a game maker
+  (`playtech.com`), `affiliatehub.com` (doesn't resolve),
+  `quintessence.media`, `gamblingads.com`, `betpartners.com`,
+  `adex.network`, `datingpartners.com`, `datingfactory.net`. Gambling and
+  dating keep only list-named domains (`netrefer.com`, `myaffiliates.com`,
+  `gambling-affiliation.com`; `adultfriendfinder.com`, `sexsearchcom.com`):
+  no page in the crawl loaded them. Gambling sites' own ads came through
+  general exchanges (Google, Xandr, Flashtalking, Bannerflow), which no
+  industry can name. Many adult and some crypto sites showed an age or bot
+  check to the container and loaded nothing. Browser test built
   2026-11-20, desktop (Mint 22.3, LibreWolf headless, devmaster install of
   d3a7b1b): `ci/extras_test.py`, block `extraads`, a list `--ads` with
   `kcnine-ads.test` and one with industry `crypto`; pages load a picture
   from `cdn.kcnine-ads.test` / `cdn.coinzilla.com` (resolved to the test
   server): both blocked, the block page naming the list; a page loading
   from another site opens; with the block off it opens. Suite run alone:
-  33/33 pass (4 new). Left: growing the shipped industry lists.
-- **2.4 SafeSearch** (S): Bing, DuckDuckGo, YouTube Restricted built under
-  the one `safesearch` setting. Left: a lock per engine (owner 2026-11-18: wanted; SPEC §6).
+  33/33 pass (4 new).
+  Left: gambling and dating domains seen live.
+- **2.4 SafeSearch** (S): a lock per engine built 2026-11-20 (SPEC §6
+  2026-11-18): four browser settings, the old one and its lock moved to
+  each (`TestMigrateSafeSearch`, `TestSafeSearchPerEngine`,
+  `ci/match_test.js`, `ci/gui_settings_smoke.py`). Built in Chrome
+  (2026-11-21, cloud container, Chrome 158.0.8127.36, the daemon running
+  as root, real `/etc/hosts` and policies): each engine on alone, then all
+  four (`browser safesearch on`), then off. Each alone made only its own
+  searches strict: Google got `safe=active` and connected to
+  forcesafesearch's 216.239.38.120 (the results page itself is Google's
+  CAPTCHA for the container's address); Bing got `adlt=strict` and
+  strict.bing.com's address; DuckDuckGo went to `safe.duckduckgo.com` with
+  `kp=1` and the page's own `settings_url_params={"kp":1}`; YouTube said
+  "Restricted Mode is enabled by your network administrator". The other
+  three stayed as with all off. The hosts section held only the engines on
+  (Google 4 names, Bing 2, DuckDuckGo 2, YouTube 6) and was gone with all
+  off; it is written by the daemon's next tick (about 30 s), not by the
+  command. Unchecked (box): the same in LibreWolf.
 - **2.5 Layered sequential locks** (M): blocks and setting locks done (stored
   order, `unlock` lifts only the first, status and GUI show the order).
   Several locks of one kind on a block built 2026-11-20 (owner: a second
@@ -1307,29 +1351,83 @@ Only items not simply Built.
   `kc9k extend B --for|--until`, GUI Extend timer… (`TestExtendTimerLock`,
   `ci/gui_extend_smoke.py`). A block's re-lock brings back its whole lock
   configuration in its order (`LockExtras.Config`,
-  `TestRelockWholeConfiguration`), with any lock. Left: several of one
-  kind given in one `start` (flags repeat: last wins) and on setting locks;
-  setting locks' re-lock still lifts only their text/password locks; a
-  person checking the GUI's Add locks…, Extend timer… and unlock flow on
-  the laptop.
-- **2.6 Factory reset protection** (M): firmware lock via
-  `/sys/class/firmware-attributes/` (password given to a trusted person,
-  no USB/network boot, fixed order); installer media guard (block OS image
-  sites, close mintstick, balenaEtcher, Ventoy, Popsicle, Startup Disk
-  Creator, GNOME Disks restore); PAM root guard in `login`, `su`, `su-l`
-  via `ApplyLockdown`/`RemoveLockdown` (test on generated config); guided
-  setup checklist for strict/no-escape.
+  `TestRelockWholeConfiguration`), with any lock. Built 2026-11-21 (SPEC
+  §4.6 *(By Opus)*): a lock flag given twice is two locks (`lockSpecs`,
+  `splitSpecs`; `TestSeveralOfOneKindInOneStart`, hotkeys keep them,
+  `TestHotkeyKeepsRepeatedLockFlags`); setting locks stack
+  (`SettingLock.Queue`, `TestSettingLocksStack`) and re-lock their whole
+  configuration (`SettingLock.Config`, `TestSettingRelockWholeConfiguration`).
+  Left (owner/box): a person checking the GUI's Add locks…, Extend timer…
+  and unlock flow on the laptop.
+- **2.6 Factory reset protection** (M): code built 2026-11-21. Firmware
+  lock via `/sys/class/firmware-attributes/` (`firmware-lock on|off`:
+  USB/network boot and the one-time boot menu off, boot order lock on,
+  then the password a trusted person types; SPEC §4.10 *(By Opus)*):
+  `TestFirmwareLockOnFakeFirmware`, `TestFirmwarePurposeNames`,
+  `TestFirmwareLockCommand`. Installer media guard: built earlier. PAM
+  root guard in `login`, `su`, `su-l` via `ApplyLockdown`/`RemoveLockdown`:
+  `TestApplyRemovePAMGuardOnGeneratedFiles`, `TestGuardPAMConfigPlacement`
+  (generated Mint/Ubuntu files, never the real `/etc/pam.d`). Guided setup:
+  `TestGuidedSetup`, GUI in `ci/gui_settings_smoke.py`. Unchecked (vm):
+  during a strict lock in the VM, `su -` and a root login on a text console
+  are refused, the user's own `su` to another account works, and all of it
+  comes back when the lock ends or with `kc9k.nofreeze`: 2026-11-21
+  `ci/strict_pam_vm_test.sh host kc9k-vm` checks all of it (snapshot
+  `clean` before and after; root login through the `login` PAM service on
+  a pseudo-terminal; refused means before a password is asked), script
+  written, never run (its terminal driver was tried in a container with
+  the guard lines added by hand: refused and allowed as expected). Unchecked (owner,
+  real hardware): the firmware lock on a Dell, Lenovo or HP computer (the
+  VM has no firmware-attributes; vendors' names and how each driver clears
+  a password are untried).
 - **2.7 Hardening** (M each): sudo rule arguments audited 2026-11-15: caller
   paths are read as the caller (`readAsCaller`), direct reads only of
   KC9K's own files, writes only into KC9K's folders under hash names;
-  `audit_test.go` keeps it so (`env_reset` untouched). Left: rules server
-  secret by policy (not rolled out overnight: if the extension can't read
-  it, every check-in fails and the guard closes browsers; the policy files
-  are user-readable anyway; for the owner, §5); GTK window for the text
-  lock's challenge (a stdin answer would let scripts type it; decided
-  2026-11-20: the command opens the window and reads the keys itself,
-  SPEC §4.6, §5).
+  `audit_test.go` keeps it so (`env_reset` untouched). Rules server
+  secret: dropped 2026-11-21 (By Opus, §5, SPEC §6); instead every
+  address the server answers is held to its guards (own host name, the
+  extension's header on posts, no CORS answer, nothing read before a
+  refusal) by `TestRulesServerGuardsEveryRoute` (`rulesRoutes`). GTK window for the text
+  lock's challenge: built 2026-11-20 (SPEC §4.6, §5 decision): without a
+  terminal the command opens its own window as the signed-in user and
+  reads the keys itself; stdin is never read for it; the GUI's Unlock runs
+  the command, no terminal. Checked on Xvfb with xdotool
+  (`TestChallengeWindowOnX`: human pace passes; a burst, Ctrl+V, Escape,
+  keys sent to an unfocused window don't). On the owner's real desktop
+  (Mint, Cinnamon: the window opens from the GUI under sudo, keeps focus,
+  a real keyboard): Unchecked.
 - **2.8** Everything else Not built/Partial in §1.
+- **2.9 Tamper settings live** (S): built 2026-11-21 (§1 *§4.10 Tamper
+  settings*). Built in Chrome-family browsers (2026-11-21, cloud container,
+  Chrome 158.0.8127.36, daemon as root, real policies): `guest` on, each
+  started with `--guest` opened its Default profile, off its Guest profile
+  (Brave 1.100.58, Edge 158.0.4370.33, Vivaldi 8.3.4191.47).
+  `inactive-tabs`: on (default), a background tab on example.com got the
+  block page within 15 s of `kc9k start`; off, it kept example.com for 40 s
+  and got the block page the moment it was switched to (from the extension
+  and from outside, DevTools protocol). `embedded`: a local page embedding
+  a Vimeo video whose path (`player.vimeo.com/video/…`) was blacklisted;
+  on, the frame was blocked; off, it still showed Chrome's "Your
+  organization doesn't allow you to view this site": the policy's
+  URLBlocklist blocks frames too. Fixed (SPEC §6 2026-11-21 *(By Opus)*):
+  with `embedded` off the browser policies hold only whole sites
+  (`TestEmbeddedOffKeepsPatternsOutOfPolicy`); then the video played
+  (time 9.99 → 12.99 s), the same address opened as a page got the block
+  page, and turning `embedded` on blocked the frame again. Unchecked (box):
+  `inactive-tabs` and `embedded` in LibreWolf (its WebsiteFilter gets the
+  same change). Unchecked (vm): the LightDM guest session gone after a restart
+  with `guest` on; during a lock with `installer` on, `sudo dpkg -i` of the
+  same `.deb` and `sudo ./install.sh` are refused and a newer `.deb`
+  installs. 2026-11-21: `ci/tamper_vm_test.sh host kc9k-vm` checks these
+  VM parts (also an older `.deb` refused, the same one installing again
+  after the lock), script written, never run. Found writing it, fixed
+  2026-11-21: when the installed package's prerm refused, dpkg asked the
+  incoming package's prerm (`failed-upgrade`), which let the same or an
+  older version install anyway; it now refuses too
+  (`packaging/build-deb.sh`; checked in a container with the real `.deb`s
+  and a refusing stub binary: same and older refused, nothing unpacked;
+  newer installs; same again once unrefused). A `.deb` built before the fix
+  still gets in that way.
 
 ## 3. Testers and Android (owner 2026-11-18)
 
@@ -1346,8 +1444,40 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
 
 ## 5. Proposed, not agreed
 
+- DECIDED 2026-11-21 (By Opus; SPEC §4.6, §6): setting locks stack like a
+  block's, as proposed below; built (`2.5`).
+  PROPOSED 2026-11-20 (session, `2.8`, §1 "Layered sequential locks"):
+  SPEC §4.6 and §6 2026-11-20 say a lock of a kind a *block* already has is
+  added as a second lock, last, and that stacking has no exceptions; they
+  don't say whether setting locks (browser, tamper, strict, bypass, freeze
+  schedules) stack too. Built: one lock per kind on a setting, and a new
+  one strengthens it (timer extended, challenge lengthened). Proposed: the
+  same as blocks (a queue on `setting_locks`, as `LockExtras.Queue`),
+  because a setting lock is "a lock" in §3.4's sense and the owner's
+  examples (two partners' passwords) fit settings as well. Not built until
+  the owner agrees.
+
+- DECIDED 2026-11-21 (By Opus; SPEC §4.10, §6): keep what was built: the
+  other engines go with any of Google's, Bing's or DuckDuckGo's SafeSearch,
+  not YouTube's, and get no setting of their own. Why: each of them is a
+  way around whichever engine is kept strict, so a setting of their own
+  could only open that hole; tied to Google's alone they would be open
+  while only Bing's or DuckDuckGo's is on; YouTube Restricted Mode is about
+  video, not search. Nothing to build: the GUI (under Google's setting)
+  and `kc9k browser --help` already say it.
+  PROPOSED 2026-11-20 (session, building `2.4`): SPEC §4.10 and §6
+  2026-11-18 name four engines with their own SafeSearch setting and are
+  silent on the rest: Brave, Yahoo and SearXNG (kept strict from the
+  address) and the engines that can't be kept strict (Startpage, Ecosia,
+  Mojeek, Yandex, Marginalia: blocked). Built meanwhile: they go with any of
+  Google's, Bing's or DuckDuckGo's SafeSearch (not YouTube's), because
+  with one search engine kept strict the others are the way around it, and
+  YouTube Restricted Mode alone shouldn't block search engines. Owner: keep
+  this, give them a setting of their own, or tie them to Google's only?
+
 - DECIDED 2026-11-17 (session; the owner asked that a block always be a
-  draft until Save edits): the draft holds what the Websites and Apps tabs
+  draft until Save edits; extended 2026-11-21 (By Opus), SPEC §6: the
+  Breaks & allowance and Bypass prevention tabs are drafted now too): the draft holds what the Websites and Apps tabs
   show (lists, phrase sets, social media settings, test mode, apps, window
   titles and their actions); the block's menu (Start, Stop, Unlock,
   Automation) and the Breaks & allowance and Bypass prevention tabs still
@@ -1429,7 +1559,19 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   on stdin would let any script do the same. Today a non-terminal stdin
   is read as one line (`runChallengeLine`, `internal/lock/lock.go`): that
   path goes too (tests keep a faked seam). SPEC §4.6 now has it.
-- FOR THE OWNER: the rules server secret (`2.7`; SPEC §6 2026-11-14, its
+- DECIDED 2026-11-21 (By Opus; SPEC §6; the owner asked for a decision):
+  drop the secret. Why: it can't keep local programs out (the policy files
+  carrying it are readable by every program the user runs, and the lists
+  are in `/etc/hosts` and the policy files anyway), and an extension that
+  can't read it fails every check-in, so the guard would close browsers:
+  a real risk for no protection. What it was meant to stop is stopped
+  without it, as below; built 2026-11-21: `rulesRoutes` lists every address
+  the server answers and `TestRulesServerGuardsEveryRoute` holds each to
+  the guards (rebound host name refused, posts without the extension's
+  header refused, CORS preflight refused, no CORS header, nothing read
+  before a refusal), so a new address can't forget one. No change to what
+  the extension sends: check-ins can't fail because of it.
+  Was: FOR THE OWNER: the rules server secret (`2.7`; SPEC §6 2026-11-14, its
   purpose as first written: "so other local programs can't read the
   lists, post statistics or fake a check-in"). As designed it can't do
   that: browsers run as the user, so the policy files that would carry the
@@ -1473,4 +1615,8 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
   Proposed: while a freeze runs, a mode only changes to a stronger one
   (allowed apps only < lock screen < logout < shutdown); a weaker one is
   refused (`refused()`, not a bypass), and an extension that names none
-  keeps the running mode.
+  keeps the running mode. Partly decided since (SPEC §4.8 *(By Opus)*,
+  built as `freeze.ExtendMode` by the cloud session 2026-11-21): a running
+  lock, logout or shutdown freeze never becomes allowed apps only, which
+  closes the case seen. Still open: other weaker changes (shutdown →
+  logout → lock screen); not rechecked in the VM.

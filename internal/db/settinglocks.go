@@ -1,4 +1,5 @@
-// settinglocks.go — locks on single browser settings.
+// settinglocks.go — locks on single settings (browser settings, tamper,
+// strict mode, bypass prevention, freeze schedules).
 //
 // A browser setting (SafeSearch, web-only, ...) can be locked on its own,
 // independently of any block: with a time lock, the typing challenge, a
@@ -10,6 +11,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 const settingLocksSchema = `CREATE TABLE IF NOT EXISTS setting_locks (
@@ -44,6 +46,11 @@ type SettingLock struct {
 	RangeFrom   int
 	RangeTo     int
 	RangeInvert bool
+	// Several locks of one kind and re-lock of the whole configuration
+	// (§3.4), as LockExtras.Queue and Config: a setting's locks stack like
+	// a block's (§6 2026-11-21 By Opus).
+	Queue  []QueuedLock
+	Config []QueuedLock
 }
 
 // asBlock views a setting lock as a block's locks, so layers.go judges both.
@@ -51,7 +58,8 @@ func (l SettingLock) asBlock() (*BlockDetail, LockExtras) {
 	return &BlockDetail{Name: l.Name, Active: true, Locked: l.LockChars > 0, LockChars: l.LockChars, LockedUntil: l.LockedUntil},
 		LockExtras{PasswordHash: l.PasswordHash, RestartBoot: l.RestartBoot, Style: l.Style, Relock: l.Relock,
 			LiftedUntil: l.LiftedUntil, Order: l.Order, TimerAfter: l.TimerAfter, LiftedKinds: l.LiftedKinds,
-			RangeDays: l.RangeDays, RangeFrom: l.RangeFrom, RangeTo: l.RangeTo, RangeInvert: l.RangeInvert}
+			RangeDays: l.RangeDays, RangeFrom: l.RangeFrom, RangeTo: l.RangeTo, RangeInvert: l.RangeInvert,
+			Queue: l.Queue, Config: l.Config}
 }
 
 // fromBlock copies back what layer code changed.
@@ -63,6 +71,34 @@ func (l *SettingLock) fromBlock(detail *BlockDetail, e LockExtras) {
 	l.PasswordHash, l.RestartBoot, l.Style, l.Relock = e.PasswordHash, e.RestartBoot, e.Style, e.Relock
 	l.LiftedUntil, l.Order, l.TimerAfter, l.LiftedKinds = e.LiftedUntil, e.Order, e.TimerAfter, e.LiftedKinds
 	l.RangeDays, l.RangeFrom, l.RangeTo, l.RangeInvert = e.RangeDays, e.RangeFrom, e.RangeTo, e.RangeInvert
+	l.Queue, l.Config = e.Queue, e.Config
+}
+
+// PlacedLayers is Layers without the queue (db.PlacedLayers).
+func (l SettingLock) PlacedLayers() []string {
+	detail, e := l.asBlock()
+	return PlacedLayers(detail, e)
+}
+
+// Snapshot is the setting's locks as they would be given again (db.Snapshot).
+func (l SettingLock) Snapshot() []QueuedLock {
+	detail, e := l.asBlock()
+	return Snapshot(detail, e)
+}
+
+// RelocksConfig reports whether re-lock brings back the whole configuration.
+func (l SettingLock) RelocksConfig() bool {
+	_, e := l.asBlock()
+	return e.relocksConfig()
+}
+
+// RelockAt is when a setting whose locks are all unlocked locks again (its
+// re-lock time is running), or 0.
+func (l SettingLock) RelockAt(trusted int64) int64 {
+	if l.Relock == 0 || l.LiftedUntil <= trusted || !l.PendingRelock(trusted) {
+		return 0
+	}
+	return l.LiftedUntil
 }
 
 // Layers returns the setting's locks in unlock order (R-LOCK-6).
@@ -109,9 +145,14 @@ func (l SettingLock) TextOrPasswordLocked(trusted int64) bool {
 	return l.LayerOn(LayerText, trusted, "") || l.LayerOn(LayerPassword, trusted, "")
 }
 
-// PendingRelock reports whether the text and password locks are all lifted
-// and will come on again by themselves.
+// PendingRelock reports whether the setting's locks are all unlocked and
+// will come on again by themselves: its whole configuration once the
+// re-lock time is over (§3.4), or, for locks set before settings kept it,
+// the lifted text and password locks.
 func (l SettingLock) PendingRelock(trusted int64) bool {
+	if l.RelocksConfig() {
+		return l.LiftedUntil != 0
+	}
 	return (l.LockChars > 0 || l.PasswordHash != "") && l.Relock > 0 && !l.TextOrPasswordLocked(trusted)
 }
 
@@ -134,14 +175,21 @@ func (l SettingLock) InForce(trusted int64, bootID string) bool {
 // GetSettingLock returns a setting's locks, or an unlocked SettingLock.
 func (d *DB) GetSettingLock(name string) (SettingLock, error) {
 	l := SettingLock{Name: name}
+	var queue, config string
 	err := d.conn.QueryRow(`SELECT locked_until, lock_chars, password, restart_boot, lock_style, relock, lifted_until,
-		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert
+		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert, lock_queue, lock_config
 		FROM setting_locks WHERE name = ?`, name).Scan(&l.LockedUntil, &l.LockChars, &l.PasswordHash, &l.RestartBoot, &l.Style, &l.Relock, &l.LiftedUntil,
-		&l.Order, &l.TimerAfter, &l.LiftedKinds, &l.RangeDays, &l.RangeFrom, &l.RangeTo, &l.RangeInvert)
+		&l.Order, &l.TimerAfter, &l.LiftedKinds, &l.RangeDays, &l.RangeFrom, &l.RangeTo, &l.RangeInvert, &queue, &config)
 	if err == sql.ErrNoRows {
 		return l, nil
 	}
 	if err != nil {
+		return l, fmt.Errorf("failed to read the lock on %s: %w", name, err)
+	}
+	if l.Queue, err = decodeQueue(queue); err != nil {
+		return l, fmt.Errorf("failed to read the lock on %s: %w", name, err)
+	}
+	if l.Config, err = decodeQueue(config); err != nil {
 		return l, fmt.Errorf("failed to read the lock on %s: %w", name, err)
 	}
 	return l, nil
@@ -150,15 +198,16 @@ func (d *DB) GetSettingLock(name string) (SettingLock, error) {
 // SetSettingLock stores a setting's locks.
 func (d *DB) SetSettingLock(l SettingLock) error {
 	_, err := d.conn.Exec(`INSERT INTO setting_locks (name, locked_until, lock_chars, password, restart_boot, lock_style, relock, lifted_until,
-			lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert, lock_queue, lock_config)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET locked_until = excluded.locked_until, lock_chars = excluded.lock_chars,
 			password = excluded.password, restart_boot = excluded.restart_boot, lock_style = excluded.lock_style,
 			relock = excluded.relock, lifted_until = excluded.lifted_until, lock_order = excluded.lock_order,
 			timer_after = excluded.timer_after, lifted_kinds = excluded.lifted_kinds, range_days = excluded.range_days,
-			range_from = excluded.range_from, range_to = excluded.range_to, range_invert = excluded.range_invert`,
+			range_from = excluded.range_from, range_to = excluded.range_to, range_invert = excluded.range_invert,
+			lock_queue = excluded.lock_queue, lock_config = excluded.lock_config`,
 		l.Name, l.LockedUntil, l.LockChars, l.PasswordHash, l.RestartBoot, l.Style, l.Relock, l.LiftedUntil,
-		l.Order, l.TimerAfter, l.LiftedKinds, l.RangeDays, l.RangeFrom, l.RangeTo, l.RangeInvert)
+		l.Order, l.TimerAfter, l.LiftedKinds, l.RangeDays, l.RangeFrom, l.RangeTo, l.RangeInvert, encodeQueue(l.Queue), encodeQueue(l.Config))
 	if err != nil {
 		return fmt.Errorf("failed to save the lock on %s: %w", l.Name, err)
 	}
@@ -177,7 +226,7 @@ func (d *DB) ClearSettingLock(name string) error {
 // longer be in force; check InForce.
 func (d *DB) SettingLocks() ([]SettingLock, error) {
 	rows, err := d.conn.Query(`SELECT name, locked_until, lock_chars, password, restart_boot, lock_style, relock, lifted_until,
-		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert
+		lock_order, timer_after, lifted_kinds, range_days, range_from, range_to, range_invert, lock_queue, lock_config
 		FROM setting_locks ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list setting locks: %w", err)
@@ -186,8 +235,16 @@ func (d *DB) SettingLocks() ([]SettingLock, error) {
 	var out []SettingLock
 	for rows.Next() {
 		var l SettingLock
+		var queue, config string
 		if err := rows.Scan(&l.Name, &l.LockedUntil, &l.LockChars, &l.PasswordHash, &l.RestartBoot, &l.Style, &l.Relock, &l.LiftedUntil,
-			&l.Order, &l.TimerAfter, &l.LiftedKinds, &l.RangeDays, &l.RangeFrom, &l.RangeTo, &l.RangeInvert); err != nil {
+			&l.Order, &l.TimerAfter, &l.LiftedKinds, &l.RangeDays, &l.RangeFrom, &l.RangeTo, &l.RangeInvert, &queue, &config); err != nil {
+			return nil, fmt.Errorf("failed to read a setting lock: %w", err)
+		}
+		var err error
+		if l.Queue, err = decodeQueue(queue); err != nil {
+			return nil, fmt.Errorf("failed to read a setting lock: %w", err)
+		}
+		if l.Config, err = decodeQueue(config); err != nil {
 			return nil, fmt.Errorf("failed to read a setting lock: %w", err)
 		}
 		out = append(out, l)
@@ -243,6 +300,70 @@ func migrateForceLibreWolf(conn *sql.DB) error {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM setting_locks WHERE name = ?", oldForceLibreWolf); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// OldSafeSearch is the one SafeSearch browser setting before each engine
+// had its own (§6 2026-11-18); SafeSearchSettings are those (the same as
+// enforce's SafeSearchSetting of each engine).
+const OldSafeSearch = "safesearch"
+
+var SafeSearchSettings = []string{"safesearch-google", "safesearch-bing", "safesearch-duckduckgo", "safesearch-youtube"}
+
+// migrateSafeSearch carries the one SafeSearch setting over to each
+// engine's once: its on/off state to every engine, and its lock row to
+// every engine unchanged (a lock of each, so a running lock holds every
+// engine exactly as before; nothing is weakened).
+func migrateSafeSearch(conn *sql.DB) error {
+	var n int
+	if err := conn.QueryRow(`SELECT (SELECT COUNT(*) FROM settings WHERE key = ?) + (SELECT COUNT(*) FROM setting_locks WHERE name = ?)`,
+		"browser."+OldSafeSearch, OldSafeSearch).Scan(&n); err != nil || n == 0 {
+		return err
+	}
+	tx, err := conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var value string
+	err = tx.QueryRow("SELECT value FROM settings WHERE key = ?", "browser."+OldSafeSearch).Scan(&value)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	var columns []string // every column but name, so each copy is the whole lock
+	rows, qerr := tx.Query("SELECT name FROM pragma_table_info('setting_locks')")
+	if qerr != nil {
+		return qerr
+	}
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			rows.Close()
+			return err
+		}
+		if c != "name" {
+			columns = append(columns, c)
+		}
+	}
+	rows.Close()
+	list := strings.Join(columns, ", ")
+	for _, name := range SafeSearchSettings {
+		if err == nil {
+			if _, err := tx.Exec("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", "browser."+name, value); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec("INSERT OR IGNORE INTO setting_locks (name, "+list+") SELECT ?, "+list+
+			" FROM setting_locks WHERE name = ?", name, OldSafeSearch); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("DELETE FROM settings WHERE key = ?", "browser."+OldSafeSearch); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM setting_locks WHERE name = ?", OldSafeSearch); err != nil {
 		return err
 	}
 	return tx.Commit()

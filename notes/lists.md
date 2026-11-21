@@ -47,11 +47,11 @@
   `PhraseEditor` (double-click loads a phrase); word sets bounded only by
   `db.MaxWordSets` (100). Files:
   `cli/phraseexport.go`; `db.AddPhraseSet`. Phrase clusters (`phrases`
-  set): `cluster copy` → phrase set, `cluster save` from one; no recording.
+  set): `list-preset copy` → phrase set, `list-preset save` from one; no recording.
 - **Import files** (`cli/entryfile.go`, §4.3): `readEntries` sorts lines
   into phrases, sites (hosts files, adblock `||x^` read as sites), rendered
   terms, unusable; `list import`, `block import-list`, `phrase-set import`,
-  `cluster import` take what fits and name the rest (`noteLeftOut`).
+  `list-preset import` take what fits and name the rest (`noteLeftOut`).
   `AddListEntries`/`RemoveListEntries` write in one transaction (one
   commit per entry: 5,000 took 215 s on the desktop's disk; 100,000 now
   10 s). Hidden `kc9k list read FILE` (JSON) lets the GUI's one Import route a
@@ -68,7 +68,15 @@
   one by one, held every command over a minute at 100,000.
 - **List and phrase set presets** (clusters in the code: `db/clusters.go`,
   `cli/clusters.go`): lists outside blocks,
-  never enforced. `cluster copy` goes through `listAdd` (gating applies).
+  never enforced. `list-preset copy` goes through `listAdd` (gating applies).
+- **Command names** (§3.14, §4.12): `block-preset` (old `template`),
+  `list-preset` (old `cluster`, also `phrase-set-preset`), `block create
+  --preset` (old `--template`), `record start --preset` (old `--cluster`).
+  Old names are cobra aliases; old flags via `flagAliases`
+  (`cli/templates.go`, a pflag normalize func). Export header `# kc9k list
+  preset, looks at:` (old `cluster`/`phrase cluster`/`term cluster`
+  headers still read). Code and DB keep "cluster"/"template".
+  `TestPresetCommandNames` (help shows neither word, aliases aside).
 - **Presets** (§3.2 Preset, §4.4; owner 2026-11-17; `db/presets.go`,
   `cli/presets.go`, GUI page "Presets" = page `clusters`): block presets
   are templates, list and phrase set presets clusters; table `presets`
@@ -93,15 +101,25 @@
   what changed in the draft since (base → draft) onto the block as it is
   now (an entry added meanwhile stays) via `listAdd`/`listWhere`/
   `listAction`…, `saveDraftPhraseSets`, `saveDraftTriggers` (each through
-  its gate) and names refusals; commands for anything else refuse a draft
-  (`draftRefused`, `refuseDraftEdit` in the root PreRun). GUI: no Edit as
+  its gate) and names refusals. The Breaks & allowance and Bypass
+  prevention commands (`draftQueued`) on a draft are kept, not run: the
+  root PreRun wraps their RunE once (`queueOnDraft`); `keepOnDraft` stores
+  the command line with the block's name (`draft.queue.<draft>`, the last
+  of each kind, `Text` for gui-state `draft_kept`); `saveDraft` runs each
+  (`runQueued`: flags reset, parsed, RunE) through its own gate. Other
+  commands for a draft are refused (`draftRefused`, `refuseDraftEdit` in
+  the root PreRun): taking a break or an allowance session, automation,
+  affected users. GUI: no Edit as
   draft; `Window.run` sends the commands of `DRAFT_EDITS` for the block
   opened on the Blocks page to its draft (`to_draft`, made at the first
   edit, `start_draft`), `DRAFT_READS` read it; `self.selected` stays the
   block; Websites and Apps show the draft (`show_block`: `content`), the
   bar says Unsaved edits with Save edits / Discard, leaving asks
   (`leave_block`, `ask_unsaved`), the card shows "Unsaved edits"; list
-  cards keep their widget by name when the draft takes over.
+  cards keep their widget by name when the draft takes over. Breaks &
+  allowance and Bypass prevention say what is kept ("Not saved yet",
+  `quota_kept_label`, `nepsis_kept_label`); `DRAFT_EDITS` "bypass" finds
+  the block after `--block` (`draft_position`).
 - **Test mode** (`db/testmode.go`): lists go out `test: true`; extension
   shows `kc9kTestReport`, skips them in `kc9kListMatches`.
 
@@ -119,7 +137,7 @@ Not fixed by `SPEC.md`; the code is the truth.
   `remove-site`, `remove-entry` are Blocked shortcuts. List/apps/titles
   files: one entry per line, `#` comments (`block export-list|import-list
   B apps|titles|blocked|exceptions`). Remove block: inactive and unlocked.
-- **List presets** (`cluster`): copies are independent. `--exceptions`, `--as N`,
+- **List presets** (`list-preset`): copies are independent. `--exceptions`, `--as N`,
   `--into L`. Export = plain entry file with a scope header (`list import`
   reads it).
 - **Recording**: domains without `www.`, pages and frames, private windows

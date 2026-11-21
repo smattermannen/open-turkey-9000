@@ -17,6 +17,8 @@ func TestNoWeakeningEverySetting(t *testing.T) {
 		{"tamper", "file-urls", "on"},
 		{"tamper", "private", "on"},
 		{"tamper", "task-managers", "on"},
+		{"tamper", "guest", "on"},
+		{"tamper", "installer", "on"},
 		{"reset-guard", "on"},
 		{"strict", "on"},
 		{"bypass", "set", "--count", "3", "--within", "10m", "--then", "warning"},
@@ -34,11 +36,18 @@ func TestNoWeakeningEverySetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
-		{"browser", "safesearch", "off"},
+		{"browser", "safesearch-google", "off"},
+		{"browser", "safesearch-youtube", "off"},
+		{"browser", "safesearch", "off"}, // every engine at once
 		{"tamper", "clock", "off"},
 		{"tamper", "file-urls", "off"},
 		{"tamper", "private", "off"},
 		{"tamper", "task-managers", "off"},
+		{"tamper", "guest", "off"},
+		{"tamper", "extension-stop", "off"},
+		{"tamper", "installer", "off"},
+		{"tamper", "inactive-tabs", "off"},
+		{"tamper", "embedded", "off"},
 		{"reset-guard", "off"},
 		{"strict", "off"},
 		{"bypass", "off"},

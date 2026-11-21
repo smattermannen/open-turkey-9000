@@ -17,18 +17,33 @@
   locks (`PlacedLayers`; `Layers`/`LayersOn` append it); `AdvanceLayers`
   `promote`s the first once no placed lock is on. Once anything is queued,
   every new lock queues (order kept); every kind queues, range included
-  (`QueuedLock.Range*`). Setting locks: still one per kind.
+  (`QueuedLock.Range*`). Setting locks the same (`SettingLock.Queue`,
+  `Config`, `lock_queue`/`lock_config` in `setting_locks`, mapped through
+  `asBlock`/`fromBlock`; `strengthenSettingLock` mirrors
+  `strengthenLocks`; `advancedSettingLock` is what `settingLocks` diffs
+  against for the confirmation).
+- **Lock flags given twice** (§3.4): `orderedValue` keeps every `Set`
+  (`sets`); `lockOccurrences` lists each, `lockSpecs` turns them into one
+  `QueuedLock` per lock (`--lock-chars`, `--lock-words` with `--lock`,
+  `--range-invert` apply to all; one password read per password lock),
+  `splitSpecs` places each kind's first until the first repeat and queues
+  the rest. `lockArgs` keeps every occurrence (hotkeys);
+  `parseStartLocks` resets `startCmd`'s lock flags before stored ones are
+  parsed (hotkey actions, a mode's blocks); `clearLockOccurrences` in the
+  tests' `resetFlags`. Hotkeys and mode locks: one password lock at most.
 - **Re-lock** (§3.4, owner 2026-11-20): a block keeps every lock it was
   given, in order and as given (a duration, not an end), in
   `LockExtras.Config` (`lock_config`; `start` and `strengthenLocks` append
-  via `queuedLock`; a block without one gets `db.Snapshot` of its locks).
+  each spec; a block without one gets `db.Snapshot` of its locks).
   With `Relock` and a `Config` (`relocksConfig`), unlocking removes a lock
   as without re-lock; `AdvanceLayers` starts `LiftedUntil` once no lock is
   on, clears it if one is added meanwhile, and when it is over
   `restoreConfig` empties every place and queues `Config`, so the first
   lock is on and the rest wait (durations count from then). `--relock`
-  goes with any lock. Without a `Config` (setting locks, blocks locked
-  before this) the old lift of text/password locks (`LiftedKinds`) stays.
+  goes with any lock. Without a `Config` (blocks and settings locked
+  before they kept one) the old lift of text/password locks
+  (`LiftedKinds`) stays; a new lock gives them a `Config` (`Snapshot`).
+  `SettingLock.PendingRelock`/`RelockAt`: unlocked, re-lock time running.
 - **Extend** (`cli/extend.go`, §4.6: its own action): `kc9k extend B --for D`
   adds D, `--until T` moves the end later; to the running timer lock, else
   the waiting one (`TimerAfter`, `--for` only), else the first queued.
@@ -38,7 +53,8 @@
   daemon still applies old queued edits (`pending.go`). `unlock` lifts
   text/password locks and starts delay countdown (`delay_until`).
 - **Lock confirmation** (`cli/confirm.go`, R-LOCK-12): every lock path builds
-  `lockToSet` items and calls `confirmLocks` before writing; terminal asks
+  `lockToSet` items and calls `confirmLocks` before writing (the firmware
+  lock too); terminal asks
   "yes", otherwise needs `--yes` (`addYesFlag`). Tests `confirm_test.go`
   (`lockCases`). GUI: `confirm_lock` then `--yes`. Hotkeys: confirmed at
   `hotkey add`, and at each press via `blocker.ConfirmDesktop` (zenity as
@@ -46,7 +62,20 @@
   `--no-confirm-ok` (`requireMonkAck`).
 - **Text lock** (`internal/lock/`): raw-mode, paste-resistant; 60% letters,
   35% digits, 5% symbols; 98% accuracy; default 300 chars;
-  `--lock-words`, `--lock-text`.
+  `--lock-words`, `--lock-text`. Without a terminal (the GUI, scripts) the
+  command opens its own window (`lock/window.go`, R-LOCK-5, SPEC §4.6):
+  `challenge_window.py` is embedded and run with `python3 -I -c`, as
+  `SUDO_UID` on the `DISPLAY`/`XAUTHORITY` sudo kept (never as root;
+  without root, as the user in their environment), `GDK_BACKEND=x11`. It
+  has no text field and only reports keys (`k code time`, `b`, `n` per
+  page, `p` paste/drop/middle click, `s` an XSendEvent key, `c` cancel);
+  `readWindowKeys` rebuilds the text, refuses more than `pasteBurst` keys
+  within `burstMillis` (5 ms), and scores. Standard input is never read
+  for it (`runChallengeLine` is gone): no window → refused. The GUI's
+  Unlock runs the command (`run_challenge`, 6 h timeout) instead of a
+  terminal. `lock.StartWindow` is the test seam
+  (`TestTextLockUnlocksOnlyFromItsWindow`); the real window:
+  `TestChallengeWindowOnX` (xdotool, under `xvfb-run`).
 - **Settings password** (`cli/settingspassword.go`):
   `requireSettingsPassword` in `gateEdit`, `ensureEditable`, stop/unlock,
   settings off, strict off, no-escape, prepare-uninstall;
@@ -76,7 +105,7 @@ Not fixed by `SPEC.md`; the code is the truth.
 - **Starting on an active block** only adds locks: any lock kind can be
   added, last in the unlock order (a duration timer or restart lock waits
   behind locks on). A kind it already has, of any kind and also from a
-  hotkey press, is a second lock of it, queued last (`queuedLock`); a lock
+  hotkey press, is a second lock of it, queued last (`db.QueuedLock`); a lock
   already set is never changed. A second range lock replaces the first
   only once the first is off (out of its times) with nothing before it on.
   A challenge longer than the
@@ -101,10 +130,12 @@ Not fixed by `SPEC.md`; the code is the truth.
   into a blacklist, record into a blacklist. Everything else weakens.
 - **Locks**: flags `--for`, `--until`, `--lock` (`--text-lock`),
   `--password-stdin`, `--restart`, `--delay`, `--range "DAYS HH:MM-HH:MM"`
-  (`--range-invert`; `LockExtras.InRange`), `--relock D` (text/password
-  only; re-locks unless stopped meanwhile). Browser setting locks: same kinds
-  minus delay (re-lock too: `SettingLock.LiftedUntil`, `unlockSetting`; also
-  strict mode, global ladder, tamper); added later only stronger; password can't be replaced;
+  (`--range-invert`; `LockExtras.InRange`), `--relock D` (with any lock;
+  re-locks unless stopped meanwhile); each given twice is two locks.
+  Browser setting locks: same kinds minus delay (re-lock too:
+  `SettingLock.LiftedUntil`, `unlockSetting`; also strict mode, global
+  ladder, tamper); a lock added later goes last, a kind already there is
+  another lock of it (never a change to the first);
   `kc9k browser unlock O` unlocks and turns off. While a browser setting is
   locked, strict mode and no-escape hold and uninstall is refused.
   `block-devtools` also can't go off while a block is locked or a freeze

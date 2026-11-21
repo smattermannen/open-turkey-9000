@@ -356,7 +356,7 @@ func TestRPhrase10(t *testing.T) {
 	same("project import", phraseSet(t, fresh, "b", "Grandpa"))
 	if c, err := fresh.GetCluster("Cats"); err != nil || !c.Phrases || c.Where != (db.Where{Title: true}) ||
 		strings.Join(c.Entries, "|") != "[long cat, neko] [running, sitting]" {
-		t.Errorf("phrase cluster after project import: %+v, %v", c, err)
+		t.Errorf("phrase set preset after project import: %+v, %v", c, err)
 	}
 
 	// .txt: one phrase per line, read back into another set.
@@ -373,7 +373,7 @@ func TestRPhrase10(t *testing.T) {
 	// Clusters: save a phrase set, copy it as a new set or into one.
 	mustRun(t, "cluster", "save", "b", "Grandpa", "Saved")
 	if c, _ := fresh.GetCluster("Saved"); !c.Phrases || c.Where != want.Where || len(c.Entries) != 2 {
-		t.Errorf("saved cluster: %+v", c)
+		t.Errorf("saved list preset: %+v", c)
 	}
 	mustRun(t, "cluster", "copy", "Cats", "b")
 	if s := phraseSet(t, fresh, "b", "Cats"); s.Where != (db.Where{Title: true}) || len(s.Phrases) != 1 || len(s.Actions) != 1 || s.Actions[0].Name != db.ActionBlock {
@@ -384,13 +384,13 @@ func TestRPhrase10(t *testing.T) {
 		t.Errorf("copy --into: %d phrases, want 3", n)
 	}
 	if err := runCLI(t, "cluster", "copy", "Cats", "b", "--as", "X", "--exceptions"); err == nil {
-		t.Error("a phrase cluster was copied as exceptions (there are no phrase exceptions)")
+		t.Error("a phrase set preset was copied as exceptions (there are no phrase exceptions)")
 	}
 	if err := runCLI(t, "cluster", "add", "Cats", "reddit.com"); err == nil {
-		t.Error("a phrase cluster took an address")
+		t.Error("a phrase set preset took an address")
 	}
 	if err := runCLI(t, "cluster", "save", "b", "Blocked", "Cats"); err == nil {
-		t.Error("a list was saved into a phrase cluster")
+		t.Error("a list was saved into a phrase set preset")
 	}
 	ctxt := filepath.Join(dir, "cats.txt")
 	if err := os.WriteFile(ctxt, []byte(capture(t, "cluster", "export", "Cats")), 0o600); err != nil {
@@ -398,14 +398,14 @@ func TestRPhrase10(t *testing.T) {
 	}
 	mustRun(t, "cluster", "import", "Cats2", ctxt)
 	if c, _ := fresh.GetCluster("Cats2"); !c.Phrases || c.Where != (db.Where{Title: true}) || len(c.Entries) != 1 {
-		t.Errorf("cluster .txt round trip: %+v", c)
+		t.Errorf("list preset .txt round trip: %+v", c)
 	}
 
 	// No recording into phrase sets or phrase clusters.
 	mustRun(t, "cluster", "scope", "Cats", "url", "on")
 	if err := runCLI(t, "record", "start", "--cluster", "Cats"); err == nil {
 		mustRun(t, "record", "stop", "--discard")
-		t.Error("recording into a phrase cluster started")
+		t.Error("recording into a phrase set preset started")
 	}
 	if err := runCLI(t, "record", "start", "b", "Grandpa"); err == nil {
 		mustRun(t, "record", "stop", "--discard")
@@ -472,7 +472,7 @@ func TestRPhrase6(t *testing.T) {
 	// Clusters keep the scope and entries through save, copy and a .txt file.
 	mustRun(t, "cluster", "save", "b", "Url words", "words")
 	if c, _ := d.GetCluster("words"); c.Where != (db.Where{URL: true}) || len(c.Entries) != 3 {
-		t.Errorf("saved cluster = %+v", c)
+		t.Errorf("saved list preset = %+v", c)
 	}
 	mustRun(t, "cluster", "copy", "words", "b", "--as", "Again")
 	if l := list(t, d, "b", "Again"); l.Where != (db.Where{URL: true}) || len(l.Entries) != 3 {
@@ -484,7 +484,7 @@ func TestRPhrase6(t *testing.T) {
 	}
 	mustRun(t, "cluster", "import", "words2", file)
 	if c, _ := d.GetCluster("words2"); c.Where != (db.Where{URL: true}) || len(c.Entries) != 3 {
-		t.Errorf("imported cluster = %+v", c)
+		t.Errorf("imported list preset = %+v", c)
 	}
 	// And block files.
 	out := strings.Replace(capture(t, "block", "export", "b"), `"name": "b"`, `"name": "copy"`, 1)
@@ -531,12 +531,12 @@ func TestOldTypedFilesImport(t *testing.T) {
 		}
 	}
 	cluster := filepath.Join(dir, "words.txt")
-	if err := os.WriteFile(cluster, []byte("# kc9k term cluster, looks at: url\nporn\nlong cat\n"), 0o600); err != nil {
+	if err := os.WriteFile(cluster, []byte("# kc9k rendered term list preset, looks at: url\nporn\nlong cat\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	mustRun(t, "cluster", "import", "words", cluster)
 	if c, err := d.GetCluster("words"); err != nil || c.Where != (db.Where{URL: true}) || len(c.Entries) != 2 {
-		t.Errorf("old term cluster = %+v, %v", c, err)
+		t.Errorf("old rendered term list preset = %+v, %v", c, err)
 	}
 }
 

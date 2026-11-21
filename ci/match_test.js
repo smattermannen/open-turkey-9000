@@ -259,6 +259,41 @@ const failed0 = [];
   }
 }
 
+// R-LIST-5, more look-alikes: capitals read by their own look, small
+// capitals, Armenian, fullwidth and mathematical letters, and invisible
+// characters inside a word.
+{
+  const folds = {
+    "ΗΟΤ": "hot", "ΝΕΤFLΙΧ": "netflix", "ᴘᴏʀɴ": "porn", "ｐｏｒｎ": "porn", "𝐩𝐨𝐫𝐧": "porn",
+    "𝔭𝔬𝔯𝔫": "porn", "ⓟⓞⓡⓝ": "porn", "p\u200Bo\u00ADr\u2060n": "porn", "ﬁnance": "finance",
+    "İstanbul": "istanbul", "һօս": "hou", "саsіnо": "casino", "СОКЕ": "coke",
+  };
+  for (const [input, want] of Object.entries(folds)) {
+    if (kc9kFold(input) !== want) {
+      failed0.push("R-LIST-5 fold " + JSON.stringify(input) + " = " + JSON.stringify(kc9kFold(input)) + ", want " + want);
+    }
+  }
+  const list = kc9kCompileLists([{
+    id: 10, block: "b", name: "Words", url_terms: ["casino"], title: ["porn"], text: ["poker"],
+    actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [] },
+  }]);
+  const hit = (url, title, text) => kc9kListMatches(list, { url, title, text }).length > 0;
+  if (!hit("https://example.com/", "free ᴘᴏʀɴ here", "") || !hit("https://example.com/", "", "Ｐｏｋｅｒ night") ||
+    !hit("https://example.com/", "", "online p\u200Boker") || !hit("https://example.com/?q=%D1%81asino", "", "") ||
+    hit("https://example.com/", "pornhub", "") || hit("https://example.com/", "", "poke\u200Br\u200Bs") ||
+    hit("https://example.com/", "a normal page", "nothing to see")) {
+    failed0.push("R-LIST-5 look-alikes in a list");
+  }
+  // A term written with look-alikes is folded the same way.
+  const typed = kc9kCompileLists([{
+    id: 11, block: "b", name: "Words", url: [], title: [], text: ["ΡΟΚΕR"],
+    actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [] },
+  }]);
+  if (kc9kListMatches(typed, { url: "https://example.com/", title: "", text: "Poker!" }).length === 0) {
+    failed0.push("R-LIST-5 a term in look-alikes");
+  }
+}
+
 // Phrases: the examples of SPEC R-PHRASE-1 to 8.
 {
   const P = (sets, length) => ({ sets: sets.map((terms) => Array.isArray(terms) ? { terms, necessary: true } : terms), length });
@@ -552,7 +587,7 @@ process.exit(failed ? 1 : 0);
   }
 }
 
-// Keyword test mode: a list in test mode never acts, and reports what it found.
+// Test mode: a list in test mode never acts, and reports what it found.
 {
   const compiled = kc9kCompileLists([{
     id: 7, block: "b", name: "Words", test: true, url: [], title: [], text: ["casino", "poker", "*bet*"],
@@ -668,6 +703,34 @@ if (typeof kc9kSocialRedirect === "function") {
       process.exitCode = 1;
     }
   }
+  // §6 2026-11-18: each engine's SafeSearch on its own. Brave, Yahoo,
+  // SearXNG and the blocked engines go with Google's, Bing's or DuckDuckGo's.
+  const engineCases = [
+    [["google"], "https://www.google.com/search?q=x", "redirect"],
+    [["google"], "https://www.bing.com/search?q=x", null],
+    [["google"], "https://duckduckgo.com/?q=x", null],
+    [["google"], "https://search.brave.com/search?q=x", "redirect"],
+    [["google"], "https://www.startpage.com/sp/search", "block"],
+    [["bing"], "https://www.bing.com/search?q=x", "redirect"],
+    [["bing"], "https://www.google.com/search?q=x", null],
+    [["duckduckgo"], "https://duckduckgo.com/?q=x", "redirect"],
+    [["youtube"], "https://www.google.com/search?q=x", null],
+    [["youtube"], "https://www.startpage.com/sp/search", null],
+    [["youtube"], "https://search.yahoo.com/search?p=x", null],
+    [[], "https://www.google.com/search?q=x", null],
+  ];
+  for (const [engines, url, want] of engineCases) {
+    const got = kc9kSafeSearch(url, null, engines);
+    const what = got ? (got.block ? "block" : "redirect") : null;
+    if (what !== want) {
+      console.error("FAIL safesearch engines", JSON.stringify(engines), url, "got", JSON.stringify(got), "want", want);
+      process.exitCode = 1;
+    }
+  }
+  if (!kc9kSafeSearchEngine(undefined, "youtube") || kc9kSafeSearchEngine(["google"], "youtube")) {
+    console.error("FAIL safesearch: YouTube's Restricted Mode follows its own setting");
+    process.exitCode = 1;
+  }
 }
 
 // §3.12 word recording: a page's words, counted.
@@ -702,6 +765,115 @@ if (typeof kc9kSocialRedirect === "function") {
   if (kc9kAdMatches(compiled, "notexoclick.com", "https://tube.example/").length !== 0 ||
     kc9kAdMatches(compiled, "ads.exoclick.com", "https://safe.example/page").length !== 0) {
     console.error("FAIL ad trigger: lookalike host or excepted page matched");
+    process.exitCode = 1;
+  }
+}
+
+// §3.1 file URL entries: local files are judged only while the rules say so
+// (tamper "allow file:// blocking": file_pages), by a list's file entries,
+// its terms, and the block's file exceptions (file://* by default spares all).
+{
+  const lists = (filePages, exceptFiles) => kc9kCompileLists([{
+    id: 20, block: "b", name: "Files", url: ["*.*"], title: [], text: ["casino"],
+    files: ["file:///home/u/games/*", "file:///home/u/notes/plan.html"], file_pages: filePages,
+    actions: [{ action: "block", distinct: 1, hits: 1 }], except: { url: [], title: [], text: [], files: exceptFiles },
+  }]);
+  const acts = (compiled, url, text) => kc9kListMatches(compiled, { url, title: "", text: text || "" }).length > 0;
+  const on = lists(true, ["file:///home/u/games/allowed/*"]);
+  const cases = [
+    [on, "file:///home/u/games/poker.html", "", true, "a file in a blocked folder"],
+    [on, "file:///home/u/games/sub/x.html", "", true, "deeper in the folder"],
+    [on, "file:///home/u/games/allowed/x.html", "", false, "spared by a file exception"],
+    [on, "file:///home/u/notes/plan.html", "", true, "one blocked file"],
+    [on, "file:///home/u/notes/plan.html/", "", true, "the same file with a slash"],
+    [on, "file:///home/u/notes/other.html", "", false, "another file: *.* is the web only"],
+    [on, "file:///home/u/notes/other.html", "play casino here", true, "a local page by its text"],
+    [on, "file:///home/u/games%20x/a.html", "", false, "a folder that only starts the same"],
+    [on, "file:///home/U/games/a.html", "", false, "paths are case-sensitive"],
+    [lists(false, []), "file:///home/u/games/poker.html", "play casino", false, "file blocking off: never judged"],
+    [lists(true, ["file://*"]), "file:///home/u/games/poker.html", "play casino", false, "file://* spares every file"],
+    [on, "https://example.com/", "", true, "web pages as before"],
+  ];
+  for (const [compiled, url, text, want, what] of cases) {
+    if (acts(compiled, url, text) !== want) {
+      console.error("FAIL file pages: " + what + " (" + url + ")");
+      process.exitCode = 1;
+    }
+  }
+  if (!kc9kJudgedAddress(on, "file:///x") || kc9kJudgedAddress(lists(false, []), "file:///x") ||
+    !kc9kJudgedAddress([], "https://a.example/") || kc9kJudgedAddress(on, "about:blank")) {
+    console.error("FAIL kc9kJudgedAddress");
+    process.exitCode = 1;
+  }
+  if (kc9kFilePaths(["file://home/x", "file:///a/*/b", "https://x.example", "file:///ok/*"]).length !== 1) {
+    console.error("FAIL kc9kFilePaths keeps only absolute paths with * at the end");
+    process.exitCode = 1;
+  }
+}
+
+// §3.9 ad trigger, edge cases: the host as requests give it (capitals, a
+// final dot), test mode, a list without actions, URL-term exceptions, and
+// lists whose block has exceptions by title or text, which the page itself
+// judges (kc9kAdsByPage, page.adHosts).
+{
+  const make = (extra, except) => kc9kCompileLists([Object.assign({
+    id: 30, block: "b", name: "Ads", url: [], title: [], text: [], ads: ["ExoClick.com"],
+    actions: [{ action: "block", distinct: 1, hits: 1 }],
+    except: Object.assign({ url: [], title: [], text: [] }, except || {}),
+  }, extra || {})]);
+  const ads = make();
+  const n = (compiled, host, page) => kc9kAdMatches(compiled, host, page).length;
+  const cases = [
+    [n(ads, "ADS.EXOCLICK.COM.", "https://tube.example/"), 1, "capitals and a final dot"],
+    [n(ads, "exoclick.com", "https://tube.example/"), 1, "the network itself"],
+    [n(ads, "", "https://tube.example/"), 0, "no host"],
+    [n(ads, "exoclick.com.evil.example", "https://tube.example/"), 0, "the name inside another domain"],
+    [n(ads, "exoclick.com", ""), 1, "no page address: no exception to check"],
+    [n(make({ test: true }), "exoclick.com", "https://tube.example/"), 0, "test mode doesn't run"],
+    [n(make({ actions: [] }), "exoclick.com", "https://tube.example/"), 0, "a list without actions"],
+    [n(make({}, { url_terms: ["school"] }), "exoclick.com", "https://news.example/school-trip"), 0, "a URL-term exception spares the page"],
+    [n(make({}, { url_terms: ["school"] }), "exoclick.com", "https://news.example/sports"), 1, "and only its pages"],
+    [n(make({}, { text: ["homework"] }), "exoclick.com", "https://news.example/"), 0, "a text exception: left to the page"],
+    [n(make({}, { title: ["Homework"] }), "exoclick.com", "https://news.example/"), 0, "a title exception: left to the page"],
+    [n(kc9kCompileLists([{ id: 31, block: "b", name: "None", url: ["x.example"], title: [], text: [],
+      actions: [{ action: "block" }], except: {} }]), "exoclick.com", "https://tube.example/"), 0, "a list without ads"],
+  ];
+  for (const [got, want, what] of cases) {
+    if (got !== want) {
+      console.error("FAIL ad trigger: " + what + ": " + got + ", want " + want);
+      process.exitCode = 1;
+    }
+  }
+  // The page judges a list with title/text exceptions: its ad hosts match
+  // unless an exception spares the page; other lists ignore page.adHosts
+  // (the background has them).
+  const byPage = make({}, { text: ["homework"] });
+  const page = (text, adHosts) => kc9kListMatches(byPage, { url: "https://news.example/", title: "", text, adHosts }).length;
+  if (page("today's news", ["cdn.exoclick.com"]) !== 1 || page("homework help", ["cdn.exoclick.com"]) !== 0 ||
+    page("today's news", ["cdn.other.example"]) !== 0 || page("today's news", undefined) !== 0 ||
+    kc9kListMatches(ads, { url: "https://news.example/", title: "", text: "x", adHosts: ["exoclick.com"] }).length !== 0) {
+    console.error("FAIL ad trigger judged with the page");
+    process.exitCode = 1;
+  }
+}
+
+// Principle 9: a long text is folded a piece at a time (kc9kFoldSteps), the
+// same as folding it whole, pieces never parting a letter from its marks.
+{
+  const text = ("Café naïve ΡΟΚΕR p​orn été ".repeat(4000)) + "end";
+  const steps = kc9kFoldSteps(text);
+  let r;
+  let n = 0;
+  while (!(r = steps.next()).done) {
+    n++;
+  }
+  if (n < 2 || r.value !== kc9kFold(text) || kc9kFoldCached(text) !== r.value) {
+    console.error("FAIL kc9kFoldSteps: " + n + " pieces, same as whole: " + (r.value === kc9kFold(text)));
+    process.exitCode = 1;
+  }
+  const short = kc9kFoldSteps("Short Ünïcode");
+  if (short.next().value !== "short unicode") {
+    console.error("FAIL kc9kFoldSteps on a short text");
     process.exitCode = 1;
   }
 }

@@ -98,6 +98,49 @@ function kc9kFilter(raw) {
   };
 }
 
+// Local files (§3.1): judged only while the rules say so (tamper "allow
+// file:// blocking": a list's file_pages), by its file entries
+// (file:///home/u/games/* is a folder's content, file:///x/y.html one
+// file, file://* every file) and its block's file exceptions (file://* by
+// default, R-LIST-3). Paths are compared decoded and case-sensitive.
+function kc9kFilePaths(entries) {
+  const out = [];
+  for (const entry of entries || []) {
+    const m = /^file:\/\/(.*)$/i.exec(String(entry).trim());
+    if (!m) {
+      continue;
+    }
+    const path = m[1] === "*" ? "/*" : m[1];
+    if (!path.startsWith("/") || path.slice(0, -1).includes("*")) {
+      continue;
+    }
+    out.push(path.endsWith("*") ? { prefix: path.slice(0, -1) } : { exact: path.replace(/(.)\/$/, "$1") });
+  }
+  return out;
+}
+
+// kc9kFileMatch reports whether the file page at url is one of the paths.
+function kc9kFileMatch(paths, url) {
+  if (!paths || paths.length === 0 || !/^file:/i.test(url || "")) {
+    return false;
+  }
+  let path;
+  try {
+    path = decodeURIComponent(new URL(url).pathname);
+  } catch (error) {
+    return false;
+  }
+  const bare = path.replace(/(.)\/$/, "$1");
+  return paths.some((p) => (p.exact !== undefined ? p.exact === bare : path.startsWith(p.prefix)));
+}
+
+// kc9kJudgedAddress reports whether pages at url are judged by the compiled
+// lists: web pages always, local files when a list says so.
+function kc9kJudgedAddress(compiled, url) {
+  return /^(https?|ftp):/i.test(url || "") ||
+    (/^file:/i.test(url || "") && (compiled || []).some((list) => list.filePages));
+}
+
 // kc9kEmbedded turns an address written inside another one into a full URL:
 // "https://reddit.com/x", "https:/reddit.com/x" or "reddit.com/x".
 function kc9kEmbedded(text) {
@@ -209,16 +252,39 @@ const KC9K_WORD = "[\\p{L}\\p{N}]";
 
 // kc9kFold makes text and terms comparable (R-LIST-5): lower case, accents
 // dropped (é = e), and letters of other alphabets that look Latin read as
-// Latin (Cyrillic "раypal" = "paypal").
+// Latin (Cyrillic "раypal" = "paypal"). Also read as plain letters:
+// capitals that lower-case to a different look (Greek "Η" is "h", though
+// "η" looks like "n"), small capitals ("ᴘᴏʀɴ"), fullwidth and mathematical
+// letters ("ｐｏｒｎ", "𝐩𝐨𝐫𝐧": compatibility forms, NFKD), and invisible
+// characters inside words are dropped ("p\u200Born": zero-width spaces, soft
+// hyphens and other format characters).
+const KC9K_LOOKALIKES_UPPER = new Map(Object.entries({
+  "Α": "a", "Β": "b", "Ε": "e", "Ζ": "z", "Η": "h", "Ι": "i", "Κ": "k", "Μ": "m", "Ν": "n", "Ο": "o",
+  "Ρ": "p", "Τ": "t", "Υ": "y", "Χ": "x",
+  "А": "a", "В": "b", "Е": "e", "К": "k", "М": "m", "Н": "h", "О": "o", "Р": "p", "С": "c", "Т": "t",
+  "Х": "x", "Ѕ": "s", "І": "i", "Ј": "j", "Ү": "y", "Ԛ": "q", "Ԝ": "w",
+}));
 const KC9K_LOOKALIKES = new Map(Object.entries({
+  // Cyrillic
   "а": "a", "в": "b", "е": "e", "ё": "e", "к": "k", "м": "m", "н": "h", "о": "o", "р": "p", "с": "c",
   "т": "t", "у": "y", "х": "x", "і": "i", "ї": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "ӏ": "l", "һ": "h",
-  "ԛ": "q", "ԝ": "w", "α": "a", "β": "b", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p",
-  "τ": "t", "υ": "u", "χ": "x", "ϲ": "c", "ı": "i",
+  "ԛ": "q", "ԝ": "w", "ь": "b", "п": "n", "г": "r", "ү": "y", "ԑ": "e",
+  // Greek
+  "α": "a", "β": "b", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p",
+  "τ": "t", "υ": "u", "χ": "x", "ϲ": "c", "γ": "y", "η": "n", "ω": "w", "ϳ": "j",
+  // Armenian
+  "օ": "o", "ս": "u", "հ": "h", "ո": "n", "ց": "g",
+  // Latin letters that look like others, and small capitals
+  "ı": "i", "ɑ": "a", "ɡ": "g", "ɩ": "i", "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ꜰ": "f",
+  "ɢ": "g", "ʜ": "h", "ɪ": "i", "ᴊ": "j", "ᴋ": "k", "ʟ": "l", "ᴍ": "m", "ɴ": "n", "ᴏ": "o", "ᴘ": "p",
+  "ʀ": "r", "ꜱ": "s", "ᴛ": "t", "ᴜ": "u", "ᴠ": "v", "ᴡ": "w", "ʏ": "y", "ᴢ": "z",
 }));
+const KC9K_LOOKALIKE_UPPER_RE = new RegExp("[" + [...KC9K_LOOKALIKES_UPPER.keys()].join("") + "]", "g");
 const KC9K_LOOKALIKE_RE = new RegExp("[" + [...KC9K_LOOKALIKES.keys()].join("") + "]", "g");
 function kc9kFold(input) {
-  return String(input).toLowerCase().normalize("NFD").replace(/\p{M}+/gu, "")
+  return String(input)
+    .replace(KC9K_LOOKALIKE_UPPER_RE, (c) => KC9K_LOOKALIKES_UPPER.get(c))
+    .normalize("NFKD").toLowerCase().replace(/[\p{M}\p{Cf}]+/gu, "")
     .replace(KC9K_LOOKALIKE_RE, (c) => KC9K_LOOKALIKES.get(c));
 }
 
@@ -237,6 +303,34 @@ function kc9kFoldCached(input) {
   }
   return value;
 }
+// kc9kFoldSteps is kc9kFoldCached in steps (principle 9): a long text is
+// folded a piece at a time, each piece ending after a blank, so no
+// letter's marks are parted from it; the result is cached as one.
+const KC9K_FOLD_PIECE = 16384;
+function* kc9kFoldSteps(input) {
+  const key = String(input);
+  if (key.length <= KC9K_FOLD_PIECE || kc9kFoldCache.has(key)) {
+    return kc9kFoldCached(key);
+  }
+  const parts = [];
+  for (let at = 0; at < key.length;) {
+    let end = Math.min(key.length, at + KC9K_FOLD_PIECE);
+    if (end < key.length) {
+      const blank = key.slice(end).search(/\s/);
+      end = blank < 0 ? key.length : end + blank + 1;
+    }
+    parts.push(kc9kFold(key.slice(at, end)));
+    at = end;
+    yield;
+  }
+  const value = parts.join("");
+  if (kc9kFoldCache.size >= 4) {
+    kc9kFoldCache.delete(kc9kFoldCache.keys().next().value);
+  }
+  kc9kFoldCache.set(key, value);
+  return value;
+}
+
 // kc9kTermSource is the pattern for one word or phrase.
 function kc9kTermSource(term) {
   const value = kc9kFold(String(term).trim());
@@ -386,17 +480,30 @@ function kc9kCombinationMatcher(boxes) {
 }
 
 // kc9kKeywordMatcher turns a keyword into { test(text), count(text) }:
-// whether it occurs in a text, and how many times.
+// whether it occurs in a text, and how many times. Its regular expression
+// is made at its first use (principle 9): one-word terms are counted
+// through the word index and never need one, and making a thousand at once
+// held a page up for a long task when the rules loaded.
 function kc9kKeywordMatcher(keyword) {
   const boxes = kc9kCombination(keyword);
   if (boxes) {
     return kc9kCombinationMatcher(boxes);
   }
-  const source = kc9kTermSource(keyword);
-  const regex = new RegExp(source, "iu");
+  let source = null;
+  let regex = null;
+  const compiled = () => {
+    if (regex === null) {
+      source = kc9kTermSource(keyword);
+      regex = new RegExp(source, "iu");
+    }
+    return regex;
+  };
   return {
-    test: (text) => regex.test(kc9kFoldCached(text)),
-    count: (text) => (kc9kFoldCached(text).match(new RegExp(source, "giu")) || []).length,
+    test: (text) => compiled().test(kc9kFoldCached(text)),
+    count: (text) => {
+      compiled();
+      return (kc9kFoldCached(text).match(new RegExp(source, "giu")) || []).length;
+    },
   };
 }
 
@@ -504,7 +611,7 @@ function* kc9kIndexCountsSteps(index, text) {
       counts.set(i, (counts.get(i) || 0) + 1);
     }
   };
-  const folded = kc9kFoldCached(text);
+  const folded = yield* kc9kFoldSteps(text);
   const re = /[\p{L}\p{N}]+/gu;
   let m;
   let w = 0;
@@ -568,6 +675,7 @@ function kc9kTextHits(matchers, text) {
 function* kc9kTextHitsSteps(matchers, text) {
   let distinct = 0;
   let total = 0;
+  yield* kc9kFoldSteps(text); // the matchers read it folded, from the cache
   if (matchers.index) {
     for (const n of (yield* kc9kIndexCountsSteps(matchers.index, text)).values()) {
       distinct++;
@@ -597,6 +705,9 @@ function* kc9kTextHitsSteps(matchers, text) {
 // kc9kSomeSteps reports, a matcher a step, whether one of matchers is in
 // text.
 function* kc9kSomeSteps(matchers, text) {
+  if (matchers.length > 0) {
+    yield* kc9kFoldSteps(text); // the matchers read it folded, from the cache
+  }
   for (const matcher of matchers) {
     yield;
     if (matcher.test(text)) {
@@ -633,7 +744,10 @@ function kc9kCompileLists(lists) {
       phraseScope: list.phrase_scope || [],
       ads: (list.ads || []).map((d) => String(d).toLowerCase()),
       actions: list.actions || [],
+      filePages: Boolean(list.file_pages),
+      files: kc9kFilePaths(list.files),
       except: {
+        files: kc9kFilePaths(except.files),
         url: kc9kFilter({ match: except.url || [] }),
         urlTerms: kc9kKeywordMatchers(except.url_terms),
         title: kc9kKeywordMatchers(except.title),
@@ -677,9 +791,10 @@ function kc9kListMatches(compiled, page) {
 // huge page never holds the page up; others run it to the end at once.
 function* kc9kListMatchesSteps(compiled, page) {
   const out = [];
-  if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
+  if (!page || !page.url || !kc9kJudgedAddress(compiled, page.url)) {
     return out;
   }
+  const file = /^file:/i.test(page.url);
   const hasTitle = typeof page.title === "string";
   const hasText = typeof page.text === "string";
   for (const list of compiled) {
@@ -687,10 +802,14 @@ function* kc9kListMatchesSteps(compiled, page) {
     if (list.test) {
       continue; // shown, not run: see kc9kTestReport
     }
+    if (file && !list.filePages) {
+      continue;
+    }
     if ((except.title.length > 0 && !hasTitle) || (except.text.length > 0 && !hasText)) {
       continue;
     }
-    if ((except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
+    if ((file && kc9kFileMatch(except.files, page.url)) ||
+      (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
       kc9kUrlTermsMatch(except.urlTerms, page.url) ||
       (hasTitle && except.title.some((matcher) => matcher.test(page.title))) ||
       (hasText && (yield* kc9kSomeSteps(except.text, page.text)))) {
@@ -705,7 +824,9 @@ function* kc9kListMatchesSteps(compiled, page) {
       }
       continue;
     }
-    const whole = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
+    const whole = (file && kc9kFileMatch(list.files, page.url)) ||
+      (Array.isArray(page.adHosts) && kc9kAdsByPage(list) && page.adHosts.some((h) => kc9kAdHost(list, h))) ||
+      (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       kc9kUrlTermsMatch(list.urlTerms, page.url) ||
       (hasTitle && list.title.some((matcher) => matcher.test(page.title)));
     const found = hasText && list.text.length > 0 ? yield* kc9kTextHitsSteps(list.text, page.text) : { distinct: 0, total: 0 };
@@ -748,7 +869,7 @@ function* kc9kPhrasesFoundSteps(list, page) {
   const scope = list.phraseScope;
   const found = [];
   if (scope.includes("text") && typeof page.text === "string" && list.phrases.length > 0) {
-    yield* kc9kPhraseTokenizedSteps(kc9kFoldCached(page.text)); // split once, in steps, as the phrases read it
+    yield* kc9kPhraseTokenizedSteps(yield* kc9kFoldSteps(page.text)); // split once, in steps, as the phrases read it
   }
   for (const p of list.phrases) {
     yield;
@@ -767,21 +888,24 @@ function* kc9kPhrasesFoundSteps(list, page) {
 // spared is true when one of the block's exceptions matches the page.
 function kc9kTestReport(compiled, page) {
   const out = [];
-  if (!page || !page.url || !/^(https?|ftp):/i.test(page.url)) {
+  if (!page || !page.url || !kc9kJudgedAddress(compiled, page.url)) {
     return out;
   }
+  const file = /^file:/i.test(page.url);
   const title = typeof page.title === "string" ? page.title : "";
   const text = typeof page.text === "string" ? page.text : "";
   for (const list of compiled) {
-    if (!list.test) {
+    if (!list.test || (file && !list.filePages)) {
       continue;
     }
     const except = list.except;
-    const spared = (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
+    const spared = (file && kc9kFileMatch(except.files, page.url)) ||
+      (except.url.match.length > 0 && kc9kMatches(except.url, page.url)) ||
       kc9kUrlTermsMatch(except.urlTerms, page.url) ||
       except.title.some((matcher) => matcher.test(title)) || except.text.some((matcher) => matcher.test(text));
     const urlWords = kc9kUrlWords(page.url);
-    const address = (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
+    const address = (file && kc9kFileMatch(list.files, page.url)) ||
+      (list.url.match.length > 0 && kc9kMatches(list.url, page.url)) ||
       list.urlTerms.some((matcher) => matcher.test(urlWords));
     const inTitle = list.titleRaw.filter((entry, i) => list.title[i].test(title));
     const entries = [];
@@ -890,11 +1014,25 @@ function kc9kTakesAway(outcome) {
 // setting can't be forced from the address are blocked. form holds a POST
 // search's fields (webRequest requestBody.formData): IronFox sends its
 // searches as POST, so they are moved into the address, which then carries
-// the setting whether the request stays a POST or not. Returns { block: true },
+// the setting whether the request stays a POST or not. engines are those
+// whose SafeSearch is on ("safesearch_engines": google, bing, duckduckgo,
+// youtube; left out: all, as Android's rules and older ones mean). Brave,
+// Yahoo, SearXNG and the engines that can't be kept strict go with any of
+// Google's, Bing's or DuckDuckGo's. Returns { block: true },
 // { redirect: address } or null when the address is already right.
 const KC9K_UNSAFE_SEARCH = /^(([a-z0-9-]+\.)*(startpage\.com|ecosia\.org|mojeek\.com|marginalia-search\.com|marginalia\.nu)|(www\.)?yandex\.[a-z]{2,3}(\.[a-z]{2})?|ya\.ru)$/;
 
-function kc9kSafeSearch(rawUrl, form) {
+const KC9K_SAFESEARCH_ENGINES = ["google", "bing", "duckduckgo", "youtube"];
+
+function kc9kSafeSearchEngine(engines, engine) {
+  const on = Array.isArray(engines) ? engines : KC9K_SAFESEARCH_ENGINES;
+  if (engine === "other") {
+    return on.includes("google") || on.includes("bing") || on.includes("duckduckgo");
+  }
+  return on.includes(engine);
+}
+
+function kc9kSafeSearch(rawUrl, form, engines) {
   let url;
   try {
     url = new URL(rawUrl);
@@ -907,16 +1045,20 @@ function kc9kSafeSearch(rawUrl, form) {
   const host = url.hostname.toLowerCase();
   const path = url.pathname;
   if (KC9K_UNSAFE_SEARCH.test(host)) {
-    return { block: true };
+    return kc9kSafeSearchEngine(engines, "other") ? { block: true } : null;
   }
   let setting = null; // [parameter, value]
+  let engine = "other";
   let safeHost = host;
   if (/^([a-z0-9-]+\.)*google(\.[a-z]{2,3}){1,2}$/.test(host) && path === "/search") {
     setting = ["safe", "active"];
+    engine = "google";
   } else if (/^(www\.)?bing\.com$/.test(host) && /^\/((images|videos|news)\/)?search$/.test(path)) {
     setting = ["adlt", "strict"];
+    engine = "bing";
   } else if (/^([a-z0-9-]+\.)?duckduckgo\.com$/.test(host) && /^\/((html|lite)\/?)?$/.test(path)) {
     setting = ["kp", "1"];
+    engine = "duckduckgo";
     // safe.duckduckgo.com is always strict, cookies or not.
     if (host === "duckduckgo.com" || host === "www.duckduckgo.com") {
       safeHost = "safe.duckduckgo.com";
@@ -928,7 +1070,7 @@ function kc9kSafeSearch(rawUrl, form) {
   } else if ((host === "search.disroot.org" || /^searx(ng)?\./.test(host)) && path === "/search") {
     setting = ["safesearch", "2"]; // SearXNG
   }
-  if (!setting) {
+  if (!setting || !kc9kSafeSearchEngine(engines, engine)) {
     return null;
   }
   const fields = form && typeof form === "object" ? Object.keys(form) : [];
@@ -1241,24 +1383,33 @@ function kc9kPageWords(text, max) {
   return Object.fromEntries(top);
 }
 
-// kc9kAdMatches is the ad trigger (§3.9): the lists one of whose ad
-// networks a page at pageUrl loads from host, each with every action (it
-// counts like an address match). A page its block's address exceptions
-// spare doesn't count; lists in test mode don't run.
-function kc9kAdMatches(compiled, host, pageUrl) {
+// kc9kAdHost reports whether a list's ad networks include host (or a
+// domain it is under). Hosts are compared in lower case, without a final dot.
+function kc9kAdHost(list, host) {
   const h = String(host || "").toLowerCase().replace(/\.$/, "");
-  if (!h) {
-    return [];
-  }
+  return h !== "" && Boolean(list.ads) && list.ads.some((d) => h === d || h.endsWith("." + d));
+}
+
+// kc9kAdsByPage reports whether a list's ad trigger is judged with the page
+// itself: its block has exceptions by title or text, which only the page
+// knows (the page's own judging gets the ad hosts it loaded, page.adHosts).
+function kc9kAdsByPage(list) {
+  return list.except.title.length > 0 || list.except.text.length > 0;
+}
+
+// kc9kAdMatches is the ad trigger (§3.9) as the background sees requests:
+// the lists one of whose ad networks a page at pageUrl loads from host, each
+// with every action (it counts like an address match). A page its block's
+// address or URL-term exceptions spare doesn't count; lists in test mode
+// don't run; lists judged with the page (kc9kAdsByPage) are left to it.
+function kc9kAdMatches(compiled, host, pageUrl) {
   const out = [];
   for (const list of compiled || []) {
-    if (list.test || !list.ads || list.ads.length === 0) {
+    if (list.test || !kc9kAdHost(list, host) || kc9kAdsByPage(list)) {
       continue;
     }
-    if (!list.ads.some((d) => h === d || h.endsWith("." + d))) {
-      continue;
-    }
-    if (pageUrl && list.except.url.match.length > 0 && kc9kMatches(list.except.url, pageUrl)) {
+    if (pageUrl && ((list.except.url.match.length > 0 && kc9kMatches(list.except.url, pageUrl)) ||
+      kc9kUrlTermsMatch(list.except.urlTerms, pageUrl))) {
       continue;
     }
     if (list.actions.length > 0) {

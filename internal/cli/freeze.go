@@ -33,7 +33,6 @@ Emergency exit: in GRUB, press e on the boot entry and add
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		forDur, _ := cmd.Flags().GetString("for")
-		yes, _ := cmd.Flags().GetBool("yes")
 		mode, _ := cmd.Flags().GetString("mode")
 		if !freeze.ValidMode(mode) {
 			return fmt.Errorf("unknown mode %q (use lock, logout, shutdown or apps)", mode)
@@ -56,8 +55,13 @@ Emergency exit: in GRUB, press e on the boot entry and add
 		if err := freeze.Validate(d); err != nil {
 			return err
 		}
-		if !yes {
-			return fmt.Errorf("this locks the computer for %s and cannot be cancelled; add --yes to confirm", d)
+		// R-LOCK-12: confirmed like every lock (a terminal asks; --yes for
+		// the interface and scripts).
+		effect := map[string]string{freeze.ModeLock: "the screen locked", freeze.ModeLogout: "every session logged out",
+			freeze.ModeShutdown: "the computer shut down at every start", freeze.ModeApps: "only allowed apps running"}[mode]
+		if err := confirmLocks(cmd, lockToSet{Target: "the computer", Kind: "Frozen Chicken (" + effect + ", can't be cancelled)",
+			Length: humanDuration(d)}); err != nil {
+			return err
 		}
 
 		database, err := openDB()
@@ -77,10 +81,26 @@ Emergency exit: in GRUB, press e on the boot entry and add
 		if until <= current {
 			return fmt.Errorf("already frozen until %s; a freeze can only be extended", time.Unix(current, 0).Format("2006-01-02 15:04"))
 		}
+		if current > time.Now().Unix() {
+			running, err := database.FreezeMode()
+			if err != nil {
+				return err
+			}
+			if kept := freeze.ExtendMode(running, mode); kept != mode {
+				return refused(database, "", fmt.Errorf("a running %s freeze can't become 'allowed apps only', which lets programs run: extend it with --mode %s", running, running))
+			}
+		}
 		if err := database.SetFreeze(until, mode); err != nil {
 			return err
 		}
 		fmt.Printf("Frozen until %s\n", time.Unix(until, 0).Format("2006-01-02 15:04"))
+		if mode == freeze.ModeApps {
+			if apps := enforce.FreezeApps(database); len(apps) == 0 {
+				fmt.Println("Allowed apps only, with no allowed apps: every program you started is closed ('kc9k freeze apps').")
+			} else {
+				fmt.Printf("Allowed apps only: %s keep running.\n", strings.Join(apps, ", "))
+			}
+		}
 		// The daemon locks the screen again every half second during a
 		// lock freeze, so failing to lock it at once only warns. A test's
 		// database (KC9K_DB) never locks the real screen.
@@ -239,6 +259,7 @@ type guiBlock struct {
 	HasPassword       bool           `json:"block_password,omitempty"` // §3.11
 	DraftOf           string         `json:"draft_of,omitempty"`       // §4.3: this is a draft of that block
 	Draft             string         `json:"draft,omitempty"`          // §4.3: this block's draft
+	DraftKept         []string       `json:"draft_kept,omitempty"`     // §4.3: Breaks & allowance, Bypass prevention settings kept for save
 	TodayWindows      []string       `json:"today_windows,omitempty"`  // §4.1: windows still to come or open today
 	Autostarts        []string       `json:"autostarts"`               // §3.6
 	Hidden            bool           `json:"hidden,omitempty"`         // contents left out until revealed
@@ -301,8 +322,8 @@ func (s settingLockState) gui() guiSettingLock {
 	g := guiSettingLock{CharLocked: l.LayerOn(db.LayerText, t, boot), Password: l.LayerOn(db.LayerPassword, t, boot),
 		Restart: l.LayerOn(db.LayerRestart, t, boot), Relock: l.Relock, TimerAfter: l.TimerAfter,
 		LockOrder: l.LayersOn(t, boot)}
-	if l.PendingRelock(t) && l.LiftedUntil > t {
-		g.RelockIn = l.LiftedUntil - t
+	if at := l.RelockAt(t); at > 0 {
+		g.RelockIn = at - t
 	}
 	if l.LockedUntil > t {
 		g.Seconds = l.LockedUntil - t
@@ -379,6 +400,11 @@ type guiState struct {
 	FileURLs         bool                      `json:"tamper_file_urls"`
 	TaskManagers     bool                      `json:"tamper_task_managers"`
 	TamperPrivate    bool                      `json:"tamper_private"`
+	TamperGuest      bool                      `json:"tamper_guest"`
+	ExtensionStop    bool                      `json:"tamper_extension_stop"`
+	TamperInstaller  bool                      `json:"tamper_installer"`
+	InactiveTabs     bool                      `json:"tamper_inactive_tabs"`
+	Embedded         bool                      `json:"tamper_embedded"`
 	Grace            int                       `json:"tamper_grace"`
 	AnythingLocked   bool                      `json:"anything_locked"`           // §4.10: tamper protection can't go off now
 	DesktopWarn      string                    `json:"desktop_warning,omitempty"` // R-DESKTOP-1
@@ -544,6 +570,11 @@ var guiStateCmd = &cobra.Command{
 		tm, _ := database.GetSetting(enforce.SettingTaskManagers)
 		state.TaskManagers = tm == "on"
 		state.TamperPrivate = enforce.PrivateTamperOn(database)
+		state.TamperGuest = enforce.TamperOn(database, enforce.SettingTamperGuest)
+		state.ExtensionStop = enforce.TamperOn(database, enforce.SettingExtensionStop)
+		state.TamperInstaller = enforce.TamperOn(database, enforce.SettingTamperInstaller)
+		state.InactiveTabs = enforce.TamperOn(database, enforce.SettingInactiveTabs)
+		state.Embedded = enforce.TamperOn(database, enforce.SettingEmbedded)
 		state.Grace = enforce.ExtensionGraceSeconds(database)
 		state.AnythingLocked, _ = enforce.AnyLock(database, now, trusted)
 		state.DesktopWarn = blocker.DesktopWarning()
@@ -678,6 +709,9 @@ var guiStateCmd = &cobra.Command{
 			g.DraftOf = draftOf(database, b.Name)
 			if draftOf(database, draftName(b.Name)) == b.Name {
 				g.Draft = draftName(b.Name)
+				for _, e := range draftQueue(database, g.Draft) {
+					g.DraftKept = append(g.DraftKept, e.Text)
+				}
 			}
 			if hash, _ := database.BlockViewPassword(b.Name); hash != "" {
 				g.HasPassword = true

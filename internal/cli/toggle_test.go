@@ -270,7 +270,7 @@ func TestTemplates(t *testing.T) {
 	mustRun(t, "block", "create", "study", "--template", "focus")
 	b, err := d.GetBlock("study")
 	if err != nil || b.Active || len(b.Apps) != 1 {
-		t.Fatalf("from template: %+v, %v", b, err)
+		t.Fatalf("from block preset: %+v, %v", b, err)
 	}
 	found := false
 	for _, l := range b.Lists {
@@ -279,14 +279,14 @@ func TestTemplates(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("the template's entries are missing")
+		t.Error("the block preset's entries are missing")
 	}
 	if err := runCLI(t, "block", "create", "x", "--template", "nope"); err == nil {
-		t.Error("an unknown template accepted")
+		t.Error("an unknown block preset accepted")
 	}
 	mustRun(t, "template", "remove", "Focus")
 	if names, _ := d.Templates(); len(names) != 0 {
-		t.Errorf("templates = %v", names)
+		t.Errorf("block presets = %v", names)
 	}
 }
 
@@ -411,7 +411,11 @@ func TestRecover(t *testing.T) {
 	isRoot, inRecovery = func() bool { return true }, func() bool { return false }
 	mustRun(t, "block", "create", "b")
 	mustRun(t, "block", "add", "b", "reddit.com")
-	if err := runWith(t, 0, []string{"pw1"}, "start", "b", "--password-stdin", "--yes"); err != nil {
+	// Two password locks and re-lock: both, and what re-lock brings back.
+	if err := runWith(t, 0, []string{"pw1", "pw2"}, "start", "b", "--password-stdin", "--password-stdin", "--relock", "10m", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runWith(t, 0, []string{"pw3"}, "strict", "on", "--for", "1h", "--password-stdin", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runWith(t, 0, []string{"settings1"}, "password", "set"); err != nil {
@@ -430,8 +434,11 @@ func TestRecover(t *testing.T) {
 	if v, _ := d.GetSetting(SettingSettingsPassword); v != "" {
 		t.Error("settings password kept")
 	}
-	if e, _ := d.GetLockExtras("b"); e.PasswordHash != "" {
-		t.Error("password lock kept")
+	if e, _ := d.GetLockExtras("b"); e.PasswordHash != "" || len(e.Queue) != 0 || passwordLocks(e.Config) != 0 {
+		t.Errorf("password locks kept: %+v", e)
+	}
+	if l, _ := d.GetSettingLock(enforce.StrictLockName); l.PasswordHash != "" || len(l.Queue) != 0 || l.LockedUntil == 0 || passwordLocks(l.Config) != 0 {
+		t.Errorf("strict mode's lock after recover: %+v", l)
 	}
 	mustRun(t, "stop", "b")
 }
@@ -630,14 +637,29 @@ func TestDraftNeverRuns(t *testing.T) {
 		t.Error("a draft was switched on")
 	}
 	for _, args := range [][]string{
-		{"allowance", "set", draft, "30m"}, {"schedule", "add", draft, "--days", "mon", "--from", "09:00", "--to", "10:00"},
-		{"autostart", draft, "add", "at 08:00"}, {"pomodoro", "set", draft, "25m", "5m"},
-		{"break", "reward", draft, "10m", "--per", "1h"}, {"bypass", "set", "--count", "3", "--within", "10m", "--then", "warning", "--block", draft},
+		{"schedule", "add", draft, "--days", "mon", "--from", "09:00", "--to", "10:00"},
+		{"autostart", draft, "add", "at 08:00"}, {"allowance", "start", draft}, {"break", "start", draft},
 	} {
 		err := runCLI(t, args...)
 		if err == nil || !strings.Contains(err.Error(), "change this on 'b' itself") {
 			t.Errorf("%v on a draft: %v", args, err)
 		}
+	}
+	// The Breaks & allowance and Bypass prevention tabs' settings are kept
+	// on the draft for save: nothing runs, the block is unchanged.
+	for _, args := range [][]string{
+		{"allowance", "set", draft, "45m"}, {"pomodoro", "set", draft, "25m", "5m"},
+		{"break", "reward", draft, "10m", "--per", "1h"}, {"bypass", "set", "--count", "3", "--within", "10m", "--then", "warning", "--block", draft},
+	} {
+		if out := capture(t, args...); !strings.Contains(out, "Kept in the draft of 'b'") {
+			t.Errorf("%v on a draft: %s", args, out)
+		}
+	}
+	if q, _ := d.GetQuota("b"); q == nil || q.Limit != 30*60 {
+		t.Errorf("the draft's allowance changed the block: %+v", q)
+	}
+	if q, _ := d.GetQuota(draft); q != nil {
+		t.Errorf("the draft got an allowance: %+v", q)
 	}
 	if active, _ := d.IsBlockActive(draft); active {
 		t.Fatal("the draft is on")
@@ -887,5 +909,32 @@ func TestBlockTriggerCommand(t *testing.T) {
 	mustRun(t, "block", "trigger", "b", "titles", "close-browser", "on")       // more: free
 	if err := runCLI(t, "block", "trigger", "b", "apps", "logout", "on", "--for", "10m"); err == nil {
 		t.Error("a shorter logout was taken while locked")
+	}
+}
+
+// R-FREEZE-1: a running lock freeze can't be extended into allowed apps
+// only (programs could run again); allowed apps only can become a lock.
+func TestFreezeExtendKeepsStrongerMode(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "freeze", "--for", "1h", "--mode", "logout", "--yes")
+	if err := runCLI(t, "freeze", "--for", "2h", "--mode", "apps", "--yes"); err == nil {
+		t.Error("a logout freeze became allowed apps only")
+	}
+	if m, _ := d.FreezeMode(); m != "logout" {
+		t.Errorf("mode = %q", m)
+	}
+	events, _ := d.RecentEvents(0, 10)
+	if len(events) == 0 || events[0].Kind != db.EventRefused {
+		t.Errorf("the refusal isn't logged: %+v", events)
+	}
+	mustRun(t, "freeze", "--for", "2h", "--mode", "logout", "--yes")
+	if err := d.SetFreeze(0, ""); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "freeze", "--for", "1h", "--mode", "apps", "--yes")
+	mustRun(t, "freeze", "--for", "2h", "--mode", "shutdown", "--yes")
+	if m, _ := d.FreezeMode(); m != "shutdown" {
+		t.Errorf("allowed apps only extended into shutdown: mode = %q", m)
 	}
 }

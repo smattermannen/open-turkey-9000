@@ -28,7 +28,30 @@ const rulesPort = 47613
 // own sites (see db.Actions). Neither is the extension: it is always
 // installed, and browsers without it are closed while it is needed (see
 // ExtensionRequired).
-var BrowserSettings = []string{"web-only", "safesearch", "force-search", "block-devtools", "no-private"}
+var BrowserSettings = []string{"web-only", "safesearch-google", "safesearch-bing", "safesearch-duckduckgo",
+	"safesearch-youtube", "force-search", "block-devtools", "no-private"}
+
+// SafeSearchGroup is the name that switches every engine's SafeSearch at
+// once (and the one setting there was before 2026-11-18).
+const SafeSearchGroup = "safesearch"
+
+// SafeSearchEngines are the engines with their own SafeSearch browser
+// setting, "safesearch-<engine>" (§4.10, §6 2026-11-18).
+var SafeSearchEngines = []string{"google", "bing", "duckduckgo", "youtube"}
+
+// SafeSearchSetting is the browser setting of one engine's SafeSearch.
+func SafeSearchSetting(engine string) string { return SafeSearchGroup + "-" + engine }
+
+// SafeSearchOn returns the engines whose SafeSearch is on.
+func SafeSearchOn(d *db.DB) []string {
+	out := []string{}
+	for _, e := range SafeSearchEngines {
+		if BrowserOn(d, SafeSearchSetting(e)) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
 
 // defaultOn are options that are on until turned off. LibreWolf's developer
 // tools can switch the extension off from its own pages or about:debugging,
@@ -93,34 +116,97 @@ const checkInRecordEvery = 30 * time.Second
 // only the extension enforces (web-only, force-search) is on. A block of
 // apps alone doesn't need it.
 func ExtensionRequired(d *db.DB, active []db.ActiveBlockDetail) bool {
-	for _, b := range active {
-		if b.Lists.Enforces() || len(b.Social) > 0 || b.HasPhrases {
+	required, _ := extensionUsers(d, active)
+	return required
+}
+
+// needsExtension reports whether a block has something only the extension
+// enforces.
+func needsExtension(lists db.Lists, social []string, phrases bool) bool {
+	return lists.Enforces() || len(social) > 0 || phrases
+}
+
+// extensionUsers is ExtensionRequired, and whose browsers need it (§3.2
+// affected users): nil for every account, else the user IDs of the accounts
+// the blocks needing it name. Options, locks and blocks for everyone need
+// it in every account.
+func extensionUsers(d *db.DB, active []db.ActiveBlockDetail) (bool, []uint64) {
+	// Close browsers if the extension stops (§4.10) off: only a lock
+	// requires it.
+	if !TamperOn(d, SettingExtensionStop) {
+		now := time.Now()
+		trusted, err := d.TrustedNow(now)
+		if err != nil {
+			return false, nil
+		}
+		locked, err := AnyLock(d, now, trusted)
+		return err == nil && locked, nil
+	}
+	var some []uint64
+	partial := false
+	add := func(b db.ActiveBlockDetail) bool {
+		uids := blockUIDs(b)
+		if uids == nil {
 			return true
+		}
+		partial = true
+		some = append(some, uids...)
+		return false
+	}
+	for _, b := range active {
+		if needsExtension(b.Lists, b.Social, b.HasPhrases) && add(b) {
+			return true, nil
 		}
 	}
 	// An open quota session counts the time on its websites, which only the
 	// extension sees: without it, another browser would be free.
 	for _, b := range openQuotaBlocks(d) {
-		if b.Lists.Enforces() {
-			return true
+		if !b.Lists.Enforces() {
+			continue
+		}
+		users, _ := d.BlockUsers(b.Name)
+		if add(db.ActiveBlockDetail{BlockName: b.Name, Lists: b.Lists, Users: users}) {
+			return true, nil
 		}
 	}
 	if BrowserOn(d, "web-only") || BrowserOn(d, "force-search") {
-		return true
+		return true, nil
 	}
 	// R-LOCK-9: while anything is locked, the extension is required.
 	now := time.Now()
 	trusted, err := d.TrustedNow(now)
-	if err != nil {
-		return false
+	if err == nil {
+		if locked, err := AnyLock(d, now, trusted); err == nil && locked {
+			return true, nil
+		}
 	}
-	locked, err := AnyLock(d, now, trusted)
-	return err == nil && locked
+	if partial {
+		return true, dedupUIDs(some)
+	}
+	return false, nil
+}
+
+// dedupUIDs returns uids without repeats, never nil.
+func dedupUIDs(uids []uint64) []uint64 {
+	out := []uint64{}
+	for _, u := range uids {
+		if !slices.Contains(out, u) {
+			out = append(out, u)
+		}
+	}
+	return out
 }
 
 // ExtensionRequiredNow is ExtensionRequired for the blocks in force now,
 // leaving out blocks on a Pomodoro break.
 func ExtensionRequiredNow(d *db.DB) (bool, error) {
+	return ExtensionRequiredNowFor(d, -1)
+}
+
+// ExtensionRequiredNowFor is ExtensionRequiredNow for the browsers of the
+// account uid (§3.2): false when only blocks for other accounts need it.
+// A negative uid: any account.
+func ExtensionRequiredNowFor(d *db.DB, uid int64) (bool, error) {
 	active, err := d.GetActiveBlocks()
 	if err != nil {
 		return false, err
@@ -129,7 +215,11 @@ func ExtensionRequiredNow(d *db.DB) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return ExtensionRequired(d, withMonk(d, enabledBlocks(d, active, trusted), trusted)), nil
+	required, uids := extensionUsers(d, withMonk(d, enabledBlocks(d, active, trusted), trusted))
+	if !required || uid < 0 || uids == nil {
+		return required, nil
+	}
+	return slices.Contains(uids, uint64(uid)), nil
 }
 
 // LastExtensionCheckIn returns when the extension last checked in, if ever.
@@ -227,8 +317,11 @@ type Rules struct {
 	WebOnly    bool       `json:"web_only"`
 	// SafeSearch: the extension keeps Bing, DuckDuckGo, Brave, Yahoo and
 	// SearXNG on strict, YouTube on Restricted Mode, and blocks engines it
-	// can't hold (§4.10; Google also by hosts, blocker.SyncSafeSearch).
-	SafeSearch bool `json:"safesearch"`
+	// can't hold (§4.10; also by hosts, blocker.SyncSafeSearch). On when
+	// any engine's is; SafeSearchEngines says which (an extension without
+	// it, or Android's rules, take every engine).
+	SafeSearch        bool     `json:"safesearch"`
+	SafeSearchEngines []string `json:"safesearch_engines"`
 	// StrictUse: every open tab of an allowance session's sites counts, not
 	// only the one in front (§3.7).
 	StrictUse bool     `json:"strict_use"`
@@ -255,6 +348,12 @@ type Rules struct {
 	ExtensionVersion string `json:"extension_version"`
 	// Dark: the circadian rhythm's dark pages (§4.10), nil when off.
 	Dark *DarkRule `json:"dark,omitempty"`
+	// InactiveTabsOff: tamper protection "block inactive tabs" is off: a tab
+	// in the background is judged when it is switched to (§4.10). Absent
+	// (older daemons, Android): on.
+	InactiveTabsOff bool `json:"inactive_tabs_off,omitempty"`
+	// EmbeddedOff: "block embedded content" is off: frames are left alone.
+	EmbeddedOff bool `json:"embedded_off,omitempty"`
 }
 
 // ListRule is one blacklist: the entries it looks for in a page's address,
@@ -284,6 +383,11 @@ type ListRule struct {
 	// places PhraseScope names (url, title, text).
 	Phrases     []db.Phrase `json:"phrases,omitempty"`
 	PhraseScope []string    `json:"phrase_scope,omitempty"`
+	// FilePages: local files (file://) are judged too, by Files (the
+	// list's file entries), the block's file exceptions and the list's
+	// terms; only while tamper "allow file:// blocking" is on (§3.1).
+	FilePages bool     `json:"file_pages,omitempty"`
+	Files     []string `json:"files,omitempty"`
 }
 
 // phraseRules turns a block's phrase sets into rules, with the block's
@@ -326,6 +430,8 @@ type RuleExcept struct {
 	Title    []string `json:"title"`
 	Text     []string `json:"text"`
 	URLTerms []string `json:"url_terms,omitempty"`
+	// Files: the block's file exceptions (file://*, R-LIST-3), for file pages.
+	Files []string `json:"files,omitempty"`
 }
 
 // blockExcept collects a block's exceptions for its rules (R-LIST-1).
@@ -381,6 +487,22 @@ func listRules(b db.ActiveBlockDetail) []ListRule {
 	return out
 }
 
+// withFilePages lets the extension judge local files with rules (§3.1,
+// tamper "allow file:// blocking"): each list's file entries and the
+// block's file exceptions go with them.
+func withFilePages(rules []ListRule, lists db.Lists) {
+	except := blocker.FilePatterns(lists.ExceptionAddresses())
+	for i := range rules {
+		rules[i].FilePages = true
+		rules[i].Except.Files = except
+		for _, l := range lists {
+			if l.ID == rules[i].ID && rules[i].Phrases == nil {
+				rules[i].Files = blocker.FilePatterns(l.Addresses())
+			}
+		}
+	}
+}
+
 // BuildRules collects the rules for the extension right now.
 func BuildRules(d *db.DB) (Rules, error) { return BuildRulesFor(d, "") }
 
@@ -389,13 +511,16 @@ func BuildRules(d *db.DB) (Rules, error) { return BuildRulesFor(d, "") }
 func BuildRulesFor(d *db.DB, user string) (Rules, error) {
 	rules := Rules{
 		Lists: []ListRule{}, Quota: []ListRule{}, Block: []string{}, Exceptions: []string{},
-		WebOnly:    BrowserOn(d, "web-only"),
-		SafeSearch: BrowserOn(d, "safesearch"),
-		StrictUse:  StrictUseOn(d),
-		Titles:     []string{},
+		WebOnly:           BrowserOn(d, "web-only"),
+		SafeSearchEngines: SafeSearchOn(d),
+		StrictUse:         StrictUseOn(d),
+		Titles:            []string{},
+		InactiveTabsOff:   !TamperOn(d, SettingInactiveTabs),
+		EmbeddedOff:       !TamperOn(d, SettingEmbedded),
 
 		ExtensionVersion: webext.Version(),
 	}
+	rules.SafeSearch = len(rules.SafeSearchEngines) > 0
 	if recording, err := d.GetRecording(); err != nil {
 		return rules, err
 	} else if recording != nil && recording.Words {
@@ -442,6 +567,9 @@ func BuildRulesFor(d *db.DB, user string) (Rules, error) {
 		if len(b.Lists) == 0 || (b.Lists[0].ID != MonkListID && b.Lists[0].ID != ResetGuardListID) {
 			blockRules = append(blockRules, phraseRules(d, b.BlockName, except)...)
 		}
+		if FileURLsOn(d) {
+			withFilePages(blockRules, b.Lists)
+		}
 		for _, rule := range blockRules {
 			// Test mode is for tuning what a list finds in pages: lists that
 			// read the title or text are shown, not run.
@@ -483,17 +611,36 @@ func ServeRules(d *db.DB) error {
 		return err
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/rules", rulesHandler(d, checkInRecorder(d)))
-	mux.HandleFunc("/usage", usageHandler(d))
-	mux.HandleFunc("/hit", hitHandler(d))
-	mux.HandleFunc("/visit", visitHandler(d))
-	mux.HandleFunc("/words", wordsHandler(d))
-	mux.HandleFunc("/add", addHandler(d))
-	mux.HandleFunc("/dark-exempt", darkExemptHandler(d))
-	mux.HandleFunc("/image/", imageHandler)
-	mux.HandleFunc(chromeUpdatePath, chromeUpdateHandler)
-	mux.HandleFunc("/chrome/", chromeExtensionHandler)
+	for _, route := range rulesRoutes(d, checkInRecorder(d)) {
+		mux.HandleFunc(route.path, route.handler)
+	}
 	return http.Serve(listener, mux)
+}
+
+// rulesRoute is one address the rules server answers.
+type rulesRoute struct {
+	path    string
+	handler http.HandlerFunc
+}
+
+// rulesRoutes lists every address of the rules server, so a test can hold
+// each one to the server's guards (SPEC §6 2026-11-21 (By Opus), no
+// secret): only requests addressed to RulesAddress, posts only with the
+// extension's own header (which a web page can't send without a CORS
+// preflight, never answered), and no CORS header in any answer.
+func rulesRoutes(d *db.DB, checkIn func(remoteAddr string)) []rulesRoute {
+	return []rulesRoute{
+		{"/rules", rulesHandler(d, checkIn)},
+		{"/usage", usageHandler(d)},
+		{"/hit", hitHandler(d)},
+		{"/visit", visitHandler(d)},
+		{"/words", wordsHandler(d)},
+		{"/add", addHandler(d)},
+		{"/dark-exempt", darkExemptHandler(d)},
+		{"/image/", imageHandler},
+		{chromeUpdatePath, chromeUpdateHandler},
+		{"/chrome/", chromeExtensionHandler},
+	}
 }
 
 // Chrome installs the extension from the daemon: it reads chromeUpdatePath
@@ -694,8 +841,11 @@ func enforceBrowser(d *db.DB) {
 	if err := blocker.EnsureChromeSetup(chrome); err != nil {
 		log.Printf("browser: %v", err)
 	}
-	if err := blocker.SyncSafeSearch(BrowserOn(d, "safesearch")); err != nil {
+	if err := blocker.SyncSafeSearch(SafeSearchOn(d)); err != nil {
 		log.Printf("browser: safesearch: %v", err)
+	}
+	if err := blocker.SyncGuestOff(TamperOn(d, SettingTamperGuest)); err != nil {
+		log.Printf("browser: guest: %v", err)
 	}
 }
 
@@ -706,13 +856,16 @@ func enforceBrowser(d *db.DB) {
 // is there to use instead: without one, every browser would be closed.
 func enforceExtension(d *db.DB, now time.Time, active []db.ActiveBlockDetail) {
 	unsupported := UnsupportedBrowsersOn(d)
-	if !unsupported && !ExtensionRequired(d, active) {
+	required, uids := extensionUsers(d, active)
+	if unsupported {
+		uids = nil // every account: no other browser may run
+	} else if !required {
 		return
 	}
 	if !blocker.ExtensionBrowserInstalled() {
 		return // 'kc9k status' says so
 	}
-	if extensionGuard.Enforce(now, protectionChanged(d), unsupported) > 0 {
+	if extensionGuard.EnforceFor(now, protectionChanged(d), unsupported, uids) > 0 {
 		logEventFor(d, db.EventBrowser, websiteBlocks(active), "")
 	}
 }

@@ -51,7 +51,7 @@ func TestProjectExportImport(t *testing.T) {
 	mustRun(t, "nepsis", "set", "--block", "work", "--step", "3 in 10m: warning")
 	mustRun(t, "cluster", "create", "papers")
 	mustRun(t, "cluster", "add", "papers", "arxiv.org", "jstor.org")
-	mustRun(t, "browser", "safesearch", "on")
+	mustRun(t, "browser", "safesearch-google", "on")
 	mustRun(t, "option", "polite-close", "off")
 	file := filepath.Join(t.TempDir(), "project.json")
 	if err := os.WriteFile(file, []byte(capture(t, "project", "export")), 0o644); err != nil {
@@ -62,7 +62,7 @@ func TestProjectExportImport(t *testing.T) {
 	// Into the same setup: the block that exists is untouched, and the
 	// imported one gets a new name (§3.13).
 	out := capture(t, "project", "import", file)
-	if !strings.Contains(out, "add block 'work' as 'work-2'") || !strings.Contains(out, "Cluster 'papers' exists already") {
+	if !strings.Contains(out, "add block 'work' as 'work-2'") || !strings.Contains(out, "The list preset 'papers' is here already") {
 		t.Errorf("import over itself said: %s", out)
 	}
 	if after, _ := d.GetBlock("work"); !reflect.DeepEqual(before.Lists, after.Lists) {
@@ -112,9 +112,9 @@ func TestProjectExportImport(t *testing.T) {
 		t.Errorf("bypass detection = %+v", n)
 	}
 	if c, err := fresh.GetCluster("papers"); err != nil || len(c.Entries) != 2 {
-		t.Errorf("cluster = %+v, %v", c, err)
+		t.Errorf("list preset = %+v, %v", c, err)
 	}
-	if !enforce.BrowserOn(fresh, "safesearch") || enforce.OptionOn(fresh, enforce.OptionPoliteClose) {
+	if !enforce.BrowserOn(fresh, "safesearch-google") || enforce.OptionOn(fresh, enforce.OptionPoliteClose) {
 		t.Error("browser option or behaviour option didn't come along")
 	}
 
@@ -190,5 +190,73 @@ func TestProjectBackupAndShare(t *testing.T) {
 			t.Error("share: a place came along")
 		}
 		fresh.Close()
+	}
+}
+
+// §3.13 (owner 2026-11-20): presets of every type are in a share only if
+// the user chooses, always in a backup; import only adds, skips one already
+// here and renames one whose name is taken by a different preset.
+func TestProjectPresetsAreAChoice(t *testing.T) {
+	d := testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "preset", "save", "lists", "b", "Mine")
+	mustRun(t, "template", "save", "b", "Focus")
+	mustRun(t, "cluster", "create", "papers")
+	mustRun(t, "cluster", "add", "papers", "arxiv.org")
+	has := func(text string) (lists, block, cluster bool) {
+		return strings.Contains(text, `"Mine"`), strings.Contains(text, `"Focus"`), strings.Contains(text, `"papers"`)
+	}
+	backup := capture(t, "project", "export")
+	if l, b, c := has(backup); !l || !b || !c {
+		t.Errorf("a backup left presets out: lists %v, block %v, list preset %v", l, b, c)
+	}
+	if l, b, c := has(capture(t, "project", "export", "--share")); l || b || c {
+		t.Errorf("a share without --presets (not a terminal) took presets: %v %v %v", l, b, c)
+	}
+	withPresets := capture(t, "project", "export", "--share", "--presets")
+	if l, b, c := has(withPresets); !l || !b || !c {
+		t.Errorf("a share with --presets left presets out: %v %v %v", l, b, c)
+	}
+
+	// Into the same setup: everything is here already, nothing is added.
+	file := filepath.Join(t.TempDir(), "share.json")
+	os.WriteFile(file, []byte(withPresets), 0o644)
+	out := capture(t, "project", "import", file)
+	if !strings.Contains(out, "The lists preset 'Mine' is here already") || !strings.Contains(out, "Block preset 'Focus' is here already") {
+		t.Errorf("import over itself said: %s", out)
+	}
+	// Different content under the same names: added under new names.
+	mustRun(t, "block", "add", "b", "youtube.com")
+	mustRun(t, "preset", "delete", "Mine")
+	mustRun(t, "preset", "save", "lists", "b", "Mine")
+	mustRun(t, "template", "save", "b", "Focus")
+	mustRun(t, "cluster", "add", "papers", "jstor.org")
+	out = capture(t, "project", "import", file)
+	for _, want := range []string{"preset 'Mine' as 'Mine-2'", "block preset 'Focus' as 'Focus-2'", "list preset 'papers' as 'papers-2'"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("import said %q, want %q", out, want)
+		}
+	}
+	if _, err := d.FindPreset(db.PresetLists, "Mine-2"); err != nil {
+		t.Error(err)
+	}
+	if _, err := d.Template("Focus-2"); err != nil {
+		t.Error(err)
+	}
+	if c, err := d.GetCluster("papers-2"); err != nil || len(c.Entries) != 1 {
+		t.Errorf("papers-2 = %+v, %v", c, err)
+	}
+
+	// Into an empty setup: every preset comes along.
+	t.Setenv("KC9K_DB", filepath.Join(t.TempDir(), "fresh.db"))
+	fresh, err := openDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Close()
+	capture(t, "project", "import", file)
+	if p, err := fresh.FindPreset(db.PresetLists, "Mine"); err != nil || len(p.Data) == 0 {
+		t.Errorf("lists preset = %+v, %v", p, err)
 	}
 }

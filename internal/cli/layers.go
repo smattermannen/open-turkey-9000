@@ -32,16 +32,86 @@ var lockFlagKind = map[string]string{
 // read back after parsing.
 var flagSeq int
 
-// orderedValue wraps a flag's value and remembers when it was last set.
+// orderedValue wraps a flag's value and remembers when it was set: last
+// (seq), and every time with its value (sets), so a flag given twice asks
+// for two locks (§3.4: several locks of one kind).
 type orderedValue struct {
 	pflag.Value
-	seq int
+	seq  int
+	sets []flagSet
+}
+
+type flagSet struct {
+	seq   int
+	value string
 }
 
 func (v *orderedValue) Set(s string) error {
 	flagSeq++
 	v.seq = flagSeq
+	v.sets = append(v.sets, flagSet{flagSeq, s})
 	return v.Value.Set(s)
+}
+
+// clearLockOccurrences forgets the lock flags' earlier settings: before
+// parsing a command's flags again in one process (a mode's blocks, tests).
+func clearLockOccurrences(cmd *cobra.Command) {
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if v, ok := f.Value.(*orderedValue); ok {
+			v.sets = nil
+		}
+	})
+}
+
+// parseStartLocks parses stored lock flags (a hotkey's, a mode lock's) into
+// start's flags afresh: the lock flags an earlier run in this process left
+// are put back first, so none is counted twice.
+func parseStartLocks(args []string) error {
+	for _, name := range lockFlagNames {
+		if f := startCmd.Flags().Lookup(name); f != nil {
+			_ = f.Value.Set(f.DefValue)
+			f.Changed = false
+		}
+	}
+	clearLockOccurrences(startCmd)
+	return startCmd.ParseFlags(args)
+}
+
+// lockOccurrence is one lock flag as given.
+type lockOccurrence struct {
+	flag, kind, value string
+	seq               int
+}
+
+// lockOccurrences returns every lock flag given, each time it was given, in
+// order: a bool flag counts when set true, a value flag when not empty.
+// --range-invert only modifies --range and isn't one.
+func lockOccurrences(cmd *cobra.Command) []lockOccurrence {
+	var out []lockOccurrence
+	for name, kind := range lockFlagKind {
+		f := cmd.Flags().Lookup(name)
+		if f == nil || !f.Changed || name == "range-invert" {
+			continue
+		}
+		v, ok := f.Value.(*orderedValue)
+		if !ok || len(v.sets) == 0 {
+			out = append(out, lockOccurrence{name, kind, f.Value.String(), 0})
+			continue
+		}
+		for _, s := range v.sets {
+			if (f.Value.Type() == "bool" && s.value != "true") || s.value == "" {
+				continue
+			}
+			out = append(out, lockOccurrence{name, kind, s.value, s.seq})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].seq != out[j].seq {
+			return out[i].seq < out[j].seq
+		}
+		return out[i].flag < out[j].flag
+	})
+	return out
 }
 
 // trackLockFlagOrder makes the command's lock flags remember their order.

@@ -122,31 +122,33 @@ func TestLayeredBlockLocks(t *testing.T) {
 func TestLayeredSettingLocks(t *testing.T) {
 	d := testDB(t)
 	notTerminal(t)
-	if err := runWith(t, 0, []string{"pw"}, "browser", "safesearch", "on", "--password-stdin", "--for", "1h", "--yes"); err != nil {
+	if err := runWith(t, 0, []string{"pw"}, "browser", "safesearch-google", "on", "--password-stdin", "--for", "1h", "--yes"); err != nil {
 		t.Fatal(err)
 	}
-	l, _ := d.GetSettingLock("safesearch")
+	l, _ := d.GetSettingLock("safesearch-google")
 	if l.LockedUntil != 0 || l.TimerAfter != 3600 || l.Order != "password,timer" {
 		t.Fatalf("lock = %+v", l)
 	}
-	if err := runCLI(t, "browser", "safesearch", "off"); err == nil {
+	if err := runCLI(t, "browser", "safesearch-google", "off"); err == nil {
 		t.Error("turned off while locked")
 	}
-	if err := runCLI(t, "browser", "safesearch", "on", "--for", "30m", "--yes"); err == nil {
-		t.Error("waiting timer shortened")
+	// Another timer lock is a second one, behind the first (§3.4).
+	mustRun(t, "browser", "safesearch-google", "on", "--for", "30m", "--yes")
+	if l, _ := d.GetSettingLock("safesearch-google"); l.TimerAfter != 3600 || len(l.Queue) != 1 || l.Queue[0].For != 1800 {
+		t.Errorf("another timer lock: %+v", l)
 	}
-	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch"); err != nil {
+	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch-google"); err != nil {
 		t.Fatal(err)
 	}
 	trusted := mustTrusted(t, d)
-	l, _ = d.GetSettingLock("safesearch")
+	l, _ = d.GetSettingLock("safesearch-google")
 	if l.PasswordHash != "" || l.TimerAfter != 0 || l.LockedUntil < trusted+3590 {
 		t.Fatalf("after unlocking the password: %+v (now %d)", l, trusted)
 	}
-	if v, _ := d.GetSetting("browser.safesearch"); v != "on" {
+	if v, _ := d.GetSetting("browser.safesearch-google"); v != "on" {
 		t.Error("turned off while its timer lock runs")
 	}
-	if err := runCLI(t, "browser", "unlock", "safesearch"); err == nil {
+	if err := runCLI(t, "browser", "unlock", "safesearch-google"); err == nil {
 		t.Error("unlocked during the timer lock")
 	}
 
@@ -203,14 +205,14 @@ func TestSettingRangeLock(t *testing.T) {
 	now := time.Now()
 	from, to := now.Add(-time.Minute), now.Add(2*time.Minute)
 	spec := fmt.Sprintf("daily %02d:%02d-%02d:%02d", from.Hour(), from.Minute(), to.Hour(), to.Minute())
-	mustRun(t, "browser", "safesearch", "on", "--range", spec, "--yes")
-	if l, _ := d.GetSettingLock("safesearch"); l.RangeDays == 0 {
+	mustRun(t, "browser", "safesearch-google", "on", "--range", spec, "--yes")
+	if l, _ := d.GetSettingLock("safesearch-google"); l.RangeDays == 0 {
 		t.Fatal("no range lock")
 	}
-	if err := runCLI(t, "browser", "safesearch", "off"); err == nil {
+	if err := runCLI(t, "browser", "safesearch-google", "off"); err == nil {
 		t.Error("turned off during its range lock")
 	}
-	if err := runCLI(t, "browser", "unlock", "safesearch"); err == nil {
+	if err := runCLI(t, "browser", "unlock", "safesearch-google"); err == nil {
 		t.Error("unlocked during its range lock")
 	}
 	mustRun(t, "browser", "web-only", "on", "--range", spec, "--range-invert", "--yes")

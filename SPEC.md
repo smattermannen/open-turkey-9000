@@ -367,7 +367,10 @@ GUI and CLI offer the same functions.
     out in a mode, saying "Automated by *mode*"). These apply at once.
   - Save edits/Cancel: an opened block is always a draft; nothing changed in
     it applies until *Save edits*. Locked block: Save edits refuses
-    weakening changes and names them.
+    weakening changes and names them. This holds for every tab, Breaks &
+    allowance and Bypass prevention too; what is done rather than set
+    (taking a break, opening or ending an allowance session), like the
+    block's menu, applies at once *(By Opus)*.
   - Import *From KC9K* (other blocks' lists/phrase sets, presets; several)
     or *From file* (`.txt`, one entry per line); also *Whole internet* and
     *All searches containing…*. Export list/phrase set to `.txt`.
@@ -423,6 +426,12 @@ GUI and CLI offer the same functions.
     lock is a separate action; range, text and password locks stack too,
     with or without re-lock; each hotkey press adds its locks again
     (confirmed per R-LOCK-12).
+  - A setting's locks (browser settings, tamper protection, strict mode,
+    the global ladder, scheduled freezes) stack the same way, and their
+    re-lock brings back the setting's whole lock configuration. Several
+    locks of one kind may be given at once: a lock option given twice is
+    two locks, in the order given. A hotkey or a mode's lock keeps one
+    password, so it sets at most one password lock. *(By Opus)*
   - The text lock's challenge is typed in the terminal the command runs in
     or, without one, in a window the command itself opens on the user's
     desktop (§6 2026-11-14); only keys typed there count. A paste, a drop or
@@ -433,6 +442,9 @@ GUI and CLI offer the same functions.
 - **4.8 Frozen Chicken**: a mode among the blocks (no page of its own):
   switched on for a time or until a date, at most a week ahead; its
   automation schedules freezes; both may coexist.
+  - A running freeze in lock screen, logout or shutdown mode, extended by
+    hand or by a scheduled freeze, keeps its mode: it never becomes allowed
+    apps only, which lets programs run (that would weaken it). *(By Opus)*
 - **4.9 Statistics**: time used and times blocked per site, app, title. Time
   frame (presets/custom), bar chart over time with one colour per site/app, per user, top 5/10, search, filter by block, JSON
   export, delete, on/off, optionally skip private windows. Separate from
@@ -449,7 +461,11 @@ GUI and CLI offer the same functions.
     shows an OK/Cancel window):
     - close private windows and Tor; close guest profiles; close browsers
       if the extension stops; grace for missing extension (default 60 s);
-      allow `file://` blocking;
+      allow `file://` blocking (local files are then judged like web pages:
+      by a list's `file://` entries, its rendered terms and phrases in
+      their address, title and text, spared by the block's file exceptions,
+      `file://*` by default; *Whole internet* still leaves them reachable)
+      *(By Opus)*;
     - block unsupported browsers (all but supported browsers with the
       extension);
     - block the installer (no reinstall/downgrade/removal while locked, via
@@ -459,12 +475,27 @@ GUI and CLI offer the same functions.
     - block task managers while locked (System Monitor, htop);
     - clock: block time/date changes; check against hardware clock and
       internet time.
+    - Defaults: close browsers if the extension stops, block inactive tabs
+      and block embedded content were always done before they were
+      settings, so they are on until turned off; off, browsers without the
+      extension are closed only while anything is locked, a background tab
+      is blocked when switched to, and the extension leaves frames alone
+      (hosts and the firewall still block whole domains). The others are
+      off until turned on. Close guest profiles also turns off the login
+      screen's guest session. Block the installer refuses reinstalling and
+      installing an older version while anything is locked (the package
+      manager and `install.sh`); a newer version installs. *(By Opus)*
   - Browsers: supported browsers found, extension status, one-click install.
   - **Browser settings**, each lockable: SafeSearch on Google, Bing,
     DuckDuckGo, YouTube (Restricted Mode); *force-search* (Google only,
     others blocked, browser search box uses Google); *web-only* (Google web
     results only: no images, shopping, AI answers); block developer tools;
     no private windows.
+    While SafeSearch on Google, Bing or DuckDuckGo is on, Brave, Yahoo and
+    SearXNG searches are kept strict too and search engines that can't be
+    kept strict (Startpage, Ecosia, Mojeek, Yandex, Marginalia) are blocked;
+    they have no setting of their own. YouTube Restricted Mode alone does
+    neither. *(By Opus)*
   - DNS: server asked for blocked sites' real addresses (firewall layer
     only). Default: the network's own server; Quad9 if it can't answer.
   - Use counting: strict use counting.
@@ -491,6 +522,22 @@ GUI and CLI offer the same functions.
       off, it touches nothing.
   - Device protection: strict mode, no-escape, factory reset protection,
     guided setup.
+    - The **firmware lock** (factory reset protection) changes the
+      firmware's settings where Linux can reach them: booting from USB and
+      the network and the one-time boot menu off, the boot order locked,
+      then a firmware password that the trusted person types and keeps;
+      KC9K never stores it. Setting it is confirmed like a lock
+      (R-LOCK-12). Removing it needs that password, puts back what it
+      changed, and is refused while anything is locked. It is not a KC9K
+      lock: it holds nothing else on. Settings the firmware doesn't offer
+      are named as steps to do in its own setup. *(By Opus)*
+    - The **guided setup** is a checklist, not a wizard: each step of the
+      strictest setup in order (settings password, no weakening, tamper
+      protection, strict mode and its lock, root-equivalent groups, the
+      root password, installer media guard, firmware lock, other systems
+      in the boot menu, no-escape last), whether it is done, and a button
+      that runs the same as that setting's own switch. It changes nothing
+      by itself. *(By Opus)*
   - **Wallpaper default** (not part of circadian rhythm): what the desktop
     shows when no mode's wallpaper and no circadian rhythm wallpaper
     applies, and while the place isn't known yet: *Latest wallpaper*,
@@ -648,7 +695,19 @@ Decisions not already written into §1–5:
 - 2026-11-20 (later): Re-lock is optional on every lock; stacking never depends on it (§4.6) (owner).
 - 2026-11-20 (later): A project includes presets of every type only if the user chooses (§3.13); a backup always does (owner).
 - 2026-11-20 (later): Circadian rhythm is a page of its own, as decided 2026-11-16; §4.10 only holds its functions (owner).
+- 2026-11-21 (By Opus): The Breaks & allowance and Bypass prevention tabs are part of the draft (§4.3): what they set is kept with the draft, the last setting of each kind, shown in the tab as not saved yet, and applied at *Save edits* through the same checks as when set directly (weakening ones refused and named on a locked block). Taking a break or an allowance session still happens at once, as the block's menu does: those are things done now, not settings. SPEC already said "nothing changed in it applies until Save edits"; the 2026-11-17 session had left these two tabs out only as the larger change.
+- 2026-11-21 (By Opus): With "allow `file://` blocking" on, the extension judges local files as it does web pages (§4.10 Tamper protection): their `file://` address entries, and rendered terms and phrases in their title and text; the block's file exceptions spare them (`file://*` by default, so nothing changes until the user narrows it). A local HTML page is a way around a block as much as a website is; the setting and the exception keep it opt-in.
 - 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
+- 2026-11-21 (By Opus): The firmware lock sets the firmware's boot settings first and its password last, typed by the trusted person and never stored; removing it is refused while anything is locked and needs that password (§4.10). Making it a KC9K lock with kinds would add nothing: only the trusted person can lift it. Stronger blocking: the one-time boot menu goes off too, since a firmware password alone leaves it open on many computers.
+- 2026-11-21 (By Opus): Tamper protection settings that KC9K always enforced (close browsers if the extension stops, block inactive tabs, block embedded content) are on by default and can be turned off while nothing is locked; the new ones (close guest profiles, block the installer) are off by default (principle 7: behaviour changes are settings, not new defaults; principle 3: a new protection is chosen). Block the installer lets a newer version through, as §4.10 names only reinstalling, downgrading and removal.
+- 2026-11-21 (By Opus): Setting locks stack like a block's (§4.6) and their re-lock brings back the whole configuration: a setting lock is a lock in §3.4's sense, the owner's examples (two partners' passwords) fit settings as well, and one rule for both is simpler to learn. A lock option given twice in one command is two locks (it used to keep the last), so several locks of one kind need no second command. Settles ROADMAP §5 "setting locks stacking".
+- 2026-11-21 (By Opus): Extending a running freeze never switches it to allowed apps only (§4.8): from a text console during a lock-screen freeze, `kc9k freeze --mode apps` would otherwise open the desktop's programs again; the reverse (allowed apps only to lock screen) strengthens and stays free.
+- 2026-11-21 (By Opus): The guided setup (§4.10) is a read-only checklist with each step's own command, no-escape last: the 2026-11-14 "no first-run wizard" decision rules out a wizard, and a checklist that shows what is left keeps the strictest setup deliberate (principle 3).
+
+- 2026-11-21 (By Opus): SafeSearch on the other search engines (§4.10) goes with Google's, Bing's or DuckDuckGo's: any one of them on keeps Brave, Yahoo and SearXNG strict and blocks the engines that can't be kept strict. Each of these engines is a way around whichever engine is kept strict, so a setting of their own could only open that hole; tying them to Google's alone would leave them open while only Bing's or DuckDuckGo's is on. YouTube Restricted Mode is about video, not search, so alone it blocks no search engine. The per-engine settings (2026-11-18) still let one of the three be lifted while another holds. Settles ROADMAP §5 "SafeSearch for the other engines".
+- 2026-11-21 (By Opus): The rules server has no secret; this replaces the secret of 2026-11-14, which the owner asked to have decided. Browsers run as the user, so a secret given by policy sits in files every local program can read, and the lists are in `/etc/hosts` and the browser policy files anyway; an extension that couldn't read the secret would fail every check-in, and the extension guard would close its browser. What holds without it, for every address the server answers: only requests addressed to its own address (no DNS rebinding); posts only with the extension's own header, which a web page can't send without a CORS preflight that is never answered; no CORS header in any answer; a check-in counts only for the browser whose own connection made it (`/proc/net/tcp`). No post weakens a block (principle 10). Settles ROADMAP §5 "rules server secret".
+- 2026-11-21 (By Opus): With block embedded content off (§4.10), a blacklist's paths and patterns stay out of the browser policies too, not only out of the extension's frame checks: Chrome's URL blocklist (and Firefox's website filter) block frames as well as pages, and no policy limits them to pages, so with the setting off a path-blocked embedded video stayed blocked. Whole sites stay in the policies, as hosts and the firewall block them in frames anyway; the extension still blocks the paths and patterns in pages. Monk mode's and factory reset protection's own lists keep theirs.
+- 2026-11-21 (By Opus): The ad trigger's industries (§3.9) ship only domains an ad request really goes to: named as ad hosts by the big ad-filter lists (EasyList, AdGuard, Peter Lowe's, StevenBlack's) or seen in a real page's requests. An entry no request ever reaches can't trigger anything, and an affiliate platform's or game maker's own site could only trigger falsely (a broker's site using the same platform counted as gambling). Gambling and dating ads mostly come through general ad exchanges, so those industries stay small.
 
 ## 7. Open decisions
 

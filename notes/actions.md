@@ -18,17 +18,27 @@
   skip them (`db.IsRemovedAction`).
 - **Ad trigger** (§3.9, `db/adnetworks.go`): scope `ads` (`Where.Ads`,
   `in_ads`; not exception lists or phrase sets); `WebList.AdNetworks`
-  expands industries; rules `ads`; background `noteAdRequest` →
-  `kc9kAdMatches` → `pageHit`. Browser test in `ci/extras_test.py`
-  (block `extraads`; ad hosts resolved to the test server through
-  `network.dns.localDomains`).
+  expands industries (`AdIndustries`: adult, gambling, crypto, dating;
+  `TestAdIndustries`: plain domains, one industry each; only domains ad
+  filter lists name or real pages loaded, the ones seen live in
+  `TestAdIndustriesSeenLive`); rules `ads`; background `noteAdRequest` →
+  `kc9kAdMatches` → `pageHit`, once per page and list (`adSeen`); address
+  and URL-term exceptions spare the page. A list whose block has
+  exceptions by title or text (`kc9kAdsByPage`) is left to the page: the
+  content script collects the other hosts it loaded (resource timing,
+  `noteResource`, `adHosts`) and `kc9kListMatchesSteps` matches them like
+  an address, after every exception. Tests: `ci/match_test.js`,
+  `ci/background_test.js`, `ci/content_harness_test.js`; browser test in
+  `ci/extras_test.py` (block `extraads`; ad hosts resolved to the test
+  server through `network.dns.localDomains`).
 - **Trigger actions** (`db/triggers.go`, `enforce/trigger.go`,
   `cli/triggers.go`; owner 2026-11-16): table `trigger_actions` (block,
   group `apps`|`titles`, JSON actions); no row = default (`close`). `kc9k
   block trigger B apps|titles ACTION on|off [--for D]` (on/longer free,
   off/shorter weakens; monk needs `--no-confirm-ok`). Daemon:
   `appsTrigger` (close or `RunningApps`), titles via
-  `TitleGuard.EnforceWatch` (watch without closing); `fireTrigger` ≤ once
+  `TitleGuard.EnforceUsers` (`TitleTargets.Watch`: watch without closing;
+  per user, `titleTargets`); `fireTrigger` ≤ once
   a minute per block+group → `runAnnounced`. GUI `TriggerEditor`,
   gui-state `triggers`, projects `triggers`. A place rule has **no
   actions** (§3.6, owner 2026-11-16: they existed for a day;

@@ -11,6 +11,11 @@ const POLL_MS = 3000;
 let lists = [];
 let webOnly = false;
 let safeSearch = false;
+let safeSearchEngines = null; // null: every engine (rules without the list)
+// Tamper protection (§4.10): "block inactive tabs" and "block embedded
+// content" are on unless the rules say they are off.
+let inactiveTabsOff = false;
+let embeddedOff = false;
 
 // Firefox for Android (IronFox) has no windows or idle API: there the tab in
 // front is the active one, and the phone counts as in use.
@@ -316,12 +321,15 @@ function act(tabId, url, outcome, reason) {
 // A tab's title is judged by the title lists only: window title entries
 // never apply to browsers (R-TITLE-1).
 function blockTitledTab(tab) {
-  if (!tab.url || !/^https?:/i.test(tab.url)) {
+  if (!tab.url || !kc9kJudgedAddress(lists, tab.url)) {
     return;
   }
   const outcome = kc9kOutcome(kc9kListMatches(lists, { url: tab.url, title: tab.title || "" }));
   if (kc9kTakesAway(outcome)) {
-    act(tab.id, tab.url, outcome, "title");
+    // A local file never reaches onBeforeRequest, so its address is judged
+    // here too: the block page names it when the address alone did it.
+    const byAddress = kc9kTakesAway(kc9kOutcome(kc9kListMatches(lists, { url: tab.url, title: "" })));
+    act(tab.id, tab.url, outcome, byAddress ? "" : "title");
     return;
   }
   if (outcome.custom) {
@@ -585,7 +593,7 @@ function mirrorHit(message, sender) {
 // taken from this script's own rules, never from the report.
 function frameHit(message, sender) {
   const tab = sender && sender.tab;
-  if (!tab || !sender.frameId || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
+  if (embeddedOff || !tab || !sender.frameId || typeof message.url !== "string" || !kc9kJudgedAddress(lists, message.url)) {
     return null;
   }
   const matches = [];
@@ -618,7 +626,7 @@ function why(sender) {
 // rules, never from the report.
 function pageHit(message, sender) {
   const tab = sender && sender.tab;
-  if (!tab || sender.frameId !== 0 || typeof message.url !== "string" || !/^https?:/i.test(message.url)) {
+  if (!tab || sender.frameId !== 0 || typeof message.url !== "string" || !kc9kJudgedAddress(lists, message.url)) {
     return;
   }
   const matches = [];
@@ -723,7 +731,8 @@ browser.webRequest.onBeforeRequest.addListener(
       noteOrigin(details);
     }
     const outcome = addressOutcome(details.url);
-    if (kc9kTakesAway(outcome)) {
+    // Block embedded content off (§4.10): frames are left alone.
+    if (kc9kTakesAway(outcome) && !(embeddedOff && details.type !== "main_frame")) {
       // A frame only ever gets the block page: something embedded in a page
       // mustn't close the tab or the browser.
       if (details.type !== "main_frame") {
@@ -754,7 +763,7 @@ browser.webRequest.onBeforeRequest.addListener(
     }
     if (safeSearch && (details.type === "main_frame" || details.type === "sub_frame")) {
       const form = details.method === "POST" && details.requestBody ? details.requestBody.formData : null;
-      const action = kc9kSafeSearch(details.url, form);
+      const action = kc9kSafeSearch(details.url, form, safeSearchEngines);
       if (action && action.block) {
         return blockedPage(details.url, "safesearch");
       }
@@ -784,7 +793,7 @@ browser.webRequest.onBeforeRequest.addListener(
 // SafeSearch on YouTube: the header Google honours for Restricted Mode.
 browser.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
-    if (!safeSearch) {
+    if (!safeSearch || !kc9kSafeSearchEngine(safeSearchEngines, "youtube")) {
       return {};
     }
     const headers = (details.requestHeaders || []).filter((h) => h.name.toLowerCase() !== "youtube-restrict");
@@ -813,7 +822,7 @@ function stillBlocked(url) {
     return true;
   }
   if (safeSearch) {
-    const action = kc9kSafeSearch(url, null);
+    const action = kc9kSafeSearch(url, null, safeSearchEngines);
     if (action && action.block) {
       return true;
     }
@@ -916,8 +925,11 @@ function apply(rules) {
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);
   safeSearch = Boolean(rules.safesearch);
+  safeSearchEngines = Array.isArray(rules.safesearch_engines) ? rules.safesearch_engines : null;
   strictUse = Boolean(rules.strict_use);
   statsSkipPrivate = Boolean(rules.stats_skip_private);
+  inactiveTabsOff = Boolean(rules.inactive_tabs_off);
+  embeddedOff = Boolean(rules.embedded_off);
   if (recording !== Boolean(rules.recording)) {
     recording = Boolean(rules.recording);
     visited.clear();
@@ -927,23 +939,39 @@ function apply(rules) {
 async function closeNewlyBlockedTabs() {
   const tabs = await browser.tabs.query({});
   for (const tab of tabs) {
-    if (!tab.url || !/^https?:/i.test(tab.url)) {
+    // Block inactive tabs off (§4.10): a background tab waits until it is
+    // switched to (judgeTab from onActivated).
+    if (inactiveTabsOff && !tab.active) {
       continue;
     }
-    const outcome = addressOutcome(tab.url);
-    if (kc9kTakesAway(outcome)) {
-      act(tab.id, tab.url, outcome, "");
-    } else if (kc9kPlaylistBlocks(social, tab.url)) {
-      browser.tabs.update(tab.id, { url: blockedPage(tab.url, "playlist").redirectUrl });
-    } else if (kc9kSocialRedirect(social, tab.url)) {
-      browser.tabs.update(tab.id, { url: kc9kSocialRedirect(social, tab.url) });
-    } else {
-      blockTitledTab(tab);
-      applyMute(tab);
-      tellFrames(tab);
-    }
+    judgeTab(tab);
   }
 }
+
+// judgeTab acts on what a tab already shows, by the rules now.
+function judgeTab(tab) {
+  if (!tab || !tab.url || !kc9kJudgedAddress(lists, tab.url)) {
+    return;
+  }
+  const outcome = addressOutcome(tab.url);
+  if (kc9kTakesAway(outcome)) {
+    act(tab.id, tab.url, outcome, "");
+  } else if (kc9kPlaylistBlocks(social, tab.url)) {
+    browser.tabs.update(tab.id, { url: blockedPage(tab.url, "playlist").redirectUrl });
+  } else if (kc9kSocialRedirect(social, tab.url)) {
+    browser.tabs.update(tab.id, { url: kc9kSocialRedirect(social, tab.url) });
+  } else {
+    blockTitledTab(tab);
+    applyMute(tab);
+    tellFrames(tab);
+  }
+}
+
+browser.tabs.onActivated.addListener((info) => {
+  if (inactiveTabsOff) {
+    browser.tabs.get(info.tabId).then(judgeTab, () => {});
+  }
+});
 
 async function poll() {
   try {
@@ -1064,7 +1092,7 @@ async function updateBadges() {
 function leftSentence(left) {
   const time = kc9kTimeLeft(left.seconds);
   if (left.kind === "quota") {
-    return time + " of today's quota left for '" + left.block + "'";
+    return time + " of the allowance left for '" + left.block + "'";
   }
   if (left.kind === "break") {
     return time + " of break left; then '" + left.block + "' blocks this again";

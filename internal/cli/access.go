@@ -59,14 +59,14 @@ var commandAreas = map[string][]string{
 	"use-counting":  {areaSettings},
 	"autostart":     {areaBlocks},
 	"automation":    {areaBlocks},
-	"template":      {areaBlocks},
+	"block-preset":  {areaBlocks},
 	"unlock":        {areaDashboard, areaBlocks},
 	"monk":          {areaDashboard},
 	"break":         {areaDashboard, areaBlocks},
 	"block":         {areaBlocks},
 	"list":          {areaBlocks},
 	"phrase-set":    {areaBlocks},
-	"cluster":       {areaBlocks},
+	"list-preset":   {areaBlocks},
 	"preset":        {areaBlocks},
 	"place":         {areaBlocks},
 	"social":        {areaBlocks},
@@ -84,6 +84,8 @@ var commandAreas = map[string][]string{
 	"strict":        {areaDevice},
 	"no-escape":     {areaDevice},
 	"reset-guard":   {areaDevice},
+	"firmware-lock": {areaDevice},
+	"guided-setup":  {areaDevice},
 	"no-weakening":  {areaSettings},
 	"dns":           {areaSettings},
 	"tamper":        {areaSettings},
@@ -108,7 +110,7 @@ var commandAreas = map[string][]string{
 // (its password was asked when the hotkey was made), the interface's state
 // (it filters what it prints itself) and uninstalling (root's business,
 // guarded by the settings password).
-var accessExempt = []string{"daemon", "hotkey run", "gui-state", "prepare-uninstall", "help", "completion", "recover",
+var accessExempt = []string{"daemon", "hotkey run", "gui-state", "prepare-uninstall", "prepare-install", "help", "completion", "recover",
 	"wallpaper before-sleep"}
 
 // accessGiven are the access passwords given so far in this command.
@@ -465,6 +467,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("settings-line", false, "Internal: the settings password comes next on standard input, after the access passwords")
 	_ = rootCmd.PersistentFlags().MarkHidden("settings-line")
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		queueOnDraft() // §4.3: the Breaks & allowance and Bypass prevention commands on a draft
 		readSettingsLine(cmd)
 		if err := accessGate(cmd, args); err != nil {
 			return err

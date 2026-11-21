@@ -72,8 +72,15 @@ func TestFilePatterns(t *testing.T) {
 		t.Error("FileCovered")
 	}
 	p := BrowserPolicy{BlockFiles: []string{"file:///home/me/games/*"}}
-	if p.Empty() || !contains(firefoxBlockSet(p), "file:///home/me/games/*") || !contains(chromiumBlockSet(p), "file:///home/me/games/*") {
+	// Chrome reads a path as a prefix and "*" in it literally (seen live
+	// 2026-11-21): the folder without the star.
+	if p.Empty() || !contains(firefoxBlockSet(p), "file:///home/me/games/*") || !contains(chromiumBlockSet(p), "file:///home/me/games/") ||
+		contains(chromiumBlockSet(p), "file:///home/me/games/*") {
 		t.Errorf("policy: %v / %v", firefoxBlockSet(p), chromiumBlockSet(p))
+	}
+	every := BrowserPolicy{BlockFiles: []string{"file://*"}}
+	if !contains(chromiumBlockSet(every), "file:///") || !contains(firefoxBlockSet(every), "file:///*") {
+		t.Errorf("every file: %v / %v", firefoxBlockSet(every), chromiumBlockSet(every))
 	}
 }
 

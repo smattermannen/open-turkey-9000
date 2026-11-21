@@ -8,9 +8,9 @@ import (
 	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
-// §3.4 re-lock on setting locks: unlocking lifts the text and password
-// locks for the re-lock time and leaves the setting on; then they are on
-// again by themselves, unless the setting was turned off meanwhile.
+// §3.4 re-lock on setting locks: once every lock is unlocked, the setting
+// stays on; after the re-lock time its whole configuration is on again by
+// itself, unless the setting was turned off meanwhile.
 func TestSettingRelock(t *testing.T) {
 	d := testDB(t)
 	notTerminal(t)
@@ -30,36 +30,36 @@ func TestSettingRelock(t *testing.T) {
 		return n
 	}
 
-	if err := runCLI(t, "browser", "web-only", "on", "--relock", "10m", "--for", "1h", "--yes"); err == nil {
-		t.Error("--relock without a text or password lock accepted")
+	if err := runCLI(t, "browser", "web-only", "on", "--relock", "10m", "--yes"); err == nil {
+		t.Error("--relock without a lock accepted")
 	}
-	if err := runWith(t, 0, []string{"pw"}, "browser", "safesearch", "on", "--password-stdin", "--relock", "30s", "--yes"); err == nil {
+	if err := runWith(t, 0, []string{"pw"}, "browser", "safesearch-google", "on", "--password-stdin", "--relock", "30s", "--yes"); err == nil {
 		t.Error("--relock under a minute accepted")
 	}
-	if err := runWith(t, 0, []string{"pw"}, "browser", "safesearch", "on", "--password-stdin", "--relock", "30m", "--yes"); err != nil {
+	if err := runWith(t, 0, []string{"pw"}, "browser", "safesearch-google", "on", "--password-stdin", "--relock", "30m", "--yes"); err != nil {
 		t.Fatal(err)
 	}
-	if l := lockOf("safesearch"); l.Relock != 1800 || !l.InForce(trusted(), "boot") {
+	if l := lockOf("safesearch-google"); l.Relock != 1800 || !l.InForce(trusted(), "boot") {
 		t.Fatalf("lock = %+v", l)
 	}
 	// Longer re-lock weakens; shorter strengthens.
-	if err := runCLI(t, "browser", "safesearch", "on", "--relock", "1h", "--yes"); err == nil {
+	if err := runCLI(t, "browser", "safesearch-google", "on", "--relock", "1h", "--yes"); err == nil {
 		t.Error("a longer re-lock was accepted")
 	}
-	mustRun(t, "browser", "safesearch", "on", "--relock", "20m", "--yes")
-	if l := lockOf("safesearch"); l.Relock != 1200 {
+	mustRun(t, "browser", "safesearch-google", "on", "--relock", "20m", "--yes")
+	if l := lockOf("safesearch-google"); l.Relock != 1200 {
 		t.Errorf("re-lock = %d; want 1200", l.Relock)
 	}
 
 	// Unlock: lifted, setting stays on, no lock counts.
-	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch"); err != nil {
+	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch-google"); err != nil {
 		t.Fatal(err)
 	}
-	l := lockOf("safesearch")
-	if !enforce.BrowserOn(d, "safesearch") || l.InForce(trusted(), "boot") || !l.PendingRelock(trusted()) {
-		t.Fatalf("after unlock: on %v, lock %+v", enforce.BrowserOn(d, "safesearch"), l)
+	l := lockOf("safesearch-google")
+	if !enforce.BrowserOn(d, "safesearch-google") || l.InForce(trusted(), "boot") || !l.PendingRelock(trusted()) {
+		t.Fatalf("after unlock: on %v, lock %+v", enforce.BrowserOn(d, "safesearch-google"), l)
 	}
-	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch"); err == nil {
+	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch-google"); err == nil {
 		t.Error("unlocking a lifted lock again succeeded")
 	}
 	if locked, _ := enforce.AnyLock(d, time.Now(), trusted()); locked {
@@ -71,7 +71,7 @@ func TestSettingRelock(t *testing.T) {
 	if err := d.SetSettingLock(l); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLI(t, "browser", "safesearch", "off"); err == nil {
+	if err := runCLI(t, "browser", "safesearch-google", "off"); err == nil {
 		t.Error("turned off after the re-lock came back on")
 	}
 	if locked, _ := enforce.AnyLock(d, time.Now(), trusted()); !locked {
@@ -79,11 +79,11 @@ func TestSettingRelock(t *testing.T) {
 	}
 
 	// Unlock, then turn off meanwhile: the re-lock is gone with it.
-	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch"); err != nil {
+	if err := runWith(t, 0, []string{"pw"}, "browser", "unlock", "safesearch-google"); err != nil {
 		t.Fatal(err)
 	}
-	mustRun(t, "browser", "safesearch", "off")
-	if l := lockOf("safesearch"); l != (db.SettingLock{Name: "safesearch"}) {
+	mustRun(t, "browser", "safesearch-google", "off")
+	if l := lockOf("safesearch-google"); len(l.Layers()) != 0 || l.Relock != 0 || len(l.Config) != 0 {
 		t.Errorf("after off during the lift: %+v", l)
 	}
 
@@ -97,7 +97,9 @@ func TestSettingRelock(t *testing.T) {
 	if err := runWith(t, 0, []string{"new"}, "browser", "web-only", "on", "--password-stdin", "--yes"); err != nil {
 		t.Fatal(err)
 	}
-	if l := lockOf("web-only"); !l.TextOrPasswordLocked(trusted()) || l.Relock != 0 || !db.CheckPassword(l.PasswordHash, "new") {
+	// A lock added while the re-lock time runs holds at once and joins the
+	// configuration re-lock brings back (as on a block).
+	if l := lockOf("web-only"); !l.TextOrPasswordLocked(trusted()) || l.LiftedUntil != 0 || !db.CheckPassword(l.PasswordHash, "new") || len(l.Config) != 2 {
 		t.Errorf("new lock over a lifted one: %+v", l)
 	}
 }

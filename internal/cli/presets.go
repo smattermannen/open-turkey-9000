@@ -39,8 +39,8 @@ var presetCmd = &cobra.Command{
 	Short: "Presets: saved copies of lists, phrase sets, blocks, automations, schedules, hotkeys",
 	Long: `A preset is a copy kept outside blocks, never enforced. Saving one copies,
 and using one copies: changing either afterwards changes nothing on the
-other. Block presets are 'kc9k template', list and phrase set presets
-'kc9k cluster'; a block's lists together, automations, schedules' windows
+other. Block presets are 'kc9k block-preset', list and phrase set presets
+'kc9k list-preset'; a block's lists together, automations, schedules' windows
 and hotkeys are kept here.
 
   kc9k preset save lists BLOCK NAME [--blacklists|--exceptions] [--actions]
@@ -97,7 +97,7 @@ name (a block's is read first).`,
 			printGroup(presetKindWords[kind], names)
 		}
 		if len(templates)+len(clusters)+len(presets) == 0 {
-			fmt.Println("No presets yet. Save one with 'kc9k preset save …', 'kc9k template save' or 'kc9k cluster save'.")
+			fmt.Println("No presets yet. Save one with 'kc9k preset save …', 'kc9k block-preset save' or 'kc9k list-preset save'.")
 		}
 		return nil
 	}),
@@ -233,7 +233,7 @@ var presetSaveCmd = &cobra.Command{
 			fmt.Printf("Preset '%s' saved: hotkey %d (%s %s).\n", name, id, h.Keys, describeHotkey(h))
 			return nil
 		}
-		return fmt.Errorf("presets saved here are lists, automation, schedule or hotkey ('kc9k template save' for a block, 'kc9k cluster save' for one list)")
+		return fmt.Errorf("presets saved here are lists, automation, schedule or hotkey ('kc9k block-preset save' for a block, 'kc9k list-preset save' for one list)")
 	}),
 }
 

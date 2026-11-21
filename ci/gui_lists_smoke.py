@@ -134,16 +134,22 @@ if len(card.entries.store):
     check(card.entries.entry.get_text() == first, "double-click moves the entry into the box: %r" % card.entries.entry.get_text())
 
 # §4.3 import from KC9K: copy another block's list in (the dialog ticked).
-r = cli("block", "create", "src"); r = cli("block", "add", "src", "copied.example"); settle()
+r = cli("block", "create", "src"); r = cli("block", "add", "src", "copied.example")
+r = cli("list-preset", "create", "pre"); r = cli("list-preset", "add", "pre", "preset.example"); settle()
 real_run = Gtk.Dialog.run
+labels = []
 def tick_all(dialog):
     for child in dialog.get_content_area().get_children():
-        if isinstance(child, Gtk.CheckButton) and "src" in child.get_label():
-            child.set_active(True)
+        if isinstance(child, Gtk.CheckButton):
+            labels.append(child.get_label())
+            if "src" in child.get_label():
+                child.set_active(True)
     return Gtk.ResponseType.OK
 Gtk.Dialog.run = tick_all
 win.selected = "b"; win.import_from_kc9k("b", "Blocked"); settle()
 Gtk.Dialog.run = real_run
+# §3.14: a list preset is called so, never a cluster.
+check("List preset: pre" in labels and not any("luster" in l for l in labels), "import sources named by the glossary: %s" % labels)
 check("copied.example" in [l for l in win.blocks["b"]["lists"] if l["name"] == "Blocked"][0]["entries"], "imported from another block")
 
 # §3.6 autostart from the block page.
@@ -231,6 +237,25 @@ win.ask_unsaved = lambda name: "cancel"
 win.leave_block(); settle()
 check(win.blocks_stack.get_visible_child_name() == "cards" and "b (draft)" not in win.blocks
       and "third.example" not in entries_of("b"), "Discard drops them and goes back to the list")
+# §4.3 (2026-11-21): the Breaks & allowance and Bypass prevention tabs are
+# drafted too: their buttons keep the setting in the draft (said in the
+# tab) and Save edits applies it.
+def block_state(name):
+    return next(b for b in json.loads(cli("gui-state").stdout)["blocks"] if b["name"] == name)
+win.open_block("b"); settle()
+win.quota_minutes.set_value(45); win.set_quota(None); settle(); settle(); win.show_block()
+check("b (draft)" in win.blocks and block_state("b").get("quota_limit") != 45 * 60, "an allowance set in the tab waits for Save edits: %s" % block_state("b").get("quota_limit"))
+check(win.quota_kept_label.get_visible() and "Allowance: 45m" in win.quota_kept_label.get_text(),
+      "the tab says what is kept: %r" % win.quota_kept_label.get_text())
+win.run(["bypass", "set", "--block", "b", "--count", "3", "--within", "10m", "--then", "warning"]); settle(); settle(); win.show_block()
+check(win.nepsis_kept_label.get_visible() and not (block_state("b").get("nepsis") or {}).get("steps"),
+      "bypass prevention waits too, said in its tab: %r" % win.nepsis_kept_label.get_text())
+win.finish_draft("save"); settle(); win.show_block()
+check(block_state("b").get("quota_limit") == 45 * 60 and (block_state("b").get("nepsis") or {}).get("steps")
+      and not win.quota_kept_label.get_visible(), "Save edits applies them")
+win.start_quota(None); settle()
+check("b (draft)" not in win.blocks, "an allowance session starts at once, no draft")
+cli("allowance", "end", "b"); cli("allowance", "remove", "b")
 # Away from the block (another page), a command for it applies at once.
 win.stack.set_visible_child_name("dashboard")
 win.run(["block", "add", "b", "direct.example"]); settle()

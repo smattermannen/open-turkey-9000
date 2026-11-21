@@ -24,7 +24,7 @@ func useUsernsFiles(t *testing.T, value string) (setting, saved string) {
 	return setting, saved
 }
 
-func readTrim(t *testing.T, path string) string {
+func readTrimT(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -42,17 +42,17 @@ func TestUserNamespacesRestricted(t *testing.T) {
 		if err := restrictUserNamespaces(); err != nil {
 			t.Fatal(err)
 		}
-		if got := readTrim(t, setting); got != "1" {
+		if got := readTrimT(t, setting); got != "1" {
 			t.Fatalf("setting = %s during the lockdown, want 1", got)
 		}
 	}
-	if got := readTrim(t, saved); got != "0" {
+	if got := readTrimT(t, saved); got != "0" {
 		t.Errorf("saved = %s, want 0", got)
 	}
 	if err := restoreUserNamespaces(); err != nil {
 		t.Fatal(err)
 	}
-	if got := readTrim(t, setting); got != "0" {
+	if got := readTrimT(t, setting); got != "0" {
 		t.Errorf("setting = %s after, want 0", got)
 	}
 	if _, err := os.Stat(saved); !os.IsNotExist(err) {
@@ -70,7 +70,7 @@ func TestUserNamespacesAlreadyRestricted(t *testing.T) {
 	if err := restoreUserNamespaces(); err != nil {
 		t.Fatal(err)
 	}
-	if got := readTrim(t, setting); got != "1" {
+	if got := readTrimT(t, setting); got != "1" {
 		t.Errorf("setting = %s, want 1", got)
 	}
 	if _, err := os.Stat(saved); !os.IsNotExist(err) {

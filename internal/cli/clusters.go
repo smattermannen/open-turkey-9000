@@ -1,18 +1,19 @@
-// clusters.go — clusters: website lists kept outside any block, to copy
-// into blocks.
+// clusters.go — list and phrase set presets (§3.2; "clusters" in the code
+// and DB, old command name kept as an alias, §4.12): lists kept outside any
+// block, to copy into blocks.
 //
-//	kc9k cluster list
-//	kc9k cluster show <cluster>
-//	kc9k cluster create <cluster> [--url] [--title] [--text]
-//	kc9k cluster rename <cluster> <new name>
-//	kc9k cluster delete <cluster>
-//	kc9k cluster add <cluster> <entries...>
-//	kc9k cluster remove <cluster> <entries...>
-//	kc9k cluster where <cluster> url|title|text on|off
-//	kc9k cluster export <cluster>
-//	kc9k cluster import <cluster> <file> [--url] [--title] [--text]
-//	kc9k cluster copy <cluster> <block> [--into LIST | --as NAME] [--exceptions]
-//	kc9k cluster save <block> <list> <cluster>
+//	kc9k list-preset list
+//	kc9k list-preset show <preset>
+//	kc9k list-preset create <preset> [--url] [--title] [--text] [--phrases]
+//	kc9k list-preset rename <preset> <new name>
+//	kc9k list-preset delete <preset>
+//	kc9k list-preset add <preset> <entries...>
+//	kc9k list-preset remove <preset> <entries...>
+//	kc9k list-preset scope <preset> url|title|text on|off
+//	kc9k list-preset export <preset>
+//	kc9k list-preset import <preset> <file> [--url] [--title] [--text]
+//	kc9k list-preset copy <preset> <block> [--into LIST | --as NAME] [--exceptions]
+//	kc9k list-preset save <block> <list> <preset>
 //
 // Nothing enforces a cluster, so editing one is always allowed and never
 // changes a block. Copying one into a block is an edit to that block like
@@ -134,7 +135,7 @@ func clusterCopy(cmd *cobra.Command, database *db.DB, cluster, block, into, as s
 		return err
 	}
 	if len(c.Entries) == 0 {
-		return fmt.Errorf("cluster '%s' is empty", cluster)
+		return fmt.Errorf("list preset '%s' is empty", cluster)
 	}
 	if c.Phrases {
 		return phraseClusterCopy(database, c, block, into, as, exceptions)
@@ -186,37 +187,38 @@ func clusterCopy(cmd *cobra.Command, database *db.DB, cluster, block, into, as s
 		return nil // queued: the gate said so
 	}
 	if created {
-		fmt.Printf("Cluster '%s' added to block '%s' as the list '%s' (%d entries).\n", cluster, block, target, len(c.Entries))
+		fmt.Printf("List preset '%s' added to block '%s' as the list '%s' (%d entries).\n", cluster, block, target, len(c.Entries))
 	} else {
-		fmt.Printf("Cluster '%s' copied into '%s' of block '%s' (%d entries).\n", cluster, target, block, len(c.Entries))
+		fmt.Printf("List preset '%s' copied into '%s' of block '%s' (%d entries).\n", cluster, target, block, len(c.Entries))
 	}
 	return nil
 }
 
 var clusterCmd = &cobra.Command{
-	Use:   "cluster",
-	Short: "Manage clusters: website lists kept outside blocks, to copy into them",
-	Long: `A cluster is a website list of its own: a name, where it looks (the
+	Use:     "list-preset",
+	Aliases: []string{"cluster", "phrase-set-preset"},
+	Short:   "Manage list presets: website lists kept outside blocks, to copy into them",
+	Long: `A list preset is a website list of its own: a name, where it looks (the
 address, the page title, the page text) and entries, as in a block's list.
-Nothing enforces a cluster; it is a stock to build blocks from. Copy one
+Nothing enforces a list preset; it is a stock to build blocks from. Copy one
 into a block as a new blacklist, as a new exception list (--exceptions), or
 into a list the block already has (--into):
 
-  kc9k cluster create academia
-  kc9k cluster add academia arxiv.org scholar.google.com jstor.org
-  kc9k cluster copy academia study --exceptions     # spare them in 'study'
-  kc9k cluster copy anime focus                     # block them in 'focus'
-  kc9k cluster copy anime focus --into Blocked      # ... in its Blocked list
+  kc9k list-preset create academia
+  kc9k list-preset add academia arxiv.org scholar.google.com jstor.org
+  kc9k list-preset copy academia study --exceptions     # spare them in 'study'
+  kc9k list-preset copy anime focus                     # block them in 'focus'
+  kc9k list-preset copy anime focus --into Blocked      # ... in its Blocked list
 
-A copy is a copy: later changes to the cluster don't reach the block, and
-editing a cluster is always allowed. Copying into a block follows the
+A copy is a copy: later changes to the list preset don't reach the block, and
+editing a list preset is always allowed. Copying into a block follows the
 block's rules: into a blacklist is always allowed, into an exception list
 weakens the block and is refused while it is locked, like other edits.`,
 }
 
 var clusterListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "Show the clusters",
+	Short: "Show the list presets",
 	Args:  cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		clusters, err := database.ListClusters()
@@ -224,7 +226,7 @@ var clusterListCmd = &cobra.Command{
 			return err
 		}
 		if len(clusters) == 0 {
-			fmt.Println("No clusters. Make one with 'kc9k cluster create <name>'.")
+			fmt.Println("No list presets. Make one with 'kc9k list-preset create <name>'.")
 		}
 		for _, c := range clusters {
 			fmt.Println(describeCluster(c))
@@ -234,8 +236,8 @@ var clusterListCmd = &cobra.Command{
 }
 
 var clusterShowCmd = &cobra.Command{
-	Use:   "show [cluster]",
-	Short: "Show a cluster's entries",
+	Use:   "show [preset]",
+	Short: "Show a list preset's entries",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		c, err := database.GetCluster(args[0])
@@ -251,12 +253,12 @@ var clusterShowCmd = &cobra.Command{
 }
 
 var clusterCreateCmd = &cobra.Command{
-	Use:   "create [cluster]",
-	Short: "Make an empty cluster",
-	Long: `Makes an empty cluster. It looks at addresses unless --title or --text is
+	Use:   "create [preset]",
+	Short: "Make an empty list preset",
+	Long: `Makes an empty list preset. It looks at addresses unless --title or --text is
 given (combine them freely).
 
-With --phrases it is a phrase cluster: it holds phrases such as
+With --phrases it is a phrase set preset: it holds phrases such as
 "[eat, nice] [hello, grandpa]", is copied into a block as a phrase set, and
 looks at the text unless --url, --title or --text say otherwise.`,
 	Args: cobra.ExactArgs(1),
@@ -275,14 +277,14 @@ looks at the text unless --url, --title or --text say otherwise.`,
 		if err := create(args[0], where); err != nil {
 			return err
 		}
-		fmt.Printf("Cluster '%s' created (looks at: %s).\n", args[0], where)
+		fmt.Printf("List preset '%s' created (looks at: %s).\n", args[0], where)
 		return nil
 	}),
 }
 
 var clusterRenameCmd = &cobra.Command{
-	Use:   "rename [cluster] [new name]",
-	Short: "Rename a cluster",
+	Use:   "rename [preset] [new name]",
+	Short: "Rename a list preset",
 	Args:  cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		c, err := database.GetCluster(args[0])
@@ -294,8 +296,8 @@ var clusterRenameCmd = &cobra.Command{
 }
 
 var clusterDeleteCmd = &cobra.Command{
-	Use:   "delete [cluster]",
-	Short: "Remove a cluster with its entries (lists copied from it stay)",
+	Use:   "delete [preset]",
+	Short: "Remove a list preset with its entries (lists copied from it stay)",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		c, err := database.GetCluster(args[0])
@@ -305,14 +307,14 @@ var clusterDeleteCmd = &cobra.Command{
 		if err := database.DeleteCluster(c.ID); err != nil {
 			return err
 		}
-		fmt.Printf("Cluster '%s' removed.\n", args[0])
+		fmt.Printf("List preset '%s' removed.\n", args[0])
 		return nil
 	}),
 }
 
 var clusterAddCmd = &cobra.Command{
-	Use:   "add [cluster] [entries...]",
-	Short: "Add entries to a cluster",
+	Use:   "add [preset] [entries...]",
+	Short: "Add entries to a list preset",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		c, err := database.GetCluster(args[0])
@@ -325,8 +327,8 @@ var clusterAddCmd = &cobra.Command{
 }
 
 var clusterRemoveCmd = &cobra.Command{
-	Use:   "remove [cluster] [entries...]",
-	Short: "Remove entries from a cluster",
+	Use:   "remove [preset] [entries...]",
+	Short: "Remove entries from a list preset",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		c, err := database.GetCluster(args[0])
@@ -344,7 +346,7 @@ var clusterRemoveCmd = &cobra.Command{
 		}
 		for _, e := range entries {
 			if !containsString(c.Entries, e) {
-				return fmt.Errorf("entry '%s' not found in cluster '%s'", e, c.Name)
+				return fmt.Errorf("entry '%s' not found in list preset '%s'", e, c.Name)
 			}
 		}
 		return database.RemoveClusterEntries(c.ID, entries)
@@ -352,9 +354,9 @@ var clusterRemoveCmd = &cobra.Command{
 }
 
 var clusterWhereCmd = &cobra.Command{
-	Use:     "scope [cluster] [url|title|text] [on|off]",
+	Use:     "scope [preset] [url|title|text] [on|off]",
 	Aliases: []string{"where"},
-	Short:   "Choose where a cluster looks: the address, the page title, the page text",
+	Short:   "Choose where a list preset looks: the address, the page title, the page text",
 	Args:    cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		place := strings.ToLower(args[1])
@@ -371,17 +373,17 @@ var clusterWhereCmd = &cobra.Command{
 		}
 		next := c.Where.With(place, on)
 		if !next.Any() {
-			return fmt.Errorf("cluster '%s' needs to look somewhere; tick another place first", c.Name)
+			return fmt.Errorf("list preset '%s' needs to look somewhere; tick another place first", c.Name)
 		}
 		return database.SetClusterWhere(c.ID, next)
 	}),
 }
 
 var clusterExportCmd = &cobra.Command{
-	Use:   "export [cluster]",
-	Short: "Print a cluster's entries, one per line",
-	Long: `Prints the cluster as a text file: a comment line saying where it looks,
-then one entry per line. 'kc9k cluster import' reads it back, and so does
+	Use:   "export [preset]",
+	Short: "Print a list preset's entries, one per line",
+	Long: `Prints the list preset as a text file: a comment line saying where it looks,
+then one entry per line. 'kc9k list-preset import' reads it back, and so does
 'kc9k list import'.`,
 	Args: cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
@@ -401,16 +403,18 @@ then one entry per line. 'kc9k cluster import' reads it back, and so does
 	}),
 }
 
-// clusterHeader starts the comment line of an exported cluster that says
-// where it looks, e.g. "# kc9k cluster, looks at: url, title".
-const clusterHeader = "# kc9k cluster, looks at: "
+// clusterHeader starts the comment line of an exported list preset that
+// says where it looks, e.g. "# kc9k list preset, looks at: url, title".
+const clusterHeader = "# kc9k list preset, looks at: "
 
-// phraseClusterHeader starts that line for a phrase cluster, and
-// termClusterHeader started it for a term cluster while clusters had types
-// (still read).
+// phraseClusterHeader starts that line for a phrase set preset. The old
+// headers (from while presets were "clusters", and term clusters while
+// they had types) are still read.
 const (
-	phraseClusterHeader = "# kc9k phrase cluster, looks at: "
-	termClusterHeader   = "# kc9k term cluster, looks at: "
+	phraseClusterHeader    = "# kc9k phrase set preset, looks at: "
+	oldClusterHeader       = "# kc9k cluster, looks at: "
+	oldPhraseClusterHeader = "# kc9k phrase cluster, looks at: "
+	oldTermClusterHeader   = "# kc9k term cluster, looks at: "
 )
 
 // exportedWhere reads where an exported cluster looks from its header line.
@@ -427,7 +431,8 @@ func exportedCluster(data string) (db.Where, string, bool) {
 		line = strings.TrimSpace(line)
 		header, what := "", ""
 		for _, h := range []struct{ prefix, what string }{
-			{phraseClusterHeader, "phrases"}, {termClusterHeader, ""}, {clusterHeader, ""}} {
+			{phraseClusterHeader, "phrases"}, {clusterHeader, ""}, {oldPhraseClusterHeader, "phrases"},
+			{oldTermClusterHeader, ""}, {oldClusterHeader, ""}} {
 			if header == "" && strings.HasPrefix(line, h.prefix) {
 				header, what = h.prefix, h.what
 			}
@@ -446,12 +451,12 @@ func exportedCluster(data string) (db.Where, string, bool) {
 }
 
 var clusterImportCmd = &cobra.Command{
-	Use:   "import [cluster] [file]",
+	Use:   "import [preset] [file]",
 	Short: "Add entries from a text file with one entry per line",
-	Long: `Adds the file's entries (one per line; # starts a comment) to the cluster,
-making it if there is none by that name. A new cluster looks where --url,
+	Long: `Adds the file's entries (one per line; # starts a comment) to the list preset,
+making it if there is none by that name. A new list preset looks where --url,
 --title and --text say, or else where the file says (a file written by
-'kc9k cluster export'), or else at addresses.`,
+'kc9k list-preset export'), or else at addresses.`,
 	Args: cobra.ExactArgs(2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		f, err := readEntries(args[1])
@@ -464,7 +469,7 @@ making it if there is none by that name. A new cluster looks where --url,
 		}
 		flagged := cmd.Flags().Changed("url") || cmd.Flags().Changed("title") || cmd.Flags().Changed("text") || cmd.Flags().Changed("ads")
 		if exists && flagged {
-			return fmt.Errorf("cluster '%s' exists; change where it looks with 'kc9k cluster where'", args[0])
+			return fmt.Errorf("list preset '%s' exists; change where it looks with 'kc9k list-preset scope'", args[0])
 		}
 		where := whereFlags(cmd)
 		phrases, _ := cmd.Flags().GetBool("phrases")
@@ -486,7 +491,7 @@ making it if there is none by that name. A new cluster looks where --url,
 			entries = f.Phrases
 		}
 		if len(entries) == 0 {
-			return fmt.Errorf("%s holds %s, none for this cluster", args[1], describeEntryFile(f))
+			return fmt.Errorf("%s holds %s, none for this list preset", args[1], describeEntryFile(f))
 		}
 		defer noteLeftOut(f, phrases)
 		if phrases && !where.Any() {
@@ -516,20 +521,20 @@ making it if there is none by that name. A new cluster looks where --url,
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Imported %d new entries into cluster '%s'.\n", added, args[0])
+		fmt.Printf("Imported %d new entries into list preset '%s'.\n", added, args[0])
 		return nil
 	}),
 }
 
 var clusterCopyCmd = &cobra.Command{
-	Use:   "copy [cluster] [block]",
-	Short: "Copy a cluster into a block, as a new list or into one of its lists",
-	Long: `Without --into, adds the cluster to the block as a new list that looks
-where the cluster does: a blacklist that blocks what it matches, or with
---exceptions an exception list. The list is named after the cluster unless
+	Use:   "copy [preset] [block]",
+	Short: "Copy a list preset into a block, as a new list or into one of its lists",
+	Long: `Without --into, adds the list preset to the block as a new list that looks
+where the list preset does: a blacklist that blocks what it matches, or with
+--exceptions an exception list. The list is named after the list preset unless
 --as gives another name.
 
-With --into, adds the cluster's entries to that list of the block; every
+With --into, adds the list preset's entries to that list of the block; every
 entry must fit where the list looks.
 
 Into a blacklist this strengthens the block and is always allowed. Into an
@@ -544,8 +549,8 @@ exception list it weakens the block, like 'kc9k list add' to that list.`,
 }
 
 var clusterSaveCmd = &cobra.Command{
-	Use:   "save [block] [list or phrase set] [cluster]",
-	Short: "Save a block's list or phrase set as a cluster (adds to the cluster if it exists)",
+	Use:   "save [block] [list or phrase set] [preset]",
+	Short: "Save a block's list or phrase set as a list preset (adds to the list preset if it exists)",
 	Args:  cobra.ExactArgs(3),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		_, l, err := findList(database, args[0], args[1])
@@ -573,13 +578,13 @@ var clusterSaveCmd = &cobra.Command{
 			return err
 		}
 		if c.Phrases {
-			return fmt.Errorf("cluster '%s' holds phrases, not a list's entries", args[2])
+			return fmt.Errorf("list preset '%s' holds phrases, not a list's entries", args[2])
 		}
 		added, err := clusterAdd(database, c, l.Entries)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Saved %d new entries from '%s' of '%s' to cluster '%s'.\n", added, args[1], args[0], args[2])
+		fmt.Printf("Saved %d new entries from '%s' of '%s' to list preset '%s'.\n", added, args[1], args[0], args[2])
 		return nil
 	}),
 }
@@ -603,7 +608,7 @@ func savePhraseCluster(database *db.DB, block string, s db.PhraseSet, name strin
 		return err
 	}
 	if !c.Phrases {
-		return fmt.Errorf("cluster '%s' holds entries, not phrases", name)
+		return fmt.Errorf("list preset '%s' holds entries, not phrases", name)
 	}
 	var texts []string
 	for _, p := range s.Phrases {
@@ -613,19 +618,19 @@ func savePhraseCluster(database *db.DB, block string, s db.PhraseSet, name strin
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Saved %d new phrases from '%s' of '%s' to cluster '%s'.\n", added, s.Name, block, name)
+	fmt.Printf("Saved %d new phrases from '%s' of '%s' to list preset '%s'.\n", added, s.Name, block, name)
 	return nil
 }
 
 func init() {
-	clusterCreateCmd.Flags().Bool("phrases", false, "Make a phrase cluster (copied into blocks as a phrase set)")
-	clusterImportCmd.Flags().Bool("phrases", false, "A new cluster holds phrases")
-	clusterCreateCmd.Flags().Bool("terms", false, "Old alias; changes nothing (clusters have no types)")
-	clusterImportCmd.Flags().Bool("terms", false, "Old alias; changes nothing (clusters have no types)")
+	clusterCreateCmd.Flags().Bool("phrases", false, "Make a phrase set preset (copied into blocks as a phrase set)")
+	clusterImportCmd.Flags().Bool("phrases", false, "A new list preset holds phrases")
+	clusterCreateCmd.Flags().Bool("terms", false, "Old alias; changes nothing (list presets have no types)")
+	clusterImportCmd.Flags().Bool("terms", false, "Old alias; changes nothing (list presets have no types)")
 	addWhereFlags(clusterCreateCmd)
 	addWhereFlags(clusterImportCmd)
 	clusterCopyCmd.Flags().String("into", "", "Add the entries to this list of the block")
-	clusterCopyCmd.Flags().String("as", "", "Name of the new list (default: the cluster's name)")
+	clusterCopyCmd.Flags().String("as", "", "Name of the new list (default: the list preset's name)")
 	clusterCopyCmd.Flags().Bool("exceptions", false, "Make the new list an exception list")
 	addNowFlag(clusterCopyCmd)
 	clusterCmd.AddCommand(clusterListCmd, clusterShowCmd, clusterCreateCmd, clusterRenameCmd, clusterDeleteCmd,

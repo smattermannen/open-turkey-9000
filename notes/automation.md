@@ -94,7 +94,9 @@ Not fixed by `SPEC.md`; the code is the truth.
 - **Places**: re-adding a name adds the BSSIDs now seen; needs at most what
   the place knows; more needed weakens its blocks, fewer is free. A rule
   can go on any block (it switches nothing on); adding or removing one is
-  gated like any automation change. With a schedule lock, a block is
+  gated like any automation change (unticking the last place makes a
+  block continuous: stronger). `place need` more and `place remove` are
+  in the weakening audit (`TestLockedBlockRefusesPlaceWeakening`). With a schedule lock, a block is
   locked while its automation has it enabled; then nothing that lifts it
   can be removed. GUI: "Add this place", "Save where I am now as…"
   (ticked: add it to the block), networks needed per place (`ci/gui_places_smoke.py`, fake

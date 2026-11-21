@@ -8,7 +8,7 @@ another application ID, and never shows the main window. Needs an X display.
 
 Strict mode and no-escape are only looked at, never switched.
 """
-import importlib.util, json, os, subprocess, sys, tempfile, time
+import importlib.util, json, os, re, subprocess, sys, tempfile, time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 S = tempfile.mkdtemp(prefix="kc9k-gui-")
 W = os.path.join(S, "kc9k")
@@ -76,7 +76,8 @@ r = cli("freeze", "apps", "remove", "libreoffice"); settle()
 
 check("Strict mode" not in device and "No-escape" not in device, "Device Blocks keeps only Frozen Chicken: " + ", ".join(device))
 check("Recording" in titles("stats"), "statistics recording on the Statistics page")
-check([n for n, *_ in gui.BROWSER_OPTIONS] == ["safesearch", "force-search", "web-only", "block-devtools", "no-private"],
+check([n for n, *_ in gui.BROWSER_OPTIONS] == ["safesearch-google", "safesearch-bing", "safesearch-duckduckgo", "safesearch-youtube",
+                                               "force-search", "web-only", "block-devtools", "no-private"],
       "browser settings in §4.10 order")
 check("force-librewolf" not in win.browser_switches and "unsupported-browsers" not in win.browser_switches,
       "block unsupported browsers not among browser settings")
@@ -94,7 +95,9 @@ for b in win.state["browsers"]:
     check(install.get_visible() == (not b["installed"]), f"{b['name']} Install button only when missing")
 check(gui.browser_status({"installed": True, "checkin_seconds": 5}) == "Installed. Extension working.", "fresh check-in")
 check("not seen" in gui.browser_status({"installed": True, "checkin_seconds": -1}), "never checked in")
-check(win.tamper_summary.get_text() == "All off.", "tamper summary all off: " + win.tamper_summary.get_text())
+# A fresh setup: only what KC9K always did is on (§4.10, 2026-11-21 By Opus).
+check(win.tamper_summary.get_text() == "On: Close browsers if the extension stops; Block inactive tabs; Block embedded content",
+      "tamper summary of a fresh setup: " + win.tamper_summary.get_text())
 
 # The tamper protection window: Cancel changes nothing, OK applies.
 real_run = Gtk.Dialog.run
@@ -122,11 +125,12 @@ check(not msgs, "no error so far: " + "; ".join(msgs))
 
 # Locked: turning it off is refused by the command and the message shown.
 answer(Gtk.ResponseType.OK, {"clock": True}); win.tamper_dialog(); settle()
-r = cli("browser", "safesearch", "on", "--for", "1h", "--yes"); check(r.returncode == 0, "safesearch locked: " + r.stderr)
+r = cli("browser", "safesearch-bing", "on", "--for", "1h", "--yes"); check(r.returncode == 0, "safesearch-bing locked: " + r.stderr)
 settle()
-status, _unlock = win.setting_locks["safesearch"]
+status, _unlock = win.setting_locks["safesearch-bing"]
 check(status.get_text().startswith("Locked: for"), "browser setting lock shown: " + status.get_text())
-check(not win.browser_switches["safesearch"].get_sensitive(), "locked browser setting can't be switched")
+check(not win.browser_switches["safesearch-bing"].get_sensitive(), "locked browser setting can't be switched")
+check(win.browser_switches["safesearch-google"].get_sensitive(), "another engine's SafeSearch keeps its own switch")
 answer(Gtk.ResponseType.OK, {"clock": False}); win.tamper_dialog(); settle()
 check(clock() == "clock on", "clock stays on while something is locked")
 check(any("locked" in m for m in msgs), "refusal shown: " + "; ".join(msgs))
@@ -263,6 +267,37 @@ Gtk.Dialog.run = lock_dialogs
 win.lock_setting(None, "force-search", "Force search"); settle()
 out = cli("browser").stdout
 check("Unlock order" in asked and "force-search on" in out and "range" in out.lower(), "setting lock with range and order: %s %s" % (asked, out))
+
+# §4.10 Device protection: the guided setup lists every step, in order,
+# with Do it… on those not done; the firmware lock says the scratch
+# database reaches no firmware (no firmware settings to change here).
+seen = {}
+def collect(widget, out):
+    if isinstance(widget, Gtk.Label):
+        out.append(widget.get_text())
+    elif isinstance(widget, Gtk.Button):
+        out.append("[" + widget.get_label() + "]")
+    if isinstance(widget, Gtk.Container):
+        for child in widget.get_children():
+            collect(child, out)
+def look(dialog):
+    texts = []
+    collect(dialog.get_content_area(), texts)
+    if isinstance(dialog, Gtk.MessageDialog):
+        texts.append(dialog.get_property("secondary-text") or "")
+    seen[dialog.get_title() or dialog.get_property("text")] = texts
+    return Gtk.ResponseType.CLOSE
+Gtk.Dialog.run = look
+win.show_guided_setup(None)
+guided = " | ".join(seen.get("Guided setup", []))
+steps = [t for t in seen.get("Guided setup", []) if re.match(r"^\d+\. ", t)]
+check(steps and steps[0].startswith("1. Settings password") and steps[-1].endswith("No-escape"),
+      "guided setup steps in order: " + "; ".join(steps))
+check("[Do it…]" in guided and "Firmware lock" in guided, "guided setup offers Do it…")
+win.show_firmware_lock(None)
+check("can't be changed from Linux" in " ".join(seen.get("Firmware lock", [])), "firmware lock dialog: " + str(seen.get("Firmware lock")))
+check(all(win.guided_action(i) for i in ("settings-password", "strict", "firmware", "no-escape", "tamper")), "each step has its action")
+Gtk.Dialog.run = real_run
 
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")

@@ -40,7 +40,6 @@ type titleSession struct {
 
 // TitleGuard closes apps whose window titles contain blocked keywords.
 type TitleGuard struct {
-	folders  []string // folder entries (§3.1): file manager windows showing them close
 	mu       sync.Mutex
 	asked    map[uint32]time.Time // window -> when it was asked to close
 	watched  map[uint32]bool      // windows with a watched keyword, already reported
@@ -80,6 +79,60 @@ func matchingKeyword(title string, keywords []string) string {
 	return ""
 }
 
+// TitleTargets are what the title guard looks for in one user's windows.
+type TitleTargets struct {
+	Close   []string // window title entries whose windows close
+	Watch   []string // window title entries only reported (owner, 2026-11-16)
+	Folders []string // folder entries (§3.1): file manager windows showing them close
+}
+
+func (t TitleTargets) Empty() bool {
+	return len(t.Close) == 0 && len(t.Watch) == 0 && len(t.Folders) == 0
+}
+
+// TitlesByUser are the title guard's targets per user (§3.2 affected
+// users): All for every account, Users for the accounts (by user ID) a
+// block names.
+type TitlesByUser struct {
+	All   TitleTargets
+	Users map[uint64]TitleTargets
+}
+
+// For returns the targets in the windows of the user uid: every account's
+// and the user's own.
+func (t TitlesByUser) For(uid uint64) TitleTargets {
+	own, ok := t.Users[uid]
+	if !ok {
+		return t.All
+	}
+	return TitleTargets{
+		Close:   append(append([]string{}, t.All.Close...), own.Close...),
+		Watch:   append(append([]string{}, t.All.Watch...), own.Watch...),
+		Folders: append(append([]string{}, t.All.Folders...), own.Folders...),
+	}
+}
+
+// Empty reports whether nobody's windows are looked at.
+func (t TitlesByUser) Empty() bool {
+	if !t.All.Empty() {
+		return false
+	}
+	for _, own := range t.Users {
+		if !own.Empty() {
+			return false
+		}
+	}
+	return true
+}
+
+// TitleHit is a window the guard newly asked to close, or newly saw with a
+// watched entry: the entry (or folder entry) and the user whose window it was.
+type TitleHit struct {
+	Keyword string
+	UID     uint64
+	Watched bool
+}
+
 // Enforce runs one cycle at now with the active blocks' keywords. It returns
 // how many programs it killed, and the keyword of each window it newly asked
 // to close (so the caller can tell which block stopped something).
@@ -91,21 +144,41 @@ func (g *TitleGuard) Enforce(keywords []string, now time.Time) (int, []string) {
 // EnforceWatch is Enforce, and also reports the keyword of each window
 // whose title contains a watched keyword, once per window, without closing
 // it: a block whose window titles don't close only fire their other actions
-// (owner, 2026-11-16).
+// (owner, 2026-11-16). Every user's windows, no folder entries.
 func (g *TitleGuard) EnforceWatch(keywords, watch []string, now time.Time) (int, []string, []string) {
+	killed, hits := g.EnforceUsers(TitlesByUser{All: TitleTargets{Close: keywords, Watch: watch}}, now)
+	var asked, seen []string
+	for _, h := range hits {
+		if h.Watched {
+			seen = append(seen, h.Keyword)
+		} else {
+			asked = append(asked, h.Keyword)
+		}
+	}
+	return killed, asked, seen
+}
+
+// EnforceUsers runs one cycle at now: each desktop user's windows are
+// judged by that user's targets (targets.For). It returns how many programs
+// it killed and each window newly asked to close or newly seen.
+func (g *TitleGuard) EnforceUsers(targets TitlesByUser, now time.Time) (int, []TitleHit) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.watched == nil {
 		g.watched = map[uint32]bool{}
 	}
-	if len(keywords) == 0 && len(g.folders) == 0 && len(watch) == 0 {
+	if targets.Empty() {
 		g.asked, g.watched = map[uint32]time.Time{}, map[uint32]bool{}
-		return 0, nil, nil
+		return 0, nil
 	}
-	var newlyAsked, newlySeen []string
+	var hits []TitleHit
 	seen := map[uint32]bool{}
 	kill := map[int]uint64{} // process -> the user it must still belong to
 	for _, s := range g.sessions() {
+		mine := targets.For(s.uid)
+		if mine.Empty() {
+			continue // no block applies to this user's windows
+		}
 		c, err := openUserDisplay(s.display, s.xauth, s.uid)
 		if err != nil {
 			continue // no X session there (a text console, or Wayland)
@@ -116,13 +189,13 @@ func (g *TitleGuard) EnforceWatch(keywords, watch []string, now time.Time) (int,
 			continue
 		}
 		for _, w := range windows {
-			keyword := matchingKeyword(w.Title, keywords)
+			keyword := matchingKeyword(w.Title, mine.Close)
 			if keyword == "" && fileManagers[exeName(w.PID)] {
-				keyword = folderWindow(w.Title, g.folders) // §3.1: a window showing a folder entry
+				keyword = folderWindow(w.Title, mine.Folders) // §3.1: a window showing a folder entry
 			}
 			watched := ""
 			if keyword == "" {
-				watched = matchingKeyword(w.Title, watch)
+				watched = matchingKeyword(w.Title, mine.Watch)
 			}
 			if (keyword == "" && watched == "") || w.PID <= 1 || !ownedBy(w.PID, s.uid) {
 				continue
@@ -134,7 +207,7 @@ func (g *TitleGuard) EnforceWatch(keywords, watch []string, now time.Time) (int,
 				seen[w.ID] = true
 				if !g.watched[w.ID] {
 					g.watched[w.ID] = true
-					newlySeen = append(newlySeen, watched)
+					hits = append(hits, TitleHit{Keyword: watched, UID: s.uid, Watched: true})
 				}
 				continue
 			}
@@ -145,7 +218,7 @@ func (g *TitleGuard) EnforceWatch(keywords, watch []string, now time.Time) (int,
 				log.Printf("titles: asking %q (pid %d) to close: its title contains %q", w.Title, w.PID, keyword)
 				_ = c.closeWindow(w.ID)
 				g.asked[w.ID] = now
-				newlyAsked = append(newlyAsked, keyword)
+				hits = append(hits, TitleHit{Keyword: keyword, UID: s.uid})
 			case now.Sub(first) >= TitleCloseGrace:
 				log.Printf("titles: closing %s (pid %d): %q is still open", exeName(w.PID), w.PID, w.Title)
 				kill[w.PID] = s.uid
@@ -163,7 +236,7 @@ func (g *TitleGuard) EnforceWatch(keywords, watch []string, now time.Time) (int,
 			delete(g.watched, id)
 		}
 	}
-	return killTrees(kill), newlyAsked, newlySeen
+	return killTrees(kill), hits
 }
 
 // killTrees kills each process in roots and everything it started, as long
@@ -197,13 +270,6 @@ func killTrees(roots map[int]uint64) int {
 // fileManagers are the programs whose windows show folders.
 var fileManagers = map[string]bool{"nemo": true, "nautilus": true, "caja": true, "thunar": true,
 	"dolphin": true, "pcmanfm": true, "pcmanfm-qt": true, "nemo-desktop": false}
-
-// SetFolders sets the folder entries whose file manager windows close.
-func (g *TitleGuard) SetFolders(folders []string) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.folders = folders
-}
 
 // folderWindow returns the folder a file manager window shows, by its
 // title: the folder's name ("games", "games — Dolphin") or its whole path;

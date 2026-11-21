@@ -64,8 +64,8 @@ func ForegroundAppsByUser(idleLimit uint64) []UserApp {
 
 // SomeoneAtDesktop reports whether a desktop user is at the computer: signed
 // in, the screen not locked and input within idleLimit seconds. When it
-// can't tell (no Cinnamon screensaver and no X session) it says yes for a
-// signed-in user.
+// can't tell (no logind, no X session and no Cinnamon screensaver) it says
+// yes for a signed-in user.
 func SomeoneAtDesktop(idleLimit uint64) bool {
 	gdbus, _ := exec.LookPath("gdbus")
 	for _, u := range desktopUsers() {
@@ -76,10 +76,10 @@ func SomeoneAtDesktop(idleLimit uint64) bool {
 	return false
 }
 
-// awayFromDesktop reports whether u's Cinnamon screen is locked or u has been
-// idle for longer than idleLimit seconds. The idle time comes from the X
-// server (x11IdleSeconds), else from Cinnamon's screensaver (6 no longer
-// answers it). When neither can tell, it reports false.
+// awayFromDesktop reports whether u's screen is locked (screenLocked) or u
+// has been idle for longer than idleLimit seconds. The idle time comes from
+// the X server (x11IdleSeconds), else from Cinnamon's screensaver (6 no
+// longer answers it). When neither can tell, it reports false.
 func awayFromDesktop(u *user.User, gdbus string, idleLimit uint64) bool {
 	call := func(method string) string {
 		if gdbus == "" {
@@ -93,7 +93,9 @@ func awayFromDesktop(u *user.User, gdbus string, idleLimit uint64) bool {
 		}
 		return string(out)
 	}
-	if strings.Contains(call("GetActive"), "true") {
+	// Locked: asked of logind, not the session bus, where any program the
+	// user runs can answer for org.cinnamon.ScreenSaver (B8, 2026-11-21).
+	if screenLocked(u.Uid) {
 		return true
 	}
 	// The X server's idle time first: the session bus is the user's own,
@@ -106,6 +108,76 @@ func awayFromDesktop(u *user.User, gdbus string, idleLimit uint64) bool {
 		}
 	}
 	return idle > idleLimit
+}
+
+// screenLocked reports whether the user uid's screen is locked: every
+// desktop (X11 or Wayland) session logind keeps for them has its
+// LockedHint set, which the desktop's screen locker sets (Cinnamon, GNOME,
+// KDE). No desktop session, or no logind: not locked. Replaceable in tests.
+var screenLocked = func(uid string) bool { return lockedByLogind(uid, runLoginctl) }
+
+// runLoginctl runs loginctl with args and returns what it printed.
+func runLoginctl(args ...string) (string, error) {
+	path, err := exec.LookPath("loginctl")
+	if err != nil {
+		return "", err
+	}
+	out, err := exec.Command(path, args...).Output()
+	return string(out), err
+}
+
+// lockedByLogind is screenLocked, asking logind through loginctl.
+func lockedByLogind(uid string, loginctl func(args ...string) (string, error)) bool {
+	if _, err := strconv.ParseUint(uid, 10, 32); err != nil {
+		return false
+	}
+	out, err := loginctl("show-user", uid, "--property=Sessions", "--value")
+	if err != nil {
+		return false
+	}
+	desktops, locked := 0, 0
+	for _, id := range strings.Fields(out) {
+		if !sessionID(id) {
+			continue
+		}
+		props, err := loginctl("show-session", id, "--property=Type", "--property=LockedHint")
+		if err != nil {
+			continue
+		}
+		p := keyValues(props)
+		if p["Type"] != "x11" && p["Type"] != "wayland" {
+			continue // a text console or an ssh login has no screen to lock
+		}
+		desktops++
+		if p["LockedHint"] == "yes" {
+			locked++
+		}
+	}
+	return desktops > 0 && locked == desktops
+}
+
+// sessionID reports whether s looks like a logind session ID ("3", "c2").
+func sessionID(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// keyValues reads "Key=value" lines.
+func keyValues(s string) map[string]string {
+	out := map[string]string{}
+	for _, line := range strings.Split(s, "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 func lastField(s string) string {

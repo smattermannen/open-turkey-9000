@@ -1,22 +1,24 @@
 // project.go — kc9k project: the whole setup in one file, to move it to
 // another computer or share it (§3.13).
 //
-//	kc9k project export > my-setup.json            # a backup
-//	kc9k project export --share > for-a-friend.json  # without places
+//	kc9k project export > my-setup.json                       # a backup
+//	kc9k project export --share [--presets] > for-a-friend.json  # without places
 //	kc9k project import my-setup.json [--dry-run]
 //
-// A project holds every block (lists, apps, window titles, schedules, quota,
-// Pomodoro, breaks, bypass detection), the clusters, the browser options
-// and behaviour options, the global bypass detection and the scheduled
-// Frozen Chicken windows, with the pictures the lists show. Locks,
-// passwords, statistics and what is running right now are never part of it.
+// A project holds every block (lists, apps, window titles, schedules,
+// allowance, Pomodoro, breaks, bypass prevention), the browser settings and
+// behaviour settings, the global bypass prevention and the scheduled Frozen
+// Chicken windows, with the pictures the lists show. Presets of every type
+// (block presets: templates; list and phrase set presets: clusters; the
+// presets table) come along if the user chooses, and always in a backup.
 //
-// A backup also holds the places (with their Wi-Fi networks) and the
-// blocks' place rules; a share leaves them out, since they tell where the
-// user lives. Importing only adds: a block whose name exists already comes
-// in under a new name, a cluster or place that exists is left as it is, browser options are only ever turned on, and bypass detection is only
-// replaced by a stricter one. So an import can't weaken anything that is
-// held.
+// A backup also holds the places (with their Wi-Fi networks), the blocks'
+// place rules and what projectbackup.go adds; a share leaves them out, since
+// they tell where the user lives. Importing only adds: a block or preset
+// whose name exists already comes in under a new name (a preset with the
+// same content is skipped), a place that exists is left as it is, browser
+// settings are only ever turned on, and bypass prevention is only replaced
+// by a stricter one. So an import can't weaken anything that is locked.
 package cli
 
 import (
@@ -27,6 +29,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -114,6 +117,13 @@ type clusterExport struct {
 	Type    string   `json:"type,omitempty"`    // read only: files from while clusters had types
 }
 
+// presetExport is a preset of the presets table (§3.2).
+type presetExport struct {
+	Kind string          `json:"kind"`
+	Name string          `json:"name"`
+	Data json.RawMessage `json:"data"`
+}
+
 // placeExport is a place with the networks it is known by (backups only).
 type placeExport struct {
 	Name     string       `json:"name"`
@@ -127,8 +137,12 @@ type projectExport struct {
 	Places      []placeExport              `json:"places,omitempty"`
 	Blocks      []projectBlock             `json:"blocks"`
 	Clusters    []clusterExport            `json:"clusters,omitempty"`
-	Templates   map[string]json.RawMessage `json:"templates,omitempty"` // §3.2
-	Browser     map[string]bool            `json:"browser_options,omitempty"`
+	Templates   map[string]json.RawMessage `json:"templates,omitempty"` // block presets, §3.2
+	// Presets are the other presets (lists, automation, schedule, hotkey;
+	// §3.2). Clusters, Templates and Presets are in a file only if the user
+	// chose presets, and always in a backup (§3.13).
+	Presets []presetExport  `json:"presets,omitempty"`
+	Browser map[string]bool `json:"browser_options,omitempty"`
 	// Tamper holds block unsupported browsers (in older files the browser
 	// option force-librewolf).
 	Tamper  map[string]bool   `json:"tamper_protection,omitempty"`
@@ -481,13 +495,16 @@ var projectExportCmd = &cobra.Command{
 	Short: "Print the whole setup as JSON (redirect to a file to save it)",
 	Long: `Prints every block with its lists, apps, window titles, schedules, schedule
 lock, social media settings, allowance, Pomodoro, breaks and bypass prevention,
-the clusters, browser settings, behaviour settings, the global bypass
-prevention and the scheduled Frozen Chicken windows.
+the browser settings, behaviour settings, the global bypass prevention and the
+scheduled Frozen Chicken windows.
 
-By default it is a backup, which also holds your places (with the Wi-Fi
-networks they are known by) and the blocks' place rules. With --share they
-are left out, so the file says nothing about where you are. Running locks,
-passwords, hotkeys and statistics are never in it.`,
+By default it is a backup: everything, also every preset (block, list, phrase
+set, schedule, automation and hotkey presets), your places (with the Wi-Fi
+networks they are known by), the blocks' place rules, running locks,
+passwords (as hashes), hotkeys and statistics. With --share places, place
+rules and what only a backup holds are left out, so the file says nothing
+about where you are; presets come along only if you choose: --presets, or
+answer the question on a terminal (elsewhere they are left out).`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		share, _ := cmd.Flags().GetBool("share")
@@ -524,16 +541,10 @@ passwords, hotkeys and statistics are never in it.`,
 			pb.Places = blockPlaces[b.Name]
 			out.Blocks = append(out.Blocks, pb)
 		}
-		clusters, err := database.ListClusters()
-		if err != nil {
-			return err
-		}
-		for _, c := range clusters {
-			full, err := database.GetCluster(c.Name)
-			if err != nil {
+		if !share || exportPresetsChosen(cmd) {
+			if err := exportPresets(database, &out); err != nil {
 				return err
 			}
-			out.Clusters = append(out.Clusters, clusterExport{Name: full.Name, Where: full.Where.List(), Entries: full.Entries, Phrases: full.Phrases})
 		}
 		for _, name := range enforce.BrowserSettings {
 			out.Browser[name] = enforce.BrowserOn(database, name)
@@ -562,16 +573,6 @@ passwords, hotkeys and statistics are never in it.`,
 			out.Freezes = append(out.Freezes, w)
 		}
 		out.Circadian = exportCircadian(database)
-		if names, err := database.Templates(); err == nil {
-			for _, n := range names {
-				if data, err := database.Template(n); err == nil {
-					if out.Templates == nil {
-						out.Templates = map[string]json.RawMessage{}
-					}
-					out.Templates[n] = json.RawMessage(data)
-				}
-			}
-		}
 		out.StrictUse = enforce.StrictUseOn(database)
 		if err := exportModes(database, &out, share); err != nil {
 			return err
@@ -598,8 +599,9 @@ passwords, hotkeys and statistics are never in it.`,
 var projectImportCmd = &cobra.Command{
 	Use:   "import [file]",
 	Short: "Add what a project file holds to this computer's setup",
-	Long: `Adds the blocks of a project file (one whose name is taken here comes in as
-name-2, name-3, …), its clusters and places that don't exist here yet, and
+	Long: `Adds the blocks and presets of a project file (one whose name is taken here
+comes in as name-2, name-3, …; a preset already here is skipped), its places
+that don't exist here yet, and
 the blocks' place rules; turns on the browser settings it has on, adds its scheduled Frozen Chicken
 windows, and takes its global bypass prevention if that is at least as strict
 as the one here. Nothing that exists is changed or removed, so importing
@@ -663,17 +665,17 @@ With --dry-run, says what would happen and changes nothing.`,
 		var clusters []checkedCluster
 		for _, c := range in.Clusters {
 			if err := db.CheckListName(c.Name); err != nil {
-				return fmt.Errorf("cluster '%s': %w", c.Name, err)
+				return fmt.Errorf("list preset '%s': %w", c.Name, err)
 			}
 			var where db.Where
 			for _, place := range c.Where {
 				if !db.IsPlace(place) {
-					return fmt.Errorf("cluster '%s': unknown place %q", c.Name, place)
+					return fmt.Errorf("list preset '%s': unknown place %q", c.Name, place)
 				}
 				where = where.With(place, true)
 			}
 			if !where.Any() {
-				return fmt.Errorf("cluster '%s' looks nowhere", c.Name)
+				return fmt.Errorf("list preset '%s' looks nowhere", c.Name)
 			}
 			// An old file's type is ignored (§3.2).
 			check := func(entries []string) ([]string, error) { return prepareEntries(where, entries) }
@@ -682,7 +684,7 @@ With --dry-run, says what would happen and changes nothing.`,
 			}
 			entries, err := check(c.Entries)
 			if err != nil {
-				return fmt.Errorf("cluster '%s': %w", c.Name, err)
+				return fmt.Errorf("preset '%s': %w", c.Name, err)
 			}
 			c.Entries = entries
 			clusters = append(clusters, checkedCluster{c, where})
@@ -921,29 +923,44 @@ With --dry-run, says what would happen and changes nothing.`,
 		if err := importModes(database, modes, in, renamed, scheduleIDs, placeIDs, dry, say); err != nil {
 			return err
 		}
+		addedClusters := map[string]bool{}
 		for _, c := range clusters {
-			if exists, err := database.ClusterExists(c.c.Name); err != nil {
-				return err
-			} else if exists {
-				fmt.Printf("Cluster '%s' exists already: left as it is.\n", c.c.Name)
+			kind := map[bool]string{false: "list preset", true: "phrase set preset"}[c.c.Phrases]
+			if have, err := database.GetCluster(c.c.Name); err == nil && have.Phrases == c.c.Phrases &&
+				have.Where == c.where && slices.Equal(have.Entries, c.c.Entries) {
+				fmt.Printf("The %s '%s' is here already: left as it is.\n", kind, c.c.Name)
 				continue
 			}
-			say("add cluster '%s' (%d entries)", c.c.Name, len(c.c.Entries))
+			name := freeName(c.c.Name, func(n string) bool {
+				exists, err := database.ClusterExists(n)
+				return err != nil || exists || addedClusters[strings.ToLower(n)]
+			})
+			addedClusters[strings.ToLower(name)] = true
+			if name != c.c.Name {
+				say("add the %s '%s' as '%s', since that name is taken here (%d entries)", kind, c.c.Name, name, len(c.c.Entries))
+			} else {
+				say("add the %s '%s' (%d entries)", kind, name, len(c.c.Entries))
+			}
 			if !dry {
 				create := database.CreateCluster
 				if c.c.Phrases {
 					create = database.CreatePhraseCluster
 				}
-				if err := create(c.c.Name, c.where); err != nil {
+				if err := create(name, c.where); err != nil {
 					return err
 				}
-				created, err := database.GetCluster(c.c.Name)
+				created, err := database.GetCluster(name)
 				if err != nil {
 					return err
 				}
 				if _, err := database.AddClusterEntries(created.ID, c.c.Entries); err != nil {
 					return err
 				}
+			}
+		}
+		if in.Browser[enforce.SafeSearchGroup] { // a file from before a setting per engine
+			for _, e := range enforce.SafeSearchEngines {
+				in.Browser[enforce.SafeSearchSetting(e)] = true
 			}
 		}
 		for _, name := range enforce.BrowserSettings {
@@ -1015,22 +1032,41 @@ With --dry-run, says what would happen and changes nothing.`,
 		if err := importWallpaperSettings(database, in.Wallpaper, modes.pictures, dry, say); err != nil {
 			return err
 		}
-		for name, raw := range in.Templates {
+		templateNames := make([]string, 0, len(in.Templates))
+		for name := range in.Templates {
+			templateNames = append(templateNames, name)
+		}
+		slices.Sort(templateNames)
+		addedTemplates := map[string]bool{}
+		for _, name := range templateNames {
+			raw := in.Templates[name]
 			var check blockExport
 			if json.Unmarshal(raw, &check) != nil || name == "" {
-				fmt.Printf("Template '%s' in the file is damaged: left out.\n", name)
+				fmt.Printf("Block preset '%s' in the file is damaged: left out.\n", name)
 				continue
 			}
-			if _, err := database.Template(name); err == nil {
-				fmt.Printf("Template '%s' exists already: left as it is.\n", name)
+			if have, err := database.Template(name); err == nil && sameJSON([]byte(have), raw) {
+				fmt.Printf("Block preset '%s' is here already: left as it is.\n", name)
 				continue
 			}
-			say("add template '%s'", name)
+			newName := freeName(name, func(n string) bool {
+				_, err := database.Template(n)
+				return err == nil || addedTemplates[strings.ToLower(n)]
+			})
+			addedTemplates[strings.ToLower(newName)] = true
+			if newName != name {
+				say("add block preset '%s' as '%s', since that name is taken here", name, newName)
+			} else {
+				say("add block preset '%s'", name)
+			}
 			if !dry {
-				if err := database.SaveTemplate(name, string(raw)); err != nil {
+				if err := database.SaveTemplate(newName, string(raw)); err != nil {
 					return err
 				}
 			}
+		}
+		if err := importPresets(database, in.Presets, dry, say); err != nil {
+			return err
 		}
 		if in.StrictUse && !enforce.StrictUseOn(database) {
 			say("turn on strict use counting")
@@ -1078,8 +1114,132 @@ func init() {
 	addYesFlag(projectImportCmd)
 	addMonkAckFlag(projectImportCmd)
 	projectExportCmd.Flags().Bool("share", false, "Leave out places and place rules, for sharing with others")
+	projectExportCmd.Flags().Bool("presets", false, "With --share: include every preset (a backup always does)")
 	projectCmd.AddCommand(projectExportCmd, projectImportCmd)
 	rootCmd.AddCommand(projectCmd)
+}
+
+// exportPresetsChosen says whether a share includes the presets (§3.13):
+// --presets decides; without it, a terminal asks and anywhere else they
+// are left out.
+func exportPresetsChosen(cmd *cobra.Command) bool {
+	if f := cmd.Flags().Lookup("presets"); f != nil && f.Changed {
+		return f.Value.String() == "true"
+	}
+	if !isTerminalInput() {
+		return false
+	}
+	fmt.Fprint(os.Stderr, "Include your presets (block, list, phrase set, schedule, automation, hotkey)? Type yes to include them: ")
+	answer, _ := stdinLines.ReadString('\n')
+	return strings.TrimSpace(strings.ToLower(answer)) == "yes"
+}
+
+// exportPresets puts every preset into a project file: block presets
+// (templates), list and phrase set presets (clusters) and the presets table.
+func exportPresets(database *db.DB, out *projectExport) error {
+	clusters, err := database.ListClusters()
+	if err != nil {
+		return err
+	}
+	for _, c := range clusters {
+		full, err := database.GetCluster(c.Name)
+		if err != nil {
+			return err
+		}
+		out.Clusters = append(out.Clusters, clusterExport{Name: full.Name, Where: full.Where.List(), Entries: full.Entries, Phrases: full.Phrases})
+	}
+	names, err := database.Templates()
+	if err != nil {
+		return err
+	}
+	for _, n := range names {
+		data, err := database.Template(n)
+		if err != nil {
+			return err
+		}
+		if out.Templates == nil {
+			out.Templates = map[string]json.RawMessage{}
+		}
+		out.Templates[n] = json.RawMessage(data)
+	}
+	presets, err := database.Presets("")
+	if err != nil {
+		return err
+	}
+	for _, p := range presets {
+		out.Presets = append(out.Presets, presetExport{Kind: p.Kind, Name: p.Name, Data: p.Data})
+	}
+	return nil
+}
+
+// freeName returns name, or name-2, name-3, … for the first one taken
+// neither here nor by this import (§3.13: a clashing name gets a new one).
+func freeName(name string, taken func(string) bool) string {
+	out := name
+	for n := 2; taken(out); n++ {
+		out = fmt.Sprintf("%s-%d", name, n)
+	}
+	return out
+}
+
+// sameJSON reports whether two JSON texts hold the same value.
+func sameJSON(a, b []byte) bool {
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
+		return false
+	}
+	return reflect.DeepEqual(x, y)
+}
+
+// importPresets adds the presets table's presets of a file. It only adds:
+// one already here with the same content is skipped, one whose name is
+// taken by a different preset comes in under a new name.
+func importPresets(database *db.DB, in []presetExport, dry bool, say func(string, ...any)) error {
+	here, err := database.Presets("")
+	if err != nil {
+		return err
+	}
+	added := map[string]bool{}
+	for _, p := range in {
+		if !slices.Contains(db.PresetKinds, p.Kind) || db.CheckListName(p.Name) != nil || !json.Valid(p.Data) {
+			fmt.Printf("Preset '%s' in the file is damaged: left out.\n", p.Name)
+			continue
+		}
+		same := false
+		taken := func(name string) bool {
+			if added[p.Kind+"\x00"+strings.ToLower(name)] {
+				return true
+			}
+			for _, h := range here {
+				if h.Kind == p.Kind && strings.EqualFold(h.Name, name) {
+					return true
+				}
+			}
+			return false
+		}
+		for _, h := range here {
+			if h.Kind == p.Kind && strings.EqualFold(h.Name, p.Name) && sameJSON(h.Data, p.Data) {
+				same = true
+			}
+		}
+		if same {
+			fmt.Printf("The %s preset '%s' is here already: left as it is.\n", p.Kind, p.Name)
+			continue
+		}
+		name := freeName(p.Name, taken)
+		added[p.Kind+"\x00"+strings.ToLower(name)] = true
+		if name != p.Name {
+			say("add the %s preset '%s' as '%s', since that name is taken here", p.Kind, p.Name, name)
+		} else {
+			say("add the %s preset '%s'", p.Kind, name)
+		}
+		if !dry {
+			if err := database.SavePreset(p.Kind, name, p.Data); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // projectMonk names what in a project file would start monk mode by itself (a

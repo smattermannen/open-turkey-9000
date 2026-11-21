@@ -489,14 +489,14 @@ func TestJoinSplitLists(t *testing.T) {
 		t.Errorf("test lists = %v", got)
 	}
 	if c, err := d.GetCluster("mix"); err != nil || c.Where != (Where{URL: true, Text: true}) || !reflect.DeepEqual(c.Entries, entries) {
-		t.Errorf("joined cluster = %+v, %v", c, err)
+		t.Errorf("joined list preset = %+v, %v", c, err)
 	}
 	if ok, _ := d.ClusterExists("mix terms"); ok {
-		t.Error("the joined cluster's terms half stayed")
+		t.Error("the joined list preset's terms half stayed")
 	}
 	for _, name := range []string{"apart", "apart terms"} {
 		if ok, _ := d.ClusterExists(name); !ok {
-			t.Errorf("cluster %s was joined", name)
+			t.Errorf("list preset %s was joined", name)
 		}
 	}
 

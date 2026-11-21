@@ -12,7 +12,6 @@ import json
 import math
 import os
 import re
-import shlex
 import subprocess
 import threading
 import weakref
@@ -60,6 +59,13 @@ DRAFT_EDITS = {
     "phrase-set": {sub: 2 for sub in ("create", "add", "remove", "change", "scope", "action", "threshold",
                                       "test", "rename", "delete", "import")},
     "social": 1,
+    # Breaks & allowance and Bypass prevention (2026-11-21): kept in the
+    # draft by the CLI and run at Save edits; "bypass" names the block by
+    # --block (draft_position).
+    "allowance": {"set": 2, "remove": 2},
+    "pomodoro": {"set": 2, "off": 2},
+    "break": {"reward": 2, "text": 2, "delay": 2},
+    "bypass": {"set": "--block", "off": "--block"},
 }
 # Reading what those tabs show: the draft's, when there is one.
 DRAFT_READS = {"block": {"export-list": 2}, "list": {"export": 2, "show": 2},
@@ -80,7 +86,10 @@ def draft_position(args, table):
     where = table[args[0]]
     if isinstance(where, int):
         return where
-    return where.get(args[1]) if len(args) > 1 else None
+    where = where.get(args[1]) if len(args) > 1 else None
+    if isinstance(where, str):  # the block comes after this flag
+        return args.index(where) + 1 if where in args else None
+    return where
 
 
 def draft_of_name(block):
@@ -100,7 +109,11 @@ OPTIONS = (
 
 # Browser settings (SPEC §4.10), in the order SPEC lists them.
 BROWSER_OPTIONS = (
-    ("safesearch", "Force Google SafeSearch", ""),
+    ("safesearch-google", "SafeSearch on Google", "Also keeps Brave, Yahoo and SearXNG searches strict and blocks "
+     "search engines that can't be kept strict (so do Bing's and DuckDuckGo's)."),
+    ("safesearch-bing", "SafeSearch on Bing", ""),
+    ("safesearch-duckduckgo", "SafeSearch on DuckDuckGo", ""),
+    ("safesearch-youtube", "YouTube Restricted Mode", ""),
     ("force-search", "Force Google as the search engine", ""),
     ("web-only", "Web results only",
      "No image, shopping or AI results in Google."),
@@ -126,6 +139,23 @@ TAMPER_SETTINGS = (
     ("private", "Close private windows and Tor",
      "Private windows are turned off in every browser (open ones close when it restarts) and "
      "Tor Browser is closed.", ("tamper", "private")),
+    ("guest", "Close guest profiles",
+     "Guest browsing is turned off in every Chrome-like browser (Chrome and Chromium have it off "
+     "always) and the login screen offers no guest session.", ("tamper", "guest")),
+    ("extension-stop", "Close browsers if the extension stops",
+     "A browser whose Killer Chicken extension stops checking in is closed while a block needs "
+     "it. Off, only while something is locked.", ("tamper", "extension-stop")),
+    ("installer", "Block the installer",
+     "While anything is locked, reinstalling Killer Chicken 9000 or installing an older version "
+     "is refused, by the package manager and install.sh. Removing it always is.",
+     ("tamper", "installer")),
+    ("inactive-tabs", "Block inactive tabs",
+     "Tabs in the background are blocked at once. Off, a background tab is blocked when you "
+     "switch to it.", ("tamper", "inactive-tabs")),
+    ("embedded", "Block embedded content",
+     "A blocked site shown inside another page (a video, a frame) gets the block page. Off, "
+     "the extension leaves embedded pages alone; whole blocked domains stay blocked.",
+     ("tamper", "embedded")),
     ("file-urls", "Allow file:// blocking",
      "Blacklist entries such as file:///home/me/games/* block local files in the browsers. "
      "Each block's own file:// exceptions (file://* by default) still spare them.",
@@ -351,6 +381,7 @@ def dim(text, wrap=True):
 
 
 CHALLENGE_MIN, CHALLENGE_MAX, CHALLENGE_DEFAULT = 1, 5000, 300
+CHALLENGE_TIMEOUT = 6 * 3600  # seconds a challenge window may stay open (5000 characters: about an hour)
 
 # Appearance is a preference of whoever runs the interface, so it lives in
 # their own config, not in the KC9K database.
@@ -7009,6 +7040,8 @@ class Window(Gtk.ApplicationWindow):
             "Settings counts everything, and both apply."), False, False, 0)
         self.block_nepsis_label = Gtk.Label(xalign=0, wrap=True)
         nepsis.pack_start(self.block_nepsis_label, False, False, 0)
+        self.nepsis_kept_label = Gtk.Label(xalign=0, wrap=True, no_show_all=True)
+        nepsis.pack_start(self.nepsis_kept_label, False, False, 0)
         row = Gtk.Box(spacing=6)
         change = Gtk.Button(label="Change…")
         change.connect("clicked", self.change_block_nepsis)
@@ -7683,6 +7716,9 @@ class Window(Gtk.ApplicationWindow):
         fields, one primary button."""
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, margin=12)
         labels = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+        # §4.3: what was set here is kept in the draft until Save edits.
+        self.quota_kept_label = Gtk.Label(xalign=0, wrap=True, no_show_all=True)
+        box.pack_start(self.quota_kept_label, False, False, 0)
 
         def form_row(text, *widgets):
             row = Gtk.Box(spacing=8)
@@ -7816,7 +7852,7 @@ class Window(Gtk.ApplicationWindow):
         box.pack_start(section(
             "Breaks that keep the locks", dim("A break after a challenge or a countdown; the block stays locked."),
             relock_row, delay_row,
-            help="Text break: passing the typing challenge or giving the password doesn't end the "
+            help="Text break: passing the text lock's challenge or giving the password doesn't end the "
                  "block's lock, it lifts the block for a while; unlocking again during that break ends "
                  "it. Delay break: asked for, it begins after the wait you chose."), False, False, 0)
         for row in (quota_row, sessions_row, pomodoro_row, long_row, allowance_row, keep_row, relock_row, delay_row):
@@ -8071,6 +8107,13 @@ class Window(Gtk.ApplicationWindow):
         self.block_nepsis_label.set_text(describe_nepsis(block.get("nepsis"), block.get("nepsis_count")
                                                          if block["active"] else None))
         self.block_nepsis_off_button.set_visible(bool((block.get("nepsis") or {}).get("steps")))
+        # §4.3: settings of these two tabs kept in the draft until Save edits.
+        kept = block.get("draft_kept") or []
+        for label, items in ((self.quota_kept_label, [k for k in kept if not k.startswith("Bypass prevention")]),
+                             (self.nepsis_kept_label, [k for k in kept if k.startswith("Bypass prevention")])):
+            label.set_markup("<b>Not saved yet</b> (applies with Save edits): " +
+                             GLib.markup_escape_text("; ".join(items)) if items else "")
+            label.set_visible(bool(items))
 
     def update_lists(self, lists, phrase_sets=()):
         """Shows the selected block's lists and phrase sets, keeping the cards
@@ -8195,14 +8238,14 @@ class Window(Gtk.ApplicationWindow):
         templates = (self.state or {}).get("templates") or []
         template = None
         if templates:
-            # §3.2: start from one of your templates, or empty.
+            # §3.2: start from one of your block presets, or empty.
             dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
                                        buttons=Gtk.ButtonsType.OK_CANCEL, text="New block",
-                                       secondary_text="Start empty or from a template.")
+                                       secondary_text="Start empty or from a block preset.")
             combo = Gtk.ComboBoxText()
             combo.append("", "Empty")
             for name in templates:
-                combo.append(name, "Template: " + name)
+                combo.append(name, "Block preset: " + name)
             combo.set_active(0)
             dialog.get_message_area().pack_start(combo, False, False, 0)
             dialog.show_all()
@@ -8216,7 +8259,7 @@ class Window(Gtk.ApplicationWindow):
             self.selected = name
             self.blocks_stack.set_visible_child_name("detail")
             self.stack.set_visible_child_name("blocks")
-            self.run(["block", "create", name] + (["--template", template] if template else []))
+            self.run(["block", "create", name] + (["--preset", template] if template else []))
 
     def save_template(self, _button):
         if not self.selected:
@@ -8224,7 +8267,7 @@ class Window(Gtk.ApplicationWindow):
         name = self.ask_text("Save as block preset", "A name for a copy of this block, to make new blocks from.",
                              initial=self.selected)
         if name:
-            self.run(["template", "save", self.selected, name])
+            self.run(["block-preset", "save", self.selected, name])
 
     def choose_block_users(self, _button, answer=None):
         """§3.2: tick the accounts the block applies to; all ticked (or
@@ -8328,7 +8371,7 @@ class Window(Gtk.ApplicationWindow):
             "New locks come after the ones already on, unlocked last. A kind it already has is "
             "a second lock of that kind, after the others. "
             "A lock that is on is never changed." if active else
-            "It starts with the locks below. Once on, a lock can only be made stronger.",
+            "It starts with the locks below. Once on, a lock is never changed; more can be added.",
             "Add locks", picker, need_lock=True)
         if asked is None:
             return
@@ -8485,11 +8528,14 @@ class Window(Gtk.ApplicationWindow):
             else:  # only a delay lock: unlocking starts its countdown
                 self.run(["unlock", block["name"]], then=lambda output: self.message(output, Gtk.MessageType.INFO))
             return
-        command = f"{CLI} unlock {shlex.quote(block['name'])}"
-        try:
-            subprocess.Popen(["x-terminal-emulator", "-e", command])
-        except OSError as error:
-            self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+        self.run_challenge(["unlock", block["name"]])
+
+    def run_challenge(self, command):
+        """A text lock's challenge (R-LOCK-5, SPEC §4.6): the command opens
+        its own window on this desktop and reads the keys typed there; the
+        GUI only runs it, and opens no terminal."""
+        self.run(command, then=lambda output: self.message(output, Gtk.MessageType.INFO),
+                 timeout=CHALLENGE_TIMEOUT)
 
     def delete_block(self, _button):
         """§4.2 (owner 2026-11-17): deleted, the page comes back to the block
@@ -8773,7 +8819,7 @@ class Window(Gtk.ApplicationWindow):
         if command[:2] == ["list", "import"]:
             answer = self.ask_import_source(
                 "Import into this list", "From a text file with one entry per line (a hosts file and "
-                "adblock rules are read too), or from other lists and clusters in Killer Chicken 9000; "
+                "adblock rules are read too), or from other lists and list presets in Killer Chicken 9000; "
                 "or the whole internet, or all searches containing some words.", more=True)
             if answer == "kc9k":
                 self.import_from_kc9k(command[2], command[3])
@@ -8824,9 +8870,9 @@ class Window(Gtk.ApplicationWindow):
                     sources.append((f"{other['name']}: {lst['name']}", ["list", "copy", other["name"], lst["name"], block, list_name]))
         for cluster in (self.state or {}).get("clusters") or []:
             if not cluster.get("phrases"):
-                sources.append((f"Cluster: {cluster['name']}", ["cluster", "copy", cluster["name"], block, "--into", list_name]))
+                sources.append((f"List preset: {cluster['name']}", ["list-preset", "copy", cluster["name"], block, "--into", list_name]))
         if not sources:
-            self.message("No other lists or clusters to import from.", Gtk.MessageType.INFO)
+            self.message("No other lists or list presets to import from.", Gtk.MessageType.INFO)
             return
         dialog = Gtk.Dialog(title="Import from Killer Chicken 9000", transient_for=self, modal=True)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
@@ -8969,7 +9015,7 @@ class Window(Gtk.ApplicationWindow):
             "Import into this phrase set",
             "From a text file, one per line: phrases such as [eat, nice] [hello, grandpa] are added to "
             "the set; rendered terms become one word set in the phrase editor. Or from lists and "
-            "clusters in Killer Chicken 9000: their entries become one word set.")
+            "list presets in Killer Chicken 9000: their entries become one word set.")
         if answer == "kc9k":
             terms = self.pick_kc9k_terms()
             if terms:
@@ -9012,9 +9058,9 @@ class Window(Gtk.ApplicationWindow):
                     sources.append((f"{other['name']}: {lst['name']}", lst["entries"]))
         for cluster in (self.state or {}).get("clusters") or []:
             if not cluster.get("phrases") and cluster.get("entries"):
-                sources.append((f"Cluster: {cluster['name']}", cluster["entries"]))
+                sources.append((f"List preset: {cluster['name']}", cluster["entries"]))
         if not sources:
-            self.message("No lists or clusters to import from.", Gtk.MessageType.INFO)
+            self.message("No lists or list presets to import from.", Gtk.MessageType.INFO)
             return []
         dialog = Gtk.Dialog(title="Import a word set from Killer Chicken 9000", transient_for=self, modal=True)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
@@ -9054,12 +9100,32 @@ class Window(Gtk.ApplicationWindow):
     def share_project(self, button):
         self.export_project(button, share=True)
 
+    def ask_share_presets(self):
+        """Sharing the setup: include the presets? True, False, or None
+        (cancelled). A backup always includes them (SPEC §3.13)."""
+        dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
+                                   text="Include your presets?",
+                                   secondary_text="Block presets, list and phrase set presets, schedule, "
+                                                  "automation and hotkey presets.")
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Without presets", 2)
+        dialog.add_button("With presets", Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        return {Gtk.ResponseType.OK: True, 2: False}.get(answer)
+
     def export_project(self, _button, share=False):
+        command = ["project", "export"]
+        if share:
+            presets = self.ask_share_presets()
+            if presets is None:
+                return
+            command += ["--share", "--presets" if presets else "--presets=false"]
         path = self.choose_file("Share the setup (without places)" if share else "Back up the whole setup",
                                 Gtk.FileChooserAction.SAVE, "Save")
         if not path:
             return
-        ok, output = cli_with_access(self.access_passwords, ["project", "export"] + (["--share"] if share else []))
+        ok, output = cli_with_access(self.access_passwords, command)
         if not ok:
             self.message(output)
             return
@@ -9157,8 +9223,8 @@ class Window(Gtk.ApplicationWindow):
 
         self.cluster_entries = EditableList(
             "Entries", "reddit.com  *casino*",
-            lambda values: self.cluster_name() and self.run(["cluster", "add", self.cluster_name(), *values]),
-            lambda value, _n: self.cluster_name() and self.run(["cluster", "remove", self.cluster_name(), value]),
+            lambda values: self.cluster_name() and self.run(["list-preset", "add", self.cluster_name(), *values]),
+            lambda value, _n: self.cluster_name() and self.run(["list-preset", "remove", self.cluster_name(), value]),
             search=True, multi=True)
         box.pack_start(self.cluster_entries, True, True, 0)
 
@@ -9166,13 +9232,13 @@ class Window(Gtk.ApplicationWindow):
         record_row = Gtk.Box(spacing=6)
         self.record_start = Gtk.Button(label="Record into this preset")
         self.record_start.connect("clicked", lambda _b: self.cluster_name() and self.run(
-            ["record", "start", "--cluster", self.cluster_name()]))
+            ["record", "start", "--preset", self.cluster_name()]))
         # §3.12 word recording: the rendered words of the pages, ranked by
         # how specific they are; the least specific cut before adding.
         self.record_words = Gtk.Button(label="Record words")
         self.record_words.set_tooltip_text("Record the words shown on the pages you open (the preset must look at page text)")
         self.record_words.connect("clicked", lambda _b: self.cluster_name() and self.run(
-            ["record", "start", "--cluster", self.cluster_name(), "--words"]))
+            ["record", "start", "--preset", self.cluster_name(), "--words"]))
         self.record_cut = NumberField(0, 0, 95, width=4)
         self.record_cut.set_tooltip_text("Words: drop this percentage of the least specific before adding")
         self.record_stop = Gtk.Button(label="Stop and add")
@@ -9242,7 +9308,7 @@ class Window(Gtk.ApplicationWindow):
             new = target or self.ask_text(f"New block from {name}", "A short name for the new block.")
             if new:
                 self.selected = new
-                self.run(["block", "create", new, "--template", name])
+                self.run(["block", "create", new, "--preset", name])
             return
         if kind == "hotkey":
             # §4.13: added again, on keys typed now (blank: the preset's own).
@@ -9278,7 +9344,7 @@ class Window(Gtk.ApplicationWindow):
     def delete_preset(self, kind, name):
         if self.confirm(f"Delete the preset {name}?", "What was copied from it stays as it is.", "Delete",
                         destructive=True):
-            self.run(["template", "remove", name] if kind == "block" else ["preset", "delete", name, "--kind", kind])
+            self.run(["block-preset", "remove", name] if kind == "block" else ["preset", "delete", name, "--kind", kind])
 
     def save_preset(self, kind, source, mode=False, answer=None):
         """Saves a copy as a preset: lists (asks which and whether with
@@ -9346,7 +9412,7 @@ class Window(Gtk.ApplicationWindow):
         self.show_cluster()
         recording = self.state.get("recording")
         if recording:
-            target = (f"the cluster {recording['cluster']}" if recording.get("cluster")
+            target = (f"the list preset {recording['cluster']}" if recording.get("cluster")
                       else f"the list {recording.get('list')} of {recording.get('block')}")
             if recording.get("words"):
                 top = ", ".join(recording.get("top") or [])
@@ -9385,7 +9451,7 @@ class Window(Gtk.ApplicationWindow):
     def toggle_cluster_where(self, check, place):
         if self.updating or not self.cluster_name():
             return
-        self.run(["cluster", "scope", self.cluster_name(), place, "on" if check.get_active() else "off"])
+        self.run(["list-preset", "scope", self.cluster_name(), place, "on" if check.get_active() else "off"])
 
     def new_cluster(self, _button):
         dialog = Gtk.MessageDialog(
@@ -9403,20 +9469,20 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         if answer == Gtk.ResponseType.OK and name:
             self.cluster_wanted = name
-            self.run(["cluster", "create", name] + (["--phrases"] if as_phrases else []))
+            self.run(["list-preset", "create", name] + (["--phrases"] if as_phrases else []))
 
     def rename_cluster(self, _button):
         old = self.cluster_name()
         name = old and self.ask_text(f"Rename {old}", initial=old)
         if name and name != old:
             self.cluster_wanted = name
-            self.run(["cluster", "rename", old, name])
+            self.run(["list-preset", "rename", old, name])
 
     def delete_cluster(self, _button):
         name = self.cluster_name()
         if name and self.confirm(f"Delete the preset {name}?",
                                  "Lists copied from it into blocks stay as they are.", "Delete", destructive=True):
-            self.run(["cluster", "delete", name])
+            self.run(["list-preset", "delete", name])
 
     def copy_cluster(self, _button):
         name = self.cluster_name()
@@ -9445,21 +9511,21 @@ class Window(Gtk.ApplicationWindow):
         block, as_exceptions = combo.get_active_text(), exceptions.get_active()
         dialog.destroy()
         if answer == Gtk.ResponseType.OK and block:
-            self.run(["cluster", "copy", name, block] + (["--exceptions"] if as_exceptions else []),
+            self.run(["list-preset", "copy", name, block] + (["--exceptions"] if as_exceptions else []),
                      then=self.queued_note)
 
     def import_cluster(self, _button):
         name = self.cluster_name()
         path = name and self.choose_file("Import entries into the preset", Gtk.FileChooserAction.OPEN, "Import")
         if path:
-            self.run(["cluster", "import", name, path])
+            self.run(["list-preset", "import", name, path])
 
     def export_cluster(self, _button):
         name = self.cluster_name()
         path = name and self.choose_file("Export the preset", Gtk.FileChooserAction.SAVE, "Save")
         if not path:
             return
-        ok, output = cli_with_access(self.access_passwords, ["cluster", "export", name])
+        ok, output = cli_with_access(self.access_passwords, ["list-preset", "export", name])
         if not ok:
             self.message(output)
             return
@@ -9585,8 +9651,8 @@ class Window(Gtk.ApplicationWindow):
         text, number = chosen
         picker = LockPicker("remove it", "removed", ("timer", "password", "text", "restart", "range", "relock"))
         asked = self.lock_dialog(f"Lock the freeze schedule {text}",
-                                 "It can't be removed until the locks end. Locks can be added later, but "
-                                 "only made stronger.", "Lock", picker, need_lock=True)
+                                 "It can't be removed until the locks end. More locks can be added later, "
+                                 "after these; a lock that is on is never changed.", "Lock", picker, need_lock=True)
         if asked is None:
             return
         locks, relock_flags, secret = asked
@@ -9621,11 +9687,7 @@ class Window(Gtk.ApplicationWindow):
         if not info.get("char_locked"):
             self.message("Its first lock isn't a text or password lock: it ends by itself.", Gtk.MessageType.INFO)
             return
-        command = " ".join([CLI] + [shlex.quote(a) for a in unlock])
-        try:
-            subprocess.Popen(["x-terminal-emulator", "-e", command])
-        except OSError as error:
-            self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+        self.run_challenge(unlock)
 
     def update_device(self):
         self.freeze_schedules.set_items(self.state.get("freeze_schedules", []))
@@ -9715,6 +9777,159 @@ class Window(Gtk.ApplicationWindow):
             return False
         self.run(["reset-guard", "on" if wanted else "off"])
         return True
+
+    def device_setup_row(self):
+        """§4.10 Device protection: the firmware lock and the guided setup."""
+        row = Gtk.Box(spacing=8)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        text.pack_start(Gtk.Label(label="Factory reset protection: firmware lock", xalign=0), False, False, 0)
+        text.pack_start(dim("USB and network boot off, the boot order locked, and a firmware password "
+                            "a trusted person keeps. The guided setup lists every step of the "
+                            "strictest setup, in order."), False, False, 0)
+        row.pack_start(text, True, True, 0)
+        guided = Gtk.Button(label="Guided setup…", valign=Gtk.Align.CENTER)
+        guided.connect("clicked", self.show_guided_setup)
+        firmware = Gtk.Button(label="Firmware lock…", valign=Gtk.Align.CENTER)
+        firmware.connect("clicked", self.show_firmware_lock)
+        row.pack_end(guided, False, False, 0)
+        row.pack_end(firmware, False, False, 0)
+        return row
+
+    def cli_json(self, args):
+        """Runs a reading command now and returns its JSON, or None after
+        saying why."""
+        ok, output = cli_with_access(list(self.access_passwords), args)
+        if not ok:
+            self.message(output or "The command failed.")
+            return None
+        try:
+            return json.loads(output)
+        except ValueError:
+            self.message("Unexpected answer from kc9k: " + output[:200])
+            return None
+
+    def show_firmware_lock(self, _button):
+        status = self.cli_json(["firmware-lock", "--json"])
+        if status is None:
+            return
+        lines = []
+        if not status["available"]:
+            lines.append("This computer's firmware settings can't be changed from Linux. Do it in the "
+                         "firmware's own setup (press F2, F1, F10 or Del while the computer starts): turn "
+                         "off booting from USB and the network, lock the boot order, and set a firmware "
+                         "password that a trusted person types and keeps.")
+        else:
+            lines.append("Firmware lock: " + ("on" if status["locked"] else "off"))
+            lines.append("Firmware password: " + ("set" if status["password"] else "not set"))
+            for setting in status["settings"]:
+                state = setting["current"]
+                if not setting["want"]:
+                    state += " (can't be changed here)"
+                elif not setting["done"]:
+                    state += f" (the lock sets {setting['want']})"
+                lines.append(f"{setting['purpose']} ({setting['name']}): {state}")
+            for missing in status["missing"]:
+                lines.append(f"{missing}: not offered here; set it in the firmware's own setup")
+        dialog = Gtk.MessageDialog(transient_for=self, modal=True, text="Firmware lock",
+                                   secondary_text="\n".join(lines), message_type=Gtk.MessageType.INFO)
+        dialog.add_button("Close", Gtk.ResponseType.CLOSE)
+        if status["available"] and status["set_by_kc9k"]:
+            dialog.add_button("Remove…", 2)
+        if status["available"] and not status["locked"]:
+            dialog.add_button("Lock the firmware…", Gtk.ResponseType.OK)
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK:
+            self.lock_firmware(status)
+        elif answer == 2:
+            password = self.ask_text("Firmware password", "The trusted person types it. The settings "
+                                     "the lock changed are put back and the password is cleared.",
+                                     password=True)
+            if password:
+                self.run(["firmware-lock", "off"], password + "\n")
+
+    def lock_firmware(self, status):
+        if status["password"]:
+            password = self.ask_text("The firmware password already set",
+                                     "Needed to change the firmware's settings; it stays as it is.",
+                                     password=True)
+        else:
+            password = self.ask_text("Firmware password",
+                                     "The trusted person types it and keeps it. Killer Chicken 9000 "
+                                     "doesn't keep it.", password=True)
+            if password and self.ask_text("Type it again", password=True) != password:
+                self.message("The two passwords differ; nothing changed.", Gtk.MessageType.INFO)
+                return
+        if not password:
+            return
+        kind = ("USB and network boot off, boot order locked, under the firmware password already set"
+                if status["password"] else
+                "USB and network boot off, boot order locked, a firmware password a trusted person keeps")
+        if not self.confirm_lock([f"the computer's firmware: firmware lock ({kind})"]):
+            return
+        self.run(["firmware-lock", "on", "--yes"], password + "\n")
+
+    GUIDED_MARKS = {"done": "✓", "todo": "○", "by-hand": "○", "info": "ℹ", "unknown": "?"}
+
+    def show_guided_setup(self, _button):
+        steps = self.cli_json(["guided-setup", "--json"])
+        if steps is None:
+            return
+        dialog = Gtk.Dialog(title="Guided setup", transient_for=self, modal=True)
+        dialog.add_button("Close", Gtk.ResponseType.CLOSE)
+        dialog.set_default_size(620, 560)
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin=16)
+        box.pack_start(dim("The strictest setup, step by step: what protects the setup first, "
+                           "no-escape last. Each step says whether it is done."), False, False, 0)
+        chosen = []
+        for i, step in enumerate(steps):
+            row = Gtk.Box(spacing=12)
+            mark = Gtk.Label(label=self.GUIDED_MARKS.get(step["state"], "?"), valign=Gtk.Align.START)
+            row.pack_start(mark, False, False, 0)
+            text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            title = f"{i + 1}. {step['title']}" + (" (optional)" if step.get("optional") else "")
+            text.pack_start(Gtk.Label(label=title, xalign=0), False, False, 0)
+            text.pack_start(dim(step["detail"]), False, False, 0)
+            command = step.get("command", "")
+            if step["state"] != "done" and command and not command.startswith("kc9k "):
+                shown = Gtk.Label(label=command, xalign=0, selectable=True)
+                shown.get_style_context().add_class("monospace")
+                text.pack_start(shown, False, False, 0)
+            row.pack_start(text, True, True, 0)
+            if step["state"] in ("todo", "by-hand") and self.guided_action(step["id"]):
+                button = Gtk.Button(label="Do it…", valign=Gtk.Align.START)
+                button.connect("clicked", lambda _b, s=step: (chosen.append(s), dialog.response(Gtk.ResponseType.OK)))
+                row.pack_end(button, False, False, 0)
+            box.pack_start(row, False, False, 0)
+        scroll.add(box)
+        dialog.get_content_area().pack_start(scroll, True, True, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and chosen:
+            self.guided_action(chosen[0]["id"], chosen[0])()
+
+    def guided_action(self, step_id, step=None):
+        """What a guided setup step's Do it… runs: the same as its own
+        switch or button elsewhere, so it asks the same questions."""
+        def tamper():
+            commands = [c.strip().split()[1:] for c in (step or {}).get("command", "").split(";") if c.strip()]
+
+            def next_one(_output=None):
+                if commands:
+                    self.run(commands.pop(0), then=next_one)
+            next_one()
+        return {
+            "settings-password": lambda: self.set_settings_password(None),
+            "no-weakening": lambda: self.toggle_no_weakening(None, True),
+            "tamper": tamper,
+            "strict": lambda: self.toggle_strict(None, True),
+            "strict-lock": lambda: self.lock_setting(None, "strict", "Strict mode"),
+            "reset-guard": lambda: self.toggle_reset_guard(None, True),
+            "firmware": lambda: self.show_firmware_lock(None),
+            "no-escape": lambda: self.toggle_no_escape(None, True),
+        }.get(step_id)
 
     def toggle_no_weakening(self, _switch, wanted):
         if self.updating:
@@ -10334,7 +10549,8 @@ class Window(Gtk.ApplicationWindow):
             self.switch_row(self.reset_guard_switch, "Factory reset protection: installer media guard",
                             "While anything is locked, the download pages of operating systems and USB "
                             "image writers are blocked and image writers (USB Image Writer, Etcher, "
-                            "Disks, …) are closed. It can't be turned off during a lock.")), False, False, 0)
+                            "Disks, …) are closed. It can't be turned off during a lock."),
+            self.device_setup_row()), False, False, 0)
 
         # §4.10, R-MODE-5 (owner 2026-11-17): what shows when no mode or
         # circadian rhythm wallpaper does, and while the place isn't known.
@@ -10441,10 +10657,11 @@ class Window(Gtk.ApplicationWindow):
             project_row.pack_start(button, False, False, 0)
         box.pack_start(section(
             "Project",
-            dim("Save every block, cluster and setting to one file. A backup also holds your "
+            dim("Save every block and setting to one file. A backup also holds every preset, your "
                 "places (the Wi-Fi networks they are known by), running locks, passwords (as hashes), "
-                "hotkeys and statistics; a file to share leaves them out. Importing shows what it "
-                "adds first, only adds, and gives a block whose name is taken a new name."),
+                "hotkeys and statistics; a file to share leaves those out and asks about presets. "
+                "Importing shows what it adds first, only adds, and gives a block or preset whose "
+                "name is taken a new name."),
             project_row), False, False, 0)
 
         self.option_switches = {}
@@ -10539,6 +10756,11 @@ class Window(Gtk.ApplicationWindow):
                 "file-urls": bool(self.state.get("tamper_file_urls", False)),
                 "task-managers": bool(self.state.get("tamper_task_managers", False)),
                 "private": bool(self.state.get("tamper_private", False)),
+                "guest": bool(self.state.get("tamper_guest", False)),
+                "extension-stop": bool(self.state.get("tamper_extension_stop", True)),
+                "installer": bool(self.state.get("tamper_installer", False)),
+                "inactive-tabs": bool(self.state.get("tamper_inactive_tabs", True)),
+                "embedded": bool(self.state.get("tamper_embedded", True)),
                 "unsupported-browsers": bool(self.state.get("unsupported_browsers", False))}
 
     def setting_lock_info(self, name):
@@ -11061,8 +11283,8 @@ class Window(Gtk.ApplicationWindow):
                             ("timer", "password", "text", "restart", "range", "relock"))
         asked = self.lock_dialog(
             f"Lock: {title}",
-            "The setting is turned on and can't be turned off until the lock ends. Locks can be "
-            "added later, but only made stronger.", "Turn on and lock", picker, need_lock=True)
+            "The setting is turned on and can't be turned off until the locks end. More locks can be "
+            "added later, after these; a lock that is on is never changed.", "Turn on and lock", picker, need_lock=True)
         if asked is None:
             return
         chosen, relock_flags, secret = asked
@@ -11093,11 +11315,7 @@ class Window(Gtk.ApplicationWindow):
             if password:
                 self.run(unlock, password + "\n")
             return
-        command = " ".join([CLI] + [shlex.quote(a) for a in unlock])
-        try:
-            subprocess.Popen(["x-terminal-emulator", "-e", command])
-        except OSError as error:
-            self.message(f"Can't open a terminal for the typing challenge: {error}\n\nRun: {command}")
+        self.run_challenge(unlock)
 
     def strict_exempt_list(self):
         """§3.8: folders programs may still start from during strict mode's

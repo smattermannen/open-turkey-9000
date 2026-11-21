@@ -50,7 +50,7 @@ func TestExtensionRequired(t *testing.T) {
 		}
 	}
 	// SafeSearch works through /etc/hosts in every browser.
-	if err := d.SetSetting("browser.safesearch", "on"); err != nil {
+	if err := d.SetSetting("browser.safesearch-google", "on"); err != nil {
 		t.Fatal(err)
 	}
 	if ExtensionRequired(d, nil) {

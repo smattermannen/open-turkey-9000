@@ -3,12 +3,14 @@
 //	kc9k tamper                                       # shows them
 //	kc9k tamper clock on|off                          # block time and date changes
 //	kc9k tamper file-urls on|off                      # allow file:// blocking
+//	kc9k tamper guest|extension-stop|installer|inactive-tabs|embedded on|off
 //	kc9k tamper unsupported-browsers on [lock flags]  # block unsupported browsers
 //	kc9k tamper unlock unsupported-browsers
 //
 // They are protection settings: turning one on is always allowed; turning
 // one off needs the settings password and is refused while any block or
-// setting is locked (R-LOCK-9). Block unsupported browsers also has its own
+// setting is locked (R-LOCK-9). extension-stop, inactive-tabs and embedded
+// are on until turned off (enforce.TamperOn). Block unsupported browsers also has its own
 // setting lock, carried over from the browser setting force-librewolf it
 // replaced (decision 2026-11-14).
 package cli
@@ -26,7 +28,7 @@ import (
 )
 
 var tamperCmd = &cobra.Command{
-	Use:   "tamper [clock|file-urls|unsupported-browsers [on|off] | unlock unsupported-browsers]",
+	Use:   "tamper [SETTING [on|off] | grace SECONDS | unlock unsupported-browsers]",
 	Short: "Tamper protection: clock changes, file:// blocking, unsupported browsers",
 	Long: `Tamper protection settings:
 
@@ -38,6 +40,24 @@ var tamperCmd = &cobra.Command{
   private               close private windows and Tor: private windows are
                         turned off in every browser (they close when it
                         restarts) and Tor Browser is closed
+  guest                 close guest profiles: guest browsing off in every
+                        Chromium-family browser (Chrome and Chromium always)
+                        and no guest session at the login screen (LightDM)
+  extension-stop        close browsers if the extension stops (on unless
+                        turned off): browsers without the Killer Chicken
+                        extension are closed while a block needs it; off,
+                        only while anything is locked
+  installer             block the installer: while anything is locked,
+                        reinstalling or installing an older version is
+                        refused too (by the package manager and install.sh);
+                        removal always is
+  inactive-tabs         block inactive tabs (on unless turned off): tabs in
+                        the background are blocked at once; off, when you
+                        switch to them
+  embedded              block embedded content (on unless turned off): a
+                        blocked site inside another page gets the block
+                        page; off, the extension leaves frames alone (hosts
+                        and the firewall still block whole domains)
   grace SECONDS         how long a browser may run without the extension
                         checking in (10 to 600; default 60); longer weakens
   file-urls             allow file:// blocking: blacklist entries such as
@@ -61,18 +81,19 @@ unsupported-browsers can also be locked when turned on, like a browser setting:
   --lock-chars N    Challenge length in characters (default 300).
   --password-stdin  Password lock.
   --restart         Stays on until the computer restarts.
-  --relock D        With a text or password lock: unlocking lifts them for D only.
+  --range SPEC      Range lock: on at these times.
+  --relock D        Re-lock: D after its last lock is unlocked, every lock comes
+                    on again, in order.
 
-Locks can only be made stronger. unlock runs the challenge and asks for the
-password, then turns it off if nothing else is locked.`,
+Locks stack as on a block: an option given twice is two locks, a lock added
+later goes last, and a lock that is on is never changed. unlock lifts the
+first lock still on, then turns it off if nothing else is locked.`,
 	Args: cobra.RangeArgs(0, 2),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if len(args) == 0 {
-			fmt.Printf("clock %s\n", onOff(tamperClockOn(database)))
-			fmt.Printf("file-urls %s\n", onOff(enforce.FileURLsOn(database)))
-			tm, _ := database.GetSetting(enforce.SettingTaskManagers)
-			fmt.Printf("task-managers %s\n", onOff(tm == "on"))
-			fmt.Printf("private %s\n", onOff(enforce.PrivateTamperOn(database)))
+			for _, name := range tamperOrder {
+				fmt.Printf("%s %s\n", name, onOff(enforce.TamperOn(database, simpleTamper[name])))
+			}
 			fmt.Printf("grace %ds\n", enforce.ExtensionGraceSeconds(database))
 			return printUnsupportedBrowsers(database)
 		}
@@ -112,14 +133,13 @@ password, then turns it off if nothing else is locked.`,
 		}
 		key, ok := simpleTamper[args[0]]
 		if !ok {
-			return fmt.Errorf("unknown tamper protection %q (use clock, file-urls or %s)", args[0], db.UnsupportedBrowsers)
+			return fmt.Errorf("unknown tamper protection %q (use %s, grace or %s)", args[0], strings.Join(tamperOrder, ", "), db.UnsupportedBrowsers)
 		}
 		if lockFlagsGiven(cmd) {
 			return fmt.Errorf("the %s setting has no lock of its own", args[0])
 		}
 		if len(args) == 1 {
-			v, _ := database.GetSetting(key)
-			fmt.Printf("%s %s\n", args[0], onOff(v == "on"))
+			fmt.Printf("%s %s\n", args[0], onOff(enforce.TamperOn(database, key)))
 			return nil
 		}
 		switch args[1] {
@@ -144,19 +164,11 @@ password, then turns it off if nothing else is locked.`,
 		if err := database.SetSetting(key, args[1]); err != nil {
 			return err
 		}
-		if args[0] == "clock" {
-			fmt.Printf("Tamper protection for the clock is %s\n", args[1])
-			return nil
+		fmt.Printf(tamperMessages[args[0]]+"\n", args[1])
+		switch args[0] {
+		case "clock", "task-managers", "installer":
+			return nil // read where they act
 		}
-		if args[0] == "task-managers" {
-			fmt.Printf("Closing task managers while locked is %s\n", args[1])
-			return nil
-		}
-		if args[0] == "private" {
-			fmt.Printf("Closing private windows and Tor is %s\n", args[1])
-			return enforce.ApplyFromDB(database)
-		}
-		fmt.Printf("file:// blocking is %s\n", args[1])
 		return enforce.ApplyFromDB(database)
 	}),
 }
@@ -164,7 +176,27 @@ password, then turns it off if nothing else is locked.`,
 // simpleTamper are the tamper protection settings without a lock of their
 // own, by name: on is free, off refused while anything is locked.
 var simpleTamper = map[string]string{"clock": db.SettingTamperClock, "file-urls": enforce.SettingFileURLs,
-	"task-managers": enforce.SettingTaskManagers, "private": enforce.SettingTamperPrivate}
+	"task-managers": enforce.SettingTaskManagers, "private": enforce.SettingTamperPrivate,
+	"guest": enforce.SettingTamperGuest, "extension-stop": enforce.SettingExtensionStop,
+	"installer": enforce.SettingTamperInstaller, "inactive-tabs": enforce.SettingInactiveTabs,
+	"embedded": enforce.SettingEmbedded}
+
+// tamperOrder is the order 'kc9k tamper' shows the simple ones in.
+var tamperOrder = []string{"clock", "file-urls", "task-managers", "private", "guest", "extension-stop",
+	"installer", "inactive-tabs", "embedded"}
+
+// tamperMessages say what a simple setting does when switched.
+var tamperMessages = map[string]string{
+	"clock":          "Tamper protection for the clock is %s",
+	"file-urls":      "file:// blocking is %s",
+	"task-managers":  "Closing task managers while locked is %s",
+	"private":        "Closing private windows and Tor is %s",
+	"guest":          "Closing guest profiles is %s",
+	"extension-stop": "Closing browsers if the extension stops is %s",
+	"installer":      "Blocking the installer while locked is %s",
+	"inactive-tabs":  "Blocking inactive tabs is %s",
+	"embedded":       "Blocking embedded content is %s",
+}
 
 func tamperClockOn(database *db.DB) bool {
 	v, err := database.GetSetting(db.SettingTamperClock)

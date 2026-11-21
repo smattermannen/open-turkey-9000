@@ -115,10 +115,10 @@ func TestCombinationMigration(t *testing.T) {
 		t.Errorf("phrases = %q", got)
 	}
 	if c, _ := d.GetCluster("combos"); strings.Join(c.Entries, "|") != "plain" {
-		t.Errorf("cluster = %+v", c)
+		t.Errorf("list preset = %+v", c)
 	}
 	if p, err := d.GetCluster("combos phrases"); err != nil || !p.Phrases || p.Where != (Where{Text: true}) ||
 		strings.Join(p.Entries, "|") != "[eat] [grandpa]" {
-		t.Errorf("phrase cluster = %+v, %v", p, err)
+		t.Errorf("phrase set preset = %+v, %v", p, err)
 	}
 }

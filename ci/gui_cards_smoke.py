@@ -221,6 +221,18 @@ check(waits[0][1] == "timer lock for 1 hour (x)" and waits[1][1].endswith("until
       and "after the locks before it" in waits[3][1],
       "only behind a lock other than a timer lock: %s" % waits)
 
+# R-LOCK-5, §4.6: a text lock's challenge is the command's own window; the
+# GUI only runs the command and opens no terminal.
+cli("start", "plain", "--lock", "--lock-chars", "20", "--yes"); settle()
+win.selected = "plain"; win.show_block()
+ran, popen = [], gui.subprocess.Popen
+gui.subprocess.Popen = lambda *a, **k: ran.append(("terminal", a))
+real_run = win.run
+win.run = lambda args, secret=None, then=None, timeout=120: ran.append((args, timeout))
+win.unlock_block(None)
+win.run, gui.subprocess.Popen = real_run, popen
+check(ran == [(["unlock", "plain"], gui.CHALLENGE_TIMEOUT)], "Unlock runs the command for the challenge: %s" % ran)
+
 win.destroy()
 print("FAILED: " + ", ".join(fails) if fails else "all passed")
 raise SystemExit(1 if fails else 0)

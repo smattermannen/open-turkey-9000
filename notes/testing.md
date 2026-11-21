@@ -11,6 +11,9 @@
   go test -tags roottest -run AppImage ./internal/blocker` (runs it as
   `SUDO_UID`; skipped without).
 - `./try-challenge.sh [len]` (`cmd/try-challenge/`): unlock challenge alone.
+- The text lock's window for real: `KC9K_TEST_PYTHON=<python3 with GTK 3>
+  xvfb-run -a go test -run Window ./internal/lock/` (needs xdotool, xterm
+  for the focus case; skipped without `DISPLAY`).
 - Root Chrome test: `go test -tags roottest -run Chrome ./internal/enforce`,
   with the daemon stopped (it holds the rules port) and Playwright's
   Chromium under `/opt/pw-browsers/chromium-*/` (else skipped).
@@ -70,6 +73,22 @@
   cut, so the VM checks itself (`inside 1`, then a oneshot unit runs
   `inside 2` after the restart it makes) into `/var/lib/kc9k-monk-live`;
   the host waits for ssh and reads `verdict`. `MONK_MINUTES` (default 6).
+- VM checks with a verdict (`ci/<name>.sh host [domain] [ssh-alias]`,
+  default `kc9k-vm`), sharing `ci/vm_check_lib.sh`: the host reverts the
+  VM to `clean` (running), rsyncs the tree to `~/open-turkey-9000`, builds
+  `.deb`s of it (`9000.N~vmcheck`) and installs the first, starts `inside
+  1` as root (`systemd-run`: it outlives ssh and a lockdown's loss of
+  sudo), waits through restarts (a oneshot unit runs `inside 2`) for
+  `/var/lib/kc9k-vmcheck-*/verdict` (readable without sudo), prints the
+  log's PASS/FAIL lines and reverts the VM shut off. kc9k runs as the VM's
+  user through the wrapper (strict mode records `SUDO_USER`); status
+  checks as root call `kc9k-bin`. `ci/strict_pam_vm_test.sh` (2.6: sets a
+  root password and an account `kc9kother`; root login and su driven on a
+  pseudo-terminal by an inline Python helper; one boot with
+  `kc9k.nofreeze` via a `/etc/default/grub.d` drop-in),
+  `ci/tamper_vm_test.sh` (2.9: installer guard with dpkg and `install.sh`,
+  which needs Go in the VM; LightDM's `HasGuestAccount` over D-Bus, a
+  guest session allowed first if the VM has none). Both never run yet.
 - Cycles and the planner (`planner_round`): each cycle starts with one
   worker (claim `PLANNER`) running a planner session
   (`AUTOPILOT_PLAN_MODEL`/`_EFFORT`, default opus xhigh), told why it runs
@@ -148,9 +167,32 @@
   the later suites found local pages "blockedByPolicy", probably the
   earlier suites' trips carried over; each passes alone. No Node
   there: `cjs ci/match_test_cjs.js`.
+- Extension scripts with Node (cloud or box): `node ci/match_test.js`
+  (matching, folding), `node ci/background_test.js` (background script,
+  browser APIs stubbed: frame reports, the ad trigger),
+  `node ci/android_background_test.js`; with Playwright's Chromium (cloud
+  only): `node ci/content_harness_test.js`. Its principle 9 check times
+  each of the extension's own callbacks (idle time, timers, observers,
+  events) on a huge page, at most 16 ms; how long the page as a whole was
+  held up (the browser's own layout of 40,000 words included) is printed,
+  not checked.
 - `ci/allowance_notify_test.sh` (box, real daemon, desktop unlocked; ~4
   min): an allowance session's advance notice arrives on the session bus
   and the session ends on time (B1).
+- `ci/lockedhint_check.sh` (box, as the desktop's user from a terminal in
+  it; never run yet): locks the screen with
+  `cinnamon-screensaver-command --lock` and checks logind's `LockedHint`
+  for the user's x11/wayland sessions before, while locked and after the
+  person unlocks (B8: `blocker.lockedByLogind` relies on it).
+- X11 tests (`startX`) need `/tmp/.X11-unix` owned by root and sticky
+  (`trustedX11Socket` refuses anything else, on purpose). In a fresh
+  cloud container the first Xvfb run by the test user creates it as that
+  user and `TestX11IdleMillis`, `TestTitleGuardPerUser`,
+  `TestX11ListsAndClosesWindows` fail ("has no X server of root's"): as
+  root, `chown root:root /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix`.
+- Race check: the `internal/cli` package takes ~14 min under `-race`, past
+  go test's 10-minute default: `CGO_ENABLED=1 go test -race -timeout 30m
+  ./internal/...`. Clean 2026-11-21.
 - GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
   `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
   never `show()`. `KC9K_DB` never applies layers nor sets desktop hotkeys.

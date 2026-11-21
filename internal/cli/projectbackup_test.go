@@ -29,7 +29,7 @@ func TestBackupHoldsEverything(t *testing.T) {
 	if err := runWith(t, 0, []string{"pw2"}, "start", "work", "--password-stdin", "--yes"); err != nil {
 		t.Fatal(err)
 	}
-	mustRun(t, "browser", "safesearch", "on", "--for", "3h", "--yes")
+	mustRun(t, "browser", "safesearch-google", "on", "--for", "3h", "--yes")
 	mustRun(t, "hotkey", "add", "ctrl+alt+w", "work", "--yes")
 	if err := d.AddUsage("2026-11-01", db.UsageSite, "reddit.com", 600); err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func TestBackupHoldsEverything(t *testing.T) {
 		len(e.Queue) != 1 || !db.CheckPassword(e.Queue[0].PasswordHash, "pw2") || len(e.Config) != 4 {
 		t.Errorf("block lock not restored: active %v, %+v", detail.Active, e)
 	}
-	if l, _ := d2.GetSettingLock("safesearch"); l.LockedUntil == 0 {
+	if l, _ := d2.GetSettingLock("safesearch-google"); l.LockedUntil == 0 {
 		t.Error("setting lock not restored")
 	}
 	if v, _ := d2.GetSetting(SettingSettingsPassword); v == "" {

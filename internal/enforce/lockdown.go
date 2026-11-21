@@ -149,6 +149,11 @@ func reconcileFreezeSchedules(d *db.DB, now time.Time) error {
 	if until.Unix() <= current {
 		return nil
 	}
+	if current > now.Unix() { // a running freeze keeps a mode that lets nothing run
+		if running, err := d.FreezeMode(); err == nil {
+			mode = freeze.ExtendMode(running, mode)
+		}
+	}
 	log.Printf("daemon: scheduled freeze (%s) until %s", mode, until.Format("2006-01-02 15:04"))
 	return d.SetFreeze(until.Unix(), mode)
 }
@@ -167,7 +172,7 @@ func escapeHonoured(d *db.DB) bool {
 	if err != nil {
 		return false
 	}
-	return noEscape != "on" && freeze.Bypassed(blocker.KernelCmdline())
+	return noEscape != "on" && freeze.Bypassed(kernelCmdline())
 }
 
 // LockFreezeEngaged reports whether a lock-mode freeze is being enforced now.
@@ -184,6 +189,28 @@ func LockFreezeEngaged(d *db.DB, now time.Time) bool {
 var (
 	holdLogins    = blocker.HoldLogins
 	releaseLogins = blocker.ReleaseLogins
+)
+
+// Strict mode's lockdown and the kernel command line it reads; replaced in
+// tests (never the real sudoers, polkit, PAM or mounts).
+var (
+	kernelCmdline  = blocker.KernelCmdline
+	applyLockdown  = blocker.ApplyLockdown
+	removeLockdown = blocker.RemoveLockdown
+	applyNoexec    = blocker.ApplyNoexec
+	removeNoexec   = blocker.RemoveNoexec
+	// closeNoexecPrograms closes people's programs run from noexec or
+	// world-writable folders.
+	closeNoexecPrograms = blocker.CloseNoexecPrograms
+)
+
+// What a running freeze does to the device, by its freeze mode; replaced in
+// tests.
+var (
+	freezeLogout     = blocker.LogoutUsers
+	freezePowerOff   = blocker.PowerOff
+	freezeLockScreen = blocker.LockSessions
+	freezeCloseApps  = blocker.CloseAllExcept
 )
 
 func enforceFreeze(d *db.DB, now time.Time) {
@@ -214,13 +241,13 @@ func enforceFreeze(d *db.DB, now time.Time) {
 		if err := holdLogins(time.Unix(until, 0)); err != nil {
 			log.Printf("daemon: freeze: %v", err)
 		}
-		err = logoutUsers()
+		err = freezeLogout()
 	case freeze.ModeShutdown:
-		err = powerOff()
+		err = freezePowerOff()
 	case freeze.ModeApps:
-		blocker.CloseAllExcept(FreezeApps(d)) // R-FREEZE-1
+		freezeCloseApps(FreezeApps(d)) // R-FREEZE-1
 	default:
-		err = blocker.LockSessions()
+		err = freezeLockScreen()
 	}
 	if err != nil {
 		log.Printf("daemon: freeze: %v", err)
@@ -246,10 +273,10 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 		}
 	}
 	if !want {
-		if err := blocker.RemoveLockdown(); err != nil {
+		if err := removeLockdown(); err != nil {
 			log.Printf("daemon: lockdown: %v", err)
 		}
-		if err := blocker.RemoveNoexec(ExemptFolders(d)...); err != nil {
+		if err := removeNoexec(ExemptFolders(d)...); err != nil {
 			log.Printf("daemon: noexec: %v", err)
 		}
 		return
@@ -259,14 +286,14 @@ func enforceLockdown(d *db.DB, now time.Time, trusted int64) {
 		log.Printf("daemon: lockdown: %v", err)
 		return
 	}
-	if err := blocker.ApplyLockdown(user); err != nil {
+	if err := applyLockdown(user); err != nil {
 		log.Printf("daemon: lockdown: %v", err)
 	}
 	exempt := ExemptFolders(d)
-	if err := blocker.ApplyNoexec(exempt...); err != nil {
+	if err := applyNoexec(exempt...); err != nil {
 		log.Printf("daemon: noexec: %v", err)
 	}
-	if n := blocker.CloseNoexecPrograms(exempt); n > 0 {
+	if n := closeNoexecPrograms(exempt); n > 0 {
 		log.Printf("daemon: strict mode closed %d processes run from people's own files", n)
 	}
 }

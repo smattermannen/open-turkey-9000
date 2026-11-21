@@ -42,14 +42,14 @@ type Cluster struct {
 func (d *DB) clusterEntries(id int) ([]string, error) {
 	rows, err := d.conn.Query("SELECT entry FROM cluster_entries WHERE cluster_id = ? ORDER BY id", id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch cluster entries: %w", err)
+		return nil, fmt.Errorf("failed to fetch list preset entries: %w", err)
 	}
 	defer rows.Close()
 	out := []string{}
 	for rows.Next() {
 		var e string
 		if err := rows.Scan(&e); err != nil {
-			return nil, fmt.Errorf("failed to read a cluster entry: %w", err)
+			return nil, fmt.Errorf("failed to read a list preset entry: %w", err)
 		}
 		out = append(out, e)
 	}
@@ -62,10 +62,10 @@ func (d *DB) GetCluster(name string) (Cluster, error) {
 	err := d.conn.QueryRow("SELECT id, in_url, in_title, in_text, in_ads, phrases FROM clusters WHERE name = ?", name).
 		Scan(&c.ID, &c.Where.URL, &c.Where.Title, &c.Where.Text, &c.Where.Ads, &c.Phrases)
 	if err == sql.ErrNoRows {
-		return c, fmt.Errorf("there is no cluster named '%s'", name)
+		return c, fmt.Errorf("there is no list preset named '%s'", name)
 	}
 	if err != nil {
-		return c, fmt.Errorf("failed to read cluster '%s': %w", name, err)
+		return c, fmt.Errorf("failed to read list preset '%s': %w", name, err)
 	}
 	c.Entries, err = d.clusterEntries(c.ID)
 	return c, err
@@ -75,7 +75,7 @@ func (d *DB) GetCluster(name string) (Cluster, error) {
 func (d *DB) ClusterExists(name string) (bool, error) {
 	var n int
 	if err := d.conn.QueryRow("SELECT COUNT(*) FROM clusters WHERE name = ?", name).Scan(&n); err != nil {
-		return false, fmt.Errorf("failed to look up cluster '%s': %w", name, err)
+		return false, fmt.Errorf("failed to look up list preset '%s': %w", name, err)
 	}
 	return n > 0, nil
 }
@@ -84,14 +84,14 @@ func (d *DB) ClusterExists(name string) (bool, error) {
 func (d *DB) ListClusters() ([]Cluster, error) {
 	rows, err := d.conn.Query("SELECT id, name, in_url, in_title, in_text, in_ads, phrases FROM clusters ORDER BY name COLLATE NOCASE")
 	if err != nil {
-		return nil, fmt.Errorf("failed to list clusters: %w", err)
+		return nil, fmt.Errorf("failed to list list presets: %w", err)
 	}
 	var out []Cluster
 	for rows.Next() {
 		var c Cluster
 		if err := rows.Scan(&c.ID, &c.Name, &c.Where.URL, &c.Where.Title, &c.Where.Text, &c.Where.Ads, &c.Phrases); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("failed to read a cluster: %w", err)
+			return nil, fmt.Errorf("failed to read a list preset: %w", err)
 		}
 		out = append(out, c)
 	}
@@ -129,9 +129,9 @@ func (d *DB) createCluster(name string, where Where, phrases bool) error {
 		name, where.URL, where.Title, where.Text, where.Ads, phrases)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
-			return fmt.Errorf("there already is a cluster named '%s'", name)
+			return fmt.Errorf("there already is a list preset named '%s'", name)
 		}
-		return fmt.Errorf("failed to create cluster '%s': %w", name, err)
+		return fmt.Errorf("failed to create list preset '%s': %w", name, err)
 	}
 	return nil
 }
@@ -143,9 +143,9 @@ func (d *DB) RenameCluster(id int, name string) error {
 	}
 	if _, err := d.conn.Exec("UPDATE clusters SET name = ? WHERE id = ?", name, id); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
-			return fmt.Errorf("there already is a cluster named '%s'", name)
+			return fmt.Errorf("there already is a list preset named '%s'", name)
 		}
-		return fmt.Errorf("failed to rename the cluster: %w", err)
+		return fmt.Errorf("failed to rename the list preset: %w", err)
 	}
 	return nil
 }
@@ -153,7 +153,7 @@ func (d *DB) RenameCluster(id int, name string) error {
 // DeleteCluster removes a cluster with its entries.
 func (d *DB) DeleteCluster(id int) error {
 	if _, err := d.conn.Exec("DELETE FROM clusters WHERE id = ?", id); err != nil {
-		return fmt.Errorf("failed to remove the cluster: %w", err)
+		return fmt.Errorf("failed to remove the list preset: %w", err)
 	}
 	return nil
 }
@@ -164,7 +164,7 @@ func checkClusterWhere(where Where, phrases bool) error {
 		return nil
 	}
 	if phrases {
-		return fmt.Errorf("a phrase cluster looks at the address, the title or the text")
+		return fmt.Errorf("a phrase set preset looks at the address, the title or the text")
 	}
 	return CheckScope(where)
 }
@@ -173,7 +173,7 @@ func checkClusterWhere(where Where, phrases bool) error {
 func (d *DB) SetClusterWhere(id int, where Where) error {
 	var phrases bool
 	if err := d.conn.QueryRow("SELECT phrases FROM clusters WHERE id = ?", id).Scan(&phrases); err != nil {
-		return fmt.Errorf("failed to read the cluster: %w", err)
+		return fmt.Errorf("failed to read the list preset: %w", err)
 	}
 	if err := checkClusterWhere(where, phrases); err != nil {
 		return err
@@ -181,7 +181,7 @@ func (d *DB) SetClusterWhere(id int, where Where) error {
 	_, err := d.conn.Exec("UPDATE clusters SET in_url = ?, in_title = ?, in_text = ?, in_ads = ? WHERE id = ?",
 		where.URL, where.Title, where.Text, where.Ads, id)
 	if err != nil {
-		return fmt.Errorf("failed to set where the cluster looks: %w", err)
+		return fmt.Errorf("failed to set where the list preset looks: %w", err)
 	}
 	return nil
 }
@@ -199,7 +199,7 @@ func (d *DB) AddClusterEntries(id int, entries []string) (int, error) {
 	}
 	tx, err := d.conn.Begin()
 	if err != nil {
-		return 0, fmt.Errorf("failed to add to the cluster: %w", err)
+		return 0, fmt.Errorf("failed to add to the list preset: %w", err)
 	}
 	defer tx.Rollback()
 	added := 0
@@ -215,7 +215,7 @@ func (d *DB) AddClusterEntries(id int, entries []string) (int, error) {
 		added++
 	}
 	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("failed to add to the cluster: %w", err)
+		return 0, fmt.Errorf("failed to add to the list preset: %w", err)
 	}
 	return added, nil
 }

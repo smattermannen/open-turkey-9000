@@ -12,17 +12,24 @@
   shells/session processes. `scripts.go`: Python by script
   (`pythonScript`, `essentialProcess`), copies by hash (`HashEntry`
   `sha256:<hex>:<size>:<path>`, hidden by `visibleApps`; system programs
-  never match), `KillNaming` (fetch tools given a blocked domain).
+  never match), `KillNaming`/`KillNamingFor` (fetch tools given a blocked
+  domain; per user for a block's affected users).
 - `titles.go`/`x11.go`: asks matching windows to close (also file manager
-  windows showing a folder entry: `SetFolders`, `folderWindow`), kills after
+  windows showing a folder entry: `folderWindow`); targets per user
+  (`EnforceUsers(TitlesByUser)`, §3.2; `TitleHit` names the user), kills after
   `TitleCloseGrace`; cgo-free X11 client (user's own Xauthority only,
   cookie only to root/user-owned socket, capped replies, 3 s budget, PID
   trusted only for the session user). Runs beside the cycle
   (`enforceTitles`). Browsers left to the extension.
 - `polite.go`: `polite-close` asks windows to close, kills a cycle later.
 - `activity.go`: focused app per desktop user (`xprop`), and who is at the
-  desktop (`awayFromDesktop`: Cinnamon screen locked, or idle past the
-  limit). Idle time from the X server first (`idle.go`, MIT-SCREEN-SAVER
+  desktop (`awayFromDesktop`: screen locked, or idle past the limit).
+  Locked: logind's `LockedHint` on every X11/Wayland session of the user
+  (`screenLocked`, `lockedByLogind` via `loginctl`; set by the desktop's
+  locker), never the session bus (any program the user runs can answer
+  for `org.cinnamon.ScreenSaver`; B8, 2026-11-21). Left: the session's
+  owner may call `SetLockedHint` themselves (logind allows it); no logind:
+  never locked, so idle time decides. Idle time from the X server first (`idle.go`, MIT-SCREEN-SAVER
   QueryInfo over the x11.go client; not Xwayland, which sees only X11
   input), else Cinnamon's `GetSessionIdleTime` (the session bus is the
   user's own; cinnamon-screensaver 6, Mint 22, answers "not implemented",

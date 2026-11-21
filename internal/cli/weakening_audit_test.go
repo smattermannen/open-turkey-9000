@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
 // R-LOCK-1, §3.5: a locked block can't be weakened, by any command. Every
@@ -100,6 +102,7 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		{"bypass", "set", "--block", "b", "--count", "30", "--within", "10m", "--then", "warning"},
 		{"autostart", "b", "remove", "1"},
 		{"cluster", "copy", "c", "b", "--exceptions"},
+		{"list-preset", "copy", "c", "b", "--exceptions"}, // §4.12: the same command, by its name
 		// §3.6 Schedule, §3.2 Mode (2026-11-17): a first window lifts a
 		// continuous block outside it.
 		{"schedule", "apply", "b", "Weekly"},
@@ -108,6 +111,26 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		if err := runCLI(t, args...); err == nil {
 			t.Errorf("%v: a locked block was weakened", args)
 		}
+	}
+
+	// §4.3: the same settings through the block's draft are kept there, and
+	// refused at Save edits.
+	mustRun(t, "block", "draft", "b")
+	for _, args := range [][]string{
+		{"allowance", "set", "b (draft)", "30m"},
+		{"pomodoro", "set", "b (draft)", "25m", "5m"},
+		{"break", "reward", "b (draft)", "10m", "--per", "1h"},
+		{"break", "text", "b (draft)", "5m"},
+		{"break", "delay", "b (draft)", "5m", "10m"},
+		{"bypass", "off", "--block", "b (draft)"},
+	} {
+		mustRun(t, args...)
+	}
+	if err := runCLI(t, "block", "draft", "b", "save"); err == nil {
+		t.Error("a draft's weakening settings were saved on a locked block")
+	}
+	if n, _ := d.BlockNepsis("b"); len(n.Steps) == 0 {
+		t.Error("bypass prevention went off through a draft")
 	}
 
 	after, err := d.GetBlock("b")
@@ -210,4 +233,105 @@ func TestLockedScheduleAndAllowanceStrengthening(t *testing.T) {
 	mustRun(t, "schedule", "add", "u", "--days", "daily", "--from", "09:00", "--to", "10:00")
 	mustRun(t, "allowance", "set", "u", "30m")
 	mustRun(t, "allowance", "set", "u", "45m")
+}
+
+// §3.4, §3.8, §4.10: while anything is locked, device and tamper
+// protection can't be taken away (factory reset protection, no-escape,
+// every tamper protection setting, an allowed app for "allowed apps
+// only"); each refusal is logged and never counted (R-WEAK-2, principle 5).
+func TestLockedDeviceProtectionRefusesWeakening(t *testing.T) {
+	notTerminal(t)
+	d := testDB(t)
+	fakeFirmwareRoot(t)
+	mustRun(t, "reset-guard", "on")
+	for _, name := range tamperOrder {
+		mustRun(t, "tamper", name, "on")
+	}
+	mustRun(t, "tamper", "grace", "30")
+	if err := runWith(t, 0, []string{"secret"}, "firmware-lock", "on", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetSetting("no_escape", "on"); err != nil { // the boot lock itself is never run here
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	weakenings := [][]string{
+		{"reset-guard", "off"},
+		{"firmware-lock", "off"},
+		{"no-escape", "off"},
+		{"freeze", "apps", "add", "steam"},
+		{"tamper", "grace", "60"},
+	}
+	for _, name := range tamperOrder {
+		weakenings = append(weakenings, []string{"tamper", name, "off"})
+	}
+	for _, args := range weakenings {
+		if err := runWith(t, 0, []string{"secret"}, args...); err == nil {
+			t.Errorf("%v: weakened while locked", args)
+		}
+	}
+	for _, name := range tamperOrder {
+		if !enforce.TamperOn(d, simpleTamper[name]) {
+			t.Errorf("tamper %s went off", name)
+		}
+	}
+	events, _ := d.RecentEvents(0, 50)
+	refusals := 0
+	for _, e := range events {
+		if e.Kind == db.EventRefused {
+			refusals++
+		}
+	}
+	if refusals != len(weakenings) {
+		t.Errorf("%d refusals logged, want %d", refusals, len(weakenings))
+	}
+	if n, _ := d.CountEvents("", 0); n != 0 {
+		t.Errorf("refusals counted by bypass prevention: %d", n)
+	}
+	if v, _ := d.GetSetting("no_escape"); v != "on" {
+		t.Error("no-escape turned off")
+	}
+}
+
+// R-LOCK-1, §3.6 places: on a locked block that two places turn on
+// (disabled by default), unticking one, needing more of its networks, or
+// forgetting it all lift the block somewhere: refused. Needing fewer
+// networks is free. (Unticking the last place makes the block continuous,
+// which is stronger.)
+func TestLockedBlockRefusesPlaceWeakening(t *testing.T) {
+	notTerminal(t)
+	d := testDB(t)
+	home := []db.Network{{BSSID: "AA:AA:AA:AA:AA:01"}, {BSSID: "AA:AA:AA:AA:AA:02"}, {BSSID: "AA:AA:AA:AA:AA:03"}}
+	office := []db.Network{{BSSID: "CC:CC:CC:CC:CC:01"}, {BSSID: "CC:CC:CC:CC:CC:02"}}
+	seen := home
+	oldScan := enforce.ScanWifi
+	enforce.ScanWifi = func(bool) ([]db.Network, error) { return seen, nil }
+	t.Cleanup(func() { enforce.ScanWifi = oldScan })
+	mustRun(t, "place", "add", "home")
+	seen = office
+	enforce.ForgetSeenNetworks()
+	mustRun(t, "place", "add", "office")
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "place", "rule", "b", "home", "on")
+	mustRun(t, "place", "rule", "b", "office", "on")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	for _, args := range [][]string{
+		{"place", "rule", "b", "home", "off"},
+		{"place", "need", "home", "3"},
+		{"place", "remove", "home"},
+	} {
+		if err := runCLI(t, args...); err == nil {
+			t.Errorf("%v: a locked block was weakened", args)
+		}
+	}
+	p, err := d.GetPlace("home")
+	if err != nil || !slices.Contains(p.Blocks, "b") || p.Needed() != 2 {
+		t.Errorf("the place changed: %+v %v", p, err)
+	}
+	if err := runCLI(t, "place", "need", "home", "1"); err != nil {
+		t.Errorf("needing fewer networks refused: %v", err)
+	}
 }

@@ -14,6 +14,29 @@
   script runs it READ_SLICE_MS at a time (`judgeOn`/`judged`; principle 9).
   Frames judge their own text (`scanFrame`, R-LIST-4) and ask the
   background (`frame-hits` → `frameHit`) for the block page.
+- Folding (R-LIST-5, `kc9kFold`): capitals that look Latin first
+  (`KC9K_LOOKALIKES_UPPER`: Greek "Η" is "h", not "η" = "n"), NFKD
+  (fullwidth, mathematical, circled letters, ligatures), lower case, marks
+  and format characters (zero-width, soft hyphen) dropped, then
+  `KC9K_LOOKALIKES` (Cyrillic, Greek, Armenian, small capitals). Terms are
+  folded the same way; a long page text is folded in pieces between steps
+  (`kc9kFoldSteps`, cut after a blank; principle 9). A term's regular
+  expression is made at its first use (`kc9kKeywordMatcher`): one-word
+  terms are counted by the word index, and making 1,000 at load was a
+  70 ms long task. The first read waits for idle time after
+  DOMContentLoaded (`queueScan`): read at once, its first visibility check
+  forced the browser's layout of the whole page inside the event.
+  `ci/match_test.js`; frames in Chromium
+  (`ci/content_harness_test.js`); `frameHit` in `ci/background_test.js`.
+- **File pages** (§3.1): judged only when a rule has `file_pages`
+  (tamper "allow file:// blocking"; `enforce.withFilePages`), by `files`
+  and `except.files` (`kc9kFilePaths`, `kc9kFileMatch`: decoded path,
+  `*` only at the end) and the list's terms; `kc9kJudgedAddress` is the
+  one check for "is this address judged" (match, content `judgedHere`,
+  background `pageHit`, `frameHit`, `blockTitledTab`,
+  `closeNewlyBlockedTabs`). `*.*` never matches a file. Chrome sends no
+  request events for files: `blockTitledTab` judges their address and
+  title, and leaves `reason=title` off when the address alone did it.
 - No flashing (R-PAGE-1, `content.js`): while a list could still act on the
   top page by its title or text (`mayActByText`), what its root holds stays
   at opacity 0 (`hidePage`; not the root itself, which takes the canvas and
@@ -58,6 +81,12 @@
   `filter: none` (else turned over twice; `picture` not listed, its img
   is). SVG `img` turn with the page (logos: a black wordmark stays
   readable). `ci/extras_test.py` counts the turns.
+- **Tamper protection** (§4.10): rules `inactive_tabs_off` (then
+  `closeNewlyBlockedTabs` skips background tabs and `onActivated` runs
+  `judgeTab` on the tab switched to) and `embedded_off` (then sub-frame
+  requests aren't blocked by address and `frameHit` answers nothing);
+  absent = on (Android, older daemons). `node ci/tamper_tabs_test.js`
+  (stub browser, background script).
 - **Workarounds**: `kc9kUnwrap` reads addresses in query/path; `checkMirror`
   (content.js) reports canonical addresses/front-ends; `/hit` with `via`
   logs `EventWorkaround`.

@@ -1,6 +1,6 @@
 # Browser policies, extension guard, supported browsers, Chrome
 
-- Covers: `blocker/browser*.go`, `extguard.go`, `browserdetect.go`, `supported.go`, `remotecontrol*.go`, `librewolf*.go`, `chromesetup.go`, `webext/chrome.go`, `db/settinglocks.go`, `cli/browser*.go`, `cli/tamper.go`, `enforce/browser.go`, `enforce/tamper.go`
+- Covers: `blocker/browser*.go`, `extguard.go`, `browserdetect.go`, `supported.go`, `remotecontrol*.go`, `librewolf*.go`, `chromesetup.go`, `webext/chrome.go`, `db/settinglocks.go`, `cli/browser*.go`, `cli/tamper.go`, `enforce/browser.go`, `enforce/tamper.go`, `enforce/tampersettings.go`, `blocker/guest.go`
 - SPEC: §3.13, §4.10 Tamper protection / Browsers / Browser settings, R-LOCK-9
 - Connects to: [extension](extension.md), [locks](locks.md) (setting locks), [layers-net](layers-net.md), [device](device.md) (strict mode)
 
@@ -13,7 +13,11 @@
 - Browser policies (Firefox, Chrome, Chromium, Brave, Edge, Opera,
   Vivaldi): blocklist, allowlist, wildcards, DoH off.
   `file://` entries (`BlockFiles`, `FilePatterns`) only with tamper
-  `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions.
+  `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions
+  (Chromium family without the trailing `*`, `chromiumFilePatterns`: Chrome
+  reads a policy path as a prefix and `*` literally);
+  the same setting has the extension judge file pages (`withFilePages`,
+  [extension](extension.md)).
   URL lists hold at most 1,000 entries (the browsers ignore the rest):
   `FirefoxPolicyLimit` (WebsiteFilter Block/Exceptions, Firefox and
   LibreWolf), `ChromiumPolicyLimit` (URLBlocklist/URLAllowlist). Past it,
@@ -21,8 +25,14 @@
   the allowlist's `*://*/*` always); exceptions cut (blocks more). Sets
   built once per policy (`setsOf`, also `Empty`): the daemon checks drift
   every cycle.
+- Rules server (`enforce.ServeRules`, `RulesAddress`): its addresses are
+  `rulesRoutes`; each answers only its own host name, posts only with the
+  extension's header (`ExtensionHeader`; `/usage`: `X-KC9K-Usage`), no
+  CORS. No secret (SPEC §6 2026-11-21 *(By Opus)*);
+  `TestRulesServerGuardsEveryRoute` holds every route to it.
 - `extguard.go`: extension mandatory while `enforce.ExtensionRequired` and
-  a supported browser is installed; closes browsers whose extension hasn't
+  a supported browser is installed, in the accounts that need it
+  (`EnforceFor`, `enforce.extensionUsers`, §3.2); closes browsers whose extension hasn't
   fetched `/rules` with `X-KC9K-Extension` within 60 s (traced via
   `/proc/net/tcp`), at once if remote-controlled (`remotecontrol.go`) or
   started before the last protecting settings change
@@ -39,6 +49,22 @@
   `statFile`/`runInstall`). LibreWolf: `block-devtools` policy;
   five prefs locked in librewolf.cfg, user overrides replaced by a cleaned
   copy (`librewolfprefs.go`).
+- **Tamper settings with defaults** (`enforce/tampersettings.go`,
+  `TamperOn`): stored on/off; `extension-stop`, `inactive-tabs`, `embedded`
+  are on when unset (`tamperDefaultOn`), the rest off. `cli/tamper.go`
+  `simpleTamper`/`tamperOrder`/`tamperMessages`; gui-state `tamper_*`.
+  `guest` → `blocker.SyncGuestOff` from `enforceBrowser`
+  (`kc9k-guest.json` beside each Chromium-family `kc9k.json`, LightDM
+  drop-in `lightdm.conf.d/90-kc9k-no-guest.conf` where `/etc/lightdm`
+  exists). `extension-stop` off: `extensionUsers` asks only `AnyLock`.
+  `inactive-tabs`/`embedded` off → rules `inactive_tabs_off`/`embedded_off`
+  (extension note). `embedded` off also keeps the blacklists' paths and
+  patterns out of the browser policies (`enforce.Inputs`, `embeddedOff`
+  loaded in `loadDNSChoice`; not monk mode's or factory reset protection's
+  lists): Chrome's URLBlocklist blocks frames too, so a path-blocked
+  embedded video stayed blocked with the setting off (seen live
+  2026-11-21). Whole sites stay in the policies. `installer` → hidden `prepare-install`
+  (`cli/installguard.go`; install note).
 - **Browser setting locks** (`db/settinglocks.go`, `cli/browser.go`): per
   option (time, challenge, password, restart); `enforce.AnyLock` counts
   them. The same code serves the tamper setting block unsupported browsers
@@ -47,6 +73,22 @@
   browser setting `force-librewolf` (`migrateForceLibreWolf` moves state
   and lock row; hidden alias in `kc9k browser`; old project files read).
   `GuardsBlocks`: it and `block-devtools`.
+- **SafeSearch per engine** (§4.10, SPEC §6 2026-11-18): browser settings
+  `safesearch-google|bing|duckduckgo|youtube` (`enforce.SafeSearchEngines`,
+  `SafeSearchSetting`, `SafeSearchOn`; `db.SafeSearchSettings` the same
+  names), each with its own lock. `kc9k browser safesearch on|off` is the
+  group (`cli/browser.go` `safeSearchGroup`): lock flags read once and
+  set on each engine, one confirmation for all; off engine by engine;
+  `unlock safesearch` refused (names the engines). `migrateSafeSearch`
+  copies the old `browser.safesearch` state and its lock row to every
+  engine (every column, so a running lock holds each); old project files'
+  `browser_options.safesearch` and backup setting locks named `safesearch`
+  become all four. Hosts: `blocker.SyncSafeSearch(engines)` pins only those
+  engines' targets and removes the others'. Rules: `safesearch` (any on)
+  plus `safesearch_engines`; the extension's `kc9kSafeSearch(url, form,
+  engines)` (no list: all, for Android and older rules); Brave, Yahoo,
+  SearXNG and blocked engines go with Google's, Bing's or DuckDuckGo's
+  (SPEC §4.10 *(By Opus)*); the YouTube-Restrict header with YouTube's.
 - **Chrome** (`webext/chrome.go`, `blocker/chromesetup.go`): `PackChrome`
   builds MV3 manifest + service worker (`chrome-worker.js`), signs CRX3 with
   a per-computer key (`webext.ChromeKeyPath`); daemon serves
@@ -64,6 +106,7 @@ Not fixed by `SPEC.md`; the code is the truth.
   check-in (`browsersWithoutExtension`, `runningSupportedBrowsers`).
   Required while an active block has a non-empty
   blacklist, web-only/force-search is on, or anything is locked (R-LOCK-9);
+  with tamper `extension-stop` off, only while anything is locked;
   unlocked app-only blocks leave browsers alone. With block unsupported browsers on, always: other browsers
   (Firefox too) close at once, supported ones after 60 s without a check-in.
   Nothing closed without LibreWolf, Chrome or Chromium installed (`status`

@@ -32,6 +32,7 @@ func resetFlags(cmd *cobra.Command) {
 		}
 		f.Changed = false
 	})
+	clearLockOccurrences(cmd) // a lock flag given in an earlier run isn't given again
 	for _, c := range cmd.Commands() {
 		resetFlags(c)
 	}
@@ -299,7 +300,7 @@ func TestWordCombinations(t *testing.T) {
 	}
 	mustRun(t, "cluster", "create", "words", "--text")
 	if err := runCLI(t, "cluster", "add", "words", "cars(red, big)"); err == nil {
-		t.Error("a cluster took a typed combination")
+		t.Error("a list preset took a typed combination")
 	}
 	// An address with brackets is still an address.
 	mustRun(t, "list", "add", "b", "Blocked", "en.wikipedia.org/wiki/Mercury_(planet)")

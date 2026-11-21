@@ -2,9 +2,10 @@
 // their locks.
 //
 //	kc9k browser                                   # list settings and locks
-//	kc9k browser safesearch on [--for 2h] [--lock] # turn on, optionally locked
-//	kc9k browser safesearch off                    # refused while locked
-//	kc9k browser unlock safesearch                 # challenge or password
+//	kc9k browser safesearch-google on [--for 2h] [--lock] # turn on, optionally locked
+//	kc9k browser safesearch-google off                    # refused while locked
+//	kc9k browser unlock safesearch-google                 # challenge or password
+//	kc9k browser safesearch on|off [lock flags]           # every engine at once
 //	kc9k browser install-librewolf
 package cli
 
@@ -12,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,17 +32,29 @@ independently of any block, when it is turned on:
 
   --for DURATION    Timer lock: can't be turned off for this long (e.g. 2h, 7d is 168h).
   --until HH:MM     Timer lock until a clock time today (or tomorrow if already past).
-  --lock            Typing challenge ('kc9k browser unlock <setting>') to turn it off.
+  --lock            Text lock: a challenge ('kc9k browser unlock <setting>') to turn it off.
   --lock-chars N    Challenge length in characters (default 300, 10 to 5000).
   --password-stdin  Password ('kc9k browser unlock <setting>') to turn it off.
   --restart         Stays on until the computer restarts.
-  --relock D        With a text or password lock: unlocking lifts them for D
-                    only, the setting stays on; turning it off meanwhile ends it.
+  --range SPEC      Range lock: on at these times, e.g. "mon-fri 09:00-17:00".
+  --relock D        Re-lock: D after its last lock is unlocked, every lock it
+                    had comes on again, in order; turning it off meanwhile
+                    ends it.
 
-Locks can be added to a setting that is already on, and only made stronger: a
-timer lock can only be extended and a challenge only lengthened. unlock runs the
-challenge and asks for the password, then turns the setting off; time and
-restart locks can't be unlocked, only waited out.
+Locks are unlocked one at a time, in the order their options were given. An
+option given twice is two locks (two partners' passwords). Locks added to a
+setting that is already on go last; a kind it already has is another lock
+of that kind, after the others; a lock that is on is never changed. unlock
+lifts the first lock still on (the challenge, the password), and turns the
+setting off once none is left; time, restart and range locks can't be
+unlocked, only waited out.
+
+SafeSearch is a setting per engine: safesearch-google, safesearch-bing,
+safesearch-duckduckgo and safesearch-youtube (Restricted Mode), each with
+its own locks. 'kc9k browser safesearch on|off' switches all four, and its
+lock flags set the same lock on each. While Google's, Bing's or
+DuckDuckGo's is on, Brave, Yahoo and SearXNG searches are kept strict too
+and engines that can't be kept strict are blocked.
 
 block-devtools also can't be turned off while a block is locked or Frozen
 Chicken runs, since blocks rely on it. block-devtools is on
@@ -84,6 +98,9 @@ every other browser at any time, turn on 'kc9k tamper unsupported-browsers'.`,
 		}
 		if name == "images" || name == "greyscale" {
 			return fmt.Errorf("%s is now chosen per block: 'kc9k block action <block> %s on'", name, map[string]string{"images": db.ActionNoImages, "greyscale": db.ActionGreyscale}[name])
+		}
+		if name == enforce.SafeSearchGroup {
+			return safeSearchGroup(cmd, database, value)
 		}
 		if !enforce.IsLockableSetting(name) {
 			return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))
@@ -180,7 +197,14 @@ func loadSettingLock(database *db.DB, name string) (settingLockState, error) {
 // typing challenge"; "" when unlocked.
 func (s settingLockState) describe() string {
 	var parts []string
-	for _, k := range s.lock.LayersOn(s.trusted, s.bootID) {
+	on := s.lock.LayersOn(s.trusted, s.bootID)
+	placed := len(on) - len(s.lock.Queue) // the queue is last (db.Layers)
+	for i, k := range on {
+		if i >= placed {
+			change, _ := describeQueued(s.lock.Queue[i-placed])
+			parts = append(parts, strings.TrimPrefix(change, "another "))
+			continue
+		}
 		switch k {
 		case db.LayerTimer:
 			if s.lock.TimerAfter > 0 {
@@ -198,11 +222,11 @@ func (s settingLockState) describe() string {
 			parts = append(parts, "range "+describeRange(db.LockExtras{RangeDays: s.lock.RangeDays, RangeFrom: s.lock.RangeFrom, RangeTo: s.lock.RangeTo, RangeInvert: s.lock.RangeInvert}))
 		}
 	}
-	if s.lock.Relock > 0 && s.lock.TextOrPasswordLocked(s.trusted) {
+	if s.lock.Relock > 0 && (s.lock.TextOrPasswordLocked(s.trusted) || (s.lock.RelocksConfig() && len(on) > 0)) {
 		parts = append(parts, "re-lock "+(time.Duration(s.lock.Relock)*time.Second).String())
 	}
-	if s.lock.PendingRelock(s.trusted) && s.lock.LiftedUntil > s.trusted {
-		parts = append(parts, "unlocked: on again at "+time.Unix(s.lock.LiftedUntil, 0).Format("2006-01-02 15:04"))
+	if at := s.lock.RelockAt(s.trusted); at > 0 {
+		parts = append(parts, "unlocked: on again at "+time.Unix(at, 0).Format("2006-01-02 15:04"))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -246,78 +270,52 @@ func lockFlagsGiven(cmd *cobra.Command) bool {
 	return false
 }
 
-// requestedSettingLock reads the lock flags into the lock they ask for.
+// requestedSettingLock reads the lock flags into the locks they ask for:
+// want.Config holds every one, in the order given (a flag given twice is a
+// second lock of its kind, §3.4), timer ends in trusted time and one
+// password read for each password lock; want.Relock the re-lock time.
 func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.SettingLock, error) {
 	want := db.SettingLock{Name: name}
-	forDur, _ := cmd.Flags().GetString("for")
-	untilClock, _ := cmd.Flags().GetString("until")
-	if forDur != "" && untilClock != "" {
-		return want, fmt.Errorf("use only one of --for or --until")
-	}
 	now := time.Now()
-	switch {
-	case forDur != "":
-		d, err := parseUserDuration(forDur)
-		if err != nil {
-			return want, fmt.Errorf("invalid --for duration %q: %w", forDur, err)
-		}
-		if d <= 0 {
-			return want, fmt.Errorf("--for duration must be positive")
-		}
-		want.LockedUntil = now.Add(d).Unix()
-		want.TimerAfter = int64(d / time.Second)
-	case untilClock != "":
-		t, err := untilToday(now, untilClock)
-		if err != nil {
-			return want, err
-		}
-		want.LockedUntil = t.Unix()
+	if _, _, _, err := textLockRequested(cmd); err != nil {
+		return want, err
 	}
-	want.Order = strings.Join(lockKindsInOrder(cmd), ",")
-	if want.LockedUntil != 0 {
-		trusted, err := database.TrustedNow(now)
-		if err != nil {
-			return want, err
-		}
-		want.LockedUntil += trusted - now.Unix()
-	}
-	useLock, style, length, err := textLockRequested(cmd)
+	specs, _, err := lockSpecs(cmd, now)
 	if err != nil {
 		return want, err
 	}
-	if useLock {
-		want.LockChars, want.Style = length, style
-	} else if cmd.Flags().Changed("lock-chars") {
+	if cmd.Flags().Changed("lock-chars") && !slices.ContainsFunc(specs, func(q db.QueuedLock) bool { return q.Kind == db.LayerText }) {
 		return want, fmt.Errorf("--lock-chars goes with --lock")
 	}
-	if usePassword, _ := cmd.Flags().GetBool("password-stdin"); usePassword {
-		password, err := readPasswordStdin("Setting password")
-		if err != nil {
-			return want, err
-		}
-		if want.PasswordHash, err = db.HashPassword(password); err != nil {
-			return want, err
-		}
-	}
-	if useRestart, _ := cmd.Flags().GetBool("restart"); useRestart {
-		boot, err := db.BootID()
-		if err != nil {
-			return want, err
-		}
-		want.RestartBoot = boot
-	}
-	if want.Relock, err = relockRequested(cmd); err != nil {
+	trusted, err := database.TrustedNow(now)
+	if err != nil {
 		return want, err
 	}
-	if cmd.Flags().Lookup("range") != nil {
-		if spec, _ := cmd.Flags().GetString("range"); spec != "" {
-			if want.RangeDays, want.RangeFrom, want.RangeTo, err = parseRange(spec); err != nil {
+	count, nth := passwordLocks(specs), 0
+	for i := range specs {
+		switch specs[i].Kind {
+		case db.LayerTimer:
+			if specs[i].Until != 0 {
+				specs[i].Until += trusted - now.Unix()
+			}
+		case db.LayerPassword:
+			nth++
+			prompt := "Setting password"
+			if count > 1 {
+				prompt = fmt.Sprintf("Setting password %d of %d", nth, count)
+			}
+			password, err := readPasswordStdin(prompt)
+			if err != nil {
 				return want, err
 			}
-			want.RangeInvert, _ = cmd.Flags().GetBool("range-invert")
-		} else if cmd.Flags().Changed("range-invert") {
-			return want, fmt.Errorf("--range-invert goes with --range")
+			if specs[i].PasswordHash, err = db.HashPassword(password); err != nil {
+				return want, err
+			}
 		}
+	}
+	want.Config = specs
+	if want.Relock, err = relockRequested(cmd); err != nil {
+		return want, err
 	}
 	return want, nil
 }
@@ -350,127 +348,94 @@ func relockRequested(cmd *cobra.Command) (int64, error) {
 // addRelockFlag adds --relock to commands that lock a setting.
 func addRelockFlag(cmds ...*cobra.Command) {
 	for _, c := range cmds {
-		c.Flags().String("relock", "", "Re-lock: after unlocking, the text and password locks come on again after this long (e.g. 30m), unless it is turned off meanwhile")
+		c.Flags().String("relock", "", "Re-lock: this long after its last lock is unlocked, every lock comes on again in its order (e.g. 30m), unless it is turned off meanwhile")
 	}
 }
 
-// strengthenSettingLock merges the requested locks into the current ones. It
-// only ever makes the lock stronger: an earlier end, a shorter challenge or a
-// new password over an existing one is refused. Locks that have run out are
-// dropped. New locks go last, in the order their flags were given
-// (want.Order, R-LOCK-6/7); a timer lock for a duration (want.TimerAfter)
-// behind a lock still on waits for it, and so does a restart lock. changes
-// describes what was added.
-func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven bool) (db.SettingLock, []string, error) {
-	next := cur.lock
+// strengthenSettingLock adds the requested locks (want.Config) to a
+// setting's, as on a block (§3.4, §4.6; §6 2026-11-21 By Opus): each goes
+// last in the unlock order; a kind the setting already has is another lock
+// of that kind, waiting in the queue behind every other, and once anything
+// waits there every new lock does. A lock already set is never changed.
+// Locks that have run out are dropped. A timer lock for a duration or a
+// restart lock behind a lock still on waits for it (R-LOCK-6). Every lock
+// is kept in Config, which re-lock brings back. changes describes what was
+// added.
+func strengthenSettingLock(cur settingLockState, want db.SettingLock, _ bool) (db.SettingLock, []string, error) {
+	next := advancedSettingLock(cur)
 	name := next.Name
 	trusted, boot := cur.trusted, cur.bootID
-	next.Advance(trusted, boot)
-	if next.LockedUntil <= trusted && next.TimerAfter == 0 {
-		next.LockedUntil = 0
-	}
-	if next.RestartBoot != "" && !next.RestartLocked(boot) {
-		next.RestartBoot = ""
-	}
-	if next.PendingRelock(trusted) && (want.LockChars > 0 || want.PasswordHash != "") {
-		// Unlocked with re-lock: a new text or password lock replaces the
-		// lifted ones and holds at once.
+	hasTextOrPassword := slices.ContainsFunc(want.Config, func(q db.QueuedLock) bool {
+		return q.Kind == db.LayerText || q.Kind == db.LayerPassword
+	})
+	if next.PendingRelock(trusted) && !next.RelocksConfig() && hasTextOrPassword {
+		// Unlocked with the old re-lock (text and password lifted): a new
+		// text or password lock replaces the lifted ones and holds at once.
 		next.LockChars, next.Style, next.PasswordHash, next.Relock, next.LiftedUntil, next.LiftedKinds = 0, "", "", 0, 0, ""
 	}
-	order := next.Layers()
-	kinds := db.ParseLayerOrder(want.Order)
-	kinds = db.AppendLayers(kinds, db.LayerTimer, db.LayerText, db.LayerPassword, db.LayerRestart, db.LayerRange)
-	anyOn := func() bool { return len(next.LayersOn(trusted, boot)) > 0 }
+	if len(next.Config) == 0 { // locked before settings kept their configuration
+		next.Config = next.Snapshot()
+	}
+	if next.RelocksConfig() && next.LiftedUntil != 0 && len(want.Config) > 0 {
+		next.LiftedUntil = 0 // a lock added while the re-lock time ran
+	}
+	order := next.PlacedLayers()
+	othersOn := false
+	for _, k := range next.LayersOn(trusted, boot) {
+		othersOn = othersOn || k != db.LayerTimer
+	}
+	has := func(kind string) bool { return slices.Contains(next.Layers(), kind) }
 	var changes []string
-	for _, kind := range kinds {
-		switch kind {
+	for _, q := range want.Config {
+		next.Config = append(next.Config, q)
+		if len(next.Queue) > 0 || has(q.Kind) {
+			next.Queue = append(next.Queue, q)
+			change, _ := describeQueued(q)
+			changes = append(changes, change+", after the locks before it")
+			othersOn = true
+			continue
+		}
+		switch q.Kind {
 		case db.LayerTimer:
-			if want.LockedUntil == 0 {
-				continue
-			}
-			switch {
-			case next.TimerAfter > 0:
-				if want.TimerAfter == 0 {
-					return next, nil, fmt.Errorf("%s has a timer lock that counts from unlocking the locks before it; extend it with --for", name)
+			if othersOn && q.For > 0 {
+				next.TimerAfter = q.For
+				changes = append(changes, "timer lock of "+(time.Duration(q.For)*time.Second).String()+" after the locks before it")
+			} else {
+				next.LockedUntil = q.Until
+				if q.For > 0 {
+					next.LockedUntil = trusted + q.For
 				}
-				if want.TimerAfter <= next.TimerAfter {
-					return next, nil, fmt.Errorf("%s already has a timer lock of %s after the locks before it; a timer lock can only be extended", name, time.Duration(next.TimerAfter)*time.Second)
-				}
-				next.TimerAfter = want.TimerAfter
-				changes = append(changes, "timer lock of "+(time.Duration(next.TimerAfter)*time.Second).String()+" after the locks before it")
-			case next.LockedUntil != 0:
-				if want.LockedUntil <= next.LockedUntil {
-					return next, nil, fmt.Errorf("%s is already locked until %s; a timer lock can only be extended", name, time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
-				}
-				next.LockedUntil = want.LockedUntil
-				changes = append(changes, "locked until "+time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
-			case want.TimerAfter > 0 && anyOn():
-				next.TimerAfter = want.TimerAfter
-				order = db.AppendLayers(order, db.LayerTimer)
-				changes = append(changes, "timer lock of "+(time.Duration(next.TimerAfter)*time.Second).String()+" after the locks before it")
-			default:
-				next.LockedUntil = want.LockedUntil
-				order = db.AppendLayers(order, db.LayerTimer)
 				changes = append(changes, "locked until "+time.Unix(next.LockedUntil, 0).Format("2006-01-02 15:04"))
 			}
 		case db.LayerText:
-			if want.LockChars == 0 {
-				continue
-			}
-			switch {
-			case next.LockChars == 0:
-				next.LockChars, next.Style = want.LockChars, want.Style
-				order = db.AppendLayers(order, db.LayerText)
-				changes = append(changes, "text lock: "+lock.DescribeStyle(next.Style, next.LockChars))
-			case want.Style != next.Style:
-				return next, nil, fmt.Errorf("%s already has a text lock (%s); its kind can't change while locked", name, lock.DescribeStyle(next.Style, next.LockChars))
-			case charsGiven && want.LockChars > next.LockChars:
-				next.LockChars = want.LockChars
-				changes = append(changes, fmt.Sprintf("challenge lengthened to %d chars", next.LockChars))
-			case charsGiven && want.LockChars < next.LockChars:
-				return next, nil, fmt.Errorf("%s already has a %d-character challenge; it can't be shortened", name, next.LockChars)
-			}
+			next.LockChars, next.Style = q.Chars, q.Style
+			changes = append(changes, "text lock: "+lock.DescribeStyle(next.Style, next.LockChars))
 		case db.LayerPassword:
-			if want.PasswordHash == "" {
-				continue
-			}
-			if next.PasswordHash != "" {
-				return next, nil, fmt.Errorf("%s already has a password; it can't be replaced while locked", name)
-			}
-			next.PasswordHash = want.PasswordHash
-			order = db.AppendLayers(order, db.LayerPassword)
+			next.PasswordHash = q.PasswordHash
 			changes = append(changes, "password")
 		case db.LayerRange:
-			if want.RangeDays == 0 {
-				continue
-			}
-			if next.RangeDays != 0 {
-				if next.RangeDays != want.RangeDays || next.RangeFrom != want.RangeFrom || next.RangeTo != want.RangeTo || next.RangeInvert != want.RangeInvert {
-					return next, nil, fmt.Errorf("%s already has a range lock; it can't change while locked", name)
-				}
-				continue
-			}
-			next.RangeDays, next.RangeFrom, next.RangeTo, next.RangeInvert = want.RangeDays, want.RangeFrom, want.RangeTo, want.RangeInvert
-			order = db.AppendLayers(order, db.LayerRange)
+			next.RangeDays, next.RangeFrom, next.RangeTo, next.RangeInvert = q.RangeDays, q.RangeFrom, q.RangeTo, q.RangeInvert
 			changes = append(changes, "range lock "+describeRange(db.LockExtras{RangeDays: next.RangeDays, RangeFrom: next.RangeFrom, RangeTo: next.RangeTo, RangeInvert: next.RangeInvert}))
 		case db.LayerRestart:
-			if want.RestartBoot == "" || next.RestartBoot != "" {
-				continue
-			}
-			next.RestartBoot = want.RestartBoot
-			if anyOn() {
+			next.RestartBoot = boot
+			if othersOn {
 				next.RestartBoot = db.RestartPending
 			}
-			order = db.AppendLayers(order, db.LayerRestart)
 			changes = append(changes, "until restart")
+		default:
+			return next, nil, fmt.Errorf("a setting can't have a %s", db.LayerName(q.Kind))
+		}
+		order = db.AppendLayers(order, q.Kind)
+		if q.Kind != db.LayerTimer {
+			othersOn = true
 		}
 	}
 	if want.Relock > 0 {
 		switch {
-		case next.LockChars == 0 && next.PasswordHash == "":
-			return next, nil, fmt.Errorf("--relock goes with a text or password lock")
+		case len(next.Config) == 0:
+			return next, nil, fmt.Errorf("--relock goes with a lock")
 		case next.Relock == 0 || want.Relock < next.Relock:
-			// Sooner is stronger: the locks are lifted for less time.
+			// Sooner is stronger: the locks are off for less time.
 			next.Relock = want.Relock
 			changes = append(changes, "re-lock "+(time.Duration(next.Relock)*time.Second).String()+" after unlocking")
 		case want.Relock > next.Relock:
@@ -481,16 +446,26 @@ func strengthenSettingLock(cur settingLockState, want db.SettingLock, charsGiven
 	return next, changes, nil
 }
 
+// advancedSettingLock is the setting's lock as strengthenSettingLock starts
+// from: layers moved on, timer and restart locks that are over dropped.
+func advancedSettingLock(cur settingLockState) db.SettingLock {
+	next := cur.lock
+	next.Queue, next.Config = slices.Clone(next.Queue), slices.Clone(next.Config)
+	trusted, boot := cur.trusted, cur.bootID
+	next.Advance(trusted, boot)
+	if next.LockedUntil <= trusted && next.TimerAfter == 0 {
+		next.LockedUntil = 0
+	}
+	if next.RestartBoot != "" && !next.RestartLocked(boot) {
+		next.RestartBoot = ""
+	}
+	return next
+}
+
 // settingLocks lists the locks strengthenSettingLock adds to a setting, for
 // confirmLocks (R-LOCK-12).
 func settingLocks(target string, cur settingLockState, next db.SettingLock) []lockToSet {
-	old := cur.lock
-	if !old.TimeLocked(cur.trusted) {
-		old.LockedUntil = 0
-	}
-	if !old.RestartLocked(cur.bootID) {
-		old.RestartBoot = ""
-	}
+	old := advancedSettingLock(cur)
 	var locks []lockToSet
 	if next.LockedUntil != old.LockedUntil {
 		locks = append(locks, lockToSet{target, "timer lock", timerLength(cur.trusted, next.LockedUntil)})
@@ -498,12 +473,8 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 	if next.TimerAfter != old.TimerAfter {
 		locks = append(locks, lockToSet{target, "timer lock", humanDuration(time.Duration(next.TimerAfter)*time.Second) + ", counting from when the locks before it are unlocked"})
 	}
-	if next.LockChars != old.LockChars {
-		length := ""
-		if old.LockChars > 0 {
-			length = "lengthened"
-		}
-		locks = append(locks, lockToSet{target, textLockKind(next.Style, next.LockChars), length})
+	if next.LockChars != old.LockChars || next.Style != old.Style {
+		locks = append(locks, lockToSet{target, textLockKind(next.Style, next.LockChars), ""})
 	}
 	if next.PasswordHash != old.PasswordHash {
 		locks = append(locks, lockToSet{target, "password lock", ""})
@@ -518,11 +489,24 @@ func settingLocks(target string, cur settingLockState, next db.SettingLock) []lo
 	if next.RangeDays != 0 && old.RangeDays == 0 {
 		locks = append(locks, lockToSet{target, "range lock", describeRange(db.LockExtras{RangeDays: next.RangeDays, RangeFrom: next.RangeFrom, RangeTo: next.RangeTo, RangeInvert: next.RangeInvert}) + " (can't be unlocked then)"})
 	}
+	if len(next.Queue) > len(old.Queue) {
+		for _, q := range next.Queue[len(old.Queue):] {
+			_, length := describeQueued(q)
+			if length != "" {
+				length += ", "
+			}
+			locks = append(locks, lockToSet{target, "another " + db.LayerName(q.Kind), length + "after the locks before it are unlocked"})
+		}
+	}
 	if order := next.Layers(); len(order) > 1 {
-		locks = append(locks, lockToSet{target, "unlock order", strings.Join(order, " → ")})
+		names := make([]string, len(order))
+		for i, k := range order {
+			names[i] = db.LayerName(k)
+		}
+		locks = append(locks, lockToSet{target, "unlock order", strings.Join(names, " → ")})
 	}
 	if next.Relock != old.Relock {
-		locks = append(locks, lockToSet{target, "re-lock", (time.Duration(next.Relock) * time.Second).String() + " after unlocking"})
+		locks = append(locks, lockToSet{target, "re-lock", "all its locks come back, in their order, " + humanDuration(time.Duration(next.Relock)*time.Second) + " after it is unlocked"})
 	}
 	return locks
 }
@@ -563,6 +547,92 @@ func browserSettingOn(cmd *cobra.Command, database *db.DB, name string) error {
 	}
 	fmt.Printf("%s is on, %s\n", name, strings.Join(changes, ", "))
 	return nil
+}
+
+// safeSearchGroup switches every engine's SafeSearch (§4.10, §6
+// 2026-11-18: each its own browser setting) at once. Lock flags set the same
+// lock on each engine, all confirmed together (R-LOCK-12); turning them off
+// goes engine by engine, so a locked one stays on.
+func safeSearchGroup(cmd *cobra.Command, database *db.DB, value string) error {
+	names := make([]string, len(enforce.SafeSearchEngines))
+	for i, e := range enforce.SafeSearchEngines {
+		names[i] = enforce.SafeSearchSetting(e)
+	}
+	switch value {
+	case "on":
+		if !lockFlagsGiven(cmd) {
+			for _, name := range names {
+				if err := database.SetSetting(enforce.SettingKey(name), "on"); err != nil {
+					return err
+				}
+			}
+			fmt.Printf("SafeSearch is on for %s.\n", strings.Join(enforce.SafeSearchEngines, ", "))
+			return nil
+		}
+		if err := requireLockPassword(database); err != nil {
+			return err
+		}
+		want, err := requestedSettingLock(cmd, database, enforce.SafeSearchGroup) // the password is read once
+		if err != nil {
+			return err
+		}
+		type step struct {
+			next    db.SettingLock
+			changes []string
+		}
+		var steps []step
+		var confirm []lockToSet
+		for _, name := range names {
+			cur, err := loadSettingLock(database, name)
+			if err != nil {
+				return err
+			}
+			w := want
+			w.Name = name
+			next, changes, err := strengthenSettingLock(cur, w, cmd.Flags().Changed("lock-chars"))
+			if err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
+			if len(changes) > 0 {
+				steps = append(steps, step{next, changes})
+				confirm = append(confirm, settingLocks(settingTarget(name), cur, next)...)
+			}
+		}
+		if len(steps) == 0 {
+			return fmt.Errorf("every engine's SafeSearch already has those locks")
+		}
+		if err := confirmLocks(cmd, confirm...); err != nil {
+			return err
+		}
+		for _, name := range names {
+			if err := database.SetSetting(enforce.SettingKey(name), "on"); err != nil {
+				return err
+			}
+		}
+		for _, s := range steps {
+			if err := database.SetSettingLock(s.next); err != nil {
+				return err
+			}
+			fmt.Printf("%s is on, %s\n", s.next.Name, strings.Join(s.changes, ", "))
+		}
+		return nil
+	case "off":
+		if lockFlagsGiven(cmd) {
+			return fmt.Errorf("lock flags only go with 'on'")
+		}
+		var refusedOnes []string
+		for _, name := range names {
+			if err := browserSettingOff(database, name); err != nil {
+				refusedOnes = append(refusedOnes, err.Error())
+			}
+		}
+		if len(refusedOnes) > 0 {
+			return fmt.Errorf("%s", strings.Join(refusedOnes, "; "))
+		}
+		fmt.Println("SafeSearch is off for every engine.")
+		return nil
+	}
+	return fmt.Errorf("use 'on' or 'off'")
 }
 
 // refuseWhileHeld returns why a setting can't be turned off by unlocking it,
@@ -642,6 +712,10 @@ func unlockBrowserSetting(database *db.DB, name string) error {
 	if name == forceLibreWolfAlias {
 		name = db.UnsupportedBrowsers
 	}
+	if name == enforce.SafeSearchGroup {
+		return fmt.Errorf("each engine's SafeSearch has its own lock: unlock it with 'kc9k browser unlock safesearch-<engine>' (%s)",
+			strings.Join(enforce.SafeSearchEngines, ", "))
+	}
 	if !enforce.IsLockableSetting(name) {
 		return fmt.Errorf("unknown setting %q (use %s)", name, strings.Join(enforce.BrowserSettings, ", "))
 	}
@@ -707,7 +781,7 @@ func unlockSetting(database *db.DB, name, label, notLocked string) (s settingLoc
 	case db.LayerText:
 		ok, err := lock.RunStyled(s.lock.Style, s.lock.LockChars)
 		if err != nil {
-			return s, false, nil, fmt.Errorf("failed to run the typing challenge: %w", err)
+			return s, false, nil, fmt.Errorf("failed to run the text lock's challenge: %w", err)
 		}
 		if !ok {
 			_ = refused(database, "", fmt.Errorf("failed the unlock challenge"))

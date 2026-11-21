@@ -1,3 +1,5 @@
+//go:build linux
+
 // owners.go — which processes KC9K may kill, and which apps it may block.
 //
 // Blocking works on programs people run. A block must never take down the

@@ -1,3 +1,5 @@
+//go:build linux
+
 // desktop.go — which desktop the user is on (R-DESKTOP-1): window titles
 // and app time need X11, and are built for Cinnamon.
 package blocker

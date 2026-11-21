@@ -1,3 +1,5 @@
+//go:build linux
+
 // browserdetect.go — recognising browsers by what they are, not their name.
 //
 // The extension guard used to know browsers only by executable name, so a

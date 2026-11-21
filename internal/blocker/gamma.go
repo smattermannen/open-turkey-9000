@@ -1,3 +1,5 @@
+//go:build linux
+
 // gamma.go — software brightness and colour temperature for the circadian
 // rhythm, through the X server's gamma ramps (the RandR extension), the way
 // Redshift and the desktops' night lights do it. It speaks the few RandR
@@ -9,7 +11,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math"
 )
 
 // extensionOpcode asks the server for an extension by name (QueryExtension)
@@ -127,61 +128,6 @@ func (c *x11Conn) setGamma(op byte, crtc uint32, red, green, blue []uint16) erro
 	req.Write(make([]byte, pad4(body)))
 	_, _, err := c.request(req.Bytes(), false)
 	return err
-}
-
-// GammaReading is what the screens' gamma ramps show.
-type GammaReading int
-
-const (
-	GammaUnknown  GammaReading = iota // no X session to read
-	GammaOurs                         // the ramps KC9K would set now
-	GammaIdentity                     // plain ramps: nothing changes the colours
-	GammaOther                        // ramps someone else set (a night light, Redshift)
-)
-
-func (g GammaReading) String() string {
-	return [...]string{"unknown", "ours", "identity", "other"}[g]
-}
-
-// RampFunc makes a ramp of a size: the circadian package's Ramp with the
-// colour temperature and brightness wanted.
-type RampFunc func(size int) (red, green, blue []uint16)
-
-// rampTolerance is how far a read ramp may be from the one expected: the
-// driver may round what it was given to the hardware's precision.
-const rampTolerance = 1024
-
-func rampsMatch(want RampFunc, red, green, blue []uint16) bool {
-	wr, wg, wb := want(len(red))
-	for i := range red {
-		for _, pair := range [][2]uint16{{wr[i], red[i]}, {wg[i], green[i]}, {wb[i], blue[i]}} {
-			if math.Abs(float64(pair[0])-float64(pair[1])) > rampTolerance {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func allZero(channels ...[]uint16) bool {
-	for _, channel := range channels {
-		for _, v := range channel {
-			if v != 0 {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func identityRamp(size int) (red, green, blue []uint16) {
-	red = make([]uint16, size)
-	for i := range red {
-		if size > 1 {
-			red[i] = uint16(math.Round(65535 * float64(i) / float64(size-1)))
-		}
-	}
-	return red, append([]uint16{}, red...), append([]uint16{}, red...)
 }
 
 // gammaSessions is every desktop session's X display (replaceable in tests).

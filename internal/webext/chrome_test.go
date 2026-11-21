@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestChromeKeyIsMadeOnceAndKept(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 { // Windows: the data folder's DACL
 		t.Errorf("key file mode %v, want 0600", info.Mode().Perm())
 	}
 	again, err := ChromeKey(path)

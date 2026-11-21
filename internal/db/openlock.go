@@ -2,7 +2,6 @@ package db
 
 import (
 	"os"
-	"syscall"
 	"time"
 )
 
@@ -26,11 +25,11 @@ func setupLock(dbPath string) func() {
 	}
 	deadline := time.Now().Add(setupLockWait)
 	for {
-		err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		busy, err := tryLockFile(file)
 		if err == nil {
 			return func() { file.Close() }
 		}
-		if err != syscall.EWOULDBLOCK || time.Now().After(deadline) {
+		if !busy || time.Now().After(deadline) {
 			file.Close()
 			return func() {}
 		}

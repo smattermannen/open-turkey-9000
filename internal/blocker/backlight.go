@@ -1,3 +1,5 @@
+//go:build linux
+
 // backlight.go — the screen's real brightness, for the circadian rhythm:
 // the laptop panel through /sys/class/backlight, and external screens
 // through DDC/CI with ddcutil when it is installed.
@@ -73,26 +75,6 @@ func (b Backlight) Raw() (int, error) {
 func (b Backlight) SetRaw(level int) error {
 	level = max(0, min(b.Max, level))
 	return os.WriteFile(filepath.Join(b.dir, "brightness"), []byte(strconv.Itoa(level)), 0o644)
-}
-
-// PercentToRaw turns a brightness in percent into a level of max, never
-// fully off: a black screen at night would look broken.
-func PercentToRaw(percent float64, max int) int {
-	return int(math.Max(1, math.Round(percent/100*float64(max))))
-}
-
-// RawToPercent turns a level of max into percent.
-func RawToPercent(level, max int) float64 {
-	if max <= 0 {
-		return 0
-	}
-	return float64(level) * 100 / float64(max)
-}
-
-// ExternalScreen is a screen whose brightness DDC/CI sets.
-type ExternalScreen struct {
-	Display string // ddcutil's display number
-	Name    string
 }
 
 // ddcutilTimeout bounds one ddcutil run: DDC/CI is slow, and a screen that

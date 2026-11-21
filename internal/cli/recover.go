@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/smattermannen/kc9k/internal/platform"
+
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
@@ -31,8 +33,8 @@ var inRecovery = func() bool {
 	return false
 }
 
-// isRoot is os.Geteuid() == 0; a variable for tests.
-var isRoot = func() bool { return os.Geteuid() == 0 }
+// isRoot is platform.Privileged; a variable for tests.
+var isRoot = platform.Privileged
 
 var recoverCmd = &cobra.Command{
 	Use:   "recover",

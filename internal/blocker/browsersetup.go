@@ -7,39 +7,7 @@ import (
 	"strings"
 )
 
-// BrowserSetup is what stays enforced in Firefox-family browsers whether or not
-// a block runs.
-type BrowserSetup struct {
-	ExtensionID  string // force-installed when set
-	ExtensionXPI string
-	ForceSearch  bool
-	// DisableDevTools blocks the developer tools, which can switch the
-	// extension off from its own pages or about:debugging.
-	DisableDevTools bool
-	// DisablePrivate turns off private windows (no-private).
-	DisablePrivate bool
-	// RemoveExtensionID is set when uninstalling: browsers remove that
-	// extension at their next start. Without it, a policy-installed
-	// extension would stay behind and keep enforcing its last rules forever,
-	// with no daemon to update them.
-	RemoveExtensionID string
-}
-
 const googleWebEngine = "Google Web"
-
-// otherPolicyDirs are installation folders that read a distribution policy
-// file. The first target list is written always; these only if installed.
-var (
-	alwaysPolicyFiles = []string{firefoxPolicyPath, "/etc/librewolf/policies/policies.json"}
-	installDirs       = []string{"/usr/lib/librewolf", "/usr/share/librewolf", "/usr/lib/firefox", "/usr/lib/firefox-esr"}
-)
-
-// otherBrowserNames names browsers besides LibreWolf, for BrowserNames.
-var otherBrowserNames = []string{
-	"firefox", "firefox-bin", "firefox-esr", "chrome", "google-chrome", "chromium", "chromium-browser",
-	"brave", "brave-browser", "opera", "vivaldi-bin", "msedge", "microsoft-edge", "epiphany",
-	"falkon", "konqueror", "midori", "qutebrowser", "palemoon", "waterfox", "floorp", "zen", "tor", "torbrowser",
-}
 
 func setupPolicies(s BrowserSetup, policies map[string]interface{}) {
 	delete(policies, "ExtensionSettings")
@@ -96,7 +64,7 @@ func EnsureBrowserSetup(s BrowserSetup) error {
 	root["policies"] = policies
 
 	targets := append([]string{}, alwaysPolicyFiles...)
-	for _, dir := range installDirs {
+	for _, dir := range firefoxInstallDirs() {
 		if dirExists(dir) {
 			targets = append(targets, filepath.Join(dir, "distribution", "policies.json"))
 		}
@@ -259,12 +227,10 @@ func SyncSafeSearch(engines []string) error {
 	if want == content {
 		return nil
 	}
-	return atomicWriteFile(hostsPath, []byte(want), 0644)
+	return writeHosts(want)
 }
 
 const signingPref = `lockPref("xpinstall.signatures.required", false); // kc9k`
-
-var librewolfConfigs = []string{"/usr/share/librewolf/librewolf.cfg", "/usr/lib/librewolf/librewolf.cfg"}
 
 // withSigningPref adds or removes the line that lets the bundled unsigned
 // extension load.

@@ -1,3 +1,5 @@
+//go:build linux
+
 // netcut.go — the two physical ways monk mode cuts the connection
 // (R-MONK-2): the Wi-Fi radio and the wired interfaces. The third, the
 // firewall dropping everything except loopback, is in firewall.go.

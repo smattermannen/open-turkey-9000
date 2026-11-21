@@ -1,3 +1,5 @@
+//go:build linux
+
 // allowedapps.go — Frozen Chicken's "allowed apps only" mode (§3.8,
 // R-FREEZE-1): while it runs, a regular user's programs are closed unless
 // they are on the freeze's app list (or run under one that is), or are

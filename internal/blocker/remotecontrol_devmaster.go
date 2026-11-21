@@ -1,4 +1,4 @@
-//go:build devmaster
+//go:build devmaster && linux
 
 package blocker
 

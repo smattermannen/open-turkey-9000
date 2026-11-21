@@ -1,3 +1,5 @@
+//go:build linux
+
 // titles.go — closing apps by their window title, like Cold Turkey's window
 // title blocking: block "YouTube" and any app showing a window with YouTube
 // in its title is closed.
@@ -25,10 +27,6 @@ import (
 	"syscall"
 	"time"
 )
-
-// TitleCloseGrace is how long a window asked to close may stay before its
-// program is killed.
-const TitleCloseGrace = 4 * time.Second
 
 // titleSession is one desktop to watch: its X display, and the Xauthority
 // file and user ID of the user it belongs to.
@@ -66,71 +64,6 @@ func NewTitleGuard() *TitleGuard {
 func sessionFor(u *user.User) titleSession {
 	uid, _ := strconv.ParseUint(u.Uid, 10, 32)
 	return titleSession{display: ":0", xauth: filepath.Join(u.HomeDir, ".Xauthority"), uid: uid}
-}
-
-// matchingKeyword returns the keyword title contains (case-insensitive), or "".
-func matchingKeyword(title string, keywords []string) string {
-	lower := strings.ToLower(title)
-	for _, k := range keywords {
-		if k != "" && strings.Contains(lower, strings.ToLower(k)) {
-			return k
-		}
-	}
-	return ""
-}
-
-// TitleTargets are what the title guard looks for in one user's windows.
-type TitleTargets struct {
-	Close   []string // window title entries whose windows close
-	Watch   []string // window title entries only reported (owner, 2026-11-16)
-	Folders []string // folder entries (§3.1): file manager windows showing them close
-}
-
-func (t TitleTargets) Empty() bool {
-	return len(t.Close) == 0 && len(t.Watch) == 0 && len(t.Folders) == 0
-}
-
-// TitlesByUser are the title guard's targets per user (§3.2 affected
-// users): All for every account, Users for the accounts (by user ID) a
-// block names.
-type TitlesByUser struct {
-	All   TitleTargets
-	Users map[uint64]TitleTargets
-}
-
-// For returns the targets in the windows of the user uid: every account's
-// and the user's own.
-func (t TitlesByUser) For(uid uint64) TitleTargets {
-	own, ok := t.Users[uid]
-	if !ok {
-		return t.All
-	}
-	return TitleTargets{
-		Close:   append(append([]string{}, t.All.Close...), own.Close...),
-		Watch:   append(append([]string{}, t.All.Watch...), own.Watch...),
-		Folders: append(append([]string{}, t.All.Folders...), own.Folders...),
-	}
-}
-
-// Empty reports whether nobody's windows are looked at.
-func (t TitlesByUser) Empty() bool {
-	if !t.All.Empty() {
-		return false
-	}
-	for _, own := range t.Users {
-		if !own.Empty() {
-			return false
-		}
-	}
-	return true
-}
-
-// TitleHit is a window the guard newly asked to close, or newly saw with a
-// watched entry: the entry (or folder entry) and the user whose window it was.
-type TitleHit struct {
-	Keyword string
-	UID     uint64
-	Watched bool
 }
 
 // Enforce runs one cycle at now with the active blocks' keywords. It returns

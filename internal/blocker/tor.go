@@ -1,3 +1,5 @@
+//go:build linux
+
 // tor.go — tamper protection "close private windows and Tor" (§4.10):
 // Tor Browser and a user's own tor are closed.
 package blocker

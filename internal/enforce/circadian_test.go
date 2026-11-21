@@ -3,6 +3,7 @@ package enforce
 import (
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -474,7 +475,7 @@ func TestCircadianWallpaperAndDarkMode(t *testing.T) {
 	e.Step(at(9, 0, 5))
 	e.Step(at(17, 0, 0))
 	// Given once: what the user picks by hand afterwards stays.
-	if len(f.wallpapers) != 1 || !strings.HasSuffix(f.wallpapers[0], "/wallpapers/day.jpg") {
+	if len(f.wallpapers) != 1 || !strings.HasSuffix(filepath.ToSlash(f.wallpapers[0]), "/wallpapers/day.jpg") {
 		t.Fatalf("wallpapers %v", f.wallpapers)
 	}
 	if len(f.darks) != 1 || f.darks[0] {

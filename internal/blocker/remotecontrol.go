@@ -1,3 +1,5 @@
+//go:build linux
+
 // remotecontrol.go — browsers started for remote control.
 //
 // A Firefox-family browser started with --marionette and

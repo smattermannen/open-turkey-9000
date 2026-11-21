@@ -25,7 +25,7 @@ import (
 // automatically.
 var rootCmd = &cobra.Command{
 	Use:   "kc9k",
-	Short: "A command-line productivity blocker for Linux",
+	Short: "A productivity blocker for Linux and Windows",
 	// Execute() prints errors itself, so tell Cobra not to also print the
 	// error and dump usage on a runtime failure (that produced noisy,
 	// duplicated output).
@@ -38,6 +38,9 @@ var rootCmd = &cobra.Command{
 // If any command returns an error, we print the message to stderr
 // and exit the process with exit code 1.
 func Execute() {
+	if code, forwarded := forwardIfNeeded(); forwarded {
+		os.Exit(code)
+	}
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

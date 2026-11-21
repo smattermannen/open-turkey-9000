@@ -127,10 +127,12 @@ func guiStateWith(t *testing.T, passwords ...string) guiState {
 		t.Fatal(err)
 	}
 	os.Stdout = w
+	read := make(chan []byte)
+	go func() { out, _ := io.ReadAll(r); read <- out }() // a full pipe would block gui-state
 	runErr := runWith(t, len(passwords), passwords, "gui-state")
 	w.Close()
 	os.Stdout = old
-	out, _ := io.ReadAll(r)
+	out := <-read
 	if runErr != nil {
 		t.Fatalf("gui-state: %v", runErr)
 	}

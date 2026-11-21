@@ -246,10 +246,12 @@ func captureStdout(fn func() error) (string, error) {
 	}
 	old := os.Stdout
 	os.Stdout = w
+	read := make(chan []byte)
+	go func() { data, _ := io.ReadAll(r); read <- data }() // a full pipe would block fn
 	runErr := fn()
 	os.Stdout = old
 	w.Close()
-	data, _ := io.ReadAll(r)
+	data := <-read
 	return string(data), runErr
 }
 

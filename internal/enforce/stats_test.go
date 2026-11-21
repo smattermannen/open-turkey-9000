@@ -114,7 +114,8 @@ func TestClientUserLive(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	me, _ := user.Current()
 	got := blocker.ClientUser(conn.LocalAddr().String(), port)
-	if me.Uid != "0" && got != me.Username {
+	want := me.Username[strings.LastIndex(me.Username, `\`)+1:] // Windows: DOMAIN\name
+	if me.Uid != "0" && got != want {
 		t.Errorf("ClientUser = %q; want %q", got, me.Username)
 	}
 }

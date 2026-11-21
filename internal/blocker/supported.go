@@ -1,3 +1,5 @@
+//go:build linux
+
 // supported.go — the supported browsers (§3.13): LibreWolf, Google Chrome
 // and Chromium, the browsers that run the KC9K extension. With block
 // unsupported browsers on (§4.10), every other browser is closed, and these
@@ -21,15 +23,6 @@ import (
 	"strings"
 	"time"
 )
-
-// SupportedBrowser is one browser that runs the extension.
-type SupportedBrowser struct {
-	ID   string // librewolf, chrome, chromium
-	Name string
-	// Exes are the executables its package installs, as /proc/<pid>/exe
-	// shows them for the main process.
-	Exes []string
-}
 
 // SupportedBrowsers lists the supported browsers, in the order shown.
 var SupportedBrowsers = []SupportedBrowser{

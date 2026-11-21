@@ -10,8 +10,9 @@ package cli
 
 import (
 	"fmt"
-	"github.com/smattermannen/kc9k/internal/blocker"
 	"strings"
+
+	"github.com/smattermannen/kc9k/internal/blocker"
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/spf13/cobra"

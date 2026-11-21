@@ -208,6 +208,7 @@ func TestMigrateWebLists(t *testing.T) {
 	if d, err = OpenDB(path); err != nil {
 		t.Fatal(err)
 	}
+	defer d.Close()
 	if again, _ := d.GetBlock("old"); len(again.Lists) != 3 {
 		t.Errorf("lists after reopening = %d; want 3", len(again.Lists))
 	}

@@ -1,3 +1,5 @@
+//go:build linux
+
 // sleephook.go — a systemd sleep hook (R-MODE-5): before the computer
 // sleeps, `kc9k-bin wallpaper before-sleep` puts the wallpaper default on
 // the desktop, so a laptop closed at one place and opened at another

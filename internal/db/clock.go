@@ -27,8 +27,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 const clockSchema = `CREATE TABLE IF NOT EXISTS clock_state (
@@ -130,7 +128,7 @@ func checkClock(prev clockState, bootID string, boottime, real, rtc int64, rtcOK
 // TrustedNow advances and returns trusted time in unix seconds. Compare
 // locked_until only against this value, never against the wall clock.
 func (d *DB) TrustedNow(wall time.Time) (int64, error) {
-	bootBytes, err := os.ReadFile(bootIDPath)
+	bootBytes, err := readBootID()
 	if err != nil {
 		return 0, fmt.Errorf("failed to read boot id: %w", err)
 	}
@@ -197,18 +195,14 @@ func (d *DB) timerLockRunning(now int64) (bool, error) {
 	return n > 0, nil
 }
 
-// bootClock reads this boot's ID and its boot clock (seconds, counting
-// suspend). Variables for tests.
-var (
-	bootIDPath = "/proc/sys/kernel/random/boot_id"
-	bootClock  = func() (int64, error) {
-		var ts unix.Timespec
-		if err := unix.ClockGettime(unix.CLOCK_BOOTTIME, &ts); err != nil {
-			return 0, fmt.Errorf("failed to read boot clock: %w", err)
-		}
-		return int64(ts.Sec), nil
+// readBootID is this boot's ID: the file at bootIDPath when set (Linux,
+// tests), else the platform's own (bootid_windows.go).
+func readBootID() ([]byte, error) {
+	if bootIDPath != "" {
+		return os.ReadFile(bootIDPath)
 	}
-)
+	return platformBootID()
+}
 
 // ClockCheckDue reports whether the daemon should take the clock check's
 // anchor now: block time and date changes is on, a timer lock runs, and
@@ -224,7 +218,7 @@ func (d *DB) ClockCheckDue(wall time.Time) (bool, error) {
 	if running, err := d.timerLockRunning(trusted); err != nil || !running {
 		return false, err
 	}
-	bootBytes, err := os.ReadFile(bootIDPath)
+	bootBytes, err := readBootID()
 	if err != nil {
 		return false, fmt.Errorf("failed to read boot id: %w", err)
 	}
@@ -242,7 +236,7 @@ func (d *DB) CheckClock(wall, real time.Time, rtc int64, rtcOK bool) (int64, err
 	if _, err := d.TrustedNow(wall); err != nil {
 		return 0, err
 	}
-	bootBytes, err := os.ReadFile(bootIDPath)
+	bootBytes, err := readBootID()
 	if err != nil {
 		return 0, fmt.Errorf("failed to read boot id: %w", err)
 	}

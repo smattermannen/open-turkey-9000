@@ -7,7 +7,6 @@ import (
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/schedule"
-	"golang.org/x/sys/unix"
 )
 
 // autostartWatch is what the daemon remembers between cycles to see a
@@ -18,16 +17,6 @@ var autostartWatch = struct {
 	sleep    int64 // CLOCK_BOOTTIME - CLOCK_MONOTONIC: time spent asleep
 	windows  map[string]bool
 }{windows: map[string]bool{}}
-
-// sleptSeconds is how long the computer has slept since boot. A variable
-// for tests.
-var sleptSeconds = func() int64 {
-	var boot, mono unix.Timespec
-	if unix.ClockGettime(unix.CLOCK_BOOTTIME, &boot) != nil || unix.ClockGettime(unix.CLOCK_MONOTONIC, &mono) != nil {
-		return 0
-	}
-	return boot.Sec - mono.Sec
-}
 
 // runAutostarts switches on inactive blocks whose autostart is due. The
 // first cycle only looks, so a daemon restart isn't taken for a sign-in.

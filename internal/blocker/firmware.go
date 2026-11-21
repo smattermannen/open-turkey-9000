@@ -1,3 +1,5 @@
+//go:build linux
+
 // firmware.go — factory reset protection's firmware lock (§3.8, §4.10).
 //
 // Linux exposes firmware (BIOS/UEFI) settings of Dell, Lenovo and HP
@@ -23,78 +25,6 @@ import (
 
 // FirmwareRoot is the firmware-attributes class folder.
 var FirmwareRoot = "/sys/class/firmware-attributes"
-
-// FirmwarePurpose is what one firmware setting is changed for.
-type FirmwarePurpose struct {
-	Name string   // shown to the user, e.g. "USB boot"
-	On   bool     // the lock wants it on (else off)
-	Keys []string // matched against the setting's name, lower case, letters and digits only
-	Skip []string // names containing one of these don't match
-}
-
-// firmwarePurposes are the settings the lock changes. Vendors name them
-// differently (Lenovo USBBootSupport, HP "USB Storage Boot", Dell
-// UefiNwStack), so a setting matches when its folded name has every word of
-// one key.
-var firmwarePurposes = []FirmwarePurpose{
-	{Name: "USB boot", Keys: []string{"usb boot", "usbstorage boot", "removable boot", "external boot", "bootfromusb"}, Skip: []string{"order", "legacy"}},
-	{Name: "network boot", Keys: []string{"pxe", "network boot", "netboot", "lanboot", "networkstack", "nwstack", "httpboot", "wakeonlanboot"}, Skip: []string{"order"}},
-	{Name: "one-time boot menu", Keys: []string{"bootmenu", "f12", "bootdevicelist", "onetimeboot"}, Skip: []string{"timeout", "delay"}},
-	{Name: "boot order lock", On: true, Keys: []string{"bootorderlock", "lockbootorder", "fixedbootorder"}},
-}
-
-// FirmwareSetting is one firmware setting the lock looks after.
-type FirmwareSetting struct {
-	Driver  string `json:"driver"`
-	Name    string `json:"name"`
-	Purpose string `json:"purpose"`
-	Current string `json:"current"`
-	Want    string `json:"want"` // "" when no possible value fits
-	Done    bool   `json:"done"`
-}
-
-// FirmwareStatus is what the firmware lets KC9K see.
-type FirmwareStatus struct {
-	Drivers       []string          `json:"drivers"`
-	Password      bool              `json:"password"` // an admin (setup) password is set
-	Settings      []FirmwareSetting `json:"settings"`
-	PendingReboot bool              `json:"pending_reboot"`
-}
-
-// Available reports whether the computer's firmware can be changed from Linux.
-func (s FirmwareStatus) Available() bool { return len(s.Drivers) > 0 }
-
-// Locked reports whether the firmware lock is complete: a password, and every
-// setting found as the lock wants it.
-func (s FirmwareStatus) Locked() bool {
-	if !s.Password || !s.Available() {
-		return false
-	}
-	for _, set := range s.Settings {
-		if set.Want != "" && !set.Done {
-			return false
-		}
-	}
-	return true
-}
-
-// Missing lists the purposes no setting was found for: they are done by hand
-// in the firmware's own setup.
-func (s FirmwareStatus) Missing() []string {
-	var out []string
-	for _, p := range firmwarePurposes {
-		found := false
-		for _, set := range s.Settings {
-			if set.Purpose == p.Name && set.Want != "" {
-				found = true
-			}
-		}
-		if !found {
-			out = append(out, p.Name)
-		}
-	}
-	return out
-}
 
 func foldName(s string) string {
 	var b strings.Builder

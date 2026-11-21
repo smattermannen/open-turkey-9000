@@ -1,3 +1,5 @@
+//go:build linux
+
 // users.go — local accounts, for blocks that apply to some users only
 // (§3.2 affected users).
 package blocker

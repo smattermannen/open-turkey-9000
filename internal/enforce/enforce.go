@@ -476,6 +476,7 @@ func Tick(d *db.DB, now time.Time) error {
 	if err == nil {
 		enforceLockdown(d, now, trusted)
 		finishDelayedStops(d, trusted)
+		guardPlatform(d, trusted)
 	}
 	if err := applyDueEditsAt(d, now, trusted); err != nil {
 		log.Printf("daemon: pending edits error: %v", err)
@@ -796,8 +797,9 @@ func ExtensionGraceSeconds(d *db.DB) int {
 }
 
 // TaskManagers are the programs "block task managers while locked" closes.
-var TaskManagers = []string{"gnome-system-monitor", "mate-system-monitor", "xfce4-taskmanager", "lxtask",
-	"plasma-systemmonitor", "ksysguard", "htop", "btop", "atop", "top", "glances", "stacer", "resources"}
+var TaskManagers = append([]string{"gnome-system-monitor", "mate-system-monitor", "xfce4-taskmanager", "lxtask",
+	"plasma-systemmonitor", "ksysguard", "htop", "btop", "atop", "top", "glances", "stacer", "resources"},
+	platformTaskManagers...)
 
 // closeTaskManagers closes task managers while anything is locked, when
 // the tamper protection setting is on.

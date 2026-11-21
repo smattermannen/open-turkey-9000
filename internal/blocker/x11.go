@@ -1,3 +1,5 @@
+//go:build linux
+
 // x11.go — a minimal X11 client: list the windows on a display with their
 // titles and processes, and ask a window to close.
 //

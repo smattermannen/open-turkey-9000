@@ -1,3 +1,5 @@
+//go:build linux
+
 // sockets.go — closing root-equivalent control sockets during strict mode.
 //
 // Strict mode takes sudo and pkexec away, but some groups are root in all but

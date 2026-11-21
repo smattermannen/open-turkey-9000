@@ -94,6 +94,7 @@ Before testing anything that locks, blocks or restarts the daemon, read
 | [gui](notes/gui.md) | `gui/kc9k-gui.py`, design layer, inputs |
 | [gui-windows](notes/gui-windows.md) | Windows GUI: `windows/gui/` (C#, WinUI 3), fake kc9k, UI Automation tests, `windows-gui.yml` |
 | [db-project](notes/db-project.md) | SQLite DB, project files, backup (`internal/db/db.go`, `cli/project*.go`) |
+| [windows](notes/windows.md) | Windows, Go side: platform split (`*_linux.go`, `*_windows.go`, `blocker/stubs_windows.go`), service, session agent, named pipe |
 
 Each note starts with the files it covers, its SPEC sections and the notes
 it connects to.

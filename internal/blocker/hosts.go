@@ -46,12 +46,6 @@ import (
 	"sync"
 )
 
-// hostsPath is the path of the Linux hosts file.
-// This file exists on every Unix/Linux system and is read automatically by
-// the operating system before any DNS query.
-// hostsPath is /etc/hosts; a variable for tests.
-var hostsPath = "/etc/hosts"
-
 // beginMarker and endMarker delimit the section Killer Chicken 9000 manages.
 // Everything BETWEEN these two lines was written by us and can be safely
 // removed. Everything OUTSIDE these lines belongs to the system and must
@@ -131,7 +125,7 @@ func ApplyHosts(domains []string) error {
 	// Write atomically (temp file + rename) so a crash can never leave
 	// /etc/hosts truncated or half-written. Permission 0644 matches the
 	// distribution default.
-	if err := atomicWriteFile(hostsPath, []byte(finalContent), 0644); err != nil {
+	if err := writeHosts(finalContent); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", hostsPath, err)
 	}
 
@@ -159,7 +153,7 @@ func RemoveHosts() error {
 
 	cleanContent := removeKC9KSection(text)
 
-	if err := atomicWriteFile(hostsPath, []byte(cleanContent), 0644); err != nil {
+	if err := writeHosts(cleanContent); err != nil {
 		return fmt.Errorf("failed to write file %s: %w", hostsPath, err)
 	}
 
@@ -341,4 +335,14 @@ func extractKC9KSection(content string) string {
 	}
 
 	return strings.Join(section, "\n")
+}
+
+// writeHosts replaces the hosts file atomically and tells the system's
+// name cache (hostsWritten: Windows caches hosts answers).
+func writeHosts(content string) error {
+	if err := atomicWriteFile(hostsPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	hostsWritten()
+	return nil
 }

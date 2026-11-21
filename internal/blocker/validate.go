@@ -181,3 +181,18 @@ func ValidDomains(domains []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// stripWWWPrefix removes a leading "www." from a host, but only when what's
+// left still has at least two labels, so a single-label registrable domain
+// like "www.com" is never reduced to the whole ".com" TLD.
+func stripWWWPrefix(host string) string {
+	if len(host) > 4 && host[:4] == "www." {
+		rest := host[4:]
+		for i := 0; i < len(rest); i++ {
+			if rest[i] == '.' {
+				return rest
+			}
+		}
+	}
+	return host
+}

@@ -119,6 +119,9 @@ exec sudo $(INSTALL_PATH)/$(BINARY_INSTALLED) "$$@"\n' > $(INSTALL_PATH)/$(BINAR
 # interface is open. Those two read-only commands are kept out of the log;
 # every other kc9k command is still logged.
 #
+# sudo-rs (Ubuntu 25.10 and on) knows neither setting: without them the
+# polls stay logged.
+#
 # visudo checks the rules before they are installed, because a broken
 # sudoers file would break sudo altogether. sudo requires mode 440.
 # -------------------------------------------------------
@@ -129,6 +132,10 @@ install-sudoers:
 	bin="$(INSTALL_PATH)/$(BINARY_INSTALLED)"; \
 	printf '%%sudo ALL=(root) NOPASSWD: %s\nCmnd_Alias KC9K_POLL = %s gui-state, %s stats --json *\nDefaults!KC9K_POLL !log_allowed, !pam_session\n' \
 		"$$bin" "$$bin" "$$bin" > "$$tmp"; \
+	if ! visudo -cf "$$tmp" >/dev/null 2>&1; then \
+		echo "visudo rejected the quiet logging of the polls (sudo-rs); keeping them logged" >&2; \
+		printf '%%sudo ALL=(root) NOPASSWD: %s\n' "$$bin" > "$$tmp"; \
+	fi; \
 	if visudo -cf "$$tmp" >/dev/null; then \
 		install -m 440 -o root -g root "$$tmp" "$(SUDOERS_FILE)"; status=$$?; \
 	else \

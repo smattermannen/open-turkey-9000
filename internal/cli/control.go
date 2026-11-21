@@ -31,9 +31,10 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/smattermannen/kc9k/internal/platform"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
@@ -899,15 +900,7 @@ var runningSupportedBrowsers = func() map[string]time.Duration {
 // callerUID is the account a command runs for: the one sudo was given by,
 // or the user running it; -1 for root itself (every account). Replaceable
 // in tests.
-var callerUID = func() int64 {
-	if os.Geteuid() == 0 {
-		if uid, err := strconv.ParseInt(os.Getenv("SUDO_UID"), 10, 64); err == nil && uid > 0 {
-			return uid
-		}
-		return -1
-	}
-	return int64(os.Getuid())
-}
+var callerUID = platform.CallerUID
 
 // extensionMissing reports whether the interface should say the extension
 // isn't running (§4.10 install dialog): no supported browser is installed,

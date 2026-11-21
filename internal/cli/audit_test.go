@@ -16,13 +16,15 @@ import (
 // the caller.
 func TestNoDirectFileReads(t *testing.T) {
 	allowed := map[string]int{
-		"blockextra.go":        1, // readAsCallerUpTo itself, when not run through sudo
-		"projectcircadian.go":  1, // wallpapers dir, base name only
-		"projectwallpapers.go": 1, // wallpapers dir, base name only (modes', the default's)
-		"master.go":            1, // the master hash file (devmaster builds)
-		"project.go":           2, // images dir, names checked by db.IsImageName
-		"recover.go":           1, // /proc/cmdline
-		"guidedsetup.go":       2, // /etc/shadow and /boot/grub/grub.cfg, fixed paths (shadowPath, grubCfgPath)
+		"readcaller_linux.go":   1, // readAsCallerUpTo itself, when not run through sudo
+		"windows_windows.go":    1, // the service's log, a fixed path in its data folder
+		"readcaller_windows.go": 2, // readAsCallerUpTo itself: impersonating the caller, or as the caller
+		"projectcircadian.go":   1, // wallpapers dir, base name only
+		"projectwallpapers.go":  1, // wallpapers dir, base name only (modes', the default's)
+		"master.go":             1, // the master hash file (devmaster builds)
+		"project.go":            2, // images dir, names checked by db.IsImageName
+		"recover.go":            1, // /proc/cmdline
+		"guidedsetup.go":        2, // /etc/shadow and /boot/grub/grub.cfg, fixed paths (shadowPath, grubCfgPath)
 	}
 	re := regexp.MustCompile(`os\.(ReadFile|Open|OpenFile)\(`)
 	files, _ := filepath.Glob("*.go")

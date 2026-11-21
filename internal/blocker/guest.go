@@ -1,3 +1,5 @@
+//go:build linux
+
 // guest.go — tamper protection "close guest profiles" (§4.10): guest
 // browsing off in every Chromium-family browser (Chrome and Chromium have it
 // off always: the extension can't run there, chromesetup.go) and no guest

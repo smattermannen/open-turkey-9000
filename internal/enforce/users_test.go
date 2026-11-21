@@ -3,7 +3,6 @@ package enforce
 import (
 	"os/user"
 	"slices"
-	"strconv"
 	"testing"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -19,7 +18,10 @@ func TestAffectedUsersTitlesAndGuard(t *testing.T) {
 	old := regularUsers
 	regularUsers = func() []string { return []string{me.Username, "root"} }
 	defer func() { regularUsers = old }()
-	uid, _ := strconv.ParseUint(me.Uid, 10, 64)
+	var uid uint64 // the account's ID as KC9K knows it (a relative ID on Windows)
+	if ids := blocker.UserIDs([]string{me.Username}); len(ids) == 1 {
+		uid = ids[0]
+	}
 	d := testDB(t)
 
 	required, uids := extensionUsers(d, nil)

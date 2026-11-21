@@ -1,13 +1,11 @@
+//go:build linux
+
 // scripts.go — telling programs apart beyond their executable's name:
 // Python programs by their script, copies of a blocked program by their
 // contents, and download or streaming tools by the address they were given.
 package blocker
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -118,55 +116,6 @@ func matchesScript(pid int, names []string) bool {
 	return matchesName(base, names) || matchesName(strings.TrimSuffix(base, ".py"), names) || matchesPath(script, names)
 }
 
-// HashPrefix starts an app entry that names a program by its contents:
-// "sha256:<hex>:<size>:<path it was taken from>". 'block add-app' adds one
-// next to a full path, so a renamed or moved copy of the program is still
-// blocked.
-const HashPrefix = "sha256:"
-
-// HashEntry returns the contents entry for the program at path.
-func HashEntry(path string) (string, bool) {
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || !strings.HasPrefix(path, "/") {
-		return "", false
-	}
-	sum, err := fileSHA256(path)
-	if err != nil {
-		return "", false
-	}
-	return fmt.Sprintf("%s%s:%d:%s", HashPrefix, sum, info.Size(), path), true
-}
-
-// HashEntryFor reports whether entry is the contents entry made for path.
-func HashEntryFor(entry, path string) bool {
-	return strings.HasPrefix(entry, HashPrefix) && strings.HasSuffix(entry, ":"+path)
-}
-
-func parseHashEntry(entry string) (sum string, size int64, ok bool) {
-	if !strings.HasPrefix(entry, HashPrefix) {
-		return "", 0, false
-	}
-	parts := strings.SplitN(entry[len(HashPrefix):], ":", 3)
-	if len(parts) < 2 || len(parts[0]) != 64 {
-		return "", 0, false
-	}
-	size, err := strconv.ParseInt(parts[1], 10, 64)
-	return parts[0], size, err == nil
-}
-
-func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
 type fileID struct {
 	dev, ino    uint64
 	size, mtime int64
@@ -228,37 +177,6 @@ func matchesHash(pid int, names []string) bool {
 	}
 	_, hit := wanted[sum]
 	return hit
-}
-
-// fetchTools are programs that download or play what an address points to.
-// One of them given a blocked site's address is a way around the browser.
-var fetchTools = map[string]bool{
-	"yt-dlp": true, "youtube-dl": true, "yt-dlp_linux": true, "gallery-dl": true, "streamlink": true,
-	"mpv": true, "vlc": true, "celluloid": true, "smplayer": true, "mplayer": true, "ffplay": true,
-	"ffmpeg": true, "totem": true, "haruna": true, "curl": true, "wget": true, "wget2": true,
-	"aria2c": true, "axel": true, "http": true, "https": true, "xh": true, "lynx": true, "w3m": true,
-	"links": true, "links2": true, "elinks": true, "browsh": true, "freetube": true,
-}
-
-// namesDomain reports whether an argument names a domain (or a subdomain of
-// it) as a host: at the start, after "//", "@", "." or "=", and followed by
-// the end, "/", ":", "?" or "#". The domain inside a longer word doesn't count.
-func namesDomain(arg, domain string) bool {
-	arg = strings.ToLower(arg)
-	for from := 0; ; {
-		i := strings.Index(arg[from:], domain)
-		if i < 0 {
-			return false
-		}
-		i += from
-		end := i + len(domain)
-		before := i == 0 || strings.ContainsRune("/@.=", rune(arg[i-1]))
-		after := end == len(arg) || strings.ContainsRune("/:?#", rune(arg[end]))
-		if before && after {
-			return true
-		}
-		from = i + 1
-	}
 }
 
 // toolNaming returns the fetch tool a process is, if its arguments name one

@@ -46,6 +46,9 @@ if [ "$1" = configure ]; then
 	tmp=$(mktemp)
 	bin=/usr/local/bin/kc9k-bin
 	printf '%%sudo ALL=(root) NOPASSWD: %s\nCmnd_Alias KC9K_POLL = %s gui-state, %s stats --json *\nDefaults!KC9K_POLL !log_allowed, !pam_session\n' "$bin" "$bin" "$bin" > "$tmp"
+	if ! visudo -cf "$tmp" >/dev/null 2>&1; then
+		printf '%%sudo ALL=(root) NOPASSWD: %s\n' "$bin" > "$tmp" # sudo-rs: polls stay logged
+	fi
 	if visudo -cf "$tmp" >/dev/null; then
 		install -m 440 -o root -g root "$tmp" /etc/sudoers.d/kc9k
 	else

@@ -22,10 +22,12 @@ func capture(t *testing.T, args ...string) string {
 		t.Fatal(err)
 	}
 	os.Stdout = w
+	read := make(chan []byte)
+	go func() { out, _ := io.ReadAll(r); read <- out }() // a full pipe would block the command
 	runErr := runCLI(t, args...)
 	w.Close()
 	os.Stdout = old
-	out, _ := io.ReadAll(r)
+	out := <-read
 	if runErr != nil {
 		t.Fatalf("%s: %v", strings.Join(args, " "), runErr)
 	}

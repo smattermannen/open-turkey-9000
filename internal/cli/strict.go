@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/smattermannen/kc9k/internal/platform"
+
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/smattermannen/kc9k/internal/lock"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 )
 
 var strictCmd = &cobra.Command{
@@ -83,7 +84,7 @@ func strictOn(cmd *cobra.Command, database *db.DB) error {
 			return err
 		}
 	}
-	if err := database.SetSetting(enforce.SettingStrictUser, os.Getenv("SUDO_USER")); err != nil {
+	if err := database.SetSetting(enforce.SettingStrictUser, platform.CallerName()); err != nil {
 		return err
 	}
 	if err := database.SetSetting(enforce.SettingStrict, "on"); err != nil {
@@ -97,7 +98,7 @@ func strictOn(cmd *cobra.Command, database *db.DB) error {
 	} else {
 		fmt.Println("Strict mode is on")
 	}
-	warnRootGroups(os.Getenv("SUDO_USER"))
+	warnRootGroups(platform.CallerName())
 	return nil
 }
 
@@ -188,23 +189,18 @@ func warnRootGroups(name string) {
 var stdinLines = bufio.NewReader(os.Stdin)
 
 // isTerminalInput reports whether standard input is a terminal.
-var isTerminalInput = func() bool {
-	_, err := unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TCGETS)
-	return err == nil
-}
+var isTerminalInput = func() bool { return isTerminalFd(int(os.Stdin.Fd())) }
 
 // readPasswordStdin reads one line, so a password never shows in a process list.
 // On a terminal it shows the prompt and hides what is typed; piped input (the
 // graphical interface) is read as is, without a prompt.
 func readPasswordStdin(prompt string) (string, error) {
 	fd := int(os.Stdin.Fd())
-	if old, err := unix.IoctlGetTermios(fd, unix.TCGETS); err == nil {
+	if isTerminalFd(fd) {
 		fmt.Fprint(os.Stderr, prompt+": ")
-		quiet := *old
-		quiet.Lflag &^= unix.ECHO
-		if err := unix.IoctlSetTermios(fd, unix.TCSETS, &quiet); err == nil {
+		if restore, ok := echoOff(fd); ok {
 			defer func() {
-				_ = unix.IoctlSetTermios(fd, unix.TCSETS, old)
+				restore()
 				fmt.Fprintln(os.Stderr)
 			}()
 		}

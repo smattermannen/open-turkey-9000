@@ -4,8 +4,9 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/smattermannen/kc9k/internal/schedule"
 	"testing"
+
+	"github.com/smattermannen/kc9k/internal/schedule"
 )
 
 // TestFeaturesRoundTrip exercises the newer schema (modes, patterns, schedules,

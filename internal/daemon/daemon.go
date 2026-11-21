@@ -35,6 +35,20 @@ func reportCrash(database *db.DB) {
 
 // Run starts the enforcement loop and blocks until a shutdown signal arrives.
 func Run() error {
+	stop := make(chan struct{})
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		sig := <-sigChan
+		log.Printf("daemon: signal received (%v), shutting down gracefully...", sig)
+		close(stop)
+	}()
+	return RunUntil(stop)
+}
+
+// RunUntil starts the enforcement loop and blocks until stop is closed (the
+// Windows service's stop request; a signal on Linux).
+func RunUntil(stop <-chan struct{}) error {
 	database, err := db.OpenDB(db.ResolveDBPath())
 	if err != nil {
 		return err
@@ -101,9 +115,6 @@ func Run() error {
 		enforce.RunCircadian(database)
 	}()
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -120,8 +131,7 @@ func Run() error {
 			if err := enforce.Tick(database, time.Now()); err != nil {
 				log.Printf("daemon: error in enforcement cycle: %v", err)
 			}
-		case sig := <-sigChan:
-			log.Printf("daemon: signal received (%v), shutting down gracefully...", sig)
+		case <-stop:
 			return nil
 		}
 	}

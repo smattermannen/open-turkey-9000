@@ -51,6 +51,7 @@ func TestMigrateScheduledSwitchOn(t *testing.T) {
 	}
 	d.Close()
 	d, _ = OpenDB(path)
+	defer d.Close()
 	if active, _ := d.IsBlockActive("sched"); active {
 		t.Error("migration ran twice")
 	}

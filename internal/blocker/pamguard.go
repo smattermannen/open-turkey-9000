@@ -1,3 +1,5 @@
+//go:build linux
+
 // pamguard.go — strict mode's PAM root guard (§3.8, SPEC §6 2026-11-14).
 //
 // Strict mode's lockdown takes sudo and pkexec away, but a root password

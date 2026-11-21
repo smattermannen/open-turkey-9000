@@ -11,6 +11,8 @@ import (
 	"os/user"
 	"strings"
 
+	"github.com/smattermannen/kc9k/internal/platform"
+
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 	"github.com/spf13/cobra"
@@ -167,7 +169,7 @@ func guidedSetup(database *db.DB) ([]setupStep, error) {
 
 	strictUser := setting(enforce.SettingStrictUser)
 	if strictUser == "" {
-		strictUser = os.Getenv("SUDO_USER")
+		strictUser = platform.CallerName()
 	}
 	if strictUser != "" {
 		groups := riskyGroups(strictUser)

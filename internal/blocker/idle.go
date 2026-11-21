@@ -1,3 +1,5 @@
+//go:build linux
+
 // idle.go — how long a desktop user has gone without input, from the X
 // server itself (the MIT-SCREEN-SAVER extension's QueryInfo), over the same
 // cgo-free client as window titles (x11.go). Cinnamon's screensaver used to

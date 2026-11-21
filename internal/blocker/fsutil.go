@@ -62,3 +62,8 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	cleanup = false
 	return nil
 }
+
+func fileHas(path, content string) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && string(data) == content
+}

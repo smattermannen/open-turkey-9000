@@ -1,3 +1,5 @@
+//go:build linux
+
 package blocker
 
 import (
@@ -5,19 +7,6 @@ import (
 	"os"
 	"path/filepath"
 )
-
-// ChromeSetup is what stays enforced in Google Chrome and Chromium whether or
-// not a block runs, written as a policy file of its own beside the blocklist
-// (kc9k.json, see browser.go), so the two never touch each other's settings.
-type ChromeSetup struct {
-	// ExtensionID is force-installed from UpdateURL (see webext.PackChrome).
-	ExtensionID string
-	UpdateURL   string
-	// DisableDevTools blocks the developer tools everywhere (block-devtools).
-	// They are always blocked on the extension itself.
-	DisableDevTools bool
-	ForceSearch     bool
-}
 
 // ChromeSetupPaths are the policy files, one per browser (tests point it
 // elsewhere). As with the blocklist, a missing folder is made, so the setup

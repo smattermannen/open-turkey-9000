@@ -1,10 +1,11 @@
 package enforce
 
 import (
-	"github.com/smattermannen/kc9k/internal/blocker"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/smattermannen/kc9k/internal/blocker"
 
 	"github.com/smattermannen/kc9k/internal/db"
 )

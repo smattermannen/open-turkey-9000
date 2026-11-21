@@ -1,3 +1,5 @@
+//go:build linux
+
 package blocker
 
 import (
@@ -22,9 +24,6 @@ func ForegroundApps(idleLimit uint64) []string {
 	}
 	return apps
 }
-
-// UserApp is an app in the foreground of a desktop user's session.
-type UserApp struct{ User, App string }
 
 // ForegroundAppsByUser is ForegroundApps with the user each app is in the
 // foreground for (§4.9 statistics per user).

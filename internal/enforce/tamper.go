@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/db"
-	"golang.org/x/sys/unix"
 )
 
 // Settings that tell a daemon start from tampering.
@@ -103,14 +102,6 @@ func NoteDaemonStart(d *db.DB) {
 // clockWatch remembers the last cycle's wall and boot clocks.
 var clockWatch struct {
 	wall, boot time.Duration
-}
-
-func bootClock() (time.Duration, bool) {
-	var ts unix.Timespec
-	if err := unix.ClockGettime(unix.CLOCK_BOOTTIME, &ts); err != nil {
-		return 0, false
-	}
-	return time.Duration(ts.Nano()), true
 }
 
 // watchClock logs a tamper event when the wall clock moved by more than

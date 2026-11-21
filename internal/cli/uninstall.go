@@ -24,10 +24,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/smattermannen/kc9k/internal/webext"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/smattermannen/kc9k/internal/webext"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/enforce"
@@ -39,98 +40,105 @@ var prepareUninstallCmd = &cobra.Command{
 	Short:  "Internal: refuse if locked, otherwise clean all layers before uninstall",
 	Hidden: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := openDB()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-		if err := requireSettingsPassword(database); err != nil {
-			return err
-		}
-
-		active, err := database.GetActiveBlocks()
-		if err != nil {
-			return err
-		}
-		blocks, err := database.ListBlocks()
-		if err != nil {
-			return err
-		}
-
-		if until, err := database.FreezeUntil(); err != nil {
-			return err
-		} else if until > time.Now().Unix() {
-			return fmt.Errorf("cannot uninstall during Frozen Chicken")
-		}
-		if trusted, err := database.TrustedNow(time.Now()); err != nil {
-			return err
-		} else if enforce.MonkOn(database, trusted) {
-			return fmt.Errorf("cannot uninstall during monk mode")
-		}
-		freezeSchedules, err := database.ListFreezeSchedules()
-		if err != nil {
-			return err
-		}
-		for _, s := range freezeSchedules {
-			if enforce.FreezeScheduleHeld(s, time.Now()) {
-				return fmt.Errorf("cannot uninstall: freeze schedule %d (%s) is locked", s.Num, s.Window)
-			}
-		}
-
-		// A locked browser setting can't be undone by uninstalling either.
-		trusted, err := database.TrustedNow(time.Now())
-		if err != nil {
-			return err
-		}
-		if locked, err := enforce.AnySettingLocked(database, trusted); err != nil {
-			return err
-		} else if locked {
-			return fmt.Errorf("cannot uninstall while a browser setting is locked (see 'kc9k browser')")
-		}
-
-		// Refuse while any block is held (char-locked, time-locked, or in or
-		// about to enter a scheduled window) — uninstalling must not be a way
-		// around a lock. Inactive blocks are checked too, for upcoming windows.
-		now := time.Now()
-		var held []string
-		for _, b := range blocks {
-			hold, err := blockHold(database, b.Name, now)
-			if err != nil {
-				return err
-			}
-			if hold.held() {
-				held = append(held, b.Name)
-			}
-		}
-		if len(held) > 0 {
-			return fmt.Errorf("cannot uninstall: locked block(s): %v. Unlock them first, or wait for their timer locks and schedule locks", held)
-		}
-
-		// Deactivate everything so the daemon (and this command) leave nothing
-		// enforced.
-		for _, b := range active {
-			if err := database.DeactivateBlock(b.BlockName); err != nil {
-				return fmt.Errorf("failed to deactivate block '%s': %w", b.BlockName, err)
-			}
-		}
-
-		// Remove every blocking layer so the system is left clean.
-		if err := blocker.RemoveHosts(); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to clean /etc/hosts: %v\n", err)
-		}
-		if err := blocker.RemoveFirewall(); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to clean firewall: %v\n", err)
-		}
-		if err := blocker.RemoveBrowserPolicies(); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to clean browser policies: %v\n", err)
-		}
-		for _, warning := range undoSystemChanges() {
-			fmt.Fprintf(os.Stderr, "warning: %s\n", warning)
-		}
-
-		fmt.Println("Killer Chicken 9000 blocking layers removed; ready to uninstall.")
-		return nil
+		return prepareUninstall()
 	},
+}
+
+// prepareUninstall refuses while anything is held, else deactivates every
+// block and removes every layer (also the start of `kc9k uninstall` on
+// Windows).
+func prepareUninstall() error {
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	if err := requireSettingsPassword(database); err != nil {
+		return err
+	}
+
+	active, err := database.GetActiveBlocks()
+	if err != nil {
+		return err
+	}
+	blocks, err := database.ListBlocks()
+	if err != nil {
+		return err
+	}
+
+	if until, err := database.FreezeUntil(); err != nil {
+		return err
+	} else if until > time.Now().Unix() {
+		return fmt.Errorf("cannot uninstall during Frozen Chicken")
+	}
+	if trusted, err := database.TrustedNow(time.Now()); err != nil {
+		return err
+	} else if enforce.MonkOn(database, trusted) {
+		return fmt.Errorf("cannot uninstall during monk mode")
+	}
+	freezeSchedules, err := database.ListFreezeSchedules()
+	if err != nil {
+		return err
+	}
+	for _, s := range freezeSchedules {
+		if enforce.FreezeScheduleHeld(s, time.Now()) {
+			return fmt.Errorf("cannot uninstall: freeze schedule %d (%s) is locked", s.Num, s.Window)
+		}
+	}
+
+	// A locked browser setting can't be undone by uninstalling either.
+	trusted, err := database.TrustedNow(time.Now())
+	if err != nil {
+		return err
+	}
+	if locked, err := enforce.AnySettingLocked(database, trusted); err != nil {
+		return err
+	} else if locked {
+		return fmt.Errorf("cannot uninstall while a browser setting is locked (see 'kc9k browser')")
+	}
+
+	// Refuse while any block is held (char-locked, time-locked, or in or
+	// about to enter a scheduled window) — uninstalling must not be a way
+	// around a lock. Inactive blocks are checked too, for upcoming windows.
+	now := time.Now()
+	var held []string
+	for _, b := range blocks {
+		hold, err := blockHold(database, b.Name, now)
+		if err != nil {
+			return err
+		}
+		if hold.held() {
+			held = append(held, b.Name)
+		}
+	}
+	if len(held) > 0 {
+		return fmt.Errorf("cannot uninstall: locked block(s): %v. Unlock them first, or wait for their timer locks and schedule locks", held)
+	}
+
+	// Deactivate everything so the daemon (and this command) leave nothing
+	// enforced.
+	for _, b := range active {
+		if err := database.DeactivateBlock(b.BlockName); err != nil {
+			return fmt.Errorf("failed to deactivate block '%s': %w", b.BlockName, err)
+		}
+	}
+
+	// Remove every blocking layer so the system is left clean.
+	if err := blocker.RemoveHosts(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to clean /etc/hosts: %v\n", err)
+	}
+	if err := blocker.RemoveFirewall(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to clean firewall: %v\n", err)
+	}
+	if err := blocker.RemoveBrowserPolicies(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to clean browser policies: %v\n", err)
+	}
+	for _, warning := range undoSystemChanges() {
+		fmt.Fprintf(os.Stderr, "warning: %s\n", warning)
+	}
+
+	fmt.Println("Killer Chicken 9000 blocking layers removed; ready to uninstall.")
+	return nil
 }
 
 // undoSystemChanges reverts what KC9K changes outside its blocks, so an

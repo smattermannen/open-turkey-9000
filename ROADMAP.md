@@ -41,13 +41,13 @@ of their group and a row here; a finished item loses its row.
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings of 2026-11-21: guest, inactive-tabs, embedded checked in Chrome-family browsers (2026-11-21); inactive-tabs, embedded in LibreWolf (box); VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
-| W0 | Windows build: platform split, cross-compile, CI on Windows | §1, §6 2026-11-21 | install, testing | agent, win-ci |
-| W1 | Windows service, session agent, named pipe, install/uninstall | §3.13 | enforce-daemon, install | agent, win-vm |
-| W2 | Windows web layers: hosts, firewall, browser policies, extension, extension guard | §3.13, §4.10 | layers-net, browsers | win-vm, laptop |
-| W3 | Windows apps and desktop: process kill, scripts, titles, polite close, monk mode, Frozen Chicken, allowed apps, hotkeys, notifications, use, logout/shutdown, network cut, text lock window | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | apps-titles, device, hotkeys, allowance, locks | win-vm, laptop |
+| W0 | Windows build: built; unit tests on `windows-latest` Unchecked | §1, §6 2026-11-21 | windows | win-ci |
+| W1 | Windows service, session agent, named pipe, install/uninstall: built; CI script, desktop parts Unchecked | §3.13 | windows | win-ci, win-vm |
+| W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
+| W3 | Windows apps and desktop: built, Unchecked on a desktop | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
 | W4 | Windows GUI: C# / WinUI 3. Partial: shell, Overview, CI (2026-11-21); Blocks, automation, the other pages next | §4.1–4.13, R-GUI-1–3 | gui-windows | agent, win-ci, laptop |
-| W5 | Windows tamper protection against an administrator | §3.10, §4.10 | device, browsers, install | win-vm, laptop |
-| W6 | Windows circadian rhythm and wallpapers | §4.10 | circadian | win-vm, laptop |
+| W5 | Windows tamper protection: built; CI checks; boot/Safe Mode Unchecked; firmware lock not built | §3.10, §4.10 | windows | win-ci, win-vm, laptop |
+| W6 | Windows circadian rhythm and wallpapers: built, Unchecked | §4.10 | windows | win-vm, laptop |
 | W7 | Windows installer (MSI) and release | §4.11 | install | agent, owner |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
@@ -1451,8 +1451,8 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
 
 ## 4. Windows (owner 2026-11-21)
 
-Built now, for an administrator account (SPEC §6 2026-11-21). Nothing is
-built yet. What carries over: `cli`, `db`, `enforce`, `schedule`, `quota`,
+Built now, for an administrator account (SPEC §6 2026-11-21). Core's
+state: the W items below. What carries over: `cli`, `db`, `enforce`, `schedule`, `quota`,
 `freeze`, `circadian`'s logic (pure Go, `modernc.org/sqlite`, no CGo), the
 extension and the rules server. What doesn't: `internal/blocker/` (14.5k
 lines: `/proc`, nftables, X11, PAM, systemd), `internal/daemon/`,
@@ -1489,40 +1489,48 @@ each finished step on `main`: rebase onto `origin/main`, run the gate
 sides. Neither touches the Linux GUI, the extension or Android, except
 where its item needs it and the Linux tests prove nothing changed.
 
-- [ ] `W0` Windows build (M). `//go:build linux` on Linux-only files;
-  interfaces in `internal/blocker/` with `_linux.go`/`_windows.go`; on
-  Windows every layer not yet built is a stub that says so. Done when
-  `GOOS=windows CGO_ENABLED=0 go build ./...` and `go vet` pass, the
-  platform-neutral tests pass on `windows-latest` in
-  `.github/workflows/test.yml`, and the Linux tests are unchanged.
-- [ ] `W1` Service and agent (M). `golang.org/x/sys/windows/svc`;
-  automatic start, restart on failure; DB and state in
-  `%ProgramData%\kc9k`, readable and writable by SYSTEM only; the named
-  pipe (who is calling: the client's token, as the socket uid on Linux);
-  the session agent; `kc9k install`/`uninstall` (uninstall refused while
-  locked, as on Linux).
-- [ ] `W2` Web layers (L). Hosts file
-  (`System32\drivers\etc\hosts`); firewall: Windows Filtering Platform
-  filters owned by the service (Windows Firewall rules are what an admin
-  turns off first); DNS resolving shared with Linux; browser policies in
-  `HKLM\SOFTWARE\Policies\…` (Chrome, Chromium, Edge, Brave, Vivaldi,
-  Opera) and `policies.json` (Firefox, LibreWolf); Edge is a supported
-  browser (SPEC §6 2026-11-21 later); the extension in Chrome
-  and Edge by `ExtensionInstallForcelist` from the unlisted Chrome Web
-  Store listing (SPEC §6), in LibreWolf from the bundled `.xpi`; the
-  extension guard and supported-browser detection by install paths and
-  the registry. The rules server is unchanged.
-- [ ] `W3` Apps and desktop (L). Processes by snapshot and full image path
-  (`/proc` today), killed by the service; scripts by interpreter command
-  line; window titles and polite close in the agent (`EnumWindows`,
-  `WM_CLOSE`); monk mode, Frozen Chicken and allowed apps close what
-  starts (no `noexec` on Windows; process-start events plus the tick);
-  hotkeys (`RegisterHotKey`), toast notifications, use and idle
-  (`GetLastInputInfo`, session lock events), statistics per user;
-  logout, shutdown, network cut (WFP block-all), sleep hook (power events).
-  The text lock's challenge window (R-LOCK-5: typed keys only, opened by
-  the command itself) on Windows: a Go Win32 window in the user's
-  session, no CGo, embedded as the Python one is.
+- [ ] `W0` Windows build (M). Built (2026-11-21): Linux-only files carry
+  `//go:build linux`, their Windows counterparts are `_windows.go`,
+  shared types in `blocker/shared.go`; what is not built yet is in
+  `blocker/stubs_windows.go`, each saying which item builds it
+  (notes/windows.md). `GOOS=windows go build ./...` and `go vet` pass, also
+  on `windows-latest` (`.github/workflows/windows.yml`, own workflow: the
+  Linux one stays unchanged). Unchecked: the unit tests on
+  `windows-latest` (the `unit` job; Linux-specific tests may need tags).
+- [ ] `W1` Service and agent (M). Built, Partial checked (2026-11-21):
+  `kc9k install`/`uninstall`, the service (automatic, restarted after any
+  failure, restarts itself on an upgrade), the command pipe (caller from
+  the client's token, Administrators only, files read as the caller,
+  consoles relayed with raw input for the challenge), the session agents
+  (SPEC §6 2026-11-21 By Opus). Checked on `windows-latest`
+  (`ci/windows_service_test.ps1`, 2026-11-21): install, the service and
+  its restart settings, PATH, forwarded commands and exit codes, a file
+  read as the caller (the database refused to an administrator), the data
+  folder closed to administrators, uninstall refused while locked, then
+  clean, data kept. The agent and the
+  console's raw mode need a signed-in desktop: Needs win-vm
+  (`ci/windows_vm_test.ps1`, written 2026-11-21, never run).
+- [ ] `W2` Web layers (L). Built (2026-11-21): hosts (+ DNS cache
+  flush), WFP firewall (persistent provider, sublayer, filters; monk mode's
+  cut), Chromium policies in the registry (Chrome, Chromium, Edge, Brave,
+  Vivaldi), Firefox-family `policies.json` in every installation, LibreWolf
+  setting locks, extension guard and browser recognition (version
+  resource, engine DLLs), supported browsers. Checked on `windows-latest`:
+  WFP blocks for real, registry policies, process snapshot, TCP owner.
+  Unchecked: real browsers obeying the policies, the guard closing a
+  browser, monk mode's cut (Needs win-vm). Needs owner: the Chrome Web
+  Store listing's ID (`blocker.ChromeStoreExtensionID`); until then Chrome
+  and Edge are not supported browsers and get no extension.
+- [ ] `W3` Apps and desktop (L). Built, Unchecked (2026-11-21): apps by
+  name, path, folder or contents (kill tree, polite close through the
+  agent), allowed apps, Tor, tools naming blocked sites (command lines),
+  titles (agent `EnumWindows`/`WM_CLOSE`), notifications (balloon/toast),
+  questions, locking, idle and the app in front, logout, power off, the
+  logout freeze's hold, monk mode's adapters, hotkeys (agent
+  `RegisterHotKey`), custom actions, the challenge window (Win32, Raw
+  Input for injected keys). Checked on `windows-latest`: process kill
+  tree. The rest needs a desktop: Needs win-vm, laptop: run
+  `ci/windows_vm_test.ps1` (written 2026-11-21, never run).
 - [ ] `W4` GUI (L). Native, C# on WinUI 3, .NET LTS, unpackaged and
   self-contained, in `windows/gui/` (SPEC §6: no browser, no web view).
   Reads `kc9k gui-state` and `kc9k stats --json`, runs `kc9k` commands
@@ -1543,29 +1551,33 @@ where its item needs it and the Linux tests prove nothing changed.
   - Unchecked (needs laptop): against the real `kc9k.exe` and service
     (Core's W1); Narrator, high contrast, 150–200 % scaling and a second
     screen by a person.
-- [ ] `W5` Tamper protection against an administrator (L). An admin can
-  always win in the end; the aim is that every way around is slow,
-  visible, and counted as a bypass with its consequences (§3.10). The
-  service's security descriptor refuses Administrators stop, pause,
-  reconfigure and delete; a SYSTEM scheduled task brings back the service
-  and the agent; files and registry keys owned by SYSTEM; the service also
-  runs in Safe Mode, and while anything is locked Safe Mode boot and the
-  recovery environment are off (`bcdedit`, `reagentc`: factory reset
-  protection); `tamper task-managers` closes Task Manager and the like,
-  and the tools that stop services or change those settings (Services,
-  `sc`, Registry Editor, Group Policy Editor, `bcdedit`); clock check;
-  firmware lock with the vendors' Windows tools (Dell Command | Configure,
-  Lenovo's WMI, HP BCU). Strict mode (SPEC §6 2026-11-21 later): while
-  anything is locked, deny-entries for Administrators on the service, its
-  files and registry keys, and boot and recovery settings, held by the
-  service and put back each tick.
-  Nothing hides from Windows Defender: if it flags KC9K, that is solved by
-  signing and reporting a false positive, never by evasion.
-- [ ] `W6` Circadian rhythm and wallpapers (M). Dark mode (registry
-  `AppsUseLightTheme`/`SystemUsesLightTheme`), colour temperature by gamma
-  ramp in the agent, brightness (WMI on laptop panels, DDC/CI for external
-  screens), Night light off while ours runs, wallpapers
-  (`SystemParametersInfo`), mode wallpapers.
+- [ ] `W5` Tamper protection against an administrator (L). Built
+  (2026-11-21), Partial checked: the service's permissions (no stop,
+  change or delete by Administrators), restart on failure, the SYSTEM
+  watchdog task, Safe Mode registration, all put back and counted each
+  cycle; strict mode's deny entries (service key, SafeBoot, BCD, recovery
+  configuration, policy keys, hosts, program folder), kept and restored;
+  people's own programs closed during strict mode; no-escape's boot
+  settings (recovery off, automatic repair off, boot menu hidden);
+  factory reset protection turns the recovery environment off while
+  locked; Windows task managers and service tools in `task-managers`
+  (notes/windows.md). Checked on `windows-latest` by
+  `ci/windows_service_test.ps1` (Unchecked until it passes there): an
+  administrator can't stop, reconfigure or delete the service or delete
+  the watchdog; strict mode denies the hosts file and the service's key,
+  restored after the lock. Unchecked: Safe Mode boot, no-escape and the
+  recovery environment on a real boot, an administrator taking ownership
+  (Needs win-vm). Not built: the firmware lock with the vendors' tools
+  (Dell Command | Configure, Lenovo WMI, HP BCU): Needs laptop to know
+  which vendor's tool applies.
+- [ ] `W6` Circadian rhythm and wallpapers (M). Built, Unchecked
+  (2026-11-21): gamma ramps per screen through the agent (warm ramps
+  allowed by `GdiIcmGammaRange`), wallpapers (copied where desktops may
+  read them), dark mode, Night light read (Windows offers no way to switch
+  it: the person is asked), laptop panel brightness (WMI), external
+  screens (DDC/CI, dxva2), the sleep hook by power events. Needs win-vm
+  (gamma, wallpaper, dark mode) and laptop (panel, external screens,
+  Night light).
 - [ ] `W7` Installer and release (M). MSI (WiX), with the service, the
   agent and the GUI; `installer` tamper setting (`prepare-install`)
   refuses removal and downgrade while locked, as the `.deb` does.

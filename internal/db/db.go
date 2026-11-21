@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/smattermannen/kc9k/internal/platform"
+
 	// Import the pure-Go SQLite driver. The underscore (_) in front means we
 	// won't call functions from this package directly — it registers itself
 	// as a SQL driver when imported. It's a common pattern in Go.
@@ -21,7 +23,7 @@ import (
 // DefaultDBPath is the default path where the database is stored.
 // We use /var/lib/ because it's the standard Linux directory for persistent
 // application data (following the Filesystem Hierarchy Standard — FHS).
-const DefaultDBPath = "/var/lib/kc9k/kc9k.db"
+var DefaultDBPath = platform.DBPath()
 
 // dbPathEnv, when set by a non-root process, overrides the database path. Root
 // always uses DefaultDBPath, so the override can never redirect enforcement. This exists mainly so the
@@ -34,7 +36,7 @@ const dbPathEnv = "KC9K_DB"
 // ResolveDBPath returns the database path to use: the KC9K_DB override
 // if set, otherwise DefaultDBPath.
 func ResolveDBPath() string {
-	if p := os.Getenv(dbPathEnv); p != "" && os.Geteuid() != 0 {
+	if p := os.Getenv(dbPathEnv); p != "" && !platform.Privileged() {
 		return p
 	}
 	return DefaultDBPath

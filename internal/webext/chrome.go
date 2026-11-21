@@ -30,10 +30,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/smattermannen/kc9k/internal/platform"
 )
 
 // ChromeKeyPath is the private key the Chrome extension is signed with.
-var ChromeKeyPath = "/var/lib/kc9k/chrome-extension.pem"
+var ChromeKeyPath = filepath.Join(platform.DataDir, "chrome-extension.pem")
 
 // ChromeKey loads the signing key from path, making one the first time.
 func ChromeKey(path string) (*rsa.PrivateKey, error) {

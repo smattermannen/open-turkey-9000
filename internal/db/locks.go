@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -94,7 +93,7 @@ func decodeQueue(s string) ([]QueuedLock, error) {
 
 // BootID identifies the current boot.
 func BootID() (string, error) {
-	data, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	data, err := readBootID()
 	if err != nil {
 		return "", fmt.Errorf("failed to read boot id: %w", err)
 	}

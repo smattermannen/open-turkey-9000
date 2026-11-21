@@ -1,3 +1,5 @@
+//go:build linux
+
 package blocker
 
 import (
@@ -47,11 +49,6 @@ func LockdownSudoers(user string) (string, error) {
 		return "", fmt.Errorf("invalid user name %q", user)
 	}
 	return rule + user + " ALL=(root) NOPASSWD: " + binaryPath + "\n", nil
-}
-
-func fileHas(path, content string) bool {
-	data, err := os.ReadFile(path)
-	return err == nil && string(data) == content
 }
 
 // ApplyLockdown installs the lockdown if it isn't already in place. A sudoers

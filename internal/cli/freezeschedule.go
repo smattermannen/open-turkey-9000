@@ -13,10 +13,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/smattermannen/kc9k/internal/lock"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/smattermannen/kc9k/internal/lock"
 
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"

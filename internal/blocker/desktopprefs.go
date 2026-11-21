@@ -1,3 +1,5 @@
+//go:build linux
+
 // desktopprefs.go — the desktop settings the circadian rhythm changes, in
 // each desktop user's own settings (gsettings, run as that user): the
 // wallpaper, dark mode, and the desktop's own night light, which would
@@ -125,15 +127,6 @@ func (t prefsTarget) run(args ...string) (string, error) {
 }
 
 func (t prefsTarget) has(schema, key string) bool { return hasKey(t.User, schema, key) }
-
-// Reach says which desktop users a wallpaper or dark mode change goes to:
-// everyone signed in but those in Skip (user IDs already given it), and
-// with SignedOut also the people who aren't signed in, so their desktop
-// starts with it.
-type Reach struct {
-	Skip      []string
-	SignedOut bool
-}
 
 func (r Reach) targets() []prefsTarget {
 	skip := map[string]bool{}
@@ -317,11 +310,6 @@ func TurnOffNightLight() error {
 	}
 	return firstErr
 }
-
-// DesktopLook is what a circadian preview may change on the desktop, per
-// user and "schema key", as gsettings prints it, so it can be put back
-// exactly: wallpaper, colour scheme and themes.
-type DesktopLook map[string]map[string]string
 
 // lookKeys are the keys a DesktopLook holds.
 var lookKeys = []struct{ schema, key string }{

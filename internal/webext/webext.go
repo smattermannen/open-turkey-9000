@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+
+	"github.com/smattermannen/kc9k/internal/platform"
 )
 
 //go:embed files
@@ -19,7 +21,7 @@ var files embed.FS
 const ID = "blocker@kc9k"
 
 // Dir is where the packed extension is installed.
-const Dir = "/usr/share/kc9k"
+var Dir = platform.ShareDir
 
 // Version returns the extension's version, from its manifest.
 func Version() string {

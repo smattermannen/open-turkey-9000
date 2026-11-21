@@ -51,9 +51,6 @@ var protectedPrefixes = []string{
 	"extensions.quarantineddomains.", "devtools.chrome.", "devtools.debugger.",
 }
 
-// LibreWolfOverridesDir holds the cleaned overrides files, one per user.
-var LibreWolfOverridesDir = "/var/lib/kc9k/librewolf"
-
 const (
 	locksBegin = "// BEGIN kc9k locks: settings that would switch the Killer Chicken extension off"
 	locksEnd   = "// END kc9k locks"
@@ -73,10 +70,9 @@ func locksSection() string {
 		lines = append(lines, fmt.Sprintf("lockPref(%q, %s);", p.name, p.value))
 	}
 	lines = append(lines,
-		"// Your overrides, cleaned by Killer Chicken 9000 (see /var/lib/kc9k/librewolf).",
-		`let kc9kUser = getenv("USER") || "";`,
-		`lockPref("autoadmin.global_config_url", /^[a-z_][a-z0-9_-]{0,31}$/.test(kc9kUser) ? "file://`+LibreWolfOverridesDir+`/" + kc9kUser + ".cfg" : "");`,
-		locksEnd)
+		"// Your overrides, cleaned by Killer Chicken 9000 (see "+LibreWolfOverridesDir+").")
+	lines = append(lines, overridesLines()...)
+	lines = append(lines, locksEnd)
 	return strings.Join(lines, "\n")
 }
 
@@ -138,7 +134,7 @@ func SyncLibreWolfLocks(on bool) error {
 	if !on {
 		return removeCleanedOverrides()
 	}
-	return syncCleanedOverrides(desktopUsers())
+	return syncCleanedOverrides(librewolfUsers())
 }
 
 // syncCleanedOverrides writes each user's cleaned overrides file. Every
@@ -151,7 +147,7 @@ func syncCleanedOverrides(users []*user.User) error {
 	for _, u := range users {
 		source := filepath.Join(u.HomeDir, ".librewolf", "librewolf.overrides.cfg")
 		content := cleanOverrides(readUserFile(source), source)
-		target := filepath.Join(LibreWolfOverridesDir, u.Username+".cfg")
+		target := filepath.Join(LibreWolfOverridesDir, overridesName(u.Username))
 		if fileHas(target, content) {
 			continue
 		}

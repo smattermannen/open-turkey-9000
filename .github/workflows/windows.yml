@@ -1,0 +1,62 @@
+name: Windows
+
+# The Go program on Windows (ROADMAP §4, W0–W6) on GitHub's windows-latest
+# runner: build and vet; the layers and the service for real (the runner
+# is a disposable administrator's machine); the unit tests.
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  system:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        shell: bash
+        run: |
+          CGO_ENABLED=0 go build ./...
+          CGO_ENABLED=0 go build -o kc9k.exe ./cmd/kc9k
+      - name: Vet
+        shell: bash
+        run: CGO_ENABLED=0 go vet ./...
+      - name: Layers for real (firewall, policies, processes)
+        shell: bash
+        env:
+          KC9K_TEST_WFP: "1"
+        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc' ./internal/blocker
+      - name: Service, pipe, install and uninstall
+        shell: pwsh
+        run: pwsh ci/windows_service_test.ps1 (Resolve-Path kc9k.exe)
+      - name: Service log
+        if: always()
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:ProgramData 'kc9k\kc9k.log'
+          if (Test-Path $log -ErrorAction SilentlyContinue) {
+            takeown /f $log | Out-Null; icacls $log /grant "$($env:USERNAME):R" | Out-Null
+            Get-Content $log -Tail 200
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kc9k-windows
+          path: kc9k.exe
+          if-no-files-found: ignore
+
+  unit:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Unit tests
+        shell: bash
+        run: CGO_ENABLED=0 go test -timeout 40m ./...

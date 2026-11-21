@@ -54,7 +54,7 @@ of their group and a row here; a finished item loses its row.
 | 2.6 | Factory reset protection: built; PAM root guard: run `ci/strict_pam_vm_test.sh host kc9k-vm` (written 2026-11-21, never run) (vm); firmware lock on real Dell/Lenovo/HP firmware (owner) | §4.10 | device | vm, owner |
 | 2.7 | Hardening: the text lock's window on a real desktop (Unchecked); rules server secret dropped (§5, 2026-11-21) | R-LOCK-5, §4.6 | browsers, locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
-| 2.9 | Tamper settings of 2026-11-21 (guest, extension-stop, installer, inactive-tabs, embedded): live checks; VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
+| 2.9 | Tamper settings of 2026-11-21: guest, inactive-tabs, embedded checked in Chrome-family browsers (2026-11-21); inactive-tabs, embedded in LibreWolf (box); VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": built; on the real site (the redirect sticks, no suggested posts) | §3.2 | extension | box |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
@@ -964,7 +964,7 @@ Only items not simply Built.
 | §3.11 Block password | Built | `block password B set|remove`; hides entries, apps, titles in gui-state (`--reveal`), `block info`, exports, `list show/export`, `phrase-set show`; GUI "Show contents…"; backups keep it. A project export still holds the contents |
 | §3.12 Word recording, specificity, cut | Built | `record start B L --words` / `--preset C --words` (text lists): extension reports each page's rendered words once (`kc9kPageWords`, `/words`); `kc9k record` ranks by specificity against the baseline (`db.Specificity`); `record stop --cut N`; `record baseline on|off`. Checked live in LibreWolf. GUI: Presets page (list presets) "Record words" with cut % and the most specific words |
 | §4.10 SafeSearch | Built | a browser setting per engine (`safesearch-google`, `-bing`, `-duckduckgo`, `-youtube`), each its own lock; `browser safesearch` switches all four. Pinned in hosts (every browser) per engine, `safesearch_engines` to the extension (Brave, Yahoo, SearXNG, engines it can't hold blocked: with Google's, Bing's or DuckDuckGo's, SPEC §4.10 *(By Opus)*, §5 decided 2026-11-21). Checked live in Chrome 2026-11-21 (`2.4`); in LibreWolf: Unchecked |
-| §4.10 Tamper settings | Built | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Built 2026-11-21 (SPEC §4.10 *(By Opus)*): `tamper guest` (guest browsing off in every Chromium-family policy, LightDM guest session off), `extension-stop`, `inactive-tabs`, `embedded` (on until turned off: what KC9K always did), `installer` (`prepare-install` from `make install`/`install.sh` and the `.deb`'s prerm for a reinstall or older version; removal always refused). `TestTamperGuestExtensionInstallerTabsEmbedded`, `TestSyncGuestOff`, `ci/tamper_tabs_test.js`, GUI tamper window. Live: Unchecked (box: Chrome-family guest windows, a background tab and an embedded frame with each setting off in LibreWolf and Chrome; vm: the LightDM guest session, `dpkg -i` of the same version and `install.sh` refused during a lock) |
+| §4.10 Tamper settings | Built | GUI group with OK/Cancel window; clock, block unsupported browsers (own lock), allow file:// blocking, block task managers while locked (`tamper task-managers`), grace for a missing extension (`tamper grace S`, 10–600 s, longer weakens); gui-state `anything_locked`, settings stuck on show so. No group lock. close private windows and Tor (`tamper private`: private browsing off in every browser policy, Tor Browser/tor closed; checked live for the policies; no Tor here). Built 2026-11-21 (SPEC §4.10 *(By Opus)*): `tamper guest` (guest browsing off in every Chromium-family policy, LightDM guest session off), `extension-stop`, `inactive-tabs`, `embedded` (on until turned off: what KC9K always did), `installer` (`prepare-install` from `make install`/`install.sh` and the `.deb`'s prerm for a reinstall or older version; removal always refused). `TestTamperGuestExtensionInstallerTabsEmbedded`, `TestSyncGuestOff`, `ci/tamper_tabs_test.js`, GUI tamper window. Live (2026-11-21, `2.9`): guest windows in Brave/Edge/Vivaldi, a background tab and an embedded frame in Chrome: Built; with `embedded` off the browser policies hold only whole sites (SPEC §6 *(By Opus)*). Unchecked (box: the background tab and embedded frame in LibreWolf; vm: the LightDM guest session, `dpkg -i` of the same version and `install.sh` refused during a lock) |
 | §4.10 Extension install dialog | Built | once per session when gui-state `extension_missing`: Install LibreWolf, or Show browsers |
 | §4.10 Device protection: factory reset protection, guided setup | Built | 2026-11-21: firmware lock, guided setup (`kc9k guided-setup [--json]`, GUI Guided setup… with Do it…, `ci/gui_settings_smoke.py`), strict mode's PAM root guard (`login`, `su`, `su-l`, tested on generated files only). Live: Unchecked (`2.6`) |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
@@ -1065,11 +1065,24 @@ Only items not simply Built.
   a real keyboard): Unchecked.
 - **2.8** Everything else Not built/Partial in §1.
 - **2.9 Tamper settings live** (S): built 2026-11-21 (§1 *§4.10 Tamper
-  settings*). Unchecked (box): with `guest` on, Brave/Edge/Vivaldi offer no
-  guest window; with `inactive-tabs` off, a background tab on a newly
-  blocked site stays until switched to, then gets the block page (LibreWolf
-  and Chrome); with `embedded` off, a page embedding a path-blocked video
-  plays it. Unchecked (vm): the LightDM guest session gone after a restart
+  settings*). Built in Chrome-family browsers (2026-11-21, cloud container,
+  Chrome 158.0.8127.36, daemon as root, real policies): `guest` on, each
+  started with `--guest` opened its Default profile, off its Guest profile
+  (Brave 1.100.58, Edge 158.0.4370.33, Vivaldi 8.3.4191.47).
+  `inactive-tabs`: on (default), a background tab on example.com got the
+  block page within 15 s of `kc9k start`; off, it kept example.com for 40 s
+  and got the block page the moment it was switched to (from the extension
+  and from outside, DevTools protocol). `embedded`: a local page embedding
+  a Vimeo video whose path (`player.vimeo.com/video/…`) was blacklisted;
+  on, the frame was blocked; off, it still showed Chrome's "Your
+  organization doesn't allow you to view this site": the policy's
+  URLBlocklist blocks frames too. Fixed (SPEC §6 2026-11-21 *(By Opus)*):
+  with `embedded` off the browser policies hold only whole sites
+  (`TestEmbeddedOffKeepsPatternsOutOfPolicy`); then the video played
+  (time 9.99 → 12.99 s), the same address opened as a page got the block
+  page, and turning `embedded` on blocked the frame again. Unchecked (box):
+  `inactive-tabs` and `embedded` in LibreWolf (its WebsiteFilter gets the
+  same change). Unchecked (vm): the LightDM guest session gone after a restart
   with `guest` on; during a lock with `installer` on, `sudo dpkg -i` of the
   same `.deb` and `sudo ./install.sh` are refused and a newer `.deb`
   installs. 2026-11-21: `ci/tamper_vm_test.sh host kc9k-vm` checks these

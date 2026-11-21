@@ -45,7 +45,12 @@
   drop-in `lightdm.conf.d/90-kc9k-no-guest.conf` where `/etc/lightdm`
   exists). `extension-stop` off: `extensionUsers` asks only `AnyLock`.
   `inactive-tabs`/`embedded` off → rules `inactive_tabs_off`/`embedded_off`
-  (extension note). `installer` → hidden `prepare-install`
+  (extension note). `embedded` off also keeps the blacklists' paths and
+  patterns out of the browser policies (`enforce.Inputs`, `embeddedOff`
+  loaded in `loadDNSChoice`; not monk mode's or factory reset protection's
+  lists): Chrome's URLBlocklist blocks frames too, so a path-blocked
+  embedded video stayed blocked with the setting off (seen live
+  2026-11-21). Whole sites stay in the policies. `installer` → hidden `prepare-install`
   (`cli/installguard.go`; install note).
 - **Browser setting locks** (`db/settinglocks.go`, `cli/browser.go`): per
   option (time, challenge, password, restart); `enforce.AnyLock` counts

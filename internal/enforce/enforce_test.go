@@ -281,6 +281,48 @@ func TestFileEntriesInPolicy(t *testing.T) {
 	}
 }
 
+// §4.10: with block embedded content off, a blacklist's paths and patterns
+// stay out of the browser policy, which Chrome and Firefox apply to frames
+// too: an embedded path-blocked video plays. Whole sites stay (hosts and
+// the firewall block them anyway), and so do KC9K's own lists.
+func TestEmbeddedOffKeepsPatternsOutOfPolicy(t *testing.T) {
+	t.Cleanup(func() { embeddedOff.Store(false) })
+	user := db.ActiveBlockDetail{BlockName: "b", Lists: db.Lists{
+		blacklist("Blocked", db.Where{URL: true}, "reddit.com", "player.vimeo.com/video/1", "*casino*")}}
+	blocks := []db.ActiveBlockDetail{user, monkBlock()}
+
+	hostsOn, _, bp := Inputs(blocks)
+	if !reflect.DeepEqual(bp.BlockPatterns, []string{"player.vimeo.com/video/1", "*casino*", "*.*"}) {
+		t.Errorf("setting on: patterns %v", bp.BlockPatterns)
+	}
+	embeddedOff.Store(true)
+	hostsOff, _, bp := Inputs(blocks)
+	if !reflect.DeepEqual(bp.BlockPatterns, []string{"*.*"}) {
+		t.Errorf("setting off: patterns %v; want only monk mode's", bp.BlockPatterns)
+	}
+	if !reflect.DeepEqual(bp.BlockDomains, []string{"reddit.com"}) || !reflect.DeepEqual(hostsOff, hostsOn) {
+		t.Errorf("setting off: sites %v, hosts %v; want reddit.com in both as before", bp.BlockDomains, hostsOff)
+	}
+
+	// The setting is read from the database before each apply.
+	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	loadDNSChoice(d)
+	if embeddedOff.Load() {
+		t.Error("unset: block embedded content should be on")
+	}
+	if err := d.SetSetting(SettingEmbedded, "off"); err != nil {
+		t.Fatal(err)
+	}
+	loadDNSChoice(d)
+	if !embeddedOff.Load() {
+		t.Error("set off: not loaded")
+	}
+}
+
 // §4.10: the SafeSearch browser setting reaches the extension's rules.
 func TestRulesSafeSearch(t *testing.T) {
 	d, err := db.OpenDB(filepath.Join(t.TempDir(), "t.db"))

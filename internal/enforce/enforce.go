@@ -34,8 +34,9 @@ import (
 //     exception under them (those layers block whole hosts). A list's
 //     rendered terms never reach these layers.
 //   - apps: the union of process names to kill.
-//   - bp: the browser policy: those blacklists' domains and patterns, with
-//     the block's address exceptions.
+//   - bp: the browser policy: those blacklists' domains and patterns
+//     (patterns only with block embedded content on), with the block's
+//     address exceptions.
 //
 // Everything is unioned across active blocks. A block with exceptions by
 // title or text leaves its websites to the extension alone: only it can
@@ -77,6 +78,16 @@ func Inputs(active []db.ActiveBlockDetail) (hostsDomains, apps []string, bp bloc
 				}
 			}
 			domains, pats := blocker.SplitURLEntries(addresses)
+			if embeddedOff.Load() && l.ID < MonkListID {
+				// Block embedded content off (§4.10): a browser policy
+				// blocks frames too (Chrome's URLBlocklist, Firefox's
+				// WebsiteFilter), so only whole sites go there, which
+				// hosts and the firewall block in frames anyway; the
+				// extension blocks paths and patterns in pages, not in
+				// frames. KC9K's own lists (monk mode, factory reset
+				// protection) keep theirs.
+				pats = nil
+			}
 			blockDomains = append(blockDomains, domains...)
 			patterns = append(patterns, pats...)
 			for _, site := range domains {
@@ -342,6 +353,10 @@ const SettingFileURLs = "tamper.file-urls"
 // apply (Inputs takes no database).
 var fileURLsOn atomic.Bool
 
+// embeddedOff is tamper protection "block embedded content" off, loaded
+// with fileURLsOn.
+var embeddedOff atomic.Bool
+
 // FileURLsOn reports whether file:// blocking is allowed.
 func FileURLsOn(d *db.DB) bool {
 	v, err := d.GetSetting(SettingFileURLs)
@@ -349,9 +364,10 @@ func FileURLsOn(d *db.DB) bool {
 }
 
 // loadDNSChoice hands the DNS setting to the blocker, and loads the file://
-// blocking setting.
+// blocking and block embedded content settings.
 func loadDNSChoice(d *db.DB) {
 	fileURLsOn.Store(FileURLsOn(d))
+	embeddedOff.Store(!TamperOn(d, SettingEmbedded))
 	blocker.SetExtensionGrace(time.Duration(ExtensionGraceSeconds(d)) * time.Second)
 	choice, err := d.GetSetting(SettingDNS)
 	if err != nil {

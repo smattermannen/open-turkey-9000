@@ -13,10 +13,5 @@ public abstract class NotYetPage(string area, string title, string what) : IPage
     public virtual void Update(GuiState state) { }
 }
 
-public sealed class StatsPage(MainWindow window) : NotYetPage("stats", "Statistics", "Time spent on websites and apps, and times blocked.");
 public sealed class CircadianPage(MainWindow window) : NotYetPage("settings", "Circadian rhythm", "Screen, wallpaper and dark mode by time of day.");
-public sealed class SettingsPage(MainWindow window) : NotYetPage("settings", "Settings", "Preferences, protection, browsers and passwords.")
-{
-    public void ShowBrowsers() { }
-}
 

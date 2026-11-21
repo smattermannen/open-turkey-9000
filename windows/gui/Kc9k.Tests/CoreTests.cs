@@ -104,6 +104,23 @@ public class WordsTests
     }
 }
 
+public class SeriesTests
+{
+    [Fact]
+    public void AColourFollowsItsName()
+    {
+        var series = new Series();
+        var first = series.Assign(["a", "b", "c"]);
+        var second = series.Assign(["c", "a", "d"]);
+        Assert.Equal(first["a"], second["a"]);
+        Assert.Equal(first["c"], second["c"]);
+        Assert.NotEqual(first["b"], second["d"]); // b's slot is remembered: d takes a fresh one
+        var many = series.Assign([.. Enumerable.Range(0, 9).Select(i => "n" + i)]);
+        Assert.Equal(2, many.Values.Count(v => v is null));
+        Assert.Equal(7, many.Values.Where(v => v is not null).Distinct().Count());
+    }
+}
+
 public class StateTests
 {
     static string Fixture(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", name));

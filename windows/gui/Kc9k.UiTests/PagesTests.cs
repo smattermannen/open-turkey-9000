@@ -47,3 +47,37 @@ public class PagesTests
         gui.WaitFor(() => gui.Ran("preset", "use", "Weekend preset", "Evening", "--kind", "schedule"), "kc9k preset use");
     }
 }
+
+[Collection("gui")]
+public class SettingsStatsTests
+{
+    [Fact]
+    public void StatisticsShowTheRecordedWeek()
+    {
+        using var gui = new GuiApp("stats");
+        gui.Page("stats");
+        gui.WaitFor(() => gui.Find("StatsTotal").Name.StartsWith("Total: ") && gui.Find("StatsTotal").Name != "Total: 0s", "a total");
+        gui.Shot("websites");
+        gui.Invoke("StatsKind_blocked");
+        gui.WaitFor(() => gui.Find("StatsTotal").Name.EndsWith("×"), "times blocked as counts");
+        gui.Shot("blocked");
+        Assert.True(gui.Ran("stats", "--json", "--days", "7"));
+    }
+
+    [Fact]
+    public void SettingsRunTheirCommands()
+    {
+        using var gui = new GuiApp("settings");
+        gui.Page("settings");
+        gui.Find("TamperChange");
+        gui.Shot("settings");
+        gui.Invoke("Browser_safesearch-bing");
+        gui.WaitFor(() => gui.Ran("browser", "safesearch-bing", "on"), "kc9k browser safesearch-bing on");
+        gui.Invoke("TamperChange");
+        gui.Find("Tamper_clock");
+        gui.Shot("tamper");
+        gui.Invoke("Tamper_private");
+        gui.Invoke(gui.FindButton("OK"));
+        gui.WaitFor(() => gui.Ran("tamper", "private", "on"), "kc9k tamper private on");
+    }
+}

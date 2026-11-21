@@ -20,6 +20,12 @@
   flashes white; the page's own background shows) until judged and settled (`SETTLE_MS` after DOMContentLoaded
   or an address change seen in the MutationObserver), never over
   `HIDE_CAP_MS`. Don't hide with `visibility`: `innerText` skips it.
+  Reading lays the page out, and Firefox paints a page laid out before its
+  stylesheets apply (unstyled, white canvas, dark sites too): the top page
+  and frames read only once `styled()` (body there and every stylesheet
+  `link` loaded or failed, seen by capture `load`/`error` listeners; or
+  complete; or `SHEETS_WAIT_MS` after the document started).
+  `ci/flash_test.py` "darklate" checks it per frame.
 - `no-images` pictures drawn as CSS content: `content.js` marks elements
   (`data-kc9k-noimg` before/after/self, idle-time `scanPseudoImages`) and
   both sheets empty them; shadow roots get an adopted sheet. Page script

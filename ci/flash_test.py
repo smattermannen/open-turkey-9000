@@ -25,6 +25,7 @@ from selenium.webdriver.firefox.service import Service
 
 failures = 0
 BLOCKS = ("flashblock", "flashlooks")
+LATE_CSS_S = 1.2
 REMOTE_CONTROL_MARKER = "/var/lib/kc9k/allow-remote-control"
 
 
@@ -49,8 +50,9 @@ def cleanup():
     subprocess.run(["sudo", "rm", "-f", REMOTE_CONTROL_MARKER])
 
 
-# Records, before each paint, "opacity|filter|has-word" for the page; the
-# word is looked for in the DOM, so a frame painted with it visible shows.
+# Records, before each paint, "opacity|filter|has-word|time|root background"
+# for the page; the word is looked for in the DOM, so a frame painted with it
+# visible shows.
 RECORDER = """<script>
 (function () {
   const key = "frames:" + location.pathname;
@@ -61,7 +63,7 @@ RECORDER = """<script>
     const cs = getComputedStyle(root);
     const text = document.body ? document.body.innerText : "";
     const shown = document.body ? getComputedStyle(document.body).opacity : cs.opacity;
-    frames.push(shown + "|" + cs.filter + "|" + (word.test(text) ? 1 : 0) + "|" + Math.round(performance.now()));
+    frames.push(shown + "|" + cs.filter + "|" + (word.test(text) ? 1 : 0) + "|" + Math.round(performance.now()) + "|" + cs.backgroundColor);
     try { localStorage.setItem(key, JSON.stringify(frames)); } catch (e) {}
     if (frames.length < 400) requestAnimationFrame(tick);
   }
@@ -80,6 +82,10 @@ PAGES = {
     "/grey": "<!doctype html><title>Grey</title>" + RECORDER + "<p>some kcninegreyword here</p>",
     # A page with nothing to find.
     "/plain": "<!doctype html><title>Plain</title>" + RECORDER + "<p>nothing here</p>",
+    # A dark page whose stylesheet comes late (LATE_CSS_S): until it applies
+    # the page is unstyled on a white canvas, so it must not be painted.
+    "/darklate": "<!doctype html><title>Dark</title>" + RECORDER + "<link rel=stylesheet href='/late.css'>"
+                 "<p>a dark page</p>" + "<p>more of it</p>" * 40,
     # A page that changes address without loading, and then shows the word.
     "/spa": "<!doctype html><title>App</title>" + RECORDER + "<p id='p'>start page</p>"
             "<script>window.go = () => { history.pushState({}, '', '/spa/next'); "
@@ -95,6 +101,16 @@ class Pages:
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 path = self.path.split("?")[0]
+                if path == "/late.css":
+                    time.sleep(LATE_CSS_S)
+                    body = b"html { background: rgb(17, 17, 17); color: #ccc; }"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/css")
+                    self.send_header("Cache-Control", "max-age=600")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
                 body = PAGES.get("/spa" if path.startswith("/spa") else path, "<!doctype html><title>?</title>").encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
@@ -185,6 +201,16 @@ try:
     # ~60 a second.
     check("a page without the words is shown soon", rec and any(f[0] != "0" for f in rec) and len(hidden) < 60,
           f"{len(hidden)} hidden frames of {len(rec)}")
+
+    # Reading lays a page out, and LibreWolf paints a page laid out before its
+    # stylesheets apply: a dark site flashed white (2026-11-20, a click inside
+    # store.steampowered.com, ~0.7 s). Only frames with the dark root count.
+    visit(browser, pages.base + "/darklate", 4)
+    rec = frames(browser, pages.base, "/darklate")
+    unstyled = [f for f in rec if len(f) > 4 and f[4] != "rgb(17, 17, 17)"]
+    check("a dark page whose stylesheet is late is never painted without it (white)", rec and not unstyled,
+          f"{len(unstyled)} of {len(rec)} frames: {unstyled[:5]}")
+    check("the dark page is shown in the end", any(f[0] != "0" for f in rec), str(rec[-3:]))
 
     # An address change without loading.
     visit(browser, pages.base + "/spa", 2)

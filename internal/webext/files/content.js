@@ -96,6 +96,40 @@ let hideCap = null;
 let settleAt = 0; // when the page may be shown, once judged (0: not yet known)
 let takenAwayFor = null;
 
+// Reading lays the page out, and a page laid out before its stylesheets
+// apply gets painted at once: unstyled, on a white canvas, dark sites too
+// (Firefox; without reading it waits for them). So nothing is read until
+// the body is there and the page's stylesheets have loaded or failed, or
+// the page is complete, or SHEETS_WAIT_MS have passed since it started.
+const SHEETS_WAIT_MS = 2000;
+const startedAt = Date.now();
+const sheetsIn = new WeakSet();
+function sheetIn(event) {
+  if (event.target && event.target.localName === "link") {
+    sheetsIn.add(event.target);
+    textChanged = true;
+    queueScan();
+  }
+}
+document.addEventListener("load", sheetIn, true);
+document.addEventListener("error", sheetIn, true);
+
+function styled() {
+  if (document.readyState === "complete" || Date.now() - startedAt > SHEETS_WAIT_MS) {
+    return true;
+  }
+  if (!document.body) {
+    return false;
+  }
+  for (const link of document.querySelectorAll("link[rel~='stylesheet' i]")) {
+    if (!sheetsIn.has(link) && !link.disabled && !/\balternate\b/i.test(link.rel) &&
+      (!link.media || matchMedia(link.media).matches)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function hidePage() {
   if (window !== window.top || !/^https?:$/.test(location.protocol)) {
     return;
@@ -396,8 +430,8 @@ function scanKeywords() {
     judgeOn();
     return;
   }
-  if (!textChanged) {
-    return;
+  if (!textChanged || !styled()) {
+    return; // not styled yet: textChanged stays, read again soon
   }
   const body = document.body || document.documentElement;
   if (!body) {
@@ -505,7 +539,8 @@ let frameJudging = null; // { url, lists, steps } while a frame is judged
 let frameBlocked = false;
 
 function scanFrame() {
-  if (!lists || frameBlocked || !/^https?:$/.test(location.protocol) || !document.body || !kc9kReadsPage(lists)) {
+  if (!lists || frameBlocked || !/^https?:$/.test(location.protocol) || !document.body || !kc9kReadsPage(lists) ||
+    !styled()) {
     return;
   }
   enterAddress(topUrl()); // as render() keeps it: a frame's looks follow the tab's address

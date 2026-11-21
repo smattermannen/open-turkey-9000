@@ -25,7 +25,6 @@ of their group and a row here; a finished item loses its row.
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text lifted on clicks: suites pass (2026-11-20); real use on the laptop | §3.9 | extension | owner |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
-| A8 | No flashing: Chrome and real sites | R-PAGE-1 | extension | box |
 | A10 | Clock check built: a real power-off mid-lock | §3.4, §4.10 | locks | vm |
 | A12 | R-LOCK-12: a person clicks Lock and Cancel (synthetic input is ignored by design) | R-LOCK-12 | hotkeys, locks | owner |
 | A13 | `install.sh` DB race: fixed; confirm a fresh install in the VM | — | install, db-project | vm |
@@ -727,7 +726,7 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     (`parseUserDuration`), confirmations say "69 days 10 hours 40
     minutes". The monk mode button never passed `--yes`, so the CLI always
     refused it: now confirmed (R-LOCK-12) and run.
-  - [ ] `A8` No flashing (R-PAGE-1). Built (extension 1.20.0): while a list or
+  - [x] `A8` No flashing (R-PAGE-1). Built (extension 1.20.0): while a list or
     phrase set could still act on the top page by its title or text (and no
     address exception spares it), the page is invisible (opacity 0, so it is
     still read) until judged: the first full read 500 ms after its document
@@ -748,7 +747,21 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
     2026-11-20 (overnight, desktop): `flash_test` 10/10 in LibreWolf 159,
     the content harness's no-white-flash checks in Chromium, and the root
     Chrome for Testing test (`TestChromeRunsTheExtension`) pass. Real
-    sites and branded Chrome: Unchecked.
+    sites and branded Chrome: Unchecked. 2026-11-20 (desktop, Google Chrome
+    158 over CDP and LibreWolf 159 over BiDi, headed on :0, a text list
+    on): a script recorded at every animation frame whether the page showed
+    a listed word, the screen was captured meanwhile. Wikipedia load and
+    click, GitHub soft and full load to a listed word: blocked, 0 frames
+    with the word, both browsers. Dark sites (GitHub dark, Steam, Spotify)
+    in Chrome: 0 white frames, open, soft and full clicks. LibreWolf: a click
+    inside Steam showed white ~0.7 s (none with the list off). Cause:
+    reading laid the page out before its stylesheets applied, and Firefox
+    then paints it unstyled on white. Fixed in 1.27.4: reading waits for the
+    body and the page's stylesheets (`styled()`, at most 2 s). After: Steam
+    open and clicks, Spotify open and SPA click 0 white frames, blocked
+    pages as before; `ci/flash_test.py` 12/12 with a new dark page whose
+    stylesheet is late (failed on 1.27.3: 73 unstyled frames). GitHub and
+    Twitch stay light in LibreWolf (it reports a light colour scheme).
   - [x] `A9` (Owner 2026-11-18: the design has become tremendous.) GUI overall unclear, hard to read, not pretty or easy to use (owner,
     2026-11-15; R-GUI-3). Redesign page by page. Done: a design layer
     (cards, status pills, page titles with one-line subtitles, ? popovers

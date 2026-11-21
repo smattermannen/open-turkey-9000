@@ -138,7 +138,7 @@
   ~/.local/share/kc9k-browsertest/venv/bin/python ci/<name>.py`
   (`browser_test`, `extras_test`, `actions_test`, `quota_test`,
   `download_test`, `flash_test`: R-PAGE-1, records per animation frame
-  whether a blocked word was painted). Needs a `TAGS=devmaster` install
+  whether a blocked word was painted, and a dark page unstyled). Needs a `TAGS=devmaster` install
   (else the guard closes the remote-controlled LibreWolf: "started for
   remote control"). Run each alone: back to back (2026-11-20, desktop)
   the later suites found local pages "blockedByPolicy", probably the

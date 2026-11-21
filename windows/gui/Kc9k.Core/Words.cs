@@ -437,6 +437,41 @@ public static class Words
     public static string DaysArg(int days) =>
         string.Join(",", Weekdays.Where(d => (days & DayBit(d.Key)) != 0).Select(d => d.Key));
 
+    /// <summary>A window as the CLI writes it: day keys Monday first, from, to.</summary>
+    public static (List<string> Days, string From, string To) WindowParts(TimeWindow w)
+    {
+        var days = Weekdays.Where(d => (w.Days & DayBit(d.Key)) != 0).Select(d => d.Key).ToList();
+        return (days, Clock.Text(w.Start), w.End >= Clock.DayMinutes ? "24:00" : Clock.Text(w.End));
+    }
+
+    /// <summary>Hours a week the windows (not allow windows) cover.</summary>
+    public static double HoursAWeek(IEnumerable<TimeWindow> windows)
+    {
+        var covered = new HashSet<(int, int)>();
+        foreach (var w in windows.Where(w => !w.Allow))
+            for (var day = 0; day < 7; day++)
+                if ((w.Days & (1 << day)) != 0)
+                    for (var m = w.Start; m < w.End; m++) covered.Add((day, m));
+        return covered.Count / 60.0;
+    }
+
+    /// <summary>A schedule's windows in a line, and its hours a week.</summary>
+    public static string ScheduleSummary(IReadOnlyList<TimeWindow> windows)
+    {
+        var parts = new List<string>();
+        foreach (var w in windows.Take(3))
+        {
+            var (names, _, _) = WindowParts(w);
+            var days = names.Count < 7 ? string.Join(",", names) : "daily";
+            days = days.Replace("mon,tue,wed,thu,fri", "weekdays").Replace("sat,sun", "weekends");
+            parts.Add($"{days} {Clock.Show(w.Start)}–{Clock.Show(w.End, true)}");
+        }
+        if (windows.Count > 3) parts.Add($"{windows.Count - 3} more");
+        var hours = HoursAWeek(windows);
+        var h = hours > 0 ? $"{Math.Round(hours, MidpointRounding.ToEven):0} h a week" : "no windows yet";
+        return (parts.Count > 0 ? string.Join(", ", parts) + " · " : "") + h;
+    }
+
     public static string Plural(int n, string one, string? many = null) => $"{n} {(n == 1 ? one : many ?? one + "s")}";
 
     /// <summary>"a", "a and b", "a, b and c".</summary>

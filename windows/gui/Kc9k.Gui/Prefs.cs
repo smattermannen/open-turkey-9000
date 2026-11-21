@@ -22,6 +22,9 @@ public sealed class Prefs
     public bool WindowMaximized { get; set; }
     public string StatsRange { get; set; } = "week";
 
+    // Before Current: static fields are set in the order written.
+    static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, WriteIndented = true };
+
     [JsonIgnore] public static Prefs Current { get; private set; } = Load();
 
     static string PathOf()
@@ -30,8 +33,6 @@ public sealed class Prefs
         if (!string.IsNullOrEmpty(env)) return env;
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "kc9k", "gui.json");
     }
-
-    static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, WriteIndented = true };
 
     static Prefs Load()
     {

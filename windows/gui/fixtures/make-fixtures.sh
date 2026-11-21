@@ -28,6 +28,8 @@ k block create Games
 k block add-app Games steam.exe epicgameslauncher.exe
 k block create "Social media"
 k block add "Social media" facebook.com instagram.com x.com tiktok.com
+k block create Reading
+k block add Reading goodreads.com
 
 # Automation (§4.5): windows, schedules
 k schedule add Evening --days weekdays --from 18:00 --to 23:00

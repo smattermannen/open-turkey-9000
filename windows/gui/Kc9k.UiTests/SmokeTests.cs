@@ -31,22 +31,22 @@ public class SmokeTests
     {
         using var gui = new GuiApp("overview");
         gui.WaitFor(() => gui.Find("Headline").Name.Contains("on"), "the headline");
-        Assert.Equal("3 blocks on · 2 locked", gui.Find("Headline").Name);
+        Assert.Equal("4 blocks on · 2 locked", gui.Find("Headline").Name);
         Assert.NotNull(gui.ById("OnNow_Work"));
         Assert.NotNull(gui.ById("OnNow_Social media"));
-        Assert.Null(gui.ById("OnNow_Games")); // off
-        gui.Find("StartBlock").Click();
-        var games = gui.FindName("Games");
+        Assert.Null(gui.ById("OnNow_Reading")); // off
+        gui.Invoke("StartBlock");
+        var reading = gui.FindMenuItem("Reading");
         gui.Shot("start-menu");
-        games.Click();
-        gui.WaitFor(() => gui.Ran("start", "Games"), "kc9k start Games");
+        reading.AsMenuItem().Invoke();
+        gui.WaitFor(() => gui.Ran("start", "Reading"), "kc9k start Reading");
     }
 
     [Fact]
     public void MonkModeIsConfirmedAsALock()
     {
         using var gui = new GuiApp("monk");
-        gui.Find("QuickMonk").Click();
+        gui.Invoke("QuickMonk");
         var box = gui.Find("AskDuration").AsTextBox();
         box.Text = "2h";
         gui.Shot("monk-length");
@@ -54,7 +54,7 @@ public class SmokeTests
         gui.FindName("Set this lock?");
         gui.Shot("monk-confirm");
         Assert.False(gui.Ran("monk"));
-        gui.FindName("Lock").Click();
+        gui.Invoke(gui.FindButton("Lock"));
         gui.WaitFor(() => gui.Ran("monk", "--for", "120m", "--yes"), "kc9k monk --for 120m --yes");
     }
 
@@ -62,9 +62,9 @@ public class SmokeTests
     public void RefusalsAreShownInTheClisWords()
     {
         using var gui = new GuiApp("refusal", prepare: dir => File.WriteAllText(Path.Combine(dir, "responses.json"),
-            """[{"args": ["start", "Games"], "ok": false, "output": "Error: refused by the fake for this test"}]"""));
-        gui.Find("StartBlock").Click();
-        gui.FindName("Games").Click();
+            """[{"args": ["start", "Reading"], "ok": false, "output": "Error: refused by the fake for this test"}]"""));
+        gui.Invoke("StartBlock");
+        gui.FindMenuItem("Reading").AsMenuItem().Invoke();
         var message = gui.Find("MessageText");
         Assert.Contains("refused by the fake", message.Name);
         gui.Shot("refusal");

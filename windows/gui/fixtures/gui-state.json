@@ -317,6 +317,103 @@
     ]
    },
    "automation": {
+    "default_on": false,
+    "need_both": false
+   },
+   "continuous": true,
+   "mode": "",
+   "applied_schedules": [],
+   "name": "Reading",
+   "lists": [
+    {
+     "id": 11,
+     "name": "Blocked",
+     "kind": "blacklist",
+     "where": [
+      "url"
+     ],
+     "actions": [
+      {
+       "action": "block",
+       "distinct": 1,
+       "hits": 1
+      }
+     ],
+     "entries": [
+      "goodreads.com"
+     ],
+     "test": false
+    },
+    {
+     "id": 12,
+     "name": "Exceptions",
+     "kind": "exceptions",
+     "where": [
+      "url"
+     ],
+     "actions": [],
+     "entries": [
+      "file://*"
+     ],
+     "test": false
+    }
+   ],
+   "phrase_sets": [],
+   "apps": [],
+   "titles": [],
+   "nepsis": {},
+   "nepsis_count": 0,
+   "schedules": [],
+   "schedule_windows": [],
+   "users": [],
+   "active": false,
+   "held": false,
+   "char_locked": false,
+   "pomodoro_on": 0,
+   "pomodoro_off": 0,
+   "pomodoro_long": 0,
+   "pomodoro_every": 0,
+   "on_break": false,
+   "password_locked": false,
+   "restart_locked": false,
+   "delay_seconds": 0,
+   "stop_seconds": 0,
+   "delay_left": 0,
+   "scheduled": false,
+   "autostarts": [],
+   "lifted": false,
+   "enabled": false,
+   "lock_seconds": 0,
+   "quota_limit": 0,
+   "quota_used": 0,
+   "quota_open": false,
+   "quota_next": -1,
+   "keyword_test": false,
+   "places": [],
+   "loosen_delay": 86400,
+   "schedule_lock": false,
+   "schedule_lead": 0,
+   "social": [],
+   "break_allowance": 0,
+   "break_per": 0,
+   "break_balance": 0,
+   "relock": 0,
+   "paused_seconds": 0
+  },
+  {
+   "triggers": {
+    "apps": [
+     {
+      "name": "close"
+     }
+    ],
+    "titles": [
+     {
+      "name": "close"
+     }
+    ]
+   },
+   "automation": {
     "default_on": true,
     "need_both": false
    },

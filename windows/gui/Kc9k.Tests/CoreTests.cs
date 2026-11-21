@@ -84,6 +84,16 @@ public class WordsTests
     }
 
     [Fact]
+    public void SummarisesSchedules()
+    {
+        var weekdays = new TimeWindow { Days = 62, Start = 540, End = 1020 };
+        var weekend = new TimeWindow { Days = 65, Start = 0, End = 1440 };
+        Assert.Equal("weekdays 09:00–17:00, weekends 00:00–24:00 · 88 h a week", Words.ScheduleSummary([weekdays, weekend]));
+        Assert.Equal("no windows yet", Words.ScheduleSummary([]));
+        Assert.Equal("mon,tue,wed,thu,fri", Words.DaysArg(62));
+    }
+
+    [Fact]
     public void SplitsEntries()
     {
         Assert.Equal(["a.com", "b.com"], Entries.Split("a.com  b.com"));

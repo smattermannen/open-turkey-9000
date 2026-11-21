@@ -33,6 +33,10 @@ jobs:
         run: dotnet publish Kc9k.Gui -c Release -r win-x64 -o ${{ runner.temp }}\gui
       - name: Build the fake kc9k
         run: dotnet publish FakeKc9k -c Release -r win-x64 --self-contained false -o ${{ runner.temp }}\fake
+      - name: What was published
+        run: |
+          Get-ChildItem ${{ runner.temp }}\gui -Filter *.pri | Format-Table Name, Length
+          Get-ChildItem ${{ runner.temp }}\gui | Measure-Object | Select-Object Count
       - name: Screen
         run: |
           Add-Type -AssemblyName System.Windows.Forms

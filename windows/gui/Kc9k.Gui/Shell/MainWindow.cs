@@ -210,7 +210,7 @@ public sealed partial class MainWindow : Window
     void Show(string key)
     {
         CurrentPage = key;
-        if (items.TryGetValue(key, out var item) && nav.SelectedItem != item) nav.SelectedItem = item;
+        if (items.TryGetValue(key, out var item) && !ReferenceEquals(nav.SelectedItem, item)) nav.SelectedItem = item;
         nav.Content = pages[key].Holder;
         if (Controller.State is { } s && !Controller.Locked(Area(key))) pages[key].Page.Update(s);
     }

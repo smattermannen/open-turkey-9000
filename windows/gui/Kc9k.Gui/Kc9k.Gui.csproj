@@ -13,6 +13,9 @@
     <UseWinUI>true</UseWinUI>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <WindowsPackageType>None</WindowsPackageType>
+    <!-- Builds the resource index (PRI) with WinUI's own theme resources, as
+         the WinUI templates do; without it XamlControlsResources finds nothing. -->
+    <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -22,6 +25,8 @@
     <ApplicationIcon>Assets\kc9k.ico</ApplicationIcon>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <Description>Killer Chicken 9000</Description>
+    <!-- Not trimmed or AOT-compiled, so collection expressions are fine. -->
+    <NoWarn>$(NoWarn);CsWinRT1032</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />

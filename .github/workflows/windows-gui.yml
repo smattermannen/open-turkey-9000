@@ -119,22 +119,27 @@ jobs:
         shell: pwsh
         run: |
           $ca = (Get-ChildItem "$env:RUNNER_TEMP\actions" -Filter *.CA.dll | Select-Object -First 1).FullName
-          foreach ($n in "a", "b") {
-            dotnet build windows/installer -c Release -o "$env:RUNNER_TEMP\msi-$n" -p:GuiDir="$env:RUNNER_TEMP\gui" -p:Kc9kExe="$env:RUNNER_TEMP\kc9k\kc9k.exe" -p:ActionsDll="$ca" -p:Version=0.1.0
+          foreach ($n in "A", "B") {
+            Remove-Item -Recurse -Force windows/installer/obj, windows/installer/bin -ErrorAction SilentlyContinue
+            dotnet build windows/installer -c Release --no-incremental -p:GuiDir="$env:RUNNER_TEMP\gui" -p:Kc9kExe="$env:RUNNER_TEMP\kc9k\kc9k.exe" -p:ActionsDll="$ca" -p:Version=0.1.0
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+            $msi = Get-ChildItem windows/installer/bin -Recurse -Filter *.msi | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            Write-Host "built $($msi.FullName) ($($msi.Length) bytes)"
+            New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\msi" | Out-Null
+            Copy-Item $msi.FullName "$env:RUNNER_TEMP\msi\KillerChicken9000-$n.msi"
           }
-          Get-ChildItem "$env:RUNNER_TEMP\msi-a" | Format-Table Name, Length
       - name: Sign the MSI
         if: env.SIGNING_PFX_BASE64 != ''
         shell: pwsh
-        run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\msi-a\KillerChicken9000.msi"
+        run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\msi\KillerChicken9000-A.msi"
       - name: Install, remove, refuse while locked
         shell: pwsh
-        run: pwsh windows/installer/test-msi.ps1 "$env:RUNNER_TEMP\msi-a\KillerChicken9000.msi" "$env:RUNNER_TEMP\msi-b\KillerChicken9000.msi"
+        run: pwsh windows/installer/test-msi.ps1 "$env:RUNNER_TEMP\msi\KillerChicken9000-A.msi" "$env:RUNNER_TEMP\msi\KillerChicken9000-B.msi"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: kc9k-msi
           path: |
-            ${{ runner.temp }}/msi-a/*.msi
+            ${{ runner.temp }}/msi/KillerChicken9000-A.msi
             ${{ runner.temp }}/msi-logs/
           if-no-files-found: ignore

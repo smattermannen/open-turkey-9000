@@ -46,6 +46,7 @@ decisions in §6 by date.
 | Hotkeys | §4.13 |
 | GUI rules | R-GUI-1–3 |
 | Decisions, open decisions | §6, §7 |
+| Android app: platform, words, functions, protection, GUI | §8, R-ANDROID-1–5 |
 
 ## 1. Vision
 
@@ -100,9 +101,9 @@ After the Android app: Windows support.
 7. Build only what improves the experience. Behaviour changes are settings,
    not new defaults.
 8. Platform: Linux Mint Cinnamon on X11. Extension in LibreWolf and Google
-   Chrome/Chromium. English only. Android companion runs the extension in
-   IronFox (`android/`); on hold until the Linux project is finished
-   (owner, 2026-11-16).
+   Chrome/Chromium. English only. The Android app (`android/`, §8) is
+   planned; built after the Linux project is finished (owner,
+   2026-11-16, 2026-11-21).
 9. Browsing stays fast; page judging runs in the background:
    - no single piece of work in a page over 16 ms;
    - a typical page with 1,000 rendered terms and 100 phrases judged in
@@ -702,6 +703,15 @@ Decisions not already written into §1–5:
 - 2026-11-21 (By Opus): Tamper protection settings that KC9K always enforced (close browsers if the extension stops, block inactive tabs, block embedded content) are on by default and can be turned off while nothing is locked; the new ones (close guest profiles, block the installer) are off by default (principle 7: behaviour changes are settings, not new defaults; principle 3: a new protection is chosen). Block the installer lets a newer version through, as §4.10 names only reinstalling, downgrading and removal.
 - 2026-11-21 (By Opus): Setting locks stack like a block's (§4.6) and their re-lock brings back the whole configuration: a setting lock is a lock in §3.4's sense, the owner's examples (two partners' passwords) fit settings as well, and one rule for both is simpler to learn. A lock option given twice in one command is two locks (it used to keep the last), so several locks of one kind need no second command. Settles ROADMAP §5 "setting locks stacking".
 - 2026-11-21 (By Opus): Extending a running freeze never switches it to allowed apps only (§4.8): from a text console during a lock-screen freeze, `kc9k freeze --mode apps` would otherwise open the desktop's programs again; the reverse (allowed apps only to lock screen) strengthens and stays free.
+- 2026-11-21: The Android app is planned (§8): every function but the
+  computer-only ones; GrapheneOS and the most common Android alike;
+  Compose with Material 3; a Kotlin rule-maker checked against cases
+  shared with Go (not Go compiled for Android); Device Owner required; an
+  optional accessibility layer, never the only protection; places also
+  as areas on the map; the built Nokia mode becomes an ordinary block
+  (All apps, the phone and SMS apps as app exceptions) automated by a
+  Home place, with monk mode for the network; no hotkeys; no sync with
+  the Linux app. Building waits until Linux is finished (owner).
 - 2026-11-21 (By Opus): The guided setup (§4.10) is a read-only checklist with each step's own command, no-escape last: the 2026-11-14 "no first-run wizard" decision rules out a wizard, and a checklist that shows what is left keeps the strictest setup deliberate (principle 3).
 
 - 2026-11-21 (By Opus): SafeSearch on the other search engines (§4.10) goes with Google's, Bing's or DuckDuckGo's: any one of them on keeps Brave, Yahoo and SearXNG strict and blocks the engines that can't be kept strict. Each of these engines is a way around whichever engine is kept strict, so a setting of their own could only open that hole; tying them to Google's alone would leave them open while only Bing's or DuckDuckGo's is on. YouTube Restricted Mode is about video, not search, so alone it blocks no search engine. The per-engine settings (2026-11-18) still let one of the three be lifted while another holds. Settles ROADMAP §5 "SafeSearch for the other engines".
@@ -709,4 +719,157 @@ Decisions not already written into §1–5:
 
 ## 7. Open decisions
 
-None.
+- **Android recovery** (principle 4, §8.7): which way out the user has
+  when a bug traps them on the phone, and what becomes of the built
+  "Lift everything".
+- **Factory reset protection with a trusted Google account** (§8.4):
+  offered on phones with Google's protection, or not (principle 6: the
+  account's address goes to Google's reset check).
+- **Signing the extension for Firefox** (§8.2): release Firefox installs
+  only add-ons Mozilla has signed; signing (unlisted) needs a Mozilla
+  account held by the owner, not by users.
+
+## 8. Android
+
+The Android app (owner, 2026-11-21): KC9K on a phone, with every function
+of §4 except those that only make sense on a computer (§8.6). Built after
+the Linux project is finished (principle 8). Words of §3 mean the same on
+Android unless this section says otherwise.
+
+### 8.1 Platform
+
+- Works excellently on GrapheneOS and on the most common Android (stock
+  Android on Pixel phones, Samsung's One UI), with or without Google Play
+  Services; tested on all three (R-ANDROID-1).
+- Kotlin. Jetpack Compose with Material 3 (AndroidX) allowed; no other
+  third-party libraries. Never needs Google Play Services or an account
+  (R-ANDROID-2).
+- **Device Owner** required: KC9K is made Device Owner once, at setup.
+- The rule-maker is the app's own command layer, in Kotlin, held to the
+  Linux behaviour by test cases shared with the Go code (as `match.js` is
+  shared) (R-ANDROID-3).
+- No sync: nothing is exchanged with the Linux app. A phone's projects
+  (backup, share, import, §3.13) are between phones.
+
+### 8.2 Words on Android
+
+| Term | Meaning | Not |
+|---|---|---|
+| **Device Owner** | Android's strongest app role, given once at setup (by `adb`, or a QR code on a freshly reset phone): lets KC9K suspend apps, restrict settings, keep its VPN on and refuse its own uninstall. | Device admin |
+| **App** (Android) | Matched by package name, app name, signing certificate (`cert:sha256:…`) or role (`role:dialer`, `role:sms`: the default phone and SMS apps). **All apps** (`*`) is every launchable app but the essentials (KC9K, launcher, system UI, emergency calls). | Window |
+| **App exception** | An app a block's All apps entry lets through; spares it from its own block only (as R-LIST-1). | Exception list |
+| **Area** | A circle on the map (centre, radius 50–2000 m). A **place** is Wi-Fi networks (§3.6) or an area: the phone is in an area when its location says so, and has left when its accuracy circle is fully outside for 10 minutes. | Wi-Fi place |
+| **Screen text entry** | Words matched against the text an app shows on screen (Shorts in the YouTube app); the phone's window title entry. Needs the accessibility layer. Never browsers (as R-TITLE-1). | Rendered term |
+| **Layer** (Android) | **VPN layer** (KC9K's own VPN filtering names: hosts and firewall), **app suspension**, **Device Owner restrictions**, and the optional **accessibility layer** (screen text entries). The extension works on top. | |
+| **Supported browser** (Android) | IronFox or Firefox with the extension. Other browsers (Chrome, Samsung Internet, Vanadium, …) are suspended while the extension is required. | |
+| **Block page** (Android) | Also shown when a blocked app is opened: full screen, with the motivational message. | |
+
+### 8.3 Functions on Android
+
+- **Blocks, lists, phrase sets, social media settings, exceptions, test
+  mode, presets, recording**: as §4.2–4.4, websites through the extension
+  and the VPN layer; apps as §8.2, with app exceptions.
+- **Locks**: every kind of §3.4, layered, re-lock, confirmation
+  (R-LOCK-12), setting locks, passwords. A restart lock is unlocked by a
+  later boot of the phone. The text lock's challenge is typed in KC9K's
+  own screen; only characters typed one by one count: a paste, swipe
+  typing, a suggestion or any other input of several characters at once
+  is refused (R-LOCK-5). Trusted time: automatic time is required and the
+  date, time and time zone can't be changed while anything is locked.
+- **Automation**: schedules, places (§8.2 Area), modes, breaks, Pomodoro,
+  allowance, reward, session limit, pause as §3.6. Autostart's
+  *sign-in/wake* is the phone starting or being unlocked.
+- **Use** (§3.7): the blocked item in front while the screen is on and
+  unlocked; sound playing counts where Android tells KC9K.
+- **Monk mode** (R-MONK-2 on a phone): the VPN layer drops all traffic
+  but KC9K's own local traffic, and Wi-Fi is off (on but unused while
+  places decide). Calls and SMS over the mobile network keep working.
+- **Frozen Chicken**: freeze modes *lock screen* and *allowed apps only*
+  (only the freeze's apps can be opened).
+- **Consequences**: close tab, close browser, lock screen, Mode action.
+- **Custom actions**: open sites, files, folders and apps; no commands.
+- **Bypass prevention**: as §3.10; detector `title` counts screen text
+  entries.
+- **Statistics**: as §4.9, apps from Android's usage records, sites from
+  the extension.
+- **Settings**: preferences (24-hour clock, first weekday, theme with
+  darkness slider), notifications, passwords, no weakening, browser
+  settings, DNS (the server the VPN layer asks), use counting, behaviour
+  setting `block-page-details`, global ladder, projects.
+- **Install**: an APK with KC9K's own updater; uninstalling refused while
+  anything is locked (Device Owner).
+
+### 8.4 Protection on Android
+
+- **Tamper protection** (§4.10), on a phone: close private windows and
+  guest profiles (here also: no other users, guests, work profiles or app
+  clones can be added, since an app's clone escapes its suspension);
+  close browsers if the extension stops; grace for a missing extension;
+  allow `file://` blocking; block unsupported browsers; block the
+  installer (no installs from unknown sources, no older KC9K); block
+  inactive tabs; block embedded content; block task managers becomes
+  *app controls* (KC9K can't be force-stopped, its data cleared or its
+  permissions taken); clock.
+- While the VPN layer is needed, KC9K's VPN is always on and traffic
+  can't go around it, and the VPN and Private DNS settings can't be
+  changed: that is the layer working, not a protection to choose.
+- **Strict mode** (§3.8) on a phone: on and something locked, the phone's
+  ways out are closed: safe mode, USB debugging, adding users, turning
+  location off, factory reset from Settings. Each can be left out
+  (leaving one out weakens); own setting lock.
+- **Factory reset protection**: a reset from Settings is closed by strict
+  mode; a reset from the phone's recovery can't be stopped by software
+  (§3.8). Open: §7.
+- **Guided setup** (§4.10): Device Owner, usage access, notifications,
+  the VPN layer, battery (never put to sleep), the extension in a
+  supported browser, the accessibility layer (optional; on Android 13+
+  an app not from a store first needs *Allow restricted settings*),
+  settings password, no weakening, tamper protection, strict mode and
+  its lock.
+- **Circadian rhythm**: one brightness clip (the phone has one
+  brightness), wallpapers (home and lock screen), dark mode, dark pages;
+  colour temperature where the phone allows it (Night Light, Eye comfort
+  shield). What a phone can't do is shown disabled, with the reason.
+
+### 8.5 GUI on a phone
+
+- R-GUI-1–3 hold; on Android R-GUI-3 follows the Material 3 guidelines in
+  place of GNOME's, with the same heuristics.
+- It looks and speaks like the Linux app: same page names and order, same
+  words, cards (12 dp corners, a thin outline), status pills (on green,
+  locked red, lifted blue, warning amber), theme with darkness slider down
+  to black; KC9K's own colours, not the wallpaper's.
+- Phone: a bottom bar with **Overview · Blocks · Statistics · More**;
+  *More* holds Schedules, Places, Presets, Circadian rhythm, Settings.
+  Wider screens: a rail with every page.
+- Overview: what is on, until when and how locked first (a countdown ring
+  for timer locks); Start, monk mode and Frozen Chicken one tap away.
+- Blocks: modes above blocks; a card on two lines (name and switch; then
+  *Continuous/Automated block*, breaks and lock state, each opening its
+  part). A block goes into a mode by long-press and drag, or *Move to
+  mode…*.
+- Block editor: tabs Websites · Apps · Breaks & allowance · Bypass
+  prevention; the draft's *Save edits* bar shows once something changed.
+  Lists full screen with the add field on top; long-press selects
+  several.
+- Automation: a week view like a calendar's (long-press and drag adds a
+  window, a tap edits it), and a list of windows for exact times.
+- Dialogs on a phone are bottom sheets; layered locks shown as a numbered
+  stack.
+
+### 8.6 Not on Android
+
+Hotkeys, hotkey presets and hotkey actions (owner, 2026-11-21); folder
+entries; scripts; affected users; logout and shutdown (freeze modes,
+consequences); commands in custom actions; no-escape; the firmware lock
+and installer media guard; behaviour setting `polite-close`; open at
+login and tray; window title entries (replaced by screen text entries);
+R-DESKTOP-1; projects exchanged with the Linux app.
+
+### 8.7 Rules
+
+- **R-ANDROID-1** Every function works on GrapheneOS and on the most common Android alike; what a phone can't offer is shown disabled with the reason, never silently missing.
+- **R-ANDROID-2** KC9K never needs Google Play Services or an account.
+- **R-ANDROID-3** The app's command layer makes every weakening decision (principle 10); the GUI, the extension and the guard service only run it or follow it. A refused weakening is logged (R-WEAK-3).
+- **R-ANDROID-4** The accessibility layer is never the only protection: everything but screen text entries works without it.
+- **R-ANDROID-5** The user is never trapped by a bug (principle 4): the recovery path is open (§7).

@@ -60,9 +60,11 @@ third-party libraries, no Play Services.
   (time, challenge 10–5000 chars at 98%, password, restart; strengthen
   only); `WebSettings` refuses loosening while locked or at home.
 
-Later: more triggers (BSSID places, schedules), rest of list features,
-other browsers, sync with `kc9k project export`, loosening delays; guard or
-remove "Lift everything".
+Planned (SPEC §8, owner 2026-11-21; items `N0`–`N8` in `ROADMAP.md`
+§3.1): every Linux function but the computer-only ones, on GrapheneOS and
+the most common Android alike; Compose with Material 3 allowed; Nokia mode
+becomes an ordinary block; no hotkeys, no sync with Linux. "Lift
+everything" waits for SPEC §7 (Android recovery).
 
 ## Build and provision
 

@@ -184,4 +184,17 @@ public class ParityTests
         gui.Invoke(gui.FindButton("Lock"));
         gui.WaitFor(() => gui.Ran("freeze", "schedule", "lock", "1", "--for", "120m", "--yes"), "kc9k freeze schedule lock 1 --for 120m --yes");
     }
+
+    // gui_automation: Disabled or Enabled by default runs 'kc9k automation'.
+    [Fact]
+    public void AutomationDefaultIsChosen()
+    {
+        using var gui = new GuiApp("automation-default");
+        gui.Page("blocks");
+        gui.Invoke("BlockAuto_Evening");
+        gui.Invoke("block_default_enabled");
+        gui.WaitFor(() => gui.Ran("automation", "Evening", "default", "enabled"), "kc9k automation Evening default enabled");
+        gui.Invoke("block_default_disabled");
+        gui.WaitFor(() => gui.Ran("automation", "Evening", "default", "disabled"), "kc9k automation Evening default disabled");
+    }
 }

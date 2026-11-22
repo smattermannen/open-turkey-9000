@@ -1808,6 +1808,26 @@ Core's features:
   (one-click browser install: W30's Install already shows its result);
   none built on `main` yet.
 
+What only the owner, a VM or the laptop can show (GUI session, 2026-11-22;
+everything else in W4, W7 and W30–W49 is checked on `windows-latest`):
+
+- **Owner**: a code-signing certificate (secrets `SIGNING_PFX_BASE64`,
+  `SIGNING_PFX_PASSWORD`, or Azure Artifact Signing's steps in place of
+  `sign.ps1`); the first release tag (`v0.1.0`); the Chrome Web Store
+  listing's ID (W2), after which Chrome and Edge count as supported (W30's
+  wording goes by itself).
+- **A person on a real desktop** (win-vm or laptop): Narrator reading the
+  pages, the lock dialogs and the charts; display scaling at 150–200 % and a
+  second screen (W33, W37: text scale and high contrast are only
+  screenshots); drag and drop (block onto mode, calendar, clips, wallpaper
+  bars); file dialogs; the tray icon's menu (W35) and the jump list (W36)
+  opened by hand; Open at sign-in; installing and removing from Apps &
+  features (W41 drives the MSI's own dialogs, not Settings); the text lock's
+  challenge window opened from the GUI (W3).
+- **Laptop only**: the firmware lock's status on real firmware (W39 shows
+  what `firmware-lock --json` says), the Night light note with Night light
+  on (W6).
+
 ### 4.2 Windows Core: parity audit 2026-11-22 (By Opus)
 
 Each Linux-only file (`//go:build linux`), command and setting compared

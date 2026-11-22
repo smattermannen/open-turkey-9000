@@ -1785,7 +1785,7 @@ Installer and release (W7):
   the lock stays), an older one refused while locked with block the
   installer on, a repair refused likewise, and removal through the MSI's
   own full UI driven by UI Automation. Built 2026-11-22 (`test-msi.ps1
-  -Older -Newer`, `msi-ui.ps1`; install and removal through the full UI
+  -Older -Newer`, `MsiUi`; install and removal through the full UI
   too). Apps & features by a person: Needs win-vm.
 - [x] `W42` Signing that switches on (S; §6 2026-11-21 later). A CI job
   signs with a throwaway self-signed certificate and checks each file

@@ -114,6 +114,8 @@ jobs:
           dotnet publish windows/gui/Kc9k.Gui -c Release -r win-x64 -o "$env:RUNNER_TEMP\gui"
           dotnet build windows/installer/Actions -c Release -o "$env:RUNNER_TEMP\actions"
           Get-ChildItem "$env:RUNNER_TEMP\actions" -Filter *.CA.dll | Format-Table Name, Length
+          dotnet publish windows/installer/MsiUi -c Release -r win-x64 --self-contained false -o "$env:RUNNER_TEMP\msiui"
+          "KC9K_MSIUI=$env:RUNNER_TEMP\msiui\MsiUi.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
       # Code signing (SPEC §6 2026-11-21 later): with the owner's certificate
       # configured (secrets SIGNING_PFX_BASE64 and SIGNING_PFX_PASSWORD), the
       # programs and the MSI are signed; without it the build is unsigned.

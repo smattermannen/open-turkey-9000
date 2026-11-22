@@ -7,7 +7,7 @@
 #    and everything stays.
 # 4. "Block the installer" on while locked: B (a reinstall) is refused.
 # W41, with -Older (0.0.9) and -Newer (0.2.0, its kc9k.exe says so):
-# 1 and 2 run through the MSI's full UI (msi-ui.ps1 answers the dialogs
+# 1 and 2 run through the MSI's full UI (MsiUi.exe, KC9K_MSIUI, answers the dialogs
 # as a person would); then, still locked with block the installer on:
 # 5. the older version is refused; 6. a repair is refused; 7. the newer
 # version installs, and the block stays locked; 8. removal through the
@@ -28,7 +28,8 @@ $logs = Join-Path $env:RUNNER_TEMP "msi-logs"
 New-Item -ItemType Directory -Force $logs | Out-Null
 
 function MsiUi($arguments, $name) {
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "msi-ui.ps1") -Arguments $arguments -Log "$logs\$name.log" -Transcript "$logs\$name-dialogs.txt" | Out-Host
+    # MsiUi.exe (FlaUI) answers the MSI's own dialogs as a person would.
+    & $env:KC9K_MSIUI $arguments "$logs\$name.log" "$logs\$name-dialogs.txt" 300 | Out-Host
     return $LASTEXITCODE
 }
 function Locked($name) {

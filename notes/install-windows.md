@@ -1,6 +1,6 @@
 # Install on Windows (the MSI)
 
-- Covers: `windows/installer/` (`Package.wxs`, `Kc9k.Installer.wixproj`, `Actions/` custom actions, `License.rtf`, `test-msi.ps1`, `msi-ui.ps1`, `sign.ps1`), the `installer` job of `.github/workflows/windows-gui.yml`, `.github/workflows/windows-release.yml`, `cli/version.go`
+- Covers: `windows/installer/` (`Package.wxs`, `Kc9k.Installer.wixproj`, `Actions/` custom actions, `License.rtf`, `test-msi.ps1`, `MsiUi/` (FlaUI console tool), `sign.ps1`), the `installer` job of `.github/workflows/windows-gui.yml`, `.github/workflows/windows-release.yml`, `cli/version.go`
 - SPEC: §4.11, R-LOCK-9, §4.10 (block the installer), §6 2026-11-21 (signing)
 - Connects to: [windows](windows.md) (Core: `kc9k install`/`uninstall`, the service), [install](install.md) (Linux's guards), [gui-windows](gui-windows.md)
 
@@ -56,8 +56,8 @@
   publishing.
 - CI checks (W41, `test-msi.ps1 -A -B -Older -Newer`; the `installer` job
   builds 0.1.0 twice, 0.0.9 and 0.2.0, each with its own kc9k.exe):
-  install and removal through the full UI (`msi-ui.ps1`: Windows
-  PowerShell's UI Automation ticks the licence box and presses Install,
+  install and removal through the full UI (`MsiUi/`, a FlaUI console tool:
+  it ticks the licence box and presses Install,
   Yes, Next, Finish, OK or Close, and keeps each dialog's text), removal
   refused while locked, then with block the installer on and a block
   locked: a reinstall, an older version and a repair refused, a newer

@@ -13,8 +13,7 @@ package blocker
 //     Services key tree is denied like KC9K's own (lockdownTargets); Task
 //     Scheduler's root folder refuses them registering tasks, and tasks
 //     made meanwhile to run as SYSTEM or a service account are deleted and
-//     counted; WMI's subscription namespace refuses them writing, and
-//     event consumers made meanwhile are deleted and counted; Windows
+//     counted; WMI event consumers made meanwhile are deleted and counted; Windows
 //     Installer is off (DisableMSI 2: strict mode is Linux's "no sudo
 //     apt").
 //   - W21: the privileges that pass by deny entries or reach SYSTEM
@@ -203,7 +202,7 @@ func applyStrictExtras() []string {
 			if _, err := os.Stat(strictStatePath); err != nil {
 				return // strict mode ended meanwhile
 			}
-			_ = os.WriteFile(strictHeavyPath, []byte("strict mode's services, Task Scheduler and WMI protection may be on\n"), 0o600)
+			_ = os.WriteFile(strictHeavyPath, []byte("v2: strict mode's services and Task Scheduler protection may be on\n"), 0o600)
 			got := strictHeavy(since, consumers, first)
 			fixedMu.Lock()
 			heavyFixed = append(heavyFixed, got...)
@@ -264,8 +263,6 @@ func strictHeavy(since int64, consumers []string, first bool) []string {
 		if !psDue {
 			return
 		}
-		changed, err := denyWMI(true)
-		note("strict mode's protection of WMI subscriptions", changed, err)
 		if now, err := wmiConsumers(); err == nil {
 			for _, c := range newItems(consumers, now) {
 				if err := deleteWMIConsumer(c); err != nil {
@@ -348,8 +345,10 @@ func undoHeavy() error {
 	if _, err := denyTaskFolder(false); err != nil {
 		return err
 	}
-	if _, err := denyWMI(false); err != nil {
-		return err
+	// The first build denied WMI's namespace too: take that out where it
+	// may be (once; it is slow).
+	if data, _ := os.ReadFile(strictHeavyPath); !strings.Contains(string(data), "v2") {
+		_, _ = denyWMI(false)
 	}
 	return os.Remove(strictHeavyPath)
 }

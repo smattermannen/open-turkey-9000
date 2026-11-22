@@ -1985,7 +1985,9 @@ their sites; their pages are an app's, not a browser's).
   vendors' tools (Dell Command | Configure, HP BCU) are not needed.
   Pure parts (reading each vendor's answer) tested on Linux. Needs: laptop
   (which vendor), owner.
-- [x] `W20` Strict mode: Windows' ways to SYSTEM (M). Built (2026-11-22):
+- [x] `W20` Strict mode: Windows' ways to SYSTEM (M). Built (2026-11-22;
+  WMI: new event consumers deleted, the namespace not denied (By Opus):
+  its security couldn't be set on GitHub's runner):
   `strict_windows.go`; checked by `ci/windows_service_test.ps1` on
   `windows-latest` (each refused for real during a lock, and allowed
   again after). Was planned: Principle 3 (strict

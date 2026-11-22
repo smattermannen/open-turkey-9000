@@ -381,8 +381,10 @@
   root folder denies `0xd0116` (registering tasks); task files written
   since the start that run as SYSTEM or a service account, outside
   `\Microsoft\Windows\` and `\KC9K\`, are deleted (`schtasks /Delete`);
-  `root\subscription` (`Invoke-CimMethod … GetSD/SetSD`) denies `0xc001c` (writes) and event consumers made
-  since the start are deleted with their bindings. The `Services` key
+  WMI event consumers made since the start (`root\subscription`, listed
+  every 5 minutes) are deleted with their bindings (denying the namespace
+  itself failed on GitHub's runner, "Invalid parameter", and was dropped:
+  a first build's entry is taken out once, marker without "v2"). The `Services` key
   tree is a lockdown target (deny entries inherited by every service's
   key). Each put back or deleted is counted as tamper. Virtual machines
   (W24, every cycle, `closeVirtualMachines`): people's VM, WSL, Sandbox,

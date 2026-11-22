@@ -206,6 +206,6 @@ if (Test-Path $k) { Get-ChildItem -Recurse (Split-Path $k) | Select-Object FullN
 Check 'the program is gone' { -not (Test-Path $k) }
 Check 'the data stays' { Test-Path $data }
 
-if (Test-Path (Join-Path $data 'kc9k.log')) { Write-Host '--- service log (as SYSTEM: not readable here)' }
+if (Test-Path (Join-Path $data 'kc9k.log') -ErrorAction SilentlyContinue) { Write-Host '--- service log (as SYSTEM: not readable here)' }
 if ($failures -gt 0) { Write-Host "$failures check(s) failed"; exit 1 }
 Write-Host 'all checks passed'

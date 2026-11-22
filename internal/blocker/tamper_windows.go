@@ -148,8 +148,18 @@ func GuardService() []string {
 	}
 	// The task's file is checked each cycle (no process); schtasks runs at
 	// most once a minute (W50 audit).
-	if !taskFileExists(watchdogTask) && minuteDue("watchdog") && !taskExists(watchdogTask) {
-		note("the watchdog task", createWatchdogTask(exe))
+	// A task deleted by hand is put back at once (its file is gone); only
+	// when schtasks finds it anyway, or creating it failed, is schtasks
+	// held off for a minute.
+	if !taskFileExists(watchdogTask) && !minuteHeld("watchdog") {
+		if taskExists(watchdogTask) {
+			holdMinute("watchdog")
+		} else if err := createWatchdogTask(exe); err != nil {
+			holdMinute("watchdog")
+			note("the watchdog task", err)
+		} else {
+			note("the watchdog task", nil)
+		}
 	}
 	for path, sddl := range map[string]string{platform.DataDir: dataSDDL, platform.InstallDir: programSDDL} {
 		if cur, err := pathSecurity(path, false); err == nil && !sameSecurity(cur, sddl) && !lockdownActive() {
@@ -538,16 +548,20 @@ func taskFileExists(name string) bool {
 	return err == nil
 }
 
-// minuteDue reports whether what is named may run again: at most once a
-// minute (process starts the service cycle reaches; W50 audit).
-func minuteDue(what string) bool {
+// minuteHeld reports whether what is named is held off: a process start
+// the service cycle reaches that just failed or found nothing to do runs
+// again at most once a minute (W50 audit); holdMinute holds it.
+func minuteHeld(what string) bool {
 	minuteDueAt.Lock()
 	defer minuteDueAt.Unlock()
-	if t, ok := minuteDueAt.m[what]; ok && time.Since(t) < time.Minute {
-		return false
-	}
+	t, ok := minuteDueAt.m[what]
+	return ok && time.Since(t) < time.Minute
+}
+
+func holdMinute(what string) {
+	minuteDueAt.Lock()
+	defer minuteDueAt.Unlock()
 	minuteDueAt.m[what] = time.Now()
-	return true
 }
 
 var minuteDueAt = struct {

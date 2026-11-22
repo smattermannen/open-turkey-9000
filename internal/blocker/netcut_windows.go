@@ -6,11 +6,13 @@ package blocker
 // (firewall_windows.go) holds whatever this does.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/winapi"
 	"golang.org/x/sys/windows"
@@ -44,7 +46,9 @@ var netAdapters = func() ([]netAdapter, error) {
 
 func powershell(script string) ([]byte, error) {
 	ps := filepath.Join(systemRoot(), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-	return exec.Command(ps, "-NoProfile", "-NonInteractive", "-Command", script).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-Command", script).Output()
 }
 
 func isWifi(a netAdapter) bool {

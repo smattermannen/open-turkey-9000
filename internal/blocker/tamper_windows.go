@@ -414,8 +414,13 @@ func ApplyLockdown(user string) error {
 func RemoveLockdown() error {
 	lockdownMu.Lock()
 	defer lockdownMu.Unlock()
-	// Strict mode's extras are put back on their own: one that can't be
-	// (logged, tried again next cycle) never keeps the deny entries on.
+	// Software Restriction Policies go first (what follows runs
+	// PowerShell); then strict mode's extras, on their own: one that can't
+	// be put back (logged, tried again next cycle) never keeps the deny
+	// entries on.
+	if err := removeSRP(); err != nil {
+		log.Printf("strict: software restriction policies: %v", err)
+	}
 	_ = removeStrictExtras()
 	data, err := os.ReadFile(lockdownPath)
 	if os.IsNotExist(err) {

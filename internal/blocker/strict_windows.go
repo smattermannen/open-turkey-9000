@@ -36,6 +36,7 @@ package blocker
 // ProgramData\kc9k\strict-extras.json.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -369,7 +370,9 @@ func denyServices(on bool) (int, error) {
 // powershellIn runs a PowerShell script with stdin; a variable for tests.
 var powershellIn = func(script string, stdin string) ([]byte, error) {
 	ps := filepath.Join(systemRoot(), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-	cmd := exec.Command(ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script)
 	cmd.Stdin = strings.NewReader(stdin)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

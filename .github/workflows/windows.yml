@@ -50,10 +50,14 @@ jobs:
         shell: pwsh
         run: |
           $log = Join-Path $env:ProgramData 'kc9k\kc9k.log'
-          if (Test-Path $log -ErrorAction SilentlyContinue) {
-            takeown /f $log | Out-Null; icacls $log /grant "$($env:USERNAME):R" | Out-Null
-            Get-Content $log -Tail 200
-          }
+          # Copied by a SYSTEM task: strict mode took this account's
+          # take-ownership privilege for the rest of the job.
+          $copy = Join-Path $env:RUNNER_TEMP 'kc9k.log'
+          schtasks.exe /Create /TN kc9klog /RU SYSTEM /SC ONCE /ST 23:59 /F /TR "cmd /c copy /y $log $copy && icacls $copy /grant Everyone:R" | Out-Null
+          schtasks.exe /Run /TN kc9klog | Out-Null
+          Start-Sleep -Seconds 5
+          if (Test-Path $copy) { Get-Content $copy -Tail 300 }
+          schtasks.exe /Delete /TN kc9klog /F | Out-Null
       - uses: actions/upload-artifact@v4
         if: always()
         with:

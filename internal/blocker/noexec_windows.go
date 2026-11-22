@@ -5,8 +5,9 @@ package blocker
 // registry only, so Windows Home has them (AppLocker is Pro-only). While
 // strict mode holds, programs may not start from where downloaded and
 // portable programs land, as userProgram tells them: each profile's own
-// folders but AppData (its temporary folder included), the Public profile,
-// Windows' temporary folder and removable drives; exempt folders may.
+// folders but AppData (its temporary folder included), the Public profile
+// and removable drives; exempt folders may. Windows' own Temp stays open:
+// SYSTEM's programs (KC9K's PowerShell too) use it.
 // Rules apply to every user, administrators included. KC9K's rules are
 // told by their key names ({4B43394B-…}); SRP set up by someone else keeps
 // its own default level and rules. CloseNoexecPrograms still closes what
@@ -62,13 +63,12 @@ var srpRules = func(exempt []string) []srpRule {
 				srpRule{filepath.Join(profile, "AppData", "Local", "Temp"), saferDisallow})
 		}
 	}
-	out = append(out, srpRule{filepath.Join(systemRoot(), "Temp"), saferDisallow})
 	for _, drive := range removableDrives() {
 		out = append(out, srpRule{drive, saferDisallow})
 	}
 	for _, e := range exempt {
 		if e != "" {
-			out = append(out, srpRule{filepath.Clean(e), saferAllow})
+			out = append(out, srpRule{longPath(filepath.Clean(e)), saferAllow})
 		}
 	}
 	return out
@@ -131,6 +131,12 @@ func applySRP(exempt []string) error {
 	for _, r := range srpRules(exempt) {
 		want[srpRuleName(r)] = r
 	}
+	changed := false
+	defer func() {
+		if changed {
+			refreshPolicy()
+		}
+	}()
 	have := map[string]string{} // name -> level
 	for _, level := range []string{saferDisallow, saferAllow} {
 		for _, name := range srpOurRules(level) {
@@ -139,6 +145,7 @@ func applySRP(exempt []string) error {
 	}
 	for name, level := range have {
 		if r, ok := want[name]; !ok || r.Level != level {
+			changed = true
 			if err := registry.DeleteKey(registry.LOCAL_MACHINE, saferCodeIDs+`\`+level+`\Paths\`+name); err != nil {
 				return err
 			}
@@ -154,6 +161,7 @@ func applySRP(exempt []string) error {
 			continue
 		}
 		r := want[name]
+		changed = true
 		k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, saferCodeIDs+`\`+r.Level+`\Paths\`+name, registry.ALL_ACCESS)
 		if err != nil {
 			return fmt.Errorf("SRP rule %s: %w", r.Path, err)
@@ -196,6 +204,7 @@ func removeSRP() error {
 	if !platform.Privileged() {
 		return nil
 	}
+	defer refreshPolicy()
 	for _, level := range []string{saferDisallow, saferAllow} {
 		for _, name := range srpOurRules(level) {
 			if err := registry.DeleteKey(registry.LOCAL_MACHINE, saferCodeIDs+`\`+level+`\Paths\`+name); err != nil {
@@ -210,4 +219,28 @@ func removeSRP() error {
 		return err
 	}
 	return os.Remove(srpMadePath)
+}
+
+// longPath is path with 8.3 short names (RUNNER~1) spelled out: SRP
+// matches the long form.
+func longPath(path string) string {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return path
+	}
+	buf := make([]uint16, windows.MAX_LONG_PATH)
+	n, err := windows.GetLongPathName(p, &buf[0], uint32(len(buf)))
+	if err != nil || n == 0 || int(n) > len(buf) {
+		return path
+	}
+	return windows.UTF16ToString(buf[:n])
+}
+
+var procRefreshPolicyEx = windows.NewLazySystemDLL("userenv.dll").NewProc("RefreshPolicyEx")
+
+// refreshPolicy tells running programs that policy changed, so they read
+// the SRP rules again (each process keeps what it read).
+func refreshPolicy() {
+	const rpForce = 1
+	procRefreshPolicyEx.Call(1, rpForce)
 }

@@ -329,11 +329,16 @@
   path rules (registry only, so Home has them; every user,
   administrators included): each profile disallowed, its AppData allowed
   but `AppData\Local\Temp` disallowed, the Public profile, Windows' Temp,
-  removable drives, and exempt folders allowed; rules synced each cycle
+  removable drives (not Windows' Temp: SYSTEM's programs use it), and
+  exempt folders allowed (long paths: SRP doesn't match 8.3 names); rules
+  synced each cycle, running programs told to read them again
+  (`RefreshPolicyEx`),
   under keys named `{4B43394B-…}`; the Safer key is made (DefaultLevel
   unrestricted, DLLs left out) only if absent, noted in
   ProgramData\kc9k\srp-made, and is a lockdown target. `RemoveNoexec`
-  removes KC9K's rules, and the key if KC9K made it.
+  removes KC9K's rules, and the key if KC9K made it; `RemoveLockdown` does
+  it first, since putting the rest back runs PowerShell. Every PowerShell
+  the service runs has a time limit (90 s; the firmware's 5 min).
 - Strict mode's ways to SYSTEM (W20–W22, `strict_windows.go`;
   `applyStrictExtras` from `ApplyLockdown`, `removeStrictExtras` first in
   `RemoveLockdown`, whose failure is logged and retried but never keeps

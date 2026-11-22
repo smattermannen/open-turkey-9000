@@ -141,6 +141,8 @@ $taskRefused = $LASTEXITCODE -ne 0
 try { Set-WmiInstance -Namespace root/subscription -Class CommandLineEventConsumer -Arguments @{ Name = 'kc9kci'; CommandLineTemplate = 'cmd /c exit' } -ErrorAction Stop | Out-Null; $wmiRefused = $false } catch { Write-Host "  $_"; $wmiRefused = $true }
 Start-Sleep -Seconds 40
 Check 'strict mode: a virtual machine program is closed' { $vm.HasExited }
+Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers\0\Paths', 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers\262144\Paths' -ErrorAction SilentlyContinue |
+    ForEach-Object { Write-Host "  SRP $(Split-Path (Split-Path $_.PSParentPath) -Leaf): $((Get-ItemProperty $_.PSPath).ItemData)" }
 New-Item -ItemType Directory -Force "$env:USERPROFILE\Downloads" | Out-Null
 Copy-Item "$env:SystemRoot\System32\PING.EXE" "$env:USERPROFILE\Downloads\kc9kping.exe" -Force
 $started = $true

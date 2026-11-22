@@ -83,7 +83,23 @@ public sealed class GuiApp : IDisposable
 
     /// <summary>Presses a button (or opens a drop-down) through UI Automation,
     /// wherever it is on the page: no pointer, no scrolling.</summary>
-    public void Invoke(string id) => Invoke(Find(id));
+    public void Invoke(string id)
+    {
+        // An element found while its page is still being shown can go stale
+        // (UIA_E_ELEMENTNOTAVAILABLE): find it again and press it again.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Invoke(Find(id));
+                return;
+            }
+            catch (Exception e) when (attempt < 3 && e is System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException)
+            {
+                Thread.Sleep(500);
+            }
+        }
+    }
 
     public void Invoke(AutomationElement e)
     {

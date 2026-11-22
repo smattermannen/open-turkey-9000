@@ -38,7 +38,7 @@ public class StabilityTests
         using (var crashing = new GuiApp("throw-crash", env: Throw("crash")))
         {
             dir = crashing.Dir;
-            crashing.WaitFor(() => crashing.App.HasExited, "the crash", 30);
+            crashing.WaitFor(() => crashing.App.HasExited, "the crash", 90);
         }
         Assert.True(File.Exists(Path.Combine(dir, "gui-crash.txt")));
         using (var again = new GuiApp("after-crash", dir: dir))

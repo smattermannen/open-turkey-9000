@@ -114,20 +114,42 @@ public class GeometryTests(ITestOutputHelper output)
 
     static int? TitleLeft(GuiApp gui) => gui.ById("PageTitle") is { } t && Shown(t, out var r) ? r.Left : null;
 
-    /// <summary>A block row: its switch and its locks at the right edge, in one column.</summary>
+    /// <summary>A block row: its switch and its locks at the right edge, in one
+    /// column. Each row is scrolled into view first (large text puts the
+    /// blocks below the modes, out of the window).</summary>
     static List<string> RowProblems(GuiApp gui, Probe probe, string where)
     {
         var problems = new List<string>();
         var tol = (int)Math.Ceiling(12 * probe.Scale);
         var rights = new List<int>();
-        foreach (var sw in gui.Window.FindAllDescendants(c => c.ByControlType(ControlType.Button).Or(c.ByControlType(ControlType.CheckBox))))
+        var names = new List<string>();
+        foreach (var e in gui.Window.FindAllDescendants())
         {
-            string id;
-            try { id = sw.Properties.AutomationId.ValueOrDefault ?? ""; } catch (Exception) { continue; }
-            if (!id.StartsWith("BlockSwitch_")) continue;
-            var name = id["BlockSwitch_".Length..];
+            try
+            {
+                var id = e.Properties.AutomationId.ValueOrDefault ?? "";
+                if (id.StartsWith("BlockSwitch_")) names.Add(id["BlockSwitch_".Length..]);
+            }
+            catch (Exception) { }
+        }
+        foreach (var name in names.Distinct())
+        {
+            var sw = gui.ById("BlockSwitch_" + name);
+            if (sw is null) continue;
+            try
+            {
+                if (sw.Patterns.ScrollItem.IsSupported) sw.Patterns.ScrollItem.Pattern.ScrollIntoView();
+                else gui.ById("BlockCard_" + name)?.Focus();
+            }
+            catch (Exception) { }
+            Thread.Sleep(300);
+            sw = gui.ById("BlockSwitch_" + name);
             var locks = gui.ById("BlockLocks_" + name);
-            if (!Shown(sw, out var s) || locks is null || !Shown(locks, out var l)) continue;
+            if (sw is null || locks is null || !Shown(sw, out var s) || !Shown(locks, out var l))
+            {
+                problems.Add($"{where}: {name}'s switch or locks not shown after scrolling to it");
+                continue;
+            }
             if (Math.Abs(s.Right - l.Right) > tol)
                 problems.Add($"{where}: {name}'s switch ends at {s.Right}, its locks at {l.Right}: not one right column");
             var title = gui.ById("BlockCard_" + name);
@@ -135,10 +157,33 @@ public class GeometryTests(ITestOutputHelper output)
                 problems.Add($"{where}: {name}'s switch is not right of its name");
             rights.Add(s.Right);
         }
-        if (rights.Count == 0) problems.Add($"{where}: no block row with a switch and its locks");
-        else if (rights.Max() - rights.Min() > tol) problems.Add($"{where}: the switches end at {string.Join(", ", rights)}: not one column");
+        if (names.Count == 0) problems.Add($"{where}: no block row with a switch");
+        else if (rights.Count > 0 && rights.Max() - rights.Min() > tol) problems.Add($"{where}: the switches end at {string.Join(", ", rights)}: not one column");
         return problems;
     }
+
+    /// <summary>Waits until the page stops changing (the same places for 300 ms).</summary>
+    static void WaitIdle(GuiApp gui, params string[] ids)
+    {
+        string Sig() => string.Join(";", ids.Select(id =>
+        {
+            try { return gui.ById(id)?.BoundingRectangle.ToString() ?? "-"; } catch (Exception) { return "?"; }
+        }));
+        var last = Sig();
+        var since = DateTime.Now;
+        var end = DateTime.Now.AddSeconds(5);
+        while (DateTime.Now < end)
+        {
+            Thread.Sleep(100);
+            var now = Sig();
+            if (now != last) { last = now; since = DateTime.Now; }
+            else if ((DateTime.Now - since).TotalMilliseconds >= 300) return;
+        }
+    }
+
+    static bool Retry(Func<bool> ok, int seconds = 8) =>
+        FlaUI.Core.Tools.Retry.WhileFalse(() => { try { return ok(); } catch (Exception) { return false; } },
+            TimeSpan.FromSeconds(seconds), TimeSpan.FromMilliseconds(200)).Result;
 
     static void SetTextScale(int percent)
     {
@@ -176,7 +221,15 @@ public class GeometryTests(ITestOutputHelper output)
                     if (page == "blocks") problems.AddRange(RowProblems(gui, probe, $"{at}, blocks"));
                 }
                 gui.Page("blocks");
-                gui.Invoke("BlockCard_Reading");
+                WaitIdle(gui, "BlockCard_Reading", "PageTitle");
+                gui.Invoke(gui.Find("BlockCard_Reading")); // once: a card must take a press right after the page shows
+                if (!Retry(() => gui.ById("Tab_websites") is not null))
+                {
+                    problems.Add($"{at}: the block's tabs are not shown (page title: {gui.ById("PageTitle")?.Name})");
+                    gui.Shot($"{asked}-{textScale}-no-tabs");
+                    gui.Page("blocks");
+                    continue;
+                }
                 foreach (var tab in Tabs)
                 {
                     gui.Invoke("Tab_" + tab);

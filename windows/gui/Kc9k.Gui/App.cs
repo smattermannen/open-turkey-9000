@@ -66,8 +66,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
         else Window.StartInTray();
         if (StartAsked.Any) _ = Window.Perform(StartAsked);
         if (CrashNote.Take() is { } crashed)
-            Window.Controller.ShowError($"Killer Chicken 9000 closed unexpectedly at {crashed:g}. The details are in {Log.FilePath}.",
-                "Closed unexpectedly");
+            Window.WhenShown(() => Window.Controller.ShowError(
+                $"Killer Chicken 9000 closed unexpectedly at {crashed:g}. The details are in {Log.FilePath}.", "Closed unexpectedly"));
         TestHook.Arm(Window);
         _ = Task.Run(JumpList.Write);
     }
@@ -126,8 +126,8 @@ public static class CrashNote
 }
 
 /// <summary>Test-only (W52): KC9K_GUI_TEST_THROW makes the window fail on
-/// purpose once the first state is shown: "window" throws twice on the UI
-/// thread (one dialog), "task" leaves a failed task unobserved, "crash"
+/// purpose once the first state is shown: "window" throws in two ticks of
+/// a XAML timer (one dialog), "task" leaves a failed task unobserved, "crash"
 /// throws on another thread (the process ends). Unset, nothing happens.</summary>
 public static class TestHook
 {
@@ -135,25 +135,33 @@ public static class TestHook
     {
         var what = Environment.GetEnvironmentVariable("KC9K_GUI_TEST_THROW");
         if (string.IsNullOrEmpty(what)) return;
-        var timer = window.DispatcherQueue.CreateTimer();
-        timer.Interval = TimeSpan.FromSeconds(5);
-        timer.IsRepeating = false;
+        // A XAML timer: the framework keeps it while it runs (a DispatcherQueueTimer
+        // nobody holds is collected and never fires), and an exception in its Tick
+        // reaches Application.UnhandledException as one from a real handler would.
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        var ticks = 0;
         timer.Tick += (_, _) =>
         {
+            ticks++;
             switch (what)
             {
                 case "window":
-                    for (var i = 0; i < 2; i++)
-                        window.DispatcherQueue.TryEnqueue(() => throw new InvalidOperationException("test hook"));
-                    break;
+                    if (ticks >= 2) timer.Stop();
+                    else timer.Interval = TimeSpan.FromMilliseconds(300); // the second while the first is shown
+                    throw new InvalidOperationException("test hook");
                 case "task":
+                    timer.Stop();
                     _ = Task.Run(() => throw new InvalidOperationException("test hook"));
                     Thread.Sleep(200);
                     GC.Collect();
                     GC.WaitForPendingFinalizers();
                     break;
                 case "crash":
+                    timer.Stop();
                     new Thread(() => throw new InvalidOperationException("test hook")).Start();
+                    break;
+                default:
+                    timer.Stop();
                     break;
             }
         };

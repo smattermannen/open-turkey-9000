@@ -58,7 +58,7 @@
   access area is closed (§3.11). `OverviewPage` (§4.1); `BlocksPage`
   (§4.2: mode and block cards, drag a block card onto a mode card, or its
   context menu, Shift+F10), with three views: `BlockView` (§4.3: the head
-  stays put, `SelectorBar` tabs Websites, Apps, Breaks & allowance, Bypass
+  stays put, tab buttons (toggle buttons that wrap) Websites, Apps, Breaks & allowance, Bypass
   prevention scroll; Start applies at once, once on it is Add locks…;
   Unlock…, Extend timer…, ⋯ rename, duplicate, block preset, users,
   delete), `AutomationView` (§4.5: `AutomationEditor` kind block, schedule
@@ -144,6 +144,10 @@
   UI Automation, screenshots and moves are in physical pixels as gui.json
   is. High contrast reads the person's flags and scheme first and puts
   them back exactly; the name check skips a scroll bar's own parts.
+  `GuiApp.Invoke(id)` finds and presses again (up to 3 times) when the
+  element went stale while its page was being shown. The geometry test
+  scrolls each block row into view before measuring it and presses a
+  card once, after the page is idle (300 ms without layout changes).
   *(By claude)*
 
 ## Built behaviour
@@ -158,8 +162,9 @@ Not fixed by `SPEC.md`; the code is the truth.
   `Controller.ShowError` drops a dialog whose title and text are already
   shown or waiting. `MainWindow.Apply` and the statistics update only the
   page shown; `Show` updates a page when it is shown. Test-only hook:
-  `KC9K_GUI_TEST_THROW` = `window`/`task`/`crash` (`TestHook`,
-  `StabilityTests.cs`). *(By claude)*
+  `KC9K_GUI_TEST_THROW` = `window`/`task`/`crash` (`TestHook`, on a XAML
+  `DispatcherTimer`: a `DispatcherQueueTimer` nobody holds is collected
+  and never fires; `StabilityTests.cs`). *(By claude)*
 - Page layout (W54, as the GTK builders): a page fills the width beside
   the sidebar (`Ui.Page`, `BlockView`: no maximum width; margins 32 DIP,
   16 below 600). `SidePanel` (`Ui.Side`, `Ui.SettingRow`) puts a row's
@@ -169,7 +174,14 @@ Not fixed by `SPEC.md`; the code is the truth.
   pill, Continuous/Automated and its breaks on the left; on/off with its
   switch above its lock link on the right (`RightColumn`). Titles, button
   rows and filters are `WrapPanel`s, never horizontal `StackPanel`s that
-  run past the right edge. The Overview has no "Get started" card (owner
+  run past the right edge. An opened block's head (back to the Start/Stop
+  row) takes at most half the height and scrolls by itself beyond that;
+  its tabs sit under it, always shown, as toggle buttons that wrap onto
+  more lines when narrow (a `SelectorBar` scrolled sideways and left
+  tabs unrealized). The crash note waits for the window's content to
+  load (`MainWindow.WhenShown`). The Blocks page keeps each card while
+  what it shows is the same (`cardCache`): a state read never replaces a
+  card under a click. *(By claude)* The Overview has no "Get started" card (owner
   2026-11-22; W38's first view is gone). Settings › Project's Import
   project… calls `Files.ImportProject`. *(By claude)*
 - Sidebar (W53, `MainWindow.PinSidebar`): pinned open at 220 DIP like

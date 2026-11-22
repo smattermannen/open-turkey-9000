@@ -8,6 +8,7 @@ using Kc9k.Core;
 using TriggerAction = Kc9k.Core.TriggerAction;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 
 namespace Kc9k.Gui;
 
@@ -21,9 +22,11 @@ public sealed class BlockView
     readonly InfoBar modeBar, hiddenBar, draftBar;
     readonly Button startButton, stopButton, unlockButton, extendButton, automationButton;
     readonly MenuFlyoutItem usersItem, deleteItem;
-    readonly SelectorBar tabs = new();
+    // The tabs wrap onto more lines when narrow (no sideways scroll, W54).
+    readonly WrapPanel tabs = new() { HorizontalSpacing = 4, VerticalSpacing = 4 };
+    string tabShown = "";
     readonly ScrollViewer tabScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-    readonly Dictionary<string, (SelectorBarItem Item, UIElement View)> tabViews = [];
+    readonly Dictionary<string, (ToggleButton Item, UIElement View)> tabViews = [];
     Block? block;
     GuiState? state;
 
@@ -235,26 +238,43 @@ public sealed class BlockView
                      ("breaks", "Breaks & allowance", breaksTab), ("bypass", "Bypass prevention", bypassTab),
                  })
         {
-            var item = new SelectorBarItem { Text = label, Tag = key }.Named(label, "Tab_" + key);
-            tabs.Items.Add(item);
+            var item = new ToggleButton { Content = label, Tag = key }.Named(label, "Tab_" + key);
+            item.Click += (_, _) => SelectTab(key);
+            tabs.Children.Add(item);
             tabViews[key] = (item, content);
         }
-        tabs.SelectionChanged += (_, _) =>
-        {
-            if (tabs.SelectedItem?.Tag is string key) tabScroll.Content = Pad(tabViews[key].View);
-        };
-        tabs.SelectedItem = tabViews["websites"].Item;
+        SelectTab("websites");
         tabs.Named("Tabs of the block", "BlockTabs");
 
-        var top = Ui.Column(8, back, title, pills, summary, modeBar, hiddenBar, draftBar, actions, tabs);
+        var top = Ui.Column(8, back, title, pills, summary, modeBar, hiddenBar, draftBar, actions);
         top.Padding = Ui.PagePadding(double.PositiveInfinity, 20, 0);
         // W54: the full width beside the sidebar, as every page.
+        // The head stays put while it takes at most half the height; taller
+        // (a short window, large text) it scrolls by itself, so the tabs and
+        // their content are always shown under it.
+        var head = new ScrollViewer
+        {
+            Content = top,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
         var grid = new Grid();
-        grid.SizeChanged += (_, e) => top.Padding = Ui.PagePadding(e.NewSize.Width, 20, 0);
+        var headRow = new RowDefinition { Height = GridLength.Auto };
+        grid.SizeChanged += (_, e) =>
+        {
+            top.Padding = Ui.PagePadding(e.NewSize.Width, 20, 0);
+            var pad = Ui.PagePadding(e.NewSize.Width, 8, 0);
+            tabs.Margin = new Thickness(pad.Left, pad.Top, pad.Right, 0);
+            headRow.MaxHeight = Math.Max(120, e.NewSize.Height / 2);
+        };
+        grid.RowDefinitions.Add(headRow);
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(top);
-        Grid.SetRow(tabScroll, 1);
+        grid.Children.Add(head);
+        tabs.Margin = new Thickness(32, 8, 32, 0);
+        Grid.SetRow(tabs, 1);
+        grid.Children.Add(tabs);
+        Grid.SetRow(tabScroll, 2);
         grid.Children.Add(tabScroll);
         View = grid;
     }
@@ -303,8 +323,16 @@ public sealed class BlockView
     public void Open(string name, string? tab)
     {
         Name = name;
-        if (tab is not null && tabViews.TryGetValue(tab, out var t)) tabs.SelectedItem = t.Item;
-        else tabs.SelectedItem = tabViews["websites"].Item;
+        SelectTab(tab is not null && tabViews.ContainsKey(tab) ? tab : "websites");
+    }
+
+    /// <summary>Shows a tab; its button stays pressed (a second press keeps it).</summary>
+    void SelectTab(string key)
+    {
+        foreach (var (k, (item, _)) in tabViews) item.IsChecked = k == key;
+        if (tabShown == key) return;
+        tabShown = key;
+        tabScroll.Content = Pad(tabViews[key].View);
     }
 
     Task Cmd(string command, IReadOnlyList<string> values) => C.Run(["block", command, Name, .. values]);

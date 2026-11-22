@@ -58,7 +58,7 @@
   access area is closed (§3.11). `OverviewPage` (§4.1); `BlocksPage`
   (§4.2: mode and block cards, drag a block card onto a mode card, or its
   context menu, Shift+F10), with three views: `BlockView` (§4.3: the head
-  stays put, `SelectorBar` tabs Websites, Apps, Breaks & allowance, Bypass
+  stays put, tab buttons (toggle buttons that wrap) Websites, Apps, Breaks & allowance, Bypass
   prevention scroll; Start applies at once, once on it is Add locks…;
   Unlock…, Extend timer…, ⋯ rename, duplicate, block preset, users,
   delete), `AutomationView` (§4.5: `AutomationEditor` kind block, schedule
@@ -172,8 +172,10 @@ Not fixed by `SPEC.md`; the code is the truth.
   rows and filters are `WrapPanel`s, never horizontal `StackPanel`s that
   run past the right edge. An opened block's head (back to the Start/Stop
   row) takes at most half the height and scrolls by itself beyond that;
-  its tabs sit under it, always shown (a SelectorBar pushed out of the
-  window realizes no tabs). *(By claude)* The Overview has no "Get started" card (owner
+  its tabs sit under it, always shown, as toggle buttons that wrap onto
+  more lines when narrow (a `SelectorBar` scrolled sideways and left
+  tabs unrealized). The crash note waits for the window's content to
+  load (`MainWindow.WhenShown`). *(By claude)* The Overview has no "Get started" card (owner
   2026-11-22; W38's first view is gone). Settings › Project's Import
   project… calls `Files.ImportProject`. *(By claude)*
 - Sidebar (W53, `MainWindow.PinSidebar`): pinned open at 220 DIP like

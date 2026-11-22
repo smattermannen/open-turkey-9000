@@ -66,8 +66,8 @@ public sealed partial class App : Application, IXamlMetadataProvider
         else Window.StartInTray();
         if (StartAsked.Any) _ = Window.Perform(StartAsked);
         if (CrashNote.Take() is { } crashed)
-            Window.Controller.ShowError($"Killer Chicken 9000 closed unexpectedly at {crashed:g}. The details are in {Log.FilePath}.",
-                "Closed unexpectedly");
+            Window.WhenShown(() => Window.Controller.ShowError(
+                $"Killer Chicken 9000 closed unexpectedly at {crashed:g}. The details are in {Log.FilePath}.", "Closed unexpectedly"));
         TestHook.Arm(Window);
         _ = Task.Run(JumpList.Write);
     }

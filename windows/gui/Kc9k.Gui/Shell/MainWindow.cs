@@ -282,6 +282,23 @@ public sealed partial class MainWindow : Window
         if (Controller.Stats is { } stats) pages[key].Page.UpdateStats(stats);
     }
 
+    /// <summary>Runs once the window's content is loaded (a dialog needs its XamlRoot).</summary>
+    public void WhenShown(Action act)
+    {
+        if (root.IsLoaded && root.XamlRoot is not null)
+        {
+            act();
+            return;
+        }
+        RoutedEventHandler? once = null;
+        once = (_, _) =>
+        {
+            root.Loaded -= once;
+            act();
+        };
+        root.Loaded += once;
+    }
+
     /// <summary>Opens a page of the sidebar.</summary>
     public void Navigate(string key) => Show(key);
 

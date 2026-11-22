@@ -1902,7 +1902,10 @@ their sites; their pages are an app's, not a browser's).
   vendors' tools (Dell Command | Configure, HP BCU) are not needed.
   Pure parts (reading each vendor's answer) tested on Linux. Needs: laptop
   (which vendor), owner.
-- [ ] `W20` Strict mode: Windows' ways to SYSTEM (M). Principle 3 (strict
+- [ ] `W20` Strict mode: Windows' ways to SYSTEM (M). Built (2026-11-22):
+  `strict_windows.go`; checked by `ci/windows_service_test.ps1` on
+  `windows-latest` (each refused for real during a lock, and allowed
+  again after). Was planned: Principle 3 (strict
   mode: any ordinary-user path to a blocked site is a real hole), SPEC §6
   2026-11-21 (later). Linux's are sudo, pkexec, root login, su and the
   container sockets (`lockdown.go`, `pamguard.go`, `sockets.go`);
@@ -1916,7 +1919,10 @@ their sites; their pages are an app's, not a browser's).
   likewise; Windows Installer is turned off for everyone but SYSTEM
   (`DisableMSI`; strict mode is Linux's "no sudo apt"). All kept and put
   back as the deny entries are. Needs: win-ci (each refused for real).
-- [ ] `W21` Strict mode: administrators' privileges (M). Same SPEC. An
+- [ ] `W21` Strict mode: administrators' privileges (M). Built (2026-11-22):
+  `strict_windows.go`; checked by `ci/windows_service_test.ps1` on
+  `windows-latest` (each refused for real during a lock, and allowed
+  again after). Was planned: Same SPEC. An
   elevated administrator's backup, restore, take-ownership, debug, driver
   and firmware-variable privileges pass by deny entries (`robocopy /B`
   rewrites the hosts file). Build (By Opus), while strict mode holds:
@@ -1924,7 +1930,10 @@ their sites; their pages are an app's, not a browser's).
   token (`SE_PRIVILEGE_REMOVED`, each cycle) and from Administrators'
   user rights (LSA, from the next sign-in), put back after. Needs:
   win-ci.
-- [ ] `W22` Strict mode: new accounts (S). Same SPEC. Linux's user can't
+- [ ] `W22` Strict mode: new accounts (S). Built (2026-11-22):
+  `strict_windows.go`; checked by `ci/windows_service_test.ps1` on
+  `windows-latest` (each refused for real during a lock, and allowed
+  again after). Was planned: Same SPEC. Linux's user can't
   make accounts without root; Windows' administrator can, and the built-in
   Administrator can be turned on. Build: accounts made or turned on while
   strict mode holds are turned off and counted (each cycle); put back as

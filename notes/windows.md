@@ -312,6 +312,31 @@
   (`CloseNoexecPrograms`), except exempt folders; per-user installs in
   AppData keep running; nothing is mounted
   (`ApplyNoexec` does nothing).
+- Strict mode's ways to SYSTEM (W20–W22, `strict_windows.go`;
+  `applyStrictExtras` from `ApplyLockdown`, `removeStrictExtras` first in
+  `RemoveLockdown`, whose failure is logged and retried but never keeps
+  the deny entries on). State: ProgramData\kc9k\strict-extras.json
+  (start time, DisableMSI before, WMI consumers and accounts at the start,
+  accounts turned off, user rights removed). Every cycle: the service
+  manager's DACL denies the three logons `0xc0022` (create service, boot
+  configuration, permissions, owner); `DisableMSI`=2 (its key is a
+  lockdown target); privileges stripped from every person's process token
+  (`SE_PRIVILEGE_REMOVED`, once per process: backup, restore, take
+  ownership, debug, load driver, firmware variables, manage volume,
+  relabel, and the TCB ones); accounts not on, or not there, at the
+  start turned off. Once: those rights taken from Administrators' and
+  Backup Operators' user rights (LSA; from the next sign-in), given back
+  after. Every 30 s: each service's DACL denies `0xd0002` (configuration,
+  delete, permissions, owner; `0xd0062` adds stop and pause for BFE,
+  Dnscache, Winmgmt, Schedule, EventLog, WlanSvc, W32Time), not KC9K's
+  own (GuardService) nor protected ones it can't open; Task Scheduler's
+  root folder denies `0xd0116` (registering tasks); task files written
+  since the start that run as SYSTEM or a service account, outside
+  `\Microsoft\Windows\` and `\KC9K\`, are deleted (`schtasks /Delete`);
+  `root\subscription` denies `0xc001c` (writes) and event consumers made
+  since the start are deleted with their bindings. The `Services` key
+  tree is a lockdown target (deny entries inherited by every service's
+  key). Each put back or deleted is counted as tamper.
 - No-escape (`ApplyBootLock`): `reagentc /disable` (if it was on),
   `bcdedit /set {current} recoveryenabled No`, `bootstatuspolicy
   IgnoreAllFailures`, `{bootmgr} displaybootmenu No`; ProgramData\kc9k\

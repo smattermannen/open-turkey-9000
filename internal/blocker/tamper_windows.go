@@ -316,7 +316,10 @@ func lockdownActive() bool {
 func lockdownTargets() []lockdownTarget {
 	var out []lockdownTarget
 	add := func(path string, key bool) { out = append(out, lockdownTarget{Path: path, Key: key}) }
-	for _, k := range []string{`SYSTEM\CurrentControlSet\Services\` + serviceName, `SYSTEM\CurrentControlSet\Control\SafeBoot`, `BCD00000000`} {
+	// The whole Services tree (W20): a service's ImagePath written there
+	// runs as SYSTEM at the next boot. Windows Installer's policy key too.
+	for _, k := range []string{`SYSTEM\CurrentControlSet\Services\` + serviceName, `SYSTEM\CurrentControlSet\Services`,
+		`SYSTEM\CurrentControlSet\Control\SafeBoot`, `BCD00000000`, msiPolicyKey} {
 		add(`MACHINE\`+k, true)
 	}
 	for _, b := range chromiumBrowsers {
@@ -396,6 +399,11 @@ func ApplyLockdown(user string) error {
 	if err := os.WriteFile(lockdownPath, data, 0o600); err != nil && firstErr == nil {
 		firstErr = err
 	}
+	if repaired := applyStrictExtras(); len(repaired) > 0 {
+		LockdownRepairs.Lock()
+		LockdownRepairs.What = append(LockdownRepairs.What, repaired...)
+		LockdownRepairs.Unlock()
+	}
 	return firstErr
 }
 
@@ -406,6 +414,9 @@ func ApplyLockdown(user string) error {
 func RemoveLockdown() error {
 	lockdownMu.Lock()
 	defer lockdownMu.Unlock()
+	// Strict mode's extras are put back on their own: one that can't be
+	// (logged, tried again next cycle) never keeps the deny entries on.
+	_ = removeStrictExtras()
 	data, err := os.ReadFile(lockdownPath)
 	if os.IsNotExist(err) {
 		return nil

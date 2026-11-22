@@ -109,8 +109,8 @@ $own = Get-Process | Where-Object { $_.Path -like "$env:SystemDrive\Users\*" -an
 $own | ForEach-Object { Write-Host "  own folder: $($_.Name) $($_.Path)" }
 $own | ForEach-Object { Split-Path $_.Path } | Sort-Object -Unique | ForEach-Object { K strict exempt add $_ | Out-Host }
 K strict on | Out-Host
-K start ci-block --for 1m --yes | Out-Host
-Start-Sleep -Seconds 8
+K start ci-block --for 3m --yes | Out-Host
+Start-Sleep -Seconds 12
 $hosts = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 $wrote = $true
 try { Add-Content -Path $hosts -Value '# kc9k test' -ErrorAction Stop } catch { $wrote = $false }
@@ -119,10 +119,32 @@ Check 'strict mode: the service still writes the hosts file (the block is in it)
 reg.exe add 'HKLM\SYSTEM\CurrentControlSet\Services\kc9k' /v KC9KTest /d x /f 2>$null | Out-Null
 Check "strict mode: an administrator can not change the service's registry key" { $LASTEXITCODE -ne 0 }
 
+# Strict mode: Windows' ways to SYSTEM, privileges, accounts (W20-W22).
+sc.exe create kc9kci binPath= "$env:SystemRoot\System32\cmd.exe /c exit" | Out-Host
+$created = $LASTEXITCODE -eq 0
+if ($created) { sc.exe delete kc9kci | Out-Null }
+Check 'strict mode: an administrator can not create a service' { -not $created }
+sc.exe config Spooler start= demand | Out-Host
+Check "strict mode: an administrator can not reconfigure another service" { $LASTEXITCODE -ne 0 }
+reg.exe add 'HKLM\SYSTEM\CurrentControlSet\Services\Spooler' /v KC9KTest /d x /f 2>$null | Out-Null
+Check "strict mode: an administrator can not write the Services key tree" { $LASTEXITCODE -ne 0 }
+Check 'strict mode: Windows Installer is off' { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer' -ErrorAction SilentlyContinue).DisableMSI -eq 2 }
+$priv = whoami.exe /priv | Out-String
+Write-Host $priv
+Check "strict mode: people's programs lose the backup, restore, debug and take-ownership privileges" { $priv -notmatch 'SeBackupPrivilege|SeRestorePrivilege|SeDebugPrivilege|SeTakeOwnershipPrivilege' }
+net.exe user kc9kci 'Kc9k-ci-1!x' /add | Out-Host
+schtasks.exe /Create /TN kc9kci /TR "$env:SystemRoot\System32\cmd.exe /c exit" /SC ONCE /ST 23:59 /RU SYSTEM /F 2>&1 | Out-Host
+$taskRefused = $LASTEXITCODE -ne 0
+try { Set-WmiInstance -Namespace root/subscription -Class CommandLineEventConsumer -Arguments @{ Name = 'kc9kci'; CommandLineTemplate = 'cmd /c exit' } -ErrorAction Stop | Out-Null; $wmiRefused = $false } catch { Write-Host "  $_"; $wmiRefused = $true }
+Start-Sleep -Seconds 40
+Check 'strict mode: an account made meanwhile is turned off' { -not (Get-LocalUser kc9kci -ErrorAction SilentlyContinue).Enabled }
+Check 'strict mode: a task as SYSTEM is refused, or deleted within a cycle' { $taskRefused -or -not (schtasks.exe /Query /TN kc9kci 2>$null) }
+Check 'strict mode: a WMI event consumer is refused, or deleted within a cycle' { $wmiRefused -or -not (Get-WmiObject -Namespace root/subscription -Class CommandLineEventConsumer -Filter "Name='kc9kci'") }
+
 # Uninstall is refused while a block is locked.
 K uninstall 2>&1 | Out-Host
 Check 'uninstall is refused while locked' { $LASTEXITCODE -ne 0 -and (Get-Service kc9k -ErrorAction SilentlyContinue) }
-Start-Sleep -Seconds 65
+Start-Sleep -Seconds 130
 K stop ci-block | Out-Host
 $wrote = $false
 for ($i = 0; $i -lt 30 -and -not $wrote; $i++) {
@@ -130,6 +152,15 @@ for ($i = 0; $i -lt 30 -and -not $wrote; $i++) {
     try { Add-Content -Path $hosts -Value '# kc9k test' -ErrorAction Stop; $wrote = $true } catch { }
 }
 Check 'after the lock the hosts file is writable again' { $wrote }
+sc.exe create kc9kci binPath= "$env:SystemRoot\System32\cmd.exe /c exit" | Out-Null
+Check 'after the lock an administrator can create a service again' { $LASTEXITCODE -eq 0 }
+sc.exe delete kc9kci | Out-Null
+sc.exe config Spooler start= auto | Out-Null
+Check 'after the lock an administrator can reconfigure services again' { $LASTEXITCODE -eq 0 }
+Check 'after the lock Windows Installer is on again' { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer' -ErrorAction SilentlyContinue).DisableMSI -ne 2 }
+Check 'after the lock the account made meanwhile is on again' { (Get-LocalUser kc9kci -ErrorAction SilentlyContinue).Enabled }
+net.exe user kc9kci /delete | Out-Null
+schtasks.exe /Delete /TN kc9kci /F 2>$null | Out-Null
 K strict off | Out-Host
 $out = K uninstall 2>&1 | Out-String
 Write-Host $out

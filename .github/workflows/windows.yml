@@ -29,7 +29,7 @@ jobs:
         shell: bash
         env:
           KC9K_TEST_WFP: "1"
-        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc|Deny|ACE|UserProgram|AccelToVK|Wlan|RemoteControl|RecoveryBoot|WinGuest|WinHardwareClock|WinInstallBrowser|WinFirmware' ./internal/blocker ./internal/enforce
+        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc|Deny|ACE|UserProgram|AccelToVK|Wlan|RemoteControl|RecoveryBoot|WinGuest|WinHardwareClock|WinInstallBrowser|WinFirmware|Strict' ./internal/blocker ./internal/enforce
       - name: One-click LibreWolf install with winget (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh

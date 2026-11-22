@@ -239,9 +239,15 @@ func init() {
 runs, administrators are denied what would stop Killer Chicken 9000: its
 service's registry key, its program folder, the hosts file, the browsers'
 policies, Safe Mode's settings, the boot configuration and the recovery
-environment's; programs run from your own folders (your profile, USB
-drives) are closed. Only kc9k itself keeps working. Everything comes back
-by itself when the lock ends.`, 1)
+environment's. They are denied the ways to SYSTEM too: no new services
+and no changes to services or their registry keys, no tasks or WMI
+subscriptions running as SYSTEM, no installers (Windows Installer off),
+no backup, restore, debug or take-ownership privileges (running programs
+lose them at once, new sign-ins don't get them), and accounts made or
+turned on meanwhile are turned off. Programs run from your own folders
+(your profile, USB drives) are closed. Only kc9k itself keeps working.
+Everything comes back by itself when the lock ends; programs already
+running keep the lost privileges until you sign in again.`, 1)
 	if i := strings.Index(strictCmd.Long, "\n\nIf something goes wrong"); i >= 0 {
 		strictCmd.Long = strictCmd.Long[:i]
 	}

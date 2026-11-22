@@ -118,7 +118,10 @@ func TestWinGuestAccount(t *testing.T) {
 func TestWinInstallBrowserWinget(t *testing.T) {
 	var got []string
 	old := installRun
-	installRun = func(name string, args ...string) ([]byte, error) { got = append([]string{name}, args...); return nil, nil }
+	installRun = func(name string, args ...string) ([]byte, error) {
+		got = append([]string{name}, args...)
+		return nil, nil
+	}
 	defer func() { installRun = old }()
 	if wingetPath() == "" {
 		t.Skip("no winget here")

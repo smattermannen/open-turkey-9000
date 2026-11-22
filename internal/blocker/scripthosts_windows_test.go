@@ -50,7 +50,8 @@ func TestWinProcScriptEntries(t *testing.T) {
 	if _, err := exec.LookPath("python.exe"); err == nil {
 		py = startIn(t, dir, "python.exe", "kc9kpy.py")
 	}
-	other := startIn(t, dir, "cmd.exe", "/c", "ping -n 60 127.0.0.1 >nul")
+	// Started elsewhere: its ping outlives the test and would hold dir.
+	other := startIn(t, os.TempDir(), "cmd.exe", "/c", "ping -n 15 127.0.0.1 >nul")
 	time.Sleep(2 * time.Second)
 	if got := RunningApps([]string{"kc9kloop.bat", "kc9kwait", filepath.Join(dir, "kc9kpy.py")}); len(got) < 2 {
 		t.Errorf("running scripts seen: %v", got)

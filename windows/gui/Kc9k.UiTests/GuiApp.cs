@@ -138,6 +138,9 @@ public sealed class GuiApp : IDisposable
     public bool Ran(params string[] args) =>
         Commands().Any(c => Strip(c).Take(args.Length).SequenceEqual(args));
 
+    /// <summary>Whether a command ran holding all these arguments (any order).</summary>
+    public bool RanWith(params string[] parts) => Commands().Any(c => parts.All(c.Contains));
+
     static IEnumerable<string> Strip(List<string> c)
     {
         var i = 0;

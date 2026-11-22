@@ -318,11 +318,10 @@ func killBlockedWin(names []string, politely bool, now time.Time, uids []uint64)
 				continue
 			}
 			protected[pid] = true
-			end := killProcess // below a blocked app: never Windows' own
-			if pid == uint32(root) {
-				end = killNamedProcess // the blocked app itself (taskmgr, cmd...)
-			}
-			if end(p) == nil {
+			// The blocked app and its tree (a blocked script's ping, cmd's
+			// conhost): System32 tools it started are its work; the
+			// session-critical deny-list still holds (W50).
+			if killNamedProcess(p) == nil {
 				killed++
 			}
 		}

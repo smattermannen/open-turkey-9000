@@ -256,10 +256,10 @@
   child (IDs are reused). `tcpOwner` (`GetExtendedTcpTable`) maps a
   connection to its process: check-ins, statistics per user.
 - Killing (W50) *(By claude)*: every Windows kill path goes through
-  `killProcess` (what KC9K found itself: browsers, trees below a blocked
-  app, people's programs; never a program under %SystemRoot% or with an
-  unreadable path) or `killNamedProcess` (a process a rule names: the
-  blocked app itself, a tamper tool such as taskmgr, curl naming a
+  `killProcess` (what KC9K found itself: browsers, people's programs;
+  never a program under %SystemRoot% or with an unreadable path) or
+  `killNamedProcess` (a process a rule names: the blocked app and the
+  tree it started, such as a blocked script's ping, a tamper tool such as taskmgr, curl naming a
   blocked site, a blocked window's owner, a VM's vmwp). Both refuse the
   hard deny-list `sessionCritical`: PID 0 and 4, `essentialWindowsApps`
   and `neverKillExtra` (dwm, csrss, winlogon, svchost, fontdrvhost,

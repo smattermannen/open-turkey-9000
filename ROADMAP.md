@@ -46,6 +46,14 @@ of their group and a row here; a finished item loses its row.
 | 2.13 | Accountability partner: reports, alerts, partner-held passwords, unlock approval | §4.15 | — | agent |
 | 2.14 | Website: like Cold Turkey's in kind; hosting to choose | §4.16 | — | agent, owner |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
+| W50 | Windows GUI froze the whole laptop (forced power-off): find and fix first | principle 1 | gui-windows, windows | win-vm, laptop |
+| W51 | Screen went black, "overrun detection" warning when switching settings | §4.10 | gui-windows, windows | win-vm, laptop |
+| W52 | Blank white classic window over the GUI (crash?) | R-GUI-3 | gui-windows | win-vm |
+| W53 | Side menu pushes the page sideways; pin it like GTK | R-GUI-3 | gui-windows | agent, win-ci |
+| W54 | Windows page layout as in the GTK GUI, Windows look kept | §4.1–4.13 | gui-windows | agent, win-ci, owner |
+| W55 | Import project in the Windows GUI | §3 Project | gui-windows, db-project | agent, win-ci |
+| W56 | A Linux project imports safely on Windows (Linux app unchanged) | §3 Project, R-WEAK-1/2 | db-project, windows | agent, win-ci |
+| A14 | Automation clip curves: sharp going up, soft going down; make both soft | §4.10 | circadian, gui, gui-windows | agent |
 | W1 | Windows service, session agent, named pipe, install/uninstall: built, checked on `windows-latest`; agent and console Unchecked | §3.13 | windows | win-vm |
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
 | W3 | Windows apps and desktop: built, Unchecked on a desktop | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
@@ -2110,6 +2118,89 @@ only what is marked laptop.
   `ci/integration.sh` on every push since before 2026-11-22 (commands
   without `--yes` where a lock is now confirmed, R-LOCK-12); its unit
   tests pass.
+
+### 4.3 Owner report 2026-11-22: Windows GUI on the laptop
+
+The owner ran the Windows GUI on the laptop and removed it afterwards
+("it was horrible"). Their verdict: the Windows GUI looks much better, but
+the GTK GUI's layout is better. Stability first, then layout, then the
+missing import. Order: top to bottom.
+
+Stability (blocks every other Windows GUI test):
+
+- [ ] `W50` **The whole computer froze** (L; principle 1: never harm the
+  device). With the Windows GUI open the laptop stopped answering;
+  Ctrl+Alt+Del did nothing; only a forced power-off helped. Find the cause
+  before the GUI goes on the laptop again: event log (`Application`,
+  `System`, Kernel-Power 41, LiveKernelEvent/WHEA, display driver TDR),
+  the GUI's own log, the service's log. Suspects: the circadian layers
+  (gamma ramps, software brightness overlay, wallpaper and dark-mode
+  switches) applied in a tight loop, the GUI polling `kc9k gui-state` with
+  no back-off, a process kill or desktop effect hitting `dwm.exe`,
+  `csrss.exe` or `winlogon.exe`. Done when: the cause is named, fixed and
+  a CI or win-vm test repeats the action that froze it.
+- [ ] `W51` **Screen black several times, "overrun detection" warning**
+  (M; §4.10 circadian). Switching different settings on blanked the screen
+  more than once and Windows warned of an overrun (a buffer overrun /
+  stack cookie, or the display driver resetting). Likely the same cause as
+  W50: check the gamma ramp and brightness calls (Win32 `SetDeviceGammaRamp`,
+  WMI brightness, DDC/CI) for bad values, repeated calls and calls from
+  several threads. Done when: each setting can be switched on and off
+  repeatedly on win-vm with no blank screen and no warning.
+- [ ] `W52` **Blank white window appears at random** (M; R-GUI-3). A
+  classic-styled window (white, old blue title bar, its own minimise,
+  maximise and close buttons) covered the GUI with nothing in it; the
+  owner thinks the GUI crashed. Find which process owns it (a WinUI
+  crash fallback, a `MessageBox`/error dialog that failed to draw, a
+  console or helper window of `kc9k.exe`, the software brightness overlay
+  window). Done when: the window is gone or shows what it is, and a GUI
+  crash writes a log and says so instead.
+
+Layout (owner: keep the Windows look, use the GTK layout):
+
+- [ ] `W53` **The side menu pushes the page sideways** (S; R-GUI-3). Opening
+  the menu (☰) moves the whole page right and cuts off its right edge
+  (Overview, Blocks, Circadian rhythm). Build: the menu never moves the
+  page: pinned open like the GTK sidebar by default, the page fills the
+  rest of the window, with no horizontal scroll at any window width.
+- [ ] `W54` **Page layout as in the GTK GUI** (M; §4.1–4.13, R-GUI-3). Pages
+  are centred with wide empty margins and cut off on the right; the GTK
+  GUI's pages fill the width, put switches and Lock… buttons in one right
+  column, and show blocks as rows (switch type, breaks, lock). Build: the
+  Windows pages follow the GTK GUI's layout page by page (Overview,
+  Blocks with modes, Circadian rhythm, Settings), keeping the Windows
+  look (colours, fonts, Mica). Overview's "Get started" card has no GTK
+  counterpart: keep only if the owner wants it (ask).
+
+Import:
+
+- [ ] `W55` **Import project is missing on Windows** (S; §3 Project,
+  `notes/db-project.md`). The GTK GUI's import has no Windows
+  counterpart. Build: Settings → Import project… opens a file dialog and
+  runs `kc9k project import <file>` (first `--dry-run`, shown for
+  confirmation), as the GTK GUI does.
+- [ ] `W56` **A Linux project imports safely on Windows** (M; §3 Project,
+  R-WEAK-1/2). The Linux app and its project format are not changed.
+  Windows reads a project file written on Linux as is: Linux-only parts
+  (Linux paths, process names such as `gnome-terminal-server`, X11
+  window classes, LibreWolf on Linux, PAM and systemd settings) are
+  kept in the file but reported as "not used on Windows" in the dry
+  run, never guessed into Windows names and never an error. Import may
+  only strengthen while anything is locked (R-WEAK-1/2), and every lock
+  it brings is confirmed (R-LOCK-12). CRLF and a UTF-8 BOM in the file
+  are accepted. Done when: a test imports a project exported by the
+  Linux build (checked into `testdata/`) into the Windows build in CI,
+  and the dry run lists what is not used.
+
+Both platforms:
+
+- [ ] `A14` **Automation clip curves bend one way only** (S; §4.10
+  automation clips). Dragging a point far up makes a sharp corner;
+  dragging it down never does (it stays a soft curve). Same on Linux
+  and Windows. Build: one curve shape for both directions, the soft
+  one the owner prefers; the GUIs and the daemon's interpolation agree.
+  Done when: a test drags a point up and down by the same amount and
+  gets mirror-image curves.
 
 ## 5. Proposed, not agreed
 

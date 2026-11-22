@@ -340,8 +340,19 @@
   Process Explorer/Hacker, System Informer, MMC consoles such as Services
   and the editors, regedit, sc, bcdedit, reagentc, schtasks, taskkill,
   msconfig…).
-- The WFP objects keep the engine's default security; firmware lock
-  (Dell, Lenovo, HP tools): not built.
+- The WFP objects keep the engine's default security.
+- Firmware lock (W19, `firmware_windows.go`, `firmware_wmi.go`): the
+  firmware's own WMI interfaces, which Linux's firmware-attributes
+  drivers use too: Dell `root\dcim\sysman\biosattributes` and
+  `wmisecurity`, Lenovo `root\wmi` (`Lenovo_BiosSetting`,
+  `GetBiosSelections`, `SetBiosSetting` + `SaveBiosSettings`,
+  `SetBiosPassword` "pap"), HP `root\HP\InstrumentedBIOS`
+  (`HP_BIOSEnumeration`, `SetBIOSSetting`, "Setup Password",
+  `<utf-16/>`). A read script prints JSON (`wmiStatus` reads it, tested on
+  Linux; drivers named as Linux's: dell-wmi-sysman, thinklmi,
+  hp-bioscfg); a write script takes a `wmiRequest` on stdin (passwords
+  never on a command line). Same purposes and order as Linux; Lenovo
+  passwords can't hold "," or ";". No vendor tool needed.
 - An administrator can still win: take ownership with their privileges,
   rewrite permissions, then stop things; each step is undone within a
   cycle and counted. Nothing hides from Windows Defender.

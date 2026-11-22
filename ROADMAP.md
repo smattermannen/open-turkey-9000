@@ -45,7 +45,7 @@ of their group and a row here; a finished item loses its row.
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
 | W3 | Windows apps and desktop: built, Unchecked on a desktop | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
 | W4 | Windows GUI: C# / WinUI 3. Built, checked in CI against the fake kc9k and the real kc9k.exe with its service (2026-11-21); Narrator, scaling, drag and drop, a real desktop: Unchecked | §4.1–4.13, R-GUI-1–3 | gui-windows | win-vm, laptop |
-| W5 | Windows tamper protection: built, checked on `windows-latest`; boot/Safe Mode Unchecked; firmware lock not built | §3.10, §4.10 | windows | win-vm, laptop |
+| W5 | Windows tamper protection: built, checked on `windows-latest`; boot/Safe Mode Unchecked; firmware lock in W19 | §3.10, §4.10 | windows | win-vm, laptop |
 | W6 | Windows circadian rhythm and wallpapers: built, Unchecked | §4.10 | windows | win-vm, laptop |
 | W7 | Windows MSI: built, checked in CI (install, removal, refused while locked, reinstall guard, 2026-11-21); signing needs the owner's certificate; Apps & features by a person Unchecked | §4.11 | install-windows | owner, win-vm |
 | W30 | Windows GUI: Chrome and Edge waiting for the store listing explained; Install shows where to get a browser | §3.13, §4.10 | gui-windows | agent, win-ci |
@@ -67,7 +67,7 @@ of their group and a row here; a finished item loses its row.
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`): built; a real Safe Mode boot Unchecked | R-ESCAPE-1 | windows, device | win-vm |
 | W18 | One-click browser install on Windows (winget): built; as SYSTEM Unchecked | §4.10 | windows, browsers | win-vm |
-| W19 | Firmware lock on Windows (vendors' firmware WMI) | §3.8, §4.10 | windows, device | laptop, owner |
+| W19 | Firmware lock on Windows (vendors' firmware WMI): built; real firmware Unchecked | §3.8, §4.10 | windows, device | laptop, owner |
 | W20 | Strict mode: Windows' ways to SYSTEM | §3.8, principle 3 | windows, device | win-ci |
 | W21 | Strict mode: administrators' privileges | §3.8, principle 3 | windows, device | win-ci |
 | W22 | Strict mode: new accounts | §3.8 | windows, device | win-ci |
@@ -1614,9 +1614,7 @@ where its item needs it and the Linux tests prove nothing changed.
   and both open again after the lock; uninstall refused while locked, then
   clean. Unchecked: Safe Mode boot, no-escape and the recovery environment
   on a real boot, an administrator taking ownership (Needs win-vm:
-  `ci/windows_vm_test.ps1 -Reboots`). Not built: the firmware lock with
-  the vendors' tools (Dell Command | Configure, Lenovo WMI, HP BCU): Needs
-  laptop to know which vendor's tool applies.
+  `ci/windows_vm_test.ps1 -Reboots`). The firmware lock: `W19`.
 - [ ] `W6` Circadian rhythm and wallpapers (M). Built, Unchecked
   (2026-11-21): gamma ramps per screen through the agent (warm ramps
   allowed by `GdiIcmGammaRange`), wallpapers (copied where desktops may
@@ -1886,7 +1884,12 @@ their sites; their pages are an app's, not a browser's).
   machine --silent`, its published package ids), an outside query stated
   in the help (principle 6). Needs: win-ci (winget on the runner;
   `workflow_dispatch` only), laptop.
-- [ ] `W19` Firmware lock on Windows (M). SPEC §3.8, §4.10, §6 2026-11-21
+- [ ] `W19` Firmware lock on Windows (M). Built (2026-11-22):
+  `firmware_wmi.go` (tested on Linux), `firmware_windows.go`;
+  `TestWinFirmwareStatusForReal` on `windows-latest` (no vendor's
+  interface there: none, no error). Unchecked: real Dell, Lenovo and HP
+  firmware (Needs laptop, owner: which vendor, and a person to type and
+  keep the password). Was planned: SPEC §3.8, §4.10, §6 2026-11-21
   (By Opus). Was: not built. Build: the same firmware interfaces Linux's
   `firmware-attributes` drivers use, through WMI, built into the
   firmware and Windows (no vendor tool to install): Dell

@@ -23,6 +23,8 @@ var windowsWords = strings.NewReplacer(
 	"LibreWolf, Google\nChrome and Chromium.", "LibreWolf, Google\nChrome and Microsoft Edge (Chrome and Edge once the extension's Chrome Web\nStore listing exists).",
 	"  install librewolf   from LibreWolf's repository (via extrepo)\n  install chromium    from Linux Mint's repository\n  install chrome      from Google's repository (added, with its signing key)",
 	"  install librewolf   with winget, for the whole computer (downloads it)\n  install chrome      with winget, for the whole computer (downloads it)",
+	"(BIOS/UEFI) settings from Linux, where the firmware allows it (Dell, Lenovo and\nHP computers, /sys/class/firmware-attributes):",
+	"(BIOS/UEFI) settings from Windows, where the firmware allows it (Dell, Lenovo and\nHP computers, through the firmware's own WMI interfaces):",
 	"root-equivalent\ngroups, the root password,", "other administrator\naccounts, the built-in Administrator,",
 	"Hotkeys are set up as Cinnamon and\nGNOME keyboard shortcuts.", "Hotkeys are registered by KC9K's agent in your\nsession.",
 	"(System Monitor, htop, …)", "(Task Manager, Process Explorer, …)",

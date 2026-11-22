@@ -47,7 +47,10 @@
   admin password (`authentication/Admin` or `Setup Password`,
   `new_password`). With a password already set each change writes
   `current_password` first. Settings `device.firmware-lock`,
-  `device.firmware-before` (what it changed, put back by `off`).
+  `device.firmware-before` (what it changed, put back by `off`). Where
+  `FirmwareRoot` doesn't exist, `platformFirmware` is used instead: on
+  Windows the vendors' firmware WMI (notes/windows.md, W19); tests
+  generate `FirmwareRoot` on both systems, so they use the sysfs path.
 - **Allowed apps only** (`blocker/allowedapps.go`): `readAppProcesses`
   (replaceable) lists processes; `appsToClose` (pure) keeps system and
   desktop programs, allowed ones and their descendants (≤ 64 parents),

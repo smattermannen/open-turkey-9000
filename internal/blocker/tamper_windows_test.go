@@ -110,3 +110,13 @@ func TestRecoveryBootWin(t *testing.T) {
 		t.Errorf("KernelCmdline in Safe Mode = %q", KernelCmdline())
 	}
 }
+
+// W19: the firmware WMI read script runs; a computer without a vendor's
+// interface (the runner, a VM) has none, without an error.
+func TestWinFirmwareStatusForReal(t *testing.T) {
+	s, err := FirmwareLockStatus()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("firmware: drivers %v, password %v, %d settings", s.Drivers, s.Password, len(s.Settings))
+}

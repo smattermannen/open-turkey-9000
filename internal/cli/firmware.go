@@ -118,7 +118,7 @@ func showFirmwareLock(cmd *cobra.Command, database *db.DB) error {
 		return nil
 	}
 	if !status.Available() {
-		fmt.Println("Firmware lock: this computer's firmware settings can't be changed from Linux.")
+		fmt.Println("Firmware lock: this computer's firmware settings can't be changed from " + thisSystem + ".")
 		fmt.Println(firmwareByHand)
 		return nil
 	}
@@ -178,7 +178,7 @@ func firmwareLockOn(cmd *cobra.Command, database *db.DB) error {
 		return err
 	}
 	if !status.Available() {
-		return fmt.Errorf("this computer's firmware settings can't be changed from Linux. %s", firmwareByHand)
+		return fmt.Errorf("this computer's firmware settings can't be changed from %s. %s", thisSystem, firmwareByHand)
 	}
 	kind := "firmware lock (USB and network boot off, boot order locked, a firmware password a trusted person keeps)"
 	if status.Password {
@@ -250,7 +250,7 @@ func firmwareLockOff(database *db.DB) error {
 		return err
 	}
 	if !status.Available() {
-		return fmt.Errorf("this computer's firmware settings can't be changed from Linux: remove the password in the firmware's own setup")
+		return fmt.Errorf("this computer's firmware settings can't be changed from %s: remove the password in the firmware's own setup", thisSystem)
 	}
 	before := map[string]string{}
 	if v, _ := database.GetSetting(SettingFirmwareBefore); v != "" {

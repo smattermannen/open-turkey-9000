@@ -110,8 +110,33 @@ func adminDir(driver string) string {
 	return ""
 }
 
+// firmwareBackend is a system's own way to the firmware's settings, used
+// when FirmwareRoot doesn't exist: Windows' firmware WMI
+// (firmware_windows.go); none on Linux.
+type firmwareBackend interface {
+	status() (FirmwareStatus, error)
+	apply(password string, s FirmwareStatus) (map[string]string, error)
+	remove(password string, before map[string]string) error
+}
+
+var platformFirmware firmwareBackend
+
+// usePlatformFirmware reports whether the firmware is reached through
+// platformFirmware: there is one and FirmwareRoot doesn't exist (tests
+// point FirmwareRoot at a generated tree on every system).
+func usePlatformFirmware() bool {
+	if platformFirmware == nil {
+		return false
+	}
+	_, err := os.Stat(FirmwareRoot)
+	return os.IsNotExist(err)
+}
+
 // FirmwareLockStatus reads the firmware's settings.
 func FirmwareLockStatus() (FirmwareStatus, error) {
+	if usePlatformFirmware() {
+		return platformFirmware.status()
+	}
 	var s FirmwareStatus
 	entries, err := os.ReadDir(FirmwareRoot)
 	if os.IsNotExist(err) {
@@ -193,6 +218,16 @@ func ApplyFirmwareLock(password string) (map[string]string, error) {
 	if password == "" {
 		return nil, fmt.Errorf("the firmware lock needs a password")
 	}
+	if usePlatformFirmware() {
+		status, err := platformFirmware.status()
+		if err != nil {
+			return nil, err
+		}
+		if !status.Available() {
+			return nil, fmt.Errorf("this computer's firmware offers no settings Windows can change: set the firmware password by hand")
+		}
+		return platformFirmware.apply(password, status)
+	}
 	status, err := FirmwareLockStatus()
 	if err != nil {
 		return nil, err
@@ -229,6 +264,9 @@ func ApplyFirmwareLock(password string) (map[string]string, error) {
 // RemoveFirmwareLock puts back the settings the lock changed (before, from
 // ApplyFirmwareLock) and clears the firmware password, which is needed.
 func RemoveFirmwareLock(password string, before map[string]string) error {
+	if usePlatformFirmware() {
+		return platformFirmware.remove(password, before)
+	}
 	status, err := FirmwareLockStatus()
 	if err != nil {
 		return err

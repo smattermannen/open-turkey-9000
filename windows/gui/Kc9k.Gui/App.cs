@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.XamlTypeInfo;
+using Kc9k.Core;
 using Microsoft.Windows.AppLifecycle;
 
 namespace Kc9k.Gui;
@@ -17,6 +18,7 @@ public sealed partial class App : Application, IXamlMetadataProvider
     public MainWindow? Window { get; private set; }
     public string[] Args { get; }
     public bool StartHidden => Args.Contains("--hidden");
+    public StartArgs StartAsked => StartArgs.Parse(Args);
 
     public App(string[] args)
     {
@@ -37,9 +39,20 @@ public sealed partial class App : Application, IXamlMetadataProvider
         Resources.MergedDictionaries.Add(new XamlControlsResources());
         Theme.AddResources(Resources);
         Window = new MainWindow();
-        AppInstance.GetCurrent().Activated += (_, _) => Window.DispatcherQueue.TryEnqueue(Window.ShowFromTray);
+        // A second start (W36): its window comes forward with what it asked for.
+        AppInstance.GetCurrent().Activated += (_, e) =>
+        {
+            var asked = e.Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs launch ? StartArgs.Parse(launch.Arguments) : StartArgs.Parse("");
+            Window.DispatcherQueue.TryEnqueue(() =>
+            {
+                Window.ShowFromTray();
+                _ = Window.Perform(asked);
+            });
+        };
         if (!StartHidden || !Prefs.Current.Tray) Window.Activate();
         else Window.StartInTray();
+        if (StartAsked.Any) _ = Window.Perform(StartAsked);
+        _ = Task.Run(JumpList.Write);
     }
 
     public IXamlType GetXamlType(Type type) => provider.GetXamlType(type);

@@ -22,11 +22,14 @@ public sealed class GuiApp : IDisposable
     public UIA3Automation Automation { get; } = new();
     public Window Window { get; }
     public string Log => Path.Combine(Dir, "commands.log");
+    /// <summary>How the GUI was started: a second start uses the same (W36).</summary>
+    public ProcessStartInfo StartInfo { get; private set; } = null!;
     readonly string name;
 
     readonly bool real_;
 
-    public GuiApp(string name, string theme = "light", Action<string>? prepare = null, bool real = false, string ready = "Headline")
+    public GuiApp(string name, string theme = "light", Action<string>? prepare = null, bool real = false, string ready = "Headline",
+        string arguments = "", bool multi = true)
     {
         real_ = real;
         this.name = name;
@@ -40,11 +43,12 @@ public sealed class GuiApp : IDisposable
         // KC9K_REAL_EXE: the real kc9k.exe (installed, its service running) instead of the fake.
         var realExe = real_ ? Environment.GetEnvironmentVariable("KC9K_REAL_EXE") : null;
         var fake = realExe ?? Environment.GetEnvironmentVariable("KC9K_FAKE_EXE") ?? throw new InvalidOperationException("KC9K_FAKE_EXE is not set");
-        var info = new ProcessStartInfo(exe) { UseShellExecute = false };
+        var info = new ProcessStartInfo(exe, arguments) { UseShellExecute = false };
         info.Environment["KC9K_CLI"] = fake;
         info.Environment["KC9K_FAKE_DIR"] = Dir;
         info.Environment["KC9K_GUI_PREFS"] = Path.Combine(Dir, "gui.json");
-        info.Environment["KC9K_GUI_MULTI"] = "1";
+        if (multi) info.Environment["KC9K_GUI_MULTI"] = "1";
+        StartInfo = info;
         App = Application.Launch(info);
         Window = Retry.WhileNull(() => App.GetMainWindow(Automation, TimeSpan.FromSeconds(2)),
             TimeSpan.FromSeconds(60), TimeSpan.FromMilliseconds(500), throwOnTimeout: true).Result!;

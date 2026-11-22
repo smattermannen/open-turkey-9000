@@ -52,7 +52,10 @@
     <StandardDirectory Id="ProgramMenuFolder">
       <Component Id="StartMenu" Guid="7b3f5d1e-6a52-4c4f-9a2b-1c0b1e5c9e21">
         <Shortcut Id="GuiShortcut" Name="Killer Chicken 9000" Description="Blocks of sites, apps and words, with locks"
-                  Target="[GUIFOLDER]kc9k-gui.exe" WorkingDirectory="GUIFOLDER" Icon="kc9k.ico" />
+                  Target="[GUIFOLDER]kc9k-gui.exe" WorkingDirectory="GUIFOLDER" Icon="kc9k.ico">
+          <!-- W36: the GUI's own AppUserModelID, so its jump list belongs to this entry -->
+          <ShortcutProperty Key="System.AppUserModel.ID" Value="KillerChicken9000.Gui" />
+        </Shortcut>
         <RemoveFolder Id="RemoveStartMenuEntry" On="uninstall" />
         <RegistryValue Root="HKCU" Key="Software\KC9K\Installer" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
       </Component>

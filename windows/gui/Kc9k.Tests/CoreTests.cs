@@ -405,4 +405,15 @@ public class CliTests
         Assert.Equal("On now: basic, strict mode, boot and hardware.", Words.ProtectionNow(true, false, false, true));
         Assert.Contains("Safe Mode", Words.ProtectionLevels(false, false, false, false)[2].Detail);
     }
+
+    // W36: start arguments name pages and the GUI's own dialogs, nothing else.
+    [Fact]
+    public void StartArgsOnlyPagesAndDialogs()
+    {
+        Assert.Equal(new StartArgs("stats", null, false), StartArgs.Parse(["--page", "stats"]));
+        Assert.Equal(new StartArgs(null, "monk", true), StartArgs.Parse("--hidden --do monk"));
+        Assert.False(StartArgs.Parse(["--page", "nowhere", "--do", "stop"]).Any);
+        Assert.False(StartArgs.Parse(["--do"]).Any);
+        Assert.All(StartArgs.JumpList, j => Assert.True(StartArgs.Parse(j.Args).Any, j.Args));
+    }
 }

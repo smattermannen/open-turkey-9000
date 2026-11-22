@@ -287,6 +287,18 @@ public sealed partial class MainWindow : Window
         Blocks.OpenMode(name);
     }
 
+    /// <summary>What a start asked for (W36): a page, or one of the GUI's own dialogs.</summary>
+    public async Task Perform(StartArgs asked)
+    {
+        if (asked.Page is { } page) Show(page);
+        switch (asked.Do)
+        {
+            case "new-block": await Actions.CreateBlock(this); break;
+            case "monk": await Actions.MonkMode(this); break;
+            case "freeze": OpenMode(Tables.FrozenChicken); break;
+        }
+    }
+
     /// <summary>Settings, at its browsers (W38).</summary>
     public void OpenBrowsers()
     {

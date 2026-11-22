@@ -176,4 +176,20 @@ public class WindowsTests
         Assert.StartsWith("This window: ", gui.Find("AboutGui").Name);
         Assert.True(gui.Ran("version"));
     }
+
+    // W36: the jump list's arguments open their page; a second start hands
+    // its arguments to the running window instead of opening another.
+    [Fact]
+    public void StartArgumentsAndASecondStart()
+    {
+        using var gui = new GuiApp("start-args", arguments: "--page stats", ready: "StatsTotal", multi: false);
+        gui.Find("StatsTotal");
+        var second = new System.Diagnostics.ProcessStartInfo(gui.StartInfo.FileName, "--page settings") { UseShellExecute = false };
+        foreach (var (k, v) in gui.StartInfo.Environment) second.Environment[k] = v;
+        using var p = System.Diagnostics.Process.Start(second)!;
+        Assert.True(p.WaitForExit(30000), "the second start ended");
+        gui.Find("ProtectionNow");
+        Assert.Single(System.Diagnostics.Process.GetProcessesByName("kc9k-gui"));
+        gui.Shot("second-start");
+    }
 }

@@ -33,8 +33,13 @@
   (raw console: console modes with VT input, so bracketed paste works in
   Windows Terminal), `lock/window_*.go` (the challenge window),
   `cli/readcaller_*.go`.
-- The hardware clock (`/sys/class/rtc`) has no Windows reader: the clock
-  check uses the internet's time only.
+- The hardware clock (W17, `enforce/rtc_*.go`): Windows lets programs read
+  it no other way, so it is taken from Kernel-General event 12 ("The
+  operating system started at system time", the hardware clock read at
+  boot), the newest one (every boot logs one), read once per service run,
+  plus the boot clock since (`hardwareClockAt`; the wall clock plays no
+  part); a cleared log gives none, and the clock check uses internet time
+  alone.
 
 ## CI
 

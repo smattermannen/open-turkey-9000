@@ -66,7 +66,6 @@ of their group and a row here; a finished item loses its row.
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`): built; a real Safe Mode boot Unchecked | R-ESCAPE-1 | windows, device | win-vm |
-| W17 | Hardware clock on Windows (boot event) | §4.10 | windows, locks | win-ci |
 | W18 | One-click browser install on Windows (winget) | §4.10 | windows, browsers | win-ci, laptop |
 | W19 | Firmware lock on Windows (vendors' firmware WMI) | §3.8, §4.10 | windows, device | laptop, owner |
 | W20 | Strict mode: Windows' ways to SYSTEM | §3.8, principle 3 | windows, device | win-ci |
@@ -1866,7 +1865,9 @@ their sites; their pages are an app's, not a browser's).
   messages name `sudo`, GRUB, `kc9k.nofreeze`, `/etc/hosts`, `systemctl`,
   `journalctl` on Windows too. Build: each says Windows' own on Windows
   (the service, Safe Mode, the hosts file, `kc9k.log`). GUI: help texts.
-- [ ] `W17` Hardware clock on Windows (S). SPEC §4.10 (clock: check
+- [ ] `W17` Hardware clock on Windows (S). Built (2026-11-22):
+  `enforce/rtc_*.go`; `TestParseBootEvent` on both systems,
+  `TestWinHardwareClockForReal` on `windows-latest`. Was planned: SPEC §4.10 (clock: check
   against hardware clock and internet time). Was: no reader; the clock
   check gives back powered-off time by internet time alone. Build (By
   Opus): Windows reads the hardware clock at boot and logs it (event 12 of

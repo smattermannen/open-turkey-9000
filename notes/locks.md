@@ -116,7 +116,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   SPEC §6 2026-11-18; `enforce/clockcheck.go`, daemon every 5 min): once
   per boot while that holds, two of google/cloudflare/microsoft over HTTPS
   must agree (Date header, no-cache, the earlier taken; the DoH resolvers'
-  IPs are firewalled) and the RTC is read (`/sys/class/rtc/rtc0`);
+  IPs are firewalled) and the RTC is read (`/sys/class/rtc/rtc0`; on Windows its reading at
+  boot, notes/windows.md);
   `CheckClock` keeps an anchor (real, trusted, boot clock, RTC). The next
   anchor raises trusted to anchor trusted + real time passed, capped by
   the RTC's count; the system clock plays no part. The anchor is a floor

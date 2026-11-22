@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -76,15 +74,9 @@ var internetTime = func() (time.Time, error) {
 }
 
 // hardwareClock reads the hardware clock in seconds (a variable for tests);
-// false when there is none.
-var hardwareClock = func() (int64, bool) {
-	data, err := os.ReadFile("/sys/class/rtc/rtc0/since_epoch")
-	if err != nil {
-		return 0, false
-	}
-	n, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
-	return n, err == nil && n > 0
-}
+// false when there is none. Linux reads /sys/class/rtc, Windows what it
+// logged of the hardware clock at boot (rtc_*.go).
+var hardwareClock = readHardwareClock
 
 // CheckClock runs the clock check when it is due. The daemon calls it every
 // few minutes; it asks the internet only when due (once per boot while a

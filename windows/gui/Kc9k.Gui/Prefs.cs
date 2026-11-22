@@ -20,6 +20,12 @@ public sealed class Prefs
     public int WindowWidth { get; set; } = 1180;
     public int WindowHeight { get; set; } = 820;
     public bool WindowMaximized { get; set; }
+    /// <summary>Where the window was (W37); null until it was moved once.</summary>
+    public int? WindowX { get; set; }
+    public int? WindowY { get; set; }
+    /// <summary>"dashboard" (the Overview) or "last": the page open when the window closed (W37).</summary>
+    public string OpenOn { get; set; } = "dashboard";
+    public string LastPage { get; set; } = "dashboard";
     public string StatsRange { get; set; } = "week";
 
     // Before Current: static fields are set in the order written.

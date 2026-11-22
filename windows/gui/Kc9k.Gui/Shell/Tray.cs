@@ -1,5 +1,6 @@
 // §4.10 tray: an icon in the notification area whose tooltip says what is
-// on; click opens the window, its menu has Open and Quit. Closing the window
+// on; click opens the window, its menu (Core's TrayMenu, W35) has quick
+// actions that strengthen, Open and Quit. Closing the window
 // keeps the GUI there (Prefs.Tray). Win32 Shell_NotifyIcon on the window's
 // own handle (a subclass receives the icon's messages): WinUI has no tray.
 using System.Runtime.InteropServices;
@@ -12,7 +13,7 @@ public sealed class Tray : IDisposable
     const int WM_APP_TRAY = 0x8000 + 17, WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205, WM_CONTEXTMENU = 0x007B, NIN_SELECT = 0x0400, NIN_KEYSELECT = 0x0401;
     const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
     const uint NIF_MESSAGE = 1, NIF_ICON = 2, NIF_TIP = 4, NIF_SHOWTIP = 0x80;
-    const uint MF_STRING = 0, MF_GRAYED = 1, MF_SEPARATOR = 0x800, TPM_RETURNCMD = 0x100, TPM_RIGHTBUTTON = 2;
+    const uint MF_STRING = 0, MF_GRAYED = 1, MF_POPUP = 0x10, MF_SEPARATOR = 0x800, TPM_RETURNCMD = 0x100, TPM_RIGHTBUTTON = 2;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     struct NotifyIconData
@@ -52,6 +53,7 @@ public sealed class Tray : IDisposable
     readonly SubclassProc proc;
     NotifyIconData data;
     string status = "Killer Chicken 9000";
+    GuiState? state;
     bool added;
 
     Tray(MainWindow window)
@@ -88,6 +90,7 @@ public sealed class Tray : IDisposable
 
     public void SetStatus(GuiState state)
     {
+        this.state = state;
         var on = state.RealBlocks.Where(b => b.Active).Select(b => b.Name).ToList();
         var text = on.Count > 0 ? "On: " + string.Join(", ", on) : "No block is on";
         if (state.FreezeSeconds > 0) text = $"Frozen Chicken {Words.Seconds(state.FreezeSeconds)} · " + text;
@@ -113,17 +116,50 @@ public sealed class Tray : IDisposable
 
     void Menu()
     {
-        var menu = CreatePopupMenu();
-        foreach (var line in status.Split('\n').Skip(1)) AppendMenu(menu, MF_STRING | MF_GRAYED, 0, line);
-        AppendMenu(menu, MF_SEPARATOR, 0, null);
-        AppendMenu(menu, MF_STRING, 1, "Open Killer Chicken 9000");
-        AppendMenu(menu, MF_STRING, 2, "Quit (blocks stay on)");
+        var chosenItems = new List<TrayItem>();
+        var menus = new List<nint>();
+        nint Fill(IReadOnlyList<TrayItem> items)
+        {
+            var menu = CreatePopupMenu();
+            menus.Add(menu);
+            foreach (var item in items)
+            {
+                if (item.Separator) AppendMenu(menu, MF_SEPARATOR, 0, null);
+                else if (item.Sub is { } sub) AppendMenu(menu, MF_POPUP, (nuint)Fill(sub), item.Text);
+                else
+                {
+                    chosenItems.Add(item);
+                    AppendMenu(menu, MF_STRING | (item.Enabled ? 0 : MF_GRAYED), item.Enabled ? (nuint)chosenItems.Count : 0, item.Text.Replace("&", "&&"));
+                }
+            }
+            return menu;
+        }
+        var root = Fill(TrayMenu.Build(state, status));
         GetCursorPos(out var p);
         SetForegroundWindow(hwnd);
-        var chosen = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, p.X, p.Y, hwnd, 0);
-        DestroyMenu(menu);
-        if (chosen == 1) window.DispatcherQueue.TryEnqueue(window.ShowFromTray);
-        else if (chosen == 2) window.DispatcherQueue.TryEnqueue(window.Quit);
+        var chosen = TrackPopupMenuEx(root, TPM_RETURNCMD | TPM_RIGHTBUTTON, p.X, p.Y, hwnd, 0);
+        DestroyMenu(root); // destroys its submenus too
+        if (chosen <= 0 || chosen > chosenItems.Count) return;
+        var pick = chosenItems[chosen - 1];
+        window.DispatcherQueue.TryEnqueue(() => _ = Do(pick));
+    }
+
+    // The window comes forward first, so a question or a refusal is seen.
+    async Task Do(TrayItem item)
+    {
+        if (item.Do == "quit")
+        {
+            window.Quit();
+            return;
+        }
+        window.ShowFromTray();
+        switch (item.Do)
+        {
+            case "monk": await Actions.MonkMode(window); break;
+            case "freeze": window.OpenMode(Tables.FrozenChicken); break;
+            case "new-block": await Actions.CreateBlock(window); break;
+        }
+        if (item.Run is { } run) await window.Controller.Run(run);
     }
 
     public void Dispose()

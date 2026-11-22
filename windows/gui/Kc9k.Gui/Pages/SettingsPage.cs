@@ -50,13 +50,16 @@ public sealed class SettingsPage : IPage
         firstDay.SelectionChanged += (_, _) => { prefs.FirstDay = Key(firstDay) == "sunday" ? 6 : 0; prefs.Save(); C.Refresh(); };
         login = Ui.Switch("Open at sign-in", Startup.IsOn(), on => Startup.Set(window, on), "PrefLogin");
         tray = Ui.Switch("Show in the notification area", prefs.Tray, on => { prefs.Tray = on; prefs.Save(); }, "PrefTray");
+        var openOn = Combo("Open on", "PrefOpenOn", [("dashboard", "The Overview"), ("last", "The page open last")], prefs.OpenOn);
+        openOn.SelectionChanged += (_, _) => { prefs.OpenOn = Key(openOn); prefs.Save(); };
         var preferences = Ui.Section("Preferences",
             Ui.SettingRow("Theme", "", theme),
             Ui.SettingRow("Darkness (dark theme): grey to black", "", darkness),
             Ui.SettingRow("Clock", "", clock),
             Ui.SettingRow("First day of the week", "", firstDay),
             Ui.SettingRow("Open at sign-in", "Start this window, in the notification area, when you sign in.", login),
-            Ui.SettingRow("Show in the notification area", "An icon by the clock shows what is on; closing the window keeps it there.", tray));
+            Ui.SettingRow("Show in the notification area", "An icon by the clock shows what is on; closing the window keeps it there.", tray),
+            Ui.SettingRow("Open on", "The page the window opens on. Its size and place are kept too.", openOn));
 
         noWeakening = Ui.Switch("Keep every setting while anything is locked", false, on => _ = NoWeakening(on), "NoWeakening");
         var noWeak = Ui.Section("No weakening during active locks",
@@ -160,7 +163,25 @@ public sealed class SettingsPage : IPage
 
         scroll = Ui.Page(Ui.Column(20, Ui.PageHeader("Settings", "How Killer Chicken looks, what protects it, and what it may never do."),
             preferences, noWeak, tamper, browsersSection, browserSettings, use, notifications, dns, device, wallpaper, passwords, nepsis, project,
-            Ui.Section("Behaviour settings", behaviour)));
+            Ui.Section("Behaviour settings", behaviour), Keyboard()));
+    }
+
+    // W34: the window's shortcuts, so they can be found.
+    static StackPanel Keyboard()
+    {
+        var rows = Ui.Column(6);
+        foreach (var (keys, what) in MainWindow.Shortcuts)
+        {
+            var g = new Grid { ColumnSpacing = 12 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.Children.Add(Ui.Strong(keys));
+            var t = Ui.Dim(what);
+            Grid.SetColumn(t, 1);
+            g.Children.Add(t);
+            rows.Children.Add(g);
+        }
+        return Ui.Section("Keyboard", rows).Id("Keyboard");
     }
 
     static ComboBox Combo(string name, string id, IEnumerable<(string Key, string Title)> items, string selected)

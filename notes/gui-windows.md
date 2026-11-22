@@ -88,12 +88,17 @@
   routes phrases to a phrase set) and exports. `Shell/Tray.cs`: the
   notification-area icon through `Shell_NotifyIcon` on the window's own
   handle (a comctl32 subclass gets its messages); Quit leaves blocks on.
+  Its menu is `Core/TrayMenu.cs` (W35): what is on, Start a block ▸,
+  Start a mode ▸, Monk mode…, Frozen Chicken…, New block…, Open, Quit;
+  only actions that strengthen, each bringing the window forward first.
 - **Dialogs over dialogs**: WinUI shows one ContentDialog at a time, so a
   dialog that asks a second question (Add action… in a hotkey, Add… in a
   clip's points) hides itself, asks, and opens again with what was typed.
 - **Preferences** (`Prefs.cs`): `%APPDATA%\kc9k\gui.json` (`KC9K_GUI_PREFS`
   for tests): theme, darkness, clock, first weekday, tray, list heights,
-  window size. Static field order matters: `Options` is set before
+  window size, place and maximized (restored only on a screen still there,
+  else centred on the primary one), open on (Overview or the last page,
+  W37). Static field order matters: `Options` is set before
   `Current` reads the file.
 
 ## Tests
@@ -132,4 +137,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   ladder stands ("step 2 of 3: 1 of 2 in 30 min", from `nepsis_level`
   and `nepsis_count`); the Device line has the global ladder's. The GTK
   GUI shows neither.
+- Shortcuts (W34, `MainWindow.Shortcuts`, listed under Settings ›
+  Keyboard): Ctrl+1…9 the sidebar's pages, Ctrl+N New block…, F5 reads
+  the state and statistics again, Alt+Left, the Back key and the mouse's
+  back button go from a block, mode or automation to the cards.
 

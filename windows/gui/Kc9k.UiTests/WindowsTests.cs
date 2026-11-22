@@ -1,6 +1,8 @@
 // W30–W49 (ROADMAP §4.1): what the Windows GUI adds or fixes beyond the
 // GTK GUI's pages, against the fake kc9k.
 using System.Text.Json.Nodes;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 using Xunit;
 
 namespace Kc9k.UiTests;
@@ -57,5 +59,66 @@ public class WindowsTests
             "Work's ladder position");
         gui.WaitFor(() => gui.Find("OnNow_Games").FindAllDescendants().Any(e => e.Name.Contains("on a break for 10 min")), "Games' break");
         gui.Shot("overview");
+    }
+
+    // W34: the window's shortcuts.
+    [Fact]
+    public void KeyboardShortcuts()
+    {
+        using var gui = new GuiApp("keys");
+        gui.Window.Focus();
+        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_3);
+        gui.Find("ScheduleCard_Weekend");
+        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_2);
+        gui.Invoke("BlockCard_Reading");
+        gui.Find("Tab_websites");
+        gui.Window.Focus();
+        Keyboard.TypeSimultaneously(VirtualKeyShort.ALT, VirtualKeyShort.LEFT);
+        gui.WaitFor(() => gui.ById("Tab_websites") is null || gui.ById("Tab_websites")!.IsOffscreen, "back to the cards");
+        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_N);
+        gui.FindName("New block");
+        gui.Shot("new-block");
+        gui.Invoke(gui.FindButton("Cancel"));
+        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_9);
+        gui.Find("Keyboard");
+        gui.Shot("keyboard");
+    }
+
+    // W37: the window opens where it was, as large, on the page open last,
+    // and keeps that when it closes.
+    [Fact]
+    public void WindowStateIsKept()
+    {
+        string? prefs = null;
+        using (var gui = new GuiApp("window", prepare: dir =>
+               {
+                   prefs = Path.Combine(dir, "gui.json");
+                   File.WriteAllText(prefs, """{"theme": "light", "tray": false, "window_width": 1000, "window_height": 760, "window_x": 60, "window_y": 50, "open_on": "last", "last_page": "stats"}""");
+               }))
+        {
+            gui.Find("StatsTotal");
+            var r = gui.Window.BoundingRectangle;
+            Assert.InRange(r.X, 40, 80);
+            Assert.InRange(r.Y, 30, 70);
+            Assert.InRange(r.Width, 980, 1020);
+            gui.Page("hotkeys");
+            gui.Window.Move(120, 90);
+            Thread.Sleep(300);
+        }
+        Thread.Sleep(1000);
+        var kept = JsonNode.Parse(File.ReadAllText(prefs!))!;
+        Assert.Equal("hotkeys", (string?)kept["last_page"]);
+        Assert.InRange((int)kept["window_x"]!, 100, 140);
+    }
+
+    // A place on a screen that is gone: the window comes back on the primary screen.
+    [Fact]
+    public void AWindowOffEveryScreenComesBack()
+    {
+        using var gui = new GuiApp("offscreen", prepare: dir => File.WriteAllText(Path.Combine(dir, "gui.json"),
+            """{"theme": "light", "tray": false, "window_width": 1000, "window_height": 700, "window_x": 30000, "window_y": 30000}"""));
+        var r = gui.Window.BoundingRectangle;
+        Assert.InRange(r.X, 0, 4000);
+        Assert.InRange(r.Y, 0, 3000);
     }
 }

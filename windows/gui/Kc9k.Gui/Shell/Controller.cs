@@ -192,6 +192,14 @@ public sealed class Controller
         BusyChanged?.Invoke(running > 0);
     }
 
+    /// <summary>F5 (W34): the state read again and shown even if unchanged.</summary>
+    public async Task ReadAgain()
+    {
+        StateJson = "";
+        await RefreshAsync();
+        await RefreshStats();
+    }
+
     /// <summary>Reads the state now (after a read already running) and waits for it.</summary>
     public async Task RefreshAsync()
     {

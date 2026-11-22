@@ -362,4 +362,24 @@ public class CliTests
         Assert.Equal("bypass prevention step 2 of 2: 0 of 2 in 30 min", Words.LadderPosition(n, 7, 0));
         Assert.Equal("bypass prevention: 2 of 5 in 10 min", Words.LadderPosition(new Nepsis { Steps = [new() { Count = 5, Minutes = 10 }] }, 0, 2));
     }
+
+    // W35: the tray's quick actions only strengthen.
+    [Fact]
+    public void TrayMenuOnlyStrengthens()
+    {
+        var s = GuiState.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "gui-state.json")));
+        var items = TrayMenu.Build(s, "Killer Chicken 9000\nOn: Work");
+        IEnumerable<TrayItem> All(IEnumerable<TrayItem> list) => list.SelectMany(i => i.Sub is null ? [i] : All(i.Sub).Prepend(i));
+        var all = All(items).ToList();
+        Assert.Equal("On: Work", items[0].Text);
+        Assert.False(items[0].Enabled);
+        var start = items.First(i => i.Text == "Start a block");
+        Assert.Contains(start.Sub!, i => i.Text == "Reading" && i.Run!.SequenceEqual(["start", "Reading"]));
+        Assert.DoesNotContain(start.Sub!, i => i.Text == "Work"); // on already
+        foreach (var i in all.Where(i => i.Run is not null))
+            Assert.Contains(i.Run![0], new[] { "start", "mode" });
+        Assert.DoesNotContain(all, i => i.Run is { } r && r.Contains("off"));
+        Assert.Equal(["open", "quit"], items.TakeLast(2).Select(i => i.Do));
+        Assert.Equal(["open", "quit"], TrayMenu.Build(null, "x").Where(i => !i.Separator).Select(i => i.Do));
+    }
 }

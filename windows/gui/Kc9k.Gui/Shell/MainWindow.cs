@@ -150,8 +150,53 @@ public sealed partial class MainWindow : Window
             tray?.Dispose();
         };
 
-        nav.SelectedItem = items["dashboard"];
+        AddShortcuts();
+        var first = Prefs.Current.OpenOn == "last" && items.ContainsKey(Prefs.Current.LastPage) ? Prefs.Current.LastPage : "dashboard";
+        nav.SelectedItem = items[first];
         Controller.Start();
+    }
+
+    /// <summary>The shortcuts (W34), listed under Settings › Keyboard.</summary>
+    public static readonly (string Keys, string What)[] Shortcuts =
+    [
+        ("Ctrl+1 … Ctrl+9", "Open the pages of the sidebar, in order"),
+        ("Ctrl+N", "New block"),
+        ("F5", "Read the state again"),
+        ("Alt+Left", "Back: from a block, a mode or an automation to the list"),
+        ("Ctrl+F", "Find in the list that has the focus"),
+        ("Enter, Delete", "Add or remove an entry in a list"),
+        ("Shift+F10", "A card's menu (put a block into a mode)"),
+    ];
+
+    void AddShortcuts()
+    {
+        void Add(Windows.System.VirtualKey key, Windows.System.VirtualKeyModifiers mods, Action act)
+        {
+            var a = new KeyboardAccelerator { Key = key, Modifiers = mods };
+            a.Invoked += (_, e) => { e.Handled = true; act(); };
+            root.KeyboardAccelerators.Add(a);
+        }
+        root.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
+        for (var i = 0; i < Tables.Pages.Length; i++)
+        {
+            var key = Tables.Pages[i].Key;
+            Add(Windows.System.VirtualKey.Number1 + i, Windows.System.VirtualKeyModifiers.Control, () => Show(key));
+        }
+        Add(Windows.System.VirtualKey.N, Windows.System.VirtualKeyModifiers.Control, () => _ = Actions.CreateBlock(this));
+        Add(Windows.System.VirtualKey.F5, Windows.System.VirtualKeyModifiers.None, () => _ = Controller.ReadAgain());
+        Add(Windows.System.VirtualKey.Left, Windows.System.VirtualKeyModifiers.Menu, Back);
+        Add(Windows.System.VirtualKey.GoBack, Windows.System.VirtualKeyModifiers.None, Back);
+        // The mouse's back button.
+        root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, e) =>
+        {
+            if (e.GetCurrentPoint(root).Properties.IsXButton1Pressed) Back();
+        }), true);
+    }
+
+    /// <summary>Back from a block, a mode or an automation to the cards.</summary>
+    public void Back()
+    {
+        if (CurrentPage == "blocks" && Blocks.CurrentView != "cards") Blocks.ShowCards();
     }
 
     static string Area(string page) => page switch
@@ -214,6 +259,7 @@ public sealed partial class MainWindow : Window
     void Show(string key)
     {
         CurrentPage = key;
+        Prefs.Current.LastPage = key;
         if (items.TryGetValue(key, out var item) && !ReferenceEquals(nav.SelectedItem, item)) nav.SelectedItem = item;
         nav.Content = pages[key].Holder;
         if (Controller.State is { } s && !Controller.Locked(Area(key))) pages[key].Page.Update(s);
@@ -283,30 +329,51 @@ public sealed partial class MainWindow : Window
         AppWindow.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
     }
 
+    // W37: size, place and maximized kept per user; a place on a screen that
+    // is gone (a second screen unplugged) falls back to the middle of the
+    // primary screen's work area.
     void RestoreSize()
     {
         var p = Prefs.Current;
-        var scale = root.XamlRoot?.RasterizationScale ?? 1.0;
-        var display = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
-        int w = Math.Min(p.WindowWidth, display.WorkArea.Width), h = Math.Min(p.WindowHeight, display.WorkArea.Height);
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(Math.Max(w, 640), Math.Max(h, 480)));
-        AppWindow.Move(new Windows.Graphics.PointInt32(
-            display.WorkArea.X + (display.WorkArea.Width - Math.Max(w, 640)) / 2,
-            display.WorkArea.Y + (display.WorkArea.Height - Math.Max(h, 480)) / 2));
+        DisplayArea? display = null;
+        if (p.WindowX is int x && p.WindowY is int y)
+        {
+            var at = DisplayArea.GetFromPoint(new Windows.Graphics.PointInt32(x + 40, y + 20), DisplayAreaFallback.None);
+            if (at is not null && Contains(at.WorkArea, x + 40, y + 20)) display = at;
+        }
+        var placed = display is not null;
+        display ??= DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+        var work = display.WorkArea;
+        int w = Math.Max(Math.Min(p.WindowWidth, work.Width), 640), h = Math.Max(Math.Min(p.WindowHeight, work.Height), 480);
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(w, h));
+        if (placed)
+            AppWindow.Move(new Windows.Graphics.PointInt32(
+                Math.Clamp(p.WindowX!.Value, work.X, work.X + work.Width - Math.Min(w, work.Width)),
+                Math.Clamp(p.WindowY!.Value, work.Y, work.Y + work.Height - Math.Min(h, work.Height))));
+        else
+            AppWindow.Move(new Windows.Graphics.PointInt32(work.X + (work.Width - w) / 2, work.Y + (work.Height - h) / 2));
         if (p.WindowMaximized && AppWindow.Presenter is OverlappedPresenter o) o.Maximize();
-        _ = scale;
     }
+
+    static bool Contains(Windows.Graphics.RectInt32 r, int x, int y) => x >= r.X && y >= r.Y && x < r.X + r.Width && y < r.Y + r.Height;
 
     void SaveSize()
     {
         var p = Prefs.Current;
-        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized })
-            p.WindowMaximized = true;
-        else
+        switch (AppWindow.Presenter)
         {
-            p.WindowMaximized = false;
-            p.WindowWidth = AppWindow.Size.Width;
-            p.WindowHeight = AppWindow.Size.Height;
+            case OverlappedPresenter { State: OverlappedPresenterState.Maximized }:
+                p.WindowMaximized = true;
+                break;
+            case OverlappedPresenter { State: OverlappedPresenterState.Minimized }:
+                break; // keep what was there before
+            default:
+                p.WindowMaximized = false;
+                p.WindowWidth = AppWindow.Size.Width;
+                p.WindowHeight = AppWindow.Size.Height;
+                p.WindowX = AppWindow.Position.X;
+                p.WindowY = AppWindow.Position.Y;
+                break;
         }
         p.Save();
     }

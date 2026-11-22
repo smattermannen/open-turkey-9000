@@ -1725,28 +1725,34 @@ Parity with the GTK GUI and its tests:
   and takes keyboard focus), screenshots in high contrast and with text
   at 150 % and 200 %. Narrator read by a person, display scaling and a
   second screen: Needs win-vm, laptop. Needs: win-ci.
-- [ ] `W34` Keyboard shortcuts (S; R-GUI-3 "everything reachable by
+- [x] `W34` Keyboard shortcuts (S; R-GUI-3 "everything reachable by
   keyboard"). Ctrl+1…9 open the sidebar's pages, Ctrl+N a new block, F5
   reads the state again, Alt+Left (and Esc) goes back from a block or a
   mode; listed under Settings › Keyboard. The GTK GUI has none of these.
-  Needs: agent, win-ci.
+  Built 2026-11-22 (also the mouse's back button; UI test
+  `KeyboardShortcuts`). Esc is left to dialogs and text boxes.
 
 Windows conveniences:
 
-- [ ] `W35` Tray quick actions (S; §4.10 tray). Start a block ▸, Start a
+- [x] `W35` Tray quick actions (S; §4.10 tray). Start a block ▸, Start a
   mode ▸, Monk mode…, Frozen Chicken…, New block…, Open, Quit. Only
   actions that strengthen: Stop, Unlock and pauses are never in the tray,
   so it is never an easier way past a block than the window (By Opus).
-  Needs: agent, win-ci (the menu by a person: laptop).
+  Built 2026-11-22: `Core/TrayMenu.cs` (`TrayMenuOnlyStrengthens`),
+  rendered with submenus by `Tray.cs`; each action brings the window
+  forward first, so a question or refusal is seen. The menu opened by a
+  person: Unchecked (Needs laptop).
 - [ ] `W36` Jump list and start arguments (M). The taskbar's and Start
   menu's jump list: Overview, Blocks, New block, Monk mode, Frozen
   Chicken, Statistics, Settings, as `kc9k-gui.exe --page KEY` or
   `--do new-block|monk|freeze`; a second start hands its arguments to the
   running GUI. Needs: agent, win-ci (the list by a person: win-vm).
-- [ ] `W37` Window state (S; §6 2026-11-21 GUI preferences). Position,
+- [x] `W37` Window state (S; §6 2026-11-21 GUI preferences). Position,
   size, maximized and the last page kept per user and restored on a
   screen that is still there; preference "Open on: Overview / the last
-  page". Needs: agent, win-ci.
+  page". Built 2026-11-22 (UI tests `WindowStateIsKept`,
+  `AWindowOffEveryScreenComesBack`). Several screens and 150–200 %
+  scaling: Unchecked (Needs win-vm, laptop).
 - [ ] `W38` First view (S; R-GUI-3 tasks first; §6 2026-11-14 no wizard,
   §6 2026-11-21 guided setup). While nothing is set up (no block, no
   supported browser with the extension), the Overview shows a short

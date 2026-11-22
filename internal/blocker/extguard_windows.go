@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -88,16 +90,64 @@ func supportedExeOf(exe string) string {
 	return ""
 }
 
-// InstallBrowser: browsers are installed by their own installers on
-// Windows.
-func InstallBrowser(id string) error {
-	switch id {
-	case "librewolf":
-		return errorf("install LibreWolf from librewolf.net, or in a console: winget install LibreWolf.LibreWolf")
-	case "chrome":
-		return errorf("install Google Chrome from google.com/chrome, or: winget install Google.Chrome")
+// wingetIDs are the supported browsers' packages in winget's own source.
+var wingetIDs = map[string]string{"librewolf": "LibreWolf.LibreWolf", "chrome": "Google.Chrome"}
+
+// wingetPath finds winget (App Installer) for SYSTEM, which has it on no
+// PATH: the newest App Installer package's winget.exe.
+func wingetPath() string {
+	matches, _ := filepath.Glob(filepath.Join(programFilesDir(), "WindowsApps", "Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe", "winget.exe"))
+	if len(matches) == 0 {
+		if p, err := exec.LookPath("winget.exe"); err == nil {
+			return p
+		}
+		return ""
 	}
-	return errorf("unknown browser %q", id)
+	sort.Strings(matches) // versions sort as text within one major version
+	return matches[len(matches)-1]
+}
+
+// InstallBrowser installs a supported browser for the whole computer with
+// winget (W18; SPEC §6 2026-11-22 By Opus): the download comes from the
+// browser's own publisher through winget's source.
+func InstallBrowser(id string) error {
+	pkg := wingetIDs[id]
+	if pkg == "" {
+		return errorf("unknown browser %q (use librewolf or chrome)", id)
+	}
+	b, _ := SupportedBrowserByID(id)
+	for _, exe := range b.Exes {
+		if fileExists(exe) {
+			if id == "chrome" && ChromeStoreExtensionID == "" {
+				return errorf("Google Chrome is installed; it gets the extension once its Chrome Web Store listing exists")
+			}
+			return nil
+		}
+	}
+	winget := wingetPath()
+	if winget == "" {
+		return errorf("winget (App Installer) isn't installed: install %s from its website, or App Installer from the Microsoft Store first", b.Name)
+	}
+	out, err := installRun(winget, "install", "--id", pkg, "--exact", "--scope", "machine", "--silent",
+		"--accept-package-agreements", "--accept-source-agreements", "--disable-interactivity")
+	if err != nil {
+		text := strings.TrimSpace(string(out))
+		if len(text) > 600 {
+			text = text[len(text)-600:]
+		}
+		return errorf("winget install %s: %v: %s", pkg, err, text)
+	}
+	for _, exe := range b.Exes {
+		if fileExists(exe) {
+			return nil
+		}
+	}
+	return errorf("winget finished but %s is missing", b.Exes[0])
+}
+
+// installRun runs the installer; a variable for tests.
+var installRun = func(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).CombinedOutput()
 }
 
 // ChromeInstalled reports whether Chrome or Edge can run the extension.

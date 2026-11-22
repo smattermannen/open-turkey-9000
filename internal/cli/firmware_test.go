@@ -120,4 +120,3 @@ func TestFirmwareLockDevicelessWithTestDB(t *testing.T) {
 		t.Error("firmware-lock on did something with a test database")
 	}
 }
-

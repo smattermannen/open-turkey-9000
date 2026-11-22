@@ -1,8 +1,8 @@
 package blocker
 
 import (
-	"strings"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -41,13 +41,13 @@ func TestAccelToVK(t *testing.T) {
 func TestUserProgram(t *testing.T) {
 	drive := filepath.VolumeName(systemRoot())
 	for path, want := range map[string]bool{
-		drive + `\Users\me\Downloads\portable-browser\browser.exe`:              true,
-		drive + `\Users\me\Desktop\game.exe`:                                     true,
-		drive + `\Users\me\AppData\Local\Temp\setup\x.exe`:                       true,
-		drive + `\Users\me\AppData\Local\Programs\Microsoft VS Code\Code.exe`:    false,
-		drive + `\Users\me\AppData\Local\Microsoft\OneDrive\OneDrive.exe`:        false,
-		drive + `\Program Files\App\app.exe`:                                       false,
-		drive + `\Users\me\Downloads\allowed\tool.exe`:                            false,
+		drive + `\Users\me\Downloads\portable-browser\browser.exe`:            true,
+		drive + `\Users\me\Desktop\game.exe`:                                  true,
+		drive + `\Users\me\AppData\Local\Temp\setup\x.exe`:                    true,
+		drive + `\Users\me\AppData\Local\Programs\Microsoft VS Code\Code.exe`: false,
+		drive + `\Users\me\AppData\Local\Microsoft\OneDrive\OneDrive.exe`:     false,
+		drive + `\Program Files\App\app.exe`:                                  false,
+		drive + `\Users\me\Downloads\allowed\tool.exe`:                        false,
 	} {
 		p := &winProc{Exe: path}
 		if got := userProgram(p, []string{drive + `\Users\me\Downloads\allowed`}); got != want {

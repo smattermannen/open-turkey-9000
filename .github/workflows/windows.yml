@@ -29,7 +29,14 @@ jobs:
         shell: bash
         env:
           KC9K_TEST_WFP: "1"
-        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc|Deny|ACE|UserProgram|AccelToVK|Wlan|RemoteControl|RecoveryBoot|WinGuest|WinHardwareClock' ./internal/blocker ./internal/enforce
+        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc|Deny|ACE|UserProgram|AccelToVK|Wlan|RemoteControl|RecoveryBoot|WinGuest|WinHardwareClock|WinInstallBrowser' ./internal/blocker ./internal/enforce
+      - name: One-click LibreWolf install with winget (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          $env:KC9K_DB = Join-Path $env:RUNNER_TEMP 'browsers.db'
+          ./kc9k.exe browsers install librewolf
+          if (-not (Test-Path "$env:ProgramFiles\LibreWolf\librewolf.exe")) { throw 'LibreWolf not installed' }
       - name: Service, pipe, install and uninstall
         timeout-minutes: 12
         shell: pwsh

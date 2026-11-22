@@ -3,6 +3,7 @@ package blocker
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/smattermannen/kc9k/internal/winapi"
@@ -109,5 +110,31 @@ func TestWinGuestAccount(t *testing.T) {
 	_, _ = syncGuestAccount(false)
 	if g, _ := guestAccount(); !g.Disabled {
 		t.Error("the Guest account, off before, was turned on")
+	}
+}
+
+// W18: winget is asked for the whole computer, silently, with its own
+// package; a browser already there isn't installed again.
+func TestWinInstallBrowserWinget(t *testing.T) {
+	var got []string
+	old := installRun
+	installRun = func(name string, args ...string) ([]byte, error) { got = append([]string{name}, args...); return nil, nil }
+	defer func() { installRun = old }()
+	if wingetPath() == "" {
+		t.Skip("no winget here")
+	}
+	err := InstallBrowser("librewolf")
+	if LibreWolfVersion() != "" {
+		if len(got) != 0 {
+			t.Errorf("an installed LibreWolf installed again: %v", got)
+		}
+		return
+	}
+	want := "install --id LibreWolf.LibreWolf --exact --scope machine --silent"
+	if len(got) == 0 || !strings.Contains(strings.Join(got, " "), want) {
+		t.Errorf("winget ran %v, want %q", got, want)
+	}
+	if err == nil {
+		t.Error("a fake install reported LibreWolf installed")
 	}
 }

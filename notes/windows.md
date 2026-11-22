@@ -173,6 +173,12 @@
   of `Program Files\LibreWolf\librewolf.cfg`; cleaned overrides per
   account (ProfileList) in `Program Files\KC9K\share\librewolf\<name>.cfg`
   (users may read, only SYSTEM write), reached through `USERNAME`.
+- One-click install (W18, `InstallBrowser`): winget as SYSTEM (the newest
+  App Installer's `winget.exe` under WindowsApps, which SYSTEM has on no
+  PATH), `--scope machine --silent`, packages `LibreWolf.LibreWolf` and
+  `Google.Chrome`; a browser already there isn't installed again (Chrome:
+  says it waits for the store listing). CI installs LibreWolf for real on
+  manual runs (`workflow_dispatch`).
 - The extension in Chrome and Edge needs the Chrome Web Store listing's ID
   (`ChromeStoreExtensionID`, empty until the owner publishes it): only
   then are they supported browsers and given the extension by policy

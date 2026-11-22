@@ -66,7 +66,7 @@ of their group and a row here; a finished item loses its row.
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`): built; a real Safe Mode boot Unchecked | R-ESCAPE-1 | windows, device | win-vm |
-| W18 | One-click browser install on Windows (winget) | §4.10 | windows, browsers | win-ci, laptop |
+| W18 | One-click browser install on Windows (winget): built; as SYSTEM Unchecked | §4.10 | windows, browsers | win-vm |
 | W19 | Firmware lock on Windows (vendors' firmware WMI) | §3.8, §4.10 | windows, device | laptop, owner |
 | W20 | Strict mode: Windows' ways to SYSTEM | §3.8, principle 3 | windows, device | win-ci |
 | W21 | Strict mode: administrators' privileges | §3.8, principle 3 | windows, device | win-ci |
@@ -1875,7 +1875,12 @@ their sites; their pages are an app's, not a browser's).
   time plus the boot clock is the hardware clock's count, which caps what
   the check gives back as on Linux. A cleared log: internet time alone, as
   now. Needs: win-ci (the event on the runner).
-- [ ] `W18` One-click browser install on Windows (S). SPEC §4.10
+- [ ] `W18` One-click browser install on Windows (S). Built (2026-11-22):
+  `InstallBrowser` (winget); `TestWinInstallBrowserWinget` (the call,
+  faked) on `windows-latest`; a real install on manual runs of
+  `windows.yml`; as SYSTEM through the service: Unchecked (Needs win-vm).
+  GUI: on Windows `kc9k browsers install` takes librewolf and chrome
+  (no chromium). Was planned: SPEC §4.10
   (Browsers: one-click install). Was: refused with a hint. Build:
   `browser install librewolf|chrome` runs winget as SYSTEM (`--scope
   machine --silent`, its published package ids), an outside query stated

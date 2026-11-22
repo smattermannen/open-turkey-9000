@@ -175,4 +175,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   refusal leaves the state as it was, so the cards are drawn again;
   found by W32's `gui_cards` counterpart). A locked block's switch is
   greyed out.
+- Guided setup on Windows (Core W15): unknown step IDs show as plain
+  steps; `other-admins` and `builtin-admin` get Do it…, which opens
+  Windows' Settings › Accounts › Other users (`ms-settings:otherusers`);
+  `safe-mode` is information.
 

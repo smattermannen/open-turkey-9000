@@ -798,8 +798,18 @@ public sealed class SettingsPage : IPage
         "reset-guard" => () => C.Run(["reset-guard", "on"]),
         "firmware" => Firmware,
         "no-escape" => () => NoEscape(true),
+        // Windows (Core W15): other administrators and the built-in
+        // Administrator are changed in Windows' own account settings.
+        "other-admins" or "builtin-admin" => OpenAccountSettings,
         _ => null,
     };
+
+    static Task OpenAccountSettings()
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:otherusers") { UseShellExecute = true }); }
+        catch (Exception e) { Log.Write("account settings: " + e.Message); }
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>§4.10 Open at sign-in: a shortcut in the user's Startup folder

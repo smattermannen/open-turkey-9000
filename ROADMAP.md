@@ -1807,7 +1807,12 @@ Core's features:
   2026-11-22: W15 (guided setup's step IDs and texts differ on Windows:
   the checklist's buttons are keyed by step ID), W16 (help texts), W18
   (one-click browser install: W30's Install already shows its result);
-  none built on `main` yet.
+  none built on `main` yet. Rechecked 2026-11-22 after Core's W11–W27
+  landed: W15's Windows steps (`other-admins`, `builtin-admin`: Do it…
+  opens Windows' account settings; `safe-mode`: information) shown, UI
+  test `WindowsGuidedSetupSteps`; W16's help texts come from kc9k.exe as
+  they are; W18's install result is shown by W30's Install. Nothing else
+  in Core's items asks the GUI for a place.
 
 What only the owner, a VM or the laptop can show (GUI session, 2026-11-22;
 everything else in W4, W7 and W30–W49 is checked on `windows-latest`):

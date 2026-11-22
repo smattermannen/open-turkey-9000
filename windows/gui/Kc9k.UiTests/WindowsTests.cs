@@ -192,4 +192,27 @@ public class WindowsTests
         Assert.Single(System.Diagnostics.Process.GetProcessesByName("kc9k-gui"));
         gui.Shot("second-start");
     }
+
+    // W49 (Core W15): Windows' guided setup steps; the account steps open
+    // Windows' own settings, Safe Mode is information only.
+    [Fact]
+    public void WindowsGuidedSetupSteps()
+    {
+        using var gui = new GuiApp("guided-windows", prepare: dir => File.WriteAllText(Path.Combine(dir, "guided-setup.json"), """
+            [{"id": "settings-password", "title": "Settings password", "state": "done", "detail": "", "command": "kc9k password set"},
+             {"id": "other-admins", "title": "Other administrator accounts", "state": "todo", "detail": "Make them standard accounts.", "command": ""},
+             {"id": "builtin-admin", "title": "The built-in Administrator", "state": "todo", "detail": "Keep it off.", "command": ""},
+             {"id": "safe-mode", "title": "Safe Mode", "state": "info", "detail": "The service runs there too.", "command": ""},
+             {"id": "no-escape", "title": "No-escape", "state": "todo", "detail": "Last.", "command": "kc9k no-escape on"}]
+            """));
+        gui.Page("settings");
+        gui.Invoke("GuidedSetup");
+        gui.Find("Guided_other-admins");
+        gui.Find("Guided_builtin-admin");
+        gui.Find("Guided_no-escape");
+        Assert.Null(gui.ById("Guided_safe-mode"));
+        Assert.Null(gui.ById("Guided_settings-password"));
+        gui.Shot("guided-windows");
+        gui.Invoke("CloseButton"); // the dialog's, not the title bar's
+    }
 }

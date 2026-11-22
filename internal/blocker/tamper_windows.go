@@ -33,6 +33,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/freeze"
 	"github.com/smattermannen/kc9k/internal/platform"
@@ -145,7 +146,9 @@ func GuardService() []string {
 		}
 		note("the service's Safe Mode ("+mode+") registration", err)
 	}
-	if !taskExists(watchdogTask) {
+	// The task's file is checked each cycle (no process); schtasks runs at
+	// most once a minute (W50 audit).
+	if !taskFileExists(watchdogTask) && minuteDue("watchdog") && !taskExists(watchdogTask) {
 		note("the watchdog task", createWatchdogTask(exe))
 	}
 	for path, sddl := range map[string]string{platform.DataDir: dataSDDL, platform.InstallDir: programSDDL} {
@@ -528,11 +531,34 @@ func recoveryMenuOn(on bool) error {
 	return err
 }
 
+// taskFileExists reports whether the scheduled task's file is in the Tasks
+// folder (no process).
+func taskFileExists(name string) bool {
+	_, err := os.Stat(filepath.Join(systemRoot(), "System32", "Tasks", strings.TrimPrefix(name, `\`)))
+	return err == nil
+}
+
+// minuteDue reports whether what is named may run again: at most once a
+// minute (process starts the service cycle reaches; W50 audit).
+func minuteDue(what string) bool {
+	minuteDueAt.Lock()
+	defer minuteDueAt.Unlock()
+	if t, ok := minuteDueAt.m[what]; ok && time.Since(t) < time.Minute {
+		return false
+	}
+	minuteDueAt.m[what] = time.Now()
+	return true
+}
+
+var minuteDueAt = struct {
+	sync.Mutex
+	m map[string]time.Time
+}{m: map[string]time.Time{}}
+
 // taskExists reports whether the scheduled task exists: its file in the
 // Tasks folder (no schtasks process each cycle), else schtasks' answer.
 func taskExists(name string) bool {
-	file := filepath.Join(systemRoot(), "System32", "Tasks", strings.TrimPrefix(name, `\`))
-	if _, err := os.Stat(file); err == nil {
+	if taskFileExists(name) {
 		return true
 	}
 	return exec.Command(filepath.Join(systemRoot(), "System32", "schtasks.exe"), "/Query", "/TN", name).Run() == nil

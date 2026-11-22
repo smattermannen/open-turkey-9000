@@ -76,6 +76,9 @@ type circadianLevel struct {
 var (
 	circadianDry = func() bool { return os.Getenv("KC9K_DB") != "" }
 
+	// circadianForgetBacklights makes the next look find the panels afresh
+	// (after a wake; Windows caches its panel, sys_windows.go).
+	circadianForgetBacklights = func() {}
 	circadianBacklights = func() []circadianLevel {
 		var out []circadianLevel
 		for _, b := range blocker.Backlights() {
@@ -367,6 +370,11 @@ type Circadian struct {
 
 	external   []string
 	displays   []string
+	// The laptop panels, looked for while the backlight clip is on, else
+	// once (and again after a wake): on Windows a look starts PowerShell
+	// (W50).
+	backlightsLooked bool
+	backlightNames   []string
 	nightLight bool
 	status     string
 }
@@ -524,7 +532,18 @@ func (e *Circadian) Step(now time.Time) {
 	backlightOn := cfg.On && lane != nil && lane.On
 	_, previewed := running[circadian.LaneBacklight]
 
-	backlights := circadianBacklights()
+	var backlights []circadianLevel
+	if backlightOn || !e.backlightsLooked || woke {
+		if woke {
+			circadianForgetBacklights()
+		}
+		backlights = circadianBacklights()
+		e.backlightsLooked = true
+		e.backlightNames = e.backlightNames[:0]
+		for _, b := range backlights {
+			e.backlightNames = append(e.backlightNames, b.Name)
+		}
+	}
 	e.levels(PauseBacklight, backlights, backlightOn, previewed, lane, minute, pauses, pause, resume)
 	if slow {
 		e.slowAt = now
@@ -562,9 +581,7 @@ func (e *Circadian) Step(now time.Time) {
 	status := CircadianStatus{Backlights: []string{}, External: append([]string{}, e.external...),
 		Displays: append([]string{}, e.displays...),
 		DDCUtil:  circadianDDC(), Gamma: reading.String(), NightLight: e.nightLight}
-	for _, b := range backlights {
-		status.Backlights = append(status.Backlights, b.Name)
-	}
+	status.Backlights = append(status.Backlights, e.backlightNames...)
 	if data, err := json.Marshal(status); err == nil && string(data) != e.status {
 		if e.d.SetSetting(settingCircadianStatus, string(data)) == nil {
 			e.status = string(data)
@@ -990,6 +1007,11 @@ func PlayCircadian(d *db.DB, length time.Duration, now time.Time, frame func(min
 	start := circadian.MinuteOfDay(now)
 	wallpaper, dark := "\x00", "\x00"
 	external := circadianExternalKnown(d)
+	var backlights []circadianLevel
+	if slices.Contains(lanes, circadian.LaneBacklight) && !circadianDry() {
+		backlights = circadianBacklights() // looked for once, not each frame
+	}
+	every := max(int(time.Second/max(length/time.Duration(frames), time.Millisecond)), 1)
 	for i := 0; i <= frames; i++ {
 		minute := math.Mod(start+1440*float64(i)/float64(frames), 1440)
 		if frame != nil {
@@ -1010,14 +1032,15 @@ func PlayCircadian(d *db.DB, length time.Duration, now time.Time, frame func(min
 			}
 		}
 		if !circadianDry() {
-			if v, ok := values[circadian.LaneBacklight]; ok {
-				for _, b := range circadianBacklights() {
+			// The panel and external screens at most once a second (on
+			// Windows each set starts PowerShell; ddcutil is slow), and the
+			// last frame's level.
+			if v, ok := values[circadian.LaneBacklight]; ok && (i%every == 0 || i == frames) {
+				for _, b := range backlights {
 					_ = b.Set(blocker.PercentToRaw(v, b.Max))
 				}
-				if i%10 == 0 { // ddcutil is slow: about once a second
-					for _, b := range external {
-						_ = b.Set(blocker.PercentToRaw(v, b.Max))
-					}
+				for _, b := range external {
+					_ = b.Set(blocker.PercentToRaw(v, b.Max))
 				}
 			}
 			_, kOK := values[circadian.LaneKelvin]

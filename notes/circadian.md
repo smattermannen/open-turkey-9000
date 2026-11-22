@@ -33,6 +33,12 @@
   `darkExempt` → daemon `/dark-exempt` (`darkExemptHandler`, refused
   behind an app/settings access password). `circadian.Shape` mirrored by
   GUI `clip_shape`.
+  Panels (`circadianBacklights`) are looked for each step only while the
+  backlight clip is on, else once and after a wake (status keeps the
+  names); Play the day finds them once and sets panels and external
+  screens at most once a second plus the last frame. On Windows a look,
+  read or set starts PowerShell, limited further in `notes/windows.md`
+  (Circadian). *(By claude)*
   `ci/circadian_test.py` tests dark pages. The wallpaper the engine gives
   is `pickWallpaper`'s (wallpapers.go, below), not only circadian rhythm's.
 - **Wallpapers of modes** (R-MODE-5, §4.10; owner 2026-11-17;

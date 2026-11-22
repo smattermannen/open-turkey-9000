@@ -524,5 +524,47 @@
   `WmiSetBrightness`, PowerShell); external screens through DDC/CI in
   the agent (dxva2 `Get/SetMonitorBrightness`), listed at most once a
   minute, `Display` = "session:index".
+- Panel PowerShell kept rare (W50) *(By claude)*: WMI over COM isn't in
+  x/sys and `\\.\LCD`'s brightness IOCTLs can't be proven on a runner
+  without a panel, so PowerShell stays, limited (`panel` in
+  `circadian_windows.go`): the panel is looked for once, again after a
+  wake (`ForgetBacklights`, called by the engine) or a failed call (a
+  display change); its level read at most once a minute (in between the
+  last read or set level); set at most once a second, a sooner level kept
+  and sent by a timer (newest wins); one PowerShell at a time. The
+  engine looks for panels only while the backlight clip is on (else once,
+  and after a wake); Play the day finds them once and sets panel and
+  external screens at most once a second plus its last frame. Laptop
+  2026-11-22: 12 PowerShells a minute with circadian off before.
+  `TestWinPanelRateLimits`, `TestCircadianBacklightsLookedOnlyWhenOn`.
 - Sleep hook: ProgramData\kc9k\sleep-hook while on; the service accepts
   power events and on suspend runs `kc9k wallpaper before-sleep`.
+
+## Process starts and broadcasts from the service cycle (W50 audit)
+
+*(By claude, 2026-11-22.)* Everything `Tick`, the circadian engine and
+the agent manager reach on Windows that starts a process or broadcasts
+to every window, and how often it runs now (strict mode, monk mode and
+no-escape are the owner's choices; their rate is while they act):
+
+| What | Where | Runs |
+|---|---|---|
+| `RefreshPolicyEx` (forced; "Policy" to every window) | `noexec_windows.go` `refreshPolicy` | only after KC9K's SRP rules changed. Was 2 per cycle (laptop: 24/min) |
+| PowerShell `WmiMonitorBrightness` | `circadian_windows.go` `panel` | look once (wake, failure: again); read ≤ 1/min; set ≤ 1/s; one at a time. Was every cycle, 1/s after start/wake, 10/s in Play the day |
+| PowerShell `Get-NetAdapter` | `netcut_windows.go` `adapters` | ≤ 1/min (cache dropped by KC9K's own change), while monk mode cuts or place rules keep Wi-Fi on. Was every cycle |
+| PowerShell `Enable/Disable-NetAdapter` | `netcut_windows.go` `setAdapter` | on change (monk mode, places) |
+| `schtasks /Query`, `/Create` (watchdog) | `tamper_windows.go` `GuardService` | the task's file is checked each cycle; schtasks ≤ 1/min when it is missing. Was 1–2 per cycle while missing |
+| `schtasks /Delete` (a task made to run as SYSTEM) | `strict_windows.go` | on change, while strict mode acts |
+| PowerShell (services, Task Scheduler, WMI) | `strict_windows.go` | while strict mode acts: first pass, then ≤ 1 per 5 min; undo once |
+| `reagentc`, `bcdedit` | `tamper_windows.go` `SyncRecoveryGuard` | on change (state file); a failure is tried again next cycle |
+| PowerShell (firmware WMI) | `firmware_windows.go` | commands only (`firmware-lock`) |
+| `wevtutil` (boot event) | `enforce/rtc_windows.go` | once per service run |
+| `kc9k hotkey run` | `desktop_windows.go` | on a hotkey |
+| `kc9k wallpaper before-sleep` | `cli/windows_windows.go` | on suspend, with the sleep hook |
+| `WM_SETTINGCHANGE "ImmersiveColorSet"`; wallpaper `SPIF_SENDCHANGE` | agent, `look_windows.go` | on change (`Circadian.desktop`; failures after `circadianRetry`) |
+| `kc9k agent` | `manager_windows.go` | per session when none runs; not again within 2 s |
+| `TerminateProcess` | `procs_windows.go` `terminateProcess` | only through `killProcess`/`killNamedProcess` and the deny-list |
+
+Not reached by the cycle: `winget` (`browsers install`), the service's
+command children, uninstall's copy, `kc9k install`'s PATH broadcast.
+

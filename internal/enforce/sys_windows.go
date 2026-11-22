@@ -76,6 +76,7 @@ func init() {
 	// Windows' USB image writers (factory reset protection).
 	ResetGuardApps = append(ResetGuardApps, "rufus", "balenaetcher", "ventoy2disk", "mediacreationtool",
 		"mediacreationtoolw1022h2", "win32diskimager", "rpi-imager", "unetbootin", "universal-usb-installer")
+	circadianForgetBacklights = blocker.ForgetBacklights
 }
 
 // agentRestarts is the session agents started again so far, counted.

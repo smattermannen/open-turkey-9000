@@ -171,7 +171,31 @@ public sealed class SettingsPage : IPage
 
         scroll = Ui.Page(Ui.Column(20, Ui.PageHeader("Settings", "How Killer Chicken looks, what protects it, and what it may never do."),
             preferences, noWeak, tamper, browsersSection, browserSettings, use, notifications, dns, device, wallpaper, passwords, nepsis, project,
-            Ui.Section("Behaviour settings", behaviour), Keyboard()));
+            Ui.Section("Behaviour settings", behaviour), Keyboard(), About()));
+    }
+
+    // W43: which versions are installed, so a person can tell (and say).
+    TextBlock aboutCli = null!;
+
+    StackPanel About()
+    {
+        var gui = typeof(SettingsPage).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "?";
+        gui = gui.Split('+')[0];
+        aboutCli = Ui.Dim("kc9k: …").Id("AboutCli");
+        return Ui.Section("About",
+            Ui.Strong("Killer Chicken 9000"),
+            Ui.Dim("This window: " + gui).Id("AboutGui"),
+            aboutCli,
+            Ui.Dim("Free forever: no accounts, no telemetry; everything stays on this computer.")).Id("About");
+    }
+
+    async Task ReadVersion()
+    {
+        var result = await C.Session.RunAsync(["version"]);
+        aboutCli.Text = result.Ok && result.Output.Trim().Length > 0 ? "Service and command line: " + result.Output.Trim()
+            : "Service and command line: an older kc9k without 'kc9k version'";
     }
 
     // W34: the window's shortcuts, so they can be found.
@@ -318,7 +342,7 @@ public sealed class SettingsPage : IPage
     public void Update(GuiState s)
     {
         levelsNow.Text = Words.ProtectionNow(s.Strict, s.NoEscape, s.ResetGuard, firmwareLocked);
-        if (!firmwareRead) _ = ReadFirmware();
+        if (!firmwareRead) { _ = ReadFirmware(); _ = ReadVersion(); }
         filling = true;
         try
         {

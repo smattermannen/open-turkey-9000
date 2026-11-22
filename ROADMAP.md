@@ -1774,25 +1774,30 @@ Windows conveniences:
 
 Installer and release (W7):
 
-- [ ] `W40` Release workflow (S; §4.11). A tag `v1.2.3` builds `kc9k.exe`
+- [x] `W40` Release workflow (S; §4.11). A tag `v1.2.3` builds `kc9k.exe`
   (with its version), the GUI and the MSI with that version, signs them
   when a certificate is configured, and publishes a GitHub release with
-  the MSI and its SHA-256. Needs: win-ci; owner (the first tag).
-- [ ] `W41` MSI checks in CI (M; §4.11, R-LOCK-9, §6 2026-11-21 MSI).
+  the MSI and its SHA-256. Built 2026-11-22 (`windows-release.yml`;
+  by hand it builds and checks without publishing). Needs owner: the
+  first tag.
+- [x] `W41` MSI checks in CI (M; §4.11, R-LOCK-9, §6 2026-11-21 MSI).
   Add to `test-msi.ps1`: a newer version over a locked install (installs,
   the lock stays), an older one refused while locked with block the
   installer on, a repair refused likewise, and removal through the MSI's
-  own full UI driven by UI Automation. Apps & features by a person: Needs
-  win-vm.
-- [ ] `W42` Signing that switches on (S; §6 2026-11-21 later). A CI job
+  own full UI driven by UI Automation. Built 2026-11-22 (`test-msi.ps1
+  -Older -Newer`, `msi-ui.ps1`; install and removal through the full UI
+  too). Apps & features by a person: Needs win-vm.
+- [x] `W42` Signing that switches on (S; §6 2026-11-21 later). A CI job
   signs with a throwaway self-signed certificate and checks each file
   carries a signature, so the owner's certificate only has to be added;
-  Azure Artifact Signing chosen by its own secrets. Needs: win-ci; owner
-  (the certificate).
-- [ ] `W43` Versions shown (S; §4.11). `kc9k version` (additive,
+  Azure Artifact Signing chosen by its own secrets. Built 2026-11-22: the
+  throwaway-certificate check in the `installer` job. Not built: Azure
+  Artifact Signing steps (their action's inputs depend on the owner's
+  account; swap them in for `sign.ps1`). Needs owner: the certificate.
+- [x] `W43` Versions shown (S; §4.11). `kc9k version` (additive,
   `internal/cli`; set at build), the GUI's version and kc9k's under
-  Settings › About, so a person can tell what is installed. Needs: agent,
-  win-ci.
+  Settings › About, so a person can tell what is installed. Built
+  2026-11-22 (`TestVersion`, UI test `AboutShowsTheVersions`).
 
 Core's features:
 

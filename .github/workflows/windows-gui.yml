@@ -104,7 +104,13 @@ jobs:
         shell: pwsh
         run: |
           $env:CGO_ENABLED = "0"
-          go build -o "$env:RUNNER_TEMP\kc9k\kc9k.exe" ./cmd/kc9k
+          # One kc9k.exe per version the checks install (W41: kc9k version tells them apart).
+          foreach ($v in "0.1.0", "0.0.9", "0.2.0") {
+            go build -ldflags "-X github.com/smattermannen/kc9k/internal/cli.Version=$v" -o "$env:RUNNER_TEMP\kc9k-$v\kc9k.exe" ./cmd/kc9k
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\kc9k" | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\kc9k-0.1.0\kc9k.exe" "$env:RUNNER_TEMP\kc9k\kc9k.exe"
           dotnet publish windows/gui/Kc9k.Gui -c Release -r win-x64 -o "$env:RUNNER_TEMP\gui"
           dotnet build windows/installer/Actions -c Release -o "$env:RUNNER_TEMP\actions"
           Get-ChildItem "$env:RUNNER_TEMP\actions" -Filter *.CA.dll | Format-Table Name, Length
@@ -115,26 +121,52 @@ jobs:
         if: env.SIGNING_PFX_BASE64 != ''
         shell: pwsh
         run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\kc9k\kc9k.exe" "$env:RUNNER_TEMP\gui\kc9k-gui.exe"
-      - name: Build the MSI (twice)
+      - name: Build the MSIs
         shell: pwsh
         run: |
           $ca = (Get-ChildItem "$env:RUNNER_TEMP\actions" -Filter *.CA.dll | Select-Object -First 1).FullName
-          foreach ($n in "A", "B") {
+          # A and B: 0.1.0 twice (a reinstall); Older 0.0.9; Newer 0.2.0.
+          foreach ($m in @(@("A", "0.1.0"), @("B", "0.1.0"), @("Older", "0.0.9"), @("Newer", "0.2.0"))) {
+            $n, $v = $m
             Remove-Item -Recurse -Force windows/installer/obj, windows/installer/bin -ErrorAction SilentlyContinue
-            dotnet build windows/installer -c Release --no-incremental -p:GuiDir="$env:RUNNER_TEMP\gui" -p:Kc9kExe="$env:RUNNER_TEMP\kc9k\kc9k.exe" -p:ActionsDll="$ca" -p:Version=0.1.0
+            dotnet build windows/installer -c Release --no-incremental -p:GuiDir="$env:RUNNER_TEMP\gui" -p:Kc9kExe="$env:RUNNER_TEMP\kc9k-$v\kc9k.exe" -p:ActionsDll="$ca" -p:Version=$v
             if ($LASTEXITCODE -ne 0) { exit 1 }
             $msi = Get-ChildItem windows/installer/bin -Recurse -Filter *.msi | Sort-Object LastWriteTime -Descending | Select-Object -First 1
             Write-Host "built $($msi.FullName) ($($msi.Length) bytes)"
             New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\msi" | Out-Null
             Copy-Item $msi.FullName "$env:RUNNER_TEMP\msi\KillerChicken9000-$n.msi"
           }
+      # W42: the signing path proven with a throwaway self-signed certificate
+      # (on copies), so the owner's certificate only has to be added.
+      - name: Signing works (throwaway certificate)
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=KC9K CI throwaway" -CertStoreLocation Cert:\CurrentUser\My
+          $pw = [guid]::NewGuid().ToString()
+          $pfx = Join-Path $env:RUNNER_TEMP "throwaway.pfx"
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password (ConvertTo-SecureString $pw -AsPlainText -Force) | Out-Null
+          $dir = Join-Path $env:RUNNER_TEMP "signed-copies"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\kc9k\kc9k.exe", "$env:RUNNER_TEMP\gui\kc9k-gui.exe", "$env:RUNNER_TEMP\msi\KillerChicken9000-A.msi" $dir
+          $env:SIGNING_PFX_BASE64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($pfx))
+          $env:SIGNING_PFX_PASSWORD = $pw
+          pwsh windows/installer/sign.ps1 (Get-ChildItem $dir | ForEach-Object FullName)
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $bad = 0
+          foreach ($f in Get-ChildItem $dir) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            Write-Host "$($f.Name): $($sig.Status) by $($sig.SignerCertificate.Subject)"
+            if ($sig.SignerCertificate.Thumbprint -ne $cert.Thumbprint) { $bad++ }
+          }
+          Remove-Item $cert.PSPath
+          if ($bad -gt 0) { Write-Host "$bad file(s) not signed"; exit 1 }
       - name: Sign the MSI
         if: env.SIGNING_PFX_BASE64 != ''
         shell: pwsh
         run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\msi\KillerChicken9000-A.msi"
-      - name: Install, remove, refuse while locked
+      - name: Install, remove, refuse while locked, upgrade, downgrade, repair
         shell: pwsh
-        run: pwsh windows/installer/test-msi.ps1 "$env:RUNNER_TEMP\msi\KillerChicken9000-A.msi" "$env:RUNNER_TEMP\msi\KillerChicken9000-B.msi"
+        run: pwsh windows/installer/test-msi.ps1 -A "$env:RUNNER_TEMP\msi\KillerChicken9000-A.msi" -B "$env:RUNNER_TEMP\msi\KillerChicken9000-B.msi" -Older "$env:RUNNER_TEMP\msi\KillerChicken9000-Older.msi" -Newer "$env:RUNNER_TEMP\msi\KillerChicken9000-Newer.msi"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

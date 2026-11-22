@@ -165,4 +165,15 @@ public class WindowsTests
         gui.Find("FirmwareStatus").Focus();
         gui.Shot("device-protection");
     }
+
+    // W43: the versions under Settings › About.
+    [Fact]
+    public void AboutShowsTheVersions()
+    {
+        using var gui = new GuiApp("about");
+        gui.Page("settings");
+        gui.WaitFor(() => gui.Find("AboutCli").Name == "Service and command line: kc9k fake (windows/amd64)", "kc9k's version");
+        Assert.StartsWith("This window: ", gui.Find("AboutGui").Name);
+        Assert.True(gui.Ran("version"));
+    }
 }

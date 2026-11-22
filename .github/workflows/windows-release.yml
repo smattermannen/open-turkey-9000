@@ -1,0 +1,103 @@
+name: Windows release
+
+# W40 (§4.11): a tag v1.2.3 builds kc9k.exe (kc9k version says 1.2.3), the
+# GUI and the MSI with that version, signs them when the owner's
+# certificate is configured (secrets SIGNING_PFX_BASE64 and
+# SIGNING_PFX_PASSWORD; unsigned otherwise), checks the MSI installs and
+# answers, and publishes a GitHub release with the MSI and its SHA-256.
+# Run by hand (workflow_dispatch) it builds and checks without publishing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (no release is published by hand)"
+        required: true
+        default: "0.0.1"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+      SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Version
+        id: v
+        run: |
+          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" -replace '^v', '' } else { "${{ inputs.version }}" }
+          # The MSI's ProductVersion is numbers only: 1.2.3-beta.1 installs as 1.2.3.
+          $msi = ($v -split '[-+]')[0]
+          if ($msi -notmatch '^\d+\.\d+\.\d+$') { Write-Host "not a version: $v"; exit 1 }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "msi=$msi" >> $env:GITHUB_OUTPUT
+          Write-Host "version $v (MSI $msi)"
+      - name: Build kc9k.exe, the GUI and the custom actions
+        run: |
+          $env:CGO_ENABLED = "0"
+          go build -ldflags "-X github.com/smattermannen/kc9k/internal/cli.Version=${{ steps.v.outputs.version }}" -o "$env:RUNNER_TEMP\kc9k\kc9k.exe" ./cmd/kc9k
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          dotnet publish windows/gui/Kc9k.Gui -c Release -r win-x64 -p:Version=${{ steps.v.outputs.msi }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o "$env:RUNNER_TEMP\gui"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          dotnet build windows/installer/Actions -c Release -o "$env:RUNNER_TEMP\actions"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Sign the programs
+        if: env.SIGNING_PFX_BASE64 != ''
+        run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\kc9k\kc9k.exe" "$env:RUNNER_TEMP\gui\kc9k-gui.exe"
+      - name: Build the MSI
+        run: |
+          $ca = (Get-ChildItem "$env:RUNNER_TEMP\actions" -Filter *.CA.dll | Select-Object -First 1).FullName
+          dotnet build windows/installer -c Release --no-incremental -p:GuiDir="$env:RUNNER_TEMP\gui" -p:Kc9kExe="$env:RUNNER_TEMP\kc9k\kc9k.exe" -p:ActionsDll="$ca" -p:Version=${{ steps.v.outputs.msi }}
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $msi = Get-ChildItem windows/installer/bin -Recurse -Filter *.msi | Select-Object -First 1
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\out" | Out-Null
+          Copy-Item $msi.FullName "$env:RUNNER_TEMP\out\KillerChicken9000-${{ steps.v.outputs.version }}.msi"
+      - name: Sign the MSI
+        if: env.SIGNING_PFX_BASE64 != ''
+        run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\out\KillerChicken9000-${{ steps.v.outputs.version }}.msi"
+      - name: The MSI installs and answers
+        run: |
+          $msi = "$env:RUNNER_TEMP\out\KillerChicken9000-${{ steps.v.outputs.version }}.msi"
+          $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn /l*v `"$env:RUNNER_TEMP\install.log`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log" -Tail 80; exit 1 }
+          $v = & "$env:ProgramFiles\KC9K\kc9k.exe" version | Out-String
+          Write-Host $v
+          if ($v -notmatch [regex]::Escape("${{ steps.v.outputs.version }}")) { Write-Host "kc9k version doesn't say ${{ steps.v.outputs.version }}"; exit 1 }
+          $p = Start-Process msiexec.exe -ArgumentList "/x `"$msi`" /qn" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Host "removal failed: $($p.ExitCode)"; exit 1 }
+      - name: Checksum and signature
+        run: |
+          $msi = Get-Item "$env:RUNNER_TEMP\out\KillerChicken9000-${{ steps.v.outputs.version }}.msi"
+          $hash = (Get-FileHash $msi.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($msi.Name)" | Set-Content -Encoding ascii "$($msi.FullName).sha256"
+          $sig = Get-AuthenticodeSignature $msi.FullName
+          Write-Host "SHA-256 $hash; signature: $($sig.Status) $($sig.SignerCertificate.Subject)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kc9k-windows-${{ steps.v.outputs.version }}
+          path: ${{ runner.temp }}/out/
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $signed = if ($env:SIGNING_PFX_BASE64) { "Signed." } else { "Not code-signed yet: Windows SmartScreen will warn before it runs." }
+          $notes = "Killer Chicken 9000 for Windows ${{ steps.v.outputs.version }}: one MSI with the service, kc9k.exe and the window. $signed The .sha256 file holds the MSI's SHA-256."
+          gh release create "${{ github.ref_name }}" (Get-ChildItem "$env:RUNNER_TEMP\out" | ForEach-Object FullName) --title "Killer Chicken 9000 ${{ steps.v.outputs.version }}" --notes $notes

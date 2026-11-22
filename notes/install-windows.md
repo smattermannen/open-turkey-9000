@@ -1,6 +1,6 @@
 # Install on Windows (the MSI)
 
-- Covers: `windows/installer/` (`Package.wxs`, `Kc9k.Installer.wixproj`, `Actions/` custom actions, `License.rtf`, `test-msi.ps1`, `sign.ps1`), the `installer` job of `.github/workflows/windows-gui.yml`
+- Covers: `windows/installer/` (`Package.wxs`, `Kc9k.Installer.wixproj`, `Actions/` custom actions, `License.rtf`, `test-msi.ps1`, `msi-ui.ps1`, `sign.ps1`), the `installer` job of `.github/workflows/windows-gui.yml`, `.github/workflows/windows-release.yml`, `cli/version.go`
 - SPEC: §4.11, R-LOCK-9, §4.10 (block the installer), §6 2026-11-21 (signing)
 - Connects to: [windows](windows.md) (Core: `kc9k install`/`uninstall`, the service), [install](install.md) (Linux's guards), [gui-windows](gui-windows.md)
 
@@ -41,6 +41,32 @@
   workflow signs `kc9k.exe`, `kc9k-gui.exe` and the MSI only when they
   are set. For Azure Artifact Signing, replace the two steps with
   Microsoft's trusted-signing action (endpoint, account, profile).
+
+- Versions (W43): `kc9k version` prints `kc9k VERSION (os/arch)`; the
+  version is set at build (`-ldflags "-X
+  github.com/smattermannen/kc9k/internal/cli.Version=1.2.3"`), "dev"
+  otherwise; no access password asked. The GUI's version is the
+  assembly's (`-p:Version`, `-p:InformationalVersion`).
+- Release (W40, `windows-release.yml`): a tag `v1.2.3` builds kc9k.exe
+  with that version, the GUI and the MSI (ProductVersion: the numbers
+  before any `-` or `+`), signs when the certificate's secrets are set,
+  installs the MSI and checks `kc9k version`, removes it, then publishes a
+  GitHub release with the MSI and `.sha256`. By hand
+  (`workflow_dispatch`, a version) it builds and checks without
+  publishing.
+- CI checks (W41, `test-msi.ps1 -A -B -Older -Newer`; the `installer` job
+  builds 0.1.0 twice, 0.0.9 and 0.2.0, each with its own kc9k.exe):
+  install and removal through the full UI (`msi-ui.ps1`: Windows
+  PowerShell's UI Automation ticks the licence box and presses Install,
+  Yes, Next, Finish, OK or Close, and keeps each dialog's text), removal
+  refused while locked, then with block the installer on and a block
+  locked: a reinstall, an older version and a repair refused, a newer
+  version installed with the block still locked and one entry in Apps &
+  features, removal through the full UI refused with kc9k's words in a
+  dialog.
+- Signing proven (W42): the `installer` job makes a throwaway
+  self-signed certificate, signs copies of kc9k.exe, kc9k-gui.exe and the
+  MSI with `sign.ps1`, and checks each carries its signature.
 
 ## Built behaviour
 

@@ -1,8 +1,11 @@
 package blocker
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/smattermannen/kc9k/internal/winapi"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -62,5 +65,49 @@ func TestRegPolicy(t *testing.T) {
 	}
 	if regValuesPresent(key, []string{"URLBlocklist", "URLAllowlist"}) {
 		t.Error("the blocklist is still there after removal")
+	}
+}
+
+// W14: "close guest profiles" turns the Guest account off and, when it
+// ends, back on only if it was on. Needs an administrator (CI).
+func TestWinGuestAccount(t *testing.T) {
+	if os.Getenv("KC9K_TEST_WFP") == "" {
+		t.Skip("changes the computer's Guest account: KC9K_TEST_WFP=1 (CI) only")
+	}
+	guest, ok := guestAccount()
+	if !ok {
+		t.Fatal("no Guest account (relative ID 501) found")
+	}
+	defer func() { _ = winapi.SetAccountDisabled(guest.Name, guest.Disabled) }()
+	old := guestOffPath
+	guestOffPath = filepath.Join(t.TempDir(), "guest-off")
+	defer func() { guestOffPath = old }()
+	if err := winapi.SetAccountDisabled(guest.Name, false); err != nil {
+		t.Fatal(err)
+	}
+	if off, err := syncGuestAccount(true); err != nil || !off {
+		t.Fatalf("turning the Guest account off: %v, %v", off, err)
+	}
+	if g, _ := guestAccount(); !g.Disabled {
+		t.Error("the Guest account is still on")
+	}
+	if off, err := syncGuestAccount(true); err != nil || off {
+		t.Errorf("a second cycle changed it again: %v, %v", off, err)
+	}
+	if _, err := syncGuestAccount(false); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := guestAccount(); g.Disabled {
+		t.Error("the Guest account, on before, wasn't put back on")
+	}
+	if _, err := os.Stat(guestOffPath); err == nil {
+		t.Error("the note stayed")
+	}
+	// Off before: stays off afterwards.
+	_ = winapi.SetAccountDisabled(guest.Name, true)
+	_, _ = syncGuestAccount(true)
+	_, _ = syncGuestAccount(false)
+	if g, _ := guestAccount(); !g.Disabled {
+		t.Error("the Guest account, off before, was turned on")
 	}
 }

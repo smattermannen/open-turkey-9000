@@ -66,7 +66,6 @@ of their group and a row here; a finished item loses its row.
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`): built; a real Safe Mode boot Unchecked | R-ESCAPE-1 | windows, device | win-vm |
-| W14 | Guest account off with close guest profiles | §4.10 | windows, browsers | win-ci |
 | W15 | Guided setup's Windows steps | §4.10 | windows, device | win-ci |
 | W16 | Windows wording in help texts and messages | §3.14 | windows | agent |
 | W17 | Hardware clock on Windows (boot event) | §4.10 | windows, locks | win-ci |
@@ -1839,7 +1838,11 @@ their sites; their pages are an app's, not a browser's).
   recovery environment is off and no-escape isn't on, the F8 boot menu
   (`bootmenupolicy Legacy`) keeps Safe Mode reachable; no-escape turns it
   off. Needs: win-ci (fakes), win-vm (`-Reboots`).
-- [ ] `W14` Guest account (S). SPEC §4.10 (close guest profiles also
+- [ ] `W14` Guest account (S). Built (2026-11-22): `syncGuestAccount`,
+  `winapi.LocalAccounts`, `SetAccountDisabled`; checked on
+  `windows-latest` (`TestWinGuestAccount`: off while on, back on only if
+  it was). A person signing in as Guest: not possible while off. Was
+  planned: SPEC §4.10 (close guest profiles also
   turns off the login screen's guest session). Was: `SyncGuestOff` does
   nothing. Build: the built-in Guest account (RID 501) is disabled while
   the setting is on, put back after; turned on by hand meanwhile: put back

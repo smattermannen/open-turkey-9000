@@ -12,6 +12,7 @@ package blocker
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/smattermannen/kc9k/internal/platform"
+	"github.com/smattermannen/kc9k/internal/winapi"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -551,4 +553,56 @@ func RemoveChromeSetup() error {
 // whatever the setting (chromeSetupFor), and Windows has no guest session
 // at sign-in (its Guest account is off unless an administrator turns it
 // on). Nothing more to write.
-func SyncGuestOff(on bool) error { return nil }
+func SyncGuestOff(on bool) error {
+	_, err := syncGuestAccount(on)
+	return err
+}
+
+// guestOffPath notes that "close guest profiles" turned the Guest account
+// off, and that it was on before.
+var guestOffPath = filepath.Join(platform.DataDir, "guest-off")
+
+// guestAccount is the built-in Guest account (relative ID 501) by its
+// local name, which Windows translates.
+func guestAccount() (winapi.Account, bool) {
+	accounts, err := winapi.LocalAccounts()
+	if err != nil {
+		return winapi.Account{}, false
+	}
+	for _, a := range accounts {
+		if a.RID == 501 {
+			return a, true
+		}
+	}
+	return winapi.Account{}, false
+}
+
+// syncGuestAccount keeps the Guest account off while on (W14): Windows'
+// guest session at sign-in. It is put back on afterwards only if it was on
+// when the setting turned it off. It reports whether it turned it off now.
+func syncGuestAccount(on bool) (bool, error) {
+	guest, ok := guestAccount()
+	if !ok {
+		return false, nil
+	}
+	_, statErr := os.Stat(guestOffPath)
+	noted := statErr == nil
+	switch {
+	case on && !guest.Disabled:
+		if !noted {
+			if err := os.WriteFile(guestOffPath, []byte("the Guest account was on\n"), 0o600); err != nil {
+				return false, err
+			}
+		}
+		log.Printf("guest: turning the Guest account off (close guest profiles)")
+		return true, winapi.SetAccountDisabled(guest.Name, true)
+	case !on && noted:
+		if guest.Disabled {
+			if err := winapi.SetAccountDisabled(guest.Name, false); err != nil {
+				return false, err
+			}
+		}
+		return false, os.Remove(guestOffPath)
+	}
+	return false, nil
+}

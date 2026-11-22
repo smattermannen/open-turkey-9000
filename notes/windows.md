@@ -180,8 +180,12 @@
   process parameters, x64 layout) checked by `remoteControlArgs`, which
   also takes Firefox's `/switch` and any case. Supported
   browsers: LibreWolf; Chrome and Edge once the store ID is set.
-- Guest: Chromium guest mode is always off by the setup; Windows has no
-  guest session at sign-in (`SyncGuestOff` writes nothing).
+- Guest: Chromium guest mode is always off by the setup. "Close guest
+  profiles" also keeps Windows' built-in Guest account (relative ID 501,
+  found by ID since its name is translated) off, each cycle
+  (`syncGuestAccount`, `winapi/accounts_windows.go`); ProgramData\kc9k\
+  guest-off notes it was on, and only then is it turned on again when the
+  setting goes off (W14).
 - Checked on `windows-latest` (CI "Layers for real"): WFP blocks a blocked
   address and DoH on 443 with WSAEACCES, leaves others, replaces on
   re-apply, removes fully; registry policies round-trip; process

@@ -23,6 +23,9 @@ public static class Files
         catch (Exception e) { Log.Write("open picker: " + e.Message); return null; }
     }
 
+    /// <summary>Settings › Import project… (W55).</summary>
+    public static Task ImportProject(MainWindow window) => Task.CompletedTask; // Lane C replaces this
+
     public static async Task<string?> Folder(MainWindow window)
     {
         var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };

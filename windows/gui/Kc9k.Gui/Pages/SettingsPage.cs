@@ -99,7 +99,7 @@ public sealed class SettingsPage : IPage
             noticeRow, Ui.Wrap(6, Ui.Text("Minutes ahead:"), advance, Ui.Button("Apply", () => _ = C.Run(["notifications", "advance", advance.Text.Replace(" ", "")]), "NoticeApply")));
 
         dnsChoice = Combo("DNS server", "DnsChoice", [("network", "The network's own server, then Quad9"), ("quad9", "Quad9 only"), ("own", "My own servers")], "network");
-        dnsServers = new TextBox { PlaceholderText = "e.g. 192.168.1.1, 9.9.9.9", Width = 240 }.Named("My own DNS servers", "DnsServers");
+        dnsServers = new TextBox { PlaceholderText = "e.g. 192.168.1.1, 9.9.9.9", MinWidth = 200, MaxWidth = 240 }.Named("My own DNS servers", "DnsServers");
         dnsChoice.SelectionChanged += (_, _) => dnsServers.Visibility = Key(dnsChoice) == "own" ? Visibility.Visible : Visibility.Collapsed;
         var dns = Ui.Section("DNS", Ui.Dim("The firewall needs the real addresses of blocked sites, so Killer Chicken 9000 asks a DNS server for them. By default that is the server the computer already uses, so nobody new learns which sites are blocked."),
             Ui.Wrap(6, dnsChoice, dnsServers, Ui.Button("Apply", () => _ = ApplyDns(), "DnsApply")));
@@ -124,12 +124,12 @@ public sealed class SettingsPage : IPage
             Ui.SettingRow("No-escape: close the ways out", "During a lock, Safe Mode and the recovery environment are off, so the only way past a lock is booting other media or reinstalling. It can't be turned off during a lock.", noEscape),
             Ui.SettingRow("Factory reset protection: installer media guard", "While anything is locked, the download pages of operating systems and USB image writers are blocked and image writers (Rufus, balenaEtcher, the Media Creation Tool, …) are closed. It can't be turned off during a lock.", resetGuard),
             Ui.SettingRow("Factory reset protection: firmware lock", "USB and network boot off, the boot order locked, and a firmware password a trusted person keeps. The guided setup lists every step of the strictest setup, in order.",
-                Ui.Row(6, Ui.Button("Firmware lock…", () => _ = Firmware(), "FirmwareLock"), Ui.Button("Guided setup…", () => _ = Guided(), "GuidedSetup")),
+                Ui.Wrap(6, Ui.Button("Firmware lock…", () => _ = Firmware(), "FirmwareLock"), Ui.Button("Guided setup…", () => _ = Guided(), "GuidedSetup")),
                 firmwareStatus));
 
         wallpaperDefault = Combo("Wallpaper default", "WallpaperDefault", Tables.WallpaperDefaults, "latest");
         wallpaperDefault.SelectionChanged += (_, _) => { if (!filling) _ = WallpaperDefaultChanged(); };
-        wallpaperCustom = Ui.Row(10, wallpaperName, Ui.Button("Choose a picture…", () => _ = ChooseWallpaper(), "WallpaperChoose"));
+        wallpaperCustom = Ui.Wrap(10, wallpaperName, Ui.Button("Choose a picture…", () => _ = ChooseWallpaper(), "WallpaperChoose"));
         var wallpaper = Ui.Section("Wallpaper default",
             Ui.Dim("What the desktop shows when no mode and no circadian rhythm wallpaper does, and while Killer Chicken can't tell where you are for a mode switched by places (no Wi-Fi, the first seconds after starting or waking)."),
             Ui.SettingRow("Default to", "", wallpaperDefault), wallpaperCustom, wallpaperNote);
@@ -145,21 +145,21 @@ public sealed class SettingsPage : IPage
         var passwords = Ui.Section("Passwords",
             Ui.Strong("Settings password"),
             Ui.Dim("Guards Killer Chicken 9000 against anything running as you, and lets someone else decide when your blocks may be weakened: weakening, stopping, unlocking, turning browser settings off, strict mode, no-escape and uninstalling all ask for it. Starting a block and adding sites don't."),
-            passwordStatus, Ui.Row(6, passwordSet, passwordRemove), passwordLocks,
+            passwordStatus, Ui.Wrap(6, passwordSet, passwordRemove), passwordLocks,
             Ui.Strong("Access passwords"),
             Ui.Dim("Optional passwords to open Killer Chicken 9000 and each of its pages: Overview, Blocks, Frozen Chicken, Statistics and Settings. Use the same one for several, or a different one for each. A locked page shows nothing until its password is given; Lock in the sidebar locks them again. Changing or removing one asks for the one it has."),
-            accessStatus, Ui.Row(6, Ui.Button("Set a password…", () => _ = AccessPassword(remove: false), "AccessSet"), accessRemove),
+            accessStatus, Ui.Wrap(6, Ui.Button("Set a password…", () => _ = AccessPassword(remove: false), "AccessSet"), accessRemove),
             Ui.Wrap(8, Ui.Text("Lock the pages again after"), idle, Ui.Text("without using this window")));
 
         nepsisOff = Ui.Button("Turn off…", () => _ = NepsisOff(), "NepsisOff");
         var nepsis = Ui.Section("Bypass prevention",
             Ui.Dim("When Killer Chicken stops many things in a short time (blocked pages, closed apps and windows, browsers without the extension, wrong access passwords), you are likely hunting for a loophole. It then takes the consequence you choose, so you really step away. Each block can have its own too."),
-            nepsisLabel, Ui.Row(6, Ui.Button("Change…", () => _ = ChangeNepsis(), "NepsisChange", accent: true), nepsisOff));
+            nepsisLabel, Ui.Wrap(6, Ui.Button("Change…", () => _ = ChangeNepsis(), "NepsisChange", accent: true), nepsisOff));
 
         var project = Ui.Section("Project",
             Ui.Dim("Save every block and setting to one file. A backup also holds every preset, your places (the Wi-Fi networks they are known by), running locks, passwords (as hashes), hotkeys and statistics; a file to share leaves those out and asks about presets. Importing shows what it adds first, only adds, and gives a block or preset whose name is taken a new name."),
-            Ui.Row(6, Ui.Button("Back up…", () => _ = ExportProject(false), "ProjectBackup"), Ui.Button("Share…", () => _ = ExportProject(true), "ProjectShare"),
-                Ui.Button("Import…", () => _ = ImportProject(), "ProjectImport")));
+            Ui.Wrap(6, Ui.Button("Back up…", () => _ = ExportProject(false), "ProjectBackup"), Ui.Button("Share…", () => _ = ExportProject(true), "ProjectShare"),
+                Ui.Button("Import project…", () => _ = Files.ImportProject(window), "ProjectImport")));
 
         var behaviour = Ui.Column(12);
         foreach (var o in Tables.Options)
@@ -228,9 +228,6 @@ public sealed class SettingsPage : IPage
 
     public void ShowBrowsers() => browsersSection.StartBringIntoView();
 
-    /// <summary>The guided setup's checklist, from elsewhere (the Overview's first view, W38).</summary>
-    public Task ShowGuidedSetup() => Guided();
-
     // W39: the firmware lock's state on the page, read quietly (a refusal
     // here is no news) when the page is first shown and after its dialog.
     TextBlock levelsNow = null!, firmwareStatus = null!;
@@ -264,17 +261,11 @@ public sealed class SettingsPage : IPage
         var unlock = Ui.Button("Unlock…", () => _ = UnlockSetting(name, title), "Unlock_" + name);
         unlock.Visibility = Visibility.Collapsed;
         settingLocks[name] = (status, unlock);
-        var g = new Grid { ColumnSpacing = 12 };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var texts = Ui.Column(2, Ui.Text(title));
         if (detail.Length > 0) texts.Children.Add(Ui.Note(detail));
         texts.Children.Add(status);
-        g.Children.Add(texts);
-        var right = Ui.Row(6, unlock, Ui.Button("Lock…", () => _ = LockSetting(name, title), "Lock_" + name), sw);
-        Grid.SetColumn(right, 1);
-        g.Children.Add(right);
-        return g;
+        // W54: Lock… and the switch in the page's right column.
+        return Ui.Side(texts, Ui.Row(6, unlock, Ui.Button("Lock…", () => _ = LockSetting(name, title), "Lock_" + name), sw));
     }
 
     UIElement LockLine(string name, string title)
@@ -643,25 +634,6 @@ public sealed class SettingsPage : IPage
         if (output is null) return;
         try { await File.WriteAllTextAsync(path, output + "\n"); }
         catch (Exception e) { await C.Dialogs.Message(e.Message); }
-    }
-
-    async Task ImportProject()
-    {
-        var path = await Files.Open(window, ".json");
-        if (path is null) return;
-        var output = await C.Read(["project", "import", "--dry-run", path]);
-        if (output is null) return;
-        if (!output.Contains("Would:"))
-        {
-            await C.Dialogs.Message(output.Length > 0 ? output : "The file adds nothing new.", "Nothing to import");
-            return;
-        }
-        var locks = output.Split('\n').Where(l => l.Contains("Would: set a lock: ")).Select(l => l[(l.IndexOf("Would: set a lock: ") + 19)..]).ToList();
-        // R-CUSTOM-1: what its custom actions open or run is in the list.
-        var customs = output.Contains("Would: add a custom action that can ");
-        if (!await C.Dialogs.Confirm("Import this setup?", output.Replace("Would: ", "• "), "Import")) return;
-        if (!(await C.Dialogs.ConfirmLock(locks)).Ok) return;
-        await C.Run(["project", "import", path, .. locks.Count > 0 || customs ? new[] { "--yes" } : []], then: o => C.Dialogs.Message(o, "Imported"));
     }
 
     // Firmware lock and guided setup (§4.10 Device protection) -------------------------------

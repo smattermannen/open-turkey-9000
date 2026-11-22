@@ -36,14 +36,9 @@ public sealed class AutomationView
         lead.Named("Schedule lock lead time", "ScheduleLead");
         var lockRow = Ui.Wrap(8, scheduleLock, lead, Ui.Text("before each window"), Ui.Button("Save", () => _ = SaveScheduleLock(), "ScheduleLockSave"),
             Ui.HelpButton("While the lock is on (during the windows, at the block's places, for the lead time before each window, and outside allow windows) the block can't be weakened or switched off. A longer lead time is always allowed; a shorter one or off is refused while the lock is on.", "the schedule lock"));
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(title);
-        var presets = Ui.Row(6, Ui.Button("Save as preset…", () => _ = SavePreset(window, "automation", name, false), "AutomationSavePreset"),
+        var presets = Ui.Wrap(6, Ui.Button("Save as preset…", () => _ = SavePreset(window, "automation", name, false), "AutomationSavePreset"),
             Ui.Button("Use a preset…", () => _ = UsePreset(window, name, false), "AutomationUsePreset"));
-        Grid.SetColumn(presets, 1);
-        head.Children.Add(presets);
+        var head = Ui.Side(title, presets);
         View = Ui.Page(Ui.Column(16,
             Ui.Link("← Back to the block", () => page.BackToBlock(), "BackToBlock"),
             head,

@@ -50,18 +50,12 @@ public sealed class ModeView
         Item("Save automation as preset…", () => AutomationView.SavePreset(window, "automation", name, true));
         Item("Use an automation preset…", () => AutomationView.UsePreset(window, name, true));
         menuButton = new Button { Content = new FontIcon { Glyph = Glyphs.More, FontSize = 14 }, Flyout = menu }.Named("More: rename, delete, presets", "ModeMore");
-        var head = new Grid { ColumnSpacing = 10 };
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(title);
-        var right = Ui.Row(8, toggle, lockButton, menuButton);
-        Grid.SetColumn(right, 1);
-        head.Children.Add(right);
+        var head = Ui.Side(title, Ui.Row(8, lockButton, menuButton, toggle));
 
         takeOutButton = Ui.Button("Take out…", () => _ = TakeOut(), "ModeTakeOut").Tip("Take a block out of the mode");
-        blocksSection = Ui.Column(10, Ui.Row(6, Ui.Heading("Its blocks"), Ui.HelpButton(
+        blocksSection = Ui.Column(10, Ui.Wrap(6, Ui.Heading("Its blocks"), Ui.HelpButton(
                 "They share the mode's automation below: changing it changes all of them, and a change that weakens one of them while it is locked is refused for all. Each keeps its own lists, apps, breaks and locks. Take out… takes one out again.", "its blocks")),
-            blockCards, Ui.Row(6, Ui.Button("Add blocks…", () => _ = AddBlocks(), "ModeAddBlocks", glyph: Glyphs.Add), takeOutButton));
+            blockCards, Ui.Wrap(6, Ui.Button("Add blocks…", () => _ = AddBlocks(), "ModeAddBlocks", glyph: Glyphs.Add), takeOutButton));
         monkBox = Ui.Card(Ui.Column(10,
             Ui.Dim("Every website is blocked and the internet connection is cut. Switch it on like any mode: with windows or places below it runs in them by itself, without them until you switch it off. Started for a time it is locked: it can't be switched off until then. While its places decide, Wi-Fi stays on to see where you are; the firewall still cuts it."),
             Ui.Button("Run now, locked for a time…", () => _ = Actions.MonkMode(window), "MonkRunNow")));

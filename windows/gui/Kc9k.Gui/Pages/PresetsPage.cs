@@ -134,18 +134,12 @@ public sealed class PresetsPage : IPage
 
     UIElement Row(Preset p)
     {
-        var g = new Grid { ColumnSpacing = 8 };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var texts = Ui.Column(2, Ui.Strong(p.Name));
         if (p.What.Length > 0) texts.Children.Add(Ui.Dim(p.What));
-        g.Children.Add(texts);
-        var buttons = Ui.Row(6, Ui.Button(p.Kind == "block" ? "New block from it…" : "Use…", () => _ = Use(p), $"PresetUse_{p.Kind}_{p.Name}"));
+        var buttons = Ui.Wrap(6, Ui.Button(p.Kind == "block" ? "New block from it…" : "Use…", () => _ = Use(p), $"PresetUse_{p.Kind}_{p.Name}"));
         if (p.Kind != "block") buttons.Children.Add(Ui.Button("Rename…", () => _ = Rename(p), $"PresetRename_{p.Kind}_{p.Name}"));
         buttons.Children.Add(Ui.Button("Delete", () => _ = Delete(p), $"PresetDelete_{p.Kind}_{p.Name}"));
-        Grid.SetColumn(buttons, 1);
-        g.Children.Add(buttons);
-        return Ui.Card(g);
+        return Ui.Card(Ui.Side(texts, buttons));
     }
 
     /// <summary>Copies a preset: a block preset into a new block; lists into a

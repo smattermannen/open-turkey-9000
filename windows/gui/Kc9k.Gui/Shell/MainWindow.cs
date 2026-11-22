@@ -316,18 +316,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Settings, at its browsers (W38).</summary>
+    /// <summary>Settings, at its browsers.</summary>
     public void OpenBrowsers()
     {
         Show("settings");
         (pages["settings"].Page as SettingsPage)?.ShowBrowsers();
-    }
-
-    /// <summary>Settings, with the guided setup's checklist open (W38).</summary>
-    public async Task OpenGuidedSetup()
-    {
-        Show("settings");
-        if (pages["settings"].Page is SettingsPage settings) await settings.ShowGuidedSetup();
     }
 
     async Task ExtensionDialog()
@@ -340,10 +333,7 @@ public sealed partial class MainWindow : Window
             ? "No supported browser is installed. Install Google Chrome, Microsoft Edge or LibreWolf, then open it once."
             : $"{(names.Count > 0 ? string.Join(" and ", names) : "A supported browser")} has run for a while without it checking in, and your blocks need it. Close and open the browser again, or see under Settings > Browsers which have it.";
         if (await Controller.Dialogs.Confirm("The Killer Chicken extension isn't running", text, "Show browsers", cancel: "Later"))
-        {
-            Show("settings");
-            (pages["settings"].Page as SettingsPage)?.ShowBrowsers();
-        }
+            OpenBrowsers();
     }
 
     public void ApplyTheme()

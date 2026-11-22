@@ -143,6 +143,18 @@ Not fixed by `SPEC.md`; the code is the truth.
   page shown; `Show` updates a page when it is shown. Test-only hook:
   `KC9K_GUI_TEST_THROW` = `window`/`task`/`crash` (`TestHook`,
   `StabilityTests.cs`). *(By claude)*
+- Page layout (W54, as the GTK builders): a page fills the width beside
+  the sidebar (`Ui.Page`, `BlockView`: no maximum width; margins 32 DIP,
+  16 below 600). `SidePanel` (`Ui.Side`, `Ui.SettingRow`) puts a row's
+  switch, Lock… or buttons in the right column, at the card's right edge,
+  and moves them under the text, still at the right, when the text would
+  get less than 200 DIP. A block on the Blocks page is a row: name and
+  pill, Continuous/Automated and its breaks on the left; on/off with its
+  switch above its lock link on the right (`RightColumn`). Titles, button
+  rows and filters are `WrapPanel`s, never horizontal `StackPanel`s that
+  run past the right edge. The Overview has no "Get started" card (owner
+  2026-11-22; W38's first view is gone). Settings › Project's Import
+  project… calls `Files.ImportProject`. *(By claude)*
 - Sidebar (W53, `MainWindow.PinSidebar`): pinned open at 220 DIP like
   the GTK sidebar, no ☰; the page fills the rest. Below 640 DIP of window
   (220 + `NarrowestPage` 420) it shows its icons alone (`LeftCompact`, its
@@ -169,11 +181,6 @@ Not fixed by `SPEC.md`; the code is the truth.
   Keyboard): Ctrl+1…9 the sidebar's pages, Ctrl+N New block…, F5 reads
   the state and statistics again, Alt+Left, the Back key and the mouse's
   back button go from a block, mode or automation to the cards.
-- First view (W38, `Words.FirstSteps`): while no block exists or no
-  supported browser's extension has checked in, the Overview shows "Get
-  started": make a block, a supported browser with the extension, start
-  the block, each with its button, then the stricter options and Guided
-  setup…. It switches nothing on.
 - Device protection (W39, `Words.ProtectionLevels`): Settings names the
   three levels of principle 3 as they hold on Windows, which is on now,
   and the firmware lock's state (`firmware-lock --json`, read quietly when

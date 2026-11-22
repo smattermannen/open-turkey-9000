@@ -94,7 +94,7 @@ public static class Ui
     /// <summary>A titled group: the title (with a ? for the long text), then a card.</summary>
     public static StackPanel Section(string title, string? help, params UIElement[] children)
     {
-        var head = Row(6, Heading(title));
+        var head = Wrap(6, Heading(title));
         if (help is not null) head.Children.Add(HelpButton(help, title));
         return Column(8, head, Card(children));
     }
@@ -132,7 +132,7 @@ public static class Ui
     {
         var titleText = Text(title, "Kc9kPageTitle");
         AutomationProperties.SetHeadingLevel(titleText, AutomationHeadingLevel.Level1);
-        var top = Row(8, titleText);
+        var top = Wrap(8, titleText);
         if (help is not null) top.Children.Add(HelpButton(help, title));
         var p = Column(2, top);
         if (subtitle.Length > 0) p.Children.Add(Dim(subtitle));
@@ -191,20 +191,24 @@ public static class Ui
         return b;
     }
 
-    /// <summary>A setting's row: title and description on the left, the control on the right.</summary>
-    public static Grid SettingRow(string title, string detail, UIElement control, UIElement? under = null)
+    /// <summary>A setting's row: title and description on the left, the
+    /// control in the right column (W54: switches and Lock… line up there).</summary>
+    public static SidePanel SettingRow(string title, string detail, UIElement control, UIElement? under = null)
     {
-        var g = new Grid { ColumnSpacing = 16 };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var texts = Column(2, Text(title));
         if (detail.Length > 0) texts.Children.Add(Note(detail));
         if (under is not null) texts.Children.Add(under);
-        g.Children.Add(texts);
-        if (control is FrameworkElement f) f.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn((FrameworkElement)control, 1);
-        g.Children.Add(control);
-        return g;
+        return Side(texts, control);
+    }
+
+    /// <summary>Main content on the left, the side (switch, Lock…) at the
+    /// right edge; under the main when the width is short (W54).</summary>
+    public static SidePanel Side(UIElement main, UIElement side)
+    {
+        var p = new SidePanel();
+        p.Children.Add(main);
+        p.Children.Add(side);
+        return p;
     }
 
     public static ToggleSwitch Switch(string name, bool on, Action<bool> changed, string? id = null)
@@ -228,17 +232,25 @@ public static class Ui
         t.Tag = null;
     }
 
+    /// <summary>A page: the full width beside the sidebar (W54, as the GTK
+    /// GUI's page_box), scrolling down only, with less margin when narrow.</summary>
     public static ScrollViewer Page(UIElement content)
     {
-        var holder = new Grid { MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(32, 24, 32, 32) };
+        var holder = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, Padding = PagePadding(double.PositiveInfinity) };
         holder.Children.Add(content);
-        return new ScrollViewer
+        var scroll = new ScrollViewer
         {
             Content = holder,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
+        scroll.SizeChanged += (_, e) => holder.Padding = PagePadding(e.NewSize.Width);
+        return scroll;
     }
+
+    /// <summary>A page's margins: 32 DIP at the sides, 16 below 600 DIP.</summary>
+    public static Thickness PagePadding(double width, double top = 24, double bottom = 32) =>
+        width < 600 ? new Thickness(16, top, 16, bottom) : new Thickness(32, top, 32, bottom);
 
     public static void Clear(Panel p) => p.Children.Clear();
 
@@ -303,6 +315,57 @@ public sealed partial class WrapPanel : Panel
             x += size.Width + HorizontalSpacing;
             line = Math.Max(line, size.Height);
         }
+        return final;
+    }
+}
+
+/// <summary>Two children: the main one on the left, filling, and the side
+/// one at the right edge, centred against it (W54: one right column for
+/// switches and Lock…). When the main one would get less than MainMin the
+/// side one goes under it, still at the right edge; never wider than given.</summary>
+public sealed partial class SidePanel : Panel
+{
+    public double Spacing { get; set; } = 16;
+    public double MainMin { get; set; } = 200;
+    bool stacked;
+
+    UIElement? Main => Children.Count > 0 ? Children[0] : null;
+    UIElement? SideChild => Children.Count > 1 && Children[1].Visibility == Visibility.Visible ? Children[1] : null;
+
+    protected override Size MeasureOverride(Size available)
+    {
+        var side = SideChild;
+        side?.Measure(new Size(available.Width, double.PositiveInfinity));
+        double sw = side?.DesiredSize.Width ?? 0, sh = side?.DesiredSize.Height ?? 0;
+        var bounded = !double.IsInfinity(available.Width);
+        stacked = side is not null && bounded && available.Width - sw - Spacing < MainMin;
+        var mainWidth = side is null || stacked || !bounded ? available.Width : available.Width - sw - Spacing;
+        Main?.Measure(new Size(mainWidth, double.PositiveInfinity));
+        double mw = Main?.DesiredSize.Width ?? 0, mh = Main?.DesiredSize.Height ?? 0;
+        var height = side is null ? mh : stacked ? mh + Spacing / 2 + sh : Math.Max(mh, sh);
+        var width = bounded ? available.Width : (side is null ? mw : mw + Spacing + sw);
+        return new Size(width, height);
+    }
+
+    protected override Size ArrangeOverride(Size final)
+    {
+        var side = SideChild;
+        double sw = Math.Min(side?.DesiredSize.Width ?? 0, final.Width), sh = side?.DesiredSize.Height ?? 0;
+        double mh = Main?.DesiredSize.Height ?? 0;
+        if (side is null)
+        {
+            Main?.Arrange(new Rect(0, 0, final.Width, final.Height));
+            return final;
+        }
+        if (stacked)
+        {
+            Main?.Arrange(new Rect(0, 0, final.Width, mh));
+            side.Arrange(new Rect(final.Width - sw, mh + Spacing / 2, sw, sh));
+            return final;
+        }
+        var height = Math.Max(mh, sh);
+        Main?.Arrange(new Rect(0, (height - mh) / 2, Math.Max(0, final.Width - sw - Spacing), mh));
+        side.Arrange(new Rect(final.Width - sw, (height - sh) / 2, sw, sh));
         return final;
     }
 }

@@ -53,7 +53,7 @@ public sealed class StatsPage : IPage
         user.Items.Add(new ComboBoxItem { Content = "All users", Tag = "" });
         user.SelectedIndex = 0;
         user.SelectionChanged += (_, _) => { if (!filling) _ = Read(); };
-        var kindRow = Ui.Row(0);
+        var kindRow = Ui.Wrap(0);
         foreach (var (key, label) in new[] { ("site", "Websites"), ("app", "Apps"), ("blocked", "Times blocked") })
         {
             var b = new ToggleButton { Content = label, IsChecked = key == "site" }.Named(label, "StatsKind_" + key);
@@ -70,7 +70,7 @@ public sealed class StatsPage : IPage
         blockFilter.Items.Add(new ComboBoxItem { Content = "All blocks", Tag = "" });
         blockFilter.SelectedIndex = 0;
         blockFilter.SelectionChanged += (_, _) => { if (!filling) _ = Read(); };
-        search = new TextBox { PlaceholderText = "Find a site or app", Width = 200 }.Named("Find a site or app", "StatsSearch");
+        search = new TextBox { PlaceholderText = "Find a site or app", MinWidth = 200 }.Named("Find a site or app", "StatsSearch");
         search.TextChanged += (_, _) => _ = Read();
         offBar = new InfoBar { Severity = InfoBarSeverity.Informational, IsClosable = false, Message = "Statistics are off, so nothing new is recorded. Turn them on under Recording, below." };
         var tiles = new Grid { ColumnSpacing = 12 };
@@ -87,7 +87,7 @@ public sealed class StatsPage : IPage
         privateSwitch = Ui.Switch("Leave out private windows", false, on => _ = C.Run(["stats", "private", on ? "skip" : "count"]), "StatsPrivate");
         View = Ui.Page(Ui.Column(18,
             Ui.PageHeader("Statistics", "Time on sites and apps, and how often pages were blocked. Only on this computer."),
-            Ui.Wrap(12, Ui.Row(6, period, rangeButton, user), kindRow),
+            Ui.Wrap(12, period, rangeButton, user, kindRow),
             Ui.Wrap(12, top, blockFilter, search,
                 Ui.Button("Export as JSON…", () => _ = Export(), "StatsExport", glyph: Glyphs.Export)),
             offBar, tiles, dailySection,

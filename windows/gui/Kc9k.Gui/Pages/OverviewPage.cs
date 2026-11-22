@@ -2,7 +2,6 @@
 // starting a block is one click away (gui/kc9k-gui.py build_dashboard).
 using Kc9k.Core;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
 namespace Kc9k.Gui;
@@ -17,8 +16,6 @@ public sealed class OverviewPage : IPage
     readonly StatTile tileActive, tileSites, tileApps;
     readonly StackPanel onNow = Ui.Column(0);
     readonly TopChart top = new();
-    readonly StackPanel firstSteps = Ui.Column(8);
-    readonly UIElement firstCard;
     GuiState? state;
 
     public string Area => "dashboard";
@@ -33,13 +30,7 @@ public sealed class OverviewPage : IPage
             .Named("Start a block", "StartBlock");
         start.VerticalAlignment = VerticalAlignment.Center;
         devicePills = new WrapPanel { HorizontalSpacing = 6 };
-        var heroGrid = new Grid { ColumnSpacing = 16 };
-        heroGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        heroGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        heroGrid.Children.Add(Ui.Column(4, headline, detail, devicePills));
-        Grid.SetColumn(start, 1);
-        heroGrid.Children.Add(start);
-        var hero = Ui.Card(heroGrid, "Kc9kHero");
+        var hero = Ui.Card(Ui.Side(Ui.Column(4, headline, detail, devicePills), start), "Kc9kHero");
 
         desktop = Ui.Dim("");
         desktop.Visibility = Visibility.Collapsed;
@@ -64,16 +55,9 @@ public sealed class OverviewPage : IPage
             Ui.Button("Monk mode…", () => _ = Actions.MonkMode(window), "QuickMonk", glyph: Glyphs.Monk),
             Ui.Button("Frozen Chicken…", () => window.OpenMode(Tables.FrozenChicken), "QuickFreeze", glyph: Glyphs.Snow));
 
-        // W38: a first view while nothing is set up. Not a wizard: a list of
-        // what is left, each step opening its place; stricter options last.
-        firstCard = Ui.Card(Ui.Column(10, Ui.Heading("Get started").Id("FirstStepsTitle"), firstSteps,
-            Ui.Dim("Stricter, when you want it: a settings password, tamper protection, strict mode and no-escape. Nothing is on until you turn it on."),
-            Ui.Button("Guided setup…", () => _ = window.OpenGuidedSetup(), "FirstGuided")), "Kc9kCard");
-        firstCard.Visibility = Visibility.Collapsed;
-
         View = Ui.Page(Ui.Column(20,
             Ui.PageHeader("Overview", "What is on now, and how it is locked."),
-            hero, firstCard, desktop, tiles,
+            hero, desktop, tiles,
             Ui.Section("On now", onNow),
             Ui.Section("Device", deviceLine),
             Ui.Section("Most used today", top, topEmpty),
@@ -107,24 +91,6 @@ public sealed class OverviewPage : IPage
                 detail.Text = $"{string.Join(", ", locked.Select(b => b.Name))}: locked until unlocked.";
             else
                 detail.Text = "Nothing is locked: any block can be stopped.";
-        }
-
-        var steps = Words.FirstSteps(s);
-        firstCard.Visibility = steps.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        firstSteps.Children.Clear();
-        foreach (var (key, text, done) in steps)
-        {
-            var mark = Ui.Icon(done ? Glyphs.Check : Glyphs.Circle, 14);
-            var row = Ui.Row(10, mark, done ? Ui.Dim(text) : Ui.Text(text));
-            if (!done)
-                row.Children.Add(key switch
-                {
-                    "block" => Ui.Button("New block…", () => _ = Actions.CreateBlock(window), "First_block", accent: true),
-                    "browser" => Ui.Button("Browsers…", window.OpenBrowsers, "First_browser"),
-                    _ => Ui.Button("Blocks…", () => window.Navigate("blocks"), "First_start"),
-                });
-            AutomationProperties.SetName(row, (done ? "Done: " : "To do: ") + text);
-            firstSteps.Children.Add(row);
         }
 
         startMenu.Items.Clear();
@@ -167,20 +133,12 @@ public sealed class OverviewPage : IPage
             if (b.PausedSeconds > 0) extra.Add($"on a break for {Words.Seconds(b.PausedSeconds)}");
             else if (b.OnBreak) extra.Add("on a Pomodoro break");
             if (Words.LadderPosition(b.Nepsis, b.NepsisLevel, b.NepsisCount) is { } ladder) extra.Add(ladder);
-            var grid = new Grid { ColumnSpacing = 12 };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var texts = Ui.Column(2, Ui.Strong(b.Name));
             if (extra.Count > 0) texts.Children.Add(Ui.Note(string.Join(" · ", extra)));
-            grid.Children.Add(texts);
             var pills = Ui.Pills(Words.BlockPills(b));
             pills.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(pills, 1);
-            grid.Children.Add(pills);
             var chevron = Ui.Icon(Glyphs.Next, 12);
-            Grid.SetColumn(chevron, 2);
-            grid.Children.Add(chevron);
+            var grid = Ui.Side(texts, Ui.Row(12, pills, chevron));
             var row = new Button
             {
                 Content = grid, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,

@@ -76,7 +76,7 @@ public sealed class SchedulesPage : IPage
         var top = new Grid();
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var left = Ui.Row(10, title);
+        var left = Ui.Wrap(10, title);
         if (name == shown) left.Children.Add(Ui.Pill(new("Shown below", PillKind.On)));
         top.Children.Add(left);
         Grid.SetColumn(more, 1);
@@ -152,7 +152,7 @@ public sealed class PlacesPage : IPage
         var top = new Grid();
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var left = Ui.Row(10, Ui.Text(name, "SubtitleTextBlockStyle", wrap: false));
+        var left = Ui.Wrap(10, Ui.Text(name, "SubtitleTextBlockStyle", wrap: false));
         if (p.Here) left.Children.Add(Ui.Pill(new("You are here", PillKind.On)));
         top.Children.Add(left);
         Grid.SetColumn(more, 1);

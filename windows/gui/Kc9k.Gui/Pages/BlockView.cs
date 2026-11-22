@@ -93,17 +93,13 @@ public sealed class BlockView
         deleteItem = Item("Delete…", Glyphs.Delete, Delete);
         var moreButton = new Button { Content = new FontIcon { Glyph = Glyphs.More, FontSize = 14 }, Flyout = more }
             .Named("More: rename, duplicate, block preset, users, delete", "BlockMore").Tip("More: rename, duplicate, block preset, users, delete");
-        var actions = new Grid();
-        actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        actions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        actions.Children.Add(Ui.Wrap(6, startButton, stopButton, unlockButton, extendButton, automationButton));
-        Grid.SetColumn(moreButton, 1);
-        actions.Children.Add(moreButton);
+        var actions = Ui.Side(Ui.Wrap(6, startButton, stopButton, unlockButton, extendButton, automationButton), moreButton);
+        actions.MainMin = 120;
 
         // Websites tab ---------------------------------------------------
         testSwitch = Ui.Switch("Test mode", false, on => { if (block is not null) _ = C.Run(["list", "test", block.Name, on ? "on" : "off"]); }, "KeywordTest");
         var websites = Ui.Column(16,
-            Ui.Row(6, Ui.Dim("Lists of sites and words, each with what it does to the pages it matches."), Ui.HelpButton(
+            Ui.Wrap(6, Ui.Dim("Lists of sites and words, each with what it does to the pages it matches."), Ui.HelpButton(
                 "Each list ticks where it looks: the address, the page title (the tab title) or the page text. Addresses take domains, paths and wildcards (*.xxx, *casino*, *.* for everything); titles and text take words: a plain word counts only on its own (porn misses pornhub), and * matches inside words (*porn* hits pornhub). Words that count only together are phrases, in phrase sets below. A match in the address or title takes every action; in the text, each action needs its number of different words. Unticking or removing weakens the block, so it isn't possible while it is locked.", "lists")),
             Ui.Wrap(6,
                 Ui.Button("Save lists as preset…", () => _ = SavePreset("lists"), "SaveListsPreset"),
@@ -122,14 +118,8 @@ public sealed class BlockView
                  })
         {
             if (kind == "exceptions") websites.Children.Add(socialExpander);
-            var head = new Grid();
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            head.Children.Add(Ui.Heading(heading));
             var create = Ui.Button(label, () => _ = CreateList(kind), "New_" + kind, glyph: Glyphs.Add);
-            Grid.SetColumn(create, 1);
-            head.Children.Add(create);
-            websites.Children.Add(head);
+            websites.Children.Add(Ui.Side(Ui.Heading(heading), create));
             if (detail.Length > 0) websites.Children.Add(Ui.Dim(detail));
             listBoxes[kind] = Ui.Column(12);
             websites.Children.Add(listBoxes[kind]);
@@ -237,7 +227,7 @@ public sealed class BlockView
         var bypassTab = Ui.Column(12,
             Ui.Dim("Bypass prevention: when this block stops many things in a short time (pages, apps, windows), likely a hunt for a loophole, it takes a consequence so you step away. It counts while the block is on; the one under Settings counts everything, and both apply."),
             Ui.Card(nepsisLabel), nepsisKept,
-            Ui.Row(6, Ui.Button("Change…", () => _ = ChangeNepsis(), "BlockNepsisChange", accent: true), nepsisOff));
+            Ui.Wrap(6, Ui.Button("Change…", () => _ = ChangeNepsis(), "BlockNepsisChange", accent: true), nepsisOff));
 
         foreach (var (key, label, content) in new (string, string, UIElement)[]
                  {
@@ -257,8 +247,10 @@ public sealed class BlockView
         tabs.Named("Tabs of the block", "BlockTabs");
 
         var top = Ui.Column(8, back, title, pills, summary, modeBar, hiddenBar, draftBar, actions, tabs);
-        top.Padding = new Thickness(32, 20, 32, 0);
-        var grid = new Grid { MaxWidth = 1164 };
+        top.Padding = Ui.PagePadding(double.PositiveInfinity, 20, 0);
+        // W54: the full width beside the sidebar, as every page.
+        var grid = new Grid();
+        grid.SizeChanged += (_, e) => top.Padding = Ui.PagePadding(e.NewSize.Width, 20, 0);
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.Children.Add(top);
@@ -267,9 +259,10 @@ public sealed class BlockView
         View = grid;
     }
 
-    static UIElement Pad(UIElement content)
+    UIElement Pad(UIElement content)
     {
-        var g = new Grid { Padding = new Thickness(32, 12, 32, 32) };
+        var g = new Grid { Padding = Ui.PagePadding(tabScroll.ActualWidth > 0 ? tabScroll.ActualWidth : double.PositiveInfinity, 12) };
+        g.SizeChanged += (_, e) => g.Padding = Ui.PagePadding(e.NewSize.Width, 12);
         if (content is FrameworkElement f && f.Parent is Grid old) old.Children.Remove(f);
         g.Children.Add(content);
         return g;

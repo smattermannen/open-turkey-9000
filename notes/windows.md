@@ -59,6 +59,25 @@
   agent, hosts and firewall against a real site, the Edge policy, a
   blocked app and a blocked window title closed through the agent, and
   dark mode written to the signed-in person's settings are checked there.
+- `ci/windows_soak_test.ps1 -Kc9k kc9k.exe [-Minutes N] [-Phases
+  idle,circadian,play,settings] [-Gui kc9k-gui.exe] [-Out dir]` (W50–W52,
+  the `system` job runs one minute a phase after the desktop checks, and
+  checks it parses in Windows PowerShell 5.1) *(By claude)*: phases idle
+  (circadian off, active blocks off), circadian (kelvin, software ≥ 40 %,
+  backlight ≥ 30 % with a panel, previews), play (Play the day ×3) and
+  settings (each safe on/off setting on and off 5×). Per phase: Group
+  Policy computer processing (4004/4006/8004/8006) per minute, powershell.exe
+  and kc9k.exe the service started (`Win32_ProcessStartTrace`), agent
+  restarts (agent PIDs; "ended from outside" in the service log, copied by
+  a SYSTEM task), tamper lines, CPU, handles and private bytes of service,
+  agent and GUI (last third against first), Display 4101 and
+  LiveKernelEvent, crash reports of kc9k, dwm and explorer, the gamma ramp,
+  "browser: closing" naming a program in %SystemRoot%. Stops and puts
+  everything back at once on CPU > 90 % for 30 s, > 5 powershell.exe, a
+  display reset, the GUI ending or hanging, an agent restart; exit 1 on any
+  threshold (idle: no policy refresh, no PowerShell, no restart, handles
+  within ±5 %). Never a lock, password, monk mode, Frozen Chicken, strict
+  mode, no-escape, firmware, Wi-Fi or adapters, logout or lock screen.
 - `ci/windows_vm_test.ps1 kc9k.exe [-Reboots]`: what needs a desktop or a
   person (agent, titles, apps, notifications, the challenge in a console
   and in its window, the lock freeze, takeown against strict mode, gamma,
@@ -122,13 +141,40 @@
 - Agents (`manager_windows.go`): every 3 s, each session with a signed-in
   user (`WTSQueryUserToken`) gets `kc9k agent` (`CreateProcessAsUser`,
   `winsta0\default`, the user's environment); one that ended is started
-  again (`Manager.Restarts`; W5 counts it). Agents connect to
+  again (`Manager.Restarts` when ended from outside; W5 counts it). Agents connect to
   `\\.\pipe\kc9k-agent`; accepted only from the installed `kc9k.exe`
   image, in the session its hello names, with its own PID. One JSON line
   per message: requests with IDs, replies, events (ID 0). Commands the
   service runs reach agents through `\\.\pipe\kc9k-agents-internal`
   (SYSTEM only): `winagent.Call`, `winagent.Sessions` work from either.
   Ops so far: `status` (idle ms from `GetLastInputInfo`).
+- Agent stability (W50–W52) *(By claude)*: `dispatch.go` (shared, tested
+  on Linux) answers each request in its own goroutine but every handler
+  under `recover()` (a panic is an error reply and a logged stack, never
+  the agent's end); screen ops (gamma get/set, monitors, wallpaper, dark
+  mode, Night light, look) one at a time under one mutex, a gamma set
+  still waiting replaced by a newer one (its reply: 0 screens). Ramps are
+  checked before they reach a screen (`CheckRamp`: 256 values per colour,
+  never falling, top no lower than 1000–10000 K at 10 % software
+  brightness allow, less a tenth). The agent puts the plain ramp back when
+  it ends (the service stopped, is uninstalled, closed its connection) if
+  it set another. `displays()` uses one package-level callback with its
+  results under a mutex (Go keeps every `NewCallback` and stops at 2000:
+  one per call ended the agent after about 2000 screen calls);
+  `TestWinDisplaysManyCalls` makes 5000 of each. The repo's other
+  callbacks (`enumCallback`, the challenge's `wndProc` under a `Once`)
+  were already made once.
+- Crash vs. tamper (§3.10) *(By claude)*: the service starts each agent
+  with its standard output and error on a pipe only that end inherits
+  (`spawnWithOutput`, `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`); the first 200
+  lines go to the service's log ("agent N: ..."), the last 16 KB tell how
+  it ended (`classifyEnd`): exit code 2 with Go's "panic: "/"fatal error: "
+  report is a crash (`Manager.Crashes`, logged, not tamper); the agent's
+  own marker line (service closed the connection, exit 0; gave up, with an
+  error) is ending by itself; anything else (TerminateProcess with any
+  code, Task Manager, taskkill) is from outside (`Manager.Restarts`,
+  which `guardPlatform` logs as tamper). `TestAgentEndCrashVsKill` runs
+  each for real.
 - Install (`install_windows.go`): Program Files\KC9K (`ProgramSDDL`:
   owner SYSTEM, SYSTEM full, Administrators and Users read/run, protected),
   ProgramData\kc9k (`DataSDDL`: SYSTEM only), `kc9k.exe` copied (a running
@@ -209,11 +255,32 @@
   session, start time; a parent counts only if it started before its
   child (IDs are reused). `tcpOwner` (`GetExtendedTcpTable`) maps a
   connection to its process: check-ins, statistics per user.
+- Killing (W50) *(By claude)*: every Windows kill path goes through
+  `killProcess` (what KC9K found itself: browsers, people's programs;
+  never a program under %SystemRoot% or with an unreadable path) or
+  `killNamedProcess` (a process a rule names: the blocked app and the
+  tree it started, such as a blocked script's ping, a tamper tool such as taskmgr, curl naming a
+  blocked site, a blocked window's owner, a VM's vmwp). Both refuse the
+  hard deny-list `sessionCritical`: PID 0 and 4, `essentialWindowsApps`
+  and `neverKillExtra` (dwm, csrss, winlogon, svchost, fontdrvhost,
+  sihost, ctfmon, explorer, ShellHost, RuntimeBroker, dllhost...) in the
+  Windows folder or unreadable, KC9K's own programs; a refusal is logged
+  once per process ("kill refused"). `terminateProcess` (the seam tests
+  replace) checks the deny-list again on the path its handle names (PIDs
+  are reused). Tests: `TestWinKillDenyList`, `TestWinGuardNeverClosesWindows`.
 - Extension guard (`extguard_windows.go`; `extguard_shared.go` is the
   shared verdict): a browser is a guarded program name, a renamed one by
   its version resource's OriginalFilename, or a program beside `xul.dll`
-  or `chrome.dll`/`msedge.dll` (portable browsers); never Thunderbird or
-  WebView2. Main process: topmost ancestor with the same program. A
+  or `chrome.dll`/`msedge.dll`, or with one in a version folder beside it
+  (`Application\120.0.…\chrome.dll`); never Thunderbird or WebView2,
+  never a program of Windows' own (`windowsOwnProgram`: under
+  %SystemRoot%, a Microsoft package in WindowsApps) nor one whose path
+  can't be read. *(By claude)* Laptop 2026-11-22 (W50): the former glob
+  `<dir>\*\msedge.dll` matched `System32\Microsoft-Edge-WebView`, so
+  every System32 program was a browser and the guard closed dwm (black
+  screens, classic white windows), fontdrvhost, sihost, svchost... every
+  5 s after the grace until the computer hung. `TestWinGuardSystem32NotBrowsers`
+  lists System32 for real. "browser: closing" lines name the path. Main process: topmost ancestor with the same program. A
   browser started for remote control is closed at once (W11): its command
   line (`commandLine`) and environment (`processEnvironment`: the PEB's
   process parameters, x64 layout) checked by `remoteControlArgs`, which
@@ -353,6 +420,15 @@
   exactly what it added; `RemoveLockdown` does
   it first, since putting the rest back runs PowerShell. Every PowerShell
   the service runs has a time limit (90 s; the firmware's 5 min).
+- Policy refresh (W50): `refreshPolicy` (a variable; forced
+  `RefreshPolicyEx`, which tells every window "Policy" changed) runs only
+  after a rule or value really changed. Strict mode not acting (every
+  cycle) runs `RemoveLockdown` and `RemoveNoexec`: with nothing of KC9K's
+  there they touch nothing and refresh nothing. Before, each cycle
+  forced two machine policy refreshes. RP_FORCE stays: the rules are
+  plain registry values, not a GPO, so an unforced refresh tells no
+  program. `TestStrictSRPRefreshOnlyOnChange` (real registry): 0 calls
+  idle, 1 after a real removal. *(By claude)*
 - Strict mode's ways to SYSTEM (W20–W22, `strict_windows.go`;
   `applyStrictExtras` from `ApplyLockdown`, `removeStrictExtras` first in
   `RemoveLockdown`, whose failure is logged and retried but never keeps
@@ -467,5 +543,47 @@
   `WmiSetBrightness`, PowerShell); external screens through DDC/CI in
   the agent (dxva2 `Get/SetMonitorBrightness`), listed at most once a
   minute, `Display` = "session:index".
+- Panel PowerShell kept rare (W50) *(By claude)*: WMI over COM isn't in
+  x/sys and `\\.\LCD`'s brightness IOCTLs can't be proven on a runner
+  without a panel, so PowerShell stays, limited (`panel` in
+  `circadian_windows.go`): the panel is looked for once, again after a
+  wake (`ForgetBacklights`, called by the engine) or a failed call (a
+  display change); its level read at most once a minute (in between the
+  last read or set level); set at most once a second, a sooner level kept
+  and sent by a timer (newest wins); one PowerShell at a time. The
+  engine looks for panels only while the backlight clip is on (else once,
+  and after a wake); Play the day finds them once and sets panel and
+  external screens at most once a second plus its last frame. Laptop
+  2026-11-22: 12 PowerShells a minute with circadian off before.
+  `TestWinPanelRateLimits`, `TestCircadianBacklightsLookedOnlyWhenOn`.
 - Sleep hook: ProgramData\kc9k\sleep-hook while on; the service accepts
   power events and on suspend runs `kc9k wallpaper before-sleep`.
+
+## Process starts and broadcasts from the service cycle (W50 audit)
+
+*(By claude, 2026-11-22.)* Everything `Tick`, the circadian engine and
+the agent manager reach on Windows that starts a process or broadcasts
+to every window, and how often it runs now (strict mode, monk mode and
+no-escape are the owner's choices; their rate is while they act):
+
+| What | Where | Runs |
+|---|---|---|
+| `RefreshPolicyEx` (forced; "Policy" to every window) | `noexec_windows.go` `refreshPolicy` | only after KC9K's SRP rules changed. Was 2 per cycle (laptop: 24/min) |
+| PowerShell `WmiMonitorBrightness` | `circadian_windows.go` `panel` | look once (wake, failure: again); read ≤ 1/min; set ≤ 1/s; one at a time. Was every cycle, 1/s after start/wake, 10/s in Play the day |
+| PowerShell `Get-NetAdapter` | `netcut_windows.go` `adapters` | ≤ 1/min (cache dropped by KC9K's own change), while monk mode cuts or place rules keep Wi-Fi on. Was every cycle |
+| PowerShell `Enable/Disable-NetAdapter` | `netcut_windows.go` `setAdapter` | on change (monk mode, places) |
+| `schtasks /Query`, `/Create` (watchdog) | `tamper_windows.go` `GuardService` | the task's file is checked each cycle; schtasks ≤ 1/min when it is missing. Was 1–2 per cycle while missing |
+| `schtasks /Delete` (a task made to run as SYSTEM) | `strict_windows.go` | on change, while strict mode acts |
+| PowerShell (services, Task Scheduler, WMI) | `strict_windows.go` | while strict mode acts: first pass, then ≤ 1 per 5 min; undo once |
+| `reagentc`, `bcdedit` | `tamper_windows.go` `SyncRecoveryGuard` | on change (state file); a failure is tried again next cycle |
+| PowerShell (firmware WMI) | `firmware_windows.go` | commands only (`firmware-lock`) |
+| `wevtutil` (boot event) | `enforce/rtc_windows.go` | once per service run |
+| `kc9k hotkey run` | `desktop_windows.go` | on a hotkey |
+| `kc9k wallpaper before-sleep` | `cli/windows_windows.go` | on suspend, with the sleep hook |
+| `WM_SETTINGCHANGE "ImmersiveColorSet"`; wallpaper `SPIF_SENDCHANGE` | agent, `look_windows.go` | on change (`Circadian.desktop`; failures after `circadianRetry`) |
+| `kc9k agent` | `manager_windows.go` | per session when none runs; not again within 2 s |
+| `TerminateProcess` | `procs_windows.go` `terminateProcess` | only through `killProcess`/`killNamedProcess` and the deny-list |
+
+Not reached by the cycle: `winget` (`browsers install`), the service's
+command children, uninstall's copy, `kc9k install`'s PATH broadcast.
+

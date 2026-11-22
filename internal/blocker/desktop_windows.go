@@ -502,7 +502,11 @@ func (g *TitleGuard) EnforceUsers(targets TitlesByUser, now time.Time) (int, []T
 					continue
 				}
 				protected[p.PID] = true
-				if killProcess(p.PID) == nil {
+				end := killProcess // below the window's owner: never Windows' own
+				if p.PID == root {
+					end = killNamedProcess
+				}
+				if end(p) == nil {
 					killed++
 				}
 			}

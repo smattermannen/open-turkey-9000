@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/winapi"
@@ -44,6 +45,36 @@ var netAdapters = func() ([]netAdapter, error) {
 	return list, nil
 }
 
+// adapterCache keeps the adapter list a minute: monk mode's cut and the
+// places' Wi-Fi check ask every cycle, and each list starts PowerShell
+// (W50 audit). A change KC9K makes drops it.
+var adapterCache struct {
+	sync.Mutex
+	list []netAdapter
+	at   time.Time
+}
+
+// adapters is netAdapters, at most once a minute.
+func adapters() ([]netAdapter, error) {
+	adapterCache.Lock()
+	defer adapterCache.Unlock()
+	if !adapterCache.at.IsZero() && time.Since(adapterCache.at) < time.Minute {
+		return adapterCache.list, nil
+	}
+	list, err := netAdapters()
+	if err != nil {
+		return nil, err
+	}
+	adapterCache.list, adapterCache.at = list, time.Now()
+	return list, nil
+}
+
+func forgetAdapters() {
+	adapterCache.Lock()
+	adapterCache.at = time.Time{}
+	adapterCache.Unlock()
+}
+
 func powershell(script string) ([]byte, error) {
 	ps := filepath.Join(systemRoot(), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -60,7 +91,7 @@ func isWifi(a netAdapter) bool {
 // radio's software switch on (Windows' "Wi-Fi off" and airplane mode turn
 // the switch off and leave the adapter enabled).
 func WifiRadio() (on, known bool) {
-	list, err := netAdapters()
+	list, err := adapters()
 	if err != nil {
 		return false, false
 	}
@@ -117,7 +148,7 @@ var wifiSoftwareRadios = func() ([]wlanRadio, bool) {
 // SetWifiRadio switches every Wi-Fi adapter on or off; on also turns each
 // radio's software switch on.
 func SetWifiRadio(on bool) error {
-	list, err := netAdapters()
+	list, err := adapters()
 	if err != nil {
 		return err
 	}
@@ -156,7 +187,7 @@ func SetWifiRadio(on bool) error {
 // EthernetLinks are the wired adapters and whether each is on.
 func EthernetLinks() map[string]bool {
 	links := map[string]bool{}
-	list, err := netAdapters()
+	list, err := adapters()
 	if err != nil {
 		return links
 	}
@@ -176,6 +207,7 @@ func setAdapter(name string, on bool) error {
 	if on {
 		verb = "Enable-NetAdapter"
 	}
+	defer forgetAdapters()
 	quoted := "'" + strings.ReplaceAll(name, "'", "''") + "'"
 	if out, err := powershell(verb + " -Name " + quoted + " -Confirm:$false -IncludeHidden"); err != nil {
 		return fmt.Errorf("%s %s: %v: %s", verb, name, err, strings.TrimSpace(string(out)))

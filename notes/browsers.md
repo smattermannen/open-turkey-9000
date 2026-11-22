@@ -118,7 +118,10 @@ Not fixed by `SPEC.md`; the code is the truth.
   (extrepo; Mint's chromium .deb; Google's repo with key in
   `/etc/apt/keyrings/google-chrome.asc`, amd64 only). Firefox needs signed extensions; Brave/Edge/Opera/Vivaldi not set
   up. Installed engine-based apps (Thunderbird, Spotify, Steam, Electron)
-  aren't browsers. Chrome flags `--disable-extensions[-except]`,
+  aren't browsers. On Windows the guard never counts or closes a program
+  of Windows' own (under %SystemRoot% or a Microsoft package in
+  WindowsApps) and no kill path ends a session-critical process (W50;
+  details and tests in `notes/windows.md`, Web layers). *(By claude)* Chrome flags `--disable-extensions[-except]`,
   `--remote-debugging-pipe` and Firefox `--marionette`/remote-debugging
   close at once. After a protecting change, older browser windows close a
   minute later. LibreWolf locked prefs: `extensions.webextensions.restrictedDomains`,

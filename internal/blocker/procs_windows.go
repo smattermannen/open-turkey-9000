@@ -7,9 +7,13 @@ package blocker
 
 import (
 	"encoding/binary"
+	"errors"
+	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -139,13 +143,106 @@ func mainOf(procs map[uint32]*winProc, p *winProc) *winProc {
 	}
 }
 
-// killProcess ends pid at once; replaced in tests.
-var killProcess = func(pid uint32) error {
-	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, pid)
+// errNeverKill: the process is one Windows needs, or (for killProcess) a
+// program of Windows' own folder.
+var errNeverKill = errors.New("a program Windows needs: never closed")
+
+// neverKillExtra are, with essentialWindowsApps, the programs no kill
+// path ends (W50: the extension guard once closed dwm, fontdrvhost,
+// sihost, ctfmon, svchost... every 5 s until the laptop hung).
+var neverKillExtra = map[string]bool{
+	"shellhost": true, "lsaiso": true, "registry": true, "memcompression": true, "memory compression": true,
+	"system": true, "secure system": true, "searchindexer": true, "wmiprvse": true, "taskhost": true,
+}
+
+// sessionCritical reports whether a process is one Windows or KC9K needs
+// (the hard deny-list every Windows kill path goes through): PID 0 and 4,
+// Windows' session and shell programs in Windows' folder (or unreadable:
+// protected), KC9K's own programs. A copy named svchost.exe in Downloads
+// is not one.
+func sessionCritical(pid uint32, name, exe string) bool {
+	if pid <= 4 {
+		return true
+	}
+	if (essentialWindowsApps[name] || neverKillExtra[name]) && (exe == "" || underSystemRoot(exe)) {
+		return true
+	}
+	if strings.HasPrefix(name, "kc9k") && (exe == "" || kc9kProgram(exe)) {
+		return true
+	}
+	return false
+}
+
+// kc9kProgram reports whether exe is in KC9K's folder or this program's.
+func kc9kProgram(exe string) bool {
+	dir := strings.ToLower(filepath.Dir(filepath.Clean(exe)))
+	if dir == strings.ToLower(filepath.Join(programFilesDir(), "KC9K")) {
+		return true
+	}
+	self, err := os.Executable()
+	return err == nil && dir == strings.ToLower(filepath.Dir(self))
+}
+
+// killProcess ends a process that is not Windows' own: never a
+// session-critical one, never a program under %SystemRoot% (nor one whose
+// path can't be read). For what KC9K found by itself: browsers, trees
+// below a blocked app, people's own programs.
+func killProcess(p *winProc) error { return killChecked(p, false) }
+
+// killNamedProcess ends a process a rule names (a blocked app, a tamper
+// tool, a fetch tool naming a blocked site, a blocked window's owner): a
+// program in Windows' folder may be one (taskmgr, cmd, curl), a
+// session-critical one never.
+func killNamedProcess(p *winProc) error { return killChecked(p, true) }
+
+func killChecked(p *winProc, named bool) error {
+	if p == nil {
+		return errors.New("no such process")
+	}
+	if sessionCritical(p.PID, p.Name, p.Exe) || (!named && (p.Exe == "" || underSystemRoot(p.Exe))) {
+		noteRefusedKill(p)
+		return errNeverKill
+	}
+	return terminateProcess(p.PID)
+}
+
+// refusedKills notes refused kills, logged once per process.
+var refusedKills = struct {
+	sync.Mutex
+	m map[uint32]string
+}{m: map[uint32]string{}}
+
+func noteRefusedKill(p *winProc) {
+	refusedKills.Lock()
+	defer refusedKills.Unlock()
+	if refusedKills.m[p.PID] == p.Name {
+		return
+	}
+	if len(refusedKills.m) > 1000 {
+		refusedKills.m = map[uint32]string{}
+	}
+	refusedKills.m[p.PID] = p.Name
+	log.Printf("kill refused: %s (pid %d, %s) is Windows' own", p.Name, p.PID, p.Exe)
+}
+
+// terminateProcess ends pid at once; replaced in tests. It checks the
+// deny-list once more on the process the handle names (a PID can be
+// reused since the snapshot).
+var terminateProcess = func(pid uint32) error {
+	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE|windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
 	if err != nil {
 		return err
 	}
 	defer windows.CloseHandle(h)
+	buf := make([]uint16, windows.MAX_LONG_PATH)
+	n := uint32(len(buf))
+	exe := ""
+	if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) == nil {
+		exe = windows.UTF16ToString(buf[:n])
+	}
+	if exe == "" || sessionCritical(pid, exeBase(exe), exe) {
+		return errNeverKill
+	}
 	return windows.TerminateProcess(h, 1)
 }
 

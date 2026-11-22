@@ -233,17 +233,26 @@ func ensureSRPOn() error {
 	return os.WriteFile(srpMadePath, data, 0o600)
 }
 
-// removeSRP takes KC9K's rules out, and what ensureSRPOn added.
+// removeSRP takes KC9K's rules out, and what ensureSRPOn added. With
+// nothing of KC9K's there (the normal case, every cycle) it touches
+// nothing and refreshes nothing (W50); policy is refreshed only after a
+// rule or value really went.
 func removeSRP() error {
 	if !platform.Privileged() {
 		return nil
 	}
-	defer refreshPolicy()
+	changed := false
+	defer func() {
+		if changed {
+			refreshPolicy()
+		}
+	}()
 	for _, level := range []string{saferDisallow, saferAllow} {
 		for _, name := range srpOurRules(level) {
 			if err := registry.DeleteKey(registry.LOCAL_MACHINE, saferCodeIDs+`\`+level+`\Paths\`+name); err != nil {
 				return err
 			}
+			changed = true
 		}
 	}
 	data, err := os.ReadFile(srpMadePath)
@@ -255,12 +264,18 @@ func removeSRP() error {
 		made.Key = true // the first build's note: KC9K made the key
 	}
 	if made.Key {
-		if err := deleteRegTree(registry.LOCAL_MACHINE, saferKey); err != nil && err != registry.ErrNotExist {
+		err := deleteRegTree(registry.LOCAL_MACHINE, saferKey)
+		if err != nil && err != registry.ErrNotExist {
 			return err
+		}
+		if err == nil {
+			changed = true
 		}
 	} else if k, err := registry.OpenKey(registry.LOCAL_MACHINE, saferCodeIDs, registry.SET_VALUE); err == nil {
 		for _, v := range made.Values {
-			_ = k.DeleteValue(v)
+			if k.DeleteValue(v) == nil {
+				changed = true
+			}
 		}
 		k.Close()
 	}
@@ -285,8 +300,12 @@ func longPath(path string) string {
 var procRefreshPolicyEx = windows.NewLazySystemDLL("userenv.dll").NewProc("RefreshPolicyEx")
 
 // refreshPolicy tells running programs that policy changed, so they read
-// the SRP rules again (each process keeps what it read).
-func refreshPolicy() {
+// the SRP rules again (each process keeps what it read). Called only
+// after KC9K's rules really changed. RP_FORCE is needed then: the rules
+// are written to the registry, not through a Group Policy object, so an
+// unforced refresh finds no GPO changed and tells no program. A variable
+// for tests (refreshPolicyCalls counts on windows-latest).
+var refreshPolicy = func() {
 	const rpForce = 1
 	procRefreshPolicyEx.Call(1, rpForce)
 }

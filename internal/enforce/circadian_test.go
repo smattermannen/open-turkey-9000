@@ -181,6 +181,40 @@ var testBacklight = map[string][]circadian.Point{
 	circadian.LaneBacklight: {{Minute: 8 * 60, Value: 40}, {Minute: 12 * 60, Value: 80}, {Minute: 20 * 60, Value: 40}},
 }
 
+// W50: with the backlight clip off the panels are looked for once (and
+// again after a wake), not every step: on Windows a look starts PowerShell.
+func TestCircadianBacklightsLookedOnlyWhenOn(t *testing.T) {
+	d, f := testDB(t), fakeCircadian(t)
+	circadianWith(t, d, testGamma, nil)
+	looks, forgets := 0, 0
+	fakeLevels, oldForget := circadianBacklights, circadianForgetBacklights
+	t.Cleanup(func() { circadianForgetBacklights = oldForget })
+	circadianBacklights = func() []circadianLevel { looks++; return fakeLevels() }
+	circadianForgetBacklights = func() { forgets++ }
+	e := NewCircadian(d)
+	for i := 0; i < 10; i++ {
+		e.Step(at(9, 0, i))
+	}
+	if looks != 1 {
+		t.Errorf("clip off: looked for panels %d times in 10 steps, want 1", looks)
+	}
+	if s, _ := ReadCircadianStatus(d); len(s.Backlights) != 1 {
+		t.Errorf("status %+v: the panel found once is still listed", s)
+	}
+	f.slept += 60
+	e.Step(at(9, 1, 0))
+	if looks != 2 || forgets != 1 {
+		t.Errorf("after a wake: %d looks, %d forgets", looks, forgets)
+	}
+	circadianWith(t, d, testBacklight, nil)
+	for i := 0; i < 3; i++ {
+		e.Step(at(9, 2, i))
+	}
+	if looks != 5 {
+		t.Errorf("clip on: %d looks, want one per step", looks)
+	}
+}
+
 func TestCircadianBacklightFollowsTheClip(t *testing.T) {
 	d, f := testDB(t), fakeCircadian(t)
 	circadianWith(t, d, testBacklight, nil)
@@ -783,6 +817,17 @@ func TestPlayCircadian(t *testing.T) {
 
 	var minutes []float64
 	var backlights []int
+	looks, sets := 0, 0
+	fakeLevels := circadianBacklights
+	circadianBacklights = func() []circadianLevel {
+		looks++
+		list := fakeLevels()
+		for i := range list {
+			set := list[i].Set
+			list[i].Set = func(v int) error { sets++; return set(v) }
+		}
+		return list
+	}
 	start := at(9, 0, 0)
 	if err := PlayCircadian(d, 15*time.Second, start, func(m float64) {
 		minutes = append(minutes, m)
@@ -798,8 +843,13 @@ func TestPlayCircadian(t *testing.T) {
 	for _, b := range backlights {
 		high, low = max(high, b), min(low, b)
 	}
-	if high < 790 || low > 410 {
+	if high < 780 || low > 410 {
 		t.Errorf("backlight went from %d to %d", low, high)
+	}
+	// W50: the panel is looked for once and set at most once a second
+	// (15 s: 16 sets with the last frame's).
+	if looks != 1 || sets > 17 {
+		t.Errorf("panel looked for %d times, set %d times in 15 s", looks, sets)
 	}
 	if len(f.wallpapers) < 2 || !strings.HasSuffix(f.wallpapers[0], "day.jpg") || !strings.HasSuffix(f.wallpapers[1], "night.jpg") {
 		t.Errorf("wallpapers %v", f.wallpapers)

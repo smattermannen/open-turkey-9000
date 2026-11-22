@@ -9,31 +9,14 @@ package winagent
 import (
 	"encoding/json"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
-
-// Ops of W6.
-const (
-	OpGetGamma     = "get-gamma"      // → []Ramp (one per screen)
-	OpSetGamma     = "set-gamma"      // Ramp → screens set
-	OpGetLook      = "get-look"       // → Look
-	OpSetWallpaper = "set-wallpaper"  // string path
-	OpSetDark      = "set-dark"       // bool
-	OpMonitors     = "monitors"       // → []Monitor
-	OpSetMonitor   = "set-monitor"    // Monitor (Index, Level)
-	OpNightLightOn = "night-light-on" // → bool
-)
-
-// Ramp is a gamma ramp: 256 values per colour.
-type Ramp struct {
-	Red   []uint16 `json:"r"`
-	Green []uint16 `json:"g"`
-	Blue  []uint16 `json:"b"`
-}
 
 // Look is what a circadian preview may change, to put back.
 type Look struct {
@@ -83,18 +66,68 @@ type physicalMonitor struct {
 	description [128]uint16
 }
 
+// displayEnum is displays()'s state: one callback for the program's life
+// (Go never frees one and stops at 2000: a callback per call ended the
+// agent after about 2000 gamma reads, sets and monitor lists; W51), its
+// results under a mutex.
+var displayEnum struct {
+	sync.Mutex
+	names   []string
+	handles []uintptr
+}
+
+var displayEnumCallback = syscall.NewCallback(func(h, hdc, rc, data uintptr) uintptr {
+	info := monitorInfoEx{size: uint32(unsafe.Sizeof(monitorInfoEx{}))}
+	if r, _, _ := procGetMonitorInfoW.Call(h, uintptr(unsafe.Pointer(&info))); r != 0 {
+		displayEnum.names = append(displayEnum.names, windows.UTF16ToString(info.device[:]))
+		displayEnum.handles = append(displayEnum.handles, h)
+	}
+	return 1
+})
+
 // displays are the screens' device names (\\.\DISPLAY1 ...) and monitors.
 func displays() (names []string, handles []uintptr) {
-	cb := syscall.NewCallback(func(h, hdc, rc, data uintptr) uintptr {
-		info := monitorInfoEx{size: uint32(unsafe.Sizeof(monitorInfoEx{}))}
-		if r, _, _ := procGetMonitorInfoW.Call(h, uintptr(unsafe.Pointer(&info))); r != 0 {
-			names = append(names, windows.UTF16ToString(info.device[:]))
-			handles = append(handles, h)
-		}
-		return 1
-	})
-	procEnumDisplayMonitors.Call(0, 0, cb, 0)
+	displayEnum.Lock()
+	defer displayEnum.Unlock()
+	displayEnum.names, displayEnum.handles = nil, nil
+	procEnumDisplayMonitors.Call(0, 0, displayEnumCallback, 0)
+	names, handles = displayEnum.names, displayEnum.handles
+	displayEnum.names, displayEnum.handles = nil, nil
 	return names, handles
+}
+
+// gammaTouched: this agent left a ramp other than plain on the screens;
+// it puts the plain one back when it ends (W51).
+var gammaTouched atomic.Bool
+
+// identity reports whether r is the plain ramp (i×257).
+func identity(r Ramp) bool {
+	for i := 0; i < 256; i++ {
+		v := uint16(i * 257)
+		if r.Red[i] != v || r.Green[i] != v || r.Blue[i] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// identityRamp is the plain ramp.
+func identityRamp() Ramp {
+	r := Ramp{Red: make([]uint16, 256), Green: make([]uint16, 256), Blue: make([]uint16, 256)}
+	for i := 0; i < 256; i++ {
+		r.Red[i], r.Green[i], r.Blue[i] = uint16(i*257), uint16(i*257), uint16(i*257)
+	}
+	return r
+}
+
+// resetGamma puts the plain ramp back if this agent changed it: when the
+// agent ends (the service stopped, is being removed, or ended it).
+func resetGamma() {
+	if !gammaTouched.Load() {
+		return
+	}
+	raw, _ := json.Marshal(identityRamp())
+	_ = agentDispatch.answer(Request{ID: 1, Op: OpSetGamma, Args: raw})
 }
 
 // screenDC opens a device context for one screen.
@@ -127,9 +160,10 @@ func init() {
 		if err := json.Unmarshal(raw, &ramp); err != nil {
 			return nil, err
 		}
-		if len(ramp.Red) != 256 || len(ramp.Green) != 256 || len(ramp.Blue) != 256 {
-			return nil, errors.New("a ramp has 256 values per colour")
+		if err := CheckRamp(ramp); err != nil {
+			return nil, err
 		}
+		gammaTouched.Store(!identity(ramp))
 		var buf [3 * 256]uint16
 		copy(buf[:256], ramp.Red)
 		copy(buf[256:512], ramp.Green)

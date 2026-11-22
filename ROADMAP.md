@@ -2190,7 +2190,7 @@ logs name the cause:
 
 Stability (blocks every other Windows GUI test):
 
-- [ ] `W50` **The whole computer froze** (L; principle 1: never harm the
+- [x] `W50` **The whole computer froze** (L; principle 1: never harm the
   device). With the Windows GUI open the laptop stopped answering;
   Ctrl+Alt+Del did nothing; only a forced power-off helped. Find the cause
   before the GUI goes on the laptop again: event log (`Application`,
@@ -2206,6 +2206,17 @@ Stability (blocks every other Windows GUI test):
   From 17:02:42 the same pids (dwm 14320, ShellHost, ctfmon) were re-"closed" every 5 s without exiting; last kc9k.log line 17:03:32; power button 17:03:33.5 (Kernel-Power 41, bugcheck 0: a hang, no BSOD).
   Confirmed, load only: Group Policy 4004 "manual" refresh pairs every 5 s (24/min, 630 in 26 min; static finding 1); SYSTEM PowerShell `WmiMonitorBrightness` every 5 s with circadian off (12/min, 361 vs 2–4/day, each "System error."; finding 2).
   Not seen: "too many callback functions", agent crash loop (1 restart, at shutdown), panics. Fix idea: never treat a program under %SystemRoot% as a browser; never kill session-critical processes (dwm, csrss, winlogon, fontdrvhost, sihost, svchost, explorer).
+  Built, checked on windows-latest (2026-11-22) *(By claude)*: no program under
+  %SystemRoot% or a Microsoft WindowsApps package is a browser; the engine dll
+  counts only beside the program or in a version folder; every Windows kill
+  path refuses the hard deny-list `sessionCritical` (`TestWinGuardSystem32NotBrowsers`
+  on the real System32, `TestWinGuardNeverClosesWindows` repeats the freeze,
+  `TestWinKillDenyList`). The load: SRP removal touches and refreshes nothing
+  when idle (`TestStrictSRPRefreshOnlyOnChange`); the panel's PowerShell only
+  while the backlight clip is on, reads once a minute, sets once a second;
+  `Get-NetAdapter` and the watchdog's `schtasks` at most once a minute
+  (audit in `notes/windows.md`). `ci/windows_soak_test.ps1` runs one minute a
+  phase in windows.yml's `system` job. Laptop: run the soak on real hardware.
 - [ ] `W51` **Screen black several times, "overrun detection" warning**
   (M; §4.10 circadian). Switching different settings on blanked the screen
   more than once and Windows warned of an overrun (a buffer overrun /
@@ -2221,6 +2232,16 @@ Stability (blocks every other Windows GUI test):
   (shell restarted) 16:53:15. Circadian was off all session: no gamma/ramp lines. No
   Display 4101, LiveKernelEvent, WHEA, 0xc0000409 or dump today (WerSvc is Disabled, so
   weak); "overrun detection" not found in any log.
+  Built, checked on windows-latest (2026-11-22) *(By claude)*: the cause was
+  W50's (dwm.exe killed). Also built: one package-level `EnumDisplayMonitors`
+  callback (5000 screen calls in one process, `TestWinDisplaysManyCalls`);
+  the agent's screen calls one at a time, a newer gamma set replacing a
+  queued one, every handler under `recover()`; ramps checked in the agent
+  (`CheckRamp`); the identity ramp put back when circadian goes off (as
+  before) and by the agent as it ends (service stop, uninstall); an agent that reports its own crash is
+  not tamper (SPEC §3.10, `TestAgentEndCrashVsKill`). Open: the switching on
+  win-vm or the laptop (soak `settings` phase); "overrun detection" not found
+  in any log.
 - [ ] `W52` **Blank white window appears at random** (M; R-GUI-3). A
   classic-styled window (white, old blue title bar, its own minimise,
   maximise and close buttons) covered the GUI with nothing in it; the

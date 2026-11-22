@@ -250,29 +250,167 @@ type Backlight struct {
 	Max  int
 }
 
+// The panel's brightness goes through PowerShell (WMI's
+// WmiMonitorBrightness): x/sys has no WMI over COM, and \\.\LCD's
+// brightness IOCTLs can't be proven on a runner without a panel. So each
+// PowerShell is rare (W50; before, one ran every 5 s, every 1 s after a
+// start or wake, every 100 ms while playing the day): the panel is looked
+// for once, again after ForgetBacklights (a wake) or a failed call; its
+// level is read at most once a minute (in between, the last read or set
+// level); a set at most once a second, the newest level winning, sent by
+// a timer when it came sooner; never two at once.
+var panel = struct {
+	sync.Mutex             // the cache
+	run        sync.Mutex  // one PowerShell at a time
+	looked     bool        // looked for since the last forget
+	found      bool        // a panel is there
+	level      int         // the last level read or set
+	readAt     time.Time   // when it was last read
+	setAt      time.Time   // when it was last set
+	want       int         // a set waiting for its second, or -1
+	timer      *time.Timer // sends want
+}{want: -1}
+
+// Seams for tests.
+var (
+	panelNow  = time.Now
+	panelRead = func() (int, error) {
+		out, err := powershell(`(Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1).CurrentBrightness`)
+		if err != nil {
+			return 0, err
+		}
+		s := strings.TrimSpace(string(out))
+		if s == "" {
+			return 0, fmt.Errorf("no panel")
+		}
+		return strconv.Atoi(s)
+	}
+	panelWrite = func(level int) error {
+		_, err := powershell(fmt.Sprintf(`Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightnessMethods -ErrorAction Stop | Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{Timeout=1; Brightness=%d} -ErrorAction Stop | Out-Null`, level))
+		return err
+	}
+)
+
+const (
+	panelReadEvery = time.Minute
+	panelSetEvery  = time.Second
+)
+
+// readPanel reads the panel's level through PowerShell, one at a time.
+func readPanel() (int, error) {
+	panel.run.Lock()
+	defer panel.run.Unlock()
+	return panelRead()
+}
+
+// writePanel sets it, one at a time.
+func writePanel(level int) error {
+	panel.run.Lock()
+	defer panel.run.Unlock()
+	return panelWrite(level)
+}
+
+// ForgetBacklights makes the next Backlights look for the panel again (a
+// wake; the screens may have changed).
+func ForgetBacklights() {
+	panel.Lock()
+	defer panel.Unlock()
+	panel.looked = false
+}
+
 // Backlights are the laptop panels whose brightness Windows sets.
 func Backlights() []Backlight {
-	out, err := powershell(`(Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1).CurrentBrightness`)
-	if err != nil || strings.TrimSpace(string(out)) == "" {
+	panel.Lock()
+	looked := panel.looked
+	panel.Unlock()
+	if !looked {
+		level, err := readPanel()
+		now := panelNow()
+		panel.Lock()
+		panel.looked, panel.found = true, err == nil
+		if err == nil {
+			panel.level, panel.readAt = level, now
+		}
+		panel.Unlock()
+	}
+	panel.Lock()
+	defer panel.Unlock()
+	if !panel.found {
 		return nil
 	}
 	return []Backlight{{Name: "panel", Max: 100}}
 }
 
-// Raw reads the panel's brightness (0-100).
+// Raw reads the panel's brightness (0-100): through PowerShell at most
+// once a minute.
 func (b Backlight) Raw() (int, error) {
-	out, err := powershell(`(Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1).CurrentBrightness`)
+	panel.Lock()
+	if panelNow().Sub(panel.readAt) < panelReadEvery || panel.want >= 0 {
+		level := panel.level
+		if panel.want >= 0 {
+			level = panel.want
+		}
+		panel.Unlock()
+		return level, nil
+	}
+	panel.Unlock()
+	level, err := readPanel()
+	panel.Lock()
+	defer panel.Unlock()
 	if err != nil {
+		panel.looked = false // gone (a display change): looked for again
 		return 0, err
 	}
-	return strconv.Atoi(strings.TrimSpace(string(out)))
+	panel.readAt = panelNow()
+	if panel.want < 0 {
+		panel.level = level
+	}
+	return panel.level, nil
 }
 
-// SetRaw sets the panel's brightness (0-100).
+// SetRaw sets the panel's brightness (0-100): at once when the last set
+// was a second ago or more, else the newest level a second after it.
 func (b Backlight) SetRaw(level int) error {
 	level = max(0, min(100, level))
-	_, err := powershell(fmt.Sprintf(`Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBrightnessMethods -ErrorAction Stop | Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{Timeout=1; Brightness=%d} -ErrorAction Stop | Out-Null`, level))
-	return err
+	panel.Lock()
+	wait := panelSetEvery - panelNow().Sub(panel.setAt)
+	if wait > 0 {
+		panel.want = level
+		if panel.timer == nil {
+			panel.timer = time.AfterFunc(wait, flushPanel)
+		}
+		panel.Unlock()
+		return nil
+	}
+	panel.setAt, panel.want = panelNow(), -1
+	panel.Unlock()
+	return setPanel(level)
+}
+
+// flushPanel sends the level that waited for its second.
+func flushPanel() {
+	panel.Lock()
+	level := panel.want
+	panel.timer, panel.want = nil, -1
+	if level >= 0 {
+		panel.setAt = panelNow()
+	}
+	panel.Unlock()
+	if level >= 0 {
+		_ = setPanel(level)
+	}
+}
+
+func setPanel(level int) error {
+	err := writePanel(level)
+	panel.Lock()
+	defer panel.Unlock()
+	if err != nil {
+		panel.looked = false
+		return err
+	}
+	panel.level = level
+	return nil
 }
 
 // External screens are found through the session at the screen; their

@@ -278,7 +278,7 @@ tamper protection settings can't be turned off.
 | **Step** | One rung: "N events within T: these consequences". |
 | **Quiet time** | Without tripping this long, the ladder drops a step. |
 | **Workaround** | Mirror, proxy address, alternative front-end, fetch tool. |
-| **Tamper** | Clock jump, or daemon restart other than upgrade, shutdown or self-reported crash. |
+| **Tamper** | Clock jump, or daemon restart other than upgrade, shutdown or self-reported crash; on Windows also a session agent ended from outside (not one that crashed and said so, or ended by itself). *(By claude)* |
 
 ### 3.11 Passwords
 
@@ -785,6 +785,7 @@ Decisions not already written into §1–5:
 - 2026-11-22 (By Opus): The Windows GUI's start arguments (its jump list, a shortcut, a second start) only open a page or one of the GUI's own dialogs (New block…, Monk mode…, Frozen Chicken…), never a kc9k command: a shortcut that started or stopped a block would act outside the window's questions and lock confirmations (R-LOCK-12), and one that weakened would be a way past them.
 - 2026-11-22 (owner): The Windows GUI has no first view: Overview's "Get started" card (W38) is dropped, since the GTK dashboard has none and the Windows pages follow the GTK layout (W54). *(By claude)*
 - 2026-11-22 (By claude): A project made on Linux imports on Windows as it is (W56, §4.10 "Linux-only"): its Linux-only parts are kept and listed as not used, not dropped and not mapped to Windows names. Dropping them would lose them when the project goes back to Linux; mapping (`gnome-terminal-server` to Windows Terminal, `/usr/bin/x` to `x.exe`) would block programs the user never named. The import is otherwise the same: only adds, so it can't weaken a locked block (R-WEAK-1/2), and its locks are confirmed (R-LOCK-12). The project format and the Linux app don't change.
+- 2026-11-22 (By claude): A Windows session agent that crashes and says so (Go's crash report on its output, exit code 2) or ends by itself is logged, not counted as tamper; only one ended from outside is (§3.10 Tamper), as Linux counts no self-reported daemon crash. *(By claude)*
 
 ## 7. Open decisions
 

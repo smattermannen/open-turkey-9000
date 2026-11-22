@@ -46,11 +46,14 @@ type Manager struct {
 	mu      sync.Mutex
 	agents  map[uint32]*agent
 	procs   map[uint32]windows.Handle // session -> agent process we started
+	outs    map[uint32]*agentOutput   // session -> that agent's output
 	started map[uint32]time.Time
 	nextID  atomic.Uint64
-	// Restarts counts agents started again after they ended (§3.10:
-	// W5 counts one ended by a person).
+	// Restarts counts agents started again after they were ended from
+	// outside (§3.10: W5 counts one ended by a person as tamper). An agent
+	// that crashed and said so (Crashes) or ended by itself is not one.
 	Restarts atomic.Int64
+	Crashes  atomic.Int64
 	// OnEvent is called with each event an agent sends.
 	OnEvent func(session uint32, event string, data json.RawMessage)
 }
@@ -72,7 +75,8 @@ var (
 
 // NewManager makes an empty manager.
 func NewManager() *Manager {
-	return &Manager{agents: map[uint32]*agent{}, procs: map[uint32]windows.Handle{}, started: map[uint32]time.Time{}}
+	return &Manager{agents: map[uint32]*agent{}, procs: map[uint32]windows.Handle{}, outs: map[uint32]*agentOutput{},
+		started: map[uint32]time.Time{}}
 }
 
 // Run accepts agents and keeps one running in each session until stop.
@@ -138,13 +142,21 @@ func (m *Manager) keepAgents() {
 		if !live[s] {
 			windows.CloseHandle(h)
 			delete(m.procs, s)
+			delete(m.outs, s)
 			continue
 		}
 		if ev, _ := windows.WaitForSingleObject(h, 0); ev == windows.WAIT_OBJECT_0 {
+			end, why := agentEnded(h, m.outs[s])
 			windows.CloseHandle(h)
 			delete(m.procs, s)
-			m.Restarts.Add(1)
-			log.Printf("agent: the agent in session %d ended; starting it again", s)
+			delete(m.outs, s)
+			switch end {
+			case endOutside:
+				m.Restarts.Add(1)
+			case endCrash:
+				m.Crashes.Add(1)
+			}
+			log.Printf("agent: the agent in session %d %s%s; starting it again", s, end, why)
 		}
 	}
 	for _, s := range sessions {
@@ -155,44 +167,147 @@ func (m *Manager) keepAgents() {
 			continue // one that ends at once is not started in a loop
 		}
 		m.started[s] = time.Now()
-		h, err := startAgent(s)
+		h, out, err := startAgent(s)
 		if err != nil {
 			log.Printf("agent: can't start in session %d: %v", s, err)
 			continue
 		}
-		m.procs[s] = h
+		m.procs[s], m.outs[s] = h, out
 	}
 }
 
 // startAgent starts `kc9k agent` as session's user, on its desktop.
-func startAgent(session uint32) (windows.Handle, error) {
+func startAgent(session uint32) (windows.Handle, *agentOutput, error) {
 	var token windows.Token
 	if err := windows.WTSQueryUserToken(session, &token); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	defer token.Close()
 	self, err := os.Executable()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	var env *uint16
 	if err := windows.CreateEnvironmentBlock(&env, token, false); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	defer windows.DestroyEnvironmentBlock(env)
-	cmdline, _ := windows.UTF16PtrFromString(syscall.EscapeArg(self) + " agent")
-	app, _ := windows.UTF16PtrFromString(self)
-	desktop, _ := windows.UTF16PtrFromString(`winsta0\default`)
-	dir, _ := windows.UTF16PtrFromString(os.Getenv("SystemRoot"))
-	si := &windows.StartupInfo{Cb: uint32(unsafe.Sizeof(windows.StartupInfo{})), Desktop: desktop}
-	var pi windows.ProcessInformation
-	err = windows.CreateProcessAsUser(token, app, cmdline, nil, nil, false,
-		windows.CREATE_UNICODE_ENVIRONMENT|windows.CREATE_NO_WINDOW, env, dir, si, &pi)
+	return spawnWithOutput(token, self, syscall.EscapeArg(self)+" agent", env, `winsta0\default`, session)
+}
+
+// spawnWithOutput starts a program (as token's user; with token 0 as this
+// process's) with its standard output and error on a pipe this process
+// reads (agentOutput): a Go crash report lands there, so a crash is told
+// from a kill. Only that pipe's end is inherited.
+func spawnWithOutput(token windows.Token, exe, cmdline string, env *uint16, desktop string, session uint32) (windows.Handle, *agentOutput, error) {
+	sa := windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), InheritHandle: 1}
+	var r, w windows.Handle
+	syscall.ForkLock.Lock()
+	defer syscall.ForkLock.Unlock()
+	if err := windows.CreatePipe(&r, &w, &sa, 0); err != nil {
+		return 0, nil, err
+	}
+	_ = windows.SetHandleInformation(r, windows.HANDLE_FLAG_INHERIT, 0)
+	defer windows.CloseHandle(w)
+	attrs, err := windows.NewProcThreadAttributeList(1)
 	if err != nil {
-		return 0, err
+		windows.CloseHandle(r)
+		return 0, nil, err
+	}
+	defer attrs.Delete()
+	if err := attrs.Update(windows.PROC_THREAD_ATTRIBUTE_HANDLE_LIST, unsafe.Pointer(&w), unsafe.Sizeof(w)); err != nil {
+		windows.CloseHandle(r)
+		return 0, nil, err
+	}
+	si := &windows.StartupInfoEx{ProcThreadAttributeList: attrs.List()}
+	si.Cb = uint32(unsafe.Sizeof(*si))
+	si.Flags = windows.STARTF_USESTDHANDLES
+	si.StdOutput, si.StdErr = w, w
+	if desktop != "" {
+		si.Desktop, _ = windows.UTF16PtrFromString(desktop)
+	}
+	cmd, _ := windows.UTF16PtrFromString(cmdline)
+	app, _ := windows.UTF16PtrFromString(exe)
+	dir, _ := windows.UTF16PtrFromString(os.Getenv("SystemRoot"))
+	flags := uint32(windows.CREATE_NO_WINDOW | windows.EXTENDED_STARTUPINFO_PRESENT)
+	if env != nil {
+		flags |= windows.CREATE_UNICODE_ENVIRONMENT
+	}
+	var pi windows.ProcessInformation
+	if token != 0 {
+		err = windows.CreateProcessAsUser(token, app, cmd, nil, nil, true, flags, env, dir, &si.StartupInfo, &pi)
+	} else {
+		err = windows.CreateProcess(app, cmd, nil, nil, true, flags, env, dir, &si.StartupInfo, &pi)
+	}
+	if err != nil {
+		windows.CloseHandle(r)
+		return 0, nil, err
 	}
 	windows.CloseHandle(pi.Thread)
-	return pi.Process, nil
+	return pi.Process, readAgentOutput(session, r), nil
+}
+
+// agentOutput is what an agent wrote: its first lines go to the service's
+// log, the last 16 KB are kept to tell how it ended.
+type agentOutput struct {
+	mu   sync.Mutex
+	tail []byte
+	done chan struct{}
+}
+
+func readAgentOutput(session uint32, r windows.Handle) *agentOutput {
+	o := &agentOutput{done: make(chan struct{})}
+	go func() {
+		defer close(o.done)
+		f := os.NewFile(uintptr(r), "agent output")
+		defer f.Close()
+		sc := bufio.NewScanner(f)
+		sc.Buffer(make([]byte, 0, 4096), 64*1024)
+		logged := 0
+		for sc.Scan() {
+			line := sc.Text()
+			if logged < 200 {
+				log.Printf("agent %d: %s", session, line)
+				logged++
+			}
+			o.mu.Lock()
+			o.tail = append(o.tail, line...)
+			o.tail = append(o.tail, '\n')
+			if len(o.tail) > 16<<10 {
+				o.tail = append([]byte(nil), o.tail[len(o.tail)-16<<10:]...)
+			}
+			o.mu.Unlock()
+		}
+	}()
+	return o
+}
+
+// text is the tail, once the agent's output closed (or after a second).
+func (o *agentOutput) text() string {
+	if o == nil {
+		return ""
+	}
+	select {
+	case <-o.done:
+	case <-time.After(time.Second):
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return string(o.tail)
+}
+
+// agentEnded tells how the ended agent h ended (§3.10: only from outside
+// is tamper), and why, for the log.
+func agentEnded(h windows.Handle, out *agentOutput) (agentEnd, string) {
+	var code uint32
+	_ = windows.GetExitCodeProcess(h, &code)
+	text := out.text()
+	end := classifyEnd(code, text)
+	why := fmt.Sprintf(" (exit code %d)", code)
+	if end == endCrash {
+		why = fmt.Sprintf(" (exit code %d: %s)", code, crashReport(text))
+	}
+	return end, why
 }
 
 // acceptAgents takes agents' connections.

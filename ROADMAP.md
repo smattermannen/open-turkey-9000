@@ -1782,6 +1782,9 @@ Windows conveniences:
   options (strict mode, no-escape, guided setup) named last. It switches
   nothing on (principles 3, 7). Built 2026-11-22 (`Words.FirstSteps`,
   UI tests `AFirstViewForNothingSetUp`, `NoFirstViewOnceSetUp`).
+  Withdrawn 2026-11-22 by the owner (W54: the Overview follows the GTK
+  dashboard, which has no "Get started" card); the first view, its words
+  and its UI tests were removed. *(By claude)*
 - [x] `W39` Device protection explained for Windows (S; §4.10 Device
   protection, principle 3, §6 2026-11-21 Windows equivalents). Settings
   says per level what holds on Windows: basic; strict mode (the

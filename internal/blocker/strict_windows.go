@@ -874,7 +874,11 @@ func closeVirtualMachines() {
 		}
 		tree := treeOf(p.PID, children)
 		for i := len(tree) - 1; i >= 0; i-- {
-			_ = killProcess(tree[i])
+			if tree[i] == p.PID {
+				_ = killNamedProcess(p) // vmwp, WSL's bash: in System32
+			} else {
+				_ = killProcess(procs[tree[i]])
+			}
 		}
 		log.Printf("strict: closed %s (pid %d): no virtual machines or containers during strict mode", p.Name, p.PID)
 	}

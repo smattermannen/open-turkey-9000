@@ -42,8 +42,12 @@ func TestWinProcKillTree(t *testing.T) {
 		t.Fatalf("tree of cmd.exe = %v, want it and ping", tree)
 	}
 	for i := len(tree) - 1; i >= 0; i-- {
-		if err := killProcess(tree[i]); err != nil {
-			t.Errorf("kill %d: %v", tree[i], err)
+		// cmd and ping are in System32: a rule names them; conhost is
+		// Windows' own and ends with cmd.
+		if p := procs[tree[i]]; p != nil && p.Name != "conhost" {
+			if err := killNamedProcess(p); err != nil {
+				t.Errorf("kill %s %d: %v", p.Name, tree[i], err)
+			}
 		}
 	}
 	done := make(chan error, 1)

@@ -209,11 +209,32 @@
   session, start time; a parent counts only if it started before its
   child (IDs are reused). `tcpOwner` (`GetExtendedTcpTable`) maps a
   connection to its process: check-ins, statistics per user.
+- Killing (W50) *(By claude)*: every Windows kill path goes through
+  `killProcess` (what KC9K found itself: browsers, trees below a blocked
+  app, people's programs; never a program under %SystemRoot% or with an
+  unreadable path) or `killNamedProcess` (a process a rule names: the
+  blocked app itself, a tamper tool such as taskmgr, curl naming a
+  blocked site, a blocked window's owner, a VM's vmwp). Both refuse the
+  hard deny-list `sessionCritical`: PID 0 and 4, `essentialWindowsApps`
+  and `neverKillExtra` (dwm, csrss, winlogon, svchost, fontdrvhost,
+  sihost, ctfmon, explorer, ShellHost, RuntimeBroker, dllhost...) in the
+  Windows folder or unreadable, KC9K's own programs; a refusal is logged
+  once per process ("kill refused"). `terminateProcess` (the seam tests
+  replace) checks the deny-list again on the path its handle names (PIDs
+  are reused). Tests: `TestWinKillDenyList`, `TestWinGuardNeverClosesWindows`.
 - Extension guard (`extguard_windows.go`; `extguard_shared.go` is the
   shared verdict): a browser is a guarded program name, a renamed one by
   its version resource's OriginalFilename, or a program beside `xul.dll`
-  or `chrome.dll`/`msedge.dll` (portable browsers); never Thunderbird or
-  WebView2. Main process: topmost ancestor with the same program. A
+  or `chrome.dll`/`msedge.dll`, or with one in a version folder beside it
+  (`Application\120.0.…\chrome.dll`); never Thunderbird or WebView2,
+  never a program of Windows' own (`windowsOwnProgram`: under
+  %SystemRoot%, a Microsoft package in WindowsApps) nor one whose path
+  can't be read. *(By claude)* Laptop 2026-11-22 (W50): the former glob
+  `<dir>\*\msedge.dll` matched `System32\Microsoft-Edge-WebView`, so
+  every System32 program was a browser and the guard closed dwm (black
+  screens, classic white windows), fontdrvhost, sihost, svchost... every
+  5 s after the grace until the computer hung. `TestWinGuardSystem32NotBrowsers`
+  lists System32 for real. "browser: closing" lines name the path. Main process: topmost ancestor with the same program. A
   browser started for remote control is closed at once (W11): its command
   line (`commandLine`) and environment (`processEnvironment`: the PEB's
   process parameters, x64 layout) checked by `remoteControlArgs`, which

@@ -769,7 +769,7 @@ func CloseNoexecPrograms(exempt []string) int {
 	protected := protectedPIDs(procs)
 	n := 0
 	for _, p := range procs {
-		if p.person() && !protected[p.PID] && userProgram(p, exempt) && killProcess(p.PID) == nil {
+		if p.person() && !protected[p.PID] && userProgram(p, exempt) && killProcess(p) == nil {
 			log.Printf("strict: closed %s (pid %d): run from %s", p.Name, p.PID, filepath.Dir(p.Exe))
 			n++
 		}

@@ -318,7 +318,11 @@ func killBlockedWin(names []string, politely bool, now time.Time, uids []uint64)
 				continue
 			}
 			protected[pid] = true
-			if killProcess(pid) == nil {
+			end := killProcess // below a blocked app: never Windows' own
+			if pid == uint32(root) {
+				end = killNamedProcess // the blocked app itself (taskmgr, cmd...)
+			}
+			if end(p) == nil {
 				killed++
 			}
 		}
@@ -377,7 +381,7 @@ func CloseAllExcept(allowed []string) int {
 		if !p.person() || protected[p.PID] || systemProgram(p) || keep(p) {
 			continue
 		}
-		if killProcess(p.PID) == nil {
+		if killProcess(p) == nil {
 			log.Printf("freeze: closed %s (pid %d): not an allowed app", p.Name, p.PID)
 			closed++
 		}
@@ -402,7 +406,7 @@ func CloseTor() int {
 	procs := processSnapshot()
 	n := 0
 	for _, p := range procs {
-		if p.person() && torProgram(p) && killProcess(p.PID) == nil {
+		if p.person() && torProgram(p) && killProcess(p) == nil {
 			n++
 		}
 	}
@@ -445,7 +449,7 @@ func KillNamingFor(domains []string, uids []uint64) []string {
 				}
 			}
 			if hit {
-				if killProcess(p.PID) == nil {
+				if killNamedProcess(p) == nil { // curl is in System32
 					tools = append(tools, name)
 				}
 				break

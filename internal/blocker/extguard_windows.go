@@ -201,14 +201,12 @@ var browserVerdicts = struct {
 
 // isBrowserProc reports whether p is a browser's process.
 func isBrowserProc(p *winProc) bool {
-	if notBrowsers[p.Name] {
+	// Never Windows' own programs (W50) nor one whose path can't be read.
+	if p.Exe == "" || notBrowsers[p.Name] || windowsOwnProgram(p.Exe) {
 		return false
 	}
 	if guardedBrowsers[p.Name] {
 		return true
-	}
-	if p.Exe == "" {
-		return false
 	}
 	key := strings.ToLower(p.Exe)
 	browserVerdicts.Lock()
@@ -224,8 +222,26 @@ func isBrowserProc(p *winProc) bool {
 	return v
 }
 
-// isBrowserProgram looks at the program file and its folder.
+// windowsOwnProgram reports whether exe is Windows' own: under
+// %SystemRoot%, or a Microsoft package in Program Files\WindowsApps.
+func windowsOwnProgram(exe string) bool {
+	if underSystemRoot(exe) {
+		return true
+	}
+	apps := strings.ToLower(filepath.Join(programFilesDir(), "WindowsApps")) + `\`
+	return strings.HasPrefix(strings.ToLower(filepath.Clean(exe)), apps+"microsoft.")
+}
+
+// isBrowserProgram looks at the program file and its folder: the engine
+// next to it, or in a version folder beside it (Chrome's and Edge's
+// Application\<version>\chrome.dll). Never a program of Windows' own:
+// System32\Microsoft-Edge-WebView holds msedge.dll, so the former glob
+// <dir>\*\msedge.dll made every System32 program a browser and the
+// extension guard closed dwm, fontdrvhost, sihost... (W50).
 func isBrowserProgram(exe string) bool {
+	if windowsOwnProgram(exe) {
+		return false
+	}
 	if orig := exeBase(originalFilename(exe)); orig != "" {
 		if notBrowsers[orig] {
 			return false
@@ -238,15 +254,40 @@ func isBrowserProgram(exe string) bool {
 	if fileExists(filepath.Join(dir, "xul.dll")) {
 		return true
 	}
+	var versions []string
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() && versionFolder(e.Name()) {
+				versions = append(versions, filepath.Join(dir, e.Name()))
+			}
+		}
+	}
 	for _, engine := range []string{"chrome.dll", "msedge.dll"} {
 		if fileExists(filepath.Join(dir, engine)) {
 			return true
 		}
-		if m, _ := filepath.Glob(filepath.Join(dir, "*", engine)); len(m) > 0 {
-			return true
+		for _, v := range versions {
+			if fileExists(filepath.Join(v, engine)) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// versionFolder reports whether name is a version: digits and dots, at
+// least one dot ("120.0.6099.71").
+func versionFolder(name string) bool {
+	dots := 0
+	for i, c := range name {
+		switch {
+		case c == '.' && i > 0 && name[i-1] != '.':
+			dots++
+		case c < '0' || c > '9':
+			return false
+		}
+	}
+	return dots > 0 && !strings.HasSuffix(name, ".")
 }
 
 func fileExists(path string) bool {
@@ -361,7 +402,7 @@ func (g *ExtensionGuard) EnforceFor(now, settingsChanged time.Time, unsupported 
 		}
 		gp.lastSeen, gp.seen = g.seen[p.PID]
 		if reason := closeReason(gp, now, settingsChanged, unsupported); reason != "" {
-			log.Printf("browser: closing %s (pid %d): %s", p.Name, p.PID, reason)
+			log.Printf("browser: closing %s (pid %d, %s): %s", p.Name, p.PID, p.Exe, reason)
 			targets = append(targets, p.PID)
 		}
 	}
@@ -373,7 +414,7 @@ func (g *ExtensionGuard) EnforceFor(now, settingsChanged time.Time, unsupported 
 	for _, pid := range targets {
 		tree := treeOf(pid, children)
 		for i := len(tree) - 1; i >= 0; i-- {
-			_ = killProcess(tree[i])
+			_ = killProcess(procs[tree[i]]) // never Windows' own (W50)
 		}
 	}
 	return len(targets)

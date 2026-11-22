@@ -572,7 +572,7 @@ no-escape are the owner's choices; their rate is while they act):
 | PowerShell `WmiMonitorBrightness` | `circadian_windows.go` `panel` | look once (wake, failure: again); read ≤ 1/min; set ≤ 1/s; one at a time. Was every cycle, 1/s after start/wake, 10/s in Play the day |
 | PowerShell `Get-NetAdapter` | `netcut_windows.go` `adapters` | ≤ 1/min (cache dropped by KC9K's own change), while monk mode cuts or place rules keep Wi-Fi on. Was every cycle |
 | PowerShell `Enable/Disable-NetAdapter` | `netcut_windows.go` `setAdapter` | on change (monk mode, places) |
-| `schtasks /Query`, `/Create` (watchdog) | `tamper_windows.go` `GuardService` | the task's file is checked each cycle; schtasks ≤ 1/min when it is missing. Was 1–2 per cycle while missing |
+| `schtasks /Query`, `/Create` (watchdog) | `tamper_windows.go` `GuardService` | the task's file is checked each cycle; its file gone, it is put back at once; after schtasks finds it anyway or creating fails, schtasks waits a minute. Was 1–2 per cycle while missing *(By claude)* |
 | `schtasks /Delete` (a task made to run as SYSTEM) | `strict_windows.go` | on change, while strict mode acts |
 | PowerShell (services, Task Scheduler, WMI) | `strict_windows.go` | while strict mode acts: first pass, then ≤ 1 per 5 min; undo once |
 | `reagentc`, `bcdedit` | `tamper_windows.go` `SyncRecoveryGuard` | on change (state file); a failure is tried again next cycle |

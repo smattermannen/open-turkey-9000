@@ -46,6 +46,11 @@ of their group and a row here; a finished item loses its row.
 | 2.13 | Accountability partner: reports, alerts, partner-held passwords, unlock approval | §4.15 | — | agent |
 | 2.14 | Website: like Cold Turkey's in kind; hosting to choose | §4.16 | — | agent, owner |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
+| 2.15 | Remove search results that lead to blacklisted addresses | R-PAGE-2 | extension | agent, box |
+| 2.16 | Dark pages switch: "Show dark web pages while dark mode is on" turns on the browser's dark mode | §4.10 | circadian, browsers, gui, gui-windows | agent, box |
+| A15 | Enter presses OK in every dialog (GTK and Windows GUI) | R-GUI-3 | gui, gui-windows | agent |
+| C3 | Android: tapping jumps to the top; app works like the computer's GUI | R-GUI-3 | android | agent |
+| C4 | Android places: map and GPS instead of Wi-Fi | §3 Place | android, automation | agent |
 | W50 | Windows GUI froze the whole laptop (forced power-off): find and fix first | principle 1 | gui-windows, windows | win-vm, laptop |
 | W51 | Screen went black, "overrun detection" warning when switching settings | §4.10 | gui-windows, windows | win-vm, laptop |
 | W52 | Blank white classic window over the GUI (crash?) | R-GUI-3 | gui-windows | win-vm |
@@ -1458,6 +1463,20 @@ Only items not simply Built.
   approval; no screenshots.
 - **2.14 Website** (M, owner 2026-11-22; SPEC §4.16): Not built. Content
   per SPEC §4.16; where it is hosted is the owner's choice when built.
+- **2.15 Search results from blacklisted addresses** (M, owner
+  2026-11-22; R-PAGE-2): Not built. The extension removes each result on a
+  search results page whose link goes to a blacklisted address (with
+  `reddit.com` blacklisted, no Reddit results). Done when: a browser test
+  on the supported engines shows no result to a blacklisted address and
+  the other results untouched.
+- **2.16 Dark pages turn on the browser's dark mode** (S, owner
+  2026-11-22; §4.10): the switch "Show light web pages dark while dark
+  mode is on" is renamed "Show dark web pages while dark mode is on" (GTK
+  GUI, Windows GUI, `kc9k circadian dark-pages` help) and turns on the
+  browser's own dark mode (its theme and `prefers-color-scheme: dark`,
+  which LibreWolf now reports as light, see `2.1`). Done when: with the
+  switch on and dark mode on, a supported browser is dark and a site with
+  its own dark design shows it.
 - **2.9 Tamper settings live** (S): built 2026-11-21 (§1 *§4.10 Tamper
   settings*). Built in Chrome-family browsers (2026-11-21, cloud container,
   Chrome 158.0.8127.36, daemon as root, real policies): `guest` on, each
@@ -1498,6 +1517,15 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
 - [ ] `C1` Build for the brothers' computers with `TAGS=devmaster`
   (owner 2026-11-18; the master password stays with the owner).
 - [ ] `C2` Remove `ci/vm.sh`; on the laptop remove `/etc/sudoers.d/99-claude-test`.
+- [ ] `C3` **Android app like the computer's GUI** (owner 2026-11-22;
+  R-GUI-3): every tap moves the view back to the top of the page; it must
+  stay where it is. Beyond that, everything in the app works roughly as on
+  the computer (same pages and behaviour). Done when: tapping anywhere on
+  a long page keeps its scroll position (test), and the app's pages match
+  the GTK GUI's except where Android differs (`C4`).
+- [ ] `C4` **Android places by map and GPS** (owner 2026-11-22; SPEC §3
+  Place): the app has a map and GPS, so making a place opens the map
+  (an area picked there, found by GPS) instead of reading Wi-Fi.
 
 ## 4. Windows (owner 2026-11-21)
 
@@ -2206,6 +2234,8 @@ Stability (blocks every other Windows GUI test):
   From 17:02:42 the same pids (dwm 14320, ShellHost, ctfmon) were re-"closed" every 5 s without exiting; last kc9k.log line 17:03:32; power button 17:03:33.5 (Kernel-Power 41, bugcheck 0: a hang, no BSOD).
   Confirmed, load only: Group Policy 4004 "manual" refresh pairs every 5 s (24/min, 630 in 26 min; static finding 1); SYSTEM PowerShell `WmiMonitorBrightness` every 5 s with circadian off (12/min, 361 vs 2–4/day, each "System error."; finding 2).
   Not seen: "too many callback functions", agent crash loop (1 restart, at shutdown), panics. Fix idea: never treat a program under %SystemRoot% as a browser; never kill session-critical processes (dwm, csrss, winlogon, fontdrvhost, sihost, svchost, explorer).
+  Laptop verdict (2026-11-22) *(By claude)*: **fixed on this laptop** (MSI 0.1.1 from 2e938d0, soak `-Minutes 2` with the GUI open, shortened at the owner's request): GP 4004 0/min (was 24), service PowerShell 0.7–1.5/min (was 12), CPU max 68 %, no agent restart, 0 System32 "closing" lines.
+  Guard over the live process list: old main called 128 of 221 processes browsers (25 kinds: winlogon, wininit, smss, services, sihost, svchost …); 3170f6f only librewolf (14). The soak still exits 1 on idle: "PowerShell by the service" (the once-a-minute panel read for the status, `panelReadEvery`; the soak's idle limit is 0) and "agent H% not flat" (+5.9 % in the first 2.6 min, flat after).
   Built, checked on windows-latest (2026-11-22) *(By claude)*: no program under
   %SystemRoot% or a Microsoft WindowsApps package is a browser; the engine dll
   counts only beside the program or in a version folder; every Windows kill
@@ -2232,6 +2262,7 @@ Stability (blocks every other Windows GUI test):
   (shell restarted) 16:53:15. Circadian was off all session: no gamma/ramp lines. No
   Display 4101, LiveKernelEvent, WHEA, 0xc0000409 or dump today (WerSvc is Disabled, so
   weak); "overrun detection" not found in any log.
+  Laptop verdict (2026-11-22) *(By claude)*: no black screen on 0.1.1: circadian (kelvin 3400–5000, software 60–85 %, backlight 50–80 %), Play the day and settings phases gave 0 Display 4101/LiveKernelEvent, 0 DWM exits, gamma "ok" every sample, identity ramp put back. Only 2-min phases: the 2000-callback build-up rests on CI's `TestWinDisplaysManyCalls`.
   Built, checked on windows-latest (2026-11-22) *(By claude)*: the cause was
   W50's (dwm.exe killed). Also built: one package-level `EnumDisplayMonitors`
   callback (5000 screen calls in one process, `TestWinDisplaysManyCalls`);
@@ -2259,6 +2290,8 @@ Stability (blocks every other Windows GUI test):
   Laptop (2026-11-22) *(By claude)*: GUI alone against the fake (main b6c3bb5, 200 %
   scaling, ~25 launches, window watcher on): no crash, hang or white window; every
   window WinUI (`WinUIDesktopWin32WindowClass`, popups). UI suite 36/38: see W33/W37 below.
+  Laptop verdict (2026-11-22) *(By claude)*: with the real service (0.1.1) and the GUI open ~30 min, the window watcher saw 189 new windows, none classic or blank from KC9K; the white window came with the dead dwm.exe (W50). Not checked: a GUI crash log (no crash happened).
+  Laptop finding (2026-11-22) *(By claude)*: KC9K closed the owner's LibreWolf twice while in use ("started before KC9K changed its browser settings", 20:24:56 and 20:48:16), when a browser setting changed with a website block on; once with a Save As dialog open. By design (notes/browsers.md), but unsaved work is lost: ask the owner whether to warn first or wait for the browser to be idle.
 
 Layout (owner: keep the Windows look, use the GTK layout):
 
@@ -2311,6 +2344,10 @@ Import:
 
 Both platforms:
 
+- [ ] `A15` **Enter presses OK** (owner 2026-11-22; R-GUI-3): in every
+  dialog of the GTK and Windows GUIs, Enter presses the OK (default)
+  button. Done when: a GUI test per platform opens dialogs, presses Enter
+  and sees each one accepted.
 - [ ] `A14` **Automation clip curves bend one way only** (S; §4.10
   automation clips). Dragging a point far up makes a sharp corner;
   dragging it down never does (it stays a soft curve). Same on Linux

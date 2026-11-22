@@ -25,6 +25,12 @@ package blocker
 //     (running tokens keep the loss until their next sign-in).
 //   - W22: accounts made or turned on meanwhile are turned off and counted,
 //     and turned on again afterwards if strict mode turned them off.
+//   - W24: virtual machines, WSL, Windows Sandbox and containers have
+//     their own network and DNS past hosts and the firewall, and Docker's
+//     engine mounts the host's drives: people's VM programs are closed,
+//     Hyper-V's VM workers ended, and the services behind WSL, Sandbox,
+//     Hyper-V and Docker stopped, every cycle (Linux's strict mode: no
+//     containers or virtual machines).
 //
 // Everything is put back by removeStrictExtras; its state is
 // ProgramData\kc9k\strict-extras.json.
@@ -46,6 +52,7 @@ import (
 	"github.com/smattermannen/kc9k/internal/winapi"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
+	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
@@ -161,6 +168,7 @@ func applyStrictExtras() []string {
 	changed, err = ensureMSIOff()
 	note("strict mode's Windows Installer policy", changed, err)
 	stripPrivileges()
+	closeVirtualMachines()
 	if !s.RightsDone {
 		s.RightsDone = true
 		note("Administrators' user rights", false, removeStrictRights(&s))
@@ -691,4 +699,77 @@ func strictAccounts(s *strictState) []string {
 		}
 	}
 	return off
+}
+
+// vmPrograms are people's virtual machine, WSL, Sandbox and container
+// programs (W24).
+var vmPrograms = map[string]bool{
+	"wsl": true, "wslhost": true, "wslg": true, "wslrelay": true, "ubuntu": true, "ubuntu2204": true,
+	"ubuntu2404": true, "debian": true, "kali": true, "opensuse-leap-15.6": true, "archlinux": true,
+	"windowssandbox": true, "windowssandboxclient": true, "windowssandboxremotesession": true,
+	"vmconnect": true, "virtualbox": true, "virtualboxvm": true, "vboxheadless": true, "vboxmanage": true,
+	"vboxsvc": true, "vboxsds": true, "vmware": true, "vmware-vmx": true, "vmplayer": true, "vmrun": true,
+	"docker desktop": true, "com.docker.backend": true, "com.docker.build": true, "docker": true,
+	"dockerd": true, "podman": true, "podman desktop": true, "multipass": true, "multipassd": true,
+	"vagrant": true, "qemu": true,
+}
+
+// vmServices run them; strict mode keeps them stopped.
+const (
+	windowsSvcStopped = svc.Stopped
+	windowsSvcStop    = svc.Stop
+)
+
+var vmServices = []string{"LxssManager", "WSLService", "vmcompute", "vmms", "CmService", "docker",
+	"com.docker.service", "VBoxSDS", "VMAuthdService", "Multipass"}
+
+// isVMProcess reports whether p is a VM program to close: a person's VM
+// program, WSL's bash (System32's, not Git's), any QEMU, or a Hyper-V VM's
+// worker (which runs under the VM's own account).
+func isVMProcess(p *winProc) bool {
+	switch {
+	case p.Name == "vmwp":
+		return underSystemRoot(p.Exe)
+	case !p.person():
+		return false
+	case vmPrograms[p.Name], strings.HasPrefix(p.Name, "qemu-system"):
+		return true
+	case p.Name == "bash":
+		return underSystemRoot(p.Exe)
+	}
+	return false
+}
+
+// closeVirtualMachines closes them and stops their services.
+func closeVirtualMachines() {
+	procs := processSnapshot()
+	children := childrenOf(procs)
+	protected := protectedPIDs(procs)
+	for _, p := range procs {
+		if protected[p.PID] || !isVMProcess(p) {
+			continue
+		}
+		tree := treeOf(p.PID, children)
+		for i := len(tree) - 1; i >= 0; i-- {
+			_ = killProcess(tree[i])
+		}
+		log.Printf("strict: closed %s (pid %d): no virtual machines or containers during strict mode", p.Name, p.PID)
+	}
+	m, err := mgr.Connect()
+	if err != nil {
+		return
+	}
+	defer m.Disconnect()
+	for _, name := range vmServices {
+		svc, err := m.OpenService(name)
+		if err != nil {
+			continue
+		}
+		if st, err := svc.Query(); err == nil && st.State != windowsSvcStopped {
+			if _, err := svc.Control(windowsSvcStop); err == nil {
+				log.Printf("strict: stopped the %s service", name)
+			}
+		}
+		svc.Close()
+	}
 }

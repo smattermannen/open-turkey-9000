@@ -132,11 +132,16 @@ Check 'strict mode: Windows Installer is off' { (Get-ItemProperty 'HKLM:\SOFTWAR
 $priv = whoami.exe /priv | Out-String
 Write-Host $priv
 Check "strict mode: people's programs lose the backup, restore, debug and take-ownership privileges" { $priv -notmatch 'SeBackupPrivilege|SeRestorePrivilege|SeDebugPrivilege|SeTakeOwnershipPrivilege' }
+New-Item -ItemType Directory -Force 'C:\kc9kci' | Out-Null
+Copy-Item "$env:SystemRoot\System32\PING.EXE" 'C:\kc9kci\VirtualBoxVM.exe'
+$vm = Start-Process 'C:\kc9kci\VirtualBoxVM.exe' -ArgumentList '-n', '120', '127.0.0.1' -WindowStyle Hidden -PassThru
 net.exe user kc9kci 'Kc9k-ci-1!x' /add | Out-Host
 schtasks.exe /Create /TN kc9kci /TR "$env:SystemRoot\System32\cmd.exe /c exit" /SC ONCE /ST 23:59 /RU SYSTEM /F 2>&1 | Out-Host
 $taskRefused = $LASTEXITCODE -ne 0
 try { Set-WmiInstance -Namespace root/subscription -Class CommandLineEventConsumer -Arguments @{ Name = 'kc9kci'; CommandLineTemplate = 'cmd /c exit' } -ErrorAction Stop | Out-Null; $wmiRefused = $false } catch { Write-Host "  $_"; $wmiRefused = $true }
 Start-Sleep -Seconds 40
+Check 'strict mode: a virtual machine program is closed' { $vm.HasExited }
+Check "strict mode: Docker's engine is stopped (where installed)" { -not (Get-Service docker -ErrorAction SilentlyContinue) -or (Get-Service docker).Status -ne 'Running' }
 Check 'strict mode: an account made meanwhile is turned off' { -not (Get-LocalUser kc9kci -ErrorAction SilentlyContinue).Enabled }
 Check 'strict mode: a task as SYSTEM is refused, or deleted within a cycle' { $taskRefused -or -not (schtasks.exe /Query /TN kc9kci 2>$null) }
 Check 'strict mode: a WMI event consumer is refused, or deleted within a cycle' { $wmiRefused -or -not (Get-WmiObject -Namespace root/subscription -Class CommandLineEventConsumer -Filter "Name='kc9kci'") }

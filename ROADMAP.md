@@ -72,7 +72,7 @@ of their group and a row here; a finished item loses its row.
 | W21 | Strict mode: administrators' privileges | §3.8, principle 3 | windows, device | win-ci |
 | W22 | Strict mode: new accounts | §3.8 | windows, device | win-ci |
 | W23 | Clock and time zone put back (tamper clock) | §4.10 | windows, locks | win-ci |
-| W24 | Strict mode: VMs, WSL, Sandbox, containers | §3.8 | windows, device | win-ci, win-vm |
+| W24 | Strict mode: VMs, WSL, Sandbox, containers: built; real WSL, Sandbox, Hyper-V Unchecked | §3.8 | windows, device | win-vm |
 | W25 | Strict mode's noexec: Software Restriction Policies | §3.8 | windows, device | win-ci |
 | W26 | Other ways around: Firefox registry policies, DoT, IPv6 hosts | §3.13, §4.10 | windows, browsers | win-ci |
 | W27 | Desktop checks of `windows_vm_test.ps1` in CI | — | windows, testing | win-ci |
@@ -1949,7 +1949,10 @@ their sites; their pages are an app's, not a browser's).
   jump of the system clock against the boot clock that internet time
   doesn't confirm is put back and counted. Needs: win-ci.
 - [ ] `W24` Strict mode: virtual machines, WSL, Windows Sandbox,
-  containers (S). SPEC §3.8 (strict mode: no containers/VMs). Was: nothing
+  containers (S). Built (2026-11-22): `closeVirtualMachines`;
+  `TestStrictVMProcesses`, and on `windows-latest` a VM program closed and
+  Docker's engine stopped during a lock. Unchecked: a real WSL
+  distribution, Sandbox and a Hyper-V VM (Needs win-vm). Was planned: SPEC §3.8 (strict mode: no containers/VMs). Was: nothing
   on Windows; a WSL distribution or VM has its own DNS and network path
   past hosts and possibly WFP. Build: while strict mode holds, people's
   WSL, Windows Sandbox, Hyper-V, VirtualBox, VMware, QEMU and Docker

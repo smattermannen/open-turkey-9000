@@ -336,7 +336,12 @@
   `root\subscription` denies `0xc001c` (writes) and event consumers made
   since the start are deleted with their bindings. The `Services` key
   tree is a lockdown target (deny entries inherited by every service's
-  key). Each put back or deleted is counted as tamper.
+  key). Each put back or deleted is counted as tamper. Virtual machines
+  (W24, every cycle, `closeVirtualMachines`): people's VM, WSL, Sandbox,
+  QEMU and Docker programs (`vmPrograms`, `isVMProcess`; WSL's bash only
+  in System32) closed with their children, Hyper-V's VM workers (`vmwp`)
+  ended, and the services behind them stopped (`vmServices`: LxssManager,
+  WSLService, vmcompute, vmms, CmService, docker…); logged, not counted.
 - Clock and time zone (W23, `clockguard_windows.go`, from `guardPlatform`):
   with tamper clock on and anything locked, the first cycle keeps the
   time zone (`GetDynamicTimeZoneInformation`) and the wall clock minus

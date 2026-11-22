@@ -45,3 +45,27 @@ func TestStrictDenies(t *testing.T) {
 func containsACE(sddl, ace string) bool {
 	return strings.Contains(sddl, ace) || strings.Contains(sddl, canonACE(ace))
 }
+
+// W24: which processes strict mode closes as virtual machines.
+func TestStrictVMProcesses(t *testing.T) {
+	win := systemRoot()
+	person := func(name, exe string) *winProc { return &winProc{Name: name, Exe: exe, UID: 1001} }
+	cases := []struct {
+		p    *winProc
+		want bool
+	}{
+		{person("virtualboxvm", `C:\Program Files\Oracle\VirtualBox\VirtualBoxVM.exe`), true},
+		{person("wsl", win + `\System32\wsl.exe`), true},
+		{person("qemu-system-x86_64", `C:\qemu\qemu-system-x86_64.exe`), true},
+		{person("bash", win + `\System32\bash.exe`), true},
+		{person("bash", `C:\Program Files\Git\usr\bin\bash.exe`), false},
+		{person("notepad", win + `\System32\notepad.exe`), false},
+		{&winProc{Name: "vmwp", Exe: win + `\System32\vmwp.exe`, UID: -1, System: true}, true},
+		{&winProc{Name: "dockerd", Exe: `C:\Program Files\Docker\dockerd.exe`, UID: -1, System: true}, false},
+	}
+	for _, c := range cases {
+		if got := isVMProcess(c.p); got != c.want {
+			t.Errorf("%s (%s): %v, want %v", c.p.Name, c.p.Exe, got, c.want)
+		}
+	}
+}

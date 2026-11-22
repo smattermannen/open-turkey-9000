@@ -2366,6 +2366,17 @@ Both platforms:
 
 ## 5. Proposed, not agreed
 
+- PROPOSED 2026-11-22 (By claude; laptop finding under W50, `notes/browsers.md`):
+  KC9K closed the owner's LibreWolf twice while in use ("started before KC9K
+  changed its browser settings"), once with a Save As dialog open: a browser
+  setting changed while a website block was on. By design the browser is
+  restarted so the new policy holds, but unsaved work is lost. Options:
+  (a) warn first ("LibreWolf closes in 60 s to apply a setting") and close
+  then; (b) wait until the browser has been idle (no input) for a minute;
+  (c) keep closing at once. Proposed: (a), since (b) can be waited out
+  forever and strengthening must take effect. Owner to decide; nothing
+  built.
+
 - DECIDED 2026-11-21 (By Opus; SPEC §4.6, §6): setting locks stack like a
   block's, as proposed below; built (`2.5`).
   PROPOSED 2026-11-20 (session, `2.8`, §1 "Layered sequential locks"):

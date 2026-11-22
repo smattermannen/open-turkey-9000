@@ -115,6 +115,18 @@
   and check the commands run; screenshots go to `KC9K_SCREENSHOTS` and are
   uploaded by the workflow (`windows-gui-screenshots`). The GUI log
   (`%LOCALAPPDATA%\kc9k\gui.log`) is printed after the tests.
+  `GuiApp.EditState`/`Respond` change a test's fixture state and canned
+  answers; `ready:` names the element that says the first state is shown,
+  `arguments:` and `multi: false` start it as a jump list entry would.
+- `ParityTests.cs` (W32): counterparts of `ci/gui_cards`, `gui_extend`,
+  `gui_duration`, `gui_lists`, `gui_presets`, `gui_modes`,
+  `gui_click_everything` (every button on every page and block tab once,
+  each question cancelled; the window never ends or shows "Something went
+  wrong"). `WindowsTests.cs`: W30–W43. `AccessibilityTests.cs` (W33):
+  every button, box, switch, list item and menu item on every page and
+  block tab has a name and takes keyboard focus; screenshots in high
+  contrast (`SPI_SETHIGHCONTRAST`, turned off after) and at 200 % text
+  (`HKCU\Software\Microsoft\Accessibility\TextScaleFactor`, put back).
 
 ## Built behaviour
 
@@ -150,4 +162,12 @@ Not fixed by `SPEC.md`; the code is the truth.
   three levels of principle 3 as they hold on Windows, which is on now,
   and the firmware lock's state (`firmware-lock --json`, read quietly when
   the page is first shown and after its dialog).
+- Jump list and start arguments (W36, `Shell/JumpList.cs`,
+  `Core/StartArgs.cs`): the process's AppUserModelID is
+  `KillerChicken9000.Gui` (also on the MSI's Start menu shortcut); the
+  jump list's tasks (Overview, Blocks, New block…, Monk mode…, Frozen
+  Chicken…, Statistics, Settings) start `kc9k-gui.exe --page KEY` or
+  `--do new-block|monk|freeze`; a second start hands them to the running
+  window. Arguments only open pages and the GUI's own dialogs, never a
+  kc9k command.
 

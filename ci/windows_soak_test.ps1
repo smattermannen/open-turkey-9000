@@ -52,16 +52,20 @@ if (-not (Get-Service kc9k -ErrorAction SilentlyContinue)) {
     $installedHere = $true
     Start-Sleep -Seconds 20
 }
-$K = Join-Path $env:ProgramFiles 'KC9K\kc9k.exe'
-if (-not (Test-Path $K)) { $K = $Kc9k }
+$KcExe = Join-Path $env:ProgramFiles 'KC9K\kc9k.exe'
+if (-not (Test-Path $KcExe)) { $KcExe = $Kc9k }
 
+# A kc9k that can't be started makes every phase hollow: that fails the
+# soak (PowerShell names are case-blind: never use $k for anything else).
+$script:kcBroken = $null
 function Kc([string[]]$a) {
-    $text = (& $K @a 2>&1 | Out-String).Trim()
+    if (-not (Test-Path -LiteralPath $KcExe)) { $script:kcBroken = "kc9k not found at '$KcExe'"; return 127 }
+    $text = (& $KcExe @a 2>&1 | Out-String).Trim()
     $code = $LASTEXITCODE
     Add-Content -Path (Join-Path $Out 'commands.log') -Value ("kc9k " + ($a -join ' ') + " -> $code`n$text")
     return $code
 }
-function KcOut([string[]]$a) { return (& $K @a 2>$null | Out-String) }
+function KcOut([string[]]$a) { return (& $KcExe @a 2>$null | Out-String) }
 function GuiState { try { return (KcOut @('gui-state')) | ConvertFrom-Json } catch { return $null } }
 function CircadianState { try { return (KcOut @('circadian', 'show', '--json')) | ConvertFrom-Json } catch { return $null } }
 function OnOff([bool]$v) { if ($v) { return 'on' } else { return 'off' } }
@@ -453,7 +457,7 @@ try {
         if ($badClose.Count -gt 0) { $why += 'closed a Windows program' }
         if ($mostPs -gt 5) { $why += 'powershell.exe at once' }
         if ($phase -eq 'idle') {
-            foreach ($k in @('svc H%', 'agent H%', 'GUI H%')) { if ([math]::Abs($row.$k) -gt 5) { $why += "$k not flat" } }
+            foreach ($col in @('svc H%', 'agent H%', 'GUI H%')) { if ([math]::Abs($row.$col) -gt 5) { $why += "$col not flat" } }
         }
         if ($stopReason) { $why += "stopped: $stopReason" }
         if ($why.Count -gt 0) { $row.Result = ($why -join '; '); $failed = $true }
@@ -466,13 +470,14 @@ try {
     if ($problem) { Note "gamma ramp after putting back: $problem"; $failed = $true }
     if ($installedHere) {
         Note 'removing KC9K again'
-        & $K uninstall | Out-Host
+        & $KcExe uninstall | Out-Host
     }
 }
 
 $results | Format-Table -AutoSize | Out-String -Width 400 | Write-Host
 $results | Export-Csv -NoTypeInformation -Path (Join-Path $Out 'summary.csv')
 Note "results in $Out"
+if ($script:kcBroken) { Write-Host "::error::soak test: $($script:kcBroken)"; $failed = $true }
 if ($failed -or $stopReason) { Write-Host '::error::soak test: a threshold was crossed'; exit 1 }
 Write-Host 'soak test: all thresholds held'
 exit 0

@@ -48,6 +48,21 @@ of their group and a row here; a finished item loses its row.
 | W5 | Windows tamper protection: built, checked on `windows-latest`; boot/Safe Mode Unchecked; firmware lock not built | §3.10, §4.10 | windows | win-vm, laptop |
 | W6 | Windows circadian rhythm and wallpapers: built, Unchecked | §4.10 | windows | win-vm, laptop |
 | W7 | Windows MSI: built, checked in CI (install, removal, refused while locked, reinstall guard, 2026-11-21); signing needs the owner's certificate; Apps & features by a person Unchecked | §4.11 | install-windows | owner, win-vm |
+| W30 | Windows GUI: Chrome and Edge waiting for the store listing explained; Install shows where to get a browser | §3.13, §4.10 | gui-windows | agent, win-ci |
+| W31 | Windows GUI: Overview break status and ladder positions | §4.1 | gui-windows | agent, win-ci |
+| W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
+| W33 | Windows GUI: accessibility checks (names, focus, high contrast, text scale); Narrator by a person | R-GUI-3 | gui-windows | win-ci, win-vm, laptop |
+| W34 | Windows GUI: keyboard shortcuts | R-GUI-3 | gui-windows | agent, win-ci |
+| W35 | Windows GUI: tray quick actions (strengthening only) | §4.10 | gui-windows | agent, win-ci, laptop |
+| W36 | Windows GUI: jump list and start arguments | §4.10 | gui-windows | agent, win-ci, win-vm |
+| W37 | Windows GUI: window state and last page kept | §6 2026-11-21 | gui-windows | agent, win-ci |
+| W38 | Windows GUI: first view for someone with nothing set up | R-GUI-3 | gui-windows | agent, win-ci |
+| W39 | Windows GUI: device protection explained for Windows, firmware lock status | §4.10 | gui-windows | agent, win-ci |
+| W40 | MSI release workflow on a tag | §4.11 | install-windows | win-ci, owner |
+| W41 | MSI CI: upgrade over a lock, older refused, repair, full-UI removal | §4.11, R-LOCK-9 | install-windows | win-ci, win-vm |
+| W42 | Signing proven with a throwaway certificate; Azure Artifact Signing | §6 2026-11-21 | install-windows | win-ci, owner |
+| W43 | `kc9k version`; versions under Settings › About | §4.11 | gui-windows | agent, win-ci |
+| W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
@@ -1617,6 +1632,119 @@ where its item needs it and the Linux tests prove nothing changed.
   Unchecked (win-vm): installing and removing from Apps & features with
   the full UI, an upgrade to a newer version over a locked install, an
   older version refused.
+
+### 4.1 Windows GUI: parity and release (W30–W49, GUI session 2026-11-22)
+
+Items and choices in this section are the GUI session's (By Opus), from
+an audit on 2026-11-22: the GTK GUI's pages, `gui-state` fields and
+`kc9k` commands against `windows/gui/`; the `ci/gui_*.py` tests against
+`Kc9k.UiTests`; Windows conveniences; the MSI and its release. Found:
+every `kc9k` command and every `gui-state` field the GTK GUI uses is used
+by the Windows GUI too (W4 ported them one to one), so the gaps are
+Windows-only behaviour, tests, conveniences and release. Order: fixes to
+what is built, then parity, then the rest. Core's `GUI:` lines (W10–W29):
+none on `main` yet; rechecked at each rebase (`W49`).
+
+Fixes to what is built:
+
+- [ ] `W30` Supported browsers on Windows (S; §3.13, §4.10 Browsers, §6
+  2026-11-21 Windows equivalents). Chrome and Edge, installed but without
+  the store listing's ID, show "not installed" with an Install button whose
+  command can only fail. Build: `gui-state` browsers get `found` (an
+  executable is there; additive, `internal/cli`, tested); the GUI says
+  "installed, but Killer Chicken 9000 can't give it the extension yet:
+  treated as an unsupported browser", and Install on Windows shows where
+  to get the browser (the CLI's words) as information, not as an error.
+  Needs: agent, win-ci.
+- [ ] `W31` Overview as §4.1 asks (S; §4.1). Break status is only a pill;
+  ladder positions are missing (the GTK GUI lacks them too). Build: per
+  block on now, "on a break" or a break's time left and its bypass
+  prevention ladder position; the global ladder's position under Device.
+  Needs: agent, win-ci.
+
+Parity with the GTK GUI and its tests:
+
+- [ ] `W32` UI Automation counterparts of the GTK smoke tests (M;
+  R-GUI-1–3, §4.2–4.13). Missing: `gui_actions` (run a mode locked,
+  custom action), `gui_automation` (enabled/disabled by default,
+  either/both), `gui_cards` (stop, a refusal put back), `gui_duration`
+  (R-GUI-1 fields say why and keep the text), `gui_extend`,
+  `gui_freeze_lock`, `gui_import`, `gui_list_resize`, `gui_lists` (new
+  list's scope boxes), `gui_modes` (into and out of a mode), `gui_phrase`
+  and `gui_phrase_edit`, `gui_places`, `gui_playlist` (social media
+  settings), `gui_presets` (save lists as a preset), `gui_trigger`,
+  `gui_wallpaper`, `gui_click_everything` (every button and switch once,
+  Cancel then OK, no crash). Needs: win-ci.
+- [ ] `W33` Accessibility checks (M; R-GUI-3). Build: a test walking every
+  page's UI Automation tree (each button, switch, box and list has a name
+  and takes keyboard focus), screenshots in high contrast and with text
+  at 150 % and 200 %. Narrator read by a person, display scaling and a
+  second screen: Needs win-vm, laptop. Needs: win-ci.
+- [ ] `W34` Keyboard shortcuts (S; R-GUI-3 "everything reachable by
+  keyboard"). Ctrl+1…9 open the sidebar's pages, Ctrl+N a new block, F5
+  reads the state again, Alt+Left (and Esc) goes back from a block or a
+  mode; listed under Settings › Keyboard. The GTK GUI has none of these.
+  Needs: agent, win-ci.
+
+Windows conveniences:
+
+- [ ] `W35` Tray quick actions (S; §4.10 tray). Start a block ▸, Start a
+  mode ▸, Monk mode…, Frozen Chicken…, New block…, Open, Quit. Only
+  actions that strengthen: Stop, Unlock and pauses are never in the tray,
+  so it is never an easier way past a block than the window (By Opus).
+  Needs: agent, win-ci (the menu by a person: laptop).
+- [ ] `W36` Jump list and start arguments (M). The taskbar's and Start
+  menu's jump list: Overview, Blocks, New block, Monk mode, Frozen
+  Chicken, Statistics, Settings, as `kc9k-gui.exe --page KEY` or
+  `--do new-block|monk|freeze`; a second start hands its arguments to the
+  running GUI. Needs: agent, win-ci (the list by a person: win-vm).
+- [ ] `W37` Window state (S; §6 2026-11-21 GUI preferences). Position,
+  size, maximized and the last page kept per user and restored on a
+  screen that is still there; preference "Open on: Overview / the last
+  page". Needs: agent, win-ci.
+- [ ] `W38` First view (S; R-GUI-3 tasks first; §6 2026-11-14 no wizard,
+  §6 2026-11-21 guided setup). While nothing is set up (no block, no
+  supported browser with the extension), the Overview shows a short
+  "Get started" list, each step opening its place, and the stricter
+  options (strict mode, no-escape, guided setup) named last. It switches
+  nothing on (principles 3, 7). Needs: agent, win-ci.
+- [ ] `W39` Device protection explained for Windows (S; §4.10 Device
+  protection, principle 3, §6 2026-11-21 Windows equivalents). Settings
+  says per level what holds on Windows: basic; strict mode (the
+  administrator account denied the service, files, registry keys, boot
+  and recovery settings; downloaded and portable programs closed); boot
+  and hardware (Safe Mode runs the service; no-escape and factory reset
+  protection turn the recovery environment off; the firmware lock and its
+  status shown on the page, not only in its dialog). Circadian rhythm's
+  Night light note exists (W6). Needs: agent, win-ci.
+
+Installer and release (W7):
+
+- [ ] `W40` Release workflow (S; §4.11). A tag `v1.2.3` builds `kc9k.exe`
+  (with its version), the GUI and the MSI with that version, signs them
+  when a certificate is configured, and publishes a GitHub release with
+  the MSI and its SHA-256. Needs: win-ci; owner (the first tag).
+- [ ] `W41` MSI checks in CI (M; §4.11, R-LOCK-9, §6 2026-11-21 MSI).
+  Add to `test-msi.ps1`: a newer version over a locked install (installs,
+  the lock stays), an older one refused while locked with block the
+  installer on, a repair refused likewise, and removal through the MSI's
+  own full UI driven by UI Automation. Apps & features by a person: Needs
+  win-vm.
+- [ ] `W42` Signing that switches on (S; §6 2026-11-21 later). A CI job
+  signs with a throwaway self-signed certificate and checks each file
+  carries a signature, so the owner's certificate only has to be added;
+  Azure Artifact Signing chosen by its own secrets. Needs: win-ci; owner
+  (the certificate).
+- [ ] `W43` Versions shown (S; §4.11). `kc9k version` (additive,
+  `internal/cli`; set at build), the GUI's version and kc9k's under
+  Settings › About, so a person can tell what is installed. Needs: agent,
+  win-ci.
+
+Core's features:
+
+- [ ] `W49` Core's `GUI:` lines (W10–W29) given their place in the GUI,
+  each with a UI Automation test, once the command is on `main`. None yet
+  (2026-11-22).
 
 ## 5. Proposed, not agreed
 

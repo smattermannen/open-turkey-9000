@@ -221,6 +221,9 @@ func applyStrictExtras() []string {
 func strictHeavy(since int64, consumers []string, first bool) []string {
 	var fixed []string
 	step := func(what string, f func()) {
+		if _, err := os.Stat(strictStatePath); err != nil {
+			return // strict mode ended meanwhile
+		}
 		start := time.Now()
 		f()
 		if d := time.Since(start); d > 5*time.Second {
@@ -324,13 +327,20 @@ func startHeavyUndo() {
 // undoHeavy takes the 30-second part's deny entries out, once a pass
 // running has ended.
 func undoHeavy() error {
+	if _, err := os.Stat(strictHeavyPath); err != nil {
+		return nil
+	}
+	// Services at once (a pass running may take minutes in PowerShell),
+	// and again once it has ended, in case it reached them meanwhile.
+	if _, err := os.Stat(strictStatePath); err != nil {
+		if _, err := denyServices(false); err != nil {
+			return err
+		}
+	}
 	heavyMu.Lock()
 	defer heavyMu.Unlock()
 	if _, err := os.Stat(strictStatePath); err == nil {
 		return nil // strict mode holds again
-	}
-	if _, err := os.Stat(strictHeavyPath); err != nil {
-		return nil
 	}
 	if _, err := denyServices(false); err != nil {
 		return err

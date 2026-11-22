@@ -2188,6 +2188,11 @@ Stability (blocks every other Windows GUI test):
   no back-off, a process kill or desktop effect hitting `dwm.exe`,
   `csrss.exe` or `winlogon.exe`. Done when: the cause is named, fixed and
   a CI or win-vm test repeats the action that froze it.
+  Laptop evidence (2026-11-22) *(By claude)*: **cause: the extension guard killed Windows.** `isBrowserProgram` (`blocker/extguard_windows.go:245`) globs `<exe dir>\*\msedge.dll`; `System32\Microsoft-Edge-WebView\msedge.dll` exists, so every System32 program is a "browser" (still so on main; any guard-on state + LibreWolf installed brings it back, RealTests' "CI block" too).
+  kc9k.log (0.0.2, 16:14–17:03): 378 "browser: closing … no Killer Chicken extension", 5 real (librewolf); svchost 108, fontdrvhost 48, RuntimeBroker 40, dwm 37, ShellHost 34, ctfmon 32, sihost 24, dllhost 20.
+  From 17:02:42 the same pids (dwm 14320, ShellHost, ctfmon) were re-"closed" every 5 s without exiting; last kc9k.log line 17:03:32; power button 17:03:33.5 (Kernel-Power 41, bugcheck 0: a hang, no BSOD).
+  Confirmed, load only: Group Policy 4004 "manual" refresh pairs every 5 s (24/min, 630 in 26 min; static finding 1); SYSTEM PowerShell `WmiMonitorBrightness` every 5 s with circadian off (12/min, 361 vs 2–4/day, each "System error."; finding 2).
+  Not seen: "too many callback functions", agent crash loop (1 restart, at shutdown), panics. Fix idea: never treat a program under %SystemRoot% as a browser; never kill session-critical processes (dwm, csrss, winlogon, fontdrvhost, sihost, svchost, explorer).
 - [ ] `W51` **Screen black several times, "overrun detection" warning**
   (M; §4.10 circadian). Switching different settings on blanked the screen
   more than once and Windows warned of an overrun (a buffer overrun /
@@ -2196,6 +2201,13 @@ Stability (blocks every other Windows GUI test):
   WMI brightness, DDC/CI) for bad values, repeated calls and calls from
   several threads. Done when: each setting can be switched on and off
   repeatedly on win-vm with no blank screen and no warning.
+  Laptop evidence (2026-11-22) *(By claude)*: the black screens are **dwm.exe killed by
+  the extension guard** (W50): Dwminit "Desktop Window Manager exited, 0x1" 23 times,
+  every ~65 s (60 s `ExtensionGrace` + 5 s loop), 16:17:34–16:31:39 and 16:53:00–17:01:37,
+  never in the 7 days before; with it 54 SCM 7034 (per-user services) and Winlogon 1002
+  (shell restarted) 16:53:15. Circadian was off all session: no gamma/ramp lines. No
+  Display 4101, LiveKernelEvent, WHEA, 0xc0000409 or dump today (WerSvc is Disabled, so
+  weak); "overrun detection" not found in any log.
 - [ ] `W52` **Blank white window appears at random** (M; R-GUI-3). A
   classic-styled window (white, old blue title bar, its own minimise,
   maximise and close buttons) covered the GUI with nothing in it; the
@@ -2204,6 +2216,12 @@ Stability (blocks every other Windows GUI test):
   console or helper window of `kc9k.exe`, the software brightness overlay
   window). Done when: the window is gone or shows what it is, and a GUI
   crash writes a log and says so instead.
+  Laptop evidence (2026-11-22) *(By claude)*: most likely an ordinary window drawn
+  **while dwm.exe was dead** (W50/W51): without composition every window falls back to
+  the classic frame (white client, old blue title bar). The guard also killed
+  fontdrvhost (48), ctfmon, sihost and ApplicationFrameHost, so windows draw blank.
+  No GUI crash recorded (no Application 1000/1026, no gui.log: %LOCALAPPDATA%\kc9k
+  was never created); no challenge window in the logs. Owner not confirmed.
 
 Layout (owner: keep the Windows look, use the GTK layout):
 

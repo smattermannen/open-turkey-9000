@@ -145,7 +145,10 @@
   is. High contrast reads the person's flags and scheme first and puts
   them back exactly; the name check skips a scroll bar's own parts.
   `GuiApp.Invoke(id)` finds and presses again (up to 3 times) when the
-  element went stale while its page was being shown. *(By claude)*
+  element went stale while its page was being shown. The geometry test
+  scrolls each block row into view before measuring it and presses a
+  card once, after the page is idle (300 ms without layout changes).
+  *(By claude)*
 
 ## Built behaviour
 
@@ -176,7 +179,9 @@ Not fixed by `SPEC.md`; the code is the truth.
   its tabs sit under it, always shown, as toggle buttons that wrap onto
   more lines when narrow (a `SelectorBar` scrolled sideways and left
   tabs unrealized). The crash note waits for the window's content to
-  load (`MainWindow.WhenShown`). *(By claude)* The Overview has no "Get started" card (owner
+  load (`MainWindow.WhenShown`). The Blocks page keeps each card while
+  what it shows is the same (`cardCache`): a state read never replaces a
+  card under a click. *(By claude)* The Overview has no "Get started" card (owner
   2026-11-22; W38's first view is gone). Settings › Project's Import
   project… calls `Files.ImportProject`. *(By claude)*
 - Sidebar (W53, `MainWindow.PinSidebar`): pinned open at 220 DIP like

@@ -90,20 +90,50 @@ public sealed class BlocksPage : IPage
 
     /// <summary>One card per block (drafts stay with their block, blocks in a
     /// mode are inside it), modes above them.</summary>
+    // Each card is kept while what it shows is the same (W54): a state read
+    // (every 5 s, and when the page is shown) never replaces a card under a
+    // click; only a card whose block or mode changed is built again.
+    readonly Dictionary<string, (string Key, UIElement Card)> cardCache = [];
+    UIElement? noBlocks, allInModes;
+
+    void ForceCards()
+    {
+        cardsShown = "";
+        cardCache.Clear();
+    }
+
+    UIElement Cached(string name, string key, Func<UIElement> make)
+    {
+        if (cardCache.TryGetValue(name, out var c) && c.Key == key) return c.Card;
+        var card = make();
+        cardCache[name] = (key, card);
+        return card;
+    }
+
+    static void Sync(Panel panel, List<UIElement> wanted)
+    {
+        if (panel.Children.Count == wanted.Count && panel.Children.Zip(wanted).All(p => ReferenceEquals(p.First, p.Second))) return;
+        panel.Children.Clear();
+        foreach (var e in wanted) panel.Children.Add(e);
+    }
+
     void UpdateCards(GuiState s)
     {
         var blocks = s.RealBlocks.ToList();
-        var shown = string.Join("\n", blocks.Select(b => $"{b.Name}|{b.Active}|{b.Held}|{b.Continuous}|{Words.Breaks(b)}|{Words.LockState(b)}|{b.Enabled}|{b.Mode}|{b.Draft}"))
-                    + System.Text.Json.JsonSerializer.Serialize(s.Modes, Kc9kJson.Options);
+        var modeNames = string.Join(",", s.Modes.Select(m => $"{m.Name}:{m.Monk}:{m.Freeze}"));
+        string BlockKey(Block b) => $"{b.Name}|{b.Active}|{b.Held}|{b.Continuous}|{Words.Breaks(b)}|{Words.LockState(b)}|{b.Enabled}|{b.Mode}|{b.Draft}|{modeNames}";
+        string ModeKey(Mode m) => System.Text.Json.JsonSerializer.Serialize(m, Kc9kJson.Options);
+        var shown = string.Join("\n", blocks.Select(BlockKey)) + string.Join("\n", s.Modes.Select(ModeKey));
         if (shown == cardsShown) return;
         cardsShown = shown;
-        modeCards.Children.Clear();
-        blockCards.Children.Clear();
-        foreach (var m in s.Modes) modeCards.Children.Add(ModeCard(m));
+        Sync(modeCards, [.. s.Modes.Select(m => Cached("mode:" + m.Name, ModeKey(m), () => ModeCard(m)))]);
         var loose = blocks.Where(b => !b.InMode).ToList();
-        foreach (var b in loose) blockCards.Children.Add(BlockCard(b));
-        if (blocks.Count == 0) blockCards.Children.Add(Ui.Dim("No blocks yet. A block holds what to block, when, and how it holds."));
-        else if (loose.Count == 0) blockCards.Children.Add(Ui.Dim("Every block is in a mode."));
+        List<UIElement> rows = [.. loose.Select(b => Cached("block:" + b.Name, BlockKey(b), () => BlockCard(b)))];
+        if (blocks.Count == 0) rows.Add(noBlocks ??= Ui.Dim("No blocks yet. A block holds what to block, when, and how it holds."));
+        else if (loose.Count == 0) rows.Add(allInModes ??= Ui.Dim("Every block is in a mode."));
+        Sync(blockCards, rows);
+        foreach (var gone in cardCache.Keys.Where(k => !blocks.Any(b => "block:" + b.Name == k) && !s.Modes.Any(m => "mode:" + m.Name == k)).ToList())
+            cardCache.Remove(gone);
     }
 
     /// <summary>A card's switch: a refusal (shown in the CLI's words) leaves
@@ -111,7 +141,7 @@ public sealed class BlocksPage : IPage
     async Task SwitchBlock(string name, bool on)
     {
         if (await C.Run(on ? ["start", name] : ["stop", name])) return;
-        cardsShown = "";
+        ForceCards();
         if (state is not null) UpdateCards(state);
     }
 
@@ -266,7 +296,7 @@ public sealed class BlocksPage : IPage
 
     public async Task ToggleMode(Mode m, bool wanted)
     {
-        cardsShown = "";
+        ForceCards();
         if (m.Freeze)
         {
             if (wanted) await Device.FreezeDialog(window);
@@ -286,7 +316,7 @@ public sealed class BlocksPage : IPage
 
     void Refresh()
     {
-        cardsShown = "";
+        ForceCards();
         if (state is not null) Update(state);
     }
 
@@ -311,7 +341,7 @@ public sealed class BlocksPage : IPage
         if (await C.Dialogs.Confirm($"Put {block} into {mode}?",
                 $"It then has the mode's automation: its own windows and places give way to {mode}'s. Taken out later, it keeps the mode's.", "Put it in"))
         {
-            cardsShown = "";
+            ForceCards();
             await C.Run(["mode", "add", mode, block]);
         }
     }

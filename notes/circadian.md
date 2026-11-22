@@ -31,10 +31,15 @@
   `<db dir>/wallpapers` (0644). `rules.dark` (`CircadianDarkRule`) →
   `darkPage`; the popup's "Exempt from dark pages" → background
   `darkExempt` → daemon `/dark-exempt` (`darkExemptHandler`, refused
-  behind an app/settings access password). `circadian.Shape` mirrored by
-  GUI `clip_shape`.
+  behind an app/settings access password).
   `ci/circadian_test.py` tests dark pages. The wallpaper the engine gives
   is `pickWallpaper`'s (wallpapers.go, below), not only circadian rhythm's.
+- `circadian.Shape` = GTK `clip_shape` = C# `Clips.Shape` (same samples
+  tested in `TestShapeMirrors`, `ci/gui_circadian_smoke.py`,
+  `CoreTests.cs`): middle m = 0.5 + 0.49·tension sits at the bend handle;
+  below straight x^p, above it the mirror 1 − (1 − x)^p, so ±t are mirror
+  images with finite end slopes, no corner (A14). Drag mapping unchanged:
+  80 px = tension 1. *(By claude)*
 - **Wallpapers of modes** (R-MODE-5, §4.10; owner 2026-11-17;
   `enforce/wallpapers.go`, `cli/wallpapers.go`, `cli/projectwallpapers.go`,
   `blocker/sleephook.go`): settings `mode.wallpapers.<mode id>`

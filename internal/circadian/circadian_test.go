@@ -65,6 +65,51 @@ func TestTensionBulgesUp(t *testing.T) {
 	}
 }
 
+// The same samples as clip_shape (ci/gui_circadian_smoke.py) and
+// ClipsShapeMirrors (C#): the three curves are one (A14).
+func TestShapeMirrors(t *testing.T) {
+	for _, c := range []struct {
+		x, t   float64
+		rising bool
+		want   float64
+	}{
+		{0.25, -0.5, true, 0.065025}, {0.75, 0.5, true, 0.934975},
+		{0.25, 0.5, true, 0.4328578561}, {0.75, -0.5, true, 0.5671421439},
+		{0.25, 0.5, false, 0.065025}, {0.3, 0, true, 0.3},
+	} {
+		if got := Shape(c.x, c.t, c.rising); math.Abs(got-c.want) > 1e-6 {
+			t.Errorf("Shape(%v, %v, %v) = %v, want %v", c.x, c.t, c.rising, got, c.want)
+		}
+	}
+	for _, tension := range []float64{0.3, 0.8, 1} {
+		for k := 0; k <= 20; k++ {
+			x := float64(k) / 20
+			if a, b := Shape(x, -tension, true), 1-Shape(1-x, tension, true); math.Abs(a-b) > 1e-9 {
+				t.Errorf("tension ±%v at %v: %v vs mirror %v", tension, x, a, b)
+			}
+		}
+	}
+	// No corner: the slope at both ends stays finite, bent hard either way.
+	for _, tension := range []float64{-1, 1} {
+		if s := Shape(1e-6, tension, true) / 1e-6; s > 7 {
+			t.Errorf("tension %v: slope %v at the start", tension, s)
+		}
+		if s := (1 - Shape(1-1e-6, tension, true)) / 1e-6; s > 7 {
+			t.Errorf("tension %v: slope %v at the end", tension, s)
+		}
+	}
+	// A lane bent up and down by the same amount: mirror images.
+	up := Lane{Points: []Point{{0, 20, 0.5}, {600, 80, 0}}}
+	down := Lane{Points: []Point{{0, 20, -0.5}, {600, 80, 0}}}
+	for m := 0.0; m <= 600; m += 60 {
+		u, _ := up.ValueAt(m)
+		d, _ := down.ValueAt(600 - m)
+		if math.Abs((u-20)-(80-d)) > 1e-6 {
+			t.Errorf("minute %v: up %v, down at %v %v", m, u, 600-m, d)
+		}
+	}
+}
+
 func TestNextPointAfter(t *testing.T) {
 	loc := time.FixedZone("x", 3600)
 	l := Lane{Points: []Point{{360, 1, 0}, {1080, 2, 0}}}

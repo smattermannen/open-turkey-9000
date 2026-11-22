@@ -207,9 +207,12 @@ func MinuteOfDay(t time.Time) float64 {
 // the next value is higher: positive tension always bulges the curve up, so
 // it hurries up a rise and lingers before a fall.
 //
-// The curve is x^p, with p chosen so that the middle of the curve is where
-// the tension handle sits: at x = 0.5 it has gone m = 0.5 + 0.49·tension of
-// the way (for a rise). The interface draws it with the same formula.
+// The middle of the curve is where the tension handle sits: at x = 0.5 it
+// has gone m = 0.5 + 0.49·tension of the way (for a rise). Below the straight
+// line the curve is x^p with p ≥ 1 (0.5^p = m); above it, its mirror image
+// 1 − (1 − x)^p (0.5^p = 1 − m). So bending by +t and −t gives mirror images
+// (f₋ₜ(x) = 1 − fₜ(1 − x)), and the slope stays finite at both ends (at most
+// p ≈ 6.6), never a corner. The interfaces draw it with the same formula.
 func Shape(x, tension float64, rising bool) float64 {
 	x = clamp(x, 0, 1)
 	if !rising {
@@ -219,8 +222,10 @@ func Shape(x, tension float64, rising bool) float64 {
 	if math.Abs(m-0.5) < 1e-9 {
 		return x
 	}
-	p := math.Log(m) / math.Log(0.5)
-	return math.Pow(x, p)
+	if m < 0.5 {
+		return math.Pow(x, math.Log(m)/math.Log(0.5))
+	}
+	return 1 - math.Pow(1-x, math.Log(1-m)/math.Log(0.5))
 }
 
 // ValueAt is the clip's value at minute of the day (0–1440). A clip without

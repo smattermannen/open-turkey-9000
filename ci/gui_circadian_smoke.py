@@ -56,6 +56,14 @@ def reread():
 # The curve is the daemon's: compare with what the command computes.
 check(abs(gui.clip_shape(0.5, 1, True) - 0.99) < 1e-9 and abs(gui.clip_shape(0.5, 1, False) - 0.01) < 1e-9
       and gui.clip_shape(0.3, 0, True) == 0.3, "clip_shape is circadian.Shape")
+# The same samples as TestShapeMirrors (Go) and ClipsShapeMirrors (C#) (A14).
+check(all(abs(gui.clip_shape(x, t, r) - want) < 1e-6 for x, t, r, want in (
+    (0.25, -0.5, True, 0.065025), (0.75, 0.5, True, 0.934975), (0.25, 0.5, True, 0.4328578561),
+    (0.75, -0.5, True, 0.5671421439), (0.25, 0.5, False, 0.065025))), "clip_shape samples")
+check(all(abs(gui.clip_shape(x / 20, -t, True) - (1 - gui.clip_shape(1 - x / 20, t, True))) < 1e-9
+          for x in range(21) for t in (0.3, 0.8, 1)), "+t and -t are mirror images")
+check(all(gui.clip_shape(1e-6, t, True) / 1e-6 < 7 and (1 - gui.clip_shape(1 - 1e-6, t, True)) / 1e-6 < 7
+          for t in (-1, 1)), "no corner at either end")
 check(gui.kelvin_rgb(6500) == (1.0, 1.0, 1.0) and gui.kelvin_rgb(2000)[2] < 0.3, "kelvin colours")
 reread()
 check(win.stack.get_child_by_name("circadian") is not None, "the page is in the sidebar")
@@ -134,6 +142,20 @@ event("released", hx, hy - 40)
 pump(lambda: any(p["minute"] == 840 and p["tension"] == 0.5 for p in show()["lanes"][2]["points"]))
 check(True, "dragging the handle up by 40 px stores tension 0.5")
 reread(); editor = page.editors["kelvin"]
+def bent(points):
+    """The segment after 14:00 as fractions of the way, at tenths."""
+    i = [p["minute"] for p in points].index(840)
+    a, b = points[i], points[i + 1]
+    return [(gui.clip_value(points, a["minute"] + (b["minute"] - a["minute"]) * k / 10) - a["value"])
+            / (b["value"] - a["value"]) for k in range(11)]
+up = bent(editor.points)
+_i, hx, hy = editor.handles()[index]
+event("pressed", hx, hy); event("motion", hx, hy + 80); event("released", hx, hy + 80)
+pump(lambda: any(p["minute"] == 840 and p["tension"] == -0.5 for p in show()["lanes"][2]["points"]))
+reread(); editor = page.editors["kelvin"]
+down = bent(editor.points)
+check(all(abs(down[k] - (1 - up[10 - k])) < 1e-6 for k in range(11)) and up[5] > 0.5 > down[5],
+      "40 px up and 40 px down from straight bend into mirror images (A14)")
 event("pressed", editor.x_of(840), editor.y_of(4000), button=3)
 pump(lambda: not any(p["minute"] == 840 for p in show()["lanes"][2]["points"]))
 check(True, "right-click on a point removes it")

@@ -119,6 +119,30 @@ public class CircadianTests
         Assert.Equal(2300, Clips.Value(kelvin.Points, 2 * 60));
         Assert.StartsWith("04:30=2300.0 06:00=3400.0~0.50", Clips.Text(kelvin.Points));
     }
+
+    // The same samples as circadian.TestShapeMirrors and the GTK clip_shape (A14).
+    [Theory]
+    [InlineData(0.25, -0.5, true, 0.065025)]
+    [InlineData(0.75, 0.5, true, 0.934975)]
+    [InlineData(0.25, 0.5, true, 0.4328578561)]
+    [InlineData(0.75, -0.5, true, 0.5671421439)]
+    [InlineData(0.25, 0.5, false, 0.065025)]
+    [InlineData(0.3, 0, true, 0.3)]
+    public void ClipsShapeSamples(double x, double tension, bool rising, double want) =>
+        Assert.Equal(want, Clips.Shape(x, tension, rising), 6);
+
+    [Fact]
+    public void ClipsShapeMirrors()
+    {
+        foreach (var t in new[] { 0.3, 0.8, 1 })
+            for (var k = 0; k <= 20; k++)
+                Assert.Equal(1 - Clips.Shape(1 - k / 20.0, t, true), Clips.Shape(k / 20.0, -t, true), 9);
+        foreach (var t in new[] { -1.0, 1 })
+        {
+            Assert.True(Clips.Shape(1e-6, t, true) / 1e-6 < 7, "no corner at the start");
+            Assert.True((1 - Clips.Shape(1 - 1e-6, t, true)) / 1e-6 < 7, "no corner at the end");
+        }
+    }
 }
 
 public class SeriesTests

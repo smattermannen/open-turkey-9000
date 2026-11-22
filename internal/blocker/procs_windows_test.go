@@ -105,3 +105,33 @@ func TestWinProcBrowserRecognition(t *testing.T) {
 		t.Error("a program with chrome.dll in a version folder is not taken for a browser")
 	}
 }
+
+// W11: another process's environment, read as the guard reads a browser's.
+func TestWinProcRemoteControlEnvironment(t *testing.T) {
+	start := func(env ...string) *exec.Cmd {
+		cmd := exec.Command("cmd.exe", "/c", "ping -n 30 127.0.0.1 >nul")
+		cmd.Env = append(os.Environ(), env...)
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+		return cmd
+	}
+	plain := start()
+	driven := start("MOZ_MARIONETTE=1")
+	time.Sleep(500 * time.Millisecond)
+	env := processEnvironment(uint32(driven.Process.Pid))
+	found := false
+	for _, kv := range env {
+		found = found || kv == "MOZ_MARIONETTE=1"
+	}
+	if !found {
+		t.Fatalf("MOZ_MARIONETTE not in the environment read (%d entries)", len(env))
+	}
+	if !remoteControlledWin(uint32(driven.Process.Pid)) {
+		t.Error("a process with MOZ_MARIONETTE is not taken as remote controlled")
+	}
+	if remoteControlledWin(uint32(plain.Process.Pid)) {
+		t.Error("a plain process is taken as remote controlled")
+	}
+}

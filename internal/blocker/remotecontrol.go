@@ -15,54 +15,20 @@ import (
 	"bytes"
 	"os"
 	"strconv"
-	"strings"
 )
-
-// remoteControlFlags are command-line switches that open a browser to remote
-// control, without their leading dashes (Firefox takes one or two).
-var remoteControlFlags = map[string]bool{
-	"marionette":                 true,
-	"remote-allow-system-access": true,
-	"remote-debugging-port":      true,
-	"start-debugger-server":      true,
-	"jsdebugger":                 true,
-	"wait-for-jsdebugger":        true,
-	// Chrome: driven through a pipe instead of a port, and started with
-	// extensions switched off (the KC9K extension included).
-	"remote-debugging-pipe":     true,
-	"disable-extensions":        true,
-	"disable-extensions-except": true,
-}
-
-// remoteControlEnv are environment variables that do the same.
-var remoteControlEnv = []string{"MOZ_MARIONETTE", "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS"}
 
 // parseRemoteControl reports whether a process's command line or environment
 // (both NUL-separated, as in /proc/<pid>/cmdline and environ) opens it to
 // remote control.
 func parseRemoteControl(cmdline, environ []byte) bool {
+	var args, env []string
 	for _, arg := range bytes.Split(cmdline, []byte{0}) {
-		a := string(arg)
-		if !strings.HasPrefix(a, "-") {
-			continue
-		}
-		a = strings.ToLower(strings.TrimLeft(a, "-"))
-		if i := strings.IndexByte(a, '='); i >= 0 {
-			a = a[:i]
-		}
-		if remoteControlFlags[a] {
-			return true
-		}
+		args = append(args, string(arg))
 	}
 	for _, kv := range bytes.Split(environ, []byte{0}) {
-		key, value, _ := strings.Cut(string(kv), "=")
-		for _, name := range remoteControlEnv {
-			if key == name && value != "" {
-				return true
-			}
-		}
+		env = append(env, string(kv))
 	}
-	return false
+	return remoteControlArgs(args, env)
 }
 
 // remoteControlled reports whether the browser process pid was started for

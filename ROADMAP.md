@@ -64,7 +64,6 @@ of their group and a row here; a finished item loses its row.
 | W43 | `kc9k version`; versions under Settings › About | §4.11 | gui-windows | agent, win-ci |
 | W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
-| W11 | Remote-control browsers closed on Windows | §3.13 | windows, browsers | win-ci |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`) | R-ESCAPE-1 | windows, device | win-ci, win-vm |
 | W14 | Guest account off with close guest profiles | §4.10 | windows, browsers | win-ci |
@@ -1795,7 +1794,12 @@ their sites; their pages are an app's, not a browser's).
   parsing) tested on Linux. Needs: win-ci (no Wi-Fi on the runner: "nothing
   seen" path), laptop (real networks; Windows 11 24H2 asks location
   permission of Wi-Fi scans by apps: Unchecked whether a service is asked).
-- [ ] `W11` Browsers started for remote control on Windows (S). SPEC
+- [x] `W11` Browsers started for remote control on Windows (S). Built
+  (2026-11-22): `remotecontrol_shared.go`, `remoteControlledWin`; checked
+  on `windows-latest` (`TestWinProcRemoteControlEnvironment`: another
+  process's environment read, MOZ_MARIONETTE found); switches tested on
+  both systems. A real browser closed by the guard: Unchecked (W2's
+  win-vm run). Was planned: SPEC
   §3.13, §4.10 (tamper protection: close browsers if the extension
   stops). Was: `RemoteControlAllowed` false and `guardedProcess.remote`
   never set: a browser with `--remote-debugging-port`, `--marionette`,

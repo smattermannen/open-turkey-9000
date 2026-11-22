@@ -305,7 +305,7 @@ func (g *ExtensionGuard) EnforceFor(now, settingsChanged time.Time, unsupported 
 		if !isBrowserProc(p) || !ownedByAnyUID(p, uids) || mainOf(procs, p) != p {
 			continue
 		}
-		gp := guardedProcess{supported: supportedExeOf(p.Exe) != ""}
+		gp := guardedProcess{supported: supportedExeOf(p.Exe) != "", remote: remoteControlledWin(p.PID) && !RemoteControlAllowed()}
 		if !p.Started.IsZero() {
 			gp.age, gp.ageKnown = now.Sub(p.Started), true
 		}
@@ -387,6 +387,13 @@ func accountName(pid uint32) string {
 }
 
 func errorf(format string, args ...any) error { return fmt.Errorf(format, args...) }
+
+// remoteControlledWin reports whether the browser process pid was started
+// for remote control (W11): its command line (--remote-debugging-port,
+// --marionette, --disable-extensions...) or environment (MOZ_MARIONETTE).
+func remoteControlledWin(pid uint32) bool {
+	return remoteControlArgs(commandLine(pid), processEnvironment(pid))
+}
 
 // RemoteControlAllowed: browsers started for remote control never run
 // during website blocks on Windows (no testing build there).

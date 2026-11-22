@@ -174,7 +174,11 @@
   shared verdict): a browser is a guarded program name, a renamed one by
   its version resource's OriginalFilename, or a program beside `xul.dll`
   or `chrome.dll`/`msedge.dll` (portable browsers); never Thunderbird or
-  WebView2. Main process: topmost ancestor with the same program. Supported
+  WebView2. Main process: topmost ancestor with the same program. A
+  browser started for remote control is closed at once (W11): its command
+  line (`commandLine`) and environment (`processEnvironment`: the PEB's
+  process parameters, x64 layout) checked by `remoteControlArgs`, which
+  also takes Firefox's `/switch` and any case. Supported
   browsers: LibreWolf; Chrome and Edge once the store ID is set.
 - Guest: Chromium guest mode is always off by the setup; Windows has no
   guest session at sign-in (`SyncGuestOff` writes nothing).

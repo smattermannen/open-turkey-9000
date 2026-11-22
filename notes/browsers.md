@@ -34,7 +34,8 @@
   a supported browser is installed, in the accounts that need it
   (`EnforceFor`, `enforce.extensionUsers`, §3.2); closes browsers whose extension hasn't
   fetched `/rules` with `X-KC9K-Extension` within 60 s (traced via
-  `/proc/net/tcp`), at once if remote-controlled (`remotecontrol.go`) or
+  `/proc/net/tcp`), at once if remote-controlled (`remotecontrol.go`; the switches and
+  variables in `remotecontrol_shared.go`, read on Windows too) or
   started before the last protecting settings change
   (`noteSettingsChange`). Browsers known by name or engine
   (`browserdetect.go`: libxul.so or icudtl.dat/V8 snapshot mapped by a

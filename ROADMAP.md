@@ -1797,8 +1797,11 @@ Installer and release (W7):
 Core's features:
 
 - [ ] `W49` Core's `GUI:` lines (W10–W29) given their place in the GUI,
-  each with a UI Automation test, once the command is on `main`. None yet
-  (2026-11-22).
+  each with a UI Automation test, once the command is on `main`. Read
+  2026-11-22: W15 (guided setup's step IDs and texts differ on Windows:
+  the checklist's buttons are keyed by step ID), W16 (help texts), W18
+  (one-click browser install: W30's Install already shows its result);
+  none built on `main` yet.
 
 ### 4.2 Windows Core: parity audit 2026-11-22 (By Opus)
 

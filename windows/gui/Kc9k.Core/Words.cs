@@ -416,7 +416,7 @@ public static class Words
     [
         ("Basic", "Blocks and their locks. You keep the administrator account: a lock outlasts an impulse, but where nothing below is on, the account could still remove Killer Chicken 9000.", true),
         ("Strict mode", "During a lock or a freeze the administrator account is denied what would stop Killer Chicken 9000: its service, files and registry keys, the boot and recovery settings. Programs started from Downloads, the Desktop, Documents, the temporary folder or a removable drive are closed.", strict),
-        ("Boot and hardware", "The service runs in Safe Mode too, so Safe Mode is no way around a block. No-escape and factory reset protection turn the recovery environment off (Reset this PC and its command prompt); the installer media guard closes USB image writers; the firmware lock keeps the computer from starting another system.", noEscape || resetGuard || firmwareLocked),
+        ("Boot and hardware", "The service runs in Safe Mode too, so blocks hold there; Safe Mode stays the way out of a freeze or strict mode's lockdown if something goes wrong, until no-escape closes it. No-escape and factory reset protection turn the recovery environment off (Reset this PC and its command prompt); the installer media guard closes USB image writers; the firmware lock keeps the computer from starting another system.", noEscape || resetGuard || firmwareLocked),
     ];
 
     /// <summary>The level on now, in a line (W39).</summary>

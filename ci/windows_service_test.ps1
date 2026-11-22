@@ -147,6 +147,11 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\Downloads" | Out-Null
 Copy-Item "$env:SystemRoot\System32\PING.EXE" "$env:USERPROFILE\Downloads\kc9kping.exe" -Force
 $started = $true
 try { Start-Process "$env:USERPROFILE\Downloads\kc9kping.exe" -ArgumentList '-n', '1', '127.0.0.1' -WindowStyle Hidden -Wait -ErrorAction Stop } catch { Write-Host "  $_"; $started = $false }
+Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers' -ErrorAction SilentlyContinue | Out-Host
+$fresh = & pwsh -NoProfile -Command "try { Start-Process '$env:USERPROFILE\Downloads\kc9kping.exe' -ArgumentList '-n','1','127.0.0.1' -WindowStyle Hidden -Wait -ErrorAction Stop; 'started' } catch { 'refused: ' + `$_ }"
+Write-Host "  from a new process: $fresh"
+cmd.exe /c "`"$env:USERPROFILE\Downloads\kc9kping.exe`" -n 1 127.0.0.1" | Out-Host
+Write-Host "  from cmd: exit $LASTEXITCODE"
 Check "strict mode: a program in your Downloads folder doesn't start (Software Restriction Policies)" { -not $started }
 Check "strict mode: Docker's engine is stopped (where installed)" { -not (Get-Service docker -ErrorAction SilentlyContinue) -or (Get-Service docker).Status -ne 'Running' }
 Check 'strict mode: an account made meanwhile is turned off' { -not (Get-LocalUser kc9kci -ErrorAction SilentlyContinue).Enabled }

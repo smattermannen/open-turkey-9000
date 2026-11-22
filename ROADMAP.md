@@ -1613,6 +1613,9 @@ where its item needs it and the Linux tests prove nothing changed.
     and drop (block onto mode, calendar, clips, wallpaper bars), file
     dialogs, the tray menu and Open at sign-in by a person; Narrator, high
     contrast, 150–200 % scaling and a second screen.
+  - Since 2026-11-22: W30–W49 (§4.1): parity, conveniences, accessibility
+    and tests built on top, checked on `windows-latest`; what needs a
+    person is listed at §4.1's end.
   - Windows wording the CLI's output will have (W1–W6) may differ from the
     help texts here; those are the GUI's own and change with Core.
 
@@ -1649,7 +1652,10 @@ where its item needs it and the Linux tests prove nothing changed.
   agent and the GUI; `installer` tamper setting (`prepare-install`)
   refuses removal and downgrade while locked, as the `.deb` does.
   Code-signed (SPEC §6 2026-11-21 later): the owner picks the certificate
-  (Azure Artifact Signing is the cheapest serious one).
+  (Azure Artifact Signing is the cheapest serious one). Since 2026-11-22
+  also W40 (release), W41 (upgrade, downgrade, repair, full UI: checked),
+  W42 (signing proven with a throwaway certificate); left: the owner's
+  certificate and first tag, Apps & features by a person.
   Built (2026-11-21, notes/install-windows.md, SPEC §6 2026-11-21 By
   Opus): `windows/installer/` (WiX 6): one x64 MSI with the GUI and
   `kc9k.exe`; `kc9k install`, `uninstall` and `prepare-install` run as
@@ -1780,14 +1786,17 @@ Installer and release (W7):
   when a certificate is configured, and publishes a GitHub release with
   the MSI and its SHA-256. Built 2026-11-22 (`windows-release.yml`;
   by hand it builds and checks without publishing). Needs owner: the
-  first tag.
+  first tag. Checked 2026-11-22: a by-hand run (`0.0.1-dryrun.1`) on
+  `windows-latest` built, installed, read `kc9k version` back and removed
+  the MSI.
 - [x] `W41` MSI checks in CI (M; §4.11, R-LOCK-9, §6 2026-11-21 MSI).
   Add to `test-msi.ps1`: a newer version over a locked install (installs,
   the lock stays), an older one refused while locked with block the
   installer on, a repair refused likewise, and removal through the MSI's
   own full UI driven by UI Automation. Built 2026-11-22 (`test-msi.ps1
   -Older -Newer`, `MsiUi`; install and removal through the full UI
-  too). Apps & features by a person: Needs win-vm.
+  too). Checked on `windows-latest` 2026-11-22 (every check of
+  `test-msi.ps1` passes). Apps & features by a person: Needs win-vm.
 - [x] `W42` Signing that switches on (S; §6 2026-11-21 later). A CI job
   signs with a throwaway self-signed certificate and checks each file
   carries a signature, so the owner's certificate only has to be added;

@@ -2023,8 +2023,38 @@ their sites; their pages are an app's, not a browser's).
   challenge window refusing injected keys, notifications, dark mode,
   wallpaper, gamma). Needs: win-ci.
 
-What needs the owner's VM, laptop or the owner (filled in as items land):
-see the end of this section.
+#### For the owner: what CI can't show (Core, 2026-11-22)
+
+Ready to do, in this order. Never on a computer in use; the laptop runs
+only what is marked laptop.
+
+- **win-vm** (a Windows 11 VM with a snapshot, signed in as an
+  administrator): `pwsh ci/windows_vm_test.ps1 kc9k.exe` (the person's
+  checks: Edge and LibreWolf showing a blocked site, the notification, the
+  text lock's challenge in a console and in its window with Ctrl+V and the
+  on-screen keyboard refused, the lock freeze, takeown against strict
+  mode, gamma); then with `-Reboots` from a fresh snapshot: Safe Mode
+  holds blocks but not a freeze or strict mode, `kc9k recover` there, F8
+  while factory reset protection acts (W13), no-escape closing Shift+
+  Restart, Reset this PC failing during a lock (W5). Also: a real WSL
+  distribution, Windows Sandbox and a Hyper-V VM closed by strict mode
+  (W24); the Store's Firefox obeying the registry policies (W26); `kc9k
+  browsers install librewolf` through the service (W18).
+- **laptop** (the owner's Windows laptop): places with real networks, and
+  Wi-Fi switched back on after "Wi-Fi off" and airplane mode (W10);
+  Software Restriction Policies on Windows 11 Home: a program in Downloads
+  refused during strict mode (W25); the panel's brightness, external
+  screens and Night light (W6); the GUI's Narrator, scaling and drag and
+  drop (W4, the GUI session's).
+- **owner**: the Chrome Web Store listing's ID for `ChromeStoreExtensionID`
+  (W2; until then Chrome and Edge get no extension); which firmware the
+  laptop has (Dell, Lenovo, HP) and a trusted person to type and keep the
+  firmware password for `kc9k firmware-lock on` (W19); the code-signing
+  certificate (W7, the GUI session's).
+- Not Core's but seen: the Linux workflow `Test` fails in
+  `ci/integration.sh` on every push since before 2026-11-22 (commands
+  without `--yes` where a lock is now confirmed, R-LOCK-12); its unit
+  tests pass.
 
 ## 5. Proposed, not agreed
 

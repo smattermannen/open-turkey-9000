@@ -144,7 +144,8 @@
   UI Automation, screenshots and moves are in physical pixels as gui.json
   is. High contrast reads the person's flags and scheme first and puts
   them back exactly; the name check skips a scroll bar's own parts.
-  *(By claude)*
+  `GuiApp.Invoke(id)` finds and presses again (up to 3 times) when the
+  element went stale while its page was being shown. *(By claude)*
 
 ## Built behaviour
 

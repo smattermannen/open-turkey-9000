@@ -41,7 +41,7 @@ public sealed class BlocksPage : IPage
             Ui.PageHeader("Blocks", "What each block blocks, what switches it, its breaks and its locks. Drag a block onto a mode to automate it with the mode's blocks."),
             Section("Modes", modesHelp, modeCards),
             Section("Blocks", null, blockCards),
-            Ui.Row(8,
+            Ui.Wrap(8,
                 Ui.Button("New block…", () => _ = Actions.CreateBlock(window), "NewBlock", accent: true, glyph: Glyphs.Add),
                 Ui.Button("New mode…", () => _ = CreateMode(), "NewMode"))));
         Block = new BlockView(window, this);
@@ -53,7 +53,7 @@ public sealed class BlocksPage : IPage
 
     static StackPanel Section(string title, string? help, UIElement content)
     {
-        var head = Ui.Row(6, Ui.Heading(title));
+        var head = Ui.Wrap(6, Ui.Heading(title));
         if (help is not null) head.Children.Add(Ui.HelpButton(help, title));
         return Ui.Column(10, head, content);
     }
@@ -128,25 +128,17 @@ public sealed class BlocksPage : IPage
         ToolTipService.SetToolTip(toggle, b.Held ? "Locked: it can't be switched off" : b.Active ? "Switch the block off" : "Switch the block on (without locks)");
         var stateText = Ui.Dim(b.Active ? (b.Enabled ? "On" : "On, lifted now") : "Off", wrap: false);
         stateText.VerticalAlignment = VerticalAlignment.Center;
-        var top = new Grid { ColumnSpacing = 10 };
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var left = Ui.Row(10, title);
+        // W54: a row as in the GTK GUI: name and what switches it, its breaks
+        // on the left; the switch and its locks in the page's right column.
+        var left = Ui.Wrap(10, title);
         if (b.Draft.Length > 0) left.Children.Add(Ui.Pill(new("Unsaved edits", PillKind.Warn)).Tip("Open the block to save or discard them"));
-        top.Children.Add(left);
-        Grid.SetColumn(stateText, 1);
-        top.Children.Add(stateText);
-        Grid.SetColumn(toggle, 2);
-        top.Children.Add(toggle);
-
         var automated = !b.Continuous;
         var links = Ui.Wrap(16,
             CardLink(automated ? "Automated block" : "Continuous block", automated ? Glyphs.Clock : Glyphs.Sync,
                 b.InMode ? $"Automated by '{b.Mode}'" : "What switches it by itself: schedule and places", () => OpenAutomation(name), "BlockAuto_" + name),
-            CardLink(Words.Breaks(b), Glyphs.Coffee, "Its breaks", () => OpenBlock(name, "breaks"), "BlockBreaks_" + name),
-            CardLink(Words.LockState(b), b.Held ? Glyphs.Lock : Glyphs.Unlock, b.Held ? "Unlock it" : "Add locks", () => _ = CardLocks(name), "BlockLocks_" + name));
-        var body = Ui.Column(6, top, links);
+            CardLink(Words.Breaks(b), Glyphs.Coffee, "Its breaks", () => OpenBlock(name, "breaks"), "BlockBreaks_" + name));
+        var locks = CardLink(Words.LockState(b), b.Held ? Glyphs.Lock : Glyphs.Unlock, b.Held ? "Unlock it" : "Add locks", () => _ = CardLocks(name), "BlockLocks_" + name);
+        var body = Ui.Side(Ui.Column(6, left, links), RightColumn(Ui.Row(10, stateText, toggle), locks));
         var card = Ui.Card(body);
         if (!b.Active) card.Opacity = 0.85;
 
@@ -178,6 +170,15 @@ public sealed class BlocksPage : IPage
         return card;
     }
 
+    /// <summary>The right column of a card (W54): each line at the right edge.</summary>
+    static StackPanel RightColumn(params FrameworkElement[] lines)
+    {
+        foreach (var l in lines) l.HorizontalAlignment = HorizontalAlignment.Right;
+        var p = Ui.Column(6, lines);
+        p.Id("RightColumn");
+        return p;
+    }
+
     static HyperlinkButton CardLink(string text, string glyph, string tip, Action click, string id)
     {
         var b = new HyperlinkButton { Content = Ui.Row(6, Ui.Icon(glyph, 14), new TextBlock { Text = text }), Padding = new Thickness(0) };
@@ -200,19 +201,11 @@ public sealed class BlocksPage : IPage
         ToolTipService.SetToolTip(toggle, tip);
         var stateText = Ui.Dim(stateWords, wrap: false);
         stateText.VerticalAlignment = VerticalAlignment.Center;
-        var top = new Grid { ColumnSpacing = 10 };
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.Children.Add(Ui.Row(10, icon, title));
-        Grid.SetColumn(stateText, 1);
-        top.Children.Add(stateText);
-        Grid.SetColumn(toggle, 2);
-        top.Children.Add(toggle);
         var line = new HyperlinkButton { Content = ModeWhat(m), Padding = new Thickness(0) }
             .Named($"{name}: {ModeWhat(m)}", "ModeLine_" + name).Tip("Open the mode: its blocks and what switches them");
         line.Click += (_, _) => OpenMode(name);
-        var card = Ui.Card(Ui.Column(6, top, line));
+        var top = Ui.Side(Ui.Column(6, Ui.Wrap(10, icon, title), line), RightColumn(Ui.Row(10, stateText, toggle)));
+        var card = Ui.Card(top);
         if (!m.Monk && !m.Freeze)
         {
             card.AllowDrop = true;

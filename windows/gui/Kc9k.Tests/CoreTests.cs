@@ -407,20 +407,6 @@ public class CliTests
         Assert.Equal(["open", "quit"], TrayMenu.Build(null, "x").Where(i => !i.Separator).Select(i => i.Do));
     }
 
-    // W38: the first view's steps; none once set up.
-    [Fact]
-    public void FirstStepsUntilSetUp()
-    {
-        var empty = new GuiState();
-        var steps = Words.FirstSteps(empty);
-        Assert.Equal(["block", "browser", "start"], steps.Select(x => x.Key));
-        Assert.All(steps, x => Assert.False(x.Done));
-        var set = new GuiState { Blocks = [new Block { Name = "B", Active = true }], Browsers = [new BrowserInfo { Id = "librewolf", Installed = true, Found = true, CheckinSeconds = 3 }] };
-        Assert.Empty(Words.FirstSteps(set));
-        set.Browsers[0].CheckinSeconds = -1;
-        Assert.Equal([true, false, true], Words.FirstSteps(set).Select(x => x.Done));
-    }
-
     // W39: the protection levels, and only basic on by default (principle 3).
     [Fact]
     public void ProtectionLevelsNow()

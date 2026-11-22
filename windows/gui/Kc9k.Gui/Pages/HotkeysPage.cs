@@ -194,14 +194,8 @@ public sealed class HotkeysPage : IPage
             for (var i = 0; i < actions.Count; i++)
             {
                 var n = i;
-                var g = new Grid { ColumnSpacing = 8 };
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                g.Children.Add(Ui.Text($"{i + 1}. {actions[i].Words}"));
                 var rm = Ui.Button("Remove", () => { actions.RemoveAt(n); Redraw(); refresh?.Invoke(); }, $"HotkeyActionRemove{n + 1}");
-                Grid.SetColumn(rm, 1);
-                g.Children.Add(rm);
-                rows.Children.Add(g);
+                rows.Children.Add(Ui.Side(Ui.Text($"{i + 1}. {actions[i].Words}"), rm));
             }
             if (actions.Count == 0) rows.Children.Add(Ui.Dim("No actions yet."));
         }

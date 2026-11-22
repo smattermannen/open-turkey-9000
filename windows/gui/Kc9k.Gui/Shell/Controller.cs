@@ -299,7 +299,16 @@ public sealed class Controller
     /// <summary>Whether a page's area is closed by an access password now.</summary>
     public bool Locked(string area) => Access.GetValueOrDefault(area) == "locked";
 
-    public void ShowError(string text) => ui.TryEnqueue(() => _ = Dialogs.Message(text, "Something went wrong"));
+    readonly HashSet<string> errorsShown = [];
+
+    /// <summary>An error in a dialog; the same text again while it is shown
+    /// or waiting is not shown twice (W52).</summary>
+    public void ShowError(string text, string title = "Something went wrong") => ui.TryEnqueue(async () =>
+    {
+        if (!errorsShown.Add(title + "\n" + text)) return;
+        try { await Dialogs.Message(text, title); }
+        finally { errorsShown.Remove(title + "\n" + text); }
+    });
 
     /// <summary>The modes a Mode action can run: monk mode first, then the others.</summary>
     public List<string> ModeChoices() =>

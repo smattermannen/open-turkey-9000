@@ -394,22 +394,6 @@ public static class Words
         return text;
     }
 
-    /// <summary>The first view's steps (W38): what is done of a first
-    /// setup. Empty once a block exists and a supported browser's extension
-    /// has checked in, so the Overview stops showing them.</summary>
-    public static List<(string Key, string Text, bool Done)> FirstSteps(GuiState s)
-    {
-        var blocks = s.RealBlocks.ToList();
-        var browser = s.Browsers.Any(b => b.Installed && b.CheckinSeconds >= 0);
-        if (blocks.Count > 0 && browser) return [];
-        return
-        [
-            ("block", "Make a block: the sites, words and apps to keep away.", blocks.Count > 0),
-            ("browser", "Use a supported browser with the extension, so pages are judged as well as addresses.", browser),
-            ("start", "Start the block, now or by a schedule. Add locks when you want it to hold.", blocks.Any(b => b.Active)),
-        ];
-    }
-
     /// <summary>The levels of custom security (principle 3) as they hold on
     /// Windows (W39): title, what it gives, whether it is on now.</summary>
     public static (string Title, string Detail, bool On)[] ProtectionLevels(bool strict, bool noEscape, bool resetGuard, bool firmwareLocked) =>

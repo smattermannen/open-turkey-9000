@@ -39,14 +39,8 @@ public sealed class CircadianPage : IPage
         master = Ui.Switch("Circadian rhythm on", false, on => { if (!filling) _ = C.Run(["circadian", on ? "on" : "off"], then: _ => Read()); }, "CircadianOn");
         play = Ui.Button("Play the day", () => _ = PlayDay(), "PlayDay", glyph: Glyphs.Play)
             .Tip($"Shows the next 24 hours on the screen in {PlaySeconds} seconds (brightness, colour, wallpaper, dark mode), then goes back to now");
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(Ui.PageHeader("Circadian rhythm", "Brightness, colour, wallpaper and dark mode follow the time of day.",
-            "The screen, the wallpaper and dark mode follow the time of day: cues for the body clock. Nothing here can be locked, and it never overrides you: change a level by hand and its clip pauses until its next point. It leaves Windows' own brightness control and night light working; off, it touches nothing."));
-        var right = Ui.Row(10, play, master);
-        Grid.SetColumn(right, 1);
-        head.Children.Add(right);
+        var head = Ui.Side(Ui.PageHeader("Circadian rhythm", "Brightness, colour, wallpaper and dark mode follow the time of day.",
+            "The screen, the wallpaper and dark mode follow the time of day: cues for the body clock. Nothing here can be locked, and it never overrides you: change a level by hand and its clip pauses until its next point. It leaves Windows' own brightness control and night light working; off, it touches nothing."), Ui.Row(10, play, master));
 
         preset = new ComboBox { MinWidth = 200 }.Named("Preset", "CircadianPreset");
         preset.SelectionChanged += (_, _) => presetDetail.Text = view?.Presets.FirstOrDefault(p => p.Name == Key(preset))?.Detail ?? "";
@@ -74,12 +68,12 @@ public sealed class CircadianPage : IPage
             Ui.Wrap(8, Ui.Text("Light between"), lightFrom, Ui.Text("and"), lightTo, Ui.Button("Set", () => _ = SetDarkTimes(), "DarkTimesSet")));
 
         darkPages = Ui.Switch("Show light web pages dark while dark mode is on", false, on => { if (!filling) _ = C.Run(["circadian", "dark-pages", on ? "on" : "off"], then: _ => Read()); }, "DarkPages");
-        exemptEntry = new TextBox { PlaceholderText = "A site to leave as it is (example.com)", Width = 300 }.Named("Site to leave as it is", "DarkExempt");
+        exemptEntry = new TextBox { PlaceholderText = "A site to leave as it is (example.com)", MinWidth = 200, MaxWidth = 300 }.Named("Site to leave as it is", "DarkExempt");
         exemptEntry.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) _ = AddExempt(); };
         var pagesSection = Ui.Section("Dark pages",
             "Pages that are dark already stay as they are. With Windows' own setting, pages follow what the browser says Windows prefers. The extension's toolbar button exempts a site too.",
             Ui.SettingRow("Show light web pages dark while dark mode is on", "", darkPages), exempt,
-            Ui.Row(6, exemptEntry, Ui.Button("Add", () => _ = AddExempt(), "DarkExemptAdd")));
+            Ui.Wrap(6, exemptEntry, Ui.Button("Add", () => _ = AddExempt(), "DarkExemptAdd")));
 
         View = Ui.Page(Ui.Column(18, head, warnings, clipsSection, wallpaperSection, darkSection, pagesSection));
     }
@@ -157,13 +151,8 @@ public sealed class CircadianPage : IPage
         editor.Preview += (e, value) => Preview(e.LaneName, value);
         var sw = Ui.Switch($"{lane.Title} on", lane.On, on => { if (!filling) _ = C.Run(["circadian", "lane", lane.Name, on ? "on" : "off"], then: _ => Read()); }, "Lane_" + lane.Name);
         var value = Ui.Dim("", wrap: false);
-        var top = new Grid { ColumnSpacing = 10 };
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        top.Children.Add(Ui.Row(10, Ui.Strong(lane.Title), value));
-        var right = Ui.Row(8, Ui.Button("Points…", () => _ = editor.EditPoints(), "LanePoints_" + lane.Name), sw);
-        Grid.SetColumn(right, 1);
-        top.Children.Add(right);
+        var top = Ui.Side(Ui.Wrap(10, Ui.Strong(lane.Title), value),
+            Ui.Row(8, Ui.Button("Points…", () => _ = editor.EditPoints(), "LanePoints_" + lane.Name), sw));
         clips.Children.Add(Ui.Column(4, top, Ui.Note(lane.Detail), editor));
         lanes[lane.Name] = (editor, sw, value);
     }

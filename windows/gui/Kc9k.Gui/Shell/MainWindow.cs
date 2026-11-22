@@ -56,17 +56,21 @@ public sealed partial class MainWindow : Window
         Grid.SetRow(top, 1);
         root.Children.Add(top);
 
+        // W53: the sidebar is pinned open like the GTK GUI's: no ☰, it never
+        // moves or covers the page, and the page fills the rest. Only a window
+        // too narrow for both shows the sidebar's icons alone (still pinned).
         nav = new NavigationView
         {
             PaneDisplayMode = NavigationViewPaneDisplayMode.Left,
             IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed,
             IsSettingsVisible = false,
-            IsPaneToggleButtonVisible = true,
-            OpenPaneLength = 240,
-            CompactModeThresholdWidth = 720,
-            ExpandedModeThresholdWidth = 1000,
+            IsPaneToggleButtonVisible = false,
+            IsPaneOpen = true,
+            OpenPaneLength = SidebarWidth,
         };
         nav.Named("Pages", "Nav");
+        nav.PaneClosing += (_, e) => { if (nav.PaneDisplayMode == NavigationViewPaneDisplayMode.Left) e.Cancel = true; };
+        root.SizeChanged += (_, e) => PinSidebar(e.NewSize.Width);
         Grid.SetRow(nav, 2);
         root.Children.Add(nav);
 
@@ -111,10 +115,10 @@ public sealed partial class MainWindow : Window
         };
 
         Controller.StateChanged += Apply;
+        // W52: only the page shown is updated; another is when it is shown.
         Controller.StatsChanged += stats =>
         {
-            foreach (var (key, p) in pages)
-                if (!Controller.Locked(Area(key))) p.Page.UpdateStats(stats);
+            if (!Controller.Locked(Area(CurrentPage)) && !Controller.Locked("app")) pages[CurrentPage].Page.UpdateStats(stats);
         };
         Controller.BusyChanged += on =>
         {
@@ -154,6 +158,17 @@ public sealed partial class MainWindow : Window
         var first = Prefs.Current.OpenOn == "last" && items.ContainsKey(Prefs.Current.LastPage) ? Prefs.Current.LastPage : "dashboard";
         nav.SelectedItem = items[first];
         Controller.Start();
+    }
+
+    /// <summary>The sidebar's width (W53), and the narrowest page beside it.</summary>
+    public const double SidebarWidth = 220, NarrowestPage = 420;
+
+    void PinSidebar(double width)
+    {
+        var mode = width >= SidebarWidth + NarrowestPage ? NavigationViewPaneDisplayMode.Left : NavigationViewPaneDisplayMode.LeftCompact;
+        if (nav.PaneDisplayMode == mode) return;
+        nav.PaneDisplayMode = mode;
+        nav.IsPaneOpen = mode == NavigationViewPaneDisplayMode.Left;
     }
 
     /// <summary>The shortcuts (W34), listed under Settings › Keyboard.</summary>
@@ -250,7 +265,7 @@ public sealed partial class MainWindow : Window
                 : $"{title} is locked.\nEnter its password to open it.";
             p.Cover.Visibility = locked ? Visibility.Visible : Visibility.Collapsed;
             p.Page.View.Visibility = locked ? Visibility.Collapsed : Visibility.Visible;
-            if (!locked) p.Page.Update(state);
+            if (!locked && key == CurrentPage) p.Page.Update(state);
         }
         lockItem.Visibility = Controller.Session.AccessPasswords.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         tray?.SetStatus(state);
@@ -262,7 +277,9 @@ public sealed partial class MainWindow : Window
         Prefs.Current.LastPage = key;
         if (items.TryGetValue(key, out var item) && !ReferenceEquals(nav.SelectedItem, item)) nav.SelectedItem = item;
         nav.Content = pages[key].Holder;
-        if (Controller.State is { } s && !Controller.Locked(Area(key))) pages[key].Page.Update(s);
+        if (Controller.Locked(Area(key)) || Controller.Locked("app")) return;
+        if (Controller.State is { } s) pages[key].Page.Update(s);
+        if (Controller.Stats is { } stats) pages[key].Page.UpdateStats(stats);
     }
 
     /// <summary>Opens a page of the sidebar.</summary>
@@ -299,18 +316,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Settings, at its browsers (W38).</summary>
+    /// <summary>Settings, at its browsers.</summary>
     public void OpenBrowsers()
     {
         Show("settings");
         (pages["settings"].Page as SettingsPage)?.ShowBrowsers();
-    }
-
-    /// <summary>Settings, with the guided setup's checklist open (W38).</summary>
-    public async Task OpenGuidedSetup()
-    {
-        Show("settings");
-        if (pages["settings"].Page is SettingsPage settings) await settings.ShowGuidedSetup();
     }
 
     async Task ExtensionDialog()
@@ -323,10 +333,7 @@ public sealed partial class MainWindow : Window
             ? "No supported browser is installed. Install Google Chrome, Microsoft Edge or LibreWolf, then open it once."
             : $"{(names.Count > 0 ? string.Join(" and ", names) : "A supported browser")} has run for a while without it checking in, and your blocks need it. Close and open the browser again, or see under Settings > Browsers which have it.";
         if (await Controller.Dialogs.Confirm("The Killer Chicken extension isn't running", text, "Show browsers", cancel: "Later"))
-        {
-            Show("settings");
-            (pages["settings"].Page as SettingsPage)?.ShowBrowsers();
-        }
+            OpenBrowsers();
     }
 
     public void ApplyTheme()

@@ -33,6 +33,9 @@ public sealed class Prefs
 
     [JsonIgnore] public static Prefs Current { get; private set; } = Load();
 
+    /// <summary>The folder of gui.json (the crash note goes beside it, W52).</summary>
+    public static string Folder => Path.GetDirectoryName(PathOf()) ?? ".";
+
     static string PathOf()
     {
         var env = Environment.GetEnvironmentVariable("KC9K_GUI_PREFS");

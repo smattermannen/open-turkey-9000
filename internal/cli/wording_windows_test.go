@@ -31,3 +31,14 @@ func TestWindowsWording(t *testing.T) {
 	}
 	walk(rootCmd)
 }
+
+// W27: the commands run outside the service (the session agent as the
+// signed-in person, install from a console) never open the database for
+// access passwords.
+func TestLocalCommandsAskNothing(t *testing.T) {
+	for _, c := range []*cobra.Command{agentCmd, installCmd, serviceCmd, watchdogCmd, finishUninstallCmd} {
+		if _, asks := areasOf(c); asks {
+			t.Errorf("%s asks for an access password", c.Name())
+		}
+	}
+}

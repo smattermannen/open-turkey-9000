@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -232,6 +233,16 @@ var watchdogCmd = &cobra.Command{
 }
 
 func init() {
+	// The commands that run outside the service never ask for an access
+	// password: they can't read the database (SYSTEM's alone), and decide
+	// nothing about blocks. Asking made the session agent, run as the
+	// signed-in person, end at once (found by the desktop checks, W27), and
+	// a reinstall over the data an uninstall kept fail.
+	for name := range localCommands {
+		if !slices.Contains(accessExempt, name) {
+			accessExempt = append(accessExempt, name)
+		}
+	}
 	// What strict mode and no-escape do on Windows (notes/windows.md W5).
 	strictCmd.Short = "Deny administrators what would stop KC9K while a block is locked"
 	strictCmd.Long = strings.Replace(strictCmd.Long, strictCmd.Long[:strings.Index(strictCmd.Long, "\n\nStrict mode is off")],

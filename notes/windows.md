@@ -69,6 +69,11 @@
   through `os.Pipe` read it while the command runs: a Windows pipe holds
   only 4 KB.
 
+- Local commands (`service`, `agent`, `install`, `finish-uninstall`,
+  `watchdog`) are exempt from access passwords: they can't read the
+  database (SYSTEM's alone). Before, the session agent (run as the person)
+  ended at once and was started again every 3 s, and a reinstall over
+  kept data failed; found by the desktop checks (W27).
 - Wording (W16): help texts are written for Linux; on Windows
   `rewordForWindows` (called first in `forwardIfNeeded`) replaces each
   Linux-only name by Windows' own from `cli/wording.go`'s table (the
@@ -333,10 +338,13 @@
   exempt folders allowed (long paths: SRP doesn't match 8.3 names); rules
   synced each cycle, running programs told to read them again
   (`RefreshPolicyEx`),
-  under keys named `{4B43394B-…}`; the Safer key is made (DefaultLevel
-  unrestricted, DLLs left out) only if absent, noted in
-  ProgramData\kc9k\srp-made, and is a lockdown target. `RemoveNoexec`
-  removes KC9K's rules, and the key if KC9K made it; `RemoveLockdown` does
+  under keys named `{4B43394B-…}`. What SRP needs to act and is missing
+  is set (`ensureSRPOn`: DefaultLevel unrestricted, TransparentEnabled 1
+  so DLLs are left out, PolicyScope 0, ExecutableTypes; Windows Server
+  ships the key with only `authenticodeenabled`, which leaves SRP off),
+  noted in ProgramData\kc9k\srp-made (the key, or the values added); the
+  key is a lockdown target. `RemoveNoexec` removes KC9K's rules and
+  exactly what it added; `RemoveLockdown` does
   it first, since putting the rest back runs PowerShell. Every PowerShell
   the service runs has a time limit (90 s; the firmware's 5 min).
 - Strict mode's ways to SYSTEM (W20–W22, `strict_windows.go`;

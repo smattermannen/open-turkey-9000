@@ -16,6 +16,7 @@ package blocker
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -108,24 +109,8 @@ func applySRP(exempt []string) error {
 	if !platform.Privileged() {
 		return nil
 	}
-	if _, err := registry.OpenKey(registry.LOCAL_MACHINE, saferCodeIDs, registry.QUERY_VALUE); err != nil {
-		k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, saferCodeIDs, registry.ALL_ACCESS)
-		if err != nil {
-			return err
-		}
-		for name, v := range map[string]uint32{"DefaultLevel": 262144, "TransparentEnabled": 1, "PolicyScope": 0, "AuthenticodeEnabled": 0} {
-			if err := k.SetDWordValue(name, v); err != nil {
-				k.Close()
-				return err
-			}
-		}
-		_ = k.SetStringsValue("ExecutableTypes", []string{"ADE", "ADP", "BAS", "BAT", "CHM", "CMD", "COM", "CPL", "CRT", "EXE",
-			"HLP", "HTA", "INF", "INS", "ISP", "LNK", "MDB", "MDE", "MSC", "MSI", "MSP", "MST", "OCX", "PCD", "PIF", "PS1",
-			"REG", "SCR", "SHS", "URL", "VB", "VBS", "WSC", "WSF", "WSH", "JS", "JSE"})
-		k.Close()
-		if err := os.WriteFile(srpMadePath, []byte("KC9K made the Safer policy key\n"), 0o600); err != nil {
-			return err
-		}
+	if err := ensureSRPOn(); err != nil {
+		return err
 	}
 	want := map[string]srpRule{}
 	for _, r := range srpRules(exempt) {
@@ -198,8 +183,57 @@ func srpOurRules(level string) []string {
 	return out
 }
 
-// removeSRP takes KC9K's rules out, and the whole Safer key if KC9K made
-// it.
+// srpMade is what KC9K added to make SRP act: the key itself, or the
+// values it lacked (Windows Server ships the key with only
+// authenticodeenabled, which leaves SRP off).
+type srpMade struct {
+	Key    bool     `json:"key"`
+	Values []string `json:"values"`
+}
+
+// ensureSRPOn sets what SRP needs to act and is missing: unrestricted by
+// default, programs (not DLLs) checked, for every user. Someone else's
+// settings are left as they are.
+func ensureSRPOn() error {
+	var made srpMade
+	if data, err := os.ReadFile(srpMadePath); err == nil {
+		_ = json.Unmarshal(data, &made)
+	}
+	k, existed, err := registry.CreateKey(registry.LOCAL_MACHINE, saferCodeIDs, registry.ALL_ACCESS)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	if !existed {
+		made.Key = true
+	}
+	added := false
+	for _, v := range []struct {
+		name  string
+		value uint32
+	}{{"DefaultLevel", 262144}, {"TransparentEnabled", 1}, {"PolicyScope", 0}} {
+		if _, _, err := k.GetIntegerValue(v.name); err == nil {
+			continue
+		}
+		if err := k.SetDWordValue(v.name, v.value); err != nil {
+			return err
+		}
+		made.Values, added = append(made.Values, v.name), true
+	}
+	if _, _, err := k.GetStringsValue("ExecutableTypes"); err != nil {
+		_ = k.SetStringsValue("ExecutableTypes", []string{"ADE", "ADP", "BAS", "BAT", "CHM", "CMD", "COM", "CPL", "CRT", "EXE",
+			"HLP", "HTA", "INF", "INS", "ISP", "LNK", "MDB", "MDE", "MSC", "MSI", "MSP", "MST", "OCX", "PCD", "PIF", "PS1",
+			"REG", "SCR", "SHS", "URL", "VB", "VBS", "WSC", "WSF", "WSH", "JS", "JSE"})
+		made.Values, added = append(made.Values, "ExecutableTypes"), true
+	}
+	if !added && existed {
+		return nil
+	}
+	data, _ := json.Marshal(made)
+	return os.WriteFile(srpMadePath, data, 0o600)
+}
+
+// removeSRP takes KC9K's rules out, and what ensureSRPOn added.
 func removeSRP() error {
 	if !platform.Privileged() {
 		return nil
@@ -212,11 +246,23 @@ func removeSRP() error {
 			}
 		}
 	}
-	if _, err := os.Stat(srpMadePath); err != nil {
+	data, err := os.ReadFile(srpMadePath)
+	if err != nil {
 		return nil
 	}
-	if err := deleteRegTree(registry.LOCAL_MACHINE, saferKey); err != nil && err != registry.ErrNotExist {
-		return err
+	var made srpMade
+	if json.Unmarshal(data, &made) != nil {
+		made.Key = true // the first build's note: KC9K made the key
+	}
+	if made.Key {
+		if err := deleteRegTree(registry.LOCAL_MACHINE, saferKey); err != nil && err != registry.ErrNotExist {
+			return err
+		}
+	} else if k, err := registry.OpenKey(registry.LOCAL_MACHINE, saferCodeIDs, registry.SET_VALUE); err == nil {
+		for _, v := range made.Values {
+			_ = k.DeleteValue(v)
+		}
+		k.Close()
 	}
 	return os.Remove(srpMadePath)
 }

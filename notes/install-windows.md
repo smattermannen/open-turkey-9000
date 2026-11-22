@@ -58,7 +58,7 @@
   builds 0.1.0 twice, 0.0.9 and 0.2.0, each with its own kc9k.exe):
   install and removal through the full UI (`MsiUi/`, a FlaUI console tool:
   it ticks the licence box and presses Install,
-  Yes, Next, Finish, OK or Close, and keeps each dialog's text), removal
+  Yes, Next, Finish or OK (No only to a cancel question; never the title bar's Close), and keeps each dialog's text), removal
   refused while locked, then with block the installer on and a block
   locked: a reinstall, an older version and a repair refused, a newer
   version installed with the block still locked and one entry in Apps &

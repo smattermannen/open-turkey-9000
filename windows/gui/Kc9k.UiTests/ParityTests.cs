@@ -11,21 +11,21 @@ namespace Kc9k.UiTests;
 [Collection("gui")]
 public class ParityTests
 {
-    // gui_cards: a card's switch stops its block; a refusal is shown and the switch put back.
+    // gui_cards: a card's switch stops its block; a refusal is shown and the
+    // switch put back; a locked block's switch is greyed out (R-GUI-3).
     [Fact]
     public void ACardsSwitchStopsAndARefusalIsPutBack()
     {
         using var gui = new GuiApp("cards-stop", prepare: dir => GuiApp.Respond(dir,
-            (["stop", "Social media"], false, "Error: 'Social media' is locked until 25 Nov 14:00 (timer lock)")));
+            (["stop", "Evening"], false, "Error: 'Evening' needs its block password")));
         gui.Page("blocks");
+        Assert.False(gui.Find("BlockSwitch_Social media").IsEnabled);
         gui.Invoke("BlockSwitch_Evening");
         gui.WaitFor(() => gui.Ran("stop", "Evening"), "kc9k stop Evening");
-        gui.Invoke("BlockSwitch_Social media");
-        gui.WaitFor(() => gui.Ran("stop", "Social media"), "kc9k stop Social media");
         gui.FindName("Not done");
         gui.Shot("refused");
         gui.Invoke(gui.FindButton("OK"));
-        gui.WaitFor(() => gui.Find("BlockSwitch_Social media").Patterns.Toggle.Pattern.ToggleState.Value == ToggleState.On, "the switch put back on");
+        gui.WaitFor(() => gui.Find("BlockSwitch_Evening").Patterns.Toggle.Pattern.ToggleState.Value == ToggleState.On, "the switch put back on");
     }
 
     // gui_extend and gui_duration: Extend timer… on a timer-locked block; a
@@ -39,7 +39,7 @@ public class ParityTests
         gui.Invoke("BlockCard_Reading");
         gui.WaitFor(() => !gui.Find("BlockExtend").IsEnabled, "Extend timer… greyed out without a timer lock");
         gui.Invoke("BackToBlocks");
-        gui.Invoke("BlockCard_Work");
+        gui.Invoke("BlockCard_Social media");
         gui.WaitFor(() => gui.Find("BlockExtend").IsEnabled, "Extend timer… on a timer-locked block");
         gui.Invoke("BlockExtend");
         var length = gui.Find("Extend_Length").AsTextBox();
@@ -54,7 +54,7 @@ public class ParityTests
         gui.FindName("Set this lock?");
         Assert.False(gui.Ran("extend"));
         gui.Invoke(gui.FindButton("Lock"));
-        gui.WaitFor(() => gui.Ran("extend", "Work", "--for", "1560m", "--yes"), "kc9k extend Work --for 1560m --yes");
+        gui.WaitFor(() => gui.Ran("extend", "Social media", "--for", "1560m", "--yes"), "kc9k extend Social media --for 1560m --yes");
     }
 
     // gui_lists: a new list asks for its name and where it looks (URL, title, text).
@@ -110,7 +110,7 @@ public class ParityTests
     public void EveryButtonOnce()
     {
         using var gui = new GuiApp("click-everything");
-        var skip = new[] { "Import", "Export", "Back up", "Share", "picture", "Picture", "Save statistics", "Install", "Lock: forget" };
+        var skip = new[] { "Close", "Minimize", "Maximize", "Import", "Export", "Back up", "Share", "picture", "Picture", "Save statistics", "Install", "Lock: forget" };
         var pressed = 0;
         void PressAll(string page, Action open)
         {
@@ -134,7 +134,8 @@ public class ParityTests
                 Thread.Sleep(250);
                 for (var i = 0; i < 4; i++)
                 {
-                    var close = gui.FindButtonOrNull("Cancel") ?? gui.FindButtonOrNull("Close") ?? gui.FindButtonOrNull("Later") ?? gui.FindButtonOrNull("OK");
+                    // A dialog's own button (never the title bar's Close).
+                    var close = gui.ById("CloseButton") ?? gui.FindButtonOrNull("Cancel");
                     if (close is null) break;
                     try { gui.Invoke(close); } catch (Exception) { }
                     Thread.Sleep(200);

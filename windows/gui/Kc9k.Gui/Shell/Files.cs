@@ -119,6 +119,39 @@ public static class Files
         return [.. checks.Where(c => c.Box.IsChecked == true).Select(c => c.Value)];
     }
 
+    /// <summary>Tests only: a file Import project… takes instead of asking with
+    /// the file dialog, which UI Automation can't fill in reliably.</summary>
+    public const string ImportProjectHook = "KC9K_GUI_IMPORT_FILE";
+
+    /// <summary>§4.10 Project, W55: Import project… as the GTK GUI's
+    /// import_project. The file dialog, then `kc9k project import --dry-run`
+    /// shown for confirmation (with what is not used on Windows, W56), the
+    /// locks and custom actions it brings confirmed (R-LOCK-12, R-CUSTOM-1),
+    /// then `kc9k project import FILE [--yes]`. The CLI decides; the GUI only
+    /// shows and asks.</summary>
+    public static async Task ImportProject(MainWindow window)
+    {
+        var c = window.Controller;
+        var path = Environment.GetEnvironmentVariable(ImportProjectHook) is { Length: > 0 } hook ? hook : await Open(window, ".json");
+        if (path is null) return;
+        var output = await c.Read(["project", "import", "--dry-run", path]);
+        if (output is null) return;
+        if (!output.Contains("Would:"))
+        {
+            await c.Dialogs.Message(output.Length > 0 ? output : "The file adds nothing new.", "Nothing to import");
+            return;
+        }
+        const string lockLine = "Would: set a lock: ";
+        var locks = output.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Contains(lockLine))
+            .Select(l => l[(l.IndexOf(lockLine) + lockLine.Length)..]).ToList();
+        // R-CUSTOM-1: what its custom actions open or run is in the list.
+        var customs = output.Contains("Would: add a custom action that can ");
+        if (!await c.Dialogs.Confirm("Import this setup?", output.Replace("Would: ", "• "), "Import")) return;
+        if (!(await c.Dialogs.ConfirmLock(locks)).Ok) return;
+        await c.Run(["project", "import", path, .. locks.Count > 0 || customs ? new[] { "--yes" } : []],
+            then: o => c.Dialogs.Message(o, "Imported"));
+    }
+
     /// <summary>§4.3: Import into a list: from a file (phrases in it go to a
     /// phrase set), from other lists and list presets, the whole internet, or
     /// all searches containing some words.</summary>

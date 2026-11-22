@@ -2223,11 +2223,13 @@ Layout (owner: keep the Windows look, use the GTK layout):
 
 Import:
 
-- [ ] `W55` **Import project is missing on Windows** (S; §3 Project,
+- [x] `W55` **Import project is missing on Windows** (S; §3 Project,
   `notes/db-project.md`). The GTK GUI's import has no Windows
   counterpart. Build: Settings → Import project… opens a file dialog and
   runs `kc9k project import <file>` (first `--dry-run`, shown for
   confirmation), as the GTK GUI does.
+  Built 2026-11-22 *(By claude)*: `Files.ImportProject`, Settings'
+  Import… calls it; `ProjectImportTests.cs`.
 - [x] `W56` **A Linux project imports safely on Windows** (M; §3 Project,
   R-WEAK-1/2). The Linux app and its project format are not changed.
   Windows reads a project file written on Linux as is: Linux-only parts

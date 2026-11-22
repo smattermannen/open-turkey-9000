@@ -141,10 +141,23 @@ Check 'strict mode: an account made meanwhile is turned off' { -not (Get-LocalUs
 Check 'strict mode: a task as SYSTEM is refused, or deleted within a cycle' { $taskRefused -or -not (schtasks.exe /Query /TN kc9kci 2>$null) }
 Check 'strict mode: a WMI event consumer is refused, or deleted within a cycle' { $wmiRefused -or -not (Get-WmiObject -Namespace root/subscription -Class CommandLineEventConsumer -Filter "Name='kc9kci'") }
 
+# Tamper protection "block time and date changes" during a lock (W23).
+K tamper clock on | Out-Host
+Start-Sleep -Seconds 8
+$tz = (Get-TimeZone).Id
+$other = if ($tz -eq 'UTC') { 'Pacific Standard Time' } else { 'UTC' }
+Set-TimeZone -Id $other
+Start-Sleep -Seconds 10
+Check 'tamper clock: a changed time zone is put back during a lock' { (Get-TimeZone).Id -eq $tz }
+$before = Get-Date
+Set-Date -Adjust (New-TimeSpan -Hours 2) | Out-Null
+Start-Sleep -Seconds 10
+Check 'tamper clock: a clock moved ahead is put back during a lock' { [math]::Abs(((Get-Date) - $before).TotalMinutes) -lt 10 }
+
 # Uninstall is refused while a block is locked.
 K uninstall 2>&1 | Out-Host
 Check 'uninstall is refused while locked' { $LASTEXITCODE -ne 0 -and (Get-Service kc9k -ErrorAction SilentlyContinue) }
-Start-Sleep -Seconds 130
+Start-Sleep -Seconds 105
 K stop ci-block | Out-Host
 $wrote = $false
 for ($i = 0; $i -lt 30 -and -not $wrote; $i++) {
@@ -162,6 +175,7 @@ Check 'after the lock the account made meanwhile is on again' { (Get-LocalUser k
 net.exe user kc9kci /delete | Out-Null
 schtasks.exe /Delete /TN kc9kci /F 2>$null | Out-Null
 K strict off | Out-Host
+K tamper clock off | Out-Host
 $out = K uninstall 2>&1 | Out-String
 Write-Host $out
 Check 'uninstall succeeds once nothing is locked' { $LASTEXITCODE -eq 0 -and $out -match 'program is removed' }

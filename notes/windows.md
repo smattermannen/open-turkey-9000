@@ -337,6 +337,14 @@
   since the start are deleted with their bindings. The `Services` key
   tree is a lockdown target (deny entries inherited by every service's
   key). Each put back or deleted is counted as tamper.
+- Clock and time zone (W23, `clockguard_windows.go`, from `guardPlatform`):
+  with tamper clock on and anything locked, the first cycle keeps the
+  time zone (`GetDynamicTimeZoneInformation`) and the wall clock minus
+  the boot clock in ProgramData\kc9k\clock-guard.json. A changed zone is
+  set back; a clock moved more than 2 minutes against the boot clock is
+  set back unless internet time (the clock check's, at most once a
+  minute) confirms the new time, which then becomes the reference. Each
+  counted as tamper; the file goes when the guard ends.
 - No-escape (`ApplyBootLock`): `reagentc /disable` (if it was on),
   `bcdedit /set {current} recoveryenabled No`, `bootstatuspolicy
   IgnoreAllFailures`, `{bootmgr} displaybootmenu No`; ProgramData\kc9k\

@@ -102,6 +102,20 @@ func guardPlatform(d *db.DB, trusted int64) {
 	} else if again {
 		fixed = append(fixed, "the recovery environment was turned on during a lock")
 	}
+	// Block time and date changes, while anything is locked (W23).
+	clockOn := false
+	if v, err := d.GetSetting(db.SettingTamperClock); err == nil && v == "on" {
+		locked, err := AnyLock(d, time.Now(), trusted)
+		clockOn = err == nil && locked
+	}
+	if again, err := blocker.SyncClockGuard(clockOn, func() (time.Time, bool) {
+		at, err := internetTime()
+		return at, err == nil
+	}); err != nil {
+		log.Printf("tamper: clock: %v", err)
+	} else {
+		fixed = append(fixed, again...)
+	}
 	for _, what := range fixed {
 		log.Printf("tamper: put back %s", what)
 		logEventFor(d, db.EventTamper, activeNames(d), what+" (put back)")

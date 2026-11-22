@@ -1938,7 +1938,10 @@ their sites; their pages are an app's, not a browser's).
   Administrator can be turned on. Build: accounts made or turned on while
   strict mode holds are turned off and counted (each cycle); put back as
   they were after. Needs: win-ci.
-- [ ] `W23` The clock and the time zone (S). SPEC §4.10 (clock: block
+- [ ] `W23` The clock and the time zone (S). Built (2026-11-22):
+  `clockguard_windows.go`; checked by `ci/windows_service_test.ps1` on
+  `windows-latest` (a time zone and a clock moved 2 h, each put back
+  during a lock). Was planned: SPEC §4.10 (clock: block
   time/date changes). Trusted time already ignores the clock; schedules
   and windows read the local time, which an administrator (and, for the
   time zone, any user) may change. Build (By Opus): with tamper clock on

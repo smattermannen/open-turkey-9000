@@ -70,7 +70,7 @@
   and kc9k.exe the service started (`Win32_ProcessStartTrace`), agent
   restarts (agent PIDs; "ended from outside" in the service log, copied by
   a SYSTEM task), tamper lines, CPU, handles and private bytes of service,
-  agent and GUI (last third against first), Display 4101 and
+  agent and GUI (last third against the middle one: the first is warm-up), Display 4101 and
   LiveKernelEvent, crash reports of kc9k, dwm and explorer, the gamma ramp,
   "browser: closing" naming a program in %SystemRoot%. Stops and puts
   everything back at once on CPU > 90 % for 30 s, > 5 powershell.exe, a
@@ -551,8 +551,8 @@
   display change); its level read at most once a minute (in between the
   last read or set level); set at most once a second, a sooner level kept
   and sent by a timer (newest wins); one PowerShell at a time. The
-  engine looks for panels only while the backlight clip is on (else once,
-  and after a wake); Play the day finds them once and sets panel and
+  engine looks for panels only while the backlight clip is on (else once;
+  a wake only forgets them, 2026-11-22 laptop soak *(By claude)*); Play the day finds them once and sets panel and
   external screens at most once a second plus its last frame. Laptop
   2026-11-22: 12 PowerShells a minute with circadian off before.
   `TestWinPanelRateLimits`, `TestCircadianBacklightsLookedOnlyWhenOn`.

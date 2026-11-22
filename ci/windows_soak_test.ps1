@@ -261,11 +261,13 @@ function ProcStats([int]$id) {
     return [pscustomobject]@{ Handles = [double]$p.HandleCount; Private = [double]$p.PrivateMemorySize64 }
 }
 
-# Slope: last third's mean against the first third's, in percent.
+# Slope: last third's mean against the middle third's, in percent. The
+# first third is warm-up (caches, the first screen calls): the laptop saw
+# the agent's handles rise 6 % in the first minutes and stay flat after.
 function Slope([double[]]$v) {
     if ($v.Count -lt 3) { return 0 }
     $n = [math]::Max([int][math]::Floor($v.Count / 3), 1)
-    $a = ($v[0..($n - 1)] | Measure-Object -Average).Average
+    $a = ($v[$n..([math]::Min(2 * $n, $v.Count - $n) - 1)] | Measure-Object -Average).Average
     $b = ($v[($v.Count - $n)..($v.Count - 1)] | Measure-Object -Average).Average
     if ($a -eq 0) { return 0 }
     return [math]::Round(($b - $a) * 100 / $a, 1)

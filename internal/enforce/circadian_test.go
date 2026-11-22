@@ -203,14 +203,14 @@ func TestCircadianBacklightsLookedOnlyWhenOn(t *testing.T) {
 	}
 	f.slept += 60
 	e.Step(at(9, 1, 0))
-	if looks != 2 || forgets != 1 {
-		t.Errorf("after a wake: %d looks, %d forgets", looks, forgets)
+	if looks != 1 || forgets != 1 {
+		t.Errorf("after a wake, clip off: %d looks, %d forgets; want 1, 1 (forgotten, not looked for: W50)", looks, forgets)
 	}
 	circadianWith(t, d, testBacklight, nil)
 	for i := 0; i < 3; i++ {
 		e.Step(at(9, 2, i))
 	}
-	if looks != 5 {
+	if looks != 4 {
 		t.Errorf("clip on: %d looks, want one per step", looks)
 	}
 }

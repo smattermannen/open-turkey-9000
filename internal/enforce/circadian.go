@@ -533,10 +533,12 @@ func (e *Circadian) Step(now time.Time) {
 	_, previewed := running[circadian.LaneBacklight]
 
 	var backlights []circadianLevel
-	if backlightOn || !e.backlightsLooked || woke {
-		if woke {
-			circadianForgetBacklights()
-		}
+	if woke {
+		// Looked for again on the next look; with the backlight clip off
+		// that is not now (no process per cycle, W50).
+		circadianForgetBacklights()
+	}
+	if backlightOn || !e.backlightsLooked {
 		backlights = circadianBacklights()
 		e.backlightsLooked = true
 		e.backlightNames = e.backlightNames[:0]

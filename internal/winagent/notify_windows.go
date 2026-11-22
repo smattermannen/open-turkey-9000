@@ -6,7 +6,7 @@ package winagent
 
 import (
 	"runtime"
-	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -39,14 +39,16 @@ type notifyIconData struct {
 
 var _ = [1]int{}[unsafe.Sizeof(notifyIconData{})-976]
 
-var notifyMu sync.Mutex
+// notifyIDs number the icons: each notification has its own, so one
+// showing never holds up the next (a second one used to wait 10 s and
+// the service stopped waiting for it).
+var notifyIDs atomic.Uint32
 
 // notify shows title and body as a notification, for about 10 s.
 func notify(title, body string) error {
-	notifyMu.Lock()
 	errc := make(chan error, 1)
+	id := notifyIDs.Add(1)
 	go func() {
-		defer notifyMu.Unlock()
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		class, _ := windows.UTF16PtrFromString("STATIC")
@@ -59,7 +61,7 @@ func notify(title, body string) error {
 		defer procDestroyWindow.Call(hwnd)
 		const idiInformation = 32516
 		icon, _, _ := procLoadIconW.Call(0, idiInformation)
-		d := notifyIconData{hwnd: hwnd, uID: 1, hIcon: icon}
+		d := notifyIconData{hwnd: hwnd, uID: id, hIcon: icon}
 		d.cbSize = uint32(unsafe.Sizeof(d))
 		const nifIcon, nifTip, nifInfo, nimAdd, nimModify, nimDelete, niifInfo = 0x2, 0x4, 0x10, 0, 1, 2, 0x1
 		copy(d.szTip[:127], windows.StringToUTF16("Killer Chicken 9000"))

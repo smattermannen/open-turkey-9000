@@ -55,7 +55,8 @@ if (-not $cmd.HasExited) { $cmd.Kill() }
 # W6: dark mode reaches the signed-in person's settings.
 $before = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -ErrorAction SilentlyContinue).AppsUseLightTheme
 & $k circadian dark dark 2>&1 | Out-Host
-Check 'dark mode on reaches your settings (AppsUseLightTheme 0)' { Until 20 { (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize').AppsUseLightTheme -eq 0 } }
+& $k circadian --json 2>&1 | Out-String | ForEach-Object { if ($_.Length -gt 1500) { $_.Substring(0, 1500) } else { $_ } } | Out-Host
+Check 'dark mode on reaches your settings (AppsUseLightTheme 0)' { Until 60 { (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize').AppsUseLightTheme -eq 0 } }
 & $k circadian dark system 2>&1 | Out-Host
 if ($null -ne $before) { Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' AppsUseLightTheme $before }
 

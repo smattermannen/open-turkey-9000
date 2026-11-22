@@ -157,4 +157,31 @@ public class ParityTests
         Assert.True(pressed > 50, $"only {pressed} buttons pressed");
         Assert.False(gui.App.HasExited);
     }
+
+    // gui_freeze_lock: a scheduled freeze picked in its list is locked with
+    // a timer lock, confirmed before --yes (R-LOCK-12).
+    [Fact]
+    public void AFreezeScheduleIsLocked()
+    {
+        using var gui = new GuiApp("freeze-lock", prepare: dir => GuiApp.EditState(dir, s =>
+        {
+            s["freeze_schedules"] = new System.Text.Json.Nodes.JsonArray("daily 23:00 24:00");
+            s["freeze_schedule_locks"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject());
+        }));
+        gui.Page("blocks");
+        gui.Invoke("ModeCard_Frozen Chicken");
+        var item = gui.Window.FindFirstDescendant(c => c.ByControlType(ControlType.ListItem).And(c.ByName("daily 23:00 24:00")))
+                   ?? gui.FindName("daily 23:00 24:00");
+        if (item.Patterns.SelectionItem.IsSupported) item.Patterns.SelectionItem.Pattern.Select();
+        else gui.Invoke(item);
+        gui.Invoke("FreezeScheduleLock");
+        gui.Invoke("FreezeLocks_Timer_For");
+        gui.Find("FreezeLocks_Timer_Length").AsTextBox().Text = "2h";
+        gui.Invoke(gui.FindButton("Lock"));
+        gui.FindName("Set this lock?");
+        Assert.False(gui.Ran("freeze", "schedule", "lock"));
+        gui.Shot("freeze-lock-confirm");
+        gui.Invoke(gui.FindButton("Lock"));
+        gui.WaitFor(() => gui.Ran("freeze", "schedule", "lock", "1", "--for", "120m", "--yes"), "kc9k freeze schedule lock 1 --for 120m --yes");
+    }
 }

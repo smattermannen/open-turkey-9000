@@ -80,6 +80,15 @@ of their group and a row here; a finished item loses its row.
 | W25 | Strict mode's noexec: Software Restriction Policies: built; Windows 11 Home Unchecked | §3.8 | windows, device | laptop |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
+| N0 | Android plan (SPEC §8) agreed; §7's Android questions | §8, §7 | — | owner |
+| N1 | Android foundation: core, command layer, storage, design layer | §8.1, R-ANDROID-3 | android/CLAUDE.md | agent |
+| N2 | Android blocks, lists, extension, VPN layer, apps | §8.2, §8.3 | android/CLAUDE.md | agent, owner |
+| N3 | Android locks and passwords | §8.3, R-LOCK-1–12 | android/CLAUDE.md | agent, owner |
+| N4 | Android automation, places, modes, monk mode, Frozen Chicken | §8.3 | android/CLAUDE.md | agent, owner |
+| N5 | Android breaks, allowance, statistics, notifications | §8.3 | android/CLAUDE.md | agent, owner |
+| N6 | Android actions, bypass prevention, presets, recording, projects | §8.3 | android/CLAUDE.md | agent, owner |
+| N7 | Android protection, guided setup, circadian rhythm, accessibility layer | §8.4, R-ANDROID-4 | android/CLAUDE.md | agent, owner |
+| N8 | Android wide screens, accessibility, three phones end to end | §8.5, R-ANDROID-1 | android/CLAUDE.md | owner |
 
 Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
 (later)*, *Owner report 2026-11-17*, *Owner 2026-11-16*.
@@ -87,7 +96,8 @@ Done, never run on a real desktop (box): §0.1 *Owner report 2026-11-17
 ## 0. Fix what exists
 
 **Android is on hold until the Linux project is finished** (owner,
-2026-11-16): no Android work; its items below wait.
+2026-11-16): no Android work; its items below wait. Its plan is SPEC §8
+(owner, 2026-11-21), its items §3.1.
 
 ### 0.1 Code contradicting `SPEC.md`
 
@@ -1526,6 +1536,41 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
 - [ ] `C4` **Android places by map and GPS** (owner 2026-11-22; SPEC §3
   Place): the app has a map and GPS, so making a place opens the map
   (an area picked there, found by GPS) instead of reading Wi-Fi.
+
+### 3.1 The Android app (SPEC §8, owner 2026-11-21)
+
+Planned, not started: building waits until Linux is finished. Each phase
+is tested on GrapheneOS, stock Android (Pixel) and One UI (Samsung)
+(R-ANDROID-1); the phone tests need the owner.
+
+- [ ] `N0` SPEC §8 read and agreed by the owner; §7's three Android
+  questions answered (recovery, trusted Google account, Firefox signing). (S)
+- [ ] `N1` Foundation: Kotlin core (model, command layer deciding all
+  weakening, `Enforce`), SQLite in device-protected storage, cases shared
+  with the Go tests (weakening audit, unlock order, schedules); the built
+  Nokia mode and IronFox settings moved into blocks (§6 2026-11-21);
+  Compose design layer (cards, pills, theme, darkness) and navigation
+  (bottom bar / rail). Code words to the glossary (`whitelist`,
+  `loosen`, `Option`). (L)
+- [ ] `N2` Blocks, lists, phrase sets, social media settings, exceptions
+  through the extension (IronFox, Firefox); the VPN layer; apps (All apps,
+  app exceptions, roles, certificates), app suspension and the block
+  page; unsupported browsers suspended. (L)
+- [ ] `N3` Locks: every kind, layered, re-lock, extend, confirmation
+  (R-LOCK-12), setting locks, settings/access/block passwords, text lock
+  refusing multi-character input, trusted time. (M)
+- [ ] `N4` Automation: schedules, places (Wi-Fi and areas), modes, monk
+  mode (VPN drops all, Wi-Fi off), Frozen Chicken (lock screen, allowed
+  apps only); week view and list editor. (L)
+- [ ] `N5` Breaks, Pomodoro, allowance, reward, session limit, pause,
+  autostart, use, statistics, notifications. (M)
+- [ ] `N6` Actions and consequences, bypass prevention, custom actions,
+  presets, link and word recording, projects (phone to phone). (M)
+- [ ] `N7` Tamper protection, strict mode, guided setup, circadian rhythm
+  and wallpapers, the optional accessibility layer (screen text entries,
+  R-ANDROID-4). (M)
+- [ ] `N8` Wide screens (rail), TalkBack and keyboard, the three phones
+  end to end. (M)
 
 ## 4. Windows (owner 2026-11-21)
 

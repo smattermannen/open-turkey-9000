@@ -63,5 +63,6 @@ if ($null -ne $before) { Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\Curr
 
 & $k uninstall | Out-Host
 Check 'uninstall' { $LASTEXITCODE -eq 0 }
+Until 60 { -not (Get-Service kc9k -ErrorAction SilentlyContinue) } | Out-Null
 if ($failures -gt 0) { Write-Host "$failures check(s) failed"; exit 1 }
 Write-Host 'all checks passed'

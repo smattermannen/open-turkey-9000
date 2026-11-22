@@ -133,7 +133,8 @@
   owner SYSTEM, SYSTEM full, Administrators and Users read/run, protected),
   ProgramData\kc9k (`DataSDDL`: SYSTEM only), `kc9k.exe` copied (a running
   one renamed `.old`, removed at reboot), PATH (Machine, broadcast),
-  service `kc9k` (`kc9k.exe service`, automatic, recovery: restart 0 s,
+  service `kc9k` (created once the one an uninstall just removed is gone,
+  up to 30 s; `kc9k.exe service`, automatic, recovery: restart 0 s,
   5 s, 10 s, also on non-crash failures), started. The service exits as a
   failure when the installed `kc9k.exe` changes (size/time), so Windows
   starts the new one. Log: ProgramData\kc9k\kc9k.log (10 MB, one old

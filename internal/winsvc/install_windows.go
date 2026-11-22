@@ -170,7 +170,15 @@ func InstallService(exe string) error {
 		}
 		return nil
 	}
-	s, err = m.CreateService(ServiceName, exe, cfg, "service")
+	// Right after an uninstall the old service may still be going
+	// (ERROR_SERVICE_MARKED_FOR_DELETE): wait for it, up to 30 s.
+	for i := 0; ; i++ {
+		s, err = m.CreateService(ServiceName, exe, cfg, "service")
+		if !errors.Is(err, windows.ERROR_SERVICE_MARKED_FOR_DELETE) || i >= 30 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 	if err != nil {
 		return fmt.Errorf("create the service: %w", err)
 	}

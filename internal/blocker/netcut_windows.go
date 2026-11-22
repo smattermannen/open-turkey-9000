@@ -61,7 +61,7 @@ func adapters() ([]netAdapter, error) {
 	if !adapterCache.at.IsZero() && time.Since(adapterCache.at) < time.Minute {
 		return adapterCache.list, nil
 	}
-	list, err := adapters()
+	list, err := netAdapters()
 	if err != nil {
 		return nil, err
 	}

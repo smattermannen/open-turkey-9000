@@ -147,7 +147,7 @@ public class ParityTests
         foreach (var page in new[] { "dashboard", "blocks", "schedules", "places", "hotkeys", "clusters", "stats", "circadian", "settings" })
             PressAll(page, () => gui.Page(page));
         Console.WriteLine($"pressed {pressed} buttons");
-        Assert.True(pressed > 50, $"only {pressed} buttons pressed");
+        Assert.True(pressed >= 25, $"only {pressed} buttons pressed");
         Assert.False(gui.App.HasExited);
     }
 

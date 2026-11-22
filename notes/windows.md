@@ -54,6 +54,11 @@
   GitHub's job provisioner runs from `AppData\Local\Temp`: the script
   exempts the folders of such programs before strict mode, or strict mode
   closes them and the job is cancelled without a log.
+- `ci/windows_desktop_test.ps1 kc9k.exe` (W27, the `system` job's
+  "Desktop checks"): the runner's session is signed in, so the session
+  agent, hosts and firewall against a real site, the Edge policy, a
+  blocked app and a blocked window title closed through the agent, and
+  dark mode written to the signed-in person's settings are checked there.
 - `ci/windows_vm_test.ps1 kc9k.exe [-Reboots]`: what needs a desktop or a
   person (agent, titles, apps, notifications, the challenge in a console
   and in its window, the lock freeze, takeown against strict mode, gamma,
@@ -150,7 +155,8 @@
   Filtering Platform, not Windows Firewall. Persistent provider and
   sublayer (fixed GUIDs, weight 0xF000) of KC9K's own; filters at
   `ALE_AUTH_CONNECT_V4/V6`: blocked addresses in filters of 500 conditions
-  (same field: ORed), DoH resolvers + remote port 443 (`doh.go`, shared).
+  (same field: ORed), DoH resolvers + remote port 443 or 853 (DNS over
+  TLS and QUIC, W26; `doh.go`, shared).
   Monk mode's cut: in all four ALE connect/accept layers, permit loopback
   (weight 15) and block everything (weight 1). One transaction deletes
   every filter of the provider and adds the new ones. Persistent: in force
@@ -179,6 +185,14 @@
   `Google.Chrome`; a browser already there isn't installed again (Chrome:
   says it waits for the store listing). CI installs LibreWolf for real on
   manual runs (`workflow_dispatch`).
+- Firefox's registry (W26, `firefoxreg_windows.go`): KC9K's
+  policies.json is also mirrored into
+  `HKLM\SOFTWARE\Policies\Mozilla\Firefox` (objects as keys, lists as
+  keys of "1", "2"…, booleans and whole numbers as DWORDs), which the
+  Store's Firefox and portable ones read; only the policies KC9K wrote
+  (ProgramData\kc9k\firefox-registry.json) are taken out again. Firefox
+  reads Group Policy before policies.json, so both say the same.
+  LibreWolf reads its own key and keeps its distribution file.
 - The extension in Chrome and Edge needs the Chrome Web Store listing's ID
   (`ChromeStoreExtensionID`, empty until the owner publishes it): only
   then are they supported browsers and given the extension by policy
@@ -310,8 +324,16 @@
   portable programs (`userProgram`: a profile's folders other than
   AppData, `AppData\Local\Temp`, removable drives) are closed
   (`CloseNoexecPrograms`), except exempt folders; per-user installs in
-  AppData keep running; nothing is mounted
-  (`ApplyNoexec` does nothing).
+  AppData keep running. They don't start either (W25,
+  `noexec_windows.go`): `ApplyNoexec` keeps Software Restriction Policies
+  path rules (registry only, so Home has them; every user,
+  administrators included): each profile disallowed, its AppData allowed
+  but `AppData\Local\Temp` disallowed, the Public profile, Windows' Temp,
+  removable drives, and exempt folders allowed; rules synced each cycle
+  under keys named `{4B43394B-…}`; the Safer key is made (DefaultLevel
+  unrestricted, DLLs left out) only if absent, noted in
+  ProgramData\kc9k\srp-made, and is a lockdown target. `RemoveNoexec`
+  removes KC9K's rules, and the key if KC9K made it.
 - Strict mode's ways to SYSTEM (W20–W22, `strict_windows.go`;
   `applyStrictExtras` from `ApplyLockdown`, `removeStrictExtras` first in
   `RemoveLockdown`, whose failure is logged and retried but never keeps
@@ -336,7 +358,12 @@
   `root\subscription` denies `0xc001c` (writes) and event consumers made
   since the start are deleted with their bindings. The `Services` key
   tree is a lockdown target (deny entries inherited by every service's
-  key). Each put back or deleted is counted as tamper.
+  key). Each put back or deleted is counted as tamper. Virtual machines
+  (W24, every cycle, `closeVirtualMachines`): people's VM, WSL, Sandbox,
+  QEMU and Docker programs (`vmPrograms`, `isVMProcess`; WSL's bash only
+  in System32) closed with their children, Hyper-V's VM workers (`vmwp`)
+  ended, and the services behind them stopped (`vmServices`: LxssManager,
+  WSLService, vmcompute, vmms, CmService, docker…); logged, not counted.
 - Clock and time zone (W23, `clockguard_windows.go`, from `guardPlatform`):
   with tamper clock on and anything locked, the first cycle keeps the
   time zone (`GetDynamicTimeZoneInformation`) and the wall clock minus

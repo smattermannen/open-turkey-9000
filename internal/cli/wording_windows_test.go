@@ -15,6 +15,9 @@ func TestWindowsWording(t *testing.T) {
 		"X11", ".deb", "apt ", "/var/", "/usr/"}
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
+		if c.Name() == "completion" {
+			return // cobra's own, for Unix shells
+		}
 		for _, b := range bad {
 			for _, text := range []string{c.Short, c.Long, c.Example} {
 				if i := strings.Index(text, b); i >= 0 {

@@ -319,7 +319,7 @@ func lockdownTargets() []lockdownTarget {
 	// The whole Services tree (W20): a service's ImagePath written there
 	// runs as SYSTEM at the next boot. Windows Installer's policy key too.
 	for _, k := range []string{`SYSTEM\CurrentControlSet\Services\` + serviceName, `SYSTEM\CurrentControlSet\Services`,
-		`SYSTEM\CurrentControlSet\Control\SafeBoot`, `BCD00000000`, msiPolicyKey} {
+		`SYSTEM\CurrentControlSet\Control\SafeBoot`, `BCD00000000`, msiPolicyKey, saferKey} {
 		add(`MACHINE\`+k, true)
 	}
 	for _, b := range chromiumBrowsers {
@@ -748,11 +748,13 @@ func userProgram(p *winProc, exempt []string) bool {
 	return windows.GetDriveType(root) == windows.DRIVE_REMOVABLE
 }
 
-// ApplyNoexec: Windows mounts nothing; CloseNoexecPrograms does the work.
-func ApplyNoexec(exempt ...string) error { return nil }
+// ApplyNoexec keeps programs from starting where downloaded and portable
+// programs land, through Software Restriction Policies (W25,
+// noexec_windows.go); CloseNoexecPrograms closes those already running.
+func ApplyNoexec(exempt ...string) error { return applySRP(exempt) }
 
-// RemoveNoexec: nothing to undo.
-func RemoveNoexec(exempt ...string) error { return nil }
+// RemoveNoexec takes those rules out.
+func RemoveNoexec(exempt ...string) error { return removeSRP() }
 
 // CloseNoexecPrograms closes people's programs run from where downloaded
 // and portable programs land (userProgram), except in exempt folders.

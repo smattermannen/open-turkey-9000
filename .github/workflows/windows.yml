@@ -41,6 +41,10 @@ jobs:
         timeout-minutes: 12
         shell: pwsh
         run: pwsh ci/windows_service_test.ps1 (Resolve-Path kc9k.exe)
+      - name: Desktop checks (agent, apps, titles, dark mode)
+        timeout-minutes: 8
+        shell: pwsh
+        run: pwsh ci/windows_desktop_test.ps1 (Resolve-Path kc9k.exe)
       - name: Service log
         if: always()
         shell: pwsh

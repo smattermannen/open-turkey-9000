@@ -77,8 +77,8 @@ of their group and a row here; a finished item loses its row.
 | W21 | Strict mode: administrators' privileges | §3.8, principle 3 | windows, device | win-ci |
 | W22 | Strict mode: new accounts | §3.8 | windows, device | win-ci |
 | W23 | Clock and time zone put back (tamper clock) | §4.10 | windows, locks | win-ci |
-| W24 | Strict mode: VMs, WSL, Sandbox, containers | §3.8 | windows, device | win-ci, win-vm |
-| W25 | Strict mode's noexec: Software Restriction Policies | §3.8 | windows, device | win-ci |
+| W24 | Strict mode: VMs, WSL, Sandbox, containers: built; real WSL, Sandbox, Hyper-V Unchecked | §3.8 | windows, device | win-vm |
+| W25 | Strict mode's noexec: Software Restriction Policies: built; Windows 11 Home Unchecked | §3.8 | windows, device | laptop |
 | W26 | Other ways around: Firefox registry policies, DoT, IPv6 hosts | §3.13, §4.10 | windows, browsers | win-ci |
 | W27 | Desktop checks of `windows_vm_test.ps1` in CI | — | windows, testing | win-ci |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
@@ -1980,13 +1980,20 @@ their sites; their pages are an app's, not a browser's).
   jump of the system clock against the boot clock that internet time
   doesn't confirm is put back and counted. Needs: win-ci.
 - [ ] `W24` Strict mode: virtual machines, WSL, Windows Sandbox,
-  containers (S). SPEC §3.8 (strict mode: no containers/VMs). Was: nothing
+  containers (S). Built (2026-11-22): `closeVirtualMachines`;
+  `TestStrictVMProcesses`, and on `windows-latest` a VM program closed and
+  Docker's engine stopped during a lock. Unchecked: a real WSL
+  distribution, Sandbox and a Hyper-V VM (Needs win-vm). Was planned: SPEC §3.8 (strict mode: no containers/VMs). Was: nothing
   on Windows; a WSL distribution or VM has its own DNS and network path
   past hosts and possibly WFP. Build: while strict mode holds, people's
   WSL, Windows Sandbox, Hyper-V, VirtualBox, VMware, QEMU and Docker
   programs are closed and WSL's VMs shut down. Needs: win-ci (WSL on the
   runner), win-vm.
-- [ ] `W25` Strict mode's noexec on Windows (M). SPEC §3.8 (nothing runs
+- [ ] `W25` Strict mode's noexec on Windows (M). Built (2026-11-22):
+  `noexec_windows.go`; checked by `ci/windows_service_test.ps1` on
+  `windows-latest` (a program in Downloads refused during a lock, the
+  rules gone after). Unchecked: Windows 11 Home (SRP's enforcement there:
+  Needs laptop). Was planned: SPEC §3.8 (nothing runs
   from home or temporary folders except exempt folders), §6 2026-11-21
   (By Opus). Was: `ApplyNoexec` does nothing; downloaded programs are
   closed within a cycle (a short one still runs). Build (By Opus):
@@ -1995,14 +2002,21 @@ their sites; their pages are an app's, not a browser's).
   temporary folders and removable drives, exempt folders unrestricted, for
   every user including administrators; put back after. Closing stays.
   Needs: win-ci (a program refused for real).
-- [ ] `W26` Other ways around on Windows (S). SPEC §3.13 (policies),
+- [ ] `W26` Other ways around on Windows (S). Built (2026-11-22):
+  `firefoxreg_windows.go` (`TestRegPolicyFirefoxMirror`), port 853 in the
+  DoH filters (`TestWFPBlocks`); IPv6 through hosts checked by
+  `TestWFPHostsIPv6` on `windows-latest` (`::` lines only if it fails).
+  The Store's Firefox obeying: Unchecked (Needs win-vm). Was planned: SPEC §3.13 (policies),
   §4.10. Firefox-family policies also in the registry
   (`HKLM\SOFTWARE\Policies\Mozilla\Firefox`, which Store/MSIX and portable
   Firefox read where no `distribution` folder is found); DNS over TLS/QUIC
   (port 853) to the DoH resolvers blocked like DoH; IPv6: a hosts entry
   (`0.0.0.0` only) checked to answer AAAA queries too, `::` lines added if
   not. Needs: win-ci.
-- [ ] `W27` Desktop checks in CI (M). `notes/testing.md`. GitHub's
+- [ ] `W27` Desktop checks in CI (M). Built (2026-11-22):
+  `ci/windows_desktop_test.ps1` in `windows.yml`. Stays in the VM script:
+  what needs a person (the challenge window and console typed in,
+  notifications seen, gamma looked at) or a reboot. Was planned: `notes/testing.md`. GitHub's
   `windows-latest` has a signed-in desktop: the checks of
   `ci/windows_vm_test.ps1` that need one but no person or reboot move to
   `windows.yml` (agent running in the session, titles, apps killed, the

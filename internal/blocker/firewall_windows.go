@@ -116,8 +116,10 @@ func wfpFilters(ipv4, ipv6 []string, cut bool) []winapi.Filter {
 	}
 	chunks(winapi.LayerConnectV4, v4(ipv4))
 	chunks(winapi.LayerConnectV6, v6(ipv6))
-	add(wfpNameDoH, winapi.LayerConnectV4, 10, false, append(v4(dohServersIPv4), winapi.RemotePort(443)))
-	add(wfpNameDoH, winapi.LayerConnectV6, 10, false, append(v6(dohServersIPv6), winapi.RemotePort(443)))
+	// DNS over HTTPS (443), and over TLS and QUIC (853), W26: conditions
+	// on one field are ORed, so either port to any of them.
+	add(wfpNameDoH, winapi.LayerConnectV4, 10, false, append(v4(dohServersIPv4), winapi.RemotePort(443), winapi.RemotePort(853)))
+	add(wfpNameDoH, winapi.LayerConnectV6, 10, false, append(v6(dohServersIPv6), winapi.RemotePort(443), winapi.RemotePort(853)))
 	return out
 }
 

@@ -4,6 +4,8 @@
 # PowerShell; it locks blocks for minutes and changes boot settings.
 # Never on a computer you use, never on the owner's laptop.
 #   pwsh ci/windows_vm_test.ps1 path\to\kc9k.exe
+# The automatic checks that need only a signed-in desktop also run in CI
+# (ci/windows_desktop_test.ps1, W27); this script keeps them for a VM run.
 # Each automatic check prints PASS or FAIL; steps marked ASK wait for you
 # to look and answer y or n. The end prints the failures.
 param([Parameter(Mandatory = $true)][string]$Exe, [switch]$Reboots)

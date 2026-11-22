@@ -46,6 +46,11 @@ of their group and a row here; a finished item loses its row.
 | 2.13 | Accountability partner: reports, alerts, partner-held passwords, unlock approval | §4.15 | — | agent |
 | 2.14 | Website: like Cold Turkey's in kind; hosting to choose | §4.16 | — | agent, owner |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
+| 2.15 | Remove search results that lead to blacklisted addresses | R-PAGE-2 | extension | agent, box |
+| 2.16 | Dark pages switch: "Show dark web pages while dark mode is on" turns on the browser's dark mode | §4.10 | circadian, browsers, gui, gui-windows | agent, box |
+| A15 | Enter presses OK in every dialog (GTK and Windows GUI) | R-GUI-3 | gui, gui-windows | agent |
+| C3 | Android: tapping jumps to the top; app works like the computer's GUI | R-GUI-3 | android | agent |
+| C4 | Android places: map and GPS instead of Wi-Fi | §3 Place | android, automation | agent |
 | W50 | Windows GUI froze the whole laptop (forced power-off): find and fix first | principle 1 | gui-windows, windows | win-vm, laptop |
 | W51 | Screen went black, "overrun detection" warning when switching settings | §4.10 | gui-windows, windows | win-vm, laptop |
 | W52 | Blank white classic window over the GUI (crash?) | R-GUI-3 | gui-windows | win-vm |
@@ -1458,6 +1463,20 @@ Only items not simply Built.
   approval; no screenshots.
 - **2.14 Website** (M, owner 2026-11-22; SPEC §4.16): Not built. Content
   per SPEC §4.16; where it is hosted is the owner's choice when built.
+- **2.15 Search results from blacklisted addresses** (M, owner
+  2026-11-22; R-PAGE-2): Not built. The extension removes each result on a
+  search results page whose link goes to a blacklisted address (with
+  `reddit.com` blacklisted, no Reddit results). Done when: a browser test
+  on the supported engines shows no result to a blacklisted address and
+  the other results untouched.
+- **2.16 Dark pages turn on the browser's dark mode** (S, owner
+  2026-11-22; §4.10): the switch "Show light web pages dark while dark
+  mode is on" is renamed "Show dark web pages while dark mode is on" (GTK
+  GUI, Windows GUI, `kc9k circadian dark-pages` help) and turns on the
+  browser's own dark mode (its theme and `prefers-color-scheme: dark`,
+  which LibreWolf now reports as light, see `2.1`). Done when: with the
+  switch on and dark mode on, a supported browser is dark and a site with
+  its own dark design shows it.
 - **2.9 Tamper settings live** (S): built 2026-11-21 (§1 *§4.10 Tamper
   settings*). Built in Chrome-family browsers (2026-11-21, cloud container,
   Chrome 158.0.8127.36, daemon as root, real policies): `guest` on, each
@@ -1498,6 +1517,15 @@ while the Android app is built (its §0 items, `android/CLAUDE.md`).
 - [ ] `C1` Build for the brothers' computers with `TAGS=devmaster`
   (owner 2026-11-18; the master password stays with the owner).
 - [ ] `C2` Remove `ci/vm.sh`; on the laptop remove `/etc/sudoers.d/99-claude-test`.
+- [ ] `C3` **Android app like the computer's GUI** (owner 2026-11-22;
+  R-GUI-3): every tap moves the view back to the top of the page; it must
+  stay where it is. Beyond that, everything in the app works roughly as on
+  the computer (same pages and behaviour). Done when: tapping anywhere on
+  a long page keeps its scroll position (test), and the app's pages match
+  the GTK GUI's except where Android differs (`C4`).
+- [ ] `C4` **Android places by map and GPS** (owner 2026-11-22; SPEC §3
+  Place): the app has a map and GPS, so making a place opens the map
+  (an area picked there, found by GPS) instead of reading Wi-Fi.
 
 ## 4. Windows (owner 2026-11-21)
 
@@ -2308,6 +2336,10 @@ Import:
 
 Both platforms:
 
+- [ ] `A15` **Enter presses OK** (owner 2026-11-22; R-GUI-3): in every
+  dialog of the GTK and Windows GUIs, Enter presses the OK (default)
+  button. Done when: a GUI test per platform opens dialogs, presses Enter
+  and sees each one accepted.
 - [ ] `A14` **Automation clip curves bend one way only** (S; §4.10
   automation clips). Dragging a point far up makes a sharp corner;
   dragging it down never does (it stays a soft curve). Same on Linux

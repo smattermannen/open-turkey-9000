@@ -39,7 +39,7 @@ decisions in §6 by date.
 | Passwords | §3.11, §4.10 Passwords |
 | Recording, presets | §3.12, §4.4, R-LIST-2, R-PHRASE-10 |
 | The program: CLI, daemon, extension, browsers | §3.13, §4.10 Extension/Browsers/Tamper protection/Browser settings, §4.12, R-LOCK-9 |
-| Page behaviour in the browser | R-PAGE-1, R-LIST-4–5, R-PHRASE-4–8 |
+| Page behaviour in the browser | R-PAGE-1–2, R-LIST-4–5, R-PHRASE-4–8 |
 | Overview, statistics | §4.1, §4.9 |
 | Settings, notifications, circadian rhythm, wallpapers | §4.10, R-MODE-5 |
 | Install, uninstall | §4.11, R-LOCK-9 |
@@ -225,7 +225,7 @@ tamper protection settings can't be turned off.
 | **Pause** | One-off lift until a set time. |
 | **Autostart** | Switches a block on: once, time of day on set days, sign-in/wake, or next block window. |
 | **Schedule** | Named weekly windows kept outside blocks (*Evening*, *Weekend*), made on the Schedules page. A block or mode uses any number of schedules besides windows of its own (*Apply schedule*); changing a schedule changes everything using it. Overlapping windows count once. |
-| **Place** | A set of Wi-Fi access points (no GPS), made on the Places page or from a block. The computer is there when as many of them as the user chooses (default 2) are in range. |
+| **Place** | A set of Wi-Fi access points (no GPS), made on the Places page or from a block. The computer is there when as many of them as the user chooses (default 2) are in range. On Android a place is an area picked on a map and found by GPS; the Places page opens the map instead of reading Wi-Fi (owner 2026-11-22). |
 | **Place rule** | A place in a block's automation; a block may have **any number**. Arriving there switches the block as its default says (enabled by default: off; disabled by default: on). A place rule has **no actions of its own**. |
 | **Automation** | What switches an active block (or a mode's blocks, or monk mode, or Frozen Chicken) by itself: its windows (its own and its schedules') and its places. The user sets the block **Enabled by default** (a window or a place turns it off) or **Disabled by default** (a window or a place turns it on). With both a schedule and places, the user sets whether switching needs **both** (in a window and at a place at once) or **either** (one is enough). Without a schedule or places the block is continuous. A block in a mode keeps its own automation, unused, until it is taken out. |
 
@@ -527,7 +527,9 @@ GUI and CLI offer the same functions.
     - dark mode = system dark mode: system default, always light, always
       dark, or light between two times;
     - dark pages follow dark mode, with exempt sites; the extension's
-      toolbar button exempts a site (or shows it dark again);
+      toolbar button exempts a site (or shows it dark again); the switch is
+      *Show dark web pages while dark mode is on* and turns on the
+      browser's own dark mode (owner 2026-11-22);
     - not lockable;
     - never overrides the user: never puts a level back; a manual change
       pauses that clip until its next point or resume; a hand-picked
@@ -667,10 +669,11 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 **GUI**
 - **R-GUI-1** Every duration field takes days, hours and minutes (or typed text such as `2d 4h`, `300m`); never minutes only. A value outside the allowed range is never changed silently: the field says why and keeps what was typed.
 - **R-GUI-2** Every timer lock is set either for a duration (R-GUI-1) or until a date and time picked on a calendar (e.g. 24 December 2099, 18:00).
-- **R-GUI-3** The GUI follows the GNOME Human Interface Guidelines and the usual usability heuristics: tasks first (the overview shows what is on, until when and how locked; common tasks one or two clicks away); one primary action per view; advanced options behind *More options*; plain glossary words, short sentences; lock state shown wherever a locked thing appears; controls that can't be used are disabled with the reason; input checked where it is typed; one widget per concept everywhere; everything reachable by keyboard; the window never freezes while a command runs.
+- **R-GUI-3** The GUI follows the GNOME Human Interface Guidelines and the usual usability heuristics: tasks first (the overview shows what is on, until when and how locked; common tasks one or two clicks away); one primary action per view; advanced options behind *More options*; plain glossary words, short sentences; lock state shown wherever a locked thing appears; controls that can't be used are disabled with the reason; input checked where it is typed; one widget per concept everywhere; everything reachable by keyboard (Enter presses a dialog's OK button, owner 2026-11-22); the window never freezes while a command runs. The Android app works like the computer's GUI, with the same pages and behaviour; tapping something never moves the view back to the top of the page (owner 2026-11-22).
 
 **Browsing**
 - **R-PAGE-1** No flashing: a page that a list or phrase set will block, replace or give a look action never shows its content without it, also when moving within a site. Content stays hidden until judged, at most 3 s (then shown and judged as usual).
+- **R-PAGE-2** Search results that lead to a blacklisted address are removed from search results pages: with `reddit.com` blacklisted, no results from Reddit are shown (owner 2026-11-22).
 
 **Events**
 - **R-EVENT-1** At most one event per tab and blocked site per minute. Restored tabs at browser start, preloaded pages and embedded frames don't count.
@@ -774,6 +777,7 @@ Decisions not already written into §1–5:
 - 2026-11-22 (By Opus): The Windows GUI's notification-area menu offers only actions that strengthen (start a block or a mode, monk mode, Frozen Chicken, a new block); stopping, unlocking and breaks stay in the window. A quick way that only weakens would make the tray an easier way past a block than the window, which locks and their confirmations never should be; each action brings the window forward first, so its questions and refusals are seen.
 - 2026-11-22 (By Opus): The Windows GUI's start arguments (its jump list, a shortcut, a second start) only open a page or one of the GUI's own dialogs (New block…, Monk mode…, Frozen Chicken…), never a kc9k command: a shortcut that started or stopped a block would act outside the window's questions and lock confirmations (R-LOCK-12), and one that weakened would be a way past them. The GUI's first view, while no block exists or no supported browser's extension has checked in, is a list of what is left with each step's button and the stricter options named last (2026-11-14 no wizard, 2026-11-21 guided setup): it switches nothing on.
 - 2026-11-22 (By claude): A Windows session agent that crashes and says so (Go's crash report on its output, exit code 2) or ends by itself is logged, not counted as tamper; only one ended from outside is (§3.10 Tamper), as Linux counts no self-reported daemon crash. *(By claude)*
+- 2026-11-22 (owner): The dark pages switch becomes *Show dark web pages while dark mode is on* and turns on the browser's own dark mode (§4.10); the extension removes search results that lead to blacklisted addresses (R-PAGE-2); Enter presses a dialog's OK button (R-GUI-3); the Android app works like the computer's GUI and never jumps to the top of the page when something is tapped (R-GUI-3); on Android places are picked on a map and found by GPS instead of Wi-Fi (§3 Place).
 
 ## 7. Open decisions
 

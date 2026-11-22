@@ -44,7 +44,7 @@ decisions in §6 by date.
 | Settings, notifications, circadian rhythm, wallpapers | §4.10, R-MODE-5 |
 | Install, uninstall | §4.11, R-LOCK-9 |
 | Hotkeys | §4.13 |
-| Cross-device sync, accountability partner, website, one-click installer | §3.13, §4.11, §4.14–4.16, §6 2026-11-22 (owner), §7 |
+| Cross-device sync, accountability partner, website, one-click installer | §3.13, §4.11, §4.14–4.16, §6 2026-11-22 (owner) |
 | GUI rules | R-GUI-1–3 |
 | Decisions, open decisions | §6, §7 |
 
@@ -99,8 +99,11 @@ Windows support, built now (owner 2026-11-21, §6); the Android app after.
 4. The user is never trapped by a bug: recovery (`kc9k.nofreeze`, recovery
    mode) exists unless no-escape is on.
 5. A refused weakening is logged, never counted by bypass prevention.
-6. Free forever: no paid tiers, accounts or telemetry. Data stays local;
-   outside queries (DNS) are stated plainly.
+6. Free forever: no paid tiers or telemetry. Data stays local;
+   outside queries (DNS) are stated plainly. The one exception is the
+   **KC9K account**, needed only for cross-device sync and the
+   accountability partner (owner 2026-11-22): with it, what those send is
+   kept in KC9K's cloud. Without an account nothing leaves the device.
 7. Build only what improves the experience. Behaviour changes are settings,
    not new defaults.
 8. Platform: Linux Mint Cinnamon on X11. Extension in LibreWolf and Google
@@ -303,7 +306,8 @@ mode unless no-escape is on.
 | **Daemon** | Service re-applying everything every few seconds: a systemd service on Linux, a Windows service on Windows. |
 | **Layer** | Hosts file, firewall, browser policy, closing apps. The extension works on top. |
 | **Extension** | Bundled browser extension. Required while anything is locked or uses websites; browsers without it are closed. |
-| **Supported browser** | LibreWolf, Chrome or Chromium with the extension; to come on every platform: Chrome, Edge, Firefox and Bing (owner 2026-11-22). KC9K shows which are installed, whether each has it, and installs it in one click. |
+| **Supported browser** | LibreWolf, Chrome or Chromium with the extension; Chrome, Edge, Firefox and Bing (the Microsoft Bing browser app) on Linux, Windows and Android (owner 2026-11-22). KC9K shows which are installed, whether each has it, and installs it in one click. |
+| **KC9K account** | The user's account in KC9K's cloud; needed only for cross-device sync and the accountability partner (principle 6). |
 | **Cross-device sync** | Copying the whole setup between the user's devices with two buttons: **Upload all** and **Download all** (§4.14). Not a project: a project only adds; Download all replaces. |
 | **Device-specific item** | Something that belongs to one device and is never synced (§4.14). |
 | **Accountability partner** | A person the user chooses to share their KC9K with (§4.15). |
@@ -577,19 +581,39 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **4.13 Hotkeys** (owner, 2026-11-17): their own page in the sidebar. Each
   hotkey: its keys, its hotkey actions in order (§3.9), *Run without
   confirmation* (§6 2026-11-14); add, change, remove, *Save as preset*.
-- **4.14 Cross-device sync** (owner, 2026-11-22), on every platform:
-  *Upload all* sends this device's whole setup; *Download all* replaces
-  this device's whole setup with the last upload. To begin with
-  everything is copied one to one except device-specific items: blocks,
-  lists, phrase sets, locks and their state, settings, presets. What was
-  unlocked and deleted on one device is unlocked and deleted on the other
-  after Upload all there and Download all here. Where uploads are kept,
-  which items are device-specific, and how Download all meets R-WEAK-1:
-  §7.
-- **4.15 Accountability partner** (owner, 2026-11-22), on every platform.
-  What the partner sees and can do: §7.
-- **4.16 Website** (owner, 2026-11-22): a really neat website for KC9K,
-  covering every platform. Content and hosting: §7.
+- **4.14 Cross-device sync** (owner, 2026-11-22), on Linux, Windows and
+  Android, signed in to a KC9K account: *Upload all* sends this device's
+  whole setup to KC9K's cloud; *Download all* replaces this device's whole
+  setup with the last upload. To begin with everything is copied one to
+  one except device-specific items: blocks, lists, phrase sets, locks and
+  their state, settings, presets. Download all is not refused by a lock
+  or counted as weakening (an exception to R-WEAK-1): what was unlocked
+  and deleted on one device is unlocked and deleted on the other after
+  Upload all there and Download all here; unlocking still needed the
+  lock to be lifted on the device that uploaded.
+  **Device-specific items** (never synced): places (Wi-Fi networks),
+  affected users and user names, strict mode, no-escape, factory reset
+  protection and the firmware lock, circadian rhythm's screens and
+  hardware, wallpapers, apps' paths and file fingerprints, statistics,
+  the device's own passwords for its system (root, firmware). *(By Opus:
+  the owner called the list obvious)*
+- **4.15 Accountability partner** (owner, 2026-11-22), on Linux, Windows
+  and Android, through the KC9K account: everything similar software
+  offers, except screenshots. The user invites a partner; the partner
+  gets activity reports (daily or weekly: time used per site and app,
+  times blocked, top blocked); alerts as they happen for bypass
+  prevention events, a block switched off, unlocked or deleted, a lock
+  ended early, tamper protection events, KC9K stopped, uninstalled or
+  not heard from; the partner can hold password locks (§3.4) and the
+  settings password, and approve unlock requests; reports and alerts
+  by email and on the partner's own KC9K. Several partners possible;
+  removing one is weakening (refused while locked).
+- **4.16 Website** (owner, 2026-11-22): KC9K's public website, like Cold
+  Turkey's in kind (own design, not a copy): what KC9K does, the
+  one-click installer for Linux, Windows and Android, free forever,
+  frequently asked questions, sign-in to the KC9K account. "No
+  user-facing docs" (`CLAUDE.md`) keeps the repository slim; it doesn't
+  apply to the website.
 
 ## 5. Rules
 
@@ -745,37 +769,9 @@ Decisions not already written into §1–5:
 - 2026-11-22 (By Opus): Windows' hardware clock (§4.10 clock check) is read from what Windows itself logs at each boot, the time the operating system started (Kernel-General event 12, taken from the hardware clock before any time sync), plus the boot clock since: Windows lets programs read the hardware clock no other way, and the check only ever gives back less time with it. A cleared log leaves internet time alone, as before.
 - 2026-11-22 (By Opus): Tamper protection's "block time and date changes" on Windows, while anything is locked: a changed time zone is put back and counted, and a jump of the system clock against the boot clock that internet time doesn't confirm is put back and counted. On Windows any user may change the time zone and an administrator the clock, and schedules read local time, so ignoring the clock for trusted time alone left schedules open to it.
 - 2026-11-22 (By Opus): The firmware lock on Windows uses the firmware's own WMI interfaces (Dell, Lenovo, HP), which are the ones Linux's `firmware-attributes` drivers use, rather than the vendors' tools (Dell Command | Configure, HP BCU): they come with the firmware and Windows, need nothing installed, and keep one behaviour on both systems.
-- 2026-11-22 (owner): KC9K gets cross-device sync, a one-click installer, Chrome, Edge, Firefox and Bing as supported browsers, a really neat website and an accountability partner function, all on every platform (Linux, Windows, Android). Sync is two buttons, Upload all and Download all; to begin with everything is copied one to one except device-specific items, so a block unlocked and deleted on the computer is unlocked and deleted on the phone after Upload all there and Download all on the phone (§4.14). Open parts: §7.
+- 2026-11-22 (owner): KC9K gets cross-device sync, a one-click installer, Chrome, Edge, Firefox and Bing as supported browsers, a really neat website and an accountability partner function, all on every platform (Linux, Windows, Android). Sync is two buttons, Upload all and Download all; to begin with everything is copied one to one except device-specific items, so a block unlocked and deleted on the computer is unlocked and deleted on the phone after Upload all there and Download all on the phone (§4.14). Settled the same day (owner): sync goes to KC9K's cloud and needs a KC9K account (principle 6 changed for it); Download all replaces everything even while locked; the accountability partner does what similar software does except screenshots; Bing means the Bing browser app; the website is like Cold Turkey's; every platform means Linux, Windows and Android.
 - 2026-11-22 (By Opus): One-click browser install on Windows (§4.10) runs winget as SYSTEM for the whole computer, with the browser's published package; the download is an outside query the command states (principle 6).
 
 ## 7. Open decisions
 
-For the owner (from §6 2026-11-22):
-
-- **Where sync uploads go.** Principle 6 says no accounts and data stays
-  local. Options: a file the user moves between devices themselves (a
-  USB stick, their own cloud drive folder); a server of the owner's with
-  an account or a sync code; the devices talking directly on the same
-  network.
-- **Download all against a lock.** One to one means a download can
-  replace a locked block on this device with an unlocked or deleted one,
-  which R-WEAK-1 refuses everywhere else. Options: Download all only
-  while nothing here is locked (or refused per locked item and named);
-  it replaces everything, and the upload carries the lock state, so
-  unlocking still needed the lock to be lifted on the other device; it
-  needs the settings password when one is set.
-- **Device-specific items.** Proposed: places (Wi-Fi networks), affected
-  users and user names, firmware lock, strict mode and no-escape, the
-  circadian rhythm's screens, apps' paths and fingerprints, desktop
-  wallpapers, statistics.
-- **Accountability partner.** What it is: reports to the partner (times
-  blocked, bypass prevention events, unlocks), the partner holding
-  password locks, the partner approving unlocks, or several of these; and
-  how it reaches the partner without accounts or telemetry (principle 6).
-- **Bing** as a supported browser: the Microsoft Bing app (a browser on
-  Android and iOS), Edge, or Bing search (already a browser setting,
-  §4.10).
-- **Website.** Its content (download links for the one-click installers,
-  what KC9K does), where it is hosted, and how it fits "no user-facing
-  docs" (`CLAUDE.md`).
-- **Every platform.** Linux, Windows and Android; macOS and iOS too?
+None.

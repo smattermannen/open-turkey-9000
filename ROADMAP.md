@@ -54,12 +54,12 @@ of their group and a row here; a finished item loses its row.
 | W55 | Import project in the Windows GUI | §3 Project | gui-windows, db-project | agent, win-ci |
 | W56 | A Linux project imports safely on Windows (Linux app unchanged) | §3 Project, R-WEAK-1/2 | db-project, windows | agent, win-ci |
 | A14 | Automation clip curves: sharp going up, soft going down; make both soft | §4.10 | circadian, gui, gui-windows | agent |
-| W1 | Windows service, session agent, named pipe, install/uninstall: built, checked on `windows-latest`; agent and console Unchecked | §3.13 | windows | win-vm |
+| W1 | Windows service, session agent, named pipe, install/uninstall: built, checked on `windows-latest` (the agent in a signed-in session too, 2026-11-22); the console's raw mode Unchecked | §3.13 | windows | win-vm |
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
-| W3 | Windows apps and desktop: built, Unchecked on a desktop | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
+| W3 | Windows apps and desktop: built; apps and titles closed through the agent checked on `windows-latest` (2026-11-22); notifications, the challenge window, hotkeys, the lock freeze Unchecked | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
 | W4 | Windows GUI: C# / WinUI 3. Built, checked in CI against the fake kc9k and the real kc9k.exe with its service (2026-11-21); Narrator, scaling, drag and drop, a real desktop: Unchecked | §4.1–4.13, R-GUI-1–3 | gui-windows | win-vm, laptop |
 | W5 | Windows tamper protection: built, checked on `windows-latest`; boot/Safe Mode Unchecked; firmware lock in W19 | §3.10, §4.10 | windows | win-vm, laptop |
-| W6 | Windows circadian rhythm and wallpapers: built, Unchecked | §4.10 | windows | win-vm, laptop |
+| W6 | Windows circadian rhythm and wallpapers: built; dark mode checked on `windows-latest` (2026-11-22); gamma, wallpaper, brightness, Night light Unchecked | §4.10 | windows | win-vm, laptop |
 | W7 | Windows MSI: built, checked in CI (install, removal, refused while locked, reinstall guard, 2026-11-21); signing needs the owner's certificate; Apps & features by a person Unchecked | §4.11 | install-windows | owner, win-vm |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
 | W36 | Windows GUI: jump list and start arguments | §4.10 | gui-windows | agent, win-ci, win-vm |
@@ -68,18 +68,11 @@ of their group and a row here; a finished item loses its row.
 | W42 | Signing proven with a throwaway certificate; Azure Artifact Signing | §6 2026-11-21 | install-windows | win-ci, owner |
 | W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
-| W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`): built; a real Safe Mode boot Unchecked | R-ESCAPE-1 | windows, device | win-vm |
 | W18 | One-click browser install on Windows (winget): built; as SYSTEM Unchecked | §4.10 | windows, browsers | win-vm |
 | W19 | Firmware lock on Windows (vendors' firmware WMI): built; real firmware Unchecked | §3.8, §4.10 | windows, device | laptop, owner |
-| W20 | Strict mode: Windows' ways to SYSTEM | §3.8, principle 3 | windows, device | win-ci |
-| W21 | Strict mode: administrators' privileges | §3.8, principle 3 | windows, device | win-ci |
-| W22 | Strict mode: new accounts | §3.8 | windows, device | win-ci |
-| W23 | Clock and time zone put back (tamper clock) | §4.10 | windows, locks | win-ci |
 | W24 | Strict mode: VMs, WSL, Sandbox, containers: built; real WSL, Sandbox, Hyper-V Unchecked | §3.8 | windows, device | win-vm |
 | W25 | Strict mode's noexec: Software Restriction Policies: built; Windows 11 Home Unchecked | §3.8 | windows, device | laptop |
-| W26 | Other ways around: Firefox registry policies, DoT, IPv6 hosts | §3.13, §4.10 | windows, browsers | win-ci |
-| W27 | Desktop checks of `windows_vm_test.ps1` in CI | — | windows, testing | win-ci |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
@@ -1563,9 +1556,10 @@ where its item needs it and the Linux tests prove nothing changed.
   its restart settings, PATH, forwarded commands and exit codes, a file
   read as the caller (the database refused to an administrator), the data
   folder closed to administrators, uninstall refused while locked, then
-  clean, data kept. The agent and the
-  console's raw mode need a signed-in desktop: Needs win-vm
-  (`ci/windows_vm_test.ps1`, written 2026-11-21, never run).
+  clean, data kept. The agent: checked on `windows-latest`'s signed-in
+  desktop (`ci/windows_desktop_test.ps1`, 2026-11-22), which found it
+  ending every 3 s (it asked for access passwords and couldn't open the
+  database; fixed). The console's raw mode needs a person: Needs win-vm.
 - [ ] `W2` Web layers (L). Built (2026-11-21): hosts (+ DNS cache
   flush), WFP firewall (persistent provider, sublayer, filters; monk mode's
   cut), Chromium policies in the registry (Chrome, Chromium, Edge, Brave,
@@ -1585,8 +1579,10 @@ where its item needs it and the Linux tests prove nothing changed.
   logout freeze's hold, monk mode's adapters, hotkeys (agent
   `RegisterHotKey`), custom actions, the challenge window (Win32, Raw
   Input for injected keys). Checked on `windows-latest`: process kill
-  tree. The rest needs a desktop: Needs win-vm, laptop: run
-  `ci/windows_vm_test.ps1` (written 2026-11-21, never run).
+  tree; on its signed-in desktop (2026-11-22, `ci/windows_desktop_test.ps1`):
+  a blocked app and a blocked window title closed through the agent.
+  Notifications seen, the challenge window, hotkeys, the lock freeze need
+  a person: Needs win-vm, laptop (`ci/windows_vm_test.ps1`).
 - [ ] `W4` GUI (L). Native, C# on WinUI 3, .NET LTS, unpackaged and
   self-contained, in `windows/gui/` (SPEC §6: no browser, no web view).
   Reads `kc9k gui-state` and `kc9k stats --json`, runs `kc9k` commands
@@ -1653,9 +1649,10 @@ where its item needs it and the Linux tests prove nothing changed.
   allowed by `GdiIcmGammaRange`), wallpapers (copied where desktops may
   read them), dark mode, Night light read (Windows offers no way to switch
   it: the person is asked), laptop panel brightness (WMI), external
-  screens (DDC/CI, dxva2), the sleep hook by power events. Needs win-vm
-  (gamma, wallpaper, dark mode) and laptop (panel, external screens,
-  Night light).
+  screens (DDC/CI, dxva2), the sleep hook by power events. Dark mode
+  checked on `windows-latest`'s signed-in desktop (2026-11-22). Needs
+  win-vm (gamma, wallpaper) and laptop (panel, external screens, Night
+  light).
 - [ ] `W7` Installer and release (M). MSI (WiX), with the service, the
   agent and the GUI; `installer` tamper setting (`prepare-install`)
   refuses removal and downgrade while locked, as the `.deb` does.
@@ -1896,7 +1893,7 @@ their sites; their pages are an app's, not a browser's).
   (`commandLine`) and environment (its PEB, `ReadProcessMemory`) and
   closes it as on Linux (`parseRemoteControl`, shared). Needs: win-ci
   (a renamed test program with the switches).
-- [ ] `W12` Scripts and script hosts on Windows (S). Built (2026-11-22):
+- [x] `W12` Scripts and script hosts on Windows (S). Built (2026-11-22):
   `scripthosts.go` (tested on Linux), `procScript`, `matchScript`;
   checked on `windows-latest` by `TestWinProcScriptEntries` (a batch file,
   a PowerShell script, a Python script closed; another cmd left) and
@@ -1927,7 +1924,7 @@ their sites; their pages are an app's, not a browser's).
   recovery environment is off and no-escape isn't on, the F8 boot menu
   (`bootmenupolicy Legacy`) keeps Safe Mode reachable; no-escape turns it
   off. Needs: win-ci (fakes), win-vm (`-Reboots`).
-- [ ] `W14` Guest account (S). Built (2026-11-22): `syncGuestAccount`,
+- [x] `W14` Guest account (S). Built (2026-11-22): `syncGuestAccount`,
   `winapi.LocalAccounts`, `SetAccountDisabled`; checked on
   `windows-latest` (`TestWinGuestAccount`: off while on, back on only if
   it was). A person signing in as Guest: not possible while off. Was
@@ -1936,7 +1933,7 @@ their sites; their pages are an app's, not a browser's).
   nothing. Build: the built-in Guest account (RID 501) is disabled while
   the setting is on, put back after; turned on by hand meanwhile: put back
   and counted. Needs: win-ci.
-- [ ] `W15` Guided setup on Windows (S). Built (2026-11-22):
+- [x] `W15` Guided setup on Windows (S). Built (2026-11-22):
   `guidedsetup_windows.go`; `TestGuidedSetupWindows` (fake accounts) and
   `TestLocalAdminsForReal` (the runner's accounts) on `windows-latest`.
   GUI: on Windows `kc9k guided-setup --json` has `other-admins`,
@@ -1949,7 +1946,7 @@ their sites; their pages are an app's, not a browser's).
   password), installer media guard, firmware lock, Safe Mode and other
   systems (info), no-escape last. GUI: the step IDs and texts of `kc9k
   guided-setup --json` differ on Windows.
-- [ ] `W16` Windows wording (S). Built (2026-11-22): `cli/wording.go`,
+- [x] `W16` Windows wording (S). Built (2026-11-22): `cli/wording.go`,
   `TestWindowsWording` (every command's texts on `windows-latest`);
   `browser` install and `firmware-lock` texts change with W18 and W19.
   GUI: help texts shown on Windows come from `kc9k.exe` and now name
@@ -1957,7 +1954,7 @@ their sites; their pages are an app's, not a browser's).
   messages name `sudo`, GRUB, `kc9k.nofreeze`, `/etc/hosts`, `systemctl`,
   `journalctl` on Windows too. Build: each says Windows' own on Windows
   (the service, Safe Mode, the hosts file, `kc9k.log`). GUI: help texts.
-- [ ] `W17` Hardware clock on Windows (S). Built (2026-11-22):
+- [x] `W17` Hardware clock on Windows (S). Built (2026-11-22):
   `enforce/rtc_*.go`; `TestParseBootEvent` on both systems,
   `TestWinHardwareClockForReal` on `windows-latest`. Was planned: SPEC §4.10 (clock: check
   against hardware clock and internet time). Was: no reader; the clock
@@ -1996,7 +1993,9 @@ their sites; their pages are an app's, not a browser's).
   vendors' tools (Dell Command | Configure, HP BCU) are not needed.
   Pure parts (reading each vendor's answer) tested on Linux. Needs: laptop
   (which vendor), owner.
-- [ ] `W20` Strict mode: Windows' ways to SYSTEM (M). Built (2026-11-22):
+- [x] `W20` Strict mode: Windows' ways to SYSTEM (M). Built (2026-11-22;
+  WMI: new event consumers deleted, the namespace not denied (By Opus):
+  its security couldn't be set on GitHub's runner):
   `strict_windows.go`; checked by `ci/windows_service_test.ps1` on
   `windows-latest` (each refused for real during a lock, and allowed
   again after). Was planned: Principle 3 (strict
@@ -2013,7 +2012,7 @@ their sites; their pages are an app's, not a browser's).
   likewise; Windows Installer is turned off for everyone but SYSTEM
   (`DisableMSI`; strict mode is Linux's "no sudo apt"). All kept and put
   back as the deny entries are. Needs: win-ci (each refused for real).
-- [ ] `W21` Strict mode: administrators' privileges (M). Built (2026-11-22):
+- [x] `W21` Strict mode: administrators' privileges (M). Built (2026-11-22):
   `strict_windows.go`; checked by `ci/windows_service_test.ps1` on
   `windows-latest` (each refused for real during a lock, and allowed
   again after). Was planned: Same SPEC. An
@@ -2024,7 +2023,7 @@ their sites; their pages are an app's, not a browser's).
   token (`SE_PRIVILEGE_REMOVED`, each cycle) and from Administrators'
   user rights (LSA, from the next sign-in), put back after. Needs:
   win-ci.
-- [ ] `W22` Strict mode: new accounts (S). Built (2026-11-22):
+- [x] `W22` Strict mode: new accounts (S). Built (2026-11-22):
   `strict_windows.go`; checked by `ci/windows_service_test.ps1` on
   `windows-latest` (each refused for real during a lock, and allowed
   again after). Was planned: Same SPEC. Linux's user can't
@@ -2032,7 +2031,7 @@ their sites; their pages are an app's, not a browser's).
   Administrator can be turned on. Build: accounts made or turned on while
   strict mode holds are turned off and counted (each cycle); put back as
   they were after. Needs: win-ci.
-- [ ] `W23` The clock and the time zone (S). Built (2026-11-22):
+- [x] `W23` The clock and the time zone (S). Built (2026-11-22):
   `clockguard_windows.go`; checked by `ci/windows_service_test.ps1` on
   `windows-latest` (a time zone and a clock moved 2 h, each put back
   during a lock). Was planned: SPEC §4.10 (clock: block
@@ -2054,9 +2053,13 @@ their sites; their pages are an app's, not a browser's).
   runner), win-vm.
 - [ ] `W25` Strict mode's noexec on Windows (M). Built (2026-11-22):
   `noexec_windows.go`; checked by `ci/windows_service_test.ps1` on
-  `windows-latest` (a program in Downloads refused during a lock, the
-  rules gone after). Unchecked: Windows 11 Home (SRP's enforcement there:
-  Needs laptop). Was planned: SPEC §3.8 (nothing runs
+  `windows-latest` (a program in Downloads refused from a new process and
+  from cmd during a lock, the rules gone after; a shell started before
+  the rules still started it: processes keep the policy they read, and
+  `CloseNoexecPrograms` closes what they start within a cycle; Windows
+  Server's own Safer key lacked DefaultLevel, now set and taken out
+  again). Unchecked: Windows 11 Home, and Explorer started before strict
+  mode (Needs laptop). Was planned: SPEC §3.8 (nothing runs
   from home or temporary folders except exempt folders), §6 2026-11-21
   (By Opus). Was: `ApplyNoexec` does nothing; downloaded programs are
   closed within a cycle (a short one still runs). Build (By Opus):
@@ -2065,7 +2068,7 @@ their sites; their pages are an app's, not a browser's).
   temporary folders and removable drives, exempt folders unrestricted, for
   every user including administrators; put back after. Closing stays.
   Needs: win-ci (a program refused for real).
-- [ ] `W26` Other ways around on Windows (S). Built (2026-11-22):
+- [x] `W26` Other ways around on Windows (S). Built (2026-11-22):
   `firefoxreg_windows.go` (`TestRegPolicyFirefoxMirror`), port 853 in the
   DoH filters (`TestWFPBlocks`); IPv6 through hosts checked by
   `TestWFPHostsIPv6` on `windows-latest` (`::` lines only if it fails).
@@ -2076,7 +2079,7 @@ their sites; their pages are an app's, not a browser's).
   (port 853) to the DoH resolvers blocked like DoH; IPv6: a hosts entry
   (`0.0.0.0` only) checked to answer AAAA queries too, `::` lines added if
   not. Needs: win-ci.
-- [ ] `W27` Desktop checks in CI (M). Built (2026-11-22):
+- [x] `W27` Desktop checks in CI (M). Built (2026-11-22):
   `ci/windows_desktop_test.ps1` in `windows.yml`. Stays in the VM script:
   what needs a person (the challenge window and console typed in,
   notifications seen, gamma looked at) or a reboot. Was planned: `notes/testing.md`. GitHub's

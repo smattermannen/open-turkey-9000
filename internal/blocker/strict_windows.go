@@ -13,8 +13,7 @@ package blocker
 //     Services key tree is denied like KC9K's own (lockdownTargets); Task
 //     Scheduler's root folder refuses them registering tasks, and tasks
 //     made meanwhile to run as SYSTEM or a service account are deleted and
-//     counted; WMI's subscription namespace refuses them writing, and
-//     event consumers made meanwhile are deleted and counted; Windows
+//     counted; WMI event consumers made meanwhile are deleted and counted; Windows
 //     Installer is off (DisableMSI 2: strict mode is Linux's "no sudo
 //     apt").
 //   - W21: the privileges that pass by deny entries or reach SYSTEM
@@ -74,9 +73,13 @@ var (
 	strictMu        sync.Mutex
 	strictHeavyAt   time.Time
 	strippedTokens  = map[uint32]time.Time{} // pid -> start time, stripped
-	heavyMu         sync.Mutex
+	strictHeavyPath = filepath.Join(platform.DataDir, "strict-heavy")
+	heavyMu         sync.Mutex // one 30-second pass or its undoing at a time
 	heavyRunning    atomic.Bool
+	undoRunning     atomic.Bool
+	fixedMu         sync.Mutex
 	heavyFixed      []string
+	psCheckedAt     time.Time
 )
 
 func loadStrictState() (strictState, bool) {
@@ -185,10 +188,10 @@ func applyStrictExtras() []string {
 	// Every 30 s, beside the cycle (it runs PowerShell and walks every
 	// service, so it must not hold up the rest): what walks many objects.
 	// What it puts back is reported by the next cycle.
-	heavyMu.Lock()
+	fixedMu.Lock()
 	fixed = append(fixed, heavyFixed...)
 	heavyFixed = nil
-	heavyMu.Unlock()
+	fixedMu.Unlock()
 	if (fresh || time.Since(strictHeavyAt) > 30*time.Second) && heavyRunning.CompareAndSwap(false, true) {
 		strictHeavyAt = time.Now()
 		since, consumers, first := s.Since, append([]string(nil), s.Consumers...), fresh
@@ -199,7 +202,11 @@ func applyStrictExtras() []string {
 			if _, err := os.Stat(strictStatePath); err != nil {
 				return // strict mode ended meanwhile
 			}
-			heavyFixed = append(heavyFixed, strictHeavy(since, consumers, first)...)
+			_ = os.WriteFile(strictHeavyPath, []byte("v2: strict mode's services and Task Scheduler protection may be on\n"), 0o600)
+			got := strictHeavy(since, consumers, first)
+			fixedMu.Lock()
+			heavyFixed = append(heavyFixed, got...)
+			fixedMu.Unlock()
 		}()
 	}
 	if err := saveStrictState(s); err != nil {
@@ -213,6 +220,9 @@ func applyStrictExtras() []string {
 func strictHeavy(since int64, consumers []string, first bool) []string {
 	var fixed []string
 	step := func(what string, f func()) {
+		if _, err := os.Stat(strictStatePath); err != nil {
+			return // strict mode ended meanwhile
+		}
 		start := time.Now()
 		f()
 		if d := time.Since(start); d > 5*time.Second {
@@ -230,9 +240,17 @@ func strictHeavy(since int64, consumers []string, first bool) []string {
 		n, err := denyServices(true)
 		note("strict mode's protection of services", n > 0, err)
 	})
+	// PowerShell is slow (tens of seconds a call on some computers): its
+	// checks run on the first pass and every 5 minutes.
+	psDue := first || time.Since(psCheckedAt) > 5*time.Minute
+	if psDue {
+		psCheckedAt = time.Now()
+	}
 	step("Task Scheduler", func() {
-		changed, err := denyTaskFolder(true)
-		note("strict mode's protection of Task Scheduler", changed, err)
+		if psDue {
+			changed, err := denyTaskFolder(true)
+			note("strict mode's protection of Task Scheduler", changed, err)
+		}
 		for _, task := range systemTasksSince(since) {
 			if err := deleteTask(task); err != nil {
 				log.Printf("strict: deleting task %s: %v", task, err)
@@ -242,8 +260,9 @@ func strictHeavy(since int64, consumers []string, first bool) []string {
 		}
 	})
 	step("WMI", func() {
-		changed, err := denyWMI(true)
-		note("strict mode's protection of WMI subscriptions", changed, err)
+		if !psDue {
+			return
+		}
 		if now, err := wmiConsumers(); err == nil {
 			for _, c := range newItems(consumers, now) {
 				if err := deleteWMIConsumer(c); err != nil {
@@ -257,12 +276,13 @@ func strictHeavy(since int64, consumers []string, first bool) []string {
 	return fixed
 }
 
-// removeStrictExtras undoes applyStrictExtras.
+// removeStrictExtras undoes applyStrictExtras: what is quick at once; the
+// services, Task Scheduler and WMI (PowerShell, slow) beside the cycle,
+// after a 30-second pass still running (strictUndoHeavy).
 func removeStrictExtras() error {
 	strictMu.Lock()
 	defer strictMu.Unlock()
-	heavyMu.Lock() // a 30-second pass running ends first
-	defer heavyMu.Unlock()
+	startHeavyUndo()
 	s, ok := loadStrictState()
 	if !ok {
 		return nil
@@ -275,12 +295,6 @@ func removeStrictExtras() error {
 	}
 	_, err := denySCM(false)
 	keep(err)
-	_, err = denyServices(false)
-	keep(err)
-	_, err = denyTaskFolder(false)
-	keep(err)
-	_, err = denyWMI(false)
-	keep(err)
 	keep(restoreMSI(s.MSIBefore))
 	keep(restoreStrictRights(&s))
 	for _, name := range s.TurnedOff {
@@ -292,6 +306,63 @@ func removeStrictExtras() error {
 	}
 	strippedTokens = map[uint32]time.Time{}
 	return os.Remove(strictStatePath)
+}
+
+// startHeavyUndo starts undoing the 30-second part, unless it's running.
+func startHeavyUndo() {
+	if _, err := os.Stat(strictHeavyPath); err != nil || !undoRunning.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer undoRunning.Store(false)
+		if err := undoHeavy(); err != nil {
+			log.Printf("strict: putting back services, Task Scheduler, WMI: %v (tried again next cycle)", err)
+		}
+	}()
+}
+
+// undoHeavy takes the 30-second part's deny entries out, once a pass
+// running has ended.
+func undoHeavy() error {
+	if _, err := os.Stat(strictHeavyPath); err != nil {
+		return nil
+	}
+	// Services at once (a pass running may take minutes in PowerShell),
+	// and again once it has ended, in case it reached them meanwhile.
+	if _, err := os.Stat(strictStatePath); err != nil {
+		if _, err := denyServices(false); err != nil {
+			return err
+		}
+	}
+	heavyMu.Lock()
+	defer heavyMu.Unlock()
+	if _, err := os.Stat(strictStatePath); err == nil {
+		return nil // strict mode holds again
+	}
+	if _, err := denyServices(false); err != nil {
+		return err
+	}
+	if _, err := denyTaskFolder(false); err != nil {
+		return err
+	}
+	// The first build denied WMI's namespace too: take that out where it
+	// may be (once; it is slow).
+	if data, _ := os.ReadFile(strictHeavyPath); !strings.Contains(string(data), "v2") {
+		_, _ = denyWMI(false)
+	}
+	return os.Remove(strictHeavyPath)
+}
+
+// WaitStrictUndone puts back everything strict mode's Windows extras
+// changed before returning (uninstall), or says what is left.
+func WaitStrictUndone() error {
+	if err := removeStrictExtras(); err != nil {
+		return err
+	}
+	for undoRunning.Load() {
+		time.Sleep(time.Second)
+	}
+	return undoHeavy()
 }
 
 func newItems(before, now []string) []string {
@@ -462,8 +533,8 @@ func denyTaskFolder(on bool) (bool, error) {
 
 // denyWMI: the namespace where permanent event subscriptions live (W20).
 func denyWMI(on bool) (bool, error) {
-	const get = `$b = (Invoke-WmiMethod -Namespace root/subscription -Path '__SystemSecurity=@' -Name GetSD).SD; ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').BinarySDToSDDL($b).SDDL`
-	const set = `$sddl = [Console]::In.ReadToEnd().Trim(); $b = ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').SDDLToBinarySD($sddl).BinarySD; $r = Invoke-WmiMethod -Namespace root/subscription -Path '__SystemSecurity=@' -Name SetSD -ArgumentList (,[byte[]]$b); if ($r.ReturnValue -ne 0) { throw "SetSD $($r.ReturnValue)" }`
+	const get = `$b = (Invoke-CimMethod -Namespace root/subscription -ClassName __SystemSecurity -MethodName GetSD).SD; ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').BinarySDToSDDL($b).SDDL`
+	const set = `$sddl = [Console]::In.ReadToEnd().Trim(); $b = ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').SDDLToBinarySD($sddl).BinarySD; $r = Invoke-CimMethod -Namespace root/subscription -ClassName __SystemSecurity -MethodName SetSD -Arguments @{ SD = [byte[]]$b }; if ($r.ReturnValue -ne 0) { throw "SetSD $($r.ReturnValue)" }`
 	return changeSDDLBy(get, set, strictDenies(wmiDenyMask, "CI"), on)
 }
 

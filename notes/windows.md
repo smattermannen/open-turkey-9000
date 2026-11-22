@@ -133,7 +133,8 @@
   owner SYSTEM, SYSTEM full, Administrators and Users read/run, protected),
   ProgramData\kc9k (`DataSDDL`: SYSTEM only), `kc9k.exe` copied (a running
   one renamed `.old`, removed at reboot), PATH (Machine, broadcast),
-  service `kc9k` (`kc9k.exe service`, automatic, recovery: restart 0 s,
+  service `kc9k` (created once the one an uninstall just removed is gone,
+  up to 30 s; `kc9k.exe service`, automatic, recovery: restart 0 s,
   5 s, 10 s, also on non-crash failures), started. The service exits as a
   failure when the installed `kc9k.exe` changes (size/time), so Windows
   starts the new one. Log: ProgramData\kc9k\kc9k.log (10 MB, one old
@@ -368,15 +369,22 @@
   Backup Operators' user rights (LSA; from the next sign-in), given back
   after. Every 30 s, in a goroutine beside the cycle (`strictHeavy`; a
   step over 5 s is logged; what it puts back is reported by the next
-  cycle; `removeStrictExtras` waits for it): each service's DACL denies `0xd0002` (configuration,
+  cycle; the PowerShell checks, Task Scheduler's and WMI's, only on the
+  first pass and every 5 minutes: on GitHub's runner one takes 30–90 s).
+  Ending strict mode undoes the quick parts at once and these beside the
+  cycle once a pass running has ended (`startHeavyUndo`, marker
+  ProgramData\kc9k\strict-heavy); `kc9k uninstall` waits for it
+  (`WaitStrictUndone`): each service's DACL denies `0xd0002` (configuration,
   delete, permissions, owner; `0xd0062` adds stop and pause for BFE,
   Dnscache, Winmgmt, Schedule, EventLog, WlanSvc, W32Time), not KC9K's
   own (GuardService) nor protected ones it can't open; Task Scheduler's
   root folder denies `0xd0116` (registering tasks); task files written
   since the start that run as SYSTEM or a service account, outside
   `\Microsoft\Windows\` and `\KC9K\`, are deleted (`schtasks /Delete`);
-  `root\subscription` (`Invoke-WmiMethod … GetSD/SetSD`) denies `0xc001c` (writes) and event consumers made
-  since the start are deleted with their bindings. The `Services` key
+  WMI event consumers made since the start (`root\subscription`, listed
+  every 5 minutes) are deleted with their bindings (denying the namespace
+  itself failed on GitHub's runner, "Invalid parameter", and was dropped:
+  a first build's entry is taken out once, marker without "v2"). The `Services` key
   tree is a lockdown target (deny entries inherited by every service's
   key). Each put back or deleted is counted as tamper. Virtual machines
   (W24, every cycle, `closeVirtualMachines`): people's VM, WSL, Sandbox,

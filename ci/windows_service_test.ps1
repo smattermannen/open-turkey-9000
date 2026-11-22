@@ -186,8 +186,9 @@ Check 'after the lock the hosts file is writable again' { $wrote }
 sc.exe create kc9kci binPath= "$env:SystemRoot\System32\cmd.exe /c exit" | Out-Null
 Check 'after the lock an administrator can create a service again' { $LASTEXITCODE -eq 0 }
 sc.exe delete kc9kci | Out-Null
-sc.exe config Spooler start= auto | Out-Null
-Check 'after the lock an administrator can reconfigure services again' { $LASTEXITCODE -eq 0 }
+$reconfigured = $false
+for ($i = 0; $i -lt 75 -and -not $reconfigured; $i++) { sc.exe config Spooler start= auto | Out-Null; $reconfigured = $LASTEXITCODE -eq 0; if (-not $reconfigured) { Start-Sleep -Seconds 2 } }
+Check 'after the lock an administrator can reconfigure services again (put back beside the cycle)' { $reconfigured }
 Check 'after the lock Windows Installer is on again' { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer' -ErrorAction SilentlyContinue).DisableMSI -ne 2 }
 Check "after the lock KC9K's Software Restriction Policies rules are gone" { -not (Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers\0\Paths' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -like '{4B43394B-*' }) }
 Check 'after the lock the account made meanwhile is on again' { (Get-LocalUser kc9kci -ErrorAction SilentlyContinue).Enabled }

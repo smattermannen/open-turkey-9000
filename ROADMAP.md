@@ -40,6 +40,11 @@ of their group and a row here; a finished item loses its row.
 | 2.7 | Hardening: the text lock's window on a real desktop (Unchecked); rules server secret dropped (§5, 2026-11-21) | R-LOCK-5, §4.6 | browsers, locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings of 2026-11-21: guest, inactive-tabs, embedded checked in Chrome-family browsers (2026-11-21); inactive-tabs, embedded in LibreWolf (box); VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
+| 2.10 | Cross-device sync: Upload all, Download all; open decisions first (SPEC §7) | §4.14 | db-project | owner, agent |
+| 2.11 | One-click installer on Linux, Windows, Android | §4.11 | install, install-windows | agent, owner |
+| 2.12 | Chrome, Edge, Firefox, Bing as supported browsers on every platform; which "Bing" is (SPEC §7) | §3.13, §4.10 | browsers | owner, agent |
+| 2.13 | Accountability partner: what it is first (SPEC §7) | §4.15 | — | owner |
+| 2.14 | Website: content and hosting first (SPEC §7) | §4.16 | — | owner, agent |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
 | W1 | Windows service, session agent, named pipe, install/uninstall: built, checked on `windows-latest`; agent and console Unchecked | §3.13 | windows | win-vm |
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
@@ -1290,6 +1295,11 @@ Only items not simply Built.
 | §4.10 Device protection: factory reset protection, guided setup | Built | 2026-11-21: firmware lock, guided setup (`kc9k guided-setup [--json]`, GUI Guided setup… with Do it…, `ci/gui_settings_smoke.py`), strict mode's PAM root guard (`login`, `su`, `su-l`, tested on generated files only). Live: Unchecked (`2.6`) |
 | §4.10 Browsers list | Built | GUI Browsers group and `kc9k browsers`: LibreWolf, Chrome, Chromium, installed, per-browser extension check-in, Install (`browsers install`); live check in 0.2 |
 | §4.11 `.deb` | Built | `make deb` (`packaging/build-deb.sh`): same paths as install.sh; postinst sets up sudoers, database folder, service; prerm runs prepare-uninstall, so removal is refused while locked (checked live); postrm removes sudoers. Installed on the laptop as 0.9.0~overnight (devmaster) |
+| §4.11 One-click installer, every platform | Not built | `2.11` |
+| §3.13 Chrome, Edge, Firefox, Bing on every platform | Partial | `2.12` |
+| §4.14 Cross-device sync | Not built | `2.10`; open decisions in SPEC §7 |
+| §4.15 Accountability partner | Not built | `2.13`; open decisions in SPEC §7 |
+| §4.16 Website | Not built | `2.14`; open decisions in SPEC §7 |
 | §4.3 Draft Save/Cancel | Built | `block draft B [save|cancel]`; GUI: an opened block is always a draft, made at the first change of the Websites or Apps tab, with Save edits/Cancel (§5 DECIDED 2026-11-17): a copy of the lists, phrase sets, apps and window titles that never runs; save applies each difference through its gate, refusing and naming weakening ones on a locked block; needs and keeps the block password; drafts stay out of the block list and projects. The Breaks & allowance and Bypass prevention tabs are drafted too (2026-11-21, SPEC §6): their commands on a draft are kept (`draftQueued`, `keepOnDraft`; the last of each kind), shown in the tab ("Not saved yet", gui-state `draft_kept`) and run at save through their own gates (`runQueued`); taking a break or an allowance session, the automation and affected users still apply at once (`draftRefused`). `TestDraftKeepsBreaksAndBypass`, the weakening audit, `ci/gui_lists_smoke.py`. On a real screen: Unchecked (Needs: box) |
 | §4.3 Ctrl+F, multi-select, double-click edit | Built | `EditableList`: Ctrl+F to its search, Ctrl/Shift-click and Ctrl+A in website lists, phrase sets, apps, titles, clusters, exempt folders; Delete/Backspace removes, selection moves on; double-click moves an entry into the box |
 | §4.3 Import "From KC9K" | Built | `list copy`; a list's Import… offers From KC9K: tick other blocks' lists and clusters; Whole internet (`*.*`, asked first) and All searches containing… (the words as rendered terms, the list's URL scope on: a search's words are in its address, R-PHRASE-6; any other address with the word matches too, and the dialog says so) (2026-11-17, `ci/gui_import_smoke.py`) |
@@ -1435,6 +1445,24 @@ Only items not simply Built.
   (Mint, Cinnamon: the window opens from the GUI under sudo, keeps focus,
   a real keyboard): Unchecked.
 - **2.8** Everything else Not built/Partial in §1.
+- **2.10 Cross-device sync** (L, owner 2026-11-22; SPEC §4.14): Not built.
+  Upload all and Download all on Linux, Windows and Android; one to one
+  except device-specific items. Waits on SPEC §7: where uploads go,
+  Download all against a lock (R-WEAK-1), the device-specific list. The
+  project export (`cli/project*.go`) is the nearest thing built, but it
+  only adds; Download all replaces.
+- **2.11 One-click installer** (M per platform, owner 2026-11-22; SPEC
+  §4.11): Not built. Linux has a `.deb` and `install.sh`; Windows an MSI
+  (W7); Android none. Each becomes one download and one click.
+- **2.12 Chrome, Edge, Firefox, Bing everywhere** (L, owner 2026-11-22;
+  SPEC §3.13): Partial. Built: Chrome and Chromium on Linux; Chrome and
+  Edge on Windows waiting for the store listing (W2). Not built: Firefox
+  (LibreWolf only), Edge on Linux, every browser on Android (IronFox only),
+  Bing (which one: SPEC §7).
+- **2.13 Accountability partner** (owner 2026-11-22; SPEC §4.15): Not
+  built; what it does is open (SPEC §7).
+- **2.14 Website** (M, owner 2026-11-22; SPEC §4.16): Not built; content
+  and hosting open (SPEC §7).
 - **2.9 Tamper settings live** (S): built 2026-11-21 (§1 *§4.10 Tamper
   settings*). Built in Chrome-family browsers (2026-11-21, cloud container,
   Chrome 158.0.8127.36, daemon as root, real policies): `guest` on, each

@@ -120,3 +120,23 @@ func TestWinFirmwareStatusForReal(t *testing.T) {
 	}
 	t.Logf("firmware: drivers %v, password %v, %d settings", s.Drivers, s.Password, len(s.Settings))
 }
+
+// W5: a protected folder's security, as Windows prints it back (AI flag,
+// inherited entries below), is the same as what was set.
+func TestSameSecurity(t *testing.T) {
+	if !sameSecurity("O:SYG:SYD:PAI(A;OICI;FA;;;SY)", dataSDDL) {
+		t.Error("the data folder's own security counts as changed")
+	}
+	if !sameSecurity("O:SYG:SYD:PAI(A;OICI;0x1200a9;;;BU)(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BA)", programSDDL) {
+		t.Error("the program folder's security, entries in another order, counts as changed")
+	}
+	if sameSecurity("O:BAG:SYD:PAI(A;OICI;FA;;;SY)", dataSDDL) {
+		t.Error("another owner counts as the same")
+	}
+	if sameSecurity("O:SYG:SYD:AI(A;OICI;FA;;;SY)", dataSDDL) {
+		t.Error("an unprotected DACL counts as the same")
+	}
+	if sameSecurity("O:SYG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)", dataSDDL) {
+		t.Error("an added entry counts as the same")
+	}
+}

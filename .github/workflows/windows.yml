@@ -29,7 +29,7 @@ jobs:
         shell: bash
         env:
           KC9K_TEST_WFP: "1"
-        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc|Deny|ACE|UserProgram|AccelToVK|Wlan|RemoteControl|RecoveryBoot|WinGuest|WinHardwareClock|WinInstallBrowser|WinFirmware|Strict' ./internal/blocker ./internal/enforce
+        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc|Deny|ACE|UserProgram|AccelToVK|Wlan|RemoteControl|RecoveryBoot|WinGuest|WinHardwareClock|WinInstallBrowser|WinFirmware|Strict|SameSecurity' ./internal/blocker ./internal/enforce
       - name: One-click LibreWolf install with winget (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh
@@ -37,15 +37,16 @@ jobs:
           $env:KC9K_DB = Join-Path $env:RUNNER_TEMP 'browsers.db'
           ./kc9k.exe browsers install librewolf
           if (-not (Test-Path "$env:ProgramFiles\LibreWolf\librewolf.exe")) { throw 'LibreWolf not installed' }
+      - name: Desktop checks (agent, apps, titles, dark mode)
+        timeout-minutes: 8
+        # Before the service checks: their strict mode takes this
+        # account's restore privilege, which a reinstall needs.
+        shell: pwsh
+        run: pwsh ci/windows_desktop_test.ps1 (Resolve-Path kc9k.exe)
       - name: Service, pipe, install and uninstall
         timeout-minutes: 12
         shell: pwsh
         run: pwsh ci/windows_service_test.ps1 (Resolve-Path kc9k.exe)
-      - name: Desktop checks (agent, apps, titles, dark mode)
-        if: success() || failure()
-        timeout-minutes: 8
-        shell: pwsh
-        run: pwsh ci/windows_desktop_test.ps1 (Resolve-Path kc9k.exe)
       - name: Service log
         if: always()
         shell: pwsh

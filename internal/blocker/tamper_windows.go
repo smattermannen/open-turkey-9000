@@ -30,6 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -148,7 +149,7 @@ func GuardService() []string {
 		note("the watchdog task", createWatchdogTask(exe))
 	}
 	for path, sddl := range map[string]string{platform.DataDir: dataSDDL, platform.InstallDir: programSDDL} {
-		if cur, err := pathSecurity(path, false); err == nil && !strings.HasPrefix(cur, canonicalSDDL(sddl)) && !lockdownActive() {
+		if cur, err := pathSecurity(path, false); err == nil && !sameSecurity(cur, sddl) && !lockdownActive() {
 			note("the permissions of "+path, SetPathSecurity(path, sddl))
 		}
 	}
@@ -839,4 +840,46 @@ func SyncRecoveryGuard(on bool) (fixed bool, err error) {
 		return false, os.Remove(recoveryGuardPath)
 	}
 	return false, nil
+}
+
+// sameSecurity reports whether cur (as Windows prints it) has want's owner,
+// protection and explicit entries. Windows adds flags of its own (AI, auto
+// inherited) and the entries inherited below, so text can't be compared:
+// before, a protected folder counted as changed each cycle.
+func sameSecurity(cur, want string) bool {
+	parse := func(sddl string) (owner string, protected bool, aces []string) {
+		sddl = canonicalSDDL(sddl)
+		if i := strings.Index(sddl, "O:"); i >= 0 {
+			owner = sddl[i+2:]
+			for _, next := range []string{"G:", "D:", "S:"} {
+				if j := strings.Index(owner, next); j >= 0 {
+					owner = owner[:j]
+				}
+			}
+		}
+		i := strings.Index(sddl, "D:")
+		if i < 0 {
+			return
+		}
+		rest := sddl[i+2:]
+		flags := ""
+		for len(rest) > 0 && rest[0] != '(' && rest[0] != 'S' {
+			flags += rest[:1]
+			rest = rest[1:]
+		}
+		protected = strings.Contains(flags, "P")
+		if end := strings.Index(rest, "S:"); end >= 0 {
+			rest = rest[:end]
+		}
+		for _, a := range splitACEs(rest) {
+			if !strings.Contains(strings.SplitN(a, ";", 3)[1], "ID") {
+				aces = append(aces, a)
+			}
+		}
+		sort.Strings(aces)
+		return
+	}
+	o1, p1, a1 := parse(cur)
+	o2, p2, a2 := parse(want)
+	return o1 == o2 && p1 == p2 && strings.Join(a1, "") == strings.Join(a2, "")
 }

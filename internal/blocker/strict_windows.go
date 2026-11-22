@@ -45,6 +45,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf16"
 	"unsafe"
@@ -73,6 +74,9 @@ var (
 	strictMu        sync.Mutex
 	strictHeavyAt   time.Time
 	strippedTokens  = map[uint32]time.Time{} // pid -> start time, stripped
+	heavyMu         sync.Mutex
+	heavyRunning    atomic.Bool
+	heavyFixed      []string
 )
 
 func loadStrictState() (strictState, bool) {
@@ -178,31 +182,25 @@ func applyStrictExtras() []string {
 	for _, name := range off {
 		fixed = append(fixed, "the account "+name+" made or turned on during strict mode (turned off)")
 	}
-	// Every 30 s: what walks many objects.
-	if fresh || time.Since(strictHeavyAt) > 30*time.Second {
+	// Every 30 s, beside the cycle (it runs PowerShell and walks every
+	// service, so it must not hold up the rest): what walks many objects.
+	// What it puts back is reported by the next cycle.
+	heavyMu.Lock()
+	fixed = append(fixed, heavyFixed...)
+	heavyFixed = nil
+	heavyMu.Unlock()
+	if (fresh || time.Since(strictHeavyAt) > 30*time.Second) && heavyRunning.CompareAndSwap(false, true) {
 		strictHeavyAt = time.Now()
-		n, err := denyServices(true)
-		note("strict mode's protection of services", n > 0, err)
-		changed, err = denyTaskFolder(true)
-		note("strict mode's protection of Task Scheduler", changed, err)
-		for _, task := range systemTasksSince(s.Since) {
-			if err := deleteTask(task); err != nil {
-				log.Printf("strict: deleting task %s: %v", task, err)
-				continue
+		since, consumers, first := s.Since, append([]string(nil), s.Consumers...), fresh
+		go func() {
+			defer heavyRunning.Store(false)
+			heavyMu.Lock()
+			defer heavyMu.Unlock()
+			if _, err := os.Stat(strictStatePath); err != nil {
+				return // strict mode ended meanwhile
 			}
-			fixed = append(fixed, "the task "+task+" made to run as SYSTEM (deleted)")
-		}
-		changed, err = denyWMI(true)
-		note("strict mode's protection of WMI subscriptions", changed, err)
-		if now, err := wmiConsumers(); err == nil {
-			for _, c := range newItems(s.Consumers, now) {
-				if err := deleteWMIConsumer(c); err != nil {
-					log.Printf("strict: deleting WMI consumer %s: %v", c, err)
-					continue
-				}
-				fixed = append(fixed, "the WMI event consumer "+c+" (deleted)")
-			}
-		}
+			heavyFixed = append(heavyFixed, strictHeavy(since, consumers, first)...)
+		}()
 	}
 	if err := saveStrictState(s); err != nil {
 		log.Printf("strict: %v", err)
@@ -210,10 +208,61 @@ func applyStrictExtras() []string {
 	return fixed
 }
 
+// strictHeavy is the 30-second part; it returns what it put back (none
+// on strict mode's first pass).
+func strictHeavy(since int64, consumers []string, first bool) []string {
+	var fixed []string
+	step := func(what string, f func()) {
+		start := time.Now()
+		f()
+		if d := time.Since(start); d > 5*time.Second {
+			log.Printf("strict: %s took %v", what, d.Round(time.Second))
+		}
+	}
+	note := func(what string, repaired bool, err error) {
+		if err != nil {
+			log.Printf("strict: %s: %v", what, err)
+		} else if repaired && !first {
+			fixed = append(fixed, what)
+		}
+	}
+	step("services", func() {
+		n, err := denyServices(true)
+		note("strict mode's protection of services", n > 0, err)
+	})
+	step("Task Scheduler", func() {
+		changed, err := denyTaskFolder(true)
+		note("strict mode's protection of Task Scheduler", changed, err)
+		for _, task := range systemTasksSince(since) {
+			if err := deleteTask(task); err != nil {
+				log.Printf("strict: deleting task %s: %v", task, err)
+				continue
+			}
+			fixed = append(fixed, "the task "+task+" made to run as SYSTEM (deleted)")
+		}
+	})
+	step("WMI", func() {
+		changed, err := denyWMI(true)
+		note("strict mode's protection of WMI subscriptions", changed, err)
+		if now, err := wmiConsumers(); err == nil {
+			for _, c := range newItems(consumers, now) {
+				if err := deleteWMIConsumer(c); err != nil {
+					log.Printf("strict: deleting WMI consumer %s: %v", c, err)
+					continue
+				}
+				fixed = append(fixed, "the WMI event consumer "+c+" (deleted)")
+			}
+		}
+	})
+	return fixed
+}
+
 // removeStrictExtras undoes applyStrictExtras.
 func removeStrictExtras() error {
 	strictMu.Lock()
 	defer strictMu.Unlock()
+	heavyMu.Lock() // a 30-second pass running ends first
+	defer heavyMu.Unlock()
 	s, ok := loadStrictState()
 	if !ok {
 		return nil
@@ -413,8 +462,8 @@ func denyTaskFolder(on bool) (bool, error) {
 
 // denyWMI: the namespace where permanent event subscriptions live (W20).
 func denyWMI(on bool) (bool, error) {
-	const get = `$s = Get-WmiObject -Namespace root/subscription -Class __SystemSecurity; $b = $s.GetSD().SD; ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').BinarySDToSDDL($b).SDDL`
-	const set = `$sddl = [Console]::In.ReadToEnd().Trim(); $b = ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').SDDLToBinarySD($sddl).BinarySD; $s = Get-WmiObject -Namespace root/subscription -Class __SystemSecurity; $r = $s.SetSD($b); if ($r.ReturnValue -ne 0) { throw "SetSD $($r.ReturnValue)" }`
+	const get = `$b = (Invoke-WmiMethod -Namespace root/subscription -Path '__SystemSecurity=@' -Name GetSD).SD; ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').BinarySDToSDDL($b).SDDL`
+	const set = `$sddl = [Console]::In.ReadToEnd().Trim(); $b = ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').SDDLToBinarySD($sddl).BinarySD; $r = Invoke-WmiMethod -Namespace root/subscription -Path '__SystemSecurity=@' -Name SetSD -ArgumentList (,[byte[]]$b); if ($r.ReturnValue -ne 0) { throw "SetSD $($r.ReturnValue)" }`
 	return changeSDDLBy(get, set, strictDenies(wmiDenyMask, "CI"), on)
 }
 

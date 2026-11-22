@@ -310,7 +310,10 @@
   XML asks that administrators only read it, but Task Scheduler lets an
   elevated administrator delete it: it is made again within a cycle and
   counted, checked on `windows-latest`); the program and
-  data folders' security (not while strict mode holds them). A session
+  data folders' security (not while strict mode holds them; compared by
+  owner, protection and explicit entries, `sameSecurity`: Windows prints
+  back flags of its own, and a text comparison counted the folders as
+  changed every cycle until 2026-11-22). A session
   agent ended while its session lasts counts too.
 - Strict mode (`ApplyLockdown`, from `enforceLockdown` as on Linux):
   deny entries (`denyACEs`) for how a person's programs signed in —
@@ -337,7 +340,9 @@
   removable drives (not Windows' Temp: SYSTEM's programs use it), and
   exempt folders allowed (long paths: SRP doesn't match 8.3 names); rules
   synced each cycle, running programs told to read them again
-  (`RefreshPolicyEx`),
+  (`RefreshPolicyEx`; a shell running before the rules still started a
+  program in CI, so processes started earlier may keep the old policy:
+  `CloseNoexecPrograms` closes what they start within a cycle),
   under keys named `{4B43394B-…}`. What SRP needs to act and is missing
   is set (`ensureSRPOn`: DefaultLevel unrestricted, TransparentEnabled 1
   so DLLs are left out, PolicyScope 0, ExecutableTypes; Windows Server
@@ -361,14 +366,16 @@
   relabel, and the TCB ones); accounts not on, or not there, at the
   start turned off. Once: those rights taken from Administrators' and
   Backup Operators' user rights (LSA; from the next sign-in), given back
-  after. Every 30 s: each service's DACL denies `0xd0002` (configuration,
+  after. Every 30 s, in a goroutine beside the cycle (`strictHeavy`; a
+  step over 5 s is logged; what it puts back is reported by the next
+  cycle; `removeStrictExtras` waits for it): each service's DACL denies `0xd0002` (configuration,
   delete, permissions, owner; `0xd0062` adds stop and pause for BFE,
   Dnscache, Winmgmt, Schedule, EventLog, WlanSvc, W32Time), not KC9K's
   own (GuardService) nor protected ones it can't open; Task Scheduler's
   root folder denies `0xd0116` (registering tasks); task files written
   since the start that run as SYSTEM or a service account, outside
   `\Microsoft\Windows\` and `\KC9K\`, are deleted (`schtasks /Delete`);
-  `root\subscription` denies `0xc001c` (writes) and event consumers made
+  `root\subscription` (`Invoke-WmiMethod … GetSD/SetSD`) denies `0xc001c` (writes) and event consumers made
   since the start are deleted with their bindings. The `Services` key
   tree is a lockdown target (deny entries inherited by every service's
   key). Each put back or deleted is counted as tamper. Virtual machines

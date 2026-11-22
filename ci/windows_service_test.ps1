@@ -152,7 +152,8 @@ $fresh = & pwsh -NoProfile -Command "try { Start-Process '$env:USERPROFILE\Downl
 Write-Host "  from a new process: $fresh"
 cmd.exe /c "`"$env:USERPROFILE\Downloads\kc9kping.exe`" -n 1 127.0.0.1" | Out-Host
 Write-Host "  from cmd: exit $LASTEXITCODE"
-Check "strict mode: a program in your Downloads folder doesn't start (Software Restriction Policies)" { -not $started }
+Write-Host "  from this (older) shell: started $started"
+Check "strict mode: a program in your Downloads folder doesn't start from a new process or cmd (Software Restriction Policies)" { $fresh -like 'refused*' -and $LASTEXITCODE -ne 0 }
 Check "strict mode: Docker's engine is stopped (where installed)" { -not (Get-Service docker -ErrorAction SilentlyContinue) -or (Get-Service docker).Status -ne 'Running' }
 Check 'strict mode: an account made meanwhile is turned off' { -not (Get-LocalUser kc9kci -ErrorAction SilentlyContinue).Enabled }
 Check 'strict mode: a task as SYSTEM is refused, or deleted within a cycle' { $taskRefused -or -not (schtasks.exe /Query /TN kc9kci 2>$null) }

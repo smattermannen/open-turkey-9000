@@ -2129,6 +2129,52 @@ The owner ran the Windows GUI on the laptop and removed it afterwards
 the GTK GUI's layout is better. Stability first, then layout, then the
 missing import. Order: top to bottom.
 
+Static findings 2026-11-22 (By claude, planning session; code read, not
+yet seen on the laptop). Each is a suspect for W50–W52 until the laptop's
+logs name the cause:
+
+- **Group Policy refreshed twice every 5 s.** With strict mode not acting
+  (the normal case), each service cycle runs `removeLockdown` and
+  `removeNoexec` (`enforce/lockdown.go:275–281`); both reach `removeSRP`
+  (`blocker/tamper_windows.go:422`, `:763`), whose `defer refreshPolicy()`
+  (`blocker/noexec_windows.go:241`) calls `RefreshPolicyEx(machine,
+  RP_FORCE)` (`:291`) even when nothing was removed: a forced machine
+  policy refresh, with its `WM_SETTINGCHANGE "Policy"` to every window,
+  about every 2.5 s, forever. Laptop evidence: the
+  `Microsoft-Windows-GroupPolicy/Operational` log.
+- **PowerShell and WMI every 5 s, even with the circadian rhythm off.**
+  `Circadian.Step` calls `circadianBacklights()` unconditionally
+  (`enforce/circadian.go:527`); on Windows that starts `powershell.exe`
+  for `Get-CimInstance WmiMonitorBrightness`
+  (`blocker/circadian_windows.go:254`); every 1 s for up to 3 min after
+  the service starts or the computer wakes (`placeLookInterval`,
+  `enforce/circadian.go:384`). With the backlight clip on, `Raw` and
+  `SetRaw` start more; Play the day starts them on every 100 ms frame
+  (`enforce/circadian.go:1014`).
+- **The agent dies after about 2000 screen calls.** `displays()`
+  (`winagent/look_windows.go:87`) makes a new `syscall.NewCallback` from a
+  closure on each call; Go never frees one and throws "too many callback
+  functions" at 2000 (Go 1.25 `cb_max`). Each gamma read or set and each
+  monitor list calls it: within hours of a gamma clip, minutes of Play the
+  day.
+- **An agent that crashes counts as tamper.** `Manager.keepAgents`
+  (`winagent/manager_windows.go:146`) counts every ended agent;
+  `guardPlatform` (`enforce/sys_windows.go:95`) logs it as "a session
+  agent was ended", which the bypass prevention ladder's tamper detector
+  counts; a crash is not told from a kill.
+- **Screen calls run at once from many threads.** The agent answers each
+  request in its own goroutine (`winagent/agent_windows.go:101`): gamma
+  sets, DDC/CI, wallpaper and dark-mode broadcasts can overlap.
+- **The challenge window looks like the white window of W52**: a topmost
+  900×560 Win32 window with its own minimise, maximise and close
+  (`winagent/challenge_windows.go:306`), a window class with no background
+  brush, from a `kc9k.exe` with no manifest.
+- **The GUI**: only WinUI's `UnhandledException` is logged (`App.cs`):
+  no `AppDomain`/`TaskScheduler` handler, no note after a crash; every
+  state change updates all nine pages, hidden ones too
+  (`MainWindow.Apply`), and `gui-state` changes every read while a
+  countdown runs.
+
 Stability (blocks every other Windows GUI test):
 
 - [ ] `W50` **The whole computer froze** (L; principle 1: never harm the
@@ -2173,7 +2219,7 @@ Layout (owner: keep the Windows look, use the GTK layout):
   Windows pages follow the GTK GUI's layout page by page (Overview,
   Blocks with modes, Circadian rhythm, Settings), keeping the Windows
   look (colours, fonts, Mica). Overview's "Get started" card has no GTK
-  counterpart: keep only if the owner wants it (ask).
+  counterpart: the owner dropped it (2026-11-22), so W38's first view goes.
 
 Import:
 

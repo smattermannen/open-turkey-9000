@@ -10,6 +10,10 @@ var fetchTools = map[string]bool{
 	"ffmpeg": true, "totem": true, "haruna": true, "curl": true, "wget": true, "wget2": true,
 	"aria2c": true, "axel": true, "http": true, "https": true, "xh": true, "lynx": true, "w3m": true,
 	"links": true, "links2": true, "elinks": true, "browsh": true, "freetube": true,
+	// Windows' own names (W12).
+	"yt-dlp_x86": true, "yt-dlp_win": true, "yt-dlp_min": true, "mpc-hc": true, "mpc-hc64": true,
+	"mpc-be": true, "mpc-be64": true, "potplayer": true, "potplayermini": true, "potplayermini64": true,
+	"wmplayer": true, "bitsadmin": true, "certutil": true, "streamlink-twitch-gui": true,
 }
 
 // namesDomain reports whether an argument names a domain (or a subdomain of

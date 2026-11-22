@@ -199,6 +199,15 @@
   Windows, System32, SysWOW64, Program Files (both), Users, ProgramData.
   Polite: `polite_shared.go`'s state; windows asked through the agent
   (`OpClose` by process).
+- Scripts (W12, `scripthosts.go`, shared and tested on Linux): an entry
+  naming a script (`bot.py`, `bot`, `game.ps1`, a full path or a folder)
+  matches the script host running it: Python (`py`, `pythonw`, `-m`
+  modules), PowerShell (`-File`, a `.ps1` first), cmd (`/c` a `.bat` or
+  `.cmd`), wscript/cscript, mshta, node, java `-jar`, AutoHotkey
+  (`hostScript`, working folder from the PEB, `processCwd`); never a
+  script in the Windows folder. A shell matched by its script is killed
+  with its children. Fetch tools are known by their script or module too
+  (`python -m yt_dlp` is yt-dlp, `scriptNames`).
 - Allowed apps (`CloseAllExcept`): kills people's programs that aren't
   allowed, started by an allowed one, Windows' own (Windows folder) or
   KC9K's. Tor: Tor Browser folders and `tor.exe`. Tools naming blocked

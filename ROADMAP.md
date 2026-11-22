@@ -1808,7 +1808,12 @@ their sites; their pages are an app's, not a browser's).
   (`commandLine`) and environment (its PEB, `ReadProcessMemory`) and
   closes it as on Linux (`parseRemoteControl`, shared). Needs: win-ci
   (a renamed test program with the switches).
-- [ ] `W12` Scripts and script hosts on Windows (S). SPEC §3.1 (apps),
+- [ ] `W12` Scripts and script hosts on Windows (S). Built (2026-11-22):
+  `scripthosts.go` (tested on Linux), `procScript`, `matchScript`;
+  checked on `windows-latest` by `TestWinProcScriptEntries` (a batch file,
+  a PowerShell script, a Python script closed; another cmd left) and
+  `TestWinProcFetchToolModule` (`python -m yt_dlp` with a blocked site).
+  Was planned: SPEC §3.1 (apps),
   §3.9 (workaround: fetch tool). Was: `scripts.go` is Linux-only; on
   Windows an app entry naming a script (`bot.py`, `game.ps1`) matches
   nothing and a fetch tool run as a script (`python -m yt_dlp`,

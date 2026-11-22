@@ -120,8 +120,64 @@ func (m *appMatcher) empty() bool {
 	return len(m.names)+len(m.paths)+len(m.folders)+len(m.hashes) == 0
 }
 
-// match is the entry p matches, or "".
+// procScript is the script a script host process runs (W12), or "": never
+// one of Windows' own.
+func procScript(p *winProc) string {
+	if scriptHosts[p.Name] == "" {
+		return ""
+	}
+	args := commandLine(p.PID)
+	cwd := ""
+	if len(args) > 1 {
+		cwd = processCwd(p.PID)
+	}
+	script := hostScript(p.Name, args, cwd)
+	if script == "" || underSystemRoot(script) {
+		return ""
+	}
+	return script
+}
+
+// matchScript is the entry naming the script p runs, or "".
+func (m *appMatcher) matchScript(p *winProc) string {
+	if len(m.names)+len(m.paths)+len(m.folders) == 0 {
+		return ""
+	}
+	script := procScript(p)
+	if script == "" {
+		return ""
+	}
+	for _, n := range scriptNames(script) {
+		if e, ok := m.names[n]; ok {
+			return e
+		}
+	}
+	if !winAbs(script) {
+		return ""
+	}
+	clean := strings.ToLower(filepath.Clean(script))
+	if e, ok := m.paths[clean]; ok {
+		return e
+	}
+	for _, f := range m.folders {
+		if strings.HasPrefix(clean, f.dir) {
+			return f.entry
+		}
+	}
+	return ""
+}
+
+// match is the entry p matches, or "": by its program, or by the script it
+// runs (W12).
 func (m *appMatcher) match(p *winProc) string {
+	if e := m.matchProgram(p); e != "" {
+		return e
+	}
+	return m.matchScript(p)
+}
+
+// matchProgram is the entry p's program matches, or "".
+func (m *appMatcher) matchProgram(p *winProc) string {
 	if essentialWindowsApps[p.Name] && (p.Exe == "" || underSystemRoot(p.Exe)) {
 		return ""
 	}
@@ -251,7 +307,8 @@ func killBlockedWin(names []string, politely bool, now time.Time, uids []uint64)
 	killed := 0
 	for _, root := range roots {
 		tree := []uint32{uint32(root)}
-		if p := procs[uint32(root)]; p != nil && !noDescendWindows[p.Name] {
+		// A shell is killed alone, unless it runs a blocked script.
+		if p := procs[uint32(root)]; p != nil && (!noDescendWindows[p.Name] || m.matchProgram(p) == "") {
 			tree = treeOf(uint32(root), children)
 		}
 		for i := len(tree) - 1; i >= 0; i-- {
@@ -360,7 +417,22 @@ func KillNamingFor(domains []string, uids []uint64) []string {
 	}
 	var tools []string
 	for _, p := range processSnapshot() {
-		if !fetchTools[p.Name] || !ownedByAnyUID(p, uids) {
+		if !ownedByAnyUID(p, uids) {
+			continue
+		}
+		name := p.Name
+		if !fetchTools[name] {
+			name = ""
+			if script := procScript(p); script != "" {
+				for _, n := range scriptNames(script) {
+					if fetchTools[n] {
+						name = n
+						break
+					}
+				}
+			}
+		}
+		if name == "" {
 			continue
 		}
 		args := commandLine(p.PID)
@@ -374,7 +446,7 @@ func KillNamingFor(domains []string, uids []uint64) []string {
 			}
 			if hit {
 				if killProcess(p.PID) == nil {
-					tools = append(tools, p.Name)
+					tools = append(tools, name)
 				}
 				break
 			}

@@ -9,7 +9,8 @@
 - Process kill: exact name, Flatpak ID (`app-flatpak-<ID>-<n>.scope` or
   `/.flatpak-info`), desktop units `app-[<launcher>-]<ID>-<n>.scope`/`@….service`
   with ID equal to or ending in `.<name>`; descendants too, except under
-  shells/session processes. `scripts.go`: Python by script
+  shells/session processes. `scripts.go`: Python by script (Windows: every script host,
+  `scripthosts.go`, notes/windows.md)
   (`pythonScript`, `essentialProcess`), copies by hash (`HashEntry`
   `sha256:<hex>:<size>:<path>`, hidden by `visibleApps`; system programs
   never match), `KillNaming`/`KillNamingFor` (fetch tools given a blocked

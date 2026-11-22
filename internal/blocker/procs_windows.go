@@ -222,14 +222,27 @@ func localPort(addr string) int {
 // processEnvironment is pid's environment ("KEY=value" each), read from its
 // process parameters (PEB, x64 layout); nil if it can't be read.
 func processEnvironment(pid uint32) []string {
+	env, _ := processParams(pid, true)
+	return env
+}
+
+// processCwd is pid's working folder, or "".
+func processCwd(pid uint32) string {
+	_, cwd := processParams(pid, false)
+	return cwd
+}
+
+// processParams reads pid's environment (withEnv) and working folder from
+// its RTL_USER_PROCESS_PARAMETERS.
+func processParams(pid uint32, withEnv bool) (env []string, cwd string) {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ, false, pid)
 	if err != nil {
-		return nil
+		return nil, ""
 	}
 	defer windows.CloseHandle(h)
 	var pbi windows.PROCESS_BASIC_INFORMATION
 	if err := windows.NtQueryInformationProcess(h, windows.ProcessBasicInformation, unsafe.Pointer(&pbi), uint32(unsafe.Sizeof(pbi)), nil); err != nil {
-		return nil
+		return nil, ""
 	}
 	read := func(addr uintptr, buf []byte) bool {
 		var n uintptr
@@ -238,26 +251,49 @@ func processEnvironment(pid uint32) []string {
 	word := make([]byte, 8)
 	// PEB.ProcessParameters at 0x20.
 	if !read(uintptr(unsafe.Pointer(pbi.PebBaseAddress))+0x20, word) {
-		return nil
+		return nil, ""
 	}
 	params := uintptr(binary.LittleEndian.Uint64(word))
-	// RTL_USER_PROCESS_PARAMETERS: Environment at 0x80, EnvironmentSize at 0x3F0.
-	if params == 0 || !read(params+0x80, word) {
-		return nil
+	if params == 0 {
+		return nil, ""
 	}
-	env := uintptr(binary.LittleEndian.Uint64(word))
-	if env == 0 || !read(params+0x3F0, word) {
-		return nil
+	// CurrentDirectory.DosPath (UNICODE_STRING) at 0x38: length, then the
+	// buffer's address at 0x40.
+	str := make([]byte, 16)
+	if read(params+0x38, str) {
+		n := int(binary.LittleEndian.Uint16(str[0:2]))
+		at := uintptr(binary.LittleEndian.Uint64(str[8:16]))
+		if n > 0 && n <= 2*32767 && n%2 == 0 && at != 0 {
+			buf := make([]byte, n)
+			if read(at, buf) {
+				u := make([]uint16, n/2)
+				for i := range u {
+					u[i] = binary.LittleEndian.Uint16(buf[2*i:])
+				}
+				cwd = windows.UTF16ToString(u)
+			}
+		}
+	}
+	if !withEnv {
+		return nil, cwd
+	}
+	// Environment at 0x80, EnvironmentSize at 0x3F0.
+	if !read(params+0x80, word) {
+		return nil, cwd
+	}
+	block := uintptr(binary.LittleEndian.Uint64(word))
+	if block == 0 || !read(params+0x3F0, word) {
+		return nil, cwd
 	}
 	size := binary.LittleEndian.Uint64(word)
 	if size == 0 || size > 1<<20 || size%2 != 0 {
-		return nil
+		return nil, cwd
 	}
-	block := make([]byte, size)
-	if !read(env, block) {
-		return nil
+	data := make([]byte, size)
+	if !read(block, data) {
+		return nil, cwd
 	}
-	return splitEnvBlock(block)
+	return splitEnvBlock(data), cwd
 }
 
 // splitEnvBlock splits a UTF-16 environment block (NUL-separated, ended by

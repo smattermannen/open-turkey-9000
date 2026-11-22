@@ -73,7 +73,7 @@ of their group and a row here; a finished item loses its row.
 | W22 | Strict mode: new accounts | §3.8 | windows, device | win-ci |
 | W23 | Clock and time zone put back (tamper clock) | §4.10 | windows, locks | win-ci |
 | W24 | Strict mode: VMs, WSL, Sandbox, containers: built; real WSL, Sandbox, Hyper-V Unchecked | §3.8 | windows, device | win-vm |
-| W25 | Strict mode's noexec: Software Restriction Policies | §3.8 | windows, device | win-ci |
+| W25 | Strict mode's noexec: Software Restriction Policies: built; Windows 11 Home Unchecked | §3.8 | windows, device | laptop |
 | W26 | Other ways around: Firefox registry policies, DoT, IPv6 hosts | §3.13, §4.10 | windows, browsers | win-ci |
 | W27 | Desktop checks of `windows_vm_test.ps1` in CI | — | windows, testing | win-ci |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
@@ -1958,7 +1958,11 @@ their sites; their pages are an app's, not a browser's).
   WSL, Windows Sandbox, Hyper-V, VirtualBox, VMware, QEMU and Docker
   programs are closed and WSL's VMs shut down. Needs: win-ci (WSL on the
   runner), win-vm.
-- [ ] `W25` Strict mode's noexec on Windows (M). SPEC §3.8 (nothing runs
+- [ ] `W25` Strict mode's noexec on Windows (M). Built (2026-11-22):
+  `noexec_windows.go`; checked by `ci/windows_service_test.ps1` on
+  `windows-latest` (a program in Downloads refused during a lock, the
+  rules gone after). Unchecked: Windows 11 Home (SRP's enforcement there:
+  Needs laptop). Was planned: SPEC §3.8 (nothing runs
   from home or temporary folders except exempt folders), §6 2026-11-21
   (By Opus). Was: `ApplyNoexec` does nothing; downloaded programs are
   closed within a cycle (a short one still runs). Build (By Opus):

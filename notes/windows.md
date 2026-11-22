@@ -310,8 +310,16 @@
   portable programs (`userProgram`: a profile's folders other than
   AppData, `AppData\Local\Temp`, removable drives) are closed
   (`CloseNoexecPrograms`), except exempt folders; per-user installs in
-  AppData keep running; nothing is mounted
-  (`ApplyNoexec` does nothing).
+  AppData keep running. They don't start either (W25,
+  `noexec_windows.go`): `ApplyNoexec` keeps Software Restriction Policies
+  path rules (registry only, so Home has them; every user,
+  administrators included): each profile disallowed, its AppData allowed
+  but `AppData\Local\Temp` disallowed, the Public profile, Windows' Temp,
+  removable drives, and exempt folders allowed; rules synced each cycle
+  under keys named `{4B43394B-…}`; the Safer key is made (DefaultLevel
+  unrestricted, DLLs left out) only if absent, noted in
+  ProgramData\kc9k\srp-made, and is a lockdown target. `RemoveNoexec`
+  removes KC9K's rules, and the key if KC9K made it.
 - Strict mode's ways to SYSTEM (W20–W22, `strict_windows.go`;
   `applyStrictExtras` from `ApplyLockdown`, `removeStrictExtras` first in
   `RemoveLockdown`, whose failure is logged and retried but never keeps

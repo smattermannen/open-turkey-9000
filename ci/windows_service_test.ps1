@@ -141,6 +141,11 @@ $taskRefused = $LASTEXITCODE -ne 0
 try { Set-WmiInstance -Namespace root/subscription -Class CommandLineEventConsumer -Arguments @{ Name = 'kc9kci'; CommandLineTemplate = 'cmd /c exit' } -ErrorAction Stop | Out-Null; $wmiRefused = $false } catch { Write-Host "  $_"; $wmiRefused = $true }
 Start-Sleep -Seconds 40
 Check 'strict mode: a virtual machine program is closed' { $vm.HasExited }
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Downloads" | Out-Null
+Copy-Item "$env:SystemRoot\System32\PING.EXE" "$env:USERPROFILE\Downloads\kc9kping.exe" -Force
+$started = $true
+try { Start-Process "$env:USERPROFILE\Downloads\kc9kping.exe" -ArgumentList '-n', '1', '127.0.0.1' -WindowStyle Hidden -Wait -ErrorAction Stop } catch { Write-Host "  $_"; $started = $false }
+Check "strict mode: a program in your Downloads folder doesn't start (Software Restriction Policies)" { -not $started }
 Check "strict mode: Docker's engine is stopped (where installed)" { -not (Get-Service docker -ErrorAction SilentlyContinue) -or (Get-Service docker).Status -ne 'Running' }
 Check 'strict mode: an account made meanwhile is turned off' { -not (Get-LocalUser kc9kci -ErrorAction SilentlyContinue).Enabled }
 Check 'strict mode: a task as SYSTEM is refused, or deleted within a cycle' { $taskRefused -or -not (schtasks.exe /Query /TN kc9kci 2>$null) }
@@ -176,6 +181,7 @@ sc.exe delete kc9kci | Out-Null
 sc.exe config Spooler start= auto | Out-Null
 Check 'after the lock an administrator can reconfigure services again' { $LASTEXITCODE -eq 0 }
 Check 'after the lock Windows Installer is on again' { (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer' -ErrorAction SilentlyContinue).DisableMSI -ne 2 }
+Check "after the lock KC9K's Software Restriction Policies rules are gone" { -not (Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers\0\Paths' -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -like '{4B43394B-*' }) }
 Check 'after the lock the account made meanwhile is on again' { (Get-LocalUser kc9kci -ErrorAction SilentlyContinue).Enabled }
 net.exe user kc9kci /delete | Out-Null
 schtasks.exe /Delete /TN kc9kci /F 2>$null | Out-Null

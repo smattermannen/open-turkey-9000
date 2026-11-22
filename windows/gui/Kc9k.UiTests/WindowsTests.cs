@@ -121,4 +121,48 @@ public class WindowsTests
         Assert.InRange(r.X, 0, 4000);
         Assert.InRange(r.Y, 0, 3000);
     }
+
+    // W38: someone with nothing set up sees what is left, each step opening its place.
+    [Fact]
+    public void AFirstViewForNothingSetUp()
+    {
+        using var gui = new GuiApp("first", prepare: dir => GuiApp.EditState(dir, s =>
+        {
+            s["blocks"] = new JsonArray();
+            s["modes"] = new JsonArray();
+            foreach (var b in s["browsers"]!.AsArray()) b!["checkin_seconds"] = -1;
+        }));
+        gui.Find("FirstSteps");
+        gui.Shot("first-view");
+        gui.Invoke("First_block");
+        gui.FindName("New block");
+        gui.Invoke(gui.FindButton("Cancel"));
+        gui.Invoke("First_browser");
+        gui.Find("InstallBrowser_librewolf");
+    }
+
+    [Fact]
+    public void NoFirstViewOnceSetUp()
+    {
+        using var gui = new GuiApp("set-up", prepare: dir => GuiApp.EditState(dir, s =>
+        {
+            foreach (var b in s["browsers"]!.AsArray()) if ((bool)b!["installed"]!) b["checkin_seconds"] = 5;
+        }));
+        gui.Find("Headline");
+        Thread.Sleep(500);
+        Assert.True(gui.ById("FirstSteps") is null || gui.ById("FirstSteps")!.IsOffscreen);
+    }
+
+    // W39: device protection says what holds on Windows, and the firmware lock's state.
+    [Fact]
+    public void DeviceProtectionExplainedForWindows()
+    {
+        using var gui = new GuiApp("device");
+        gui.Page("settings");
+        gui.WaitFor(() => gui.Find("ProtectionNow").Name.StartsWith("On now: basic"), "the level on now");
+        gui.WaitFor(() => gui.Find("FirmwareStatus").Name.StartsWith("Firmware lock: not available from Windows"), "the firmware lock's state");
+        Assert.True(gui.Ran("firmware-lock", "--json"));
+        gui.Find("FirmwareStatus").Focus();
+        gui.Shot("device-protection");
+    }
 }

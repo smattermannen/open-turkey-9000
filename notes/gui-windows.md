@@ -141,4 +141,13 @@ Not fixed by `SPEC.md`; the code is the truth.
   Keyboard): Ctrl+1…9 the sidebar's pages, Ctrl+N New block…, F5 reads
   the state and statistics again, Alt+Left, the Back key and the mouse's
   back button go from a block, mode or automation to the cards.
+- First view (W38, `Words.FirstSteps`): while no block exists or no
+  supported browser's extension has checked in, the Overview shows "Get
+  started": make a block, a supported browser with the extension, start
+  the block, each with its button, then the stricter options and Guided
+  setup…. It switches nothing on.
+- Device protection (W39, `Words.ProtectionLevels`): Settings names the
+  three levels of principle 3 as they hold on Windows, which is on now,
+  and the firmware lock's state (`firmware-lock --json`, read quietly when
+  the page is first shown and after its dialog).
 

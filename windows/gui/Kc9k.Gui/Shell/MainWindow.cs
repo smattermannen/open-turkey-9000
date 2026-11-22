@@ -287,6 +287,20 @@ public sealed partial class MainWindow : Window
         Blocks.OpenMode(name);
     }
 
+    /// <summary>Settings, at its browsers (W38).</summary>
+    public void OpenBrowsers()
+    {
+        Show("settings");
+        (pages["settings"].Page as SettingsPage)?.ShowBrowsers();
+    }
+
+    /// <summary>Settings, with the guided setup's checklist open (W38).</summary>
+    public async Task OpenGuidedSetup()
+    {
+        Show("settings");
+        if (pages["settings"].Page is SettingsPage settings) await settings.ShowGuidedSetup();
+    }
+
     async Task ExtensionDialog()
     {
         var state = Controller.State;

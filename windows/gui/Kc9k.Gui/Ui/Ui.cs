@@ -255,7 +255,7 @@ public static class Glyphs
         Cancel = "", Info = "", Warning = "", Accept = "", Copy = "", Rename = "",
         Import = "", Export = "", Globe = "", App = "", Shield = "", Snow = "\uE7E8",
         Monk = "", Brightness = "", Picture = "", Record = "", Filter = "",
-        Refresh = "", Coffee = "", Timer = "", Sync = "", Browser = "";
+        Refresh = "", Coffee = "", Timer = "", Sync = "", Browser = "", Check = "\uE73E", Circle = "\uEA3A";
 }
 
 /// <summary>Lays children out like words in a line of text: each at its own

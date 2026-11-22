@@ -1753,13 +1753,14 @@ Windows conveniences:
   page". Built 2026-11-22 (UI tests `WindowStateIsKept`,
   `AWindowOffEveryScreenComesBack`). Several screens and 150–200 %
   scaling: Unchecked (Needs win-vm, laptop).
-- [ ] `W38` First view (S; R-GUI-3 tasks first; §6 2026-11-14 no wizard,
+- [x] `W38` First view (S; R-GUI-3 tasks first; §6 2026-11-14 no wizard,
   §6 2026-11-21 guided setup). While nothing is set up (no block, no
   supported browser with the extension), the Overview shows a short
   "Get started" list, each step opening its place, and the stricter
   options (strict mode, no-escape, guided setup) named last. It switches
-  nothing on (principles 3, 7). Needs: agent, win-ci.
-- [ ] `W39` Device protection explained for Windows (S; §4.10 Device
+  nothing on (principles 3, 7). Built 2026-11-22 (`Words.FirstSteps`,
+  UI tests `AFirstViewForNothingSetUp`, `NoFirstViewOnceSetUp`).
+- [x] `W39` Device protection explained for Windows (S; §4.10 Device
   protection, principle 3, §6 2026-11-21 Windows equivalents). Settings
   says per level what holds on Windows: basic; strict mode (the
   administrator account denied the service, files, registry keys, boot
@@ -1767,7 +1768,9 @@ Windows conveniences:
   and hardware (Safe Mode runs the service; no-escape and factory reset
   protection turn the recovery environment off; the firmware lock and its
   status shown on the page, not only in its dialog). Circadian rhythm's
-  Night light note exists (W6). Needs: agent, win-ci.
+  Night light note exists (W6). Built 2026-11-22 (`Words.ProtectionLevels`,
+  UI test `DeviceProtectionExplainedForWindows`); each level's claims are
+  Core's (W5) and Unchecked on a real boot until W5 is (Needs win-vm).
 
 Installer and release (W7):
 

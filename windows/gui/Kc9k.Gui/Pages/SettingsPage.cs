@@ -111,13 +111,21 @@ public sealed class SettingsPage : IPage
             split: t => t.Trim().Length > 0 ? [t.Trim()] : [], multi: true, id: "StrictExempt", showTitle: false);
         noEscape = Ui.Switch("No-escape", false, on => _ = NoEscape(on), "NoEscape");
         resetGuard = Ui.Switch("Installer media guard", false, on => _ = C.Run(["reset-guard", on ? "on" : "off"]), "ResetGuard");
+        levelsNow = Ui.Strong("").Id("ProtectionNow");
+        firmwareStatus = Ui.Note("").Id("FirmwareStatus");
+        var levels = Ui.Column(4);
+        foreach (var (title, detail, _) in Words.ProtectionLevels(false, false, false, false))
+            levels.Children.Add(Ui.Text($"{title}: {detail}", "CaptionTextBlockStyle"));
         var device = Ui.Section("Device protection",
+            Ui.Dim("How far Killer Chicken 9000 holds against you is your choice: nothing here is on until you turn it on. The guided setup goes through the strictest setup in order."),
+            levelsNow, levels,
             LockedRow("strict", "Strict mode: deny the administrator account what would stop Killer Chicken", "While anything is locked or Frozen Chicken runs, the administrator account is denied what would stop Killer Chicken: its service, files and registry keys, and the boot and recovery settings. It holds again each minute. Strict mode itself can be turned off at any time unless you lock it.", strict),
             strictExempt,
             Ui.SettingRow("No-escape: close the ways out", "During a lock, Safe Mode and the recovery environment are off, so the only way past a lock is booting other media or reinstalling. It can't be turned off during a lock.", noEscape),
             Ui.SettingRow("Factory reset protection: installer media guard", "While anything is locked, the download pages of operating systems and USB image writers are blocked and image writers (Rufus, balenaEtcher, the Media Creation Tool, …) are closed. It can't be turned off during a lock.", resetGuard),
             Ui.SettingRow("Factory reset protection: firmware lock", "USB and network boot off, the boot order locked, and a firmware password a trusted person keeps. The guided setup lists every step of the strictest setup, in order.",
-                Ui.Row(6, Ui.Button("Firmware lock…", () => _ = Firmware(), "FirmwareLock"), Ui.Button("Guided setup…", () => _ = Guided(), "GuidedSetup"))));
+                Ui.Row(6, Ui.Button("Firmware lock…", () => _ = Firmware(), "FirmwareLock"), Ui.Button("Guided setup…", () => _ = Guided(), "GuidedSetup")),
+                firmwareStatus));
 
         wallpaperDefault = Combo("Wallpaper default", "WallpaperDefault", Tables.WallpaperDefaults, "latest");
         wallpaperDefault.SelectionChanged += (_, _) => { if (!filling) _ = WallpaperDefaultChanged(); };
@@ -195,6 +203,33 @@ public sealed class SettingsPage : IPage
     static string Key(ComboBox c) => (c.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
 
     public void ShowBrowsers() => browsersSection.StartBringIntoView();
+
+    /// <summary>The guided setup's checklist, from elsewhere (the Overview's first view, W38).</summary>
+    public Task ShowGuidedSetup() => Guided();
+
+    // W39: the firmware lock's state on the page, read quietly (a refusal
+    // here is no news) when the page is first shown and after its dialog.
+    TextBlock levelsNow = null!, firmwareStatus = null!;
+    bool firmwareLocked, firmwareRead;
+
+    async Task ReadFirmware()
+    {
+        firmwareRead = true;
+        var result = await C.Session.RunAsync(["firmware-lock", "--json"]);
+        if (!result.Ok) { firmwareStatus.Text = "Firmware lock: its state can't be read now."; return; }
+        try
+        {
+            var o = result.Output;
+            var status = JsonDocument.Parse(o[Math.Max(0, o.IndexOf('{'))..]).RootElement;
+            firmwareLocked = B(status, "locked");
+            firmwareStatus.Text = !B(status, "available")
+                ? "Firmware lock: not available from Windows on this computer; its steps can be done in the firmware's own setup."
+                : $"Firmware lock: {(firmwareLocked ? "on" : "off")} · firmware password {(B(status, "password") ? "set" : "not set")}"
+                  + (B(status, "pending_reboot") ? " · takes effect at the next restart" : "");
+        }
+        catch (JsonException) { firmwareStatus.Text = ""; }
+        if (C.State is { } s) levelsNow.Text = Words.ProtectionNow(s.Strict, s.NoEscape, s.ResetGuard, firmwareLocked);
+    }
 
     // Setting locks (browser settings, strict mode, block unsupported browsers) ---
 
@@ -282,6 +317,8 @@ public sealed class SettingsPage : IPage
 
     public void Update(GuiState s)
     {
+        levelsNow.Text = Words.ProtectionNow(s.Strict, s.NoEscape, s.ResetGuard, firmwareLocked);
+        if (!firmwareRead) _ = ReadFirmware();
         filling = true;
         try
         {
@@ -646,6 +683,12 @@ public sealed class SettingsPage : IPage
         if (available && !B(status, "locked")) d.PrimaryButtonText = "Lock the firmware…";
         if (available && B(status, "set_by_kc9k")) d.SecondaryButtonText = "Remove…";
         var answer = await C.Dialogs.Show(d);
+        try { await FirmwareAnswer(answer, status); }
+        finally { await ReadFirmware(); }
+    }
+
+    async Task FirmwareAnswer(ContentDialogResult answer, JsonElement status)
+    {
         if (answer == ContentDialogResult.Primary) await LockFirmware(B(status, "password"));
         else if (answer == ContentDialogResult.Secondary)
         {

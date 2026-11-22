@@ -394,6 +394,39 @@ public static class Words
         return text;
     }
 
+    /// <summary>The first view's steps (W38): what is done of a first
+    /// setup. Empty once a block exists and a supported browser's extension
+    /// has checked in, so the Overview stops showing them.</summary>
+    public static List<(string Key, string Text, bool Done)> FirstSteps(GuiState s)
+    {
+        var blocks = s.RealBlocks.ToList();
+        var browser = s.Browsers.Any(b => b.Installed && b.CheckinSeconds >= 0);
+        if (blocks.Count > 0 && browser) return [];
+        return
+        [
+            ("block", "Make a block: the sites, words and apps to keep away.", blocks.Count > 0),
+            ("browser", "Use a supported browser with the extension, so pages are judged as well as addresses.", browser),
+            ("start", "Start the block, now or by a schedule. Add locks when you want it to hold.", blocks.Any(b => b.Active)),
+        ];
+    }
+
+    /// <summary>The levels of custom security (principle 3) as they hold on
+    /// Windows (W39): title, what it gives, whether it is on now.</summary>
+    public static (string Title, string Detail, bool On)[] ProtectionLevels(bool strict, bool noEscape, bool resetGuard, bool firmwareLocked) =>
+    [
+        ("Basic", "Blocks and their locks. You keep the administrator account: a lock outlasts an impulse, but where nothing below is on, the account could still remove Killer Chicken 9000.", true),
+        ("Strict mode", "During a lock or a freeze the administrator account is denied what would stop Killer Chicken 9000: its service, files and registry keys, the boot and recovery settings. Programs started from Downloads, the Desktop, Documents, the temporary folder or a removable drive are closed.", strict),
+        ("Boot and hardware", "The service runs in Safe Mode too, so Safe Mode is no way around a block. No-escape and factory reset protection turn the recovery environment off (Reset this PC and its command prompt); the installer media guard closes USB image writers; the firmware lock keeps the computer from starting another system.", noEscape || resetGuard || firmwareLocked),
+    ];
+
+    /// <summary>The level on now, in a line (W39).</summary>
+    public static string ProtectionNow(bool strict, bool noEscape, bool resetGuard, bool firmwareLocked)
+    {
+        var levels = ProtectionLevels(strict, noEscape, resetGuard, firmwareLocked);
+        var on = levels.Where(l => l.On).Select(l => l.Title.ToLowerInvariant()).ToList();
+        return "On now: " + string.Join(", ", on) + (on.Count < levels.Length ? ". Nothing stricter is on until you turn it on." : ".");
+    }
+
     /// <summary>Where a ladder stands (§4.1 ladder positions): its step and
     /// how many events count towards it; null when it is off.</summary>
     public static string? LadderPosition(Nepsis? n, int level, int count)

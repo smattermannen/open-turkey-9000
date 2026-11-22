@@ -2203,6 +2203,8 @@ Stability (blocks every other Windows GUI test):
   From 17:02:42 the same pids (dwm 14320, ShellHost, ctfmon) were re-"closed" every 5 s without exiting; last kc9k.log line 17:03:32; power button 17:03:33.5 (Kernel-Power 41, bugcheck 0: a hang, no BSOD).
   Confirmed, load only: Group Policy 4004 "manual" refresh pairs every 5 s (24/min, 630 in 26 min; static finding 1); SYSTEM PowerShell `WmiMonitorBrightness` every 5 s with circadian off (12/min, 361 vs 2–4/day, each "System error."; finding 2).
   Not seen: "too many callback functions", agent crash loop (1 restart, at shutdown), panics. Fix idea: never treat a program under %SystemRoot% as a browser; never kill session-critical processes (dwm, csrss, winlogon, fontdrvhost, sihost, svchost, explorer).
+  Laptop verdict (2026-11-22) *(By claude)*: **fixed on this laptop** (MSI 0.1.1 from 2e938d0, soak `-Minutes 2` with the GUI open, shortened at the owner's request): GP 4004 0/min (was 24), service PowerShell 0.7–1.5/min (was 12), CPU max 68 %, no agent restart, 0 System32 "closing" lines.
+  Guard over the live process list: old main called 128 of 221 processes browsers (25 kinds: winlogon, wininit, smss, services, sihost, svchost …); 3170f6f only librewolf (14). The soak still exits 1 on idle: "PowerShell by the service" (the once-a-minute panel read for the status, `panelReadEvery`; the soak's idle limit is 0) and "agent H% not flat" (+5.9 % in the first 2.6 min, flat after).
   Built, checked on windows-latest (2026-11-22) *(By claude)*: no program under
   %SystemRoot% or a Microsoft WindowsApps package is a browser; the engine dll
   counts only beside the program or in a version folder; every Windows kill
@@ -2229,6 +2231,7 @@ Stability (blocks every other Windows GUI test):
   (shell restarted) 16:53:15. Circadian was off all session: no gamma/ramp lines. No
   Display 4101, LiveKernelEvent, WHEA, 0xc0000409 or dump today (WerSvc is Disabled, so
   weak); "overrun detection" not found in any log.
+  Laptop verdict (2026-11-22) *(By claude)*: no black screen on 0.1.1: circadian (kelvin 3400–5000, software 60–85 %, backlight 50–80 %), Play the day and settings phases gave 0 Display 4101/LiveKernelEvent, 0 DWM exits, gamma "ok" every sample, identity ramp put back. Only 2-min phases: the 2000-callback build-up rests on CI's `TestWinDisplaysManyCalls`.
   Built, checked on windows-latest (2026-11-22) *(By claude)*: the cause was
   W50's (dwm.exe killed). Also built: one package-level `EnumDisplayMonitors`
   callback (5000 screen calls in one process, `TestWinDisplaysManyCalls`);
@@ -2256,6 +2259,8 @@ Stability (blocks every other Windows GUI test):
   Laptop (2026-11-22) *(By claude)*: GUI alone against the fake (main b6c3bb5, 200 %
   scaling, ~25 launches, window watcher on): no crash, hang or white window; every
   window WinUI (`WinUIDesktopWin32WindowClass`, popups). UI suite 36/38: see W33/W37 below.
+  Laptop verdict (2026-11-22) *(By claude)*: with the real service (0.1.1) and the GUI open ~30 min, the window watcher saw 189 new windows, none classic or blank from KC9K; the white window came with the dead dwm.exe (W50). Not checked: a GUI crash log (no crash happened).
+  Laptop finding (2026-11-22) *(By claude)*: KC9K closed the owner's LibreWolf twice while in use ("started before KC9K changed its browser settings", 20:24:56 and 20:48:16), when a browser setting changed with a website block on; once with a Save As dialog open. By design (notes/browsers.md), but unsaved work is lost: ask the owner whether to warn first or wait for the browser to be idle.
 
 Layout (owner: keep the Windows look, use the GTK layout):
 

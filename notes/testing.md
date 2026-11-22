@@ -151,6 +151,22 @@
   when its lock file names its own Xvfb. Go tests use port 0 and
   `t.TempDir()`; two full `go test ./...` at once pass.
 
+## Windows laptop (owner's, Windows 11 Home, 200 % scaling, used for real) *(By claude)*
+
+- Claude Code must run elevated (UAC): the data folder is SYSTEM-only and
+  the MSI, `kc9k uninstall` and SYSTEM one-shot tasks need it. Read
+  SYSTEM-only files through a one-shot `schtasks /RU SYSTEM` task (create,
+  run, delete); never change the data folder's security.
+- Safe here: the UI suite against the fake kc9k; `ci/windows_soak_test.ps1`
+  with a freeze guard beside it. Not without the owner: RealTests or any
+  block with a website (the extension guard and browser-setting changes
+  close LibreWolf, the owner's browser, even mid-dialog).
+- At 200 %, `gui.json` window sizes are physical pixels and the UI tests'
+  coordinates and `Capture.Element` were logical (fixed in the DPI-aware
+  tests); the Accessibility test once cleared the owner's High Contrast
+  flags (put back: 126).
+- Needs a person: Narrator, reboot-only checks, anything judged by eye.
+
 ## Test laptop (owner's, Mint 22.3, `TAGS=devmaster`, used for real)
 
 - Tests add/remove blocks, restart the daemon (tamper) and trip blocks: all

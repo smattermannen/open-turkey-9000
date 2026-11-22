@@ -278,7 +278,7 @@ tamper protection settings can't be turned off.
 | **Step** | One rung: "N events within T: these consequences". |
 | **Quiet time** | Without tripping this long, the ladder drops a step. |
 | **Workaround** | Mirror, proxy address, alternative front-end, fetch tool. |
-| **Tamper** | Clock jump, or daemon restart other than upgrade, shutdown or self-reported crash. |
+| **Tamper** | Clock jump, or daemon restart other than upgrade, shutdown or self-reported crash; on Windows also a session agent ended from outside (not one that crashed and said so, or ended by itself). *(By claude)* |
 
 ### 3.11 Passwords
 
@@ -773,6 +773,7 @@ Decisions not already written into §1–5:
 - 2026-11-22 (By Opus): One-click browser install on Windows (§4.10) runs winget as SYSTEM for the whole computer, with the browser's published package; the download is an outside query the command states (principle 6).
 - 2026-11-22 (By Opus): The Windows GUI's notification-area menu offers only actions that strengthen (start a block or a mode, monk mode, Frozen Chicken, a new block); stopping, unlocking and breaks stay in the window. A quick way that only weakens would make the tray an easier way past a block than the window, which locks and their confirmations never should be; each action brings the window forward first, so its questions and refusals are seen.
 - 2026-11-22 (By Opus): The Windows GUI's start arguments (its jump list, a shortcut, a second start) only open a page or one of the GUI's own dialogs (New block…, Monk mode…, Frozen Chicken…), never a kc9k command: a shortcut that started or stopped a block would act outside the window's questions and lock confirmations (R-LOCK-12), and one that weakened would be a way past them. The GUI's first view, while no block exists or no supported browser's extension has checked in, is a list of what is left with each step's button and the stricter options named last (2026-11-14 no wizard, 2026-11-21 guided setup): it switches nothing on.
+- 2026-11-22 (By claude): A Windows session agent that crashes and says so (Go's crash report on its output, exit code 2) or ends by itself is logged, not counted as tamper; only one ended from outside is (§3.10 Tamper), as Linux counts no self-reported daemon crash. *(By claude)*
 
 ## 7. Open decisions
 

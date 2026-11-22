@@ -122,13 +122,40 @@
 - Agents (`manager_windows.go`): every 3 s, each session with a signed-in
   user (`WTSQueryUserToken`) gets `kc9k agent` (`CreateProcessAsUser`,
   `winsta0\default`, the user's environment); one that ended is started
-  again (`Manager.Restarts`; W5 counts it). Agents connect to
+  again (`Manager.Restarts` when ended from outside; W5 counts it). Agents connect to
   `\\.\pipe\kc9k-agent`; accepted only from the installed `kc9k.exe`
   image, in the session its hello names, with its own PID. One JSON line
   per message: requests with IDs, replies, events (ID 0). Commands the
   service runs reach agents through `\\.\pipe\kc9k-agents-internal`
   (SYSTEM only): `winagent.Call`, `winagent.Sessions` work from either.
   Ops so far: `status` (idle ms from `GetLastInputInfo`).
+- Agent stability (W50–W52) *(By claude)*: `dispatch.go` (shared, tested
+  on Linux) answers each request in its own goroutine but every handler
+  under `recover()` (a panic is an error reply and a logged stack, never
+  the agent's end); screen ops (gamma get/set, monitors, wallpaper, dark
+  mode, Night light, look) one at a time under one mutex, a gamma set
+  still waiting replaced by a newer one (its reply: 0 screens). Ramps are
+  checked before they reach a screen (`CheckRamp`: 256 values per colour,
+  never falling, top no lower than 1000–10000 K at 10 % software
+  brightness allow, less a tenth). The agent puts the plain ramp back when
+  it ends (the service stopped, is uninstalled, closed its connection) if
+  it set another. `displays()` uses one package-level callback with its
+  results under a mutex (Go keeps every `NewCallback` and stops at 2000:
+  one per call ended the agent after about 2000 screen calls);
+  `TestWinDisplaysManyCalls` makes 5000 of each. The repo's other
+  callbacks (`enumCallback`, the challenge's `wndProc` under a `Once`)
+  were already made once.
+- Crash vs. tamper (§3.10) *(By claude)*: the service starts each agent
+  with its standard output and error on a pipe only that end inherits
+  (`spawnWithOutput`, `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`); the first 200
+  lines go to the service's log ("agent N: ..."), the last 16 KB tell how
+  it ended (`classifyEnd`): exit code 2 with Go's "panic: "/"fatal error: "
+  report is a crash (`Manager.Crashes`, logged, not tamper); the agent's
+  own marker line (service closed the connection, exit 0; gave up, with an
+  error) is ending by itself; anything else (TerminateProcess with any
+  code, Task Manager, taskkill) is from outside (`Manager.Restarts`,
+  which `guardPlatform` logs as tamper). `TestAgentEndCrashVsKill` runs
+  each for real.
 - Install (`install_windows.go`): Program Files\KC9K (`ProgramSDDL`:
   owner SYSTEM, SYSTEM full, Administrators and Users read/run, protected),
   ProgramData\kc9k (`DataSDDL`: SYSTEM only), `kc9k.exe` copied (a running

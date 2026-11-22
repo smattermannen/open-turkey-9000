@@ -20,30 +20,18 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Handler answers one op in the agent.
-type Handler func(args json.RawMessage) (any, error)
+func init() {
+	Register(OpStatus, func(json.RawMessage) (any, error) {
+		idle, _ := winapi.IdleMillis()
+		return Status{IdleMillis: idle, Locked: sessionLocked()}, nil
+	})
+}
 
-var (
-	handlersMu sync.Mutex
-	handlers   = map[string]Handler{
-		OpStatus: func(json.RawMessage) (any, error) {
-			idle, _ := winapi.IdleMillis()
-			return Status{IdleMillis: idle, Locked: sessionLocked()}, nil
-		},
-	}
-	// emit sends an event to the service; set while connected.
-	emit func(event string, data any)
-)
+// emit sends an event to the service; set while connected.
+var emit func(event string, data any)
 
 // sessionLocked is set by the agent's session watch (W3); false until then.
 var sessionLocked = func() bool { return false }
-
-// Register adds a handler for op (the desktop work of W3 and W6).
-func Register(op string, h Handler) {
-	handlersMu.Lock()
-	defer handlersMu.Unlock()
-	handlers[op] = h
-}
 
 // Emit sends an event to the service, if connected.
 func Emit(event string, data any) {
@@ -52,8 +40,21 @@ func Emit(event string, data any) {
 	}
 }
 
-// RunAgent is `kc9k agent`. It returns when the service goes away.
+// RunAgent is `kc9k agent`. It returns when the service goes away. It
+// writes why it ends to its output (the service reads it: an agent that
+// ended by itself is not tamper, §3.10).
 func RunAgent() error {
+	err := runAgent()
+	resetGamma()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, markerGaveUp, err)
+	} else {
+		fmt.Fprintln(os.Stderr, markerDone)
+	}
+	return err
+}
+
+func runAgent() error {
 	var session uint32
 	if err := windows.ProcessIdToSessionId(uint32(os.Getpid()), &session); err != nil || session == 0 {
 		return errors.New("the agent runs in a user's session, started by the service")
@@ -98,20 +99,10 @@ func RunAgent() error {
 		if json.Unmarshal(line, &req) != nil || req.ID == 0 {
 			continue
 		}
-		go func() {
-			handlersMu.Lock()
-			h := handlers[req.Op]
-			handlersMu.Unlock()
-			rep := Reply{ID: req.ID}
-			if h == nil {
-				rep.Error = "unknown op " + req.Op
-			} else if result, err := h(req.Args); err != nil {
-				rep.Error = err.Error()
-			} else if result != nil {
-				rep.Result, _ = json.Marshal(result)
-			}
-			_ = send(rep)
-		}()
+		// Each request in its own goroutine (a challenge waits for hours);
+		// screen work one at a time, every handler under recover()
+		// (dispatch.go).
+		go func() { _ = send(agentDispatch.answer(req)) }()
 	}
 }
 

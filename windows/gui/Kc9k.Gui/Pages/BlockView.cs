@@ -279,13 +279,32 @@ public sealed class BlockView
         View = grid;
     }
 
+    Grid? pad;
+
+    /// <summary>The tab area: one padded grid whose only child is the tab shown.
+    /// A view is detached from any parent first (WinUI throws 0x800F1000 when an
+    /// element still has one).</summary>
     UIElement Pad(UIElement content)
     {
-        var g = new Grid { Padding = Ui.PagePadding(tabScroll.ActualWidth > 0 ? tabScroll.ActualWidth : double.PositiveInfinity, 12) };
-        g.SizeChanged += (_, e) => g.Padding = Ui.PagePadding(e.NewSize.Width, 12);
-        if (content is FrameworkElement f && f.Parent is Grid old) old.Children.Remove(f);
-        g.Children.Add(content);
-        return g;
+        if (pad is null)
+        {
+            pad = new Grid { Padding = Ui.PagePadding(tabScroll.ActualWidth > 0 ? tabScroll.ActualWidth : double.PositiveInfinity, 12) };
+            pad.SizeChanged += (_, e) => pad.Padding = Ui.PagePadding(e.NewSize.Width, 12);
+        }
+        pad.Children.Clear();
+        Detach(content);
+        pad.Children.Add(content);
+        return pad;
+    }
+
+    static void Detach(UIElement e)
+    {
+        switch ((e as FrameworkElement)?.Parent)
+        {
+            case Panel p: p.Children.Remove(e); break;
+            case Border b: b.Child = null; break;
+            case ContentControl c: c.Content = null; break;
+        }
     }
 
     static ComboBox Combo(string name, string id, params (string Key, string Title)[] items)
@@ -332,7 +351,8 @@ public sealed class BlockView
         foreach (var (k, (item, _)) in tabViews) item.IsChecked = k == key;
         if (tabShown == key) return;
         tabShown = key;
-        tabScroll.Content = Pad(tabViews[key].View);
+        var padded = Pad(tabViews[key].View);
+        if (!ReferenceEquals(tabScroll.Content, padded)) tabScroll.Content = padded;
     }
 
     Task Cmd(string command, IReadOnlyList<string> values) => C.Run(["block", command, Name, .. values]);

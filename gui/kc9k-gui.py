@@ -3459,7 +3459,11 @@ def clip_shape(x, tension, rising):
     middle = 0.5 + 0.49 * max(-1.0, min(1.0, tension))
     if abs(middle - 0.5) < 1e-9:
         return x
-    return x ** (math.log(middle) / math.log(0.5))
+    # Below the straight line x^p, above it its mirror image: +t and -t are
+    # mirror images and neither end is a corner.
+    if middle < 0.5:
+        return x ** (math.log(middle) / math.log(0.5))
+    return 1 - (1 - x) ** (math.log(1 - middle) / math.log(0.5))
 
 
 def clip_segment(points, minute):

@@ -53,7 +53,7 @@ of their group and a row here; a finished item loses its row.
 | W54 | Windows page layout as in the GTK GUI, Windows look kept | §4.1–4.13 | gui-windows | agent, win-ci, owner |
 | W55 | Import project in the Windows GUI | §3 Project | gui-windows, db-project | agent, win-ci |
 | W56 | A Linux project imports safely on Windows (Linux app unchanged) | §3 Project, R-WEAK-1/2 | db-project, windows | agent, win-ci |
-| A14 | Automation clip curves: sharp going up, soft going down; make both soft | §4.10 | circadian, gui, gui-windows | agent |
+| A14 | Automation clip curves: built, mirrored both ways; GTK smoke test and laptop look Unchecked *(By claude)* | §4.10 | circadian, gui, gui-windows | agent, laptop |
 | W1 | Windows service, session agent, named pipe, install/uninstall: built, checked on `windows-latest` (the agent in a signed-in session too, 2026-11-22); the console's raw mode Unchecked | §3.13 | windows | win-vm |
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
 | W3 | Windows apps and desktop: built; apps and titles closed through the agent checked on `windows-latest` (2026-11-22); notifications, the challenge window, hotkeys, the lock freeze Unchecked | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
@@ -2250,6 +2250,12 @@ Both platforms:
   one the owner prefers; the GUIs and the daemon's interpolation agree.
   Done when: a test drags a point up and down by the same amount and
   gets mirror-image curves.
+  Built 2026-11-22: one mirrored curve (below straight x^p, above it
+  1 − (1 − x)^p) in Go, C# and GTK, the same samples tested in each; the
+  GTK smoke test drags a handle 40 px up and down from straight and gets
+  mirror images (written, not run here: no GTK); Go and C# tests pass.
+  Unchecked: the GTK smoke test, and the owner's look on the laptop.
+  *(By claude)*
 
 ## 5. Proposed, not agreed
 

@@ -76,7 +76,10 @@ public static class Clips
         if (!rising) tension = -tension;
         var middle = 0.5 + 0.49 * Math.Clamp(tension, -1, 1);
         if (Math.Abs(middle - 0.5) < 1e-9) return x;
-        return Math.Pow(x, Math.Log(middle) / Math.Log(0.5));
+        // Below the straight line x^p, above it its mirror image: +t and -t
+        // are mirror images and neither end is a corner (circadian.Shape).
+        if (middle < 0.5) return Math.Pow(x, Math.Log(middle) / Math.Log(0.5));
+        return 1 - Math.Pow(1 - x, Math.Log(1 - middle) / Math.Log(0.5));
     }
 
     /// <summary>The points the curve runs between at minute: (from, to, start, end).</summary>

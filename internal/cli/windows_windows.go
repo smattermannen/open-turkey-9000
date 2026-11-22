@@ -244,8 +244,10 @@ and no changes to services or their registry keys, no tasks or WMI
 subscriptions running as SYSTEM, no installers (Windows Installer off),
 no backup, restore, debug or take-ownership privileges (running programs
 lose them at once, new sign-ins don't get them), and accounts made or
-turned on meanwhile are turned off. Programs run from your own folders
-(your profile, USB drives) are closed. Only kc9k itself keeps working.
+turned on meanwhile are turned off. No virtual machines, WSL, Windows
+Sandbox or containers. Programs in your own folders, temporary folders or
+on USB drives don't start, and those running are closed (exempt folders
+excepted). Only kc9k itself keeps working.
 Everything comes back by itself when the lock ends; programs already
 running keep the lost privileges until you sign in again.`, 1)
 	if i := strings.Index(strictCmd.Long, "\n\nIf something goes wrong"); i >= 0 {

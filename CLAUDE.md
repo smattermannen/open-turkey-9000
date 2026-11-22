@@ -7,7 +7,7 @@ daemon, GTK GUI. Windows: being built (`ROADMAP.md` §4; nothing built yet).
 
 | File | Holds | Changes |
 |---|---|---|
-| `SPEC.md` | What KC9K should be: principles, glossary, rules, decisions | With the owner, or the autopilot's resolver (tagged *(By Opus)*) |
+| `SPEC.md` | What KC9K should be: principles, glossary, rules, decisions | With the owner; agents' changes tagged *(By claude)* |
 | `ROADMAP.md` | Status against `SPEC.md`; next work. Only status file | Same commit as the code |
 | `CLAUDE.md` | Shared rules, build, test, note index | Agents |
 | `notes/*.md` | Code layout and built behaviour, one note per area | Agents, same commit as the code |

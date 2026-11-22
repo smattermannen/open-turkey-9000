@@ -3,10 +3,8 @@
 What KC9K is meant to be. Status lives in `ROADMAP.md`.
 
 Rules for this file:
-1. Changed only with the owner's agreement; log it in §6. Exception: the
-   autopilot's resolver (`ci/autopilot.sh`) decides open questions; every
-   change it makes ends with *(By Opus)*. It never changes these rules or
-   an owner decision; the owner can overrule any of its decisions.
+1. Changed only with the owner's agreement; log it in §6. An agent's
+   change is tagged *(By Opus)* or *(By claude)*; the owner can overrule it.
 2. No status or work items.
 3. Use the glossary's words exactly, everywhere. New names go here first.
 4. Where code or docs disagree, this file wins. If it seems wrong, ask the owner
@@ -752,7 +750,6 @@ Decisions not already written into §1–5:
 - 2026-11-18: The clock check (§4.10 tamper protection) may ask internet time: an outside query the owner agreed to (principle 6).
 - 2026-11-18: SafeSearch is lockable per engine: Google, Bing, DuckDuckGo and YouTube are each their own browser setting (§4.10).
 - 2026-11-18: When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
-- 2026-11-19: The autopilot's resolver may write decisions into this file, each change tagged as rule 1 says; only the owner's decisions are untagged (owner).
 - 2026-11-20: A lock of a kind a block already has (§3.4) is added as a second lock of that kind, last in the unlock order, not a strengthening of the first (owner).
 - 2026-11-20 (later): Stacking has no exceptions (§4.6): a new timer or delay lock is its own layer, not a change to the last one (extending stays a separate action); range locks stack in their order; text and password locks stack on a block, with or without re-lock; each hotkey press adds its locks again. Re-lock brings back the whole lock configuration the block had, every lock in its order (§3.4) (owner).
 - 2026-11-20 (later): Re-lock is optional on every lock; stacking never depends on it (§4.6) (owner).

@@ -41,7 +41,7 @@ func TestXauthCookie(t *testing.T) {
 }
 
 // startX starts a virtual X server needing the returned Xauthority file.
-// Other test runs (parallel autopilot workers) may pick the same display at
+// Other test runs (parallel `go test`) may pick the same display at
 // the same moment: a server that loses the race exits, and one is only ours
 // when its lock file names our process.
 func startX(t *testing.T) (display, xauth string) {

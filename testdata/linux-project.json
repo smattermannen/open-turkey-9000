@@ -1,0 +1,85 @@
+{
+  "kc9k_project": 1,
+  "kind": "share",
+  "blocks": [
+    {
+      "name": "linux-desk",
+      "lists": [
+        {
+          "name": "Blocked",
+          "kind": "blacklist",
+          "where": [
+            "url"
+          ],
+          "actions": [
+            {
+              "action": "block",
+              "distinct": 1,
+              "hits": 1
+            }
+          ],
+          "entries": [
+            "reddit.com"
+          ]
+        },
+        {
+          "name": "Exceptions",
+          "kind": "exceptions",
+          "where": [
+            "url"
+          ],
+          "entries": [
+            "file://*"
+          ]
+        }
+      ],
+      "apps": [
+        "/opt/games/",
+        "/usr/lib/librewolf/librewolf",
+        "gnome-terminal-server",
+        "org.gnome.Nautilus",
+        "steam"
+      ],
+      "titles": [
+        "YouTube"
+      ],
+      "schedules": [
+        {
+          "days": "sat",
+          "from": "09:00",
+          "to": "12:00"
+        }
+      ],
+      "schedule_lock_minutes": 30,
+      "triggers": {
+        "apps": [
+          {
+            "name": "close"
+          },
+          {
+            "name": "custom",
+            "param": "[{\"run\":\"systemctl suspend\"},{\"open\":\"/home/tester/Documents/focus.txt\"}]"
+          }
+        ]
+      }
+    }
+  ],
+  "browser_options": {
+    "block-devtools": true,
+    "force-search": false,
+    "no-private": false,
+    "safesearch-bing": false,
+    "safesearch-duckduckgo": false,
+    "safesearch-google": true,
+    "safesearch-youtube": false,
+    "web-only": false
+  },
+  "tamper_protection": {
+    "file-urls": false,
+    "unsupported-browsers": false
+  },
+  "options": {
+    "block-page-details": true,
+    "polite-close": true
+  }
+}

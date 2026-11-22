@@ -85,7 +85,11 @@
   keyboard's way), `WallpaperEditor` (timeline plus rows), charts
   (`TopChart`, `DailyChart` in `StatsPage.cs`: elements, not pixels).
   `Shell/Files.cs`: Windows' file dialogs, list imports (`list read`
-  routes phrases to a phrase set) and exports. `Shell/Tray.cs`: the
+  routes phrases to a phrase set) and exports; `ImportProject` (W55,
+  Settings → Import…, *(By claude)*): `project import --dry-run` shown,
+  `ConfirmLock` for its locks, then `project import FILE [--yes]` (`--yes`
+  when it has locks or custom actions); `KC9K_GUI_IMPORT_FILE` (tests)
+  gives the file instead of the dialog. `Shell/Tray.cs`: the
   notification-area icon through `Shell_NotifyIcon` on the window's own
   handle (a comctl32 subclass gets its messages); Quit leaves blocks on.
   Its menu is `Core/TrayMenu.cs` (W35): what is on, Start a block ▸,
@@ -123,7 +127,8 @@
   `gui_freeze_lock`, `gui_automation`, `gui_click_everything` (every
   button on every sidebar page once,
   each question cancelled; the window never ends or shows "Something went
-  wrong"). `WindowsTests.cs`: W30–W43. `AccessibilityTests.cs` (W33):
+  wrong"). `WindowsTests.cs`: W30–W43. `ProjectImportTests.cs` (W55,
+  *(By claude)*): Import… with the dry run, its lock confirmed or declined. `AccessibilityTests.cs` (W33):
   every button, box, switch, list item and menu item on every page and
   block tab has a name and takes keyboard focus; screenshots in high
   contrast (`SPI_SETHIGHCONTRAST`, turned off after) and at 200 % text

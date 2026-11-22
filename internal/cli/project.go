@@ -336,6 +336,9 @@ func checkBlock(in projectBlock) (checkedBlock, error) {
 		return out, err
 	}
 	for _, app := range in.Apps {
+		if linuxOnlyApp(app) != "" {
+			continue // kept as it is, unused here (W56)
+		}
 		if err := blocker.ValidAppEntry(app); err != nil {
 			return out, err
 		}
@@ -616,7 +619,7 @@ With --dry-run, says what would happen and changes nothing.`,
 			return fmt.Errorf("failed to read %s: %w", args[0], err)
 		}
 		var in projectExport
-		if err := json.Unmarshal(data, &in); err != nil {
+		if err := json.Unmarshal(projectText(data), &in); err != nil {
 			return fmt.Errorf("failed to parse %s: %w", args[0], err)
 		}
 		if in.KC9KProject == 0 {
@@ -625,6 +628,8 @@ With --dry-run, says what would happen and changes nothing.`,
 		if in.KC9KProject > projectVersion {
 			return fmt.Errorf("%s was made by a newer Killer Chicken 9000", args[0])
 		}
+
+		sayLinuxOnly(in) // W56: kept, not used here, never an error
 
 		if what := projectMonk(in); what != "" {
 			if err := requireMonkAck(cmd, what); err != nil {

@@ -645,24 +645,7 @@ public sealed class SettingsPage : IPage
         catch (Exception e) { await C.Dialogs.Message(e.Message); }
     }
 
-    async Task ImportProject()
-    {
-        var path = await Files.Open(window, ".json");
-        if (path is null) return;
-        var output = await C.Read(["project", "import", "--dry-run", path]);
-        if (output is null) return;
-        if (!output.Contains("Would:"))
-        {
-            await C.Dialogs.Message(output.Length > 0 ? output : "The file adds nothing new.", "Nothing to import");
-            return;
-        }
-        var locks = output.Split('\n').Where(l => l.Contains("Would: set a lock: ")).Select(l => l[(l.IndexOf("Would: set a lock: ") + 19)..]).ToList();
-        // R-CUSTOM-1: what its custom actions open or run is in the list.
-        var customs = output.Contains("Would: add a custom action that can ");
-        if (!await C.Dialogs.Confirm("Import this setup?", output.Replace("Would: ", "• "), "Import")) return;
-        if (!(await C.Dialogs.ConfirmLock(locks)).Ok) return;
-        await C.Run(["project", "import", path, .. locks.Count > 0 || customs ? new[] { "--yes" } : []], then: o => C.Dialogs.Message(o, "Imported"));
-    }
+    Task ImportProject() => Files.ImportProject(window); // W55
 
     // Firmware lock and guided setup (§4.10 Device protection) -------------------------------
 

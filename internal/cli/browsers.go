@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -20,6 +21,12 @@ type guiBrowser struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Installed bool   `json:"installed"`
+	// Found: one of its executables is on the computer. Unlike Installed,
+	// it doesn't ask whether KC9K can give it the extension: on Windows,
+	// Chrome and Edge are found but not installed as supported browsers
+	// until the extension's Chrome Web Store listing exists (the GUI says
+	// so, W30). On Linux the two are the same.
+	Found bool `json:"found"`
 	// CheckIn is how many seconds ago its extension last checked in; -1
 	// never (since this was recorded).
 	CheckIn int64 `json:"checkin_seconds"`
@@ -30,12 +37,26 @@ func supportedBrowsers(database *db.DB) []guiBrowser {
 	var out []guiBrowser
 	for _, b := range blocker.SupportedBrowsers {
 		g := guiBrowser{ID: b.ID, Name: b.Name, Installed: b.Installed(), CheckIn: -1}
+		g.Found = g.Installed || browserFound(b.Exes)
 		if last, ok := enforce.LastBrowserCheckIn(database, b.ID); ok {
 			g.CheckIn = max(0, int64(time.Since(last).Seconds()))
 		}
 		out = append(out, g)
 	}
 	return out
+}
+
+// browserFileStat is os.Stat, replaced in tests.
+var browserFileStat = os.Stat
+
+// browserFound reports whether any of a browser's executables exists.
+func browserFound(exes []string) bool {
+	for _, exe := range exes {
+		if _, err := browserFileStat(exe); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // extensionText describes a browser's extension for people.

@@ -1689,7 +1689,7 @@ none on `main` yet; rechecked at each rebase (`W49`).
 
 Fixes to what is built:
 
-- [ ] `W30` Supported browsers on Windows (S; §3.13, §4.10 Browsers, §6
+- [x] `W30` Supported browsers on Windows (S; §3.13, §4.10 Browsers, §6
   2026-11-21 Windows equivalents). Chrome and Edge, installed but without
   the store listing's ID, show "not installed" with an Install button whose
   command can only fail. Build: `gui-state` browsers get `found` (an
@@ -1697,7 +1697,8 @@ Fixes to what is built:
   "installed, but Killer Chicken 9000 can't give it the extension yet:
   treated as an unsupported browser", and Install on Windows shows where
   to get the browser (the CLI's words) as information, not as an error.
-  Needs: agent, win-ci.
+  Built 2026-11-22 (`TestBrowsersFound`, `BrowserFoundButNotSupported`,
+  UI test `BrowsersWaitingForTheStoreAreExplained`).
 - [ ] `W31` Overview as §4.1 asks (S; §4.1). Break status is only a pill;
   ladder positions are missing (the GTK GUI lacks them too). Build: per
   block on now, "on a break" or a break's time left and its bypass

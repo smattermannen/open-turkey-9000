@@ -121,3 +121,10 @@ Not fixed by `SPEC.md`; the code is the truth.
   the chosen theme, and pills use styles, so a theme change applies live.
 - Statistics can be saved as JSON (§4.9 JSON export) with the page's time
   frame and filters; the GTK GUI has no such button.
+- Supported browsers (W30): a browser `gui-state` names as `found` but not
+  `installed` (Chrome and Edge on Windows until the extension's store
+  listing exists) is said to count as an unsupported browser, with no
+  Install button; Install shows `browsers install`'s words (on Windows,
+  where to get the browser) under "Getting NAME", not as a refusal
+  (`Controller.Run(refusalTitle:)`).
+

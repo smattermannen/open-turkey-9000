@@ -112,7 +112,9 @@ Not fixed by `SPEC.md`; the code is the truth.
   (Firefox too) close at once, supported ones after 60 s without a check-in.
   Nothing closed without LibreWolf, Chrome or Chromium installed (`status`
   says so). `kc9k browsers` lists them with per-browser check-in
-  (`extension.last_checkin.<id>`); `browsers install librewolf|chromium|chrome`
+  (`extension.last_checkin.<id>`; `gui-state` also says `found`: an
+  executable is there, even where it can't get the extension, as Chrome
+  and Edge on Windows before the store listing, W30); `browsers install librewolf|chromium|chrome`
   (extrepo; Mint's chromium .deb; Google's repo with key in
   `/etc/apt/keyrings/google-chrome.asc`, amd64 only). Firefox needs signed extensions; Brave/Edge/Opera/Vivaldi not set
   up. Installed engine-based apps (Thunderbird, Spotify, Steam, Electron)

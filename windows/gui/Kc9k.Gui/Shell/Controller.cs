@@ -84,7 +84,7 @@ public sealed class Controller
     /// in the CLI's words; then (when given) runs on success with the output.
     /// Returns whether it succeeded.</summary>
     public async Task<bool> Run(IReadOnlyList<string> args, string? secret = null, Func<string, Task>? then = null,
-        TimeSpan? timeout = null, bool quiet = false)
+        TimeSpan? timeout = null, bool quiet = false, string? refusalTitle = null)
     {
         var drafted = await ToDraft(args);
         if (drafted is null) return false; // cancelled (a block password not given)
@@ -97,7 +97,7 @@ public sealed class Controller
         {
             var title = Tables.AreaTitles.GetValueOrDefault(area, area);
             var password = await Dialogs.AskText("Access password", $"This needs the password for {title}.", password: true);
-            if (!string.IsNullOrEmpty(password) && await TryAccess(password)) return await Run(args, secret, then, timeout, quiet);
+            if (!string.IsNullOrEmpty(password) && await TryAccess(password)) return await Run(args, secret, then, timeout, quiet, refusalTitle);
             return false;
         }
         if (!result.Ok && result.NeedsSettingsPassword)
@@ -109,11 +109,11 @@ public sealed class Controller
             if (string.IsNullOrEmpty(password)) return false;
             Session.SettingsPassword = password;
             Session.SettingsPasswordSet = true;
-            return await Run(args, secret, then, timeout, quiet);
+            return await Run(args, secret, then, timeout, quiet, refusalTitle);
         }
         if (!result.Ok)
         {
-            if (!quiet) await Dialogs.Message(result.Output.Length > 0 ? result.Output : "The command failed.");
+            if (!quiet) await Dialogs.Message(result.Output.Length > 0 ? result.Output : "The command failed.", refusalTitle ?? "Not done");
         }
         else if (then is not null) await then(result.Output);
         else if (!quiet) QueuedNote(result.Output);

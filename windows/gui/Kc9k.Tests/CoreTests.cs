@@ -342,4 +342,13 @@ public class CliTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    // W30: a browser on the computer that KC9K can't give the extension yet.
+    [Fact]
+    public void BrowserFoundButNotSupported()
+    {
+        Assert.Equal("Not installed.", Words.BrowserStatus(new BrowserInfo { Id = "edge" }));
+        Assert.Contains("can't give it the extension yet", Words.BrowserStatus(new BrowserInfo { Id = "edge", Found = true }));
+        Assert.StartsWith("Installed. Extension working", Words.BrowserStatus(new BrowserInfo { Id = "chrome", Installed = true, Found = true, CheckinSeconds = 5 }));
+    }
 }

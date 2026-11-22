@@ -16,6 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FakeKc9k\FakeKc9k.csproj" ReferenceOutputAssembly="true" />
+    <ProjectReference Include="..\Kc9k.Core\Kc9k.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\fixtures\*.json" LinkBase="fixtures" CopyToOutputDirectory="PreserveNewest" />

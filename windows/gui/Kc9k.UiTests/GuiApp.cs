@@ -151,6 +151,28 @@ public sealed class GuiApp : IDisposable
         catch (Exception e) { Console.WriteLine("screenshot failed: " + e.Message); }
     }
 
+    /// <summary>Changes the fixture gui-state.json in a test's folder (for prepare:).</summary>
+    public static void EditState(string dir, Action<System.Text.Json.Nodes.JsonObject> change)
+    {
+        var path = Path.Combine(dir, "gui-state.json");
+        var state = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        change(state);
+        File.WriteAllText(path, state.ToJsonString());
+    }
+
+    /// <summary>Canned answers of the fake kc9k (for prepare:): leading arguments, ok, output.</summary>
+    public static void Respond(string dir, params (string[] Args, bool Ok, string Output)[] answers)
+    {
+        var list = new System.Text.Json.Nodes.JsonArray();
+        foreach (var (args, ok, output) in answers)
+            list.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["args"] = new System.Text.Json.Nodes.JsonArray([.. args.Select(a => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(a)!)]),
+                ["ok"] = ok, ["output"] = output,
+            });
+        File.WriteAllText(Path.Combine(dir, "responses.json"), list.ToJsonString());
+    }
+
     public void Dispose()
     {
         try { App.Close(); } catch (Exception) { }

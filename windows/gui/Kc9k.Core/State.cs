@@ -394,6 +394,8 @@ public sealed class BrowserInfo
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public bool Installed { get; set; }
+    /// <summary>On the computer, whether or not KC9K can give it the extension (W30).</summary>
+    public bool Found { get; set; }
     public long CheckinSeconds { get; set; } = -1;
 }
 

@@ -343,7 +343,7 @@ public sealed class SettingsPage : IPage
             var status = Ui.Dim(Words.BrowserStatus(b));
             Grid.SetColumn(status, 1);
             g.Children.Add(status);
-            if (!b.Installed)
+            if (!b.Installed && !b.Found)
             {
                 var install = Ui.Button("Install", () => _ = InstallBrowser(b), "InstallBrowser_" + b.Id);
                 Grid.SetColumn(install, 2);
@@ -355,10 +355,13 @@ public sealed class SettingsPage : IPage
             : "No supported browser is installed, so the extension can't run: wildcards, rendered terms, greyscale, images and web-only aren't enforced in the browser, and no browser is closed. Install one above.";
     }
 
+    // On Windows, kc9k doesn't download browsers: 'browsers install' says
+    // where to get one, shown as information, not as a refusal (W30).
     async Task InstallBrowser(BrowserInfo b)
     {
-        if (await C.Dialogs.Confirm($"Install {b.Name}?", "This needs an internet connection and can take a few minutes.", "Install"))
-            await C.Run(["browsers", "install", b.Id], timeout: TimeSpan.FromMinutes(15), then: o => C.Dialogs.Message(o, "Installed"));
+        if (await C.Dialogs.Confirm($"Install {b.Name}?", "Killer Chicken 9000 installs it or says where to get it. The extension is added the next time it starts.", "Continue"))
+            await C.Run(["browsers", "install", b.Id], timeout: TimeSpan.FromMinutes(15), then: o => C.Dialogs.Message(o, "Installed"),
+                refusalTitle: $"Getting {b.Name}");
     }
 
     // Commands ---------------------------------------------------------------------------

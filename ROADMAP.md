@@ -1982,7 +1982,10 @@ their sites; their pages are an app's, not a browser's).
   (port 853) to the DoH resolvers blocked like DoH; IPv6: a hosts entry
   (`0.0.0.0` only) checked to answer AAAA queries too, `::` lines added if
   not. Needs: win-ci.
-- [ ] `W27` Desktop checks in CI (M). `notes/testing.md`. GitHub's
+- [ ] `W27` Desktop checks in CI (M). Built (2026-11-22):
+  `ci/windows_desktop_test.ps1` in `windows.yml`. Stays in the VM script:
+  what needs a person (the challenge window and console typed in,
+  notifications seen, gamma looked at) or a reboot. Was planned: `notes/testing.md`. GitHub's
   `windows-latest` has a signed-in desktop: the checks of
   `ci/windows_vm_test.ps1` that need one but no person or reboot move to
   `windows.yml` (agent running in the session, titles, apps killed, the

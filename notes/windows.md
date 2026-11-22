@@ -54,6 +54,11 @@
   GitHub's job provisioner runs from `AppData\Local\Temp`: the script
   exempts the folders of such programs before strict mode, or strict mode
   closes them and the job is cancelled without a log.
+- `ci/windows_desktop_test.ps1 kc9k.exe` (W27, the `system` job's
+  "Desktop checks"): the runner's session is signed in, so the session
+  agent, hosts and firewall against a real site, the Edge policy, a
+  blocked app and a blocked window title closed through the agent, and
+  dark mode written to the signed-in person's settings are checked there.
 - `ci/windows_vm_test.ps1 kc9k.exe [-Reboots]`: what needs a desktop or a
   person (agent, titles, apps, notifications, the challenge in a console
   and in its window, the lock freeze, takeown against strict mode, gamma,

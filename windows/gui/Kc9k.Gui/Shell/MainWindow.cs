@@ -56,17 +56,21 @@ public sealed partial class MainWindow : Window
         Grid.SetRow(top, 1);
         root.Children.Add(top);
 
+        // W53: the sidebar is pinned open like the GTK GUI's: no ☰, it never
+        // moves or covers the page, and the page fills the rest. Only a window
+        // too narrow for both shows the sidebar's icons alone (still pinned).
         nav = new NavigationView
         {
             PaneDisplayMode = NavigationViewPaneDisplayMode.Left,
             IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed,
             IsSettingsVisible = false,
-            IsPaneToggleButtonVisible = true,
-            OpenPaneLength = 240,
-            CompactModeThresholdWidth = 720,
-            ExpandedModeThresholdWidth = 1000,
+            IsPaneToggleButtonVisible = false,
+            IsPaneOpen = true,
+            OpenPaneLength = SidebarWidth,
         };
         nav.Named("Pages", "Nav");
+        nav.PaneClosing += (_, e) => { if (nav.PaneDisplayMode == NavigationViewPaneDisplayMode.Left) e.Cancel = true; };
+        root.SizeChanged += (_, e) => PinSidebar(e.NewSize.Width);
         Grid.SetRow(nav, 2);
         root.Children.Add(nav);
 
@@ -154,6 +158,17 @@ public sealed partial class MainWindow : Window
         var first = Prefs.Current.OpenOn == "last" && items.ContainsKey(Prefs.Current.LastPage) ? Prefs.Current.LastPage : "dashboard";
         nav.SelectedItem = items[first];
         Controller.Start();
+    }
+
+    /// <summary>The sidebar's width (W53), and the narrowest page beside it.</summary>
+    public const double SidebarWidth = 220, NarrowestPage = 420;
+
+    void PinSidebar(double width)
+    {
+        var mode = width >= SidebarWidth + NarrowestPage ? NavigationViewPaneDisplayMode.Left : NavigationViewPaneDisplayMode.LeftCompact;
+        if (nav.PaneDisplayMode == mode) return;
+        nav.PaneDisplayMode = mode;
+        nav.IsPaneOpen = mode == NavigationViewPaneDisplayMode.Left;
     }
 
     /// <summary>The shortcuts (W34), listed under Settings › Keyboard.</summary>

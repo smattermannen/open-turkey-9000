@@ -143,6 +143,11 @@ Not fixed by `SPEC.md`; the code is the truth.
   page shown; `Show` updates a page when it is shown. Test-only hook:
   `KC9K_GUI_TEST_THROW` = `window`/`task`/`crash` (`TestHook`,
   `StabilityTests.cs`). *(By claude)*
+- Sidebar (W53, `MainWindow.PinSidebar`): pinned open at 220 DIP like
+  the GTK sidebar, no ☰; the page fills the rest. Below 640 DIP of window
+  (220 + `NarrowestPage` 420) it shows its icons alone (`LeftCompact`, its
+  titles as tooltips), still pinned: it never opens over or beside the
+  page. *(By claude)*
 - Hotkeys are worded with win+ (the CLI also takes super+).
 - Colours drawn in code (calendar, clips, charts) are looked up for the
   theme the window shows (`Theme.Brush(key, element)`); the app starts in

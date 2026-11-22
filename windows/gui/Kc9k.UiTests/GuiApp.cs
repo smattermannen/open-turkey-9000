@@ -29,15 +29,19 @@ public sealed class GuiApp : IDisposable
     readonly bool real_;
 
     public GuiApp(string name, string theme = "light", Action<string>? prepare = null, bool real = false, string ready = "Headline",
-        string arguments = "", bool multi = true)
+        string arguments = "", bool multi = true, string? dir = null, IDictionary<string, string>? env = null)
     {
         real_ = real;
         this.name = name;
-        Dir = Path.Combine(Path.GetTempPath(), "kc9k-ui-" + name + "-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(Dir);
-        foreach (var f in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "fixtures")))
-            File.Copy(f, Path.Combine(Dir, Path.GetFileName(f)));
-        File.WriteAllText(Path.Combine(Dir, "gui.json"), $$"""{"theme": "{{theme}}", "tray": false, "window_width": 1280, "window_height": 900}""");
+        // dir: start again in an earlier start's folder (W52: what a crash left).
+        Dir = dir ?? Path.Combine(Path.GetTempPath(), "kc9k-ui-" + name + "-" + Guid.NewGuid().ToString("N")[..8]);
+        if (dir is null)
+        {
+            Directory.CreateDirectory(Dir);
+            foreach (var f in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "fixtures")))
+                File.Copy(f, Path.Combine(Dir, Path.GetFileName(f)));
+            File.WriteAllText(Path.Combine(Dir, "gui.json"), $$"""{"theme": "{{theme}}", "tray": false, "window_width": 1280, "window_height": 900}""");
+        }
         prepare?.Invoke(Dir);
         var exe = Environment.GetEnvironmentVariable("KC9K_GUI_EXE") ?? throw new InvalidOperationException("KC9K_GUI_EXE is not set");
         // KC9K_REAL_EXE: the real kc9k.exe (installed, its service running) instead of the fake.
@@ -48,6 +52,7 @@ public sealed class GuiApp : IDisposable
         info.Environment["KC9K_FAKE_DIR"] = Dir;
         info.Environment["KC9K_GUI_PREFS"] = Path.Combine(Dir, "gui.json");
         if (multi) info.Environment["KC9K_GUI_MULTI"] = "1";
+        foreach (var (k, v) in env ?? new Dictionary<string, string>()) info.Environment[k] = v;
         StartInfo = info;
         App = Application.Launch(info);
         Window = Retry.WhileNull(() => App.GetMainWindow(Automation, TimeSpan.FromSeconds(2)),

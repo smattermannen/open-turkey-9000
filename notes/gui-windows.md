@@ -133,6 +133,16 @@
 
 Not fixed by `SPEC.md`; the code is the truth.
 
+- Errors and crashes (W52, `App.cs`): WinUI's `UnhandledException`,
+  `TaskScheduler.UnobservedTaskException` (kept alive) and
+  `AppDomain.UnhandledException` all go to gui.log; a terminating one
+  writes `gui-crash.txt` beside gui.json, and the next start shows "closed
+  unexpectedly at …, details in gui.log" once and removes it.
+  `Controller.ShowError` drops a dialog whose title and text are already
+  shown or waiting. `MainWindow.Apply` and the statistics update only the
+  page shown; `Show` updates a page when it is shown. Test-only hook:
+  `KC9K_GUI_TEST_THROW` = `window`/`task`/`crash` (`TestHook`,
+  `StabilityTests.cs`). *(By claude)*
 - Hotkeys are worded with win+ (the CLI also takes super+).
 - Colours drawn in code (calendar, clips, charts) are looked up for the
   theme the window shows (`Theme.Brush(key, element)`); the app starts in

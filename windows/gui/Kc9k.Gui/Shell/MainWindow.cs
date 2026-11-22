@@ -111,10 +111,10 @@ public sealed partial class MainWindow : Window
         };
 
         Controller.StateChanged += Apply;
+        // W52: only the page shown is updated; another is when it is shown.
         Controller.StatsChanged += stats =>
         {
-            foreach (var (key, p) in pages)
-                if (!Controller.Locked(Area(key))) p.Page.UpdateStats(stats);
+            if (!Controller.Locked(Area(CurrentPage)) && !Controller.Locked("app")) pages[CurrentPage].Page.UpdateStats(stats);
         };
         Controller.BusyChanged += on =>
         {
@@ -250,7 +250,7 @@ public sealed partial class MainWindow : Window
                 : $"{title} is locked.\nEnter its password to open it.";
             p.Cover.Visibility = locked ? Visibility.Visible : Visibility.Collapsed;
             p.Page.View.Visibility = locked ? Visibility.Collapsed : Visibility.Visible;
-            if (!locked) p.Page.Update(state);
+            if (!locked && key == CurrentPage) p.Page.Update(state);
         }
         lockItem.Visibility = Controller.Session.AccessPasswords.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         tray?.SetStatus(state);
@@ -262,7 +262,9 @@ public sealed partial class MainWindow : Window
         Prefs.Current.LastPage = key;
         if (items.TryGetValue(key, out var item) && !ReferenceEquals(nav.SelectedItem, item)) nav.SelectedItem = item;
         nav.Content = pages[key].Holder;
-        if (Controller.State is { } s && !Controller.Locked(Area(key))) pages[key].Page.Update(s);
+        if (Controller.Locked(Area(key)) || Controller.Locked("app")) return;
+        if (Controller.State is { } s) pages[key].Page.Update(s);
+        if (Controller.Stats is { } stats) pages[key].Page.UpdateStats(stats);
     }
 
     /// <summary>Opens a page of the sidebar.</summary>

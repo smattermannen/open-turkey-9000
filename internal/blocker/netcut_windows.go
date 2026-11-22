@@ -11,6 +11,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/smattermannen/kc9k/internal/winapi"
+	"golang.org/x/sys/windows"
 )
 
 type netAdapter struct {
@@ -49,7 +52,9 @@ func isWifi(a netAdapter) bool {
 	return strings.Contains(m, "802.11") || strings.Contains(m, "wireless")
 }
 
-// WifiRadio reports whether Wi-Fi is on: any Wi-Fi adapter switched on.
+// WifiRadio reports whether Wi-Fi is on: a Wi-Fi adapter enabled and its
+// radio's software switch on (Windows' "Wi-Fi off" and airplane mode turn
+// the switch off and leave the adapter enabled).
 func WifiRadio() (on, known bool) {
 	list, err := netAdapters()
 	if err != nil {
@@ -61,19 +66,83 @@ func WifiRadio() (on, known bool) {
 			on = on || a.AdminStatus == 1
 		}
 	}
+	if on {
+		if radios, ok := wifiSoftwareRadios(); ok {
+			on = false
+			for _, r := range radios {
+				on = on || r.Software == 1
+			}
+		}
+	}
 	return on, known
 }
 
-// SetWifiRadio switches every Wi-Fi adapter on or off.
+// wlanRadio is one radio of one Wi-Fi interface.
+type wlanRadio struct {
+	iface    windows.GUID
+	phy      uint32
+	Software uint32 // 1 on, 2 off
+	Hardware uint32
+}
+
+// wifiSoftwareRadios lists every Wi-Fi radio; false without the WLAN
+// service. A variable for tests.
+var wifiSoftwareRadios = func() ([]wlanRadio, bool) {
+	w, err := winapi.OpenWlan()
+	if err != nil {
+		return nil, false
+	}
+	defer w.Close()
+	ifaces, err := w.Interfaces()
+	if err != nil {
+		return nil, false
+	}
+	var out []wlanRadio
+	for _, i := range ifaces {
+		states, err := w.Radios(i)
+		if err != nil {
+			continue
+		}
+		for _, s := range states {
+			out = append(out, wlanRadio{i, s.Phy, s.Software, s.Hardware})
+		}
+	}
+	return out, len(out) > 0
+}
+
+// SetWifiRadio switches every Wi-Fi adapter on or off; on also turns each
+// radio's software switch on.
 func SetWifiRadio(on bool) error {
 	list, err := netAdapters()
 	if err != nil {
 		return err
 	}
 	for _, a := range list {
-		if isWifi(a) {
+		if isWifi(a) && (a.AdminStatus == 1) != on {
 			if err := setAdapter(a.Name, on); err != nil {
 				return err
+			}
+		}
+	}
+	if !on {
+		return nil
+	}
+	w, err := winapi.OpenWlan()
+	if err != nil {
+		return nil // no WLAN service: the adapters are all there is
+	}
+	defer w.Close()
+	ifaces, _ := w.Interfaces()
+	for _, i := range ifaces {
+		states, err := w.Radios(i)
+		if err != nil {
+			continue
+		}
+		for _, s := range states {
+			if s.Software != 1 {
+				if err := w.SetRadioOn(i, s.Phy); err != nil {
+					return fmt.Errorf("Wi-Fi radio: %w", err)
+				}
 			}
 		}
 	}

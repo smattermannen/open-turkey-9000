@@ -220,6 +220,15 @@
   and gives them to every agent (and each one that connects); a press is
   an agent event, and the service runs `kc9k hotkey run <id>` for that
   session's person.
+- Places (W10, `enforce/wifi_windows.go`, `winapi/wlan*.go`): the
+  Native Wifi API (`WlanEnumInterfaces`, `WlanScan`,
+  `WlanGetNetworkBssList`; layouts read by `ParseBSSList`, tested on
+  Linux). No WLAN service (no Wi-Fi, Windows Server): nothing seen, which
+  counts as at every place. Wi-Fi counts as on only with an enabled adapter
+  and a radio whose software switch is on (Windows' "Wi-Fi off" and
+  airplane mode leave the adapter enabled); `SetWifiRadio(true)` enables
+  the adapters and turns the switches on (`WlanSetInterface`), so
+  `keepWifiOn` holds against both.
 - Monk mode's physical cut (`netcut_windows.go`): `Get-NetAdapter
   -Physical` (PowerShell: its values aren't translated), Wi-Fi by
   physical media type; `Enable-/Disable-NetAdapter`.

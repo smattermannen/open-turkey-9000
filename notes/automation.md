@@ -60,10 +60,12 @@
 - **Autostart** (`db/autostart.go`, `enforce/autostart.go`, `cli/autostart.go`, §3.6):
   once/at/sign-in/next-window; daemon `runAutostarts` in `Tick` (first look
   only records; sign-in = new loginctl session or wake by BOOTTIME−MONOTONIC).
-- **Places** (`db/places.go`, `enforce/places.go`, `cli/places.go`): BSSIDs
-  from `nmcli` (`ScanWifi`); `AtPlace` needs `Place.Needed()` in range
+- **Places** (`db/places.go`, `enforce/places.go`, `wifi_*.go`,
+  `cli/places.go`): BSSIDs from `nmcli` on Linux, the Native Wifi API on
+  Windows (`ScanWifi`, `rescanWifi`; notes/windows.md); `AtPlace` needs `Place.Needed()` in range
   (`places.need`, default 2, `place need P N`, `place add --need`);
-  `placesHere` (none seen: unknown, see Automation); `keepWifiOn`.
+  `placesHere` (none seen: unknown, see Automation); `keepWifiOn` (through
+  monk mode's `wifiRadio`/`setWifiRadio`, faked in tests).
   `seenNetworks` reads every 10 s (every 2 s, scan asked every 15 s, while
   none are seen).
 

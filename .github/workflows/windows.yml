@@ -29,7 +29,7 @@ jobs:
         shell: bash
         env:
           KC9K_TEST_WFP: "1"
-        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc|Deny|ACE|UserProgram|AccelToVK' ./internal/blocker
+        run: CGO_ENABLED=0 go test -count=1 -v -run 'WFP|RegPolicy|WinProc|Deny|ACE|UserProgram|AccelToVK|Wlan' ./internal/blocker ./internal/enforce
       - name: Service, pipe, install and uninstall
         timeout-minutes: 12
         shell: pwsh

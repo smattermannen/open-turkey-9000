@@ -11,7 +11,6 @@ package enforce
 
 import (
 	"log"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -20,18 +19,13 @@ import (
 )
 
 // ScanWifi returns the access points in range. rescan asks the adapter to
-// look again first (slower). It is a variable so tests can stand in for it.
-var ScanWifi = func(rescan bool) ([]db.Network, error) {
-	mode := "no"
-	if rescan {
-		mode = "yes"
-	}
-	out, err := exec.Command("nmcli", "-t", "-f", "BSSID,SSID", "dev", "wifi", "list", "--rescan", mode).Output()
-	if err != nil {
-		return nil, err
-	}
-	return parseNmcli(string(out)), nil
-}
+// look again first (slower). It is a variable so tests can stand in for it;
+// nmcli on Linux, the Native Wifi API on Windows (wifi_*.go).
+var ScanWifi = scanWifi
+
+// rescanWifi asks the adapters to look again, without waiting; a variable
+// for tests.
+var rescanWifi = startWifiRescan
 
 // parseNmcli reads nmcli's terse output: fields split by ":", with the
 // colons inside a field written "\:".
@@ -94,7 +88,7 @@ func seenNetworks(now time.Time) []db.Network {
 	}
 	if now.Sub(placeRescan) > rescan {
 		placeRescan = now
-		go func() { _ = exec.Command("nmcli", "dev", "wifi", "rescan").Run() }()
+		go rescanWifi()
 	}
 	seen, err := ScanWifi(false)
 	if err != nil {
@@ -166,9 +160,10 @@ func keepWifiOn(d *db.DB) {
 	if until, err := d.MonkUntil(); (err != nil || until > 0 || MonkAutomationOn(d, time.Now())) && !monkPlaces {
 		return
 	}
-	out, err := exec.Command("nmcli", "radio", "wifi").Output()
-	if err == nil && strings.TrimSpace(string(out)) == "disabled" {
+	if on, known := wifiRadio(); known && !on {
 		log.Println("places: Wi-Fi was switched off; switching it on (a block depends on where the computer is)")
-		_ = exec.Command("nmcli", "radio", "wifi", "on").Run()
+		if err := setWifiRadio(true); err != nil {
+			log.Printf("places: %v", err)
+		}
 	}
 }

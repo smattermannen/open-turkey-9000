@@ -63,7 +63,7 @@ of their group and a row here; a finished item loses its row.
 | W42 | Signing proven with a throwaway certificate; Azure Artifact Signing | §6 2026-11-21 | install-windows | win-ci, owner |
 | W43 | `kc9k version`; versions under Settings › About | §4.11 | gui-windows | agent, win-ci |
 | W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
-| W10 | Places on Windows (Native Wifi; Wi-Fi kept on) | §3.6, R-MODE-5 | windows, automation | win-ci, laptop |
+| W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
 | W11 | Remote-control browsers closed on Windows | §3.13 | windows, browsers | win-ci |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`) | R-ESCAPE-1 | windows, device | win-ci, win-vm |
@@ -1779,7 +1779,11 @@ Windows' own DNS over HTTPS (the hosts file is read first, and the DoH
 filters cover Windows' known servers); WebView2 apps (hosts and WFP block
 their sites; their pages are an app's, not a browser's).
 
-- [ ] `W10` Places on Windows (M). SPEC §3.6, §4.5 (places), R-MODE-5,
+- [ ] `W10` Places on Windows (M). Built (2026-11-22), Partial checked:
+  `wifi_windows.go`, `winapi/wlan*.go`; layouts tested on Linux; on
+  `windows-latest` (`TestWlanScanForReal`): no WLAN service, nothing seen,
+  nothing breaks. Unchecked: real networks, the radio switch put back
+  (Needs laptop). Was planned: SPEC §3.6, §4.5 (places), R-MODE-5,
   §6 2026-11-16. Was: `enforce/places.go` runs `nmcli`, so on Windows no
   network is ever seen: every place counts as here (blocks with a place
   rule always on) and a place can't be saved. Build: `ScanWifi` and the

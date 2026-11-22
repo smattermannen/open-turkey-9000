@@ -53,20 +53,11 @@ of their group and a row here; a finished item loses its row.
 | W5 | Windows tamper protection: built, checked on `windows-latest`; boot/Safe Mode Unchecked; firmware lock in W19 | §3.10, §4.10 | windows | win-vm, laptop |
 | W6 | Windows circadian rhythm and wallpapers: built, Unchecked | §4.10 | windows | win-vm, laptop |
 | W7 | Windows MSI: built, checked in CI (install, removal, refused while locked, reinstall guard, 2026-11-21); signing needs the owner's certificate; Apps & features by a person Unchecked | §4.11 | install-windows | owner, win-vm |
-| W30 | Windows GUI: Chrome and Edge waiting for the store listing explained; Install shows where to get a browser | §3.13, §4.10 | gui-windows | agent, win-ci |
-| W31 | Windows GUI: Overview break status and ladder positions | §4.1 | gui-windows | agent, win-ci |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
-| W33 | Windows GUI: accessibility checks (names, focus, high contrast, text scale); Narrator by a person | R-GUI-3 | gui-windows | win-ci, win-vm, laptop |
-| W34 | Windows GUI: keyboard shortcuts | R-GUI-3 | gui-windows | agent, win-ci |
-| W35 | Windows GUI: tray quick actions (strengthening only) | §4.10 | gui-windows | agent, win-ci, laptop |
 | W36 | Windows GUI: jump list and start arguments | §4.10 | gui-windows | agent, win-ci, win-vm |
-| W37 | Windows GUI: window state and last page kept | §6 2026-11-21 | gui-windows | agent, win-ci |
-| W38 | Windows GUI: first view for someone with nothing set up | R-GUI-3 | gui-windows | agent, win-ci |
-| W39 | Windows GUI: device protection explained for Windows, firmware lock status | §4.10 | gui-windows | agent, win-ci |
 | W40 | MSI release workflow on a tag | §4.11 | install-windows | win-ci, owner |
 | W41 | MSI CI: upgrade over a lock, older refused, repair, full-UI removal | §4.11, R-LOCK-9 | install-windows | win-ci, win-vm |
 | W42 | Signing proven with a throwaway certificate; Azure Artifact Signing | §6 2026-11-21 | install-windows | win-ci, owner |
-| W43 | `kc9k version`; versions under Settings › About | §4.11 | gui-windows | agent, win-ci |
 | W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
@@ -1719,12 +1710,20 @@ Parity with the GTK GUI and its tests:
   and `gui_phrase_edit`, `gui_places`, `gui_playlist` (social media
   settings), `gui_presets` (save lists as a preset), `gui_trigger`,
   `gui_wallpaper`, `gui_click_everything` (every button and switch once,
-  Cancel then OK, no crash). Needs: win-ci.
-- [ ] `W33` Accessibility checks (M; R-GUI-3). Build: a test walking every
+  Cancel then OK, no crash). Partial (2026-11-22, `ParityTests.cs`): built
+  for `gui_cards`, `gui_extend`, `gui_duration`, `gui_lists`,
+  `gui_presets`, `gui_modes` (by the card's menu), `gui_freeze_lock`,
+  `gui_automation`, `gui_click_everything` (every button once, questions
+  cancelled). Not yet: `gui_actions`, `gui_import` (file dialogs),
+  `gui_list_resize`, `gui_phrase`, `gui_phrase_edit`, `gui_places`,
+  `gui_playlist`, `gui_trigger`, `gui_wallpaper`. Needs: win-ci.
+- [x] `W33` Accessibility checks (M; R-GUI-3). Build: a test walking every
   page's UI Automation tree (each button, switch, box and list has a name
   and takes keyboard focus), screenshots in high contrast and with text
   at 150 % and 200 %. Narrator read by a person, display scaling and a
-  second screen: Needs win-vm, laptop. Needs: win-ci.
+  second screen: Needs win-vm, laptop. Built, checked 2026-11-22
+  (`AccessibilityTests.cs`: every usable control on every page and block
+  tab named and focusable; high-contrast and 200 % text screenshots).
 - [x] `W34` Keyboard shortcuts (S; R-GUI-3 "everything reachable by
   keyboard"). Ctrl+1…9 open the sidebar's pages, Ctrl+N a new block, F5
   reads the state again, Alt+Left (and Esc) goes back from a block or a
@@ -1742,11 +1741,13 @@ Windows conveniences:
   rendered with submenus by `Tray.cs`; each action brings the window
   forward first, so a question or refusal is seen. The menu opened by a
   person: Unchecked (Needs laptop).
-- [ ] `W36` Jump list and start arguments (M). The taskbar's and Start
+- [x] `W36` Jump list and start arguments (M). The taskbar's and Start
   menu's jump list: Overview, Blocks, New block, Monk mode, Frozen
   Chicken, Statistics, Settings, as `kc9k-gui.exe --page KEY` or
   `--do new-block|monk|freeze`; a second start hands its arguments to the
-  running GUI. Needs: agent, win-ci (the list by a person: win-vm).
+  running GUI. Built 2026-11-22 (`StartArgsOnlyPagesAndDialogs`, UI test
+  `StartArgumentsAndASecondStart`); the jump list itself shown by the
+  taskbar: Unchecked (Needs win-vm).
 - [x] `W37` Window state (S; §6 2026-11-21 GUI preferences). Position,
   size, maximized and the last page kept per user and restored on a
   screen that is still there; preference "Open on: Overview / the last

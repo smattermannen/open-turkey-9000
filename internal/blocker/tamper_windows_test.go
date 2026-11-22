@@ -1,11 +1,13 @@
 package blocker
 
 import (
+	"strings"
 	"path/filepath"
 	"testing"
 )
 
 func TestWithDeny(t *testing.T) {
+	denyFileACE := denyACEs("dir")[0]
 	cases := []struct{ in, want string }{
 		{"O:SYG:SYD:PAI(A;;FA;;;SY)(A;;0x1200a9;;;BU)", "O:SYG:SYD:PAI" + denyFileACE + "(A;;FA;;;SY)(A;;0x1200a9;;;BU)"},
 		// Inherited entries come back by themselves: not written as explicit.
@@ -50,6 +52,44 @@ func TestUserProgram(t *testing.T) {
 		p := &winProc{Exe: path}
 		if got := userProgram(p, []string{drive + `\Users\me\Downloads\allowed`}); got != want {
 			t.Errorf("userProgram(%s) = %v; want %v", path, got, want)
+		}
+	}
+}
+
+func TestWithoutACE(t *testing.T) {
+	denyFileACE := denyACEs("dir")[0]
+	in := "O:SYD:AI" + denyFileACE + "(A;;FA;;;SY)(A;ID;FR;;;BU)"
+	if got, want := withoutACE(in, denyFileACE), "O:SYD:AI(A;;FA;;;SY)"; got != want {
+		t.Errorf("withoutACE = %q; want %q", got, want)
+	}
+	if got := withoutACE("O:SYD:(A;;FA;;;SY)", denyFileACE); got != "O:SYD:(A;;FA;;;SY)" {
+		t.Errorf("without the entry: %q", got)
+	}
+}
+
+// Windows prints the deny entries in letters; both forms are found.
+func TestCanonDeny(t *testing.T) {
+	denyFileACE := denyACEs("dir")[0]
+	c := canonACE(denyFileACE)
+	if c == "" || c[0] != '(' {
+		t.Fatalf("canonACE = %q", c)
+	}
+	in := "O:SYD:" + c + "(A;;FA;;;SY)"
+	if got := withoutACE(in, denyFileACE); got != "O:SYD:(A;;FA;;;SY)" {
+		t.Errorf("withoutACE(canonical) = %q", got)
+	}
+	if got := withDeny(in, denyFileACE); got != "O:SYD:"+denyFileACE+"(A;;FA;;;SY)" {
+		t.Errorf("withDeny(canonical) = %q", got)
+	}
+	t.Logf("%s prints as %s", denyFileACE, c)
+}
+
+func TestDenyNotForServices(t *testing.T) {
+	for _, kind := range []string{"dir", "file", "key"} {
+		for _, ace := range denyACEs(kind) {
+			if strings.Contains(ace, ";BA)") || strings.Contains(ace, ";SY)") || strings.Contains(ace, ";SU)") {
+				t.Errorf("%s denies the service itself", ace)
+			}
 		}
 	}
 }

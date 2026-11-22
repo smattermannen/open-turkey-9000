@@ -53,13 +53,31 @@ const (
 	programSDDL = "O:SYG:SYD:P(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;BA)(A;OICI;0x1200a9;;;BU)"
 )
 
-// Deny entries strict mode adds for Administrators: on files and folders
-// writing, deleting, and changing permissions or owner; on registry keys
-// setting values, adding keys, deleting, and changing permissions or owner.
-const (
-	denyFileACE = "(D;OICI;0xd0156;;;BA)"
-	denyKeyACE  = "(D;CI;0xd0006;;;BA)"
-)
+// Deny entries strict mode adds. Not for Administrators: LocalSystem's
+// token holds that group too, and the service would deny itself. A person's
+// programs carry how they signed in instead (Interactive at the screen,
+// Network over SSH or remote PowerShell, Batch for scheduled tasks); a
+// service never does. On files and folders: writing, deleting, and
+// changing permissions or owner; on registry keys: setting values, adding
+// keys, deleting, and changing permissions or owner.
+var denyWho = []string{"IU", "NU", "S-1-5-3"}
+
+// denyACEs are the deny entries for one kind of object: "dir", "file" or
+// "key".
+func denyACEs(kind string) []string {
+	flags, mask := "OICI", "0xd0156"
+	switch kind {
+	case "file":
+		flags = ""
+	case "key":
+		flags, mask = "CI", "0xd0006"
+	}
+	var out []string
+	for _, who := range denyWho {
+		out = append(out, "(D;"+flags+";"+mask+";;;"+who+")")
+	}
+	return out
+}
 
 // watchdogTask is the scheduled task that starts the service again.
 const watchdogTask = `\KC9K\Watchdog`
@@ -237,8 +255,9 @@ func withDeny(sddl, ace string) string {
 		dacl, sacl = rest[:end], rest[end:]
 	}
 	var kept []string
+	canon := canonACE(ace)
 	for _, a := range splitACEs(dacl) {
-		if !strings.Contains(strings.SplitN(a, ";", 3)[1], "ID") && a != ace {
+		if !strings.Contains(strings.SplitN(a, ";", 3)[1], "ID") && a != ace && a != canon {
 			kept = append(kept, a)
 		}
 	}
@@ -254,6 +273,23 @@ func splitACEs(dacl string) []string {
 		}
 		out = append(out, dacl[:end+1])
 		dacl = dacl[end+1:]
+	}
+	return out
+}
+
+// canonACE is ace as Windows prints it back (rights in letters where they
+// have them: 0xd0156 reads DCLCRPDTCRSDWDWO), so entries compare.
+func canonACE(ace string) string {
+	sd, err := windows.SecurityDescriptorFromString("D:" + ace)
+	if err != nil {
+		return ace
+	}
+	out := sd.String()
+	if i := strings.Index(out, "D:"); i >= 0 {
+		out = out[i+2:]
+	}
+	if i := strings.IndexByte(out, '('); i >= 0 {
+		out = out[i:]
 	}
 	return out
 }
@@ -322,11 +358,11 @@ func ApplyLockdown(user string) error {
 		if err != nil {
 			continue // not there (no Brave policy key, say)
 		}
-		ace := denyFileACE
+		kind := "dir"
 		if t.Key {
-			ace = denyKeyACE
+			kind = "key"
 		} else if info, err := os.Stat(t.Path); err == nil && !info.IsDir() {
-			ace = "(D;;0xd0156;;;BA)"
+			kind = "file"
 		}
 		if old, ok := saved[t.Path]; ok {
 			t.SDDL = old.SDDL
@@ -334,10 +370,16 @@ func ApplyLockdown(user string) error {
 			t.SDDL = cur
 		}
 		list = append(list, t)
-		if strings.Contains(cur, strings.Trim(ace, "()")) {
+		next := cur
+		for _, ace := range denyACEs(kind) {
+			if !strings.Contains(next, canonACE(ace)) {
+				next = withDeny(next, ace)
+			}
+		}
+		if next == cur {
 			continue
 		}
-		if err := setSecurity(t.Path, t.Key, withDeny(cur, ace)); err != nil {
+		if err := setSecurity(t.Path, t.Key, next); err != nil {
 			if firstErr == nil {
 				firstErr = fmt.Errorf("deny %s: %w", t.Path, err)
 			}
@@ -356,7 +398,10 @@ func ApplyLockdown(user string) error {
 	return firstErr
 }
 
-// RemoveLockdown puts back the security strict mode found.
+// RemoveLockdown takes strict mode's deny entries out again. It removes
+// only its own entries from the security as it is now (an install or
+// Windows may have changed the rest meanwhile); the security found at the
+// start is kept in the state file for a person to compare.
 func RemoveLockdown() error {
 	lockdownMu.Lock()
 	defer lockdownMu.Unlock()
@@ -368,15 +413,28 @@ func RemoveLockdown() error {
 		return err
 	}
 	var list []lockdownTarget
-	if err := json.Unmarshal(data, &list); err != nil {
-		return os.Remove(lockdownPath)
-	}
+	_ = json.Unmarshal(data, &list)
 	var firstErr error
 	for _, t := range list {
-		if t.SDDL == "" {
+		cur, err := pathSecurity(t.Path, t.Key)
+		if err != nil {
+			continue // gone
+		}
+		next := cur
+		for _, kind := range []string{"dir", "file", "key"} {
+			for _, ace := range denyACEs(kind) {
+				next = withoutACE(next, ace)
+			}
+		}
+		// Entries of the first build (for Administrators, which denied
+		// the service too).
+		for _, ace := range []string{"(D;OICI;0xd0156;;;BA)", "(D;;0xd0156;;;BA)", "(D;CI;0xd0006;;;BA)"} {
+			next = withoutACE(next, ace)
+		}
+		if next == cur {
 			continue
 		}
-		if err := setSecurity(t.Path, t.Key, t.SDDL); err != nil && firstErr == nil {
+		if err := setSecurity(t.Path, t.Key, next); err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("restore %s: %w", t.Path, err)
 		}
 	}
@@ -384,6 +442,34 @@ func RemoveLockdown() error {
 		return firstErr
 	}
 	return os.Remove(lockdownPath)
+}
+
+// withoutACE removes ace from sddl's DACL, and the inherited entries
+// (they come back by themselves).
+func withoutACE(sddl, ace string) string {
+	canon := canonACE(ace)
+	if !strings.Contains(sddl, ace) && !strings.Contains(sddl, canon) {
+		return sddl
+	}
+	i := strings.Index(sddl, "D:")
+	rest := sddl[i+2:]
+	flags := ""
+	for len(rest) > 0 && rest[0] != '(' && rest[0] != 'S' {
+		flags += rest[:1]
+		rest = rest[1:]
+	}
+	end := strings.Index(rest, "S:")
+	dacl, sacl := rest, ""
+	if end >= 0 {
+		dacl, sacl = rest[:end], rest[end:]
+	}
+	var kept []string
+	for _, a := range splitACEs(dacl) {
+		if !strings.EqualFold(a, ace) && a != canon && !strings.Contains(strings.SplitN(a, ";", 3)[1], "ID") {
+			kept = append(kept, a)
+		}
+	}
+	return sddl[:i] + "D:" + flags + strings.Join(kept, "") + sacl
 }
 
 // LockdownInstalled reports whether strict mode's deny entries are on.

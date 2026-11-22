@@ -115,6 +115,7 @@ $hosts = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 $wrote = $true
 try { Add-Content -Path $hosts -Value '# kc9k test' -ErrorAction Stop } catch { $wrote = $false }
 Check 'strict mode: an administrator can not write the hosts file' { -not $wrote }
+Check 'strict mode: the service still writes the hosts file (the block is in it)' { (Get-Content $hosts -Raw) -match 'example\.com' }
 reg.exe add 'HKLM\SYSTEM\CurrentControlSet\Services\kc9k' /v KC9KTest /d x /f 2>$null | Out-Null
 Check "strict mode: an administrator can not change the service's registry key" { $LASTEXITCODE -ne 0 }
 
@@ -123,9 +124,11 @@ K uninstall 2>&1 | Out-Host
 Check 'uninstall is refused while locked' { $LASTEXITCODE -ne 0 -and (Get-Service kc9k -ErrorAction SilentlyContinue) }
 Start-Sleep -Seconds 65
 K stop ci-block | Out-Host
-Start-Sleep -Seconds 8
-$wrote = $true
-try { Add-Content -Path $hosts -Value '# kc9k test' -ErrorAction Stop } catch { $wrote = $false }
+$wrote = $false
+for ($i = 0; $i -lt 30 -and -not $wrote; $i++) {
+    Start-Sleep -Seconds 2
+    try { Add-Content -Path $hosts -Value '# kc9k test' -ErrorAction Stop; $wrote = $true } catch { }
+}
 Check 'after the lock the hosts file is writable again' { $wrote }
 K strict off | Out-Host
 $out = K uninstall 2>&1 | Out-String
@@ -133,7 +136,8 @@ Write-Host $out
 Check 'uninstall succeeds once nothing is locked' { $LASTEXITCODE -eq 0 -and $out -match 'program is removed' }
 for ($i = 0; $i -lt 30 -and (Get-Service kc9k -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
 Check 'the service is gone' { -not (Get-Service kc9k -ErrorAction SilentlyContinue) }
-for ($i = 0; $i -lt 15 -and (Test-Path $k); $i++) { Start-Sleep -Seconds 1 }
+for ($i = 0; $i -lt 60 -and (Test-Path $k); $i++) { Start-Sleep -Seconds 1 }
+if (Test-Path $k) { Get-ChildItem -Recurse (Split-Path $k) | Select-Object FullName | Out-Host }
 Check 'the program is gone' { -not (Test-Path $k) }
 Check 'the data stays' { Test-Path $data }
 

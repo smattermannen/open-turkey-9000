@@ -46,6 +46,9 @@
   `ci/windows_service_test.ps1`: install, pipe, tamper protection, strict
   mode, uninstall) and `unit` (`go test ./...`, slow: SQLite on the
   runner's disk). The runner is a disposable administrator's machine.
+  GitHub's job provisioner runs from `AppData\Local\Temp`: the script
+  exempts the folders of such programs before strict mode, or strict mode
+  closes them and the job is cancelled without a log.
 - `ci/windows_vm_test.ps1 kc9k.exe [-Reboots]`: what needs a desktop or a
   person (agent, titles, apps, notifications, the challenge in a console
   and in its window, the lock freeze, takeown against strict mode, gamma,
@@ -246,9 +249,13 @@
   data folders' security (not while strict mode holds them). A session
   agent ended while its session lasts counts too.
 - Strict mode (`ApplyLockdown`, from `enforceLockdown` as on Linux):
-  deny entries for Administrators (files and folders `0xd0156`: write,
-  delete, permissions, owner; keys `0xd0006`: set, create, delete,
-  permissions, owner) on the service's key, `Control\SafeBoot`,
+  deny entries (`denyACEs`) for how a person's programs signed in —
+  Interactive, Network, Batch (S-1-5-3) — not for Administrators, whose
+  group LocalSystem's token holds too (the service would deny itself;
+  seen on `windows-latest`). Files and folders `0xd0156` (write, delete,
+  permissions, owner; Windows prints it `DCLCRPDTCRSDWDWO`, so entries are
+  compared in its own form, `canonACE`), keys `0xd0006` (set, create,
+  delete, permissions, owner) on the service's key, `Control\SafeBoot`,
   `BCD00000000` (boot settings), `Recovery\ReAgent.xml`, the Chromium
   policy keys, the hosts file, the program folder and Firefox-family
   `distribution` folders. The security found is kept in

@@ -41,11 +41,11 @@ of their group and a row here; a finished item loses its row.
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings of 2026-11-21: guest, inactive-tabs, embedded checked in Chrome-family browsers (2026-11-21); inactive-tabs, embedded in LibreWolf (box); VM parts: run `ci/tamper_vm_test.sh host kc9k-vm` (written 2026-11-21, never run; needs Go in the VM) | §4.10 | browsers, extension, install | box, vm |
 | D3 | Instagram "Following only": redirect checked (2026-11-20); logged in, the feed shows no suggested posts | §3.2 | extension | owner |
-| W1 | Windows service, session agent, named pipe, install/uninstall: built; CI script, desktop parts Unchecked | §3.13 | windows | win-ci, win-vm |
+| W1 | Windows service, session agent, named pipe, install/uninstall: built, checked on `windows-latest`; agent and console Unchecked | §3.13 | windows | win-vm |
 | W2 | Windows web layers: built; WFP checked in CI; browsers obeying Unchecked; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
 | W3 | Windows apps and desktop: built, Unchecked on a desktop | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
 | W4 | Windows GUI: C# / WinUI 3. Built, checked in CI against the fake kc9k and the real kc9k.exe with its service (2026-11-21); Narrator, scaling, drag and drop, a real desktop: Unchecked | §4.1–4.13, R-GUI-1–3 | gui-windows | win-vm, laptop |
-| W5 | Windows tamper protection: built; CI checks; boot/Safe Mode Unchecked; firmware lock not built | §3.10, §4.10 | windows | win-ci, win-vm, laptop |
+| W5 | Windows tamper protection: built, checked on `windows-latest`; boot/Safe Mode Unchecked; firmware lock not built | §3.10, §4.10 | windows | win-vm, laptop |
 | W6 | Windows circadian rhythm and wallpapers: built, Unchecked | §4.10 | windows | win-vm, laptop |
 | W7 | Windows MSI: built, checked in CI (install, removal, refused while locked, reinstall guard, 2026-11-21); signing needs the owner's certificate; Apps & features by a person Unchecked | §4.11 | install-windows | owner, win-vm |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
@@ -1571,20 +1571,24 @@ where its item needs it and the Linux tests prove nothing changed.
   change or delete by Administrators), restart on failure, the SYSTEM
   watchdog task, Safe Mode registration, all put back and counted each
   cycle; strict mode's deny entries (service key, SafeBoot, BCD, recovery
-  configuration, policy keys, hosts, program folder), kept and restored;
-  people's own programs closed during strict mode; no-escape's boot
-  settings (recovery off, automatic repair off, boot menu hidden);
-  factory reset protection turns the recovery environment off while
-  locked; Windows task managers and service tools in `task-managers`
-  (notes/windows.md). Checked on `windows-latest` by
-  `ci/windows_service_test.ps1` (Unchecked until it passes there): an
-  administrator can't stop, reconfigure or delete the service or delete
-  the watchdog; strict mode denies the hosts file and the service's key,
-  restored after the lock. Unchecked: Safe Mode boot, no-escape and the
-  recovery environment on a real boot, an administrator taking ownership
-  (Needs win-vm). Not built: the firmware lock with the vendors' tools
-  (Dell Command | Configure, Lenovo WMI, HP BCU): Needs laptop to know
-  which vendor's tool applies.
+  configuration, policy keys, hosts, program folder; for Interactive,
+  Network and Batch logons, since LocalSystem holds Administrators), kept
+  and taken off again; downloaded and portable programs closed during
+  strict mode; no-escape's boot settings (recovery off, automatic repair
+  off, boot menu hidden); factory reset protection turns the recovery
+  environment off while locked; Windows task managers and service tools
+  in `task-managers` (notes/windows.md). Checked on `windows-latest`
+  (`ci/windows_service_test.ps1`, 2026-11-21, all 30 checks): an
+  administrator can't stop, reconfigure or delete the service; a deleted
+  watchdog task is back within a cycle (Task Scheduler lets an elevated
+  administrator delete it); Safe Mode registration; strict mode denies the
+  hosts file and the service's key while the service still writes hosts,
+  and both open again after the lock; uninstall refused while locked, then
+  clean. Unchecked: Safe Mode boot, no-escape and the recovery environment
+  on a real boot, an administrator taking ownership (Needs win-vm:
+  `ci/windows_vm_test.ps1 -Reboots`). Not built: the firmware lock with
+  the vendors' tools (Dell Command | Configure, Lenovo WMI, HP BCU): Needs
+  laptop to know which vendor's tool applies.
 - [ ] `W6` Circadian rhythm and wallpapers (M). Built, Unchecked
   (2026-11-21): gamma ramps per screen through the agent (warm ramps
   allowed by `GdiIcmGammaRange`), wallpapers (copied where desktops may

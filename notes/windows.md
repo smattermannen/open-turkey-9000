@@ -353,6 +353,15 @@
   exactly what it added; `RemoveLockdown` does
   it first, since putting the rest back runs PowerShell. Every PowerShell
   the service runs has a time limit (90 s; the firmware's 5 min).
+- Policy refresh (W50): `refreshPolicy` (a variable; forced
+  `RefreshPolicyEx`, which tells every window "Policy" changed) runs only
+  after a rule or value really changed. Strict mode not acting (every
+  cycle) runs `RemoveLockdown` and `RemoveNoexec`: with nothing of KC9K's
+  there they touch nothing and refresh nothing. Before, each cycle
+  forced two machine policy refreshes. RP_FORCE stays: the rules are
+  plain registry values, not a GPO, so an unforced refresh tells no
+  program. `TestStrictSRPRefreshOnlyOnChange` (real registry): 0 calls
+  idle, 1 after a real removal. *(By claude)*
 - Strict mode's ways to SYSTEM (W20–W22, `strict_windows.go`;
   `applyStrictExtras` from `ApplyLockdown`, `removeStrictExtras` first in
   `RemoveLockdown`, whose failure is logged and retried but never keeps

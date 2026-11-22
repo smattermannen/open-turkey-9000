@@ -24,7 +24,7 @@ func TestNoDirectFileReads(t *testing.T) {
 		"master.go":             1, // the master hash file (devmaster builds)
 		"project.go":            2, // images dir, names checked by db.IsImageName
 		"recover_linux.go":      1, // /proc/cmdline
-		"guidedsetup.go":        2, // /etc/shadow and /boot/grub/grub.cfg, fixed paths (shadowPath, grubCfgPath)
+		"guidedsetup_linux.go":  2, // /etc/shadow and /boot/grub/grub.cfg, fixed paths (shadowPath, grubCfgPath)
 	}
 	re := regexp.MustCompile(`os\.(ReadFile|Open|OpenFile)\(`)
 	files, _ := filepath.Glob("*.go")

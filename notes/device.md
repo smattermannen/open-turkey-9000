@@ -58,9 +58,12 @@
   lock/logout/shutdown freeze keeps its mode when extended to `apps` (CLI
   refuses and logs; `reconcileFreezeSchedules` keeps the running mode).
 - **Guided setup** (`cli/guidedsetup.go`): `guidedSetup` builds the steps
-  (`setupStep`: id, state done/todo/by-hand/info/unknown, command); reads
-  `shadowPath` (root password) and `grubCfgPath` (other systems), both
-  replaced in tests. GUI: Device protection's Firmware lock… and Guided
+  (`setupStep`: id, state done/todo/by-hand/info/unknown, command); the
+  per-system ones in `guidedsetup_linux.go` (reads `shadowPath`, root
+  password, and `grubCfgPath`, other systems, both replaced in tests) and
+  `guidedsetup_windows.go` (`other-admins`, `builtin-admin` from
+  `localAdmins`, `safe-mode` info, other systems from `bcdedit /enum
+  osloader`; notes/windows.md). GUI: Device protection's Firmware lock… and Guided
   setup… (`show_guided_setup`, Do it… → `guided_action`, the same handler
   as the step's own switch).
 - **Monk mode** (`enforce/monk.go`, `db/monk.go`, `blocker/netcut.go`,

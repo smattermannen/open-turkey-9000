@@ -66,7 +66,6 @@ of their group and a row here; a finished item loses its row.
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`): built; a real Safe Mode boot Unchecked | R-ESCAPE-1 | windows, device | win-vm |
-| W15 | Guided setup's Windows steps | §4.10 | windows, device | win-ci |
 | W16 | Windows wording in help texts and messages | §3.14 | windows | agent |
 | W17 | Hardware clock on Windows (boot event) | §4.10 | windows, locks | win-ci |
 | W18 | One-click browser install on Windows (winget) | §4.10 | windows, browsers | win-ci, laptop |
@@ -1847,7 +1846,12 @@ their sites; their pages are an app's, not a browser's).
   nothing. Build: the built-in Guest account (RID 501) is disabled while
   the setting is on, put back after; turned on by hand meanwhile: put back
   and counted. Needs: win-ci.
-- [ ] `W15` Guided setup on Windows (S). SPEC §4.10, §6 2026-11-21 (By
+- [ ] `W15` Guided setup on Windows (S). Built (2026-11-22):
+  `guidedsetup_windows.go`; `TestGuidedSetupWindows` (fake accounts) and
+  `TestLocalAdminsForReal` (the runner's accounts) on `windows-latest`.
+  GUI: on Windows `kc9k guided-setup --json` has `other-admins`,
+  `builtin-admin` and `safe-mode` (state `info`) instead of `groups` and
+  `root-password`; show each like any step. Was planned: SPEC §4.10, §6 2026-11-21 (By
   Opus). Was: Linux's steps (sudo groups, `/etc/shadow`, GRUB). Build:
   Windows' steps: settings password, no weakening, tamper protection,
   strict mode and its lock, other administrator accounts and the

@@ -114,3 +114,61 @@ func accountFlags(name string) (uint32, error) {
 	// home_dir, comment (pointers), flags.
 	return *(*uint32)(unsafe.Add(unsafe.Pointer(buf), 4*unsafe.Sizeof(uintptr(0))+8)), nil
 }
+
+var procNetLocalGroupGetMembers = netapi32.NewProc("NetLocalGroupGetMembers")
+
+// AdministratorsName is the local Administrators group's name, which
+// Windows translates (found by its SID, S-1-5-32-544).
+func AdministratorsName() (string, error) {
+	sid, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err != nil {
+		return "", err
+	}
+	name, _, _, err := sid.LookupAccount("")
+	return name, err
+}
+
+// AdministratorSIDs are the SIDs of the Administrators group's members
+// (accounts and groups), as strings.
+func AdministratorSIDs() ([]string, error) {
+	group, err := AdministratorsName()
+	if err != nil {
+		return nil, err
+	}
+	g, err := windows.UTF16PtrFromString(group)
+	if err != nil {
+		return nil, err
+	}
+	var buf **windows.SID // LOCALGROUP_MEMBERS_INFO_0: one SID pointer each
+	var read, total uint32
+	if r, _, _ := procNetLocalGroupGetMembers.Call(0, uintptr(unsafe.Pointer(g)), 0, uintptr(unsafe.Pointer(&buf)),
+		0xFFFFFFFF, uintptr(unsafe.Pointer(&read)), uintptr(unsafe.Pointer(&total)), 0); r != 0 {
+		return nil, fmt.Errorf("NetLocalGroupGetMembers: %w", windows.Errno(r))
+	}
+	defer procNetApiBufferFree.Call(uintptr(unsafe.Pointer(buf)))
+	var out []string
+	for _, sid := range unsafe.Slice(buf, read) {
+		out = append(out, sid.String())
+	}
+	return out, nil
+}
+
+// LocalAccountSID is the SID of a local account's relative ID: the
+// computer's SID with rid added.
+func LocalAccountSID(rid uint32) (string, error) {
+	accounts, err := LocalAccounts()
+	if err != nil {
+		return "", err
+	}
+	for _, a := range accounts {
+		if a.RID != rid {
+			continue
+		}
+		sid, _, _, err := windows.LookupSID("", a.Name)
+		if err != nil {
+			return "", err
+		}
+		return sid.String(), nil
+	}
+	return "", fmt.Errorf("no local account with ID %d", rid)
+}

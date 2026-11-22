@@ -297,6 +297,12 @@
   `bcdedit /set {current} recoveryenabled No`, `bootstatuspolicy
   IgnoreAllFailures`, `{bootmgr} displaybootmenu No`; ProgramData\kc9k\
   bootlock.json keeps whether recovery was on; `RemoveBootLock` undoes.
+- Guided setup (W15, `cli/guidedsetup_windows.go`): instead of Linux's
+  groups and root password, `other-admins` (enabled local accounts in
+  Administrators, found by SID: `winapi.AdministratorSIDs`) and
+  `builtin-admin` (relative ID 500 on), each with its `net user … /active:no`;
+  a `safe-mode` info step before no-escape; other systems from `bcdedit
+  /enum osloader` (element names aren't translated).
 - Recovery path (W13, principle 4, R-ESCAPE-1): Safe Mode is Windows'
   recovery boot (`SafeModeBoot`: `SafeBoot\Option` exists only then).
   `KernelCmdline` carries `kc9k.nofreeze` in Safe Mode, so freezes and

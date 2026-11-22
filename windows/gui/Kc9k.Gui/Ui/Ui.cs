@@ -130,7 +130,7 @@ public static class Ui
     /// <summary>A page's title and its one-line subtitle.</summary>
     public static StackPanel PageHeader(string title, string subtitle = "", string? help = null)
     {
-        var titleText = Text(title, "Kc9kPageTitle");
+        var titleText = Text(title, "Kc9kPageTitle").Id("PageTitle");
         AutomationProperties.SetHeadingLevel(titleText, AutomationHeadingLevel.Level1);
         var top = Wrap(8, titleText);
         if (help is not null) top.Children.Add(HelpButton(help, title));

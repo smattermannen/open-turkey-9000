@@ -128,6 +128,18 @@
   block tab has a name and takes keyboard focus; screenshots in high
   contrast (`SPI_SETHIGHCONTRAST`, turned off after) and at 200 % text
   (`HKCU\Software\Microsoft\Accessibility\TextScaleFactor`, put back).
+- `GeometryTests.cs` (W53/W54): windows of 400, 512, 800, 1024, 1366 and
+  1920 DIP (resized with `SetWindowPos`; a width the screen can't hold is
+  tested at the widest it got) × text at 100, 150 and 200 %, on every
+  sidebar page and block tab: every element shown lies inside the client
+  area left to right, no horizontal scroll bar, no ☰, the page title right
+  of the sidebar and at one place on every page; on Blocks each row's
+  switch and locks end in one right column. `StabilityTests.cs`: W52.
+  The test process is per-monitor DPI aware (`DpiAware.cs`), so
+  UI Automation, screenshots and moves are in physical pixels as gui.json
+  is. High contrast reads the person's flags and scheme first and puts
+  them back exactly; the name check skips a scroll bar's own parts.
+  *(By claude)*
 
 ## Built behaviour
 

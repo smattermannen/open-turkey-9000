@@ -13,7 +13,7 @@ public sealed class ModeView
 {
     readonly MainWindow window;
     readonly BlocksPage page;
-    readonly TextBlock title = Ui.Text("", "Kc9kPageTitle", wrap: false);
+    readonly TextBlock title = Ui.Text("", "Kc9kPageTitle", wrap: false).Id("PageTitle");
     readonly TextBlock status = Ui.Dim("");
     readonly ToggleSwitch toggle;
     readonly Button lockButton, menuButton, takeOutButton;

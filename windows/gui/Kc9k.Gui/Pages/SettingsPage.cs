@@ -636,6 +636,8 @@ public sealed class SettingsPage : IPage
         catch (Exception e) { await C.Dialogs.Message(e.Message); }
     }
 
+    Task ImportProject() => Files.ImportProject(window); // W55
+
     // Firmware lock and guided setup (§4.10 Device protection) -------------------------------
 
     async Task<JsonElement?> CliJson(List<string> args)

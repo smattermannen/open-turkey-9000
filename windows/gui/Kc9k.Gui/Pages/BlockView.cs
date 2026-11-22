@@ -15,7 +15,7 @@ public sealed class BlockView
 {
     readonly MainWindow window;
     readonly BlocksPage page;
-    readonly TextBlock title = Ui.Text("", "Kc9kPageTitle", wrap: false);
+    readonly TextBlock title = Ui.Text("", "Kc9kPageTitle", wrap: false).Id("PageTitle");
     readonly WrapPanel pills = new() { HorizontalSpacing = 6 };
     readonly TextBlock summary = Ui.Dim("");
     readonly InfoBar modeBar, hiddenBar, draftBar;

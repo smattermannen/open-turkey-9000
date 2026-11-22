@@ -11,7 +11,7 @@ namespace Kc9k.Gui;
 public sealed class AutomationView
 {
     readonly MainWindow window;
-    readonly TextBlock title = Ui.Text("", "Kc9kPageTitle", wrap: false);
+    readonly TextBlock title = Ui.Text("", "Kc9kPageTitle", wrap: false).Id("PageTitle");
     readonly AutomationEditor editor;
     readonly EditableList autostarts;
     readonly CheckBox scheduleLock;

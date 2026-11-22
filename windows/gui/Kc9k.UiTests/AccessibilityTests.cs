@@ -28,6 +28,8 @@ public class AccessibilityTests
             if (!Usable.Contains(type)) continue;
             try
             {
+                // A scroll bar's own arrows and thumb are WinUI's, not ours.
+                if (e.Parent?.ControlType == ControlType.ScrollBar) continue;
                 if (e.IsOffscreen || !e.IsEnabled) continue;
                 var id = e.Properties.AutomationId.ValueOrDefault ?? "";
                 if (string.IsNullOrWhiteSpace(e.Name)) problems.Add($"{where}: {type} {id} has no name");
@@ -62,23 +64,42 @@ public class AccessibilityTests
         Assert.True(problems.Count == 0, $"{problems.Distinct().Count()} control(s) without a name or keyboard focus:\n" + string.Join("\n", problems.Distinct()));
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    struct HighContrast { public int Size; public uint Flags; public string? Scheme; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct HighContrast { public int Size; public uint Flags; public IntPtr Scheme; }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [DllImport("user32.dll", SetLastError = true)]
     static extern bool SystemParametersInfo(uint action, uint param, ref HighContrast value, uint winIni);
 
-    static void SetHighContrast(bool on)
+    const uint GetHighContrast = 0x0042, SetHighContrastAction = 0x0043, HighContrastOn = 0x1;
+
+    /// <summary>Turns high contrast on and gives back how to put the
+    /// person's own setting back exactly (flags and scheme, not only on/off).</summary>
+    static Action SetHighContrast()
     {
-        var hc = new HighContrast { Size = Marshal.SizeOf<HighContrast>(), Flags = on ? 1u : 0u, Scheme = on ? "High Contrast Black" : null };
-        SystemParametersInfo(0x0043, (uint)hc.Size, ref hc, 0x3); // SPI_SETHIGHCONTRAST, update and broadcast
-        Thread.Sleep(1500);
+        var size = Marshal.SizeOf<HighContrast>();
+        var before = new HighContrast { Size = size };
+        SystemParametersInfo(GetHighContrast, (uint)size, ref before, 0);
+        var flags = before.Flags;
+        var scheme = before.Scheme != IntPtr.Zero ? Marshal.PtrToStringUni(before.Scheme) : null;
+        void Put(uint f, string? s)
+        {
+            var text = s is null ? IntPtr.Zero : Marshal.StringToHGlobalUni(s);
+            try
+            {
+                var hc = new HighContrast { Size = size, Flags = f, Scheme = text };
+                SystemParametersInfo(SetHighContrastAction, (uint)size, ref hc, 0x3); // update and broadcast
+            }
+            finally { if (text != IntPtr.Zero) Marshal.FreeHGlobal(text); }
+            Thread.Sleep(1500);
+        }
+        Put(flags | HighContrastOn, (flags & HighContrastOn) != 0 ? scheme : "High Contrast Black");
+        return () => Put(flags, scheme);
     }
 
     [Fact]
     public void PagesInHighContrast()
     {
-        SetHighContrast(true);
+        var restore = SetHighContrast();
         try
         {
             using var gui = new GuiApp("contrast");
@@ -91,7 +112,7 @@ public class AccessibilityTests
             gui.Invoke("BlockCard_Reading");
             gui.Shot("block");
         }
-        finally { SetHighContrast(false); }
+        finally { restore(); }
     }
 
     [Fact]

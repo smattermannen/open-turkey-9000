@@ -31,7 +31,9 @@
   or runtime folder or below a world-writable folder (`forbiddenPlace`,
   `worldWritableAbove`), exempt folders excepted.
   Boot param
-  `kc9k.nofreeze` skips freeze and lockdown for that boot.
+  `kc9k.nofreeze` skips freeze and lockdown for that boot (on Windows:
+  Safe Mode, notes/windows.md; `kc9k recover`'s recovery boot is
+  `recoveryBoot`, `cli/recover_*.go`).
   `enforceLockdown` reaches them through `enforce` vars `applyLockdown`,
   `removeLockdown`, `applyNoexec`, `removeNoexec`, `closeNoexecPrograms`,
   `kernelCmdline`, faked

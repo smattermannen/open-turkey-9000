@@ -293,6 +293,15 @@
   `bcdedit /set {current} recoveryenabled No`, `bootstatuspolicy
   IgnoreAllFailures`, `{bootmgr} displaybootmenu No`; ProgramData\kc9k\
   bootlock.json keeps whether recovery was on; `RemoveBootLock` undoes.
+- Recovery path (W13, principle 4, R-ESCAPE-1): Safe Mode is Windows'
+  recovery boot (`SafeModeBoot`: `SafeBoot\Option` exists only then).
+  `KernelCmdline` carries `kc9k.nofreeze` in Safe Mode, so freezes and
+  strict mode's lockdown are skipped for that boot unless no-escape is on
+  (blocks stay: the service runs in Safe Mode); `kc9k recover` works there
+  (`cli/recover_windows.go`). While factory reset protection keeps the
+  recovery environment off and no-escape isn't on, the F8 menu is on
+  (`bootmenupolicy Legacy`, `recoveryMenuOn`); no-escape sets it back to
+  Standard, and so does the end of factory reset protection.
 - Factory reset protection while anything is locked
   (`SyncRecoveryGuard`): the recovery environment off (Reset this PC
   needs it), back on after unless no-escape holds it; turned on by hand

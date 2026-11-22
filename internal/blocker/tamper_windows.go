@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/smattermannen/kc9k/internal/freeze"
 	"github.com/smattermannen/kc9k/internal/platform"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -475,9 +476,40 @@ func withoutACE(sddl, ace string) string {
 // LockdownInstalled reports whether strict mode's deny entries are on.
 func LockdownInstalled() bool { return lockdownActive() }
 
-// KernelCmdline: Windows has no kernel command line (no kc9k.nofreeze
-// escape).
-func KernelCmdline() string { return "" }
+// SafeModeBoot reports whether Windows was started in Safe Mode (with or
+// without networking): Windows writes SafeBoot\Option only then. A
+// variable for tests.
+var SafeModeBoot = func() bool {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Control\SafeBoot\Option`, registry.QUERY_VALUE)
+	if err != nil {
+		return false
+	}
+	defer k.Close()
+	v, _, err := k.GetIntegerValue("OptionValue")
+	return err == nil && v != 0
+}
+
+// KernelCmdline stands for Linux's kernel command line: Windows has none,
+// and Safe Mode is its recovery boot (W13, SPEC §6 2026-11-22 By Opus), so
+// in Safe Mode it carries kc9k.nofreeze: freezes and strict mode's
+// lockdown are skipped for that boot unless no-escape is on.
+func KernelCmdline() string {
+	if SafeModeBoot() {
+		return freeze.BypassParam
+	}
+	return ""
+}
+
+// recoveryMenuOn keeps a way to Safe Mode while the recovery environment
+// is off and no-escape isn't on (R-ESCAPE-1): the F8 boot menu.
+func recoveryMenuOn(on bool) error {
+	policy := "Standard"
+	if on {
+		policy = "Legacy"
+	}
+	_, err := bcdedit("/set", "{current}", "bootmenupolicy", policy)
+	return err
+}
 
 // taskExists reports whether the scheduled task exists: its file in the
 // Tasks folder (no schtasks process each cycle), else schtasks' answer.
@@ -625,6 +657,7 @@ func ApplyBootLock() error {
 		{"/set", "{current}", "recoveryenabled", "No"},
 		{"/set", "{current}", "bootstatuspolicy", "IgnoreAllFailures"},
 		{"/set", "{bootmgr}", "displaybootmenu", "No"},
+		{"/set", "{current}", "bootmenupolicy", "Standard"},
 	} {
 		if _, err := bcdedit(args...); err != nil {
 			return err
@@ -649,7 +682,13 @@ func RemoveBootLock() error {
 			return err
 		}
 	}
-	if state.RecoveryWasOn {
+	if _, err := os.Stat(recoveryGuardPath); err == nil {
+		// Factory reset protection still keeps the recovery environment
+		// off: Safe Mode stays reachable by F8.
+		if err := recoveryMenuOn(true); err != nil {
+			return err
+		}
+	} else if state.RecoveryWasOn {
 		if _, err := reagentc("/enable"); err != nil {
 			return err
 		}
@@ -754,6 +793,9 @@ func SyncRecoveryGuard(on bool) (fixed bool, err error) {
 		if state.RecoveryWasOn {
 			_, err = reagentc("/disable")
 		}
+		if err == nil && !BootLockInstalled() {
+			err = recoveryMenuOn(true)
+		}
 		return false, err
 	case on && active:
 		if recoveryOn() {
@@ -766,9 +808,14 @@ func SyncRecoveryGuard(on bool) (fixed bool, err error) {
 		if data, err := os.ReadFile(recoveryGuardPath); err == nil {
 			_ = json.Unmarshal(data, &state)
 		}
-		if state.RecoveryWasOn && !BootLockInstalled() {
-			if _, err := reagentc("/enable"); err != nil {
+		if !BootLockInstalled() {
+			if err := recoveryMenuOn(false); err != nil {
 				return false, err
+			}
+			if state.RecoveryWasOn {
+				if _, err := reagentc("/enable"); err != nil {
+					return false, err
+				}
 			}
 		}
 		return false, os.Remove(recoveryGuardPath)

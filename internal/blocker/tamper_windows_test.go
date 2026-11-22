@@ -93,3 +93,20 @@ func TestDenyNotForServices(t *testing.T) {
 		}
 	}
 }
+
+// W13: a normal boot is no recovery boot; Safe Mode's marker is what makes
+// one (the runner never boots in Safe Mode: win-vm checks that).
+func TestRecoveryBootWin(t *testing.T) {
+	if SafeModeBoot() {
+		t.Skip("this computer runs in Safe Mode")
+	}
+	if KernelCmdline() != "" {
+		t.Errorf("KernelCmdline outside Safe Mode = %q", KernelCmdline())
+	}
+	old := SafeModeBoot
+	SafeModeBoot = func() bool { return true }
+	defer func() { SafeModeBoot = old }()
+	if KernelCmdline() != "kc9k.nofreeze" {
+		t.Errorf("KernelCmdline in Safe Mode = %q", KernelCmdline())
+	}
+}

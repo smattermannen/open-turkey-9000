@@ -6,9 +6,7 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"slices"
-	"strings"
 
 	"github.com/smattermannen/kc9k/internal/platform"
 
@@ -17,21 +15,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// inRecovery reports whether this boot is a recovery boot, from the kernel
-// command line. A variable for tests.
-var inRecovery = func() bool {
-	data, err := os.ReadFile("/proc/cmdline")
-	if err != nil {
-		return false
-	}
-	for _, word := range strings.Fields(string(data)) {
-		switch word {
-		case "single", "recovery", "S", "1", "emergency", "systemd.unit=rescue.target", "systemd.unit=emergency.target":
-			return true
-		}
-	}
-	return false
-}
+// inRecovery reports whether this boot is a recovery boot: the kernel
+// command line on Linux, Safe Mode on Windows (recover_*.go). A variable for
+// tests.
+var inRecovery = recoveryBoot
 
 // isRoot is platform.Privileged; a variable for tests.
 var isRoot = platform.Privileged
@@ -39,17 +26,17 @@ var isRoot = platform.Privileged
 var recoverCmd = &cobra.Command{
 	Use:   "recover",
 	Short: "From recovery mode: remove a forgotten settings password and password locks",
-	Long: `Run as root after booting the recovery menu entry. It removes the settings
+	Long: recoverIntro + ` It removes the settings
 password and every password lock (on blocks and settings); other locks stay.
 With --access it also removes the access passwords. It refuses while
 no-escape is on: then there is no way out but the locks themselves.`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if !isRoot() {
-			return fmt.Errorf("run it as root, from recovery mode")
+			return fmt.Errorf("%s", recoverNotRoot)
 		}
 		if !inRecovery() {
-			return fmt.Errorf("this is not a recovery boot: choose the recovery entry in the boot menu first")
+			return fmt.Errorf("%s", recoverNotRecovery)
 		}
 		if v, _ := database.GetSetting(enforce.SettingNoEscape); v == "on" {
 			return fmt.Errorf("no-escape is on, so there is no recovery from here (R-ESCAPE-1)")

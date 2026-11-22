@@ -65,7 +65,7 @@ of their group and a row here; a finished item loses its row.
 | W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
-| W13 | Recovery path on Windows (Safe Mode, `kc9k recover`) | R-ESCAPE-1 | windows, device | win-ci, win-vm |
+| W13 | Recovery path on Windows (Safe Mode, `kc9k recover`): built; a real Safe Mode boot Unchecked | R-ESCAPE-1 | windows, device | win-vm |
 | W14 | Guest account off with close guest profiles | §4.10 | windows, browsers | win-ci |
 | W15 | Guided setup's Windows steps | §4.10 | windows, device | win-ci |
 | W16 | Windows wording in help texts and messages | §3.14 | windows | agent |
@@ -1823,7 +1823,12 @@ their sites; their pages are an app's, not a browser's).
   mshta, node, java `-jar`, AutoHotkey), by name, path or folder; fetch
   tools by their script or module too. Needs: win-ci (real interpreters on
   the runner).
-- [ ] `W13` A recovery path on Windows (S). Principle 4, R-ESCAPE-1,
+- [ ] `W13` A recovery path on Windows (S). Built (2026-11-22):
+  `SafeModeBoot`, `KernelCmdline`, `recoveryMenuOn`,
+  `cli/recover_windows.go`; checked on `windows-latest`
+  (`TestRecoveryBootWin`: a normal boot is none; Safe Mode carries
+  kc9k.nofreeze). Unchecked: a real Safe Mode boot, F8 (Needs win-vm,
+  `-Reboots`). Was planned: Principle 4, R-ESCAPE-1,
   §3.11 (`kc9k recover`). Was: `kc9k recover` reads `/proc/cmdline` and
   never works; Windows has no `kc9k.nofreeze`, so a buggy freeze or strict
   mode could trap the user, the more so with the recovery environment off

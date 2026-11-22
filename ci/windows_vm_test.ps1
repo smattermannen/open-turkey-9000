@@ -91,7 +91,8 @@ Ask "'kc9k status' or the GUI counts the takeown as a bypass (tamper event)"
 
 if ($Reboots) {
     Write-Host 'Reboot checks: take a snapshot first. Then run, one at a time:'
-    Write-Host '  1. bcdedit /set {current} safeboot minimal; reboot: in Safe Mode, the block still holds (kc9k status, the hosts file).'
+    Write-Host '  1. bcdedit /set {current} safeboot minimal; reboot: in Safe Mode, the block still holds (kc9k status, the hosts file), a freeze and strict mode do not (W13), and kc9k recover removes a settings password; bcdedit /deletevalue {current} safeboot; reboot.'
+    Write-Host '  1b. With factory reset protection acting (a lock, no no-escape): F8 while booting shows Advanced Boot Options with Safe Mode (W13).'
     Write-Host '  2. kc9k no-escape on --yes; reboot holding Shift+Restart: the recovery environment must not open.'
     Write-Host '  3. Settings > System > Recovery > Reset this PC during a lock with factory reset protection on: it must fail.'
 }

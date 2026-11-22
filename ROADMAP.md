@@ -63,6 +63,24 @@ of their group and a row here; a finished item loses its row.
 | W42 | Signing proven with a throwaway certificate; Azure Artifact Signing | §6 2026-11-21 | install-windows | win-ci, owner |
 | W43 | `kc9k version`; versions under Settings › About | §4.11 | gui-windows | agent, win-ci |
 | W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
+| W10 | Places on Windows (Native Wifi; Wi-Fi kept on) | §3.6, R-MODE-5 | windows, automation | win-ci, laptop |
+| W11 | Remote-control browsers closed on Windows | §3.13 | windows, browsers | win-ci |
+| W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
+| W13 | Recovery path on Windows (Safe Mode, `kc9k recover`) | R-ESCAPE-1 | windows, device | win-ci, win-vm |
+| W14 | Guest account off with close guest profiles | §4.10 | windows, browsers | win-ci |
+| W15 | Guided setup's Windows steps | §4.10 | windows, device | win-ci |
+| W16 | Windows wording in help texts and messages | §3.14 | windows | agent |
+| W17 | Hardware clock on Windows (boot event) | §4.10 | windows, locks | win-ci |
+| W18 | One-click browser install on Windows (winget) | §4.10 | windows, browsers | win-ci, laptop |
+| W19 | Firmware lock on Windows (vendors' firmware WMI) | §3.8, §4.10 | windows, device | laptop, owner |
+| W20 | Strict mode: Windows' ways to SYSTEM | §3.8, principle 3 | windows, device | win-ci |
+| W21 | Strict mode: administrators' privileges | §3.8, principle 3 | windows, device | win-ci |
+| W22 | Strict mode: new accounts | §3.8 | windows, device | win-ci |
+| W23 | Clock and time zone put back (tamper clock) | §4.10 | windows, locks | win-ci |
+| W24 | Strict mode: VMs, WSL, Sandbox, containers | §3.8 | windows, device | win-ci, win-vm |
+| W25 | Strict mode's noexec: Software Restriction Policies | §3.8 | windows, device | win-ci |
+| W26 | Other ways around: Firefox registry policies, DoT, IPv6 hosts | §3.13, §4.10 | windows, browsers | win-ci |
+| W27 | Desktop checks of `windows_vm_test.ps1` in CI | — | windows, testing | win-ci |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 
@@ -1745,6 +1763,174 @@ Core's features:
 - [ ] `W49` Core's `GUI:` lines (W10–W29) given their place in the GUI,
   each with a UI Automation test, once the command is on `main`. None yet
   (2026-11-22).
+
+### 4.2 Windows Core: parity audit 2026-11-22 (By Opus)
+
+Each Linux-only file (`//go:build linux`), command and setting compared
+with its Windows behaviour (Core session, 2026-11-22). Found weaker or
+missing on Windows, in the order they are built: fixes to what is built
+(`W10`–`W16`), missing features (`W17`–`W19`), added strictness
+(`W20`–`W26`), then CI (`W27`). The choices marked (By Opus) are the
+resolver's, not the owner's (SPEC §6 2026-11-22 By Opus). Not holes, so no
+item (SPEC §6 2026-11-22 By Opus): a system proxy or VPN (hosts, the
+extension and the browser policies judge names and addresses whichever way
+the traffic goes; WFP's ALE filters see the real address before a tunnel);
+Windows' own DNS over HTTPS (the hosts file is read first, and the DoH
+filters cover Windows' known servers); WebView2 apps (hosts and WFP block
+their sites; their pages are an app's, not a browser's).
+
+- [ ] `W10` Places on Windows (M). SPEC §3.6, §4.5 (places), R-MODE-5,
+  §6 2026-11-16. Was: `enforce/places.go` runs `nmcli`, so on Windows no
+  network is ever seen: every place counts as here (blocks with a place
+  rule always on) and a place can't be saved. Build: `ScanWifi` and the
+  rescan through the Native Wifi API (`WlanOpenHandle`,
+  `WlanEnumInterfaces`, `WlanScan`, `WlanGetNetworkBssList`; SSID and
+  BSSID of every interface), and keeping Wi-Fi on (radio switched on with
+  `WlanSetInterface` software radio state; a disabled Wi-Fi adapter
+  enabled), as `wifiRadio` already is for monk mode. Pure parts (BSS list
+  parsing) tested on Linux. Needs: win-ci (no Wi-Fi on the runner: "nothing
+  seen" path), laptop (real networks; Windows 11 24H2 asks location
+  permission of Wi-Fi scans by apps: Unchecked whether a service is asked).
+- [ ] `W11` Browsers started for remote control on Windows (S). SPEC
+  §3.13, §4.10 (tamper protection: close browsers if the extension
+  stops). Was: `RemoteControlAllowed` false and `guardedProcess.remote`
+  never set: a browser with `--remote-debugging-port`, `--marionette`,
+  `--remote-debugging-pipe`, `--disable-extensions` or `MOZ_MARIONETTE`
+  kept running. Build: the guard reads each browser's command line
+  (`commandLine`) and environment (its PEB, `ReadProcessMemory`) and
+  closes it as on Linux (`parseRemoteControl`, shared). Needs: win-ci
+  (a renamed test program with the switches).
+- [ ] `W12` Scripts and script hosts on Windows (S). SPEC §3.1 (apps),
+  §3.9 (workaround: fetch tool). Was: `scripts.go` is Linux-only; on
+  Windows an app entry naming a script (`bot.py`, `game.ps1`) matches
+  nothing and a fetch tool run as a script (`python -m yt_dlp`,
+  `yt-dlp.py`, `node`) isn't seen. Build: an app entry that names a script
+  file matches the interpreter process running it (py/python/pythonw,
+  PowerShell/pwsh `-File`, cmd `/c` batch files, wscript/cscript,
+  mshta, node, java `-jar`, AutoHotkey), by name, path or folder; fetch
+  tools by their script or module too. Needs: win-ci (real interpreters on
+  the runner).
+- [ ] `W13` A recovery path on Windows (S). Principle 4, R-ESCAPE-1,
+  §3.11 (`kc9k recover`). Was: `kc9k recover` reads `/proc/cmdline` and
+  never works; Windows has no `kc9k.nofreeze`, so a buggy freeze or strict
+  mode could trap the user, the more so with the recovery environment off
+  (factory reset protection). Build (By Opus): Safe Mode is Windows'
+  recovery boot: in it, freeze and strict mode's lockdown are skipped for
+  that boot and `kc9k recover` works, unless no-escape is on (blocks stay
+  enforced: the service runs in Safe Mode, SPEC §6 2026-11-21); while the
+  recovery environment is off and no-escape isn't on, the F8 boot menu
+  (`bootmenupolicy Legacy`) keeps Safe Mode reachable; no-escape turns it
+  off. Needs: win-ci (fakes), win-vm (`-Reboots`).
+- [ ] `W14` Guest account (S). SPEC §4.10 (close guest profiles also
+  turns off the login screen's guest session). Was: `SyncGuestOff` does
+  nothing. Build: the built-in Guest account (RID 501) is disabled while
+  the setting is on, put back after; turned on by hand meanwhile: put back
+  and counted. Needs: win-ci.
+- [ ] `W15` Guided setup on Windows (S). SPEC §4.10, §6 2026-11-21 (By
+  Opus). Was: Linux's steps (sudo groups, `/etc/shadow`, GRUB). Build:
+  Windows' steps: settings password, no weakening, tamper protection,
+  strict mode and its lock, other administrator accounts and the
+  built-in Administrator (instead of root-equivalent groups and the root
+  password), installer media guard, firmware lock, Safe Mode and other
+  systems (info), no-escape last. GUI: the step IDs and texts of `kc9k
+  guided-setup --json` differ on Windows.
+- [ ] `W16` Windows wording (S). SPEC §3.14, R-GUI-3. Was: help texts and
+  messages name `sudo`, GRUB, `kc9k.nofreeze`, `/etc/hosts`, `systemctl`,
+  `journalctl` on Windows too. Build: each says Windows' own on Windows
+  (the service, Safe Mode, the hosts file, `kc9k.log`). GUI: help texts.
+- [ ] `W17` Hardware clock on Windows (S). SPEC §4.10 (clock: check
+  against hardware clock and internet time). Was: no reader; the clock
+  check gives back powered-off time by internet time alone. Build (By
+  Opus): Windows reads the hardware clock at boot and logs it (event 12 of
+  Kernel-General, "The operating system started at system time"); that
+  time plus the boot clock is the hardware clock's count, which caps what
+  the check gives back as on Linux. A cleared log: internet time alone, as
+  now. Needs: win-ci (the event on the runner).
+- [ ] `W18` One-click browser install on Windows (S). SPEC §4.10
+  (Browsers: one-click install). Was: refused with a hint. Build:
+  `browser install librewolf|chrome` runs winget as SYSTEM (`--scope
+  machine --silent`, its published package ids), an outside query stated
+  in the help (principle 6). Needs: win-ci (winget on the runner;
+  `workflow_dispatch` only), laptop.
+- [ ] `W19` Firmware lock on Windows (M). SPEC §3.8, §4.10, §6 2026-11-21
+  (By Opus). Was: not built. Build: the same firmware interfaces Linux's
+  `firmware-attributes` drivers use, through WMI, built into the
+  firmware and Windows (no vendor tool to install): Dell
+  (`root\dcim\sysman\biosattributes`), Lenovo (`root\wmi`
+  `Lenovo_BiosSetting`, `Lenovo_SetBiosSetting`, `Lenovo_SaveBiosSettings`,
+  `Lenovo_SetBiosPassword`), HP (`root\HP\InstrumentedBIOS`,
+  `HP_BIOSSettingInterface`); the same purposes and order (settings first,
+  password last; the password over stdin, never stored); a computer
+  without them: "set the firmware password by hand", as on Linux. The
+  vendors' tools (Dell Command | Configure, HP BCU) are not needed.
+  Pure parts (reading each vendor's answer) tested on Linux. Needs: laptop
+  (which vendor), owner.
+- [ ] `W20` Strict mode: Windows' ways to SYSTEM (M). Principle 3 (strict
+  mode: any ordinary-user path to a blocked site is a real hole), SPEC §6
+  2026-11-21 (later). Linux's are sudo, pkexec, root login, su and the
+  container sockets (`lockdown.go`, `pamguard.go`, `sockets.go`);
+  Windows' are what makes an administrator SYSTEM, which strict mode
+  never denies. Build (By Opus), while strict mode holds: the service
+  manager denies people's logons creating services (`sc create`, PsExec,
+  drivers); every service denies them changing its configuration, owner
+  or permissions; the `Services` key tree is denied to them; scheduled
+  tasks people make to run as SYSTEM (or another service account) are
+  deleted and counted each cycle; permanent WMI event subscriptions
+  likewise; Windows Installer is turned off for everyone but SYSTEM
+  (`DisableMSI`; strict mode is Linux's "no sudo apt"). All kept and put
+  back as the deny entries are. Needs: win-ci (each refused for real).
+- [ ] `W21` Strict mode: administrators' privileges (M). Same SPEC. An
+  elevated administrator's backup, restore, take-ownership, debug, driver
+  and firmware-variable privileges pass by deny entries (`robocopy /B`
+  rewrites the hosts file). Build (By Opus), while strict mode holds:
+  those privileges are removed from every person's running process's
+  token (`SE_PRIVILEGE_REMOVED`, each cycle) and from Administrators'
+  user rights (LSA, from the next sign-in), put back after. Needs:
+  win-ci.
+- [ ] `W22` Strict mode: new accounts (S). Same SPEC. Linux's user can't
+  make accounts without root; Windows' administrator can, and the built-in
+  Administrator can be turned on. Build: accounts made or turned on while
+  strict mode holds are turned off and counted (each cycle); put back as
+  they were after. Needs: win-ci.
+- [ ] `W23` The clock and the time zone (S). SPEC §4.10 (clock: block
+  time/date changes). Trusted time already ignores the clock; schedules
+  and windows read the local time, which an administrator (and, for the
+  time zone, any user) may change. Build (By Opus): with tamper clock on
+  and anything locked, a time zone change is put back and counted, and a
+  jump of the system clock against the boot clock that internet time
+  doesn't confirm is put back and counted. Needs: win-ci.
+- [ ] `W24` Strict mode: virtual machines, WSL, Windows Sandbox,
+  containers (S). SPEC §3.8 (strict mode: no containers/VMs). Was: nothing
+  on Windows; a WSL distribution or VM has its own DNS and network path
+  past hosts and possibly WFP. Build: while strict mode holds, people's
+  WSL, Windows Sandbox, Hyper-V, VirtualBox, VMware, QEMU and Docker
+  programs are closed and WSL's VMs shut down. Needs: win-ci (WSL on the
+  runner), win-vm.
+- [ ] `W25` Strict mode's noexec on Windows (M). SPEC §3.8 (nothing runs
+  from home or temporary folders except exempt folders), §6 2026-11-21
+  (By Opus). Was: `ApplyNoexec` does nothing; downloaded programs are
+  closed within a cycle (a short one still runs). Build (By Opus):
+  Software Restriction Policies, registry only so Home has them:
+  disallowed paths for each profile's own folders (not AppData), the
+  temporary folders and removable drives, exempt folders unrestricted, for
+  every user including administrators; put back after. Closing stays.
+  Needs: win-ci (a program refused for real).
+- [ ] `W26` Other ways around on Windows (S). SPEC §3.13 (policies),
+  §4.10. Firefox-family policies also in the registry
+  (`HKLM\SOFTWARE\Policies\Mozilla\Firefox`, which Store/MSIX and portable
+  Firefox read where no `distribution` folder is found); DNS over TLS/QUIC
+  (port 853) to the DoH resolvers blocked like DoH; IPv6: a hosts entry
+  (`0.0.0.0` only) checked to answer AAAA queries too, `::` lines added if
+  not. Needs: win-ci.
+- [ ] `W27` Desktop checks in CI (M). `notes/testing.md`. GitHub's
+  `windows-latest` has a signed-in desktop: the checks of
+  `ci/windows_vm_test.ps1` that need one but no person or reboot move to
+  `windows.yml` (agent running in the session, titles, apps killed, the
+  challenge window refusing injected keys, notifications, dark mode,
+  wallpaper, gamma). Needs: win-ci.
+
+What needs the owner's VM, laptop or the owner (filled in as items land):
+see the end of this section.
 
 ## 5. Proposed, not agreed
 

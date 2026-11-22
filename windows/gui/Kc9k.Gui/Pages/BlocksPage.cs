@@ -106,6 +106,15 @@ public sealed class BlocksPage : IPage
         else if (loose.Count == 0) blockCards.Children.Add(Ui.Dim("Every block is in a mode."));
     }
 
+    /// <summary>A card's switch: a refusal (shown in the CLI's words) leaves
+    /// the state as it was, so the cards are drawn again to put the switch back.</summary>
+    async Task SwitchBlock(string name, bool on)
+    {
+        if (await C.Run(on ? ["start", name] : ["stop", name])) return;
+        cardsShown = "";
+        if (state is not null) UpdateCards(state);
+    }
+
     /// <summary>A block's card: its name (opens it), switch, Continuous or
     /// Automated, its breaks, its locks; nothing else (§4.2).</summary>
     public UIElement BlockCard(Block b)
@@ -114,7 +123,7 @@ public sealed class BlocksPage : IPage
         var title = new HyperlinkButton { Content = Ui.Text(name, "SubtitleTextBlockStyle", wrap: false), Padding = new Thickness(0) }
             .Named($"Open the block {name}", "BlockCard_" + name).Tip("Open the block");
         title.Click += (_, _) => OpenBlock(name);
-        var toggle = Ui.Switch($"{name} on", b.Active, on => _ = C.Run(on ? ["start", name] : ["stop", name]), "BlockSwitch_" + name);
+        var toggle = Ui.Switch($"{name} on", b.Active, on => _ = SwitchBlock(name, on), "BlockSwitch_" + name);
         toggle.IsEnabled = !(b.Active && b.Held);
         ToolTipService.SetToolTip(toggle, b.Held ? "Locked: it can't be switched off" : b.Active ? "Switch the block off" : "Switch the block on (without locks)");
         var stateText = Ui.Dim(b.Active ? (b.Enabled ? "On" : "On, lifted now") : "Off", wrap: false);

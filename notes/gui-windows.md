@@ -120,7 +120,8 @@
   `arguments:` and `multi: false` start it as a jump list entry would.
 - `ParityTests.cs` (W32): counterparts of `ci/gui_cards`, `gui_extend`,
   `gui_duration`, `gui_lists`, `gui_presets`, `gui_modes`,
-  `gui_click_everything` (every button on every page and block tab once,
+  `gui_freeze_lock`, `gui_automation`, `gui_click_everything` (every
+  button on every sidebar page once,
   each question cancelled; the window never ends or shows "Something went
   wrong"). `WindowsTests.cs`: W30–W43. `AccessibilityTests.cs` (W33):
   every button, box, switch, list item and menu item on every page and
@@ -170,4 +171,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   `--do new-block|monk|freeze`; a second start hands them to the running
   window. Arguments only open pages and the GUI's own dialogs, never a
   kc9k command.
+- A card's switch whose command is refused is put back at once (the
+  refusal leaves the state as it was, so the cards are drawn again;
+  found by W32's `gui_cards` counterpart). A locked block's switch is
+  greyed out.
 

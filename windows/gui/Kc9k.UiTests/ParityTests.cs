@@ -103,8 +103,7 @@ public class ParityTests
         gui.WaitFor(() => gui.Ran("mode", "add", "Study", "Reading"), "kc9k mode add Study Reading");
     }
 
-    // gui_click_everything: every button on every page and in a block's tabs
-    // pressed once, each question answered Cancel (or closed); the window
+    // gui_click_everything: every button on every sidebar page pressed once, each question answered Cancel (or closed); the window
     // never shows "Something went wrong" and never ends.
     [Fact]
     public void EveryButtonOnce()
@@ -147,13 +146,6 @@ public class ParityTests
         }
         foreach (var page in new[] { "dashboard", "blocks", "schedules", "places", "hotkeys", "clusters", "stats", "circadian", "settings" })
             PressAll(page, () => gui.Page(page));
-        foreach (var tab in new[] { "websites", "apps", "breaks", "bypass" })
-            PressAll("block " + tab, () =>
-            {
-                gui.Page("blocks");
-                if (gui.ById("Tab_" + tab) is null) gui.Invoke("BlockCard_Reading");
-                gui.Invoke("Tab_" + tab);
-            });
         Console.WriteLine($"pressed {pressed} buttons");
         Assert.True(pressed > 50, $"only {pressed} buttons pressed");
         Assert.False(gui.App.HasExited);

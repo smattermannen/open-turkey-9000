@@ -6,7 +6,11 @@
       "Bash(git merge:*)",
       "Bash(git push origin main)",
       "Bash(git push -q origin main)",
-      "Bash(git push -u origin main)"
+      "Bash(git push -u origin main)",
+      "Bash(git push origin HEAD:main)",
+      "Bash(git push -q origin HEAD:main)",
+      "Bash(git fetch origin main)",
+      "Bash(git fetch -q origin main)"
     ]
   }
 }

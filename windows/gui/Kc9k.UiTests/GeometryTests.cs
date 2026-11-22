@@ -140,6 +140,10 @@ public class GeometryTests(ITestOutputHelper output)
         return problems;
     }
 
+    static bool Retry(Func<bool> ok, int seconds = 8) =>
+        FlaUI.Core.Tools.Retry.WhileFalse(() => { try { return ok(); } catch (Exception) { return false; } },
+            TimeSpan.FromSeconds(seconds), TimeSpan.FromMilliseconds(200)).Result;
+
     static void SetTextScale(int percent)
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Accessibility");
@@ -177,6 +181,13 @@ public class GeometryTests(ITestOutputHelper output)
                 }
                 gui.Page("blocks");
                 gui.Invoke("BlockCard_Reading");
+                if (!Retry(() => gui.ById("Tab_websites") is not null))
+                {
+                    problems.Add($"{at}: the block's tabs are not shown (page title: {gui.ById("PageTitle")?.Name})");
+                    gui.Shot($"{asked}-{textScale}-no-tabs");
+                    gui.Page("blocks");
+                    continue;
+                }
                 foreach (var tab in Tabs)
                 {
                     gui.Invoke("Tab_" + tab);

@@ -158,8 +158,9 @@ Not fixed by `SPEC.md`; the code is the truth.
   `Controller.ShowError` drops a dialog whose title and text are already
   shown or waiting. `MainWindow.Apply` and the statistics update only the
   page shown; `Show` updates a page when it is shown. Test-only hook:
-  `KC9K_GUI_TEST_THROW` = `window`/`task`/`crash` (`TestHook`,
-  `StabilityTests.cs`). *(By claude)*
+  `KC9K_GUI_TEST_THROW` = `window`/`task`/`crash` (`TestHook`, on a XAML
+  `DispatcherTimer`: a `DispatcherQueueTimer` nobody holds is collected
+  and never fires; `StabilityTests.cs`). *(By claude)*
 - Page layout (W54, as the GTK builders): a page fills the width beside
   the sidebar (`Ui.Page`, `BlockView`: no maximum width; margins 32 DIP,
   16 below 600). `SidePanel` (`Ui.Side`, `Ui.SettingRow`) puts a row's
@@ -169,7 +170,10 @@ Not fixed by `SPEC.md`; the code is the truth.
   pill, Continuous/Automated and its breaks on the left; on/off with its
   switch above its lock link on the right (`RightColumn`). Titles, button
   rows and filters are `WrapPanel`s, never horizontal `StackPanel`s that
-  run past the right edge. The Overview has no "Get started" card (owner
+  run past the right edge. An opened block's head (back to the Start/Stop
+  row) takes at most half the height and scrolls by itself beyond that;
+  its tabs sit under it, always shown (a SelectorBar pushed out of the
+  window realizes no tabs). *(By claude)* The Overview has no "Get started" card (owner
   2026-11-22; W38's first view is gone). Settings › Project's Import
   project… calls `Files.ImportProject`. *(By claude)*
 - Sidebar (W53, `MainWindow.PinSidebar`): pinned open at 220 DIP like

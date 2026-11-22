@@ -246,15 +246,35 @@ public sealed class BlockView
         tabs.SelectedItem = tabViews["websites"].Item;
         tabs.Named("Tabs of the block", "BlockTabs");
 
-        var top = Ui.Column(8, back, title, pills, summary, modeBar, hiddenBar, draftBar, actions, tabs);
+        var top = Ui.Column(8, back, title, pills, summary, modeBar, hiddenBar, draftBar, actions);
         top.Padding = Ui.PagePadding(double.PositiveInfinity, 20, 0);
         // W54: the full width beside the sidebar, as every page.
+        // The head stays put while it takes at most half the height; taller
+        // (a short window, large text) it scrolls by itself, so the tabs and
+        // their content are always shown under it.
+        var head = new ScrollViewer
+        {
+            Content = top,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
         var grid = new Grid();
-        grid.SizeChanged += (_, e) => top.Padding = Ui.PagePadding(e.NewSize.Width, 20, 0);
+        var headRow = new RowDefinition { Height = GridLength.Auto };
+        grid.SizeChanged += (_, e) =>
+        {
+            top.Padding = Ui.PagePadding(e.NewSize.Width, 20, 0);
+            var pad = Ui.PagePadding(e.NewSize.Width, 8, 0);
+            tabs.Margin = new Thickness(pad.Left, pad.Top, pad.Right, 0);
+            headRow.MaxHeight = Math.Max(120, e.NewSize.Height / 2);
+        };
+        grid.RowDefinitions.Add(headRow);
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(top);
-        Grid.SetRow(tabScroll, 1);
+        grid.Children.Add(head);
+        tabs.Margin = new Thickness(32, 8, 32, 0);
+        Grid.SetRow(tabs, 1);
+        grid.Children.Add(tabs);
+        Grid.SetRow(tabScroll, 2);
         grid.Children.Add(tabScroll);
         View = grid;
     }

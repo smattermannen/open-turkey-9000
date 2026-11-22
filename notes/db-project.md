@@ -1,6 +1,6 @@
 # Database, project files, backup
 
-- Covers: `internal/db/` (`db.go`, `openlock.go`, `features.go`, `pending.go`, `clock.go`), `cli/project.go`, `projectbackup.go`
+- Covers: `internal/db/` (`db.go`, `openlock.go`, `features.go`, `pending.go`, `clock.go`), `cli/project.go`, `projectbackup.go`, `projectlinux.go`, `blocker/linuxonly.go`, `testdata/`
 - SPEC: §4.2 export/import, §4.10 Project
 - Connects to: every note (each table belongs to an area); [lists](lists.md) and [automation](automation.md) for imports
 
@@ -40,3 +40,16 @@ Not fixed by `SPEC.md`; the code is the truth.
   here, confirms the locks, starts blocks that come with running locks. Clashing block → `name-2`; existing
   places kept; browser settings only on; ladder replaced only by a
   stricter one. `--dry-run` lists additions and locks.
+- **A Linux project on Windows** (W56) *(By claude)*: `projectText` takes a
+  UTF-8 BOM off (CRLF needs nothing). On Windows (`projectOS`, a seam
+  tests set) `sayLinuxOnly` lists `linuxOnlyParts` first as "Not used on
+  Windows", in the dry run and the import alike; `checkBlock` skips
+  `ValidAppEntry` for such app entries, which are stored as they are.
+  What is Linux-only: `blocker.LinuxOnlyApp`/`LinuxOnlyCommand`
+  (`linuxonly.go`, shared); the Windows app matcher skips those entries
+  (`newAppMatcher`), so nothing is guessed into a Windows name. Fixture:
+  `testdata/linux-project.json`, exported by the Linux build (share; apps,
+  custom action, schedule lock), and its `-crlf`/`-bom` copies
+  (`testdata/.gitattributes`: `-text`). Tests: `projectlinux_test.go`
+  (`TestLinuxProjectOnWindows` with the seam, on Linux),
+  `projectlinux_windows_test.go` (the same on Windows, windows.yml `unit`).

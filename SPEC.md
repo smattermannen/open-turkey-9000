@@ -558,6 +558,16 @@ GUI and CLI offer the same functions.
     *Circadian rhythm* or *Custom* (a picture chosen here).
   - Passwords: settings, access. Global ladder, lockable. Project:
     backup, share, import. Behaviour settings.
+  - **Linux-only** parts of a project *(By claude)*: a block's app entry
+    that is a Linux path (starts with `/`, not `//`, or `~/`), a Linux app
+    ID or X11 window class (reverse-DNS, `org.gnome.Nautilus`), or a Linux
+    program (desktop, systemd and PAM tools such as
+    `gnome-terminal-server`, `systemctl`, `pkexec`); a custom action that
+    runs such a program or opens a Linux path; a setting lock of a Linux
+    device setting (strict mode's PAM guard, no-escape). Imported on
+    Windows they are kept as they are, unused, and listed by the dry run
+    as "not used on Windows"; never an error, never turned into Windows
+    names. The file may have CRLF line ends and a UTF-8 BOM.
 - **4.11 Install**: `.deb`. No automatic updates for now. Uninstall refused
   while anything is locked. Every platform (Linux, Windows, Android) gets
   a one-click installer: one download, one click, and KC9K with its
@@ -773,6 +783,7 @@ Decisions not already written into §1–5:
 - 2026-11-22 (By Opus): One-click browser install on Windows (§4.10) runs winget as SYSTEM for the whole computer, with the browser's published package; the download is an outside query the command states (principle 6).
 - 2026-11-22 (By Opus): The Windows GUI's notification-area menu offers only actions that strengthen (start a block or a mode, monk mode, Frozen Chicken, a new block); stopping, unlocking and breaks stay in the window. A quick way that only weakens would make the tray an easier way past a block than the window, which locks and their confirmations never should be; each action brings the window forward first, so its questions and refusals are seen.
 - 2026-11-22 (By Opus): The Windows GUI's start arguments (its jump list, a shortcut, a second start) only open a page or one of the GUI's own dialogs (New block…, Monk mode…, Frozen Chicken…), never a kc9k command: a shortcut that started or stopped a block would act outside the window's questions and lock confirmations (R-LOCK-12), and one that weakened would be a way past them. The GUI's first view, while no block exists or no supported browser's extension has checked in, is a list of what is left with each step's button and the stricter options named last (2026-11-14 no wizard, 2026-11-21 guided setup): it switches nothing on.
+- 2026-11-22 (By claude): A project made on Linux imports on Windows as it is (W56, §4.10 "Linux-only"): its Linux-only parts are kept and listed as not used, not dropped and not mapped to Windows names. Dropping them would lose them when the project goes back to Linux; mapping (`gnome-terminal-server` to Windows Terminal, `/usr/bin/x` to `x.exe`) would block programs the user never named. The import is otherwise the same: only adds, so it can't weaken a locked block (R-WEAK-1/2), and its locks are confirmed (R-LOCK-12). The project format and the Linux app don't change.
 
 ## 7. Open decisions
 

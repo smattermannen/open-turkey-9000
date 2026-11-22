@@ -235,7 +235,7 @@
 - Apps (`apps_windows.go`): an entry is a program name (`steam`,
   `steam.exe`), a full path, a folder (ends in `\` or `/`), or a contents
   entry (`sha256:…`, size checked before hashing, cached by path, size and
-  time; never Windows' own programs). Only people's processes
+  time; never Windows' own programs; Linux-only entries are kept unused, [db-project](db-project.md) *(By claude)*). Only people's processes
   (`winProc.person`); never `essentialWindowsApps` in the Windows folder,
   KC9K, or this process and its ancestors; children too, except under
   shells and Explorer (`noDescendWindows`). Protected folders: drive root,

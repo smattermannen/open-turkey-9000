@@ -1,0 +1,2 @@
+# Fixtures are byte-exact: CRLF and BOM copies must stay as they are.
+* -text

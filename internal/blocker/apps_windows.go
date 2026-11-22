@@ -96,7 +96,7 @@ type appMatcher struct {
 func newAppMatcher(entries []string) *appMatcher {
 	m := &appMatcher{names: map[string]string{}, paths: map[string]string{}, hashes: map[string]int64{}, hashEnt: map[string]string{}}
 	for _, e := range entries {
-		if isEssentialWindowsApp(e) {
+		if isEssentialWindowsApp(e) || LinuxOnlyApp(e) != "" { // a Linux-only entry is kept, unused (W56)
 			continue
 		}
 		if sum, size, ok := parseHashEntry(e); ok {

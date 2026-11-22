@@ -2228,7 +2228,7 @@ Import:
   counterpart. Build: Settings → Import project… opens a file dialog and
   runs `kc9k project import <file>` (first `--dry-run`, shown for
   confirmation), as the GTK GUI does.
-- [ ] `W56` **A Linux project imports safely on Windows** (M; §3 Project,
+- [x] `W56` **A Linux project imports safely on Windows** (M; §3 Project,
   R-WEAK-1/2). The Linux app and its project format are not changed.
   Windows reads a project file written on Linux as is: Linux-only parts
   (Linux paths, process names such as `gnome-terminal-server`, X11
@@ -2240,6 +2240,9 @@ Import:
   are accepted. Done when: a test imports a project exported by the
   Linux build (checked into `testdata/`) into the Windows build in CI,
   and the dry run lists what is not used.
+  Built 2026-11-22 *(By claude)*: `testdata/linux-project*.json`,
+  `cli/projectlinux.go`, `blocker/linuxonly.go`; `TestLinuxProjectOnWindows`
+  (seam, on Linux) and `TestLinuxProjectOnRealWindows` (`unit` job).
 
 Both platforms:
 

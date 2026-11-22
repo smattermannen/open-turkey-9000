@@ -150,7 +150,8 @@
   Filtering Platform, not Windows Firewall. Persistent provider and
   sublayer (fixed GUIDs, weight 0xF000) of KC9K's own; filters at
   `ALE_AUTH_CONNECT_V4/V6`: blocked addresses in filters of 500 conditions
-  (same field: ORed), DoH resolvers + remote port 443 (`doh.go`, shared).
+  (same field: ORed), DoH resolvers + remote port 443 or 853 (DNS over
+  TLS and QUIC, W26; `doh.go`, shared).
   Monk mode's cut: in all four ALE connect/accept layers, permit loopback
   (weight 15) and block everything (weight 1). One transaction deletes
   every filter of the provider and adds the new ones. Persistent: in force
@@ -179,6 +180,14 @@
   `Google.Chrome`; a browser already there isn't installed again (Chrome:
   says it waits for the store listing). CI installs LibreWolf for real on
   manual runs (`workflow_dispatch`).
+- Firefox's registry (W26, `firefoxreg_windows.go`): KC9K's
+  policies.json is also mirrored into
+  `HKLM\SOFTWARE\Policies\Mozilla\Firefox` (objects as keys, lists as
+  keys of "1", "2"…, booleans and whole numbers as DWORDs), which the
+  Store's Firefox and portable ones read; only the policies KC9K wrote
+  (ProgramData\kc9k\firefox-registry.json) are taken out again. Firefox
+  reads Group Policy before policies.json, so both say the same.
+  LibreWolf reads its own key and keeps its distribution file.
 - The extension in Chrome and Edge needs the Chrome Web Store listing's ID
   (`ChromeStoreExtensionID`, empty until the owner publishes it): only
   then are they supported browsers and given the extension by policy

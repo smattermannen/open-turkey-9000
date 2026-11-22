@@ -52,6 +52,9 @@ func TestWFPBlocks(t *testing.T) {
 	if err := dial("1.1.1.1:443"); !refused(err) {
 		t.Errorf("a DNS-over-HTTPS resolver was reached on 443: %v", err)
 	}
+	if err := dial("1.1.1.1:853"); !refused(err) { // W26: DNS over TLS
+		t.Errorf("a DNS-over-TLS resolver was reached on 853: %v", err)
+	}
 	if err := dial("1.1.1.1:80"); err != nil {
 		t.Errorf("an address that isn't blocked was refused: %v", err)
 	}

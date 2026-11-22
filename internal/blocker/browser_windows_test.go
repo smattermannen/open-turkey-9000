@@ -1,10 +1,13 @@
 package blocker
 
 import (
+	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/winapi"
 	"golang.org/x/sys/windows/registry"
@@ -139,5 +142,80 @@ func TestWinInstallBrowserWinget(t *testing.T) {
 	}
 	if err == nil {
 		t.Error("a fake install reported LibreWolf installed")
+	}
+}
+
+// W26: KC9K's policies.json mirrored into Firefox's registry key as
+// Firefox reads Group Policy, and only KC9K's taken out again.
+func TestRegPolicyFirefoxMirror(t *testing.T) {
+	const key = `SOFTWARE\KC9K-test\Mozilla\Firefox`
+	if k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, key, registry.ALL_ACCESS); err != nil {
+		t.Skipf("no write access to HKLM: %v", err)
+	} else {
+		_ = k.SetStringValue("TheirPolicy", "kept")
+		k.Close()
+	}
+	defer deleteRegTree(registry.LOCAL_MACHINE, `SOFTWARE\KC9K-test`)
+	oldKey, oldOwned := firefoxRegKey, firefoxRegOwnedPath
+	firefoxRegKey, firefoxRegOwnedPath = key, filepath.Join(t.TempDir(), "owned.json")
+	defer func() { firefoxRegKey, firefoxRegOwnedPath = oldKey, oldOwned }()
+	doc := `{"policies":{"WebsiteFilter":{"Block":["*://*.example.com/*","*://example.org/*"],"Exceptions":[]},
+		"DNSOverHTTPS":{"Enabled":false,"Locked":true},"DisableDeveloperTools":true,"SearchEngines":{"Default":"Google"}}}`
+	if err := syncFirefoxRegistry([]byte(doc)); err != nil {
+		t.Fatal(err)
+	}
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, key+`\WebsiteFilter\Block`, registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _, err := k.GetStringValue("2"); err != nil || v != "*://example.org/*" {
+		t.Errorf("WebsiteFilter\\Block\\2 = %q, %v", v, err)
+	}
+	k.Close()
+	k, _ = registry.OpenKey(registry.LOCAL_MACHINE, key+`\DNSOverHTTPS`, registry.QUERY_VALUE)
+	if v, _, err := k.GetIntegerValue("Locked"); err != nil || v != 1 {
+		t.Errorf("DNSOverHTTPS\\Locked = %d, %v", v, err)
+	}
+	k.Close()
+	if err := syncFirefoxRegistry(nil); err != nil {
+		t.Fatal(err)
+	}
+	k, _ = registry.OpenKey(registry.LOCAL_MACHINE, key, registry.QUERY_VALUE|registry.ENUMERATE_SUB_KEYS)
+	defer k.Close()
+	subs, _ := k.ReadSubKeyNames(-1)
+	if v, _, err := k.GetStringValue("TheirPolicy"); err != nil || v != "kept" || len(subs) != 0 {
+		t.Errorf("after removal: their policy %q (%v), keys left %v", v, err, subs)
+	}
+	if _, _, err := k.GetIntegerValue("DisableDeveloperTools"); err == nil {
+		t.Error("KC9K's DisableDeveloperTools stayed")
+	}
+}
+
+// W26: a name the hosts file sends to 0.0.0.0 gets no IPv6 address from
+// Windows either (else ":: name" lines are needed).
+func TestWFPHostsIPv6(t *testing.T) {
+	if os.Getenv("KC9K_TEST_WFP") != "1" {
+		t.Skip("changes the hosts file; KC9K_TEST_WFP=1 (CI) only")
+	}
+	const name = "www.google.com"
+	if ips, err := net.LookupIP(name); err != nil || len(ips) == 0 {
+		t.Skipf("no DNS here: %v", err)
+	}
+	orig, err := os.ReadFile(hostsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.WriteFile(hostsPath, orig, 0o644); hostsWritten() }()
+	if err := os.WriteFile(hostsPath, append(append([]byte{}, orig...), []byte("\r\n0.0.0.0 "+name+"\r\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hostsWritten()
+	time.Sleep(time.Second)
+	ips, _ := net.DefaultResolver.LookupIP(context.Background(), "ip6", name)
+	t.Logf("AAAA of %s with only 0.0.0.0 in hosts: %v", name, ips)
+	for _, ip := range ips {
+		if !ip.IsUnspecified() {
+			t.Errorf("an IPv6 address got past the hosts file: %v", ip)
+		}
 	}
 }

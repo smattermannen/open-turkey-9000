@@ -354,6 +354,9 @@ func distributeFirefoxPolicy() error {
 	if err != nil {
 		return err
 	}
+	if err := syncFirefoxRegistry(data); err != nil {
+		return err
+	}
 	for _, dir := range firefoxInstallDirs() {
 		target := filepath.Join(dir, "distribution", "policies.json")
 		if fileHas(target, string(data)) {
@@ -379,6 +382,9 @@ func RemoveBrowserPolicies() error {
 			return err
 		}
 	} else {
+		if err := syncFirefoxRegistry(nil); err != nil {
+			return err
+		}
 		for _, dir := range firefoxInstallDirs() {
 			if err := removeFirefoxBlocking(filepath.Join(dir, "distribution", "policies.json")); err != nil {
 				return err

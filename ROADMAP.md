@@ -1971,7 +1971,11 @@ their sites; their pages are an app's, not a browser's).
   temporary folders and removable drives, exempt folders unrestricted, for
   every user including administrators; put back after. Closing stays.
   Needs: win-ci (a program refused for real).
-- [ ] `W26` Other ways around on Windows (S). SPEC §3.13 (policies),
+- [ ] `W26` Other ways around on Windows (S). Built (2026-11-22):
+  `firefoxreg_windows.go` (`TestRegPolicyFirefoxMirror`), port 853 in the
+  DoH filters (`TestWFPBlocks`); IPv6 through hosts checked by
+  `TestWFPHostsIPv6` on `windows-latest` (`::` lines only if it fails).
+  The Store's Firefox obeying: Unchecked (Needs win-vm). Was planned: SPEC §3.13 (policies),
   §4.10. Firefox-family policies also in the registry
   (`HKLM\SOFTWARE\Policies\Mozilla\Firefox`, which Store/MSIX and portable
   Firefox read where no `distribution` folder is found); DNS over TLS/QUIC

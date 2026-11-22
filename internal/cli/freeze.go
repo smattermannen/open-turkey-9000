@@ -235,6 +235,7 @@ type guiBlock struct {
 	Titles            []string       `json:"titles"`
 	Nepsis            db.Nepsis      `json:"nepsis"`
 	NepsisCount       int            `json:"nepsis_count"`
+	NepsisLevel       int            `json:"nepsis_level"` // the ladder's current step, 0-based (§4.1 ladder positions, W31)
 	Schedules         []string       `json:"schedules"`
 	Windows           []guiWin       `json:"schedule_windows"`
 	Users             []string       `json:"users"` // §3.2; empty: every account
@@ -391,6 +392,7 @@ type guiState struct {
 	Hotkeys          []guiHotkey               `json:"hotkeys"`
 	Nepsis           db.Nepsis                 `json:"nepsis"`
 	NepsisCount      int                       `json:"nepsis_count"`
+	NepsisLevel      int                       `json:"nepsis_level"` // the global ladder's current step, 0-based (W31)
 	NepsisLock       guiSettingLock            `json:"nepsis_lock"`
 	StrictLock       guiSettingLock            `json:"strict_lock"`
 	NoWeakening      bool                      `json:"no_weakening"`
@@ -543,7 +545,7 @@ var guiStateCmd = &cobra.Command{
 			return err
 		}
 		if state.Nepsis.On() {
-			_, state.NepsisCount, _ = enforce.NepsisState(database, now, "", state.Nepsis)
+			state.NepsisLevel, state.NepsisCount, _ = enforce.NepsisState(database, now, "", state.Nepsis)
 		}
 		if s, err := loadSettingLock(database, db.NepsisLockName); err == nil {
 			state.NepsisLock = s.gui()
@@ -784,7 +786,7 @@ var guiStateCmd = &cobra.Command{
 				return err
 			}
 			if g.Nepsis.On() {
-				_, g.NepsisCount, _ = enforce.NepsisState(database, now, b.Name, g.Nepsis)
+				g.NepsisLevel, g.NepsisCount, _ = enforce.NepsisState(database, now, b.Name, g.Nepsis)
 			}
 			g.QuotaNext = quota.NoPending
 			if q, err := database.GetQuota(b.Name); err != nil {

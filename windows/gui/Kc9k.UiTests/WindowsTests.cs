@@ -33,4 +33,29 @@ public class WindowsTests
         gui.Shot("browser-install");
         gui.Invoke(gui.FindButton("OK"));
     }
+
+    // W31 (§4.1): break status and ladder positions on the Overview.
+    [Fact]
+    public void OverviewShowsBreaksAndLadderPositions()
+    {
+        using var gui = new GuiApp("ladders", prepare: dir => GuiApp.EditState(dir, s =>
+        {
+            s["nepsis_level"] = 0;
+            s["nepsis_count"] = 2;
+            foreach (var b in s["blocks"]!.AsArray())
+            {
+                if ((string?)b!["name"] == "Games") b["paused_seconds"] = 600;
+                if ((string?)b!["name"] != "Work") continue;
+                b["nepsis"] = JsonNode.Parse("""{"steps": [{"count": 3, "minutes": 10, "actions": [{"action": "warning"}]}, {"count": 2, "minutes": 30, "actions": [{"action": "close-browser"}]}]}""");
+                b["nepsis_level"] = 1;
+                b["nepsis_count"] = 1;
+            }
+        }));
+        gui.Page("dashboard");
+        gui.WaitFor(() => gui.Find("DeviceLine").Name.Contains("global bypass prevention: 2 of 5 in 10 min"), "the global ladder's position");
+        gui.WaitFor(() => gui.Find("OnNow_Work").FindAllDescendants().Any(e => e.Name.Contains("bypass prevention step 2 of 2: 1 of 2 in 30 min")),
+            "Work's ladder position");
+        gui.WaitFor(() => gui.Find("OnNow_Games").FindAllDescendants().Any(e => e.Name.Contains("on a break for 10 min")), "Games' break");
+        gui.Shot("overview");
+    }
 }

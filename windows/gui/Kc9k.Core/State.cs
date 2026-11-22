@@ -47,6 +47,8 @@ public sealed class GuiState
     public List<Hotkey> Hotkeys { get; set; } = [];
     public Nepsis Nepsis { get; set; } = new();
     public int NepsisCount { get; set; }
+    /// <summary>The ladder's current step, 0-based (§4.1 ladder positions, W31).</summary>
+    public int NepsisLevel { get; set; }
     public SettingLock NepsisLock { get; set; } = new();
     public SettingLock StrictLock { get; set; } = new();
     public bool NoWeakening { get; set; }
@@ -255,6 +257,8 @@ public sealed class Block
     public List<string> Titles { get; set; } = [];
     public Nepsis Nepsis { get; set; } = new();
     public int NepsisCount { get; set; }
+    /// <summary>The ladder's current step, 0-based (§4.1 ladder positions, W31).</summary>
+    public int NepsisLevel { get; set; }
     public List<string> Schedules { get; set; } = [];
     public List<TimeWindow> ScheduleWindows { get; set; } = [];
     public List<string> Users { get; set; } = [];

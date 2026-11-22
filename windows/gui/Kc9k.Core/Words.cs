@@ -394,6 +394,17 @@ public static class Words
         return text;
     }
 
+    /// <summary>Where a ladder stands (§4.1 ladder positions): its step and
+    /// how many events count towards it; null when it is off.</summary>
+    public static string? LadderPosition(Nepsis? n, int level, int count)
+    {
+        if (n is null || n.Steps.Count == 0) return null;
+        var i = Math.Clamp(level, 0, n.Steps.Count - 1);
+        var step = n.Steps[i];
+        var where = n.Steps.Count == 1 ? "bypass prevention" : $"bypass prevention step {i + 1} of {n.Steps.Count}";
+        return $"{where}: {count} of {step.Count} in {Minutes(step.Minutes)}";
+    }
+
     static readonly Dictionary<string, string> HotkeyModifiers = new()
     {
         ["ctrl"] = "ctrl", ["control"] = "ctrl", ["primary"] = "ctrl", ["alt"] = "alt", ["shift"] = "shift",

@@ -351,4 +351,15 @@ public class CliTests
         Assert.Contains("can't give it the extension yet", Words.BrowserStatus(new BrowserInfo { Id = "edge", Found = true }));
         Assert.StartsWith("Installed. Extension working", Words.BrowserStatus(new BrowserInfo { Id = "chrome", Installed = true, Found = true, CheckinSeconds = 5 }));
     }
+
+    // W31: a ladder's position in words.
+    [Fact]
+    public void LadderPositionInWords()
+    {
+        var n = new Nepsis { Steps = [new() { Count = 3, Minutes = 10 }, new() { Count = 2, Minutes = 30 }] };
+        Assert.Null(Words.LadderPosition(new Nepsis(), 0, 0));
+        Assert.Equal("bypass prevention step 2 of 2: 1 of 2 in 30 min", Words.LadderPosition(n, 1, 1));
+        Assert.Equal("bypass prevention step 2 of 2: 0 of 2 in 30 min", Words.LadderPosition(n, 7, 0));
+        Assert.Equal("bypass prevention: 2 of 5 in 10 min", Words.LadderPosition(new Nepsis { Steps = [new() { Count = 5, Minutes = 10 }] }, 0, 2));
+    }
 }

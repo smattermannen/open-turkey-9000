@@ -1699,11 +1699,13 @@ Fixes to what is built:
   to get the browser (the CLI's words) as information, not as an error.
   Built 2026-11-22 (`TestBrowsersFound`, `BrowserFoundButNotSupported`,
   UI test `BrowsersWaitingForTheStoreAreExplained`).
-- [ ] `W31` Overview as §4.1 asks (S; §4.1). Break status is only a pill;
+- [x] `W31` Overview as §4.1 asks (S; §4.1). Break status is only a pill;
   ladder positions are missing (the GTK GUI lacks them too). Build: per
   block on now, "on a break" or a break's time left and its bypass
   prevention ladder position; the global ladder's position under Device.
-  Needs: agent, win-ci.
+  Built 2026-11-22: `gui-state` gives `nepsis_level` (global and per
+  block; `TestGuiStateNepsisLevel`); `Words.LadderPosition`, UI test
+  `OverviewShowsBreaksAndLadderPositions`.
 
 Parity with the GTK GUI and its tests:
 

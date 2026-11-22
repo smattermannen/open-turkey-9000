@@ -135,6 +135,10 @@ public sealed class OverviewPage : IPage
             var extra = new List<string>();
             if (b.TodayWindows.Count > 0) extra.Add("today: " + string.Join(", ", b.TodayWindows));
             if (b.QuotaLimit > 0) extra.Add($"allowance {b.QuotaUsed / 60} of {b.QuotaLimit / 60} min");
+            // §4.1 break status and ladder positions (W31).
+            if (b.PausedSeconds > 0) extra.Add($"on a break for {Words.Seconds(b.PausedSeconds)}");
+            else if (b.OnBreak) extra.Add("on a Pomodoro break");
+            if (Words.LadderPosition(b.Nepsis, b.NepsisLevel, b.NepsisCount) is { } ladder) extra.Add(ladder);
             var grid = new Grid { ColumnSpacing = 12 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -163,6 +167,7 @@ public sealed class OverviewPage : IPage
         var locks = new List<string> { s.Strict ? "Strict mode on" : "Strict mode off", s.NoEscape ? "no-escape on" : "no-escape off" };
         if (s.FreezeSeconds > 0) locks.Insert(0, $"Frozen Chicken ({s.FreezeMode}) for {Words.Seconds(s.FreezeSeconds)}");
         if (s.MonkSeconds > 0) locks.Insert(0, $"Monk mode for {Words.Seconds(s.MonkSeconds)}");
+        if (Words.LadderPosition(s.Nepsis, s.NepsisLevel, s.NepsisCount) is { } global) locks.Add("global " + global);
         var line = string.Join(" · ", locks);
         deviceLine.Text = char.ToUpperInvariant(line[0]) + line[1..];
         if (window.Controller.Stats is { } stats) UpdateStats(stats);

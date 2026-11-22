@@ -127,4 +127,9 @@ Not fixed by `SPEC.md`; the code is the truth.
   Install button; Install shows `browsers install`'s words (on Windows,
   where to get the browser) under "Getting NAME", not as a refusal
   (`Controller.Run(refusalTitle:)`).
+- Overview (W31, §4.1): each block on now also says its break ("on a
+  break for …", "on a Pomodoro break") and where its bypass prevention
+  ladder stands ("step 2 of 3: 1 of 2 in 30 min", from `nepsis_level`
+  and `nepsis_count`); the Device line has the global ladder's. The GTK
+  GUI shows neither.
 

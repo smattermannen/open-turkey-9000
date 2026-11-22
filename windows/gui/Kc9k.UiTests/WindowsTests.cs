@@ -80,7 +80,7 @@ public class WindowsTests
         gui.Shot("new-block");
         gui.Invoke(gui.FindButton("Cancel"));
         Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_9);
-        gui.Find("Keyboard");
+        gui.FindName("Ctrl+1 … Ctrl+9");
         gui.Shot("keyboard");
     }
 
@@ -93,14 +93,14 @@ public class WindowsTests
         using (var gui = new GuiApp("window", prepare: dir =>
                {
                    prefs = Path.Combine(dir, "gui.json");
-                   File.WriteAllText(prefs, """{"theme": "light", "tray": false, "window_width": 1000, "window_height": 760, "window_x": 60, "window_y": 50, "open_on": "last", "last_page": "stats"}""");
-               }))
+                   File.WriteAllText(prefs, """{"theme": "light", "tray": false, "window_width": 800, "window_height": 600, "window_x": 60, "window_y": 50, "open_on": "last", "last_page": "stats"}""");
+               }, ready: "StatsTotal"))
         {
             gui.Find("StatsTotal");
             var r = gui.Window.BoundingRectangle;
             Assert.InRange(r.X, 40, 80);
             Assert.InRange(r.Y, 30, 70);
-            Assert.InRange(r.Width, 980, 1020);
+            Assert.InRange(r.Width, 780, 820);
             gui.Page("hotkeys");
             gui.Window.Move(120, 90);
             Thread.Sleep(300);
@@ -132,7 +132,7 @@ public class WindowsTests
             s["modes"] = new JsonArray();
             foreach (var b in s["browsers"]!.AsArray()) b!["checkin_seconds"] = -1;
         }));
-        gui.Find("FirstSteps");
+        gui.Find("FirstStepsTitle");
         gui.Shot("first-view");
         gui.Invoke("First_block");
         gui.FindName("New block");
@@ -150,7 +150,7 @@ public class WindowsTests
         }));
         gui.Find("Headline");
         Thread.Sleep(500);
-        Assert.True(gui.ById("FirstSteps") is null || gui.ById("FirstSteps")!.IsOffscreen);
+        Assert.True(gui.ById("FirstStepsTitle") is null || gui.ById("FirstStepsTitle")!.IsOffscreen);
     }
 
     // W39: device protection says what holds on Windows, and the firmware lock's state.

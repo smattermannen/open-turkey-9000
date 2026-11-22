@@ -66,12 +66,10 @@ public sealed class OverviewPage : IPage
 
         // W38: a first view while nothing is set up. Not a wizard: a list of
         // what is left, each step opening its place; stricter options last.
-        firstCard = Ui.Card(Ui.Column(10, Ui.Heading("Get started"), firstSteps,
+        firstCard = Ui.Card(Ui.Column(10, Ui.Heading("Get started").Id("FirstStepsTitle"), firstSteps,
             Ui.Dim("Stricter, when you want it: a settings password, tamper protection, strict mode and no-escape. Nothing is on until you turn it on."),
             Ui.Button("Guided setup…", () => _ = window.OpenGuidedSetup(), "FirstGuided")), "Kc9kCard");
         firstCard.Visibility = Visibility.Collapsed;
-        AutomationProperties.SetName(firstCard, "Get started");
-        AutomationProperties.SetAutomationId(firstCard, "FirstSteps");
 
         View = Ui.Page(Ui.Column(20,
             Ui.PageHeader("Overview", "What is on now, and how it is locked."),

@@ -26,7 +26,7 @@ public sealed class GuiApp : IDisposable
 
     readonly bool real_;
 
-    public GuiApp(string name, string theme = "light", Action<string>? prepare = null, bool real = false)
+    public GuiApp(string name, string theme = "light", Action<string>? prepare = null, bool real = false, string ready = "Headline")
     {
         real_ = real;
         this.name = name;
@@ -50,7 +50,7 @@ public sealed class GuiApp : IDisposable
             TimeSpan.FromSeconds(60), TimeSpan.FromMilliseconds(500), throwOnTimeout: true).Result!;
         Window.SetForeground();
         // The first state is read in the background.
-        WaitFor(() => ById("Headline")?.Name is { Length: > 0 } || ById("CoverUnlock_dashboard") is not null, "the first state", real_ ? 60 : 20);
+        WaitFor(() => ById(ready)?.Name is { Length: > 0 } || ById("CoverUnlock_dashboard") is not null, "the first state", real_ ? 60 : 20);
     }
 
     public AutomationElement? ById(string id, AutomationElement? root = null) =>

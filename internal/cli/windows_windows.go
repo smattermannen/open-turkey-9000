@@ -191,6 +191,11 @@ var uninstallCmd = &cobra.Command{
 		if err := prepareUninstall(); err != nil {
 			return err
 		}
+		// Strict mode's slower parts (services, Task Scheduler, WMI) are
+		// put back beside the cycle; nothing of them may stay behind.
+		if err := blocker.WaitStrictUndone(); err != nil {
+			return fmt.Errorf("strict mode's protection could not all be taken off yet: %w", err)
+		}
 		if err := blocker.RemoveWatchdogTask(); err != nil {
 			return fmt.Errorf("the layers are removed, but the watchdog task could not be: %w", err)
 		}

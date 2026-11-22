@@ -369,7 +369,12 @@
   Backup Operators' user rights (LSA; from the next sign-in), given back
   after. Every 30 s, in a goroutine beside the cycle (`strictHeavy`; a
   step over 5 s is logged; what it puts back is reported by the next
-  cycle; `removeStrictExtras` waits for it): each service's DACL denies `0xd0002` (configuration,
+  cycle; the PowerShell checks, Task Scheduler's and WMI's, only on the
+  first pass and every 5 minutes: on GitHub's runner one takes 30–90 s).
+  Ending strict mode undoes the quick parts at once and these beside the
+  cycle once a pass running has ended (`startHeavyUndo`, marker
+  ProgramData\kc9k\strict-heavy); `kc9k uninstall` waits for it
+  (`WaitStrictUndone`): each service's DACL denies `0xd0002` (configuration,
   delete, permissions, owner; `0xd0062` adds stop and pause for BFE,
   Dnscache, Winmgmt, Schedule, EventLog, WlanSvc, W32Time), not KC9K's
   own (GuardService) nor protected ones it can't open; Task Scheduler's

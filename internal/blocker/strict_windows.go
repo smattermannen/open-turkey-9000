@@ -74,9 +74,13 @@ var (
 	strictMu        sync.Mutex
 	strictHeavyAt   time.Time
 	strippedTokens  = map[uint32]time.Time{} // pid -> start time, stripped
-	heavyMu         sync.Mutex
+	strictHeavyPath = filepath.Join(platform.DataDir, "strict-heavy")
+	heavyMu         sync.Mutex // one 30-second pass or its undoing at a time
 	heavyRunning    atomic.Bool
+	undoRunning     atomic.Bool
+	fixedMu         sync.Mutex
 	heavyFixed      []string
+	psCheckedAt     time.Time
 )
 
 func loadStrictState() (strictState, bool) {
@@ -185,10 +189,10 @@ func applyStrictExtras() []string {
 	// Every 30 s, beside the cycle (it runs PowerShell and walks every
 	// service, so it must not hold up the rest): what walks many objects.
 	// What it puts back is reported by the next cycle.
-	heavyMu.Lock()
+	fixedMu.Lock()
 	fixed = append(fixed, heavyFixed...)
 	heavyFixed = nil
-	heavyMu.Unlock()
+	fixedMu.Unlock()
 	if (fresh || time.Since(strictHeavyAt) > 30*time.Second) && heavyRunning.CompareAndSwap(false, true) {
 		strictHeavyAt = time.Now()
 		since, consumers, first := s.Since, append([]string(nil), s.Consumers...), fresh
@@ -199,7 +203,11 @@ func applyStrictExtras() []string {
 			if _, err := os.Stat(strictStatePath); err != nil {
 				return // strict mode ended meanwhile
 			}
-			heavyFixed = append(heavyFixed, strictHeavy(since, consumers, first)...)
+			_ = os.WriteFile(strictHeavyPath, []byte("strict mode's services, Task Scheduler and WMI protection may be on\n"), 0o600)
+			got := strictHeavy(since, consumers, first)
+			fixedMu.Lock()
+			heavyFixed = append(heavyFixed, got...)
+			fixedMu.Unlock()
 		}()
 	}
 	if err := saveStrictState(s); err != nil {
@@ -230,9 +238,17 @@ func strictHeavy(since int64, consumers []string, first bool) []string {
 		n, err := denyServices(true)
 		note("strict mode's protection of services", n > 0, err)
 	})
+	// PowerShell is slow (tens of seconds a call on some computers): its
+	// checks run on the first pass and every 5 minutes.
+	psDue := first || time.Since(psCheckedAt) > 5*time.Minute
+	if psDue {
+		psCheckedAt = time.Now()
+	}
 	step("Task Scheduler", func() {
-		changed, err := denyTaskFolder(true)
-		note("strict mode's protection of Task Scheduler", changed, err)
+		if psDue {
+			changed, err := denyTaskFolder(true)
+			note("strict mode's protection of Task Scheduler", changed, err)
+		}
 		for _, task := range systemTasksSince(since) {
 			if err := deleteTask(task); err != nil {
 				log.Printf("strict: deleting task %s: %v", task, err)
@@ -242,6 +258,9 @@ func strictHeavy(since int64, consumers []string, first bool) []string {
 		}
 	})
 	step("WMI", func() {
+		if !psDue {
+			return
+		}
 		changed, err := denyWMI(true)
 		note("strict mode's protection of WMI subscriptions", changed, err)
 		if now, err := wmiConsumers(); err == nil {
@@ -257,12 +276,13 @@ func strictHeavy(since int64, consumers []string, first bool) []string {
 	return fixed
 }
 
-// removeStrictExtras undoes applyStrictExtras.
+// removeStrictExtras undoes applyStrictExtras: what is quick at once; the
+// services, Task Scheduler and WMI (PowerShell, slow) beside the cycle,
+// after a 30-second pass still running (strictUndoHeavy).
 func removeStrictExtras() error {
 	strictMu.Lock()
 	defer strictMu.Unlock()
-	heavyMu.Lock() // a 30-second pass running ends first
-	defer heavyMu.Unlock()
+	startHeavyUndo()
 	s, ok := loadStrictState()
 	if !ok {
 		return nil
@@ -275,12 +295,6 @@ func removeStrictExtras() error {
 	}
 	_, err := denySCM(false)
 	keep(err)
-	_, err = denyServices(false)
-	keep(err)
-	_, err = denyTaskFolder(false)
-	keep(err)
-	_, err = denyWMI(false)
-	keep(err)
 	keep(restoreMSI(s.MSIBefore))
 	keep(restoreStrictRights(&s))
 	for _, name := range s.TurnedOff {
@@ -292,6 +306,54 @@ func removeStrictExtras() error {
 	}
 	strippedTokens = map[uint32]time.Time{}
 	return os.Remove(strictStatePath)
+}
+
+// startHeavyUndo starts undoing the 30-second part, unless it's running.
+func startHeavyUndo() {
+	if _, err := os.Stat(strictHeavyPath); err != nil || !undoRunning.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer undoRunning.Store(false)
+		if err := undoHeavy(); err != nil {
+			log.Printf("strict: putting back services, Task Scheduler, WMI: %v (tried again next cycle)", err)
+		}
+	}()
+}
+
+// undoHeavy takes the 30-second part's deny entries out, once a pass
+// running has ended.
+func undoHeavy() error {
+	heavyMu.Lock()
+	defer heavyMu.Unlock()
+	if _, err := os.Stat(strictStatePath); err == nil {
+		return nil // strict mode holds again
+	}
+	if _, err := os.Stat(strictHeavyPath); err != nil {
+		return nil
+	}
+	if _, err := denyServices(false); err != nil {
+		return err
+	}
+	if _, err := denyTaskFolder(false); err != nil {
+		return err
+	}
+	if _, err := denyWMI(false); err != nil {
+		return err
+	}
+	return os.Remove(strictHeavyPath)
+}
+
+// WaitStrictUndone puts back everything strict mode's Windows extras
+// changed before returning (uninstall), or says what is left.
+func WaitStrictUndone() error {
+	if err := removeStrictExtras(); err != nil {
+		return err
+	}
+	for undoRunning.Load() {
+		time.Sleep(time.Second)
+	}
+	return undoHeavy()
 }
 
 func newItems(before, now []string) []string {

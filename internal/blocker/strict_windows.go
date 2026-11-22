@@ -534,8 +534,8 @@ func denyTaskFolder(on bool) (bool, error) {
 
 // denyWMI: the namespace where permanent event subscriptions live (W20).
 func denyWMI(on bool) (bool, error) {
-	const get = `$b = (Invoke-WmiMethod -Namespace root/subscription -Path '__SystemSecurity=@' -Name GetSD).SD; ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').BinarySDToSDDL($b).SDDL`
-	const set = `$sddl = [Console]::In.ReadToEnd().Trim(); $b = ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').SDDLToBinarySD($sddl).BinarySD; $r = Invoke-WmiMethod -Namespace root/subscription -Path '__SystemSecurity=@' -Name SetSD -ArgumentList (,[byte[]]$b); if ($r.ReturnValue -ne 0) { throw "SetSD $($r.ReturnValue)" }`
+	const get = `$b = (Invoke-CimMethod -Namespace root/subscription -ClassName __SystemSecurity -MethodName GetSD).SD; ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').BinarySDToSDDL($b).SDDL`
+	const set = `$sddl = [Console]::In.ReadToEnd().Trim(); $b = ([wmiclass]'root/cimv2:Win32_SecurityDescriptorHelper').SDDLToBinarySD($sddl).BinarySD; $r = Invoke-CimMethod -Namespace root/subscription -ClassName __SystemSecurity -MethodName SetSD -Arguments @{ SD = [byte[]]$b }; if ($r.ReturnValue -ne 0) { throw "SetSD $($r.ReturnValue)" }`
 	return changeSDDLBy(get, set, strictDenies(wmiDenyMask, "CI"), on)
 }
 

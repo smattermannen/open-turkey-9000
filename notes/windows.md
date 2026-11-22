@@ -381,7 +381,7 @@
   root folder denies `0xd0116` (registering tasks); task files written
   since the start that run as SYSTEM or a service account, outside
   `\Microsoft\Windows\` and `\KC9K\`, are deleted (`schtasks /Delete`);
-  `root\subscription` (`Invoke-WmiMethod … GetSD/SetSD`) denies `0xc001c` (writes) and event consumers made
+  `root\subscription` (`Invoke-CimMethod … GetSD/SetSD`) denies `0xc001c` (writes) and event consumers made
   since the start are deleted with their bindings. The `Services` key
   tree is a lockdown target (deny entries inherited by every service's
   key). Each put back or deleted is counted as tamper. Virtual machines

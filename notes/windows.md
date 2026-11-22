@@ -59,6 +59,25 @@
   agent, hosts and firewall against a real site, the Edge policy, a
   blocked app and a blocked window title closed through the agent, and
   dark mode written to the signed-in person's settings are checked there.
+- `ci/windows_soak_test.ps1 -Kc9k kc9k.exe [-Minutes N] [-Phases
+  idle,circadian,play,settings] [-Gui kc9k-gui.exe] [-Out dir]` (W50–W52,
+  the `system` job runs one minute a phase after the desktop checks, and
+  checks it parses in Windows PowerShell 5.1) *(By claude)*: phases idle
+  (circadian off, active blocks off), circadian (kelvin, software ≥ 40 %,
+  backlight ≥ 30 % with a panel, previews), play (Play the day ×3) and
+  settings (each safe on/off setting on and off 5×). Per phase: Group
+  Policy computer processing (4004/4006/8004/8006) per minute, powershell.exe
+  and kc9k.exe the service started (`Win32_ProcessStartTrace`), agent
+  restarts (agent PIDs; "ended from outside" in the service log, copied by
+  a SYSTEM task), tamper lines, CPU, handles and private bytes of service,
+  agent and GUI (last third against first), Display 4101 and
+  LiveKernelEvent, crash reports of kc9k, dwm and explorer, the gamma ramp,
+  "browser: closing" naming a program in %SystemRoot%. Stops and puts
+  everything back at once on CPU > 90 % for 30 s, > 5 powershell.exe, a
+  display reset, the GUI ending or hanging, an agent restart; exit 1 on any
+  threshold (idle: no policy refresh, no PowerShell, no restart, handles
+  within ±5 %). Never a lock, password, monk mode, Frozen Chicken, strict
+  mode, no-escape, firmware, Wi-Fi or adapters, logout or lock screen.
 - `ci/windows_vm_test.ps1 kc9k.exe [-Reboots]`: what needs a desktop or a
   person (agent, titles, apps, notifications, the challenge in a console
   and in its window, the lock freeze, takeown against strict mode, gamma,

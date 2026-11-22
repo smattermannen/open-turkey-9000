@@ -1735,6 +1735,13 @@ Parity with the GTK GUI and its tests:
   second screen: Needs win-vm, laptop. Built, checked 2026-11-22
   (`AccessibilityTests.cs`: every usable control on every page and block
   tab named and focusable; high-contrast and 200 % text screenshots).
+  Laptop (2026-11-22) *(By claude)*: at 200 % scaling `EveryControlHasANameAndTakesFocus`
+  fails: 33 ScrollBar parts ("Vertical Small Decrease" …, every page) can't take focus
+  (the test should skip scroll bar parts). `HighContrast` (`AccessibilityTests.cs:73`)
+  sets the flags to 1/0 and so cleared the owner's 126 (hotkey and other bits): put back
+  by hand; it should read the flags first and change only `HCF_HIGHCONTRASTON`.
+  `GuiApp.Shot` at 200 % captures only the window's top-left quarter (the test process
+  isn't DPI-aware).
 - [x] `W34` Keyboard shortcuts (S; R-GUI-3 "everything reachable by
   keyboard"). Ctrl+1…9 open the sidebar's pages, Ctrl+N a new block, F5
   reads the state again, Alt+Left (and Esc) goes back from a block or a
@@ -1765,6 +1772,9 @@ Windows conveniences:
   page". Built 2026-11-22 (UI tests `WindowStateIsKept`,
   `AWindowOffEveryScreenComesBack`). Several screens and 150–200 %
   scaling: Unchecked (Needs win-vm, laptop).
+  Laptop (2026-11-22) *(By claude)*: at 200 % `WindowStateIsKept` fails (`window_x` 60
+  → X 30 in UI Automation): `gui.json` stores physical pixels and the non-DPI-aware test
+  reads logical ones; the test, not the restore, needs the fix (or prefs in DIPs).
 - [x] `W38` First view (S; R-GUI-3 tasks first; §6 2026-11-14 no wizard,
   §6 2026-11-21 guided setup). While nothing is set up (no block, no
   supported browser with the extension), the Overview shows a short
@@ -2222,6 +2232,9 @@ Stability (blocks every other Windows GUI test):
   fontdrvhost (48), ctfmon, sihost and ApplicationFrameHost, so windows draw blank.
   No GUI crash recorded (no Application 1000/1026, no gui.log: %LOCALAPPDATA%\kc9k
   was never created); no challenge window in the logs. Owner not confirmed.
+  Laptop (2026-11-22) *(By claude)*: GUI alone against the fake (main b6c3bb5, 200 %
+  scaling, ~25 launches, window watcher on): no crash, hang or white window; every
+  window WinUI (`WinUIDesktopWin32WindowClass`, popups). UI suite 36/38: see W33/W37 below.
 
 Layout (owner: keep the Windows look, use the GTK layout):
 
@@ -2230,6 +2243,11 @@ Layout (owner: keep the Windows look, use the GTK layout):
   (Overview, Blocks, Circadian rhythm). Build: the menu never moves the
   page: pinned open like the GTK sidebar by default, the page fills the
   rest of the window, with no horizontal scroll at any window width.
+  Laptop before (2026-11-22) *(By claude)*: at 200 % with the menu open, UI Automation
+  finds controls past the right edge at 400 DIP (Clusters 117, Stats 186, Circadian 97,
+  Settings 113 px: preset/time-frame combo boxes) and 512 DIP (Stats 74, Settings 1);
+  none at 683 DIP or wider, and none with the menu folded. `gui.json`
+  `window_width/height` are physical pixels: 800 opens a 400 DIP window at 200 %.
 - [ ] `W54` **Page layout as in the GTK GUI** (M; §4.1–4.13, R-GUI-3). Pages
   are centred with wide empty margins and cut off on the right; the GTK
   GUI's pages fill the width, put switches and Lock… buttons in one right
@@ -2238,6 +2256,9 @@ Layout (owner: keep the Windows look, use the GTK layout):
   Blocks with modes, Circadian rhythm, Settings), keeping the Windows
   look (colours, fonts, Mica). Overview's "Get started" card has no GTK
   counterpart: the owner dropped it (2026-11-22), so W38's first view goes.
+  Laptop before (2026-11-22) *(By claude)*: at 1440 DIP with the menu folded, Circadian
+  rhythm is a centred column with ~260 DIP empty on the left; Blocks at 1024 DIP fills
+  the width (cards, switch right). Shots: C:\kc9k-laptop\shots\full-before (laptop only).
 
 Import:
 
@@ -2268,6 +2289,8 @@ Both platforms:
   one the owner prefers; the GUIs and the daemon's interpolation agree.
   Done when: a test drags a point up and down by the same amount and
   gets mirror-image curves.
+  Laptop before (2026-11-22) *(By claude)*: seen in the fixture's Backlight clip on
+  Windows: a sharp knee where the curve rises at 06:30, soft bends where it falls (18:30).
 
 ## 5. Proposed, not agreed
 

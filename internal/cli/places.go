@@ -75,7 +75,7 @@ var placeAddCmd = &cobra.Command{
 		}
 		seen, err := enforce.ScanWifi(true)
 		if err != nil {
-			return fmt.Errorf("Wi-Fi can't be read (is NetworkManager running?): %w", err)
+			return fmt.Errorf("Wi-Fi can't be read (%s): %w", wifiUnreadableHint, err)
 		}
 		if len(seen) == 0 {
 			return fmt.Errorf("no Wi-Fi network is in range, so this place has nothing to be known by")

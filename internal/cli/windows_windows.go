@@ -36,6 +36,7 @@ var localCommands = map[string]bool{
 // the service's (LocalSystem), the command runs locally, or KC9K_DB names
 // a test database. It reports whether it forwarded, and the exit code.
 func forwardIfNeeded() (int, bool) {
+	rewordForWindows(rootCmd)
 	args := os.Args[1:]
 	if platform.Privileged() || os.Getenv("KC9K_DB") != "" {
 		return 0, false
@@ -247,8 +248,9 @@ by itself when the lock ends.`, 1)
 	strictCmd.Long = strings.Replace(strictCmd.Long, "sudo is taken away only while", "administrators are denied only while", 1)
 	noEscapeCmd.Long = `With no-escape on, the recovery environment is off (Reset this PC, Startup
 Repair and its command prompt), automatic repair doesn't start, and the boot
-menu is hidden. KC9K's service runs in Safe Mode too. It can't be turned off
-during a lock.
+menu (F8 included) is hidden. Safe Mode stops being a way out: KC9K's
+service runs there, and with no-escape freezes and strict mode hold there
+too. It can't be turned off during a lock.
 
 Booting a USB stick still works unless the firmware is locked with a password.
 Test it in a virtual machine first.`

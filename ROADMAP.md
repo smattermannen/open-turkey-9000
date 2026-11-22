@@ -66,7 +66,6 @@ of their group and a row here; a finished item loses its row.
 | W10 | Places on Windows (Native Wifi; Wi-Fi kept on): built; real networks Unchecked | §3.6, R-MODE-5 | windows, automation | laptop |
 | W12 | Scripts and script hosts on Windows | §3.1, §3.9 | windows, apps-titles | win-ci |
 | W13 | Recovery path on Windows (Safe Mode, `kc9k recover`): built; a real Safe Mode boot Unchecked | R-ESCAPE-1 | windows, device | win-vm |
-| W16 | Windows wording in help texts and messages | §3.14 | windows | agent |
 | W17 | Hardware clock on Windows (boot event) | §4.10 | windows, locks | win-ci |
 | W18 | One-click browser install on Windows (winget) | §4.10 | windows, browsers | win-ci, laptop |
 | W19 | Firmware lock on Windows (vendors' firmware WMI) | §3.8, §4.10 | windows, device | laptop, owner |
@@ -1859,7 +1858,11 @@ their sites; their pages are an app's, not a browser's).
   password), installer media guard, firmware lock, Safe Mode and other
   systems (info), no-escape last. GUI: the step IDs and texts of `kc9k
   guided-setup --json` differ on Windows.
-- [ ] `W16` Windows wording (S). SPEC §3.14, R-GUI-3. Was: help texts and
+- [ ] `W16` Windows wording (S). Built (2026-11-22): `cli/wording.go`,
+  `TestWindowsWording` (every command's texts on `windows-latest`);
+  `browser` install and `firmware-lock` texts change with W18 and W19.
+  GUI: help texts shown on Windows come from `kc9k.exe` and now name
+  Windows' things. Was planned: SPEC §3.14, R-GUI-3. Was: help texts and
   messages name `sudo`, GRUB, `kc9k.nofreeze`, `/etc/hosts`, `systemctl`,
   `journalctl` on Windows too. Build: each says Windows' own on Windows
   (the service, Safe Mode, the hosts file, `kc9k.log`). GUI: help texts.

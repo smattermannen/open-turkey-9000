@@ -59,6 +59,14 @@
   through `os.Pipe` read it while the command runs: a Windows pipe holds
   only 4 KB.
 
+- Wording (W16): help texts are written for Linux; on Windows
+  `rewordForWindows` (called first in `forwardIfNeeded`) replaces each
+  Linux-only name by Windows' own from `cli/wording.go`'s table (the
+  hosts file, the service, Safe Mode instead of GRUB and
+  `kc9k.nofreeze`, Task Manager, the Guest account); `strict` and
+  `no-escape` get Windows texts of their own (`windows_windows.go`).
+  `TestWindowsWording` fails on any Linux name left.
+
 ## Service, pipe, agent, install (W1)
 
 - Packages: `internal/platform` (data folder, privileged, caller; on

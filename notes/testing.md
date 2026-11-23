@@ -85,7 +85,12 @@
   GUI, extension policies), waits for the daemon's LibreWolf
   (`LIBREWOLF_MINUTES`, default 15), removes.
 
-- Extension, Node: `node ci/match_test.js`, `node ci/background_test.js`
+- Timing checks on shared runners (A17): a time judged by its fastest of
+  several rounds (a pause hits one round, too much work every round);
+  servers in unit tests bind port 0 (fixed ports in 32768–60999 get
+  taken: Android `RulesServerTest`).
+- Extension, Node: `node ci/match_test.js` (huge page: each step's fastest
+  of 3 timed rounds ≤ 16 ms), `node ci/background_test.js`
   (APIs stubbed: frame reports, ad trigger), `node
   ci/android_background_test.js`; Playwright Chromium (cloud only): `node
   ci/content_harness_test.js` (principle 9: each extension callback ≤ 16 ms

@@ -133,6 +133,9 @@ class RulesServer(
         }
     }
 
+    /** The port it listens on: the one asked for, or the system's pick for port 0 (tests). */
+    val localPort: Int get() = socket?.localPort ?: port
+
     /** Waits until the server listens (for tests). */
     fun awaitListening(timeoutMs: Long = 5_000): Boolean {
         val end = System.currentTimeMillis() + timeoutMs

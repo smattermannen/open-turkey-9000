@@ -25,7 +25,7 @@ its bypass prevention).
 
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
-| A17 | Flaky CI checks: `ci/match_test.js` timing, Android `RulesServerTest` | principle 9 | testing, extension | agent |
+| A17 | Flaky CI checks fixed: 10 green `Test` runs in a row | principle 9 | testing, extension | agent |
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text: real use on the laptop | §3.9 | extension | owner |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
@@ -85,13 +85,13 @@ its bypass prevention).
 **Android is on hold until the Linux project is finished** (owner): its
 plan is SPEC §8, its items §3.1.
 
-- [ ] `A17` **Flaky CI checks** (found 2026-11-23 while fixing A16):
-  `node ci/match_test.js` failed once on its timing ("huge page: slowest
-  step 52.5 ms", run 697; passed on re-run), skipping every later step of
-  `Test`; Android `RulesServerTest > noPreflight` failed twice (runs 680,
-  684; passes on re-run). Done when: each passes 10 runs in a row, or its
-  limit is made fit for a shared runner without losing what it proves
-  (principle 9).
+- [ ] `A17` **Flaky CI checks** (found 2026-11-23 while fixing A16).
+  Fixed (2026-11-23): `ci/match_test.js`'s huge page (one 52.5 ms step,
+  run 697) judges each step by its fastest of 3 timed rounds, still
+  ≤ 16 ms (principle 9); Android `RulesServerTest` (`awaitListening`
+  false at `@Before`, runs 680, 684: fixed port 47699 in Linux's ephemeral
+  range, retried only after 5 s) binds port 0. Done when: each passes 10
+  runs in a row (`Test` dispatched by hand on the fix).
 
 ### 0.1 Code contradicting `SPEC.md`
 

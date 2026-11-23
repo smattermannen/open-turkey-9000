@@ -727,6 +727,8 @@ Windows mechanisms: `notes/windows.md`.
 - 2026-11-22 (By Opus): Windows GUI start arguments (jump list, shortcut, second start) only open a page or GUI dialog, never a kc9k command (R-LOCK-12).
 - 2026-11-22 *(By claude)*: Windows GUI has no first view ("Get started" dropped); pages follow the GTK layout.
 - 2026-11-22 (By claude): Linux projects import on Windows as they are (§4.10 Linux-only); session agent crashes (§3.10 Tamper).
+- 2026-11-23 *(By claude; owner asked the agent to choose)*: KC9K account and cloud on **Supabase** (not Firebase): Auth, Postgres, private Storage with row-level security, reached over plain HTTPS from Go and Android (no SDK, no Play Services, which Firebase's Android libraries lean on, and no Go client SDK); open source, so it can be self-hosted. Upload all = one file per account; Download all takes the last upload (last upload wins).
+- 2026-11-23 *(By claude; owner asked the agent to choose)*: One-click installer (§4.11): Linux the `.deb` (double-click → Mint's package installer → Install; it also installs LibreWolf); Windows the signed MSI; both on GitHub Releases, later the website. Android open (§7).
 
 ## 7. Open decisions
 
@@ -735,6 +737,12 @@ Windows mechanisms: `notes/windows.md`.
 - **Factory reset protection with a trusted Google account** (§8.4):
   offered on phones with Google's protection or not (principle 6: the
   account's address goes to Google's reset check).
+- **Android one-click installer** (§4.11) *(By claude)*: KC9K needs
+  device owner, which Android grants only by `adb` on a phone without
+  accounts or by a QR code at setup after a factory reset; an APK alone
+  can't. Options: (a) QR code at setup (factory reset); (b) "Set up phone"
+  in the computer's KC9K over USB (bundled `adb`; accounts removed first);
+  (c) without device owner (weaker protection). Proposed: (a) and (b).
 - **Signing the extension for Firefox** (§8.2): release Firefox installs
   only Mozilla-signed add-ons; signing (unlisted) needs a Mozilla account
   held by the owner, not users.

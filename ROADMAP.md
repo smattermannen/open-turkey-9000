@@ -42,13 +42,14 @@ its bypass prevention).
 | 2.7 | Text lock's challenge window on a real desktop | R-LOCK-5, §4.6 | locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings: LibreWolf parts (box); `ci/tamper_vm_test.sh` (never run) | §4.10 | browsers, extension, install | box, vm |
-| 2.10 | Cross-device sync | §4.14 | db-project | agent |
-| 2.11 | One-click installer on Linux, Windows, Android | §4.11 | install, install-windows | agent, owner |
+| 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
+| 2.11 | One-click installer: `.deb`, MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, owner |
 | 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere | §3.13, §4.10 | browsers | agent |
 | 2.13 | Accountability partner | §4.15 | — | agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
 | 2.15 | Remove search results leading to blacklisted addresses | R-PAGE-2 | extension | agent, box |
 | 2.16 | "Show dark web pages while dark mode is on" turns on the browser's dark mode | §4.10 | circadian, browsers, gui, gui-windows | agent, box |
+| 2.17 | Chrome extension in the Chrome Web Store (unlisted) | §3.13, §6 2026-11-21 | browsers, windows-layers | owner, agent |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
 | C3 | Android: tapping jumps to the top; app works like the computer's GUI | R-GUI-3 | android | agent |
@@ -235,19 +236,88 @@ Only rows not fully built.
   `installer` on, `dpkg -i` of the same or an older `.deb` and
   `install.sh` refused, a newer `.deb` installs. A `.deb` built before the
   prerm `failed-upgrade` fix still gets in.
-- **2.10 Cross-device sync** (L; §4.14): Not built. KC9K account and
-  cloud (principle 6's one exception); Upload all / Download all on
-  Linux, Windows, Android; one to one except §4.14's device-specific
-  items. Download all replaces even while locked (an exception to
-  R-WEAK-1: the weakening audit must name it). Project export
-  (`cli/project*.go`) is nearest, but only adds.
-- **2.11 One-click installer** (M per platform; §4.11): Not built. Linux
-  has `.deb` and `install.sh`, Windows an MSI (W7), Android none; each
-  becomes one download, one click.
+- **2.10 Cross-device sync** (L; §4.14; backend Supabase, SPEC §6
+  2026-11-23): Not built. KC9K account and cloud (principle 6's one
+  exception); Upload all / Download all on Linux, Windows, Android; one to
+  one except §4.14's device-specific items. Download all replaces even
+  while locked (an exception to R-WEAK-1: the weakening audit must name
+  it). Project backup (`cli/projectbackup.go`) is nearest, but only adds.
+  To do, owner:
+  - [ ] Supabase account; one project (EU region), free plan to start.
+  - [ ] Auth → Email on; own SMTP for real users (built-in sender allows
+    only a few emails an hour).
+  - [ ] Give the agent the project URL and the anon key (public, safe
+    behind row-level security); never the service role key.
+  - [ ] Decide the plan: free projects pause after a week without use
+    (Pro ~25 USD/month doesn't); principle 6 means users never pay.
+  To do, agent:
+  - [ ] Schema as SQL in the repo (`cloud/supabase/`): private Storage
+    bucket `setups`, one object `<user id>/setup.json.gz` per account; a
+    `setups` row (upload time, device name, format version, size);
+    row-level security: an account reads and writes only its own.
+  - [ ] Setup file: versioned JSON from the backup's code, everything
+    §4.14 copies (lock state included), device-specific items left out.
+  - [ ] `internal/cloud/`: Supabase Auth and Storage over plain HTTPS
+    (`net/http`, no SDK); tokens root-only in the DB; fake server in tests.
+  - [ ] CLI: `kc9k account signup|login|logout|status`, `kc9k sync upload`,
+    `kc9k sync download [--dry-run]` (shows upload time and device, asks
+    first, locks confirmed per R-LOCK-12; replaces in one transaction;
+    device-specific items here kept).
+  - [ ] Weakening audit entry for `sync download`; `refused()` untouched.
+  - [ ] GTK and Windows GUI: account page, Upload all, Download all (each
+    runs the command). Android with N-items.
+  - [ ] Check against the real project: Linux → Windows → Linux round trip.
+  - [ ] Note `notes/sync.md` when built.
+- **2.11 One-click installer** (M per platform; §4.11; methods SPEC §6
+  2026-11-23): Not built. Linux: the `.deb` (double-click opens Mint's
+  package installer, one click Install). Windows: the signed MSI (W7).
+  Both on GitHub Releases, later the website (`2.14`). Android: open (SPEC
+  §7).
+  To do, agent (Linux):
+  - [ ] `.deb` does all `install.sh` does: LibreWolf too (postinst can't
+    run apt: daemon installs it once on first start, retried later).
+  - [ ] Release workflow: tag `v1.2.3` builds `.deb` (amd64) + `.sha256`,
+    attaches both to the GitHub Release (as `windows-release.yml`).
+  - [ ] Installed by double-click on a clean Mint VM: daemon running, GUI
+    in the menu, LibreWolf and Chrome get the extension (vm).
+  To do, agent (Windows):
+  - [ ] MSI sets up the extension in Chrome and Edge (needs `2.17`'s ID).
+  To do, owner:
+  - [ ] Windows signing certificate (Azure Artifact Signing, or an OV
+    certificate); unsigned, SmartScreen warns "unknown publisher".
+  - [ ] First release tag; install both by a person (W7, C1).
+  - [ ] Android: answer SPEC §7 "Android one-click installer".
 - **2.12 Chrome, Edge, Firefox, Bing everywhere** (L; §3.13): Partial.
   Built: Chrome, Chromium on Linux; Chrome, Edge on Windows waiting for the
   store ID (W2). Not built: Firefox (LibreWolf only), Edge on Linux, every
   browser on Android (IronFox only), Bing (Microsoft Bing browser app).
+- **2.17 Chrome Web Store listing** (S agent, owner's review wait;
+  §3.13, SPEC §6 2026-11-21): Not built. Chrome and Edge on Windows
+  force-install only store extensions (`blocker.ChromeStoreExtensionID`
+  empty: they get none, W2). Linux keeps its own signed `.crx` from the
+  daemon.
+  To do, agent:
+  - [ ] Store build: MV3 `.zip` from `webext.PackChrome`'s files, no `key`
+    or `update_url`; `make chrome-store-zip`.
+  - [ ] Listing texts: single purpose, a reason per permission, data use
+    (nothing leaves the device), privacy policy text (a repo file until
+    the website).
+  - [ ] Pictures: 128 px icon (have), screenshots 1280×800, small tile
+    440×280.
+  - [ ] With the ID: set `ChromeStoreExtensionID`; release step uploading
+    each new extension version (Chrome Web Store API; owner's OAuth client
+    as GitHub secrets).
+  To do, owner:
+  - [ ] Chrome Web Store developer account (Google account with 2-step
+    verification; one-time 5 USD).
+  - [ ] Upload the agent's `.zip`, visibility **Unlisted**, fill privacy
+    practices from the agent's texts, privacy policy URL, submit (review
+    days to weeks; access to all sites makes it slower).
+  - [ ] Give the agent the extension ID.
+  - [ ] Optional later: Edge Add-ons listing (free; Edge takes Chrome
+    Web Store extensions by policy anyway).
+  Done when: on the laptop Chrome and Edge get the extension by policy,
+  pinned, the guard sees their check-ins (W2).
 - **2.13 Accountability partner** (L; §4.15): Not built. Needs the KC9K
   account (`2.10`): invites, reports, alerts, partner holding password
   locks and the settings password, unlock approval; no screenshots.
@@ -468,6 +538,11 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- PROPOSED 2026-11-23 (`2.10`): the setup file holds password hashes and
+  lock state. Encrypt it on the device with a passphrase only the user
+  knows (Supabase sees only ciphertext)? Lost passphrase = upload lost.
+  Proposed: no (the account password already guards it; hashes are
+  salted); owner to decide before `2.10` is built.
 - PROPOSED 2026-11-22 (`notes/browsers.md`): KC9K closed the owner's
   LibreWolf twice while in use (once with Save As open) when a browser
   setting changed with a website block on: restarted so the new policy

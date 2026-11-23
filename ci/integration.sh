@@ -55,6 +55,24 @@ ot() { kc9k "$@"; }
 check "sudo rule limited to group sudo" sudo grep -q '^%sudo ALL' /etc/sudoers.d/kc9k
 check "daemon is running" systemctl is-active --quiet kc9k
 
+# GitHub's runner runs from its user's home (/home/runner/...): strict mode
+# closes a person's programs running from /home (CloseNoexecPrograms), the
+# runner too, and the job is lost. Its folders are exempt, as a person's
+# own tools would be.
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    echo "::notice::programs of $(id -un): $(for p in $(pgrep -u "$(id -u)"); do readlink "/proc/$p/exe"; done 2>/dev/null | sort -u | tr '\n' ' ')"
+    for pid in $(pgrep -u "$(id -u)"); do
+        exe=$(readlink "/proc/$pid/exe" 2>/dev/null) || continue
+        case "$exe" in /home/* | /tmp/* | /var/tmp/* | /dev/shm/*) ;; *) continue ;; esac
+        dir=$(dirname "$exe")
+        [ "$(basename "$dir")" = bin ] && dir=$(dirname "$dir")
+        echo "$dir"
+    done | sort -u | while read -r dir; do
+        echo "::notice::strict mode exempt folder (the runner's): $dir"
+        kc9k strict exempt add "$dir" || echo "::error::can't exempt $dir"
+    done
+fi
+
 ot block create strictblock
 ot block add strictblock example.dev
 ot strict on --yes

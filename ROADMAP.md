@@ -43,7 +43,7 @@ its bypass prevention).
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings: LibreWolf parts (box); `ci/tamper_vm_test.sh` (never run) | §4.10 | browsers, extension, install | box, vm |
 | 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
-| 2.11 | One-click installer: `.deb`, MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, owner |
+| 2.11 | One-click installer: `.deb` built (clean Mint VM left), MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, vm, owner |
 | 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere | §3.13, §4.10 | browsers | agent |
 | 2.13 | Accountability partner | §4.15 | — | agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
@@ -92,7 +92,9 @@ plan is SPEC §8, its items §3.1.
   (`KC9K_BIN`; `timeout` got the builtin `command`, so all 51 calls
   failed); the app checks run a sleeper built from Go (a copy of uutils'
   multicall `sleep` refuses to run under another name, so "is killed"
-  passed proving nothing). Unchecked: what fails after these. Done when:
+  passed proving nothing); the runner's folders are strict mode exempt
+  folders (strict mode closed the runner, running from `/home/runner`, and
+  the job was lost). Unchecked: what fails after these. Done when:
   the `Integration tests` step of `.github/workflows/test.yml` is green on
   main.
 

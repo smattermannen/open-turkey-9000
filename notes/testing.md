@@ -72,7 +72,9 @@
   the clock, firewall, hosts: never on a computer in use): `kc9k` runs
   through `$KC9K_BIN` under a 120 s `timeout`; the app checks run a sleeper
   built from Go (uutils' multicall `sleep`, Ubuntu 25.10+, refuses to run
-  under another name). Locking commands take `--yes` (R-LOCK-12).
+  under another name); on GitHub the runner's folders (`/home/runner/…`)
+  are made strict mode exempt folders first, else strict mode closes the
+  runner. Locking commands take `--yes` (R-LOCK-12).
 - `ci/deb_install_check.sh <deb> [version]` (root, disposable machine: CI
   job `deb` and `linux-release.yml` on `ubuntu-24.04`): installs the `.deb`
   with apt, checks what `install.sh` sets up (daemon, sudo rule, wrapper,

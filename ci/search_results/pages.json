@@ -1,0 +1,14 @@
+{
+  "_": "R-PAGE-2 fixtures: each engine's results page at its real address, markup modelled on the engine's own (2025-2026). data-expect marks what must be gone or kept; the extension never reads it. Lists: ci/search_results_test.js.",
+  "google": "https://www.google.com/search?q=productivity",
+  "bing": "https://www.bing.com/search?q=productivity",
+  "duckduckgo": "https://duckduckgo.com/?q=productivity",
+  "duckduckgo-html": "https://html.duckduckgo.com/html/?q=productivity",
+  "brave": "https://search.brave.com/search?q=productivity",
+  "yahoo": "https://search.yahoo.com/search?p=productivity",
+  "startpage": "https://www.startpage.com/sp/search?query=productivity",
+  "ecosia": "https://www.ecosia.org/search?q=productivity",
+  "yandex": "https://yandex.com/search/?text=productivity",
+  "mojeek": "https://www.mojeek.com/search?q=productivity",
+  "searxng": "https://searx.example.org/search?q=productivity"
+}

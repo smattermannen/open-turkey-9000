@@ -1,4 +1,4 @@
-// Runs the extension's page script (match.js, social.js, content.js) in a
+// Runs the extension's page script (match.js, social.js, search.js, content.js) in a
 // real Chromium page, with the extension APIs it uses stubbed, so what it
 // does to a page can be checked without installing KC9K. Needs Node and
 // Playwright (the cloud containers have both; the test laptop doesn't):
@@ -57,7 +57,7 @@ async function main() {
   const browser = await chromium.launch();
   // One script, as the extension's content scripts share one scope (each
   // init script here would get its own).
-  const script = ["match.js", "social.js", "content.js"].map((f) => fs.readFileSync(path.join(FILES, f), "utf8")).join("\n;\n");
+  const script = ["match.js", "social.js", "search.js", "content.js"].map((f) => fs.readFileSync(path.join(FILES, f), "utf8")).join("\n;\n");
 
   async function open(page) {
     const p = await browser.newPage();

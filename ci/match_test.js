@@ -25,6 +25,8 @@ const cases = [
   ["https://web.archive.org/web/2024id_/https:/reddit.com/", true],
   ["https://web.archive.org/web/*/reddit.com*", true],
   ["https://web.archive.org/web/2024/https://wikipedia.org/", false],
+  ["https://web.archive.org/web/https://www.reddit.com/r/funny/", true],
+  ["https://web.archive.org/web/https://wikipedia.org/", false],
   ["https://archive.ph/newest/https://old.reddit.com/", true],
   ["https://archive.ph/AbCdE", false],
 ];

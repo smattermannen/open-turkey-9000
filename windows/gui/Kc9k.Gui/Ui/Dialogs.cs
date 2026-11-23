@@ -4,6 +4,8 @@
 using Kc9k.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 
 namespace Kc9k.Gui;
 
@@ -24,7 +26,23 @@ public sealed class Dialogs(Func<XamlRoot?> root, Func<ElementTheme> theme)
             dialog.DefaultButton = dialog.IsPrimaryButtonEnabled && !string.IsNullOrEmpty(dialog.PrimaryButtonText)
                 ? ContentDialogButton.Primary : ContentDialogButton.None;
             Open = dialog;
-            return await dialog.ShowAsync();
+            // A15: Enter takes the main button wherever the focus is (a choice's
+            // drop-down too, which would open itself instead), except on a
+            // button (it presses that one), in a box that takes several lines
+            // and in an open drop-down.
+            var accepted = false;
+            dialog.PreviewKeyDown += (_, e) =>
+            {
+                if (e.Key != Windows.System.VirtualKey.Enter || !dialog.IsPrimaryButtonEnabled || string.IsNullOrEmpty(dialog.PrimaryButtonText)) return;
+                var focused = FocusManager.GetFocusedElement(dialog.XamlRoot);
+                if (focused is ButtonBase and not CheckBox and not RadioButton) return;
+                if (focused is TextBox { AcceptsReturn: true } or ComboBoxItem or ComboBox { IsDropDownOpen: true }) return;
+                accepted = true;
+                e.Handled = true;
+                dialog.Hide();
+            };
+            var result = await dialog.ShowAsync();
+            return accepted ? ContentDialogResult.Primary : result;
         }
         catch (Exception e)
         {

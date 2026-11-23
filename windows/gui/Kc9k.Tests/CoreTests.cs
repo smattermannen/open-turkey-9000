@@ -427,3 +427,43 @@ public class CliTests
         Assert.All(StartArgs.JumpList, j => Assert.True(StartArgs.Parse(j.Args).Any, j.Args));
     }
 }
+
+// Stability (ROADMAP §4.3): running kc9k never stops the GUI for long.
+public class ProcessCliTests
+{
+    [Fact]
+    public async Task AMissingKc9kIsARefusalNotACrash()
+    {
+        var r = await new ProcessCli(Path.Combine(Path.GetTempPath(), "no-such-kc9k-" + Guid.NewGuid() + ".exe")).RunAsync(["gui-state"]);
+        Assert.False(r.Ok);
+        Assert.Contains("could not be started", r.Output);
+    }
+
+    [Fact]
+    public async Task AHungKc9kIsStoppedAtItsTimeout()
+    {
+        var (exe, args) = OperatingSystem.IsWindows()
+            ? ("powershell.exe", new[] { "-NoProfile", "-Command", "Start-Sleep 60" })
+            : ("/bin/sh", new[] { "-c", "sleep 60" });
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var r = await new ProcessCli(exe).RunAsync(args, timeout: TimeSpan.FromSeconds(2));
+        Assert.False(r.Ok);
+        Assert.Contains("took too long", r.Output);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(30), watch.Elapsed.ToString());
+    }
+
+    // A program kc9k leaves running with its output open (a browser it
+    // started): the answer still comes once kc9k itself has ended.
+    [Fact]
+    public async Task OutputHeldOpenByAChildDoesNotHang()
+    {
+        var (exe, args) = OperatingSystem.IsWindows()
+            ? ("cmd.exe", new[] { "/c", "echo done& start /b powershell.exe -NoProfile -Command Start-Sleep 40" })
+            : ("/bin/sh", new[] { "-c", "echo done; sleep 40 & exit 0" });
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var r = await new ProcessCli(exe).RunAsync(args, timeout: TimeSpan.FromSeconds(30));
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), watch.Elapsed.ToString());
+        Assert.True(r.Ok, r.Output);
+        Assert.Contains("done", r.Output);
+    }
+}

@@ -204,6 +204,20 @@ public sealed class GuiApp : IDisposable
         File.WriteAllText(Path.Combine(dir, "responses.json"), list.ToJsonString());
     }
 
+    /// <summary>Makes the fake kc9k slow (for prepare:): commands starting with
+    /// these arguments wait ms first; other answers stay.</summary>
+    public static void Slow(string dir, int ms, params string[] args)
+    {
+        var path = Path.Combine(dir, "responses.json");
+        var list = File.Exists(path) ? System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsArray() : [];
+        list.Insert(0, new System.Text.Json.Nodes.JsonObject
+        {
+            ["args"] = new System.Text.Json.Nodes.JsonArray([.. args.Select(a => (System.Text.Json.Nodes.JsonNode)System.Text.Json.Nodes.JsonValue.Create(a)!)]),
+            ["delay_ms"] = ms,
+        });
+        File.WriteAllText(path, list.ToJsonString());
+    }
+
     public void Dispose()
     {
         try { App.Close(); } catch (Exception) { }

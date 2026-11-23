@@ -86,6 +86,10 @@ public sealed class Controller
     public async Task<bool> Run(IReadOnlyList<string> args, string? secret = null, Func<string, Task>? then = null,
         TimeSpan? timeout = null, bool quiet = false, string? refusalTitle = null)
     {
+        // A change may wait on a text lock's challenge a person types
+        // (R-LOCK-5): kc9k is not stopped under them. The window keeps working
+        // meanwhile; only reads have the short limit.
+        timeout ??= TimeSpan.FromMinutes(30);
         var drafted = await ToDraft(args);
         if (drafted is null) return false; // cancelled (a block password not given)
         args = drafted;
@@ -235,6 +239,8 @@ public sealed class Controller
         }
         if (read.State is null)
         {
+            // The next good read is shown even if unchanged, so this goes away.
+            StateJson = "";
             Banner?.Invoke($"Can't read the state: {read.Result.Output}");
             return;
         }
@@ -255,9 +261,28 @@ public sealed class Controller
         catch (Exception e) { Log.Write("update: " + e); }
     }
 
+    bool readingStats, statsAgain;
+
     public async Task RefreshStats()
     {
-        var (stats, _) = await Session.ReadStatsAsync(StatsArgs());
+        // A slow kc9k never piles reads up: one at a time; asked meanwhile
+        // (a new time frame), read once more when it lands.
+        if (readingStats)
+        {
+            statsAgain = true;
+            return;
+        }
+        readingStats = true;
+        statsAgain = false;
+        (StatsOutput? Stats, CliResult Result) read;
+        try { read = await Session.ReadStatsAsync(StatsArgs()); }
+        finally { readingStats = false; }
+        if (statsAgain)
+        {
+            await RefreshStats();
+            return;
+        }
+        var stats = read.Stats;
         if (stats is null || stopped) return;
         Stats = stats;
         try { StatsChanged?.Invoke(stats); }

@@ -78,7 +78,9 @@ public sealed class ProcessCli(string path) : ICliProcess
         Process process;
         try
         {
-            process = Process.Start(info) ?? throw new InvalidOperationException("kc9k did not start");
+            // Off the window's thread: starting a program can take seconds
+            // (a virus scanner reading it), and the window must not stop.
+            process = await Task.Run(() => Process.Start(info) ?? throw new InvalidOperationException("kc9k did not start"));
         }
         catch (Exception e)
         {
@@ -86,8 +88,9 @@ public sealed class ProcessCli(string path) : ICliProcess
         }
         using (process)
         {
-            var stdout = process.StandardOutput.ReadToEndAsync();
-            var stderr = process.StandardError.ReadToEndAsync();
+            StringBuilder outText = new(), errText = new();
+            var stdout = Drain(process.StandardOutput, outText);
+            var stderr = Drain(process.StandardError, errText);
             try
             {
                 if (!string.IsNullOrEmpty(stdin)) await process.StandardInput.WriteAsync(stdin);
@@ -104,9 +107,25 @@ public sealed class ProcessCli(string path) : ICliProcess
                 try { process.Kill(true); } catch (Exception) { }
                 return new CliResult(false, $"kc9k {string.Join(' ', args)} took too long and was stopped.");
             }
-            var output = ((await stdout) + (await stderr)).Trim();
+            // A program kc9k started may still hold its output open: read
+            // what came, never wait on it for long.
+            await Task.WhenAny(Task.WhenAll(stdout, stderr), Task.Delay(TimeSpan.FromSeconds(5)));
+            string output;
+            lock (outText) lock (errText) output = (outText.ToString() + errText).Trim();
             return new CliResult(process.ExitCode == 0, output);
         }
+    }
+
+    static async Task Drain(StreamReader reader, StringBuilder into)
+    {
+        var buffer = new char[4096];
+        try
+        {
+            int n;
+            while ((n = await reader.ReadAsync(buffer)) > 0)
+                lock (into) into.Append(buffer, 0, n);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException) { }
     }
 }
 

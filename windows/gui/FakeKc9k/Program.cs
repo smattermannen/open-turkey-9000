@@ -7,6 +7,8 @@
 //                   in KC9K_FAKE_DIR)
 // responses.json lists canned answers: [{"args": ["start", "Work"], "ok":
 // false, "output": "..."}], matched by leading arguments, first match wins.
+// An answer with "delay_ms" waits that long first (a slow kc9k); one with
+// only "delay_ms" (no "output") then goes on as if it weren't there.
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -51,8 +53,10 @@ public static class FakeCli
             foreach (var r in JsonNode.Parse(File.ReadAllText(canned))!.AsArray())
             {
                 var want = r!["args"]!.AsArray().Select(a => a!.GetValue<string>()).ToList();
-                if (want.Count <= rest.Count && want.SequenceEqual(rest.Take(want.Count)))
-                    return (r["ok"]?.GetValue<bool>() == false ? 1 : 0, r["output"]?.GetValue<string>() ?? "");
+                if (want.Count > rest.Count || !want.SequenceEqual(rest.Take(want.Count))) continue;
+                if (r["delay_ms"]?.GetValue<int>() is int delay) Thread.Sleep(delay);
+                if (r["output"] is null && r["ok"] is null) continue;
+                return (r["ok"]?.GetValue<bool>() == false ? 1 : 0, r["output"]?.GetValue<string>() ?? "");
             }
         }
         if (rest.Count > 0 && rest[0] == "gui-state") return (0, File.ReadAllText(Path.Combine(dir, "gui-state.json")));

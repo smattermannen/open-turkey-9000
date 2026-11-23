@@ -78,6 +78,7 @@ its bypass prevention).
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows-tamper, device | laptop |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
 | W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows, windows-layers | laptop |
+| W55 | Windows service without its pipe after an upgrade ("service is not running") | principle 1, §4.11 | windows | agent |
 | W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
 | A14 | Clip curves mirrored, tested in Go, C#, GTK; the owner's look on the laptop | §4.10 | circadian | owner |
 
@@ -515,6 +516,20 @@ W26 the Store's Firefox obeying the registry policies (win-vm).
   keep the policy they read, so `CloseNoexecPrograms` closes what older
   shells start. Unchecked (laptop): Windows 11 Home, Explorer started
   before strict mode.
+
+- [ ] `W55` **Service runs without its pipe** (Core; principle 1, §4.11;
+  found by the GUI session 2026-11-23, windows-gui run 75's `installer`
+  job). After `test-msi.ps1`'s upgrade over a lock the service was Running
+  but every forwarded command (`version`, `gui-state`) said "the Killer
+  Chicken 9000 service is not running" (`ERROR_FILE_NOT_FOUND`), while
+  SYSTEM's `kc9k uninstall` (local) still read the lock. Cause in the code:
+  `winsvc.Serve` returns on its first error (`Listen`, or
+  `FILE_FLAG_FIRST_PIPE_INSTANCE` refused while the old process's pipe is
+  still there) and `kc9kService.Execute` only logs it, so the pipe never
+  comes back for the service's life; `Accept` errors other than access
+  denied also loop without a pause. The GUI then shows only the banner.
+  Done when: Serve retries (with a pause) until stop, and the installer
+  job's "kc9k version says 0.2.0" passes 10 runs in a row. (S)
 
 Never on a computer in use; the laptop runs only what is marked laptop.
 win-vm (Windows 11, snapshot, admin): `pwsh ci/windows_vm_test.ps1

@@ -6,584 +6,338 @@
 
 ## Platform split (W0)
 
-- One Go program for both systems. A file that only makes sense on Linux
-  starts with `//go:build linux` (most of `internal/blocker/`); its
-  Windows counterpart is `<name>_windows.go`. New platform files use the
-  suffix (`sys_linux.go`/`sys_windows.go`), old ones keep their names
-  and the tag, so notes and history stay valid.
-- What enforce hands a layer and what it reports back is shared on both:
-  `blocker/shared.go` (policy and setup types, `Reach`, `DesktopLook`,
-  `GammaReading`, title targets, firmware status, `PercentToRaw`),
-  `hotkeys_shared.go` (`ParseAccel`), `hashentry.go` (contents entries),
-  `browser.go` (policy sets and patterns; writing them is
-  `browser_linux.go`), `hosts.go` (only `hostsPath` differs:
-  `System32\drivers\etc\hosts`), `resolve.go` (the DNS client;
-  network servers from resolv.conf or `GetAdaptersAddresses`).
-- `blocker/stubs_windows.go` held every layer function not yet built on
-  Windows while W2–W6 were built; it is gone (2026-11-21): every function
-  has its Windows version. The firmware lock (`firmware.go`) is shared
-  file I/O on sysfs: on Windows the folder isn't there, so the firmware
-  counts as not available (the vendors' tools: not built).
-- Small per-system pieces: `db/bootclock_*.go` (boot ID: `BootId` under
-  `PrefetchParameters`, raised at every boot; boot clock:
-  `GetTickCount64`, counts sleep like `CLOCK_BOOTTIME`),
-  `db/openlock_*.go` and `enforce/sys_*.go` (file locks: `flock` /
-  `LockFileEx`; time asleep: tick count minus
-  `QueryUnbiasedInterruptTime`), `lock/term_*.go` and `cli/term_*.go`
-  (raw console: console modes with VT input, so bracketed paste works in
-  Windows Terminal), `lock/window_*.go` (the challenge window),
-  `cli/readcaller_*.go`.
-- The hardware clock (W17, `enforce/rtc_*.go`): Windows lets programs read
-  it no other way, so it is taken from Kernel-General event 12 ("The
-  operating system started at system time", the hardware clock read at
-  boot), the newest one (every boot logs one), read once per service run,
-  plus the boot clock since (`hardwareClockAt`; the wall clock plays no
-  part); a cleared log gives none, and the clock check uses internet time
-  alone.
+- Linux-only files: `//go:build linux` (older, most of `internal/blocker/`)
+  or `_linux.go`; Windows counterpart `<name>_windows.go`.
+- Shared: `blocker/shared.go` (layer input/report types),
+  `hotkeys_shared.go`, `hashentry.go`, `browser.go`, `hosts.go` (only
+  `hostsPath` differs), `resolve.go` (`GetAdaptersAddresses`).
+  `firmware.go` (sysfs) finds nothing on Windows (Windows: WMI, below).
+- Per-system: `db/bootclock_*.go` (boot ID `PrefetchParameters\BootId`;
+  `GetTickCount64` counts sleep), `db/openlock_*.go`, `enforce/sys_*.go`
+  (`LockFileEx`; time asleep via `QueryUnbiasedInterruptTime`),
+  `lock/term_*.go`, `cli/term_*.go` (VT input: bracketed paste),
+  `lock/window_*.go`, `cli/readcaller_*.go`.
+- Hardware clock (W17, `enforce/rtc_*.go`): newest Kernel-General event 12
+  (clock read at boot) + boot clock since (`hardwareClockAt`); cleared
+  log → internet time alone.
 
 ## CI
 
-- `.github/workflows/windows.yml` on `windows-latest`: build (also
-  `kc9k.exe`, uploaded as an artifact), vet, `go test ./...`. Linux-only
-  tests carry the tag of the file they test.
-- Jobs: `system` (build, vet, "Layers for real": `-run
-  'WFP|RegPolicy|WinProc'` with `KC9K_TEST_WFP=1`, then
-  `ci/windows_service_test.ps1`: install, pipe, tamper protection, strict
-  mode, uninstall) and `unit` (`go test ./...`, slow: SQLite on the
-  runner's disk). The runner is a disposable administrator's machine.
-  GitHub's job provisioner runs from `AppData\Local\Temp`: the script
-  exempts the folders of such programs before strict mode, or strict mode
-  closes them and the job is cancelled without a log.
-- `ci/windows_desktop_test.ps1 kc9k.exe` (W27, the `system` job's
-  "Desktop checks"): the runner's session is signed in, so the session
-  agent, hosts and firewall against a real site, the Edge policy, a
-  blocked app and a blocked window title closed through the agent, and
-  dark mode written to the signed-in person's settings are checked there.
+- `windows.yml`: job `system` (build + `kc9k.exe` artifact, vet, "Layers
+  for real" `-run 'WFP|RegPolicy|WinProc'` with `KC9K_TEST_WFP=1`,
+  service, desktop and soak scripts) and `unit` (`go test ./...`, slow).
+  Linux-only tests carry their file's tag. GitHub's provisioner runs from
+  `AppData\Local\Temp`: exempted before strict mode or the job dies
+  silently.
+- `ci/windows_service_test.ps1`: install, forwarding, exit codes,
+  caller-named files, data DACL, uninstall refused while locked.
+- `ci/windows_desktop_test.ps1` (W27, signed-in runner): agent, hosts and
+  firewall on a real site, Edge policy, app and title closed, dark mode.
 - `ci/windows_soak_test.ps1 -Kc9k kc9k.exe [-Minutes N] [-Phases
-  idle,circadian,play,settings] [-Gui kc9k-gui.exe] [-Out dir]` (W50–W52,
-  the `system` job runs one minute a phase after the desktop checks, and
-  checks it parses in Windows PowerShell 5.1) *(By claude)*: phases idle
-  (circadian off, active blocks off), circadian (kelvin, software ≥ 40 %,
-  backlight ≥ 30 % with a panel, previews), play (Play the day ×3) and
-  settings (each safe on/off setting on and off 5×). Per phase: Group
-  Policy computer processing (4004/4006/8004/8006) per minute, powershell.exe
-  and kc9k.exe the service started (`Win32_ProcessStartTrace`), agent
-  restarts (agent PIDs; "ended from outside" in the service log, copied by
-  a SYSTEM task), tamper lines, CPU, handles and private bytes of service,
-  agent and GUI (last third against the middle one: the first is warm-up), Display 4101 and
-  LiveKernelEvent, crash reports of kc9k, dwm and explorer, the gamma ramp,
-  "browser: closing" naming a program in %SystemRoot%. Stops and puts
-  everything back at once on CPU > 90 % for 30 s, > 5 powershell.exe, a
-  display reset, the GUI ending or hanging, an agent restart; exit 1 on any
-  threshold (idle: no policy refresh, no PowerShell, no restart, handles
-  within ±5 %). Never a lock, password, monk mode, Frozen Chicken, strict
-  mode, no-escape, firmware, Wi-Fi or adapters, logout or lock screen.
-- `ci/windows_vm_test.ps1 kc9k.exe [-Reboots]`: what needs a desktop or a
-  person (agent, titles, apps, notifications, the challenge in a console
-  and in its window, the lock freeze, takeown against strict mode, gamma,
-  dark mode; with -Reboots the Safe Mode and recovery steps). In a VM
-  with a snapshot only.
-- Locally: `GOOS=windows CGO_ENABLED=0 go build ./... && GOOS=windows go vet ./...`
-  (vet compiles the Windows tests too). Test helpers that capture output
-  through `os.Pipe` read it while the command runs: a Windows pipe holds
-  only 4 KB.
-
-- Local commands (`service`, `agent`, `install`, `finish-uninstall`,
-  `watchdog`) are exempt from access passwords: they can't read the
-  database (SYSTEM's alone). Before, the session agent (run as the person)
-  ended at once and was started again every 3 s, and a reinstall over
-  kept data failed; found by the desktop checks (W27).
-- Wording (W16): help texts are written for Linux; on Windows
-  `rewordForWindows` (called first in `forwardIfNeeded`) replaces each
-  Linux-only name by Windows' own from `cli/wording.go`'s table (the
-  hosts file, the service, Safe Mode instead of GRUB and
-  `kc9k.nofreeze`, Task Manager, the Guest account); `strict` and
-  `no-escape` get Windows texts of their own (`windows_windows.go`).
-  `TestWindowsWording` fails on any Linux name left.
+  idle,circadian,play,settings] [-Gui …] [-Out …]` (W50–W52; CI 1 min/phase,
+  must parse in PowerShell 5.1): per phase counts policy refreshes,
+  process starts, agent restarts, tamper, resources, display resets,
+  crashes, gamma, %SystemRoot% programs closed. Aborts and restores on CPU > 90 %
+  30 s, > 5 powershell.exe, display reset, GUI dead/hung, agent restart;
+  exit 1 over a threshold (idle: no refresh, PowerShell or restart,
+  handles ±5 %). Never touches locks, passwords, monk mode, Frozen Chicken,
+  strict mode, no-escape, firmware, network adapters, logout, lock screen.
+- `ci/windows_vm_test.ps1 kc9k.exe [-Reboots]`: checks needing a desktop
+  or person (`-Reboots`: Safe Mode, recovery). VM with snapshot only.
+- Local: `GOOS=windows CGO_ENABLED=0 go build ./... && GOOS=windows go vet ./...`.
+  `os.Pipe` capture helpers must read while the command runs (4 KB pipe).
 
 ## Service, pipe, agent, install (W1)
 
-- Packages: `internal/platform` (data folder, privileged, caller; on
-  Windows from `KC9K_CALLER_*`, which only the service sets),
-  `internal/winapi` (Win32 calls x/sys lacks; overlapped pipe ends,
-  `Listen`/`DialPipe`, server/client process IDs), `internal/winsvc` (the
-  command pipe: `proto.go` framing, shared and tested on Linux;
-  `server_windows.go`, `client_windows.go`, `install_windows.go`),
-  `internal/winagent` (agents: `proto.go`; `manager_windows.go` in the
-  service; `agent_windows.go`, `kc9k agent`), `cli/windows_windows.go`
-  (`service`, `agent`, `install`, `uninstall`, `finish-uninstall`, and
-  `forwardIfNeeded`, called first in `Execute`).
-- Forwarding: every command but `service`, `agent`, `install`, `help`,
-  `completion` goes to `\\.\pipe\kc9k` unless the process is LocalSystem
-  or `KC9K_DB` is set (tests). The client checks the pipe's server process
-  is the service's (`ServicePID` from the service manager) before sending.
-  Frames: type byte, 4-byte length, payload; request (JSON: args, working
-  folder, console size and a random nonce), input, input end, Ctrl-C;
-  output, errors, exit code.
-- The service (`server_windows.go`): pipe DACL SYSTEM all, signed-in users
-  read/write but not create instances, network denied; first instance
-  `FILE_FLAG_FIRST_PIPE_INSTANCE`, remote clients rejected; at most 32
-  commands at once. Caller from `ImpersonateNamedPipeClient` + thread
-  token: SID, RID as uid, name, session, Administrators member (refused
-  otherwise). The command runs as `kc9k.exe <args>` (child, LocalSystem)
-  with the service's environment minus `KC9K_*`, plus `KC9K_CALLER_SID`,
-  `_UID`, `_USER`, `_SESSION`, `_TOKEN` (an inherited impersonation token
-  handle: `cli/readcaller_windows.go` opens caller-named files while
-  impersonating it) and `KC9K_TERMINAL` (cols,rows,nonce) for a console.
-  Ctrl-C or a closed client kills the command.
-- Consoles: the client enables VT output and keeps input cooked; a
-  command that needs raw input (the text lock's challenge) or no echo
-  (passwords) writes `ESC ]7799;kc9k;<nonce>;raw|cooked|echo-off|echo-on
-  BEL`, which the client strips and obeys (`lock/term_windows.go`,
-  `cli/term_windows.go`; `ControlFilter`). Without the nonce, printed
-  text can't switch the console. The client waits for input before each
-  read, so a switch to raw applies to the next key.
-- Agents (`manager_windows.go`): every 3 s, each session with a signed-in
-  user (`WTSQueryUserToken`) gets `kc9k agent` (`CreateProcessAsUser`,
-  `winsta0\default`, the user's environment); one that ended is started
-  again (`Manager.Restarts` when ended from outside; W5 counts it). Agents connect to
-  `\\.\pipe\kc9k-agent`; accepted only from the installed `kc9k.exe`
-  image, in the session its hello names, with its own PID. One JSON line
-  per message: requests with IDs, replies, events (ID 0). Commands the
-  service runs reach agents through `\\.\pipe\kc9k-agents-internal`
-  (SYSTEM only): `winagent.Call`, `winagent.Sessions` work from either.
-  Ops so far: `status` (idle ms from `GetLastInputInfo`).
-- Agent stability (W50–W52) *(By claude)*: `dispatch.go` (shared, tested
-  on Linux) answers each request in its own goroutine but every handler
-  under `recover()` (a panic is an error reply and a logged stack, never
-  the agent's end); screen ops (gamma get/set, monitors, wallpaper, dark
-  mode, Night light, look) one at a time under one mutex, a gamma set
-  still waiting replaced by a newer one (its reply: 0 screens). Ramps are
-  checked before they reach a screen (`CheckRamp`: 256 values per colour,
-  never falling, top no lower than 1000–10000 K at 10 % software
-  brightness allow, less a tenth). The agent puts the plain ramp back when
-  it ends (the service stopped, is uninstalled, closed its connection) if
-  it set another. `displays()` uses one package-level callback with its
-  results under a mutex (Go keeps every `NewCallback` and stops at 2000:
-  one per call ended the agent after about 2000 screen calls);
-  `TestWinDisplaysManyCalls` makes 5000 of each. The repo's other
-  callbacks (`enumCallback`, the challenge's `wndProc` under a `Once`)
-  were already made once.
-- Crash vs. tamper (§3.10) *(By claude)*: the service starts each agent
-  with its standard output and error on a pipe only that end inherits
-  (`spawnWithOutput`, `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`); the first 200
-  lines go to the service's log ("agent N: ..."), the last 16 KB tell how
-  it ended (`classifyEnd`): exit code 2 with Go's "panic: "/"fatal error: "
-  report is a crash (`Manager.Crashes`, logged, not tamper); the agent's
-  own marker line (service closed the connection, exit 0; gave up, with an
-  error) is ending by itself; anything else (TerminateProcess with any
-  code, Task Manager, taskkill) is from outside (`Manager.Restarts`,
-  which `guardPlatform` logs as tamper). `TestAgentEndCrashVsKill` runs
-  each for real.
-- Install (`install_windows.go`): Program Files\KC9K (`ProgramSDDL`:
-  owner SYSTEM, SYSTEM full, Administrators and Users read/run, protected),
-  ProgramData\kc9k (`DataSDDL`: SYSTEM only), `kc9k.exe` copied (a running
-  one renamed `.old`, removed at reboot), PATH (Machine, broadcast),
-  service `kc9k` (created once the one an uninstall just removed is gone,
-  up to 30 s; `kc9k.exe service`, automatic, recovery: restart 0 s,
-  5 s, 10 s, also on non-crash failures), started. The service exits as a
-  failure when the installed `kc9k.exe` changes (size/time), so Windows
-  starts the new one. Log: ProgramData\kc9k\kc9k.log (10 MB, one old
-  copy).
-- Uninstall: `kc9k uninstall` (in the service) runs `prepareUninstall`
-  (Linux's prepare-uninstall), then starts a copy of itself in the temp
-  folder (`finish-uninstall <pid>`), which waits for the command to end,
-  deletes and stops the service, removes the program folder and the PATH
-  entry. The data stays.
-- Checks: `ci/windows_service_test.ps1 kc9k.exe` (install, forwarded
-  commands and exit codes, caller-named files, the data folder's DACL,
-  uninstall refused while locked, then done) runs on `windows-latest`.
-  The agent needs a signed-in desktop: win-vm.
+- `internal/platform` (data folder, caller from `KC9K_CALLER_*`),
+  `winapi` (Win32 x/sys lacks), `winsvc` (command pipe), `winagent`;
+  `cli/windows_windows.go` (`service`, `agent`, `install`, `uninstall`,
+  `finish-uninstall`; `forwardIfNeeded` first in `Execute`).
+- Local commands (`service`, `agent`, `install`, `finish-uninstall`,
+  `watchdog`) skip access passwords (they can't read the SYSTEM-only DB).
+- Wording (W16): `rewordForWindows` swaps Linux names via
+  `cli/wording.go` (hosts file, service, Safe Mode, Task Manager, Guest);
+  `strict`, `no-escape` have Windows help. `TestWindowsWording`.
+- Forwarding: all commands but `service`, `agent`, `install`, `help`,
+  `completion` go to `\\.\pipe\kc9k` unless LocalSystem or `KC9K_DB`
+  set; client first checks the server PID is `ServicePID`. Frames: type,
+  4-byte length, payload (request JSON with args, cwd, console size,
+  nonce; input; input end; Ctrl-C; output; errors; exit code).
+- Server: pipe DACL SYSTEM all, signed-in users read/write (no new
+  instances), network denied; `FILE_FLAG_FIRST_PIPE_INSTANCE`, no remote
+  clients, ≤ 32 commands. Caller via `ImpersonateNamedPipeClient` (SID,
+  RID as uid, name, session; Administrators only). Child `kc9k.exe <args>`
+  as LocalSystem, env minus `KC9K_*` plus
+  `KC9K_CALLER_SID/_UID/_USER/_SESSION/_TOKEN` (inherited impersonation
+  token: `readcaller_windows.go` opens caller-named files as the caller)
+  and `KC9K_TERMINAL` (cols,rows,nonce). Ctrl-C/closed client kills it.
+- Consoles: VT output, cooked input; for raw input (challenge) or no echo
+  a command writes `ESC ]7799;kc9k;<nonce>;raw|cooked|echo-off|echo-on BEL`,
+  which the client strips and obeys (`ControlFilter`); the nonce stops
+  printed text switching the console. Client waits for input before each
+  read, so raw applies to the next key.
+- Agents (`manager_windows.go`): every 3 s each session with a user token
+  gets `kc9k agent` (`CreateProcessAsUser`, `winsta0\default`), restarted
+  if ended. Agent pipe `\\.\pipe\kc9k-agent` accepts only the installed
+  `kc9k.exe` image, in the session its hello names, own PID. JSON lines
+  (requests with IDs, replies, events ID 0). Service-run commands reach
+  agents via `\\.\pipe\kc9k-agents-internal` (SYSTEM only):
+  `winagent.Call`, `winagent.Sessions`.
+- Agent stability: `dispatch.go` runs each request in a goroutine under
+  `recover()` (panic → error reply, logged). Screen ops one at a time (one
+  mutex); a waiting gamma set is replaced by a newer one. `CheckRamp`
+  rejects bad ramps (256 values/colour, never falling, top ≥ the
+  1000–10000 K / 10 % floor less a tenth). Exiting agent restores the
+  plain ramp if it set another. Win32 callbacks made once
+  (`displays()`: Go caps `NewCallback` at 2000; `TestWinDisplaysManyCalls`).
+- Crash vs tamper (§3.10): agent output on a pipe only it inherits
+  (`spawnWithOutput`); first 200 lines to the service log; last 16 KB
+  decide (`classifyEnd`): exit 2 with Go's "panic: "/"fatal error: " →
+  crash (`Manager.Crashes`, not tamper); its own marker line → ended by
+  itself; else (TerminateProcess, taskkill) from outside
+  (`Manager.Restarts`, tamper via `guardPlatform`). `TestAgentEndCrashVsKill`.
+- Install (`install_windows.go`): `Program Files\KC9K` (`ProgramSDDL`:
+  owner SYSTEM, Users read+run, protected), `ProgramData\kc9k`
+  (`DataSDDL`: SYSTEM only), `kc9k.exe` copied (running one renamed
+  `.old`, deleted at reboot), Machine PATH, service `kc9k` (automatic;
+  restarts 0/5/10 s, also on non-crash failures; waits ≤ 30 s for a
+  just-removed one). Service exits as failed when installed `kc9k.exe`
+  changes, so Windows starts the new one. Log `ProgramData\kc9k\kc9k.log`
+  (10 MB + one old).
+- Uninstall: `prepareUninstall`, then a temp copy `finish-uninstall <pid>`
+  waits, removes service, program folder, PATH entry. Data stays.
 
 ## Web layers (W2)
 
-- Hosts: `hosts.go` (shared) with `hostsPath` =
-  `%SystemRoot%\System32\drivers\etc\hosts`; every write ends in
-  `hostsWritten` (`DnsFlushResolverCache`: the DNS Client caches hosts
-  answers). SafeSearch lines (`SyncSafeSearch`) the same. Windows Defender
-  may flag a hosts file that redirects some popular sites; KC9K never hides
-  from it (SPEC §6): if it does, the firewall and policies still block.
-- Firewall (`firewall_windows.go`, `winapi/wfp_windows.go`): the Windows
-  Filtering Platform, not Windows Firewall. Persistent provider and
-  sublayer (fixed GUIDs, weight 0xF000) of KC9K's own; filters at
-  `ALE_AUTH_CONNECT_V4/V6`: blocked addresses in filters of 500 conditions
-  (same field: ORed), DoH resolvers + remote port 443 or 853 (DNS over
-  TLS and QUIC, W26; `doh.go`, shared).
-  Monk mode's cut: in all four ALE connect/accept layers, permit loopback
-  (weight 15) and block everything (weight 1). One transaction deletes
-  every filter of the provider and adds the new ones. Persistent: in force
-  from boot, before the service, and after it stops. `IsFirewallApplied`:
-  the filters of the last apply all there, by name and count (after a
-  restart: the two DoH filters). `wfpSecurity` (nil: the engine's default
-  security) is W5's.
-- Policies (`browser_windows.go`): Chromium browsers (Chrome, Chromium,
-  Edge, Brave, Vivaldi) under `HKLM\SOFTWARE\Policies\<vendor>\<name>`:
-  lists as subkeys of numbered strings, dictionaries as JSON strings,
-  booleans and numbers as DWORDs (`writeRegPolicy`). The blocklist owns
-  `URLBlocklist`, `URLAllowlist`, `DnsOverHttpsMode`,
-  `BuiltInDnsClientEnabled`; the setup owns private windows
-  (`IncognitoModeAvailability`, Edge `InPrivateModeAvailability`), guest,
-  developer mode, devtools, the extension, forced search. Firefox family:
-  KC9K's copy in ProgramData\kc9k\firefox\policies.json, written to
-  `distribution\policies.json` of every installation found (usual Program
-  Files folders, App Paths, per-user `AppData\Local\Mozilla Firefox`).
-  LibreWolf's setting locks (`librewolfprefs.go`, shared): locks at the end
-  of `Program Files\LibreWolf\librewolf.cfg`; cleaned overrides per
-  account (ProfileList) in `Program Files\KC9K\share\librewolf\<name>.cfg`
-  (users may read, only SYSTEM write), reached through `USERNAME`.
-- One-click install (W18, `InstallBrowser`): winget as SYSTEM (the newest
-  App Installer's `winget.exe` under WindowsApps, which SYSTEM has on no
-  PATH), `--scope machine --silent`, packages `LibreWolf.LibreWolf` and
-  `Google.Chrome`; a browser already there isn't installed again (Chrome:
-  says it waits for the store listing). CI installs LibreWolf for real on
-  manual runs (`workflow_dispatch`).
-- Firefox's registry (W26, `firefoxreg_windows.go`): KC9K's
-  policies.json is also mirrored into
-  `HKLM\SOFTWARE\Policies\Mozilla\Firefox` (objects as keys, lists as
-  keys of "1", "2"…, booleans and whole numbers as DWORDs), which the
-  Store's Firefox and portable ones read; only the policies KC9K wrote
-  (ProgramData\kc9k\firefox-registry.json) are taken out again. Firefox
-  reads Group Policy before policies.json, so both say the same.
-  LibreWolf reads its own key and keeps its distribution file.
-- The extension in Chrome and Edge needs the Chrome Web Store listing's ID
-  (`ChromeStoreExtensionID`, empty until the owner publishes it): only
-  then are they supported browsers and given the extension by policy
-  (`ExtensionSettings`, `ExtensionInstallForcelist` with the store's update
-  URL). LibreWolf gets the bundled `.xpi` as on Linux.
-- Processes (`procs_windows.go`): Toolhelp snapshot + full path
-  (`QueryFullProcessImageName`), owner RID and service-account flag,
-  session, start time; a parent counts only if it started before its
-  child (IDs are reused). `tcpOwner` (`GetExtendedTcpTable`) maps a
-  connection to its process: check-ins, statistics per user.
-- Killing (W50) *(By claude)*: every Windows kill path goes through
-  `killProcess` (what KC9K found itself: browsers, people's programs;
-  never a program under %SystemRoot% or with an unreadable path) or
-  `killNamedProcess` (a process a rule names: the blocked app and the
-  tree it started, such as a blocked script's ping, a tamper tool such as taskmgr, curl naming a
-  blocked site, a blocked window's owner, a VM's vmwp). Both refuse the
-  hard deny-list `sessionCritical`: PID 0 and 4, `essentialWindowsApps`
-  and `neverKillExtra` (dwm, csrss, winlogon, svchost, fontdrvhost,
-  sihost, ctfmon, explorer, ShellHost, RuntimeBroker, dllhost...) in the
-  Windows folder or unreadable, KC9K's own programs; a refusal is logged
-  once per process ("kill refused"). `terminateProcess` (the seam tests
-  replace) checks the deny-list again on the path its handle names (PIDs
-  are reused). Tests: `TestWinKillDenyList`, `TestWinGuardNeverClosesWindows`.
-- Extension guard (`extguard_windows.go`; `extguard_shared.go` is the
-  shared verdict): a browser is a guarded program name, a renamed one by
-  its version resource's OriginalFilename, or a program beside `xul.dll`
-  or `chrome.dll`/`msedge.dll`, or with one in a version folder beside it
-  (`Application\120.0.…\chrome.dll`); never Thunderbird or WebView2,
-  never a program of Windows' own (`windowsOwnProgram`: under
-  %SystemRoot%, a Microsoft package in WindowsApps) nor one whose path
-  can't be read. *(By claude)* Laptop 2026-11-22 (W50): the former glob
-  `<dir>\*\msedge.dll` matched `System32\Microsoft-Edge-WebView`, so
-  every System32 program was a browser and the guard closed dwm (black
-  screens, classic white windows), fontdrvhost, sihost, svchost... every
-  5 s after the grace until the computer hung. `TestWinGuardSystem32NotBrowsers`
-  lists System32 for real. "browser: closing" lines name the path. Main process: topmost ancestor with the same program. A
-  browser started for remote control is closed at once (W11): its command
-  line (`commandLine`) and environment (`processEnvironment`: the PEB's
-  process parameters, x64 layout) checked by `remoteControlArgs`, which
-  also takes Firefox's `/switch` and any case. Supported
-  browsers: LibreWolf; Chrome and Edge once the store ID is set.
-- Guest: Chromium guest mode is always off by the setup. "Close guest
-  profiles" also keeps Windows' built-in Guest account (relative ID 501,
-  found by ID since its name is translated) off, each cycle
-  (`syncGuestAccount`, `winapi/accounts_windows.go`); ProgramData\kc9k\
-  guest-off notes it was on, and only then is it turned on again when the
-  setting goes off (W14).
-- Checked on `windows-latest` (CI "Layers for real"): WFP blocks a blocked
-  address and DoH on 443 with WSAEACCES, leaves others, replaces on
-  re-apply, removes fully; registry policies round-trip; process
-  snapshot, kill tree, TCP owner, browser recognition.
+- Hosts: `System32\drivers\etc\hosts`; every write (and `SyncSafeSearch`)
+  ends in `hostsWritten` (`DnsFlushResolverCache`). Defender may flag it;
+  KC9K never hides from Defender (SPEC §6).
+- Firewall (`firewall_windows.go`, `winapi/wfp_windows.go`): WFP, not
+  Windows Firewall. Own persistent provider/sublayer (fixed GUIDs, weight
+  0xF000, default engine security). `ALE_AUTH_CONNECT_V4/V6` filters:
+  blocked addresses (500 ORed conditions per filter); DoH resolvers + port
+  443/853 (W26, `doh.go`). Monk mode's cut: all four ALE connect/accept
+  layers, permit loopback (weight 15), block all (1). One transaction
+  replaces all filters; persistent (boot, service stopped).
+  `IsFirewallApplied`: last apply's filters present by name and count.
+- Policies (`browser_windows.go`): Chrome, Chromium, Edge, Brave, Vivaldi
+  under `HKLM\SOFTWARE\Policies\<vendor>\<name>` (`writeRegPolicy`).
+  Blocklist owns `URLBlocklist`, `URLAllowlist`, `DnsOverHttpsMode`,
+  `BuiltInDnsClientEnabled`; setup owns private windows
+  (`IncognitoModeAvailability`, `InPrivateModeAvailability`), guest,
+  developer mode, devtools, extension, forced search. Firefox family:
+  `ProgramData\kc9k\firefox\policies.json` copied to each install's
+  `distribution\` (Program Files, App Paths, per-user `AppData\Local`)
+  and (W26, `firefoxreg_windows.go`) mirrored to
+  `HKLM\SOFTWARE\Policies\Mozilla\Firefox` for Store/portable Firefox;
+  only keys in `firefox-registry.json` are removed. LibreWolf: own key +
+  distribution file; setting locks (`librewolfprefs.go`) at the end of
+  `librewolf.cfg`, per-account overrides in
+  `Program Files\KC9K\share\librewolf\<name>.cfg` via `USERNAME`.
+- Chrome/Edge are supported browsers (extension by `ExtensionSettings`/
+  `ExtensionInstallForcelist`) only once `ChromeStoreExtensionID` is set
+  (empty until the owner publishes). LibreWolf gets the bundled `.xpi`.
+- One-click install (W18, `InstallBrowser`): winget as SYSTEM (newest
+  `winget.exe` in WindowsApps), `--scope machine --silent`; skipped if
+  present.
+- Processes (`procs_windows.go`): Toolhelp snapshot, full path, owner RID,
+  service-account flag, session, start time; a parent counts only if
+  started before its child (PID reuse). `tcpOwner`: connection → process.
+- Killing (W50): only via `killProcess` (what KC9K found; never under
+  %SystemRoot% or an unreadable path) or `killNamedProcess` (a rule names
+  it: blocked app and tree, tamper tools, blocked window owner, `vmwp`).
+  Both refuse `sessionCritical`: PID 0/4, `essentialWindowsApps` +
+  `neverKillExtra` in the Windows folder or unreadable, KC9K's own; logged
+  once ("kill refused"). `terminateProcess` (test seam) rechecks the
+  handle's path. `TestWinKillDenyList`, `TestWinGuardNeverClosesWindows`.
+- Extension guard (`extguard_windows.go`, verdict `extguard_shared.go`):
+  a browser = guarded name, OriginalFilename of a renamed one, or a
+  program beside `xul.dll`/`chrome.dll`/`msedge.dll` (or in a version
+  subfolder). Never Thunderbird, WebView2, Windows' own
+  (`windowsOwnProgram`: %SystemRoot%, Microsoft WindowsApps packages),
+  unreadable paths. Hazard: a glob `<dir>\*\msedge.dll` matched
+  `System32\Microsoft-Edge-WebView`, so the guard closed dwm/svchost… and
+  hung the laptop; `TestWinGuardSystem32NotBrowsers`. Main process:
+  topmost same-program ancestor. Remote-control starts closed at once
+  (W11): `commandLine`, `processEnvironment` (PEB) checked by
+  `remoteControlArgs` (also `/switch`, any case).
+- Guest: Chromium guest off by setup. "Close guest profiles" also keeps
+  Windows' Guest account (RID 501) off (`syncGuestAccount`); `guest-off`
+  records it was on, and only then is it re-enabled after (W14).
 
 ## Apps and desktop (W3)
 
-- Apps (`apps_windows.go`): an entry is a program name (`steam`,
-  `steam.exe`), a full path, a folder (ends in `\` or `/`), or a contents
-  entry (`sha256:…`, size checked before hashing, cached by path, size and
-  time; never Windows' own programs; Linux-only entries are kept unused, [db-project](db-project.md) *(By claude)*). Only people's processes
-  (`winProc.person`); never `essentialWindowsApps` in the Windows folder,
-  KC9K, or this process and its ancestors; children too, except under
-  shells and Explorer (`noDescendWindows`). Protected folders: drive root,
-  Windows, System32, SysWOW64, Program Files (both), Users, ProgramData.
-  Polite: `polite_shared.go`'s state; windows asked through the agent
-  (`OpClose` by process).
-- Scripts (W12, `scripthosts.go`, shared and tested on Linux): an entry
-  naming a script (`bot.py`, `bot`, `game.ps1`, a full path or a folder)
-  matches the script host running it: Python (`py`, `pythonw`, `-m`
-  modules), PowerShell (`-File`, a `.ps1` first), cmd (`/c` a `.bat` or
-  `.cmd`), wscript/cscript, mshta, node, java `-jar`, AutoHotkey
-  (`hostScript`, working folder from the PEB, `processCwd`); never a
-  script in the Windows folder. A shell matched by its script is killed
-  with its children. Fetch tools are known by their script or module too
-  (`python -m yt_dlp` is yt-dlp, `scriptNames`).
-- Allowed apps (`CloseAllExcept`): kills people's programs that aren't
-  allowed, started by an allowed one, Windows' own (Windows folder) or
-  KC9K's. Tor: Tor Browser folders and `tor.exe`. Tools naming blocked
-  domains (`KillNamingFor`): command lines from
-  `NtQueryInformationProcess(ProcessCommandLineInformation)`.
-- Sessions (`desktop_windows.go`): WTS sessions with a user token;
-  locked from `WTSQuerySessionInformation(WTSSessionInfoEx)` (Windows'
-  answer, never the session's programs). Idle and the app in front from the
-  agent (`OpStatus`, `OpForeground`; a window's process believed only if
-  it is the session user's). Notifications (`OpNotify`: a
-  notification-area balloon, shown as a toast), questions (`OpConfirm`:
-  MessageBox), locking (`OpLock`: `LockWorkStation`), titles
-  (`OpWindows`: `EnumWindows`, visible unowned windows; `OpClose`:
-  `WM_CLOSE`), Explorer windows showing a folder entry close (never
-  killed). Logout: `WTSLogoffSession`; power off: `ExitWindowsEx` with
-  `SeShutdownPrivilege`. Logout freeze: `HoldLogins` writes
-  ProgramData\kc9k\hold-logins; while it holds, the service signs out
-  every session instead of starting its agent (`winagent.SessionFilter`).
-- Custom actions (`RunCustom`): Explorer opens, `cmd /c` runs, as the
-  first signed-in person (`CreateProcessAsUser`).
-- Hotkeys: `SyncHotkeys` saves ProgramData\kc9k\hotkeys.json (GTK
-  accelerators turned into `RegisterHotKey` modifiers and virtual keys)
-  and gives them to every agent (and each one that connects); a press is
-  an agent event, and the service runs `kc9k hotkey run <id>` for that
-  session's person.
-- Places (W10, `enforce/wifi_windows.go`, `winapi/wlan*.go`): the
-  Native Wifi API (`WlanEnumInterfaces`, `WlanScan`,
-  `WlanGetNetworkBssList`; layouts read by `ParseBSSList`, tested on
-  Linux). No WLAN service (no Wi-Fi, Windows Server): nothing seen, which
-  counts as at every place. Wi-Fi counts as on only with an enabled adapter
-  and a radio whose software switch is on (Windows' "Wi-Fi off" and
-  airplane mode leave the adapter enabled); `SetWifiRadio(true)` enables
-  the adapters and turns the switches on (`WlanSetInterface`), so
-  `keepWifiOn` holds against both.
+- Apps (`apps_windows.go`): entry = program name, full path, folder
+  (ends `\` or `/`), or `sha256:…` (cached by path/size/time; never
+  Windows' own; Linux-only entries unused, [db-project](db-project.md)).
+  Only people's processes (`winProc.person`); never `essentialWindowsApps`
+  in the Windows folder, KC9K, or this process and its ancestors; children
+  too, except under shells/Explorer (`noDescendWindows`). Protected
+  folders: drive root, Windows, System32, SysWOW64, Program Files, Users,
+  ProgramData. Polite close: `polite_shared.go`, agent `OpClose`.
+- Scripts (W12, `scripthosts.go`, shared): a script entry matches its
+  host: Python (`-m` too), PowerShell, cmd, wscript/cscript, mshta, node,
+  java `-jar`, AutoHotkey (`hostScript`; cwd from PEB); never a
+  Windows-folder script. Matched shell dies with its children. Fetch tools
+  known by script/module (`python -m yt_dlp`, `scriptNames`).
+- Allowed apps (`CloseAllExcept`): kills people's programs not allowed,
+  not started by an allowed one, not Windows' or KC9K's. Tor: Tor Browser
+  folders, `tor.exe`. `KillNamingFor` reads command lines via
+  `NtQueryInformationProcess`.
+- Sessions (`desktop_windows.go`): WTS sessions with a user token; locked
+  from `WTSSessionInfoEx`. Agent ops: `OpStatus` (idle), `OpForeground`
+  (only if the window's process is the session user's), `OpNotify` (tray
+  balloon), `OpConfirm` (MessageBox), `OpLock`, `OpWindows` (visible
+  unowned), `OpClose` (`WM_CLOSE`; folder-entry Explorer windows closed,
+  never killed). Logout `WTSLogoffSession`; power off `ExitWindowsEx`.
+  Logout freeze: `HoldLogins` writes `hold-logins`; the service then signs
+  out every session instead of starting its agent
+  (`winagent.SessionFilter`).
+- Custom actions (`RunCustom`): Explorer opens, `cmd /c` runs, as the first
+  signed-in person.
+- Hotkeys: `SyncHotkeys` → `hotkeys.json` (`RegisterHotKey` codes) to
+  every agent; a press → service runs `kc9k hotkey run <id>` for that
+  person.
+- Places (W10, `enforce/wifi_windows.go`, `winapi/wlan*.go`): Native Wifi
+  (`ParseBSSList` tested on Linux). No WLAN service → at every place.
+  Wi-Fi on = enabled adapter + radio switch on (airplane mode keeps the
+  adapter enabled); `SetWifiRadio(true)` sets both, so `keepWifiOn` holds.
 - Monk mode's physical cut (`netcut_windows.go`): `Get-NetAdapter
-  -Physical` (PowerShell: its values aren't translated), Wi-Fi by
-  physical media type; `Enable-/Disable-NetAdapter`.
-- The challenge window (`winagent/challenge_windows.go`): a Win32 window
-  (no text field) the caller's session agent opens (`OpChallenge`, up to
-  4 h); its events are the GTK window's (`k`, `b`, `n`, `p`, `s`, `c`).
-  Raw Input (`RIDEV_INPUTSINK`): a key down with no device is injected
-  (SendInput, on-screen keyboards): `s`. Ctrl+V and Shift+Insert: `p`.
-  `lock/window_windows.go` reads the events as the Linux window's.
+  -Physical`, `Enable-/Disable-NetAdapter`.
+- Challenge window (`winagent/challenge_windows.go`): Win32 window, no
+  text field, opened by the caller's agent (`OpChallenge`, ≤ 4 h); GTK's
+  events (`k`, `b`, `n`, `p`, `s`, `c`). Raw Input: key with no device
+  (SendInput, on-screen keyboard) → `s`; Ctrl+V/Shift+Insert → `p`.
+  Read by `lock/window_windows.go`.
 
 ## Tamper protection against an administrator (W5)
 
-- `blocker/tamper_windows.go`; `enforce/sys_windows.go` (`guardPlatform`,
-  each cycle after `enforceLockdown`): everything found changed is put
-  back and logged as a tamper event (§3.10, counted like a daemon
-  restart).
-- Always (`GuardService`, service only): the service's security
-  descriptor `ServiceSDDL` (Administrators: query, start, read; never stop,
-  pause, change, delete, change permissions or owner); automatic start and
-  its program path; restart on failure; Safe Mode registration
-  (`SafeBoot\Minimal|Network\kc9k` = Service: the service runs in Safe Mode
-  too); the watchdog task `\KC9K\Watchdog` (SYSTEM, at boot and every
-  minute, `kc9k watchdog` starts or recreates the service; the task's
-  XML asks that administrators only read it, but Task Scheduler lets an
-  elevated administrator delete it: it is made again within a cycle and
-  counted, checked on `windows-latest`); the program and
-  data folders' security (not while strict mode holds them; compared by
-  owner, protection and explicit entries, `sameSecurity`: Windows prints
-  back flags of its own, and a text comparison counted the folders as
-  changed every cycle until 2026-11-22). A session
-  agent ended while its session lasts counts too.
-- Strict mode (`ApplyLockdown`, from `enforceLockdown` as on Linux):
-  deny entries (`denyACEs`) for how a person's programs signed in —
-  Interactive, Network, Batch (S-1-5-3) — not for Administrators, whose
-  group LocalSystem's token holds too (the service would deny itself;
-  seen on `windows-latest`). Files and folders `0xd0156` (write, delete,
-  permissions, owner; Windows prints it `DCLCRPDTCRSDWDWO`, so entries are
-  compared in its own form, `canonACE`), keys `0xd0006` (set, create,
-  delete, permissions, owner) on the service's key, `Control\SafeBoot`,
-  `BCD00000000` (boot settings), `Recovery\ReAgent.xml`, the Chromium
-  policy keys, the hosts file, the program folder and Firefox-family
-  `distribution` folders. The security found is kept in
-  ProgramData\kc9k\lockdown.json and put back by `RemoveLockdown`; a deny
-  entry removed while it holds is put back and counted
-  (`LockdownRepairs`). SYSTEM is never denied. People's downloaded and
-  portable programs (`userProgram`: a profile's folders other than
-  AppData, `AppData\Local\Temp`, removable drives) are closed
-  (`CloseNoexecPrograms`), except exempt folders; per-user installs in
-  AppData keep running. They don't start either (W25,
-  `noexec_windows.go`): `ApplyNoexec` keeps Software Restriction Policies
-  path rules (registry only, so Home has them; every user,
-  administrators included): each profile disallowed, its AppData allowed
-  but `AppData\Local\Temp` disallowed, the Public profile, Windows' Temp,
-  removable drives (not Windows' Temp: SYSTEM's programs use it), and
-  exempt folders allowed (long paths: SRP doesn't match 8.3 names); rules
-  synced each cycle, running programs told to read them again
-  (`RefreshPolicyEx`; a shell running before the rules still started a
-  program in CI, so processes started earlier may keep the old policy:
-  `CloseNoexecPrograms` closes what they start within a cycle),
-  under keys named `{4B43394B-…}`. What SRP needs to act and is missing
-  is set (`ensureSRPOn`: DefaultLevel unrestricted, TransparentEnabled 1
-  so DLLs are left out, PolicyScope 0, ExecutableTypes; Windows Server
-  ships the key with only `authenticodeenabled`, which leaves SRP off),
-  noted in ProgramData\kc9k\srp-made (the key, or the values added); the
-  key is a lockdown target. `RemoveNoexec` removes KC9K's rules and
-  exactly what it added; `RemoveLockdown` does
-  it first, since putting the rest back runs PowerShell. Every PowerShell
-  the service runs has a time limit (90 s; the firmware's 5 min).
-- Policy refresh (W50): `refreshPolicy` (a variable; forced
-  `RefreshPolicyEx`, which tells every window "Policy" changed) runs only
-  after a rule or value really changed. Strict mode not acting (every
-  cycle) runs `RemoveLockdown` and `RemoveNoexec`: with nothing of KC9K's
-  there they touch nothing and refresh nothing. Before, each cycle
-  forced two machine policy refreshes. RP_FORCE stays: the rules are
-  plain registry values, not a GPO, so an unforced refresh tells no
-  program. `TestStrictSRPRefreshOnlyOnChange` (real registry): 0 calls
-  idle, 1 after a real removal. *(By claude)*
+- `blocker/tamper_windows.go`; `guardPlatform` (`enforce/sys_windows.go`,
+  each cycle after `enforceLockdown`) puts back anything changed and logs
+  tamper (§3.10, counted like a daemon restart). An admin can still win
+  (take ownership, rewrite ACLs, stop things); each step is undone within
+  a cycle and counted. Nothing hides from Defender.
+- Always (`GuardService`): `ServiceSDDL` (Administrators: query, start,
+  read only); automatic start, program path, restart on failure; Safe Mode
+  registration (`SafeBoot\Minimal|Network\kc9k`); watchdog task
+  `\KC9K\Watchdog` (SYSTEM, boot + every minute, `kc9k watchdog`
+  starts/recreates the service; admins can delete it → recreated,
+  counted); program/data folder security (not while strict mode holds
+  them; compared structurally by `sameSecurity`, never as text). An agent
+  ended while its session lasts counts too.
+- Strict mode (`ApplyLockdown`): deny entries (`denyACEs`) for
+  Interactive, Network, Batch (S-1-5-3); never Administrators
+  (LocalSystem's token has it) or SYSTEM. Files `0xd0156` (write, delete,
+  permissions, owner; compared via `canonACE`), keys `0xd0006`. Targets:
+  service key, `Control\SafeBoot`, `BCD00000000`, `Recovery\ReAgent.xml`,
+  Chromium policy keys, hosts, program folder, Firefox `distribution`
+  folders, SRP key, `DisableMSI` key, `Services` tree. Original security in
+  `lockdown.json`, restored by `RemoveLockdown`; removed deny entries put
+  back and counted (`LockdownRepairs`).
+- Downloaded/portable programs (`userProgram`: profile folders but
+  AppData, `AppData\Local\Temp`, removable drives) closed
+  (`CloseNoexecPrograms`) unless exempt; AppData installs run. Starts
+  blocked too (W25, `noexec_windows.go` `ApplyNoexec`): Software
+  Restriction Policies path rules (registry, so Home has them; all users),
+  keys `{4B43394B-…}`: profiles, `AppData\Local\Temp`, Public, removable
+  drives disallowed; AppData and exempt folders (long paths) allowed; not
+  Windows' Temp (SYSTEM uses it). `ensureSRPOn` sets missing SRP values
+  (DefaultLevel, TransparentEnabled 1, PolicyScope 0, ExecutableTypes;
+  off on Windows Server), noted in `srp-made`; `RemoveNoexec` removes
+  exactly KC9K's, first in `RemoveLockdown`. Shells started before the
+  rules may keep old policy: `CloseNoexecPrograms` catches their starts.
+  Service-run PowerShell: 90 s limit (firmware 5 min).
+- `refreshPolicy` (var; forced `RefreshPolicyEx`, needed since rules are
+  plain registry): only after a rule really changed.
+  `TestStrictSRPRefreshOnlyOnChange`.
 - Strict mode's ways to SYSTEM (W20–W22, `strict_windows.go`;
-  `applyStrictExtras` from `ApplyLockdown`, `removeStrictExtras` first in
-  `RemoveLockdown`, whose failure is logged and retried but never keeps
-  the deny entries on). State: ProgramData\kc9k\strict-extras.json
-  (start time, DisableMSI before, WMI consumers and accounts at the start,
-  accounts turned off, user rights removed). Every cycle: the service
-  manager's DACL denies the three logons `0xc0022` (create service, boot
-  configuration, permissions, owner); `DisableMSI`=2 (its key is a
-  lockdown target); privileges stripped from every person's process token
-  (`SE_PRIVILEGE_REMOVED`, once per process: backup, restore, take
-  ownership, debug, load driver, firmware variables, manage volume,
-  relabel, and the TCB ones); accounts not on, or not there, at the
-  start turned off. Once: those rights taken from Administrators' and
-  Backup Operators' user rights (LSA; from the next sign-in), given back
-  after. Every 30 s, in a goroutine beside the cycle (`strictHeavy`; a
-  step over 5 s is logged; what it puts back is reported by the next
-  cycle; the PowerShell checks, Task Scheduler's and WMI's, only on the
-  first pass and every 5 minutes: on GitHub's runner one takes 30–90 s).
-  Ending strict mode undoes the quick parts at once and these beside the
-  cycle once a pass running has ended (`startHeavyUndo`, marker
-  ProgramData\kc9k\strict-heavy); `kc9k uninstall` waits for it
-  (`WaitStrictUndone`): each service's DACL denies `0xd0002` (configuration,
-  delete, permissions, owner; `0xd0062` adds stop and pause for BFE,
-  Dnscache, Winmgmt, Schedule, EventLog, WlanSvc, W32Time), not KC9K's
-  own (GuardService) nor protected ones it can't open; Task Scheduler's
-  root folder denies `0xd0116` (registering tasks); task files written
-  since the start that run as SYSTEM or a service account, outside
-  `\Microsoft\Windows\` and `\KC9K\`, are deleted (`schtasks /Delete`);
-  WMI event consumers made since the start (`root\subscription`, listed
-  every 5 minutes) are deleted with their bindings (denying the namespace
-  itself failed on GitHub's runner, "Invalid parameter", and was dropped:
-  a first build's entry is taken out once, marker without "v2"). The `Services` key
-  tree is a lockdown target (deny entries inherited by every service's
-  key). Each put back or deleted is counted as tamper. Virtual machines
-  (W24, every cycle, `closeVirtualMachines`): people's VM, WSL, Sandbox,
-  QEMU and Docker programs (`vmPrograms`, `isVMProcess`; WSL's bash only
-  in System32) closed with their children, Hyper-V's VM workers (`vmwp`)
-  ended, and the services behind them stopped (`vmServices`: LxssManager,
-  WSLService, vmcompute, vmms, CmService, docker…); logged, not counted.
-- Clock and time zone (W23, `clockguard_windows.go`, from `guardPlatform`):
-  with tamper clock on and anything locked, the first cycle keeps the
-  time zone (`GetDynamicTimeZoneInformation`) and the wall clock minus
-  the boot clock in ProgramData\kc9k\clock-guard.json. A changed zone is
-  set back; a clock moved more than 2 minutes against the boot clock is
-  set back unless internet time (the clock check's, at most once a
-  minute) confirms the new time, which then becomes the reference. Each
-  counted as tamper; the file goes when the guard ends.
-- No-escape (`ApplyBootLock`): `reagentc /disable` (if it was on),
-  `bcdedit /set {current} recoveryenabled No`, `bootstatuspolicy
-  IgnoreAllFailures`, `{bootmgr} displaybootmenu No`; ProgramData\kc9k\
-  bootlock.json keeps whether recovery was on; `RemoveBootLock` undoes.
-- Guided setup (W15, `cli/guidedsetup_windows.go`): instead of Linux's
-  groups and root password, `other-admins` (enabled local accounts in
-  Administrators, found by SID: `winapi.AdministratorSIDs`) and
-  `builtin-admin` (relative ID 500 on), each with its `net user … /active:no`;
-  a `safe-mode` info step before no-escape; other systems from `bcdedit
-  /enum osloader` (element names aren't translated).
-- Recovery path (W13, principle 4, R-ESCAPE-1): Safe Mode is Windows'
-  recovery boot (`SafeModeBoot`: `SafeBoot\Option` exists only then).
-  `KernelCmdline` carries `kc9k.nofreeze` in Safe Mode, so freezes and
-  strict mode's lockdown are skipped for that boot unless no-escape is on
-  (blocks stay: the service runs in Safe Mode); `kc9k recover` works there
-  (`cli/recover_windows.go`). While factory reset protection keeps the
-  recovery environment off and no-escape isn't on, the F8 menu is on
-  (`bootmenupolicy Legacy`, `recoveryMenuOn`); no-escape sets it back to
-  Standard, and so does the end of factory reset protection.
-- Factory reset protection while anything is locked
-  (`SyncRecoveryGuard`): the recovery environment off (Reset this PC
-  needs it), back on after unless no-escape holds it; turned on by hand
-  during a lock: put back and counted. Windows' image writers join its
-  apps (Rufus, balenaEtcher, Ventoy, Media Creation Tool…).
-- Task managers (tamper setting): `platformTaskManagers` (Task Manager,
-  Process Explorer/Hacker, System Informer, MMC consoles such as Services
-  and the editors, regedit, sc, bcdedit, reagentc, schtasks, taskkill,
-  msconfig…).
-- The WFP objects keep the engine's default security.
-- Firmware lock (W19, `firmware_windows.go`, `firmware_wmi.go`): the
-  firmware's own WMI interfaces, which Linux's firmware-attributes
-  drivers use too: Dell `root\dcim\sysman\biosattributes` and
-  `wmisecurity`, Lenovo `root\wmi` (`Lenovo_BiosSetting`,
-  `GetBiosSelections`, `SetBiosSetting` + `SaveBiosSettings`,
-  `SetBiosPassword` "pap"), HP `root\HP\InstrumentedBIOS`
-  (`HP_BIOSEnumeration`, `SetBIOSSetting`, "Setup Password",
-  `<utf-16/>`). A read script prints JSON (`wmiStatus` reads it, tested on
-  Linux; drivers named as Linux's: dell-wmi-sysman, thinklmi,
-  hp-bioscfg); a write script takes a `wmiRequest` on stdin (passwords
-  never on a command line). Same purposes and order as Linux; Lenovo
-  passwords can't hold "," or ";". No vendor tool needed.
-- An administrator can still win: take ownership with their privileges,
-  rewrite permissions, then stop things; each step is undone within a
-  cycle and counted. Nothing hides from Windows Defender.
+  `applyStrictExtras`/`removeStrictExtras`, the latter first in
+  `RemoveLockdown`, failure logged and retried, never keeps deny entries).
+  State `strict-extras.json`. Each cycle: service manager DACL denies the
+  three logons `0xc0022`; `DisableMSI`=2; people's tokens lose backup,
+  restore, take ownership, debug, load driver, firmware vars, manage
+  volume, relabel, TCB (`SE_PRIVILEGE_REMOVED`); accounts not enabled at
+  start disabled. Once: those LSA rights removed from Administrators and
+  Backup Operators, restored after. Heavy pass every 30 s in a goroutine
+  (`strictHeavy`; PowerShell checks first pass, then every 5 min): each
+  service DACL denies `0xd0002` (`0xd0062` + stop/pause for BFE, Dnscache,
+  Winmgmt, Schedule, EventLog, WlanSvc, W32Time), not KC9K's; Task
+  Scheduler root denies `0xd0116`; new SYSTEM/service-account tasks
+  outside `\Microsoft\Windows\`, `\KC9K\` deleted; new WMI consumers in
+  `root\subscription` deleted with bindings. All counted. Ending: quick
+  parts at once, heavy after the running pass (`startHeavyUndo`, marker
+  `strict-heavy`); `kc9k uninstall` waits (`WaitStrictUndone`).
+- VMs (W24, `closeVirtualMachines`): people's VM, WSL, Sandbox, QEMU,
+  Docker programs (`vmPrograms`, `isVMProcess`) closed with children,
+  `vmwp` ended, `vmServices` stopped; logged, not counted.
+- Clock/time zone (W23, `clockguard_windows.go`): tamper clock on and
+  anything locked → zone and wall−boot offset kept in `clock-guard.json`;
+  zone change set back; clock moved > 2 min set back unless internet time
+  (≤ 1/min) confirms it (new reference). Counted.
+- No-escape (`ApplyBootLock`): `reagentc /disable`, `bcdedit`
+  `recoveryenabled No`, `bootstatuspolicy IgnoreAllFailures`,
+  `displaybootmenu No`; `bootlock.json`; `RemoveBootLock` undoes.
+- Guided setup (W15, `cli/guidedsetup_windows.go`): `other-admins`
+  (`winapi.AdministratorSIDs`), `builtin-admin` (RID 500), fixed by `net
+  user … /active:no`; `safe-mode` info step before no-escape; other
+  systems from `bcdedit /enum osloader`.
+- Recovery path (W13, principle 4, R-ESCAPE-1): Safe Mode is the recovery
+  boot (`SafeModeBoot`); `KernelCmdline` then carries `kc9k.nofreeze`
+  (freezes, lockdown skipped unless no-escape; blocks stay), `kc9k
+  recover` works. Factory reset protection on and no-escape off → F8 menu
+  on (`bootmenupolicy Legacy`, `recoveryMenuOn`); else Standard.
+- Factory reset protection while anything is locked (`SyncRecoveryGuard`):
+  recovery environment off (Reset this PC needs it), restored after
+  unless no-escape; re-enabled by hand → put back, counted. Image writers
+  (Rufus, Ventoy, Media Creation Tool…) join its apps.
+- Task managers: `platformTaskManagers` (Task Manager, regedit, MMC, sc,
+  bcdedit, schtasks, taskkill…).
+- Firmware lock (W19, `firmware_windows.go`, `firmware_wmi.go`): vendor
+  WMI (as Linux's drivers): Dell `root\dcim\sysman` (`biosattributes`,
+  `wmisecurity`); Lenovo `root\wmi` (`Lenovo_BiosSetting`,
+  `SetBiosSetting` + `SaveBiosSettings`, `SetBiosPassword` "pap";
+  passwords without "," or ";"); HP `root\HP\InstrumentedBIOS`
+  (`SetBIOSSetting`, "Setup Password", `<utf-16/>`). Read script → JSON
+  (`wmiStatus`); write script reads `wmiRequest` on stdin (no passwords on
+  command lines). Same purposes and order as Linux.
 
 ## Circadian rhythm and wallpapers (W6)
 
-- `blocker/circadian_windows.go`; agent ops in `winagent/look_windows.go`.
-- Gamma ramps (colour temperature, software brightness): 256 values per
-  colour, computed in the service from `RampFunc`, set by each session's
-  agent on every screen (`SetDeviceGammaRamp` on a DC per display);
-  `GdiIcmGammaRange`=256 (HKLM ICM) so warm ramps aren't refused.
-  `ReadGamma` compares as on Linux.
-- Wallpaper: copied to Program Files\KC9K\share\wallpapers (people can't
-  read the data folder), set by the agent
-  (`SystemParametersInfo(SPI_SETDESKWALLPAPER)`). Dark mode: HKCU
-  `Themes\Personalize` `AppsUseLightTheme`, `SystemUsesLightTheme`, then
-  `WM_SETTINGCHANGE "ImmersiveColorSet"`. Signed-out people can't be
-  reached (their settings aren't loaded). `DesktopLook` keys: wallpaper,
-  apps-light, system-light.
-- Night light: read from the user's settings store (byte 18 of
-  `bluelightreductionstate` is 0x15 while on); not switched
-  (`TurnOffNightLight` asks the person).
-- Brightness: a laptop panel through WMI (`WmiMonitorBrightness`,
-  `WmiSetBrightness`, PowerShell); external screens through DDC/CI in
-  the agent (dxva2 `Get/SetMonitorBrightness`), listed at most once a
-  minute, `Display` = "session:index".
-- Panel PowerShell kept rare (W50) *(By claude)*: WMI over COM isn't in
-  x/sys and `\\.\LCD`'s brightness IOCTLs can't be proven on a runner
-  without a panel, so PowerShell stays, limited (`panel` in
-  `circadian_windows.go`): the panel is looked for once, again after a
-  wake (`ForgetBacklights`, called by the engine) or a failed call (a
-  display change); its level read at most once a minute (in between the
-  last read or set level); set at most once a second, a sooner level kept
-  and sent by a timer (newest wins); one PowerShell at a time. The
-  engine looks for panels only while the backlight clip is on (else once;
-  a wake only forgets them, 2026-11-22 laptop soak *(By claude)*); Play the day finds them once and sets panel and
-  external screens at most once a second plus its last frame. Laptop
-  2026-11-22: 12 PowerShells a minute with circadian off before.
-  `TestWinPanelRateLimits`, `TestCircadianBacklightsLookedOnlyWhenOn`.
-- Sleep hook: ProgramData\kc9k\sleep-hook while on; the service accepts
-  power events and on suspend runs `kc9k wallpaper before-sleep`.
+- `blocker/circadian_windows.go`; agent side `winagent/look_windows.go`.
+- Gamma: ramps from `RampFunc` set by each agent on every screen
+  (`SetDeviceGammaRamp`); HKLM ICM `GdiIcmGammaRange`=256 so warm ramps
+  aren't refused.
+- Wallpaper copied to `Program Files\KC9K\share\wallpapers` (data folder
+  is SYSTEM-only), set via `SPI_SETDESKWALLPAPER`. Dark mode: HKCU
+  `Themes\Personalize` `AppsUseLightTheme`/`SystemUsesLightTheme` +
+  `WM_SETTINGCHANGE "ImmersiveColorSet"`. Signed-out people unreachable.
+- Night light: read only (`bluelightreductionstate` byte 18 = 0x15);
+  `TurnOffNightLight` asks the person.
+- Brightness: panel via PowerShell WMI (`WmiMonitorBrightness`; WMI over
+  COM isn't in x/sys, `\\.\LCD` IOCTLs unprovable in CI; rates in the
+  table below, `ForgetBacklights` on wake, `TestWinPanelRateLimits`);
+  external screens via DDC/CI (dxva2) in the agent, listed ≤ 1/min,
+  `Display` = "session:index".
+- Sleep hook: `sleep-hook` file while on; on suspend the service runs
+  `kc9k wallpaper before-sleep`.
 
 ## Process starts and broadcasts from the service cycle (W50 audit)
 
-*(By claude, 2026-11-22.)* Everything `Tick`, the circadian engine and
-the agent manager reach on Windows that starts a process or broadcasts
-to every window, and how often it runs now (strict mode, monk mode and
-no-escape are the owner's choices; their rate is while they act):
+What `Tick`, the circadian engine and the agent manager start or
+broadcast, and the allowed rate:
 
 | What | Where | Runs |
 |---|---|---|
-| `RefreshPolicyEx` (forced; "Policy" to every window) | `noexec_windows.go` `refreshPolicy` | only after KC9K's SRP rules changed. Was 2 per cycle (laptop: 24/min) |
-| PowerShell `WmiMonitorBrightness` | `circadian_windows.go` `panel` | look once (wake, failure: again); read ≤ 1/min; set ≤ 1/s; one at a time. Was every cycle, 1/s after start/wake, 10/s in Play the day |
-| PowerShell `Get-NetAdapter` | `netcut_windows.go` `adapters` | ≤ 1/min (cache dropped by KC9K's own change), while monk mode cuts or place rules keep Wi-Fi on. Was every cycle |
-| PowerShell `Enable/Disable-NetAdapter` | `netcut_windows.go` `setAdapter` | on change (monk mode, places) |
-| `schtasks /Query`, `/Create` (watchdog) | `tamper_windows.go` `GuardService` | the task's file is checked each cycle; its file gone, it is put back at once; after schtasks finds it anyway or creating fails, schtasks waits a minute. Was 1–2 per cycle while missing *(By claude)* |
-| `schtasks /Delete` (a task made to run as SYSTEM) | `strict_windows.go` | on change, while strict mode acts |
-| PowerShell (services, Task Scheduler, WMI) | `strict_windows.go` | while strict mode acts: first pass, then ≤ 1 per 5 min; undo once |
-| `reagentc`, `bcdedit` | `tamper_windows.go` `SyncRecoveryGuard` | on change (state file); a failure is tried again next cycle |
-| PowerShell (firmware WMI) | `firmware_windows.go` | commands only (`firmware-lock`) |
-| `wevtutil` (boot event) | `enforce/rtc_windows.go` | once per service run |
-| `kc9k hotkey run` | `desktop_windows.go` | on a hotkey |
-| `kc9k wallpaper before-sleep` | `cli/windows_windows.go` | on suspend, with the sleep hook |
-| `WM_SETTINGCHANGE "ImmersiveColorSet"`; wallpaper `SPIF_SENDCHANGE` | agent, `look_windows.go` | on change (`Circadian.desktop`; failures after `circadianRetry`) |
-| `kc9k agent` | `manager_windows.go` | per session when none runs; not again within 2 s |
-| `TerminateProcess` | `procs_windows.go` `terminateProcess` | only through `killProcess`/`killNamedProcess` and the deny-list |
-
-Not reached by the cycle: `winget` (`browsers install`), the service's
-command children, uninstall's copy, `kc9k install`'s PATH broadcast.
-
+| `RefreshPolicyEx` (forced) | `noexec_windows.go` `refreshPolicy` | after SRP rules changed |
+| PowerShell brightness | `circadian_windows.go` `panel` | look once (again after wake/failure); read ≤ 1/min; set ≤ 1/s (newest kept); one at a time |
+| PowerShell `Get-NetAdapter` | `netcut_windows.go` | ≤ 1/min, while monk mode cuts or places keep Wi-Fi on |
+| PowerShell `Enable/Disable-NetAdapter` | `netcut_windows.go` | on change |
+| `schtasks /Query`, `/Create` | `GuardService` | task file checked each cycle, put back at once; after a failure waits a minute |
+| `schtasks /Delete`; PowerShell (services, tasks, WMI) | `strict_windows.go` | strict mode: on change; first pass then ≤ 1/5 min |
+| `reagentc`, `bcdedit` | `SyncRecoveryGuard` | on change; failure retried next cycle |
+| PowerShell (firmware) | `firmware_windows.go` | `firmware-lock` only |
+| `wevtutil` | `rtc_windows.go` | once per service run |
+| `kc9k hotkey run`; `kc9k wallpaper before-sleep` | service | on hotkey; on suspend |
+| `WM_SETTINGCHANGE`, `SPIF_SENDCHANGE` | agent `look_windows.go` | on change |
+| `kc9k agent` | `manager_windows.go` | per session without one; not within 2 s |
+| `TerminateProcess` | `procs_windows.go` | only via the deny-list kill paths |

@@ -73,7 +73,7 @@ its bypass prevention).
 | W10 | Places on Windows: real networks | §3.6, R-MODE-5 | windows-layers, automation | laptop |
 | W13 | Recovery path on Windows: a real Safe Mode boot | R-ESCAPE-1 | windows-tamper, device | win-vm |
 | W19 | Firmware lock on Windows: real firmware | §3.8, §4.10 | windows-tamper, device | laptop, owner |
-| W24 | Strict mode: real WSL, Sandbox, Hyper-V | §3.8 | windows-tamper, device | win-vm |
+| W24 | Strict mode: Sandbox, Hyper-V, WSL 2 | §3.8 | windows-tamper, device | win-vm |
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows-tamper, device | laptop |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
 | W50 | Freeze fixed, idle soak hard in CI; the laptop confirms it | principle 1 | windows, windows-layers | laptop |
@@ -522,8 +522,9 @@ W26 the Store's Firefox obeying the registry policies (win-vm).
   owner): which vendor, and a trusted person to type and keep the
   password.
 - [ ] `W24` Strict mode: VMs, WSL, Windows Sandbox, containers (S; §3.8).
-  Built (`closeVirtualMachines`; VM program and Docker engine checked in
-  CI). Unchecked (win-vm): a real WSL distribution, Sandbox, Hyper-V VM.
+  Built (`closeVirtualMachines`; in CI: a VM program, Docker's engine, a
+  real WSL 1 Ubuntu closed and closed again when restarted). Unchecked
+  (win-vm, `ci/windows_vm_test.ps1`): Windows Sandbox, a Hyper-V VM, WSL 2.
 - [ ] `W25` Strict mode's noexec on Windows (M; §3.8). Built: Software
   Restriction Policies in the registry (profile folders but not AppData,
   temp folders, removable drives; exempt folders unrestricted); processes

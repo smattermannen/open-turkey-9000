@@ -37,8 +37,8 @@ jobs:
           $env:KC9K_DB = Join-Path $env:RUNNER_TEMP 'browsers.db'
           ./kc9k.exe browsers install librewolf
           if (-not (Test-Path "$env:ProgramFiles\LibreWolf\librewolf.exe")) { throw 'LibreWolf not installed' }
-      - name: Desktop checks (agent, apps, titles, dark mode)
-        timeout-minutes: 8
+      - name: Desktop checks (agent, apps, titles, challenge window, hotkey, gamma, wallpaper, dark mode, winget as SYSTEM)
+        timeout-minutes: 15
         # Before the service checks: their strict mode takes this
         # account's restore privilege, which a reinstall needs.
         shell: pwsh
@@ -73,6 +73,12 @@ jobs:
       - name: Manifest and challenge window (kc9k.exe's manifest, ROADMAP §4.3)
         shell: bash
         run: CGO_ENABLED=0 go test -count=1 -v ./cmd/kc9k
+      - name: A real WSL distribution (W24, closed by strict mode in the service checks)
+        uses: Vampire/setup-wsl@v4
+        continue-on-error: true
+        with:
+          distribution: Ubuntu-22.04
+          wsl-version: 1
       - name: Service, pipe, install and uninstall
         timeout-minutes: 12
         shell: pwsh

@@ -1,0 +1,3 @@
+# kc9k.exe manifest: linked byte for byte (internal/winres checks it)
+cmd/kc9k/kc9k.manifest -text
+*.syso binary

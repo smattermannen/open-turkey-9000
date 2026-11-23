@@ -61,6 +61,106 @@ Check 'dark mode on reaches your settings (AppsUseLightTheme 0)' { Until 60 { (G
 & $k circadian off 2>&1 | Out-Host
 if ($null -ne $before) { Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' AppsUseLightTheme $before }
 
+# W3, W6: what needs the signed-in session's own input and screen.
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class Kc9kDesk {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+    [DllImport("gdi32.dll")] static extern bool GetDeviceGammaRamp(IntPtr dc, ushort[] ramp);
+    [DllImport("user32.dll")] static extern uint SendInput(uint n, INPUT[] inputs, int size);
+    [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT { public ushort vk; public ushort scan; public uint flags; public uint time; public IntPtr extra; }
+    [StructLayout(LayoutKind.Explicit, Size = 40)] public struct INPUT { [FieldOffset(0)] public uint type; [FieldOffset(8)] public KEYBDINPUT ki; }
+    // Keys down in order, then up in reverse: injected input (no device).
+    public static uint Keys(params ushort[] vks) {
+        var list = new System.Collections.Generic.List<INPUT>();
+        foreach (var vk in vks) { var i = new INPUT(); i.type = 1; i.ki.vk = vk; list.Add(i); }
+        for (int j = vks.Length - 1; j >= 0; j--) { var i = new INPUT(); i.type = 1; i.ki.vk = vks[j]; i.ki.flags = 2; list.Add(i); }
+        return SendInput((uint)list.Count, list.ToArray(), Marshal.SizeOf(typeof(INPUT)));
+    }
+    public static ushort[] Ramp() {
+        IntPtr dc = GetDC(IntPtr.Zero); ushort[] r = new ushort[768];
+        bool ok = GetDeviceGammaRamp(dc, r); ReleaseDC(IntPtr.Zero, dc);
+        return ok ? r : null;
+    }
+}
+'@
+function BlockOn([string]$name) { (((& $k gui-state) | ConvertFrom-Json).blocks | Where-Object { $_.name -eq $name }).active }
+function BlockLocked([string]$name) { $b = ((& $k gui-state) | ConvertFrom-Json).blocks | Where-Object { $_.name -eq $name }; [bool]$b.char_locked -or @($b.lock_order).Count -gt 0 }
+# 'kc9k unlock' with no console: the service asks this session's agent
+# for the challenge window (R-LOCK-5); returns the process and its output file.
+function UnlockNoConsole([string]$name) {
+    $outFile = Join-Path $env:RUNNER_TEMP "unlock-$name-$(Get-Random).txt"
+    $empty = Join-Path $env:RUNNER_TEMP 'empty.txt'; Set-Content $empty ''
+    $p = Start-Process $k "unlock $name" -WindowStyle Hidden -RedirectStandardInput $empty -RedirectStandardOutput $outFile -PassThru
+    return @($p, $outFile)
+}
+function ChallengeWindow { Until 30 { [Kc9kDesk]::FindWindow('KC9KChallenge', $null) -ne [IntPtr]::Zero } | Out-Null; [Kc9kDesk]::FindWindow('KC9KChallenge', $null) }
+
+& $k block create ci-lock | Out-Host
+& $k block add ci-lock example.org | Out-Host
+& $k start ci-lock --lock-text kc --yes | Out-Host
+Check 'the text-locked block is locked' { BlockLocked 'ci-lock' }
+# A key injected with SendInput (no keyboard behind it) is refused.
+$u = UnlockNoConsole 'ci-lock'
+$hwnd = ChallengeWindow
+Check 'the challenge window opens through the service and agent (no console)' { $hwnd -ne [IntPtr]::Zero }
+if ($hwnd -ne [IntPtr]::Zero) { [Kc9kDesk]::Keys(0x4B) | Out-Null } # K
+$u[0].WaitForExit(30000) | Out-Null
+$said = Get-Content $u[1] -Raw -ErrorAction SilentlyContinue
+Write-Host "  unlock said: $said"
+Check "the challenge window refuses an injected key (Raw Input, no device)" { $said -match "wasn't typed on the keyboard" -and (BlockLocked 'ci-lock') }
+# Typed keys (window messages, as a keyboard's reach it) unlock it.
+$u = UnlockNoConsole 'ci-lock'
+$hwnd = ChallengeWindow
+foreach ($c in @(0x6B, 0x63, 0x0D)) { [Kc9kDesk]::PostMessage($hwnd, 0x0102, [IntPtr]$c, [IntPtr]::Zero) | Out-Null; Start-Sleep -Milliseconds 150 }
+$u[0].WaitForExit(30000) | Out-Null
+Write-Host "  unlock said: $(Get-Content $u[1] -Raw -ErrorAction SilentlyContinue)"
+Check 'the challenge typed in the window unlocks the block' { Until 10 { -not (BlockLocked 'ci-lock') } }
+& $k stop ci-lock | Out-Host
+
+# A hotkey pressed in the session runs its action through the service.
+& $k block create ci-hotkey | Out-Host
+& $k block add ci-hotkey example.org | Out-Host
+& $k hotkey add ctrl+alt+f9 ci-hotkey | Out-Host
+Start-Sleep -Seconds 8 # the agent registers it (hotkeys.json)
+[Kc9kDesk]::Keys(0x11, 0x12, 0x78) | Out-Null # Ctrl+Alt+F9
+Check 'a hotkey pressed in the session starts its block' { Until 20 { BlockOn 'ci-hotkey' } }
+& $k stop ci-hotkey | Out-Host
+& $k hotkey remove 1 | Out-Host
+
+# W6: gamma ramp and wallpaper in the session.
+$plain = [Kc9kDesk]::Ramp()
+if ($null -eq $plain) {
+    Write-Host '::warning::no gamma ramp on this runner: gamma left to the VM'
+} else {
+    & $k circadian lane kelvin on --points '00:00=6500' | Out-Host
+    & $k circadian on | Out-Host
+    & $k circadian preview kelvin 2500 | Out-Host
+    Check 'a warm preview reaches the screen (blue below red at the top)' { Until 20 { $r = [Kc9kDesk]::Ramp(); $r -and $r[767] -lt $r[255] - 4000 } }
+    & $k circadian preview kelvin --end | Out-Host
+    & $k circadian off | Out-Host
+    Check 'circadian rhythm off gives the plain ramp back' { Until 20 { $r = [Kc9kDesk]::Ramp(); $r -and [math]::Abs($r[767] - $r[255]) -lt 600 } }
+}
+$wallBefore = (Get-ItemProperty 'HKCU:\Control Panel\Desktop').WallPaper
+$pic = Get-ChildItem "$env:SystemRoot\Web\Wallpaper" -Recurse -Include *.jpg, *.png -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($pic) {
+    $mine = Join-Path $env:RUNNER_TEMP ('kc9k-wall' + $pic.Extension)
+    Copy-Item $pic.FullName $mine
+    & $k wallpaper default custom $mine | Out-Host
+    Check 'a wallpaper of your own reaches your desktop (copied to Program Files\KC9K)' { Until 30 { (Get-ItemProperty 'HKCU:\Control Panel\Desktop').WallPaper -like "*KC9K*" } }
+    & $k wallpaper default latest | Out-Host
+    if ($wallBefore) { Set-ItemProperty 'HKCU:\Control Panel\Desktop' WallPaper $wallBefore }
+} else { Write-Host '::warning::no picture on this runner to set as wallpaper' }
+
+# W18: one-click browser install, as SYSTEM through the service (winget).
+& $k browsers install librewolf | Out-Host
+Check 'LibreWolf installed by winget as SYSTEM through the service' { Test-Path "$env:ProgramFiles\LibreWolf\librewolf.exe" }
+Check "'kc9k browsers' lists LibreWolf as installed" { (& $k browsers | Out-String) -match 'librewolf\s+installed' }
+
 & $k uninstall | Out-Host
 Check 'uninstall' { $LASTEXITCODE -eq 0 }
 Until 60 { -not (Get-Service kc9k -ErrorAction SilentlyContinue) } | Out-Null

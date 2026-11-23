@@ -135,12 +135,21 @@ Check "strict mode: people's programs lose the backup, restore, debug and take-o
 New-Item -ItemType Directory -Force 'C:\kc9kci' | Out-Null
 Copy-Item "$env:SystemRoot\System32\PING.EXE" 'C:\kc9kci\VirtualBoxVM.exe'
 $vm = Start-Process 'C:\kc9kci\VirtualBoxVM.exe' -ArgumentList '-n', '120', '127.0.0.1' -WindowStyle Hidden -PassThru
+# W24: a real WSL distribution where the workflow installed one.
+$distro = (wsl.exe -l -q 2>$null | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ } | Select-Object -First 1)
+$wsl = $null
+if ($distro) { Write-Host "  WSL distribution: $distro"; $wsl = Start-Process wsl.exe -ArgumentList '-d', $distro, '-e', 'sleep', '300' -WindowStyle Hidden -PassThru }
 net.exe user kc9kci 'Kc9k-ci-1!x' /add | Out-Host
 schtasks.exe /Create /TN kc9kci /TR "$env:SystemRoot\System32\cmd.exe /c exit" /SC ONCE /ST 23:59 /RU SYSTEM /F 2>&1 | Out-Host
 $taskRefused = $LASTEXITCODE -ne 0
 try { Set-WmiInstance -Namespace root/subscription -Class CommandLineEventConsumer -Arguments @{ Name = 'kc9kci'; CommandLineTemplate = 'cmd /c exit' } -ErrorAction Stop | Out-Null; $wmiRefused = $false } catch { Write-Host "  $_"; $wmiRefused = $true }
 Start-Sleep -Seconds 40
 Check 'strict mode: a virtual machine program is closed' { $vm.HasExited }
+if ($wsl) {
+    Check "strict mode: a real WSL distribution's program is closed" { $wsl.HasExited }
+    $again = Start-Process wsl.exe -ArgumentList '-d', $distro, '-e', 'sleep', '300' -WindowStyle Hidden -PassThru
+    Check 'strict mode: WSL started again is closed within a cycle' { $again.WaitForExit(30000) }
+} else { Write-Host '::warning::no WSL distribution on this runner: W24 left to the VM' }
 Get-ChildItem 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers\0\Paths', 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers\262144\Paths' -ErrorAction SilentlyContinue |
     ForEach-Object { Write-Host "  SRP $(Split-Path (Split-Path $_.PSParentPath) -Leaf): $((Get-ItemProperty $_.PSPath).ItemData)" }
 New-Item -ItemType Directory -Force "$env:USERPROFILE\Downloads" | Out-Null

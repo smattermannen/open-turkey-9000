@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/platform"
 )
@@ -188,9 +189,20 @@ func chromeWorker() ([]byte, error) {
 		strings.Join(quoted, ", ") + ");\n"), nil
 }
 
+// PackChromeStoreZip is PackChromeZip for the Chrome Web Store (ROADMAP
+// 2.17, make chrome-store-zip): the same files, each with a real date (a
+// fixed one, so the same files give the same zip).
+func PackChromeStoreZip() ([]byte, error) {
+	return packChromeZip(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+}
+
 // PackChromeZip returns the extension's files with the Chrome manifest and
 // service worker, as a zip.
 func PackChromeZip() ([]byte, error) {
+	return packChromeZip(time.Time{})
+}
+
+func packChromeZip(modified time.Time) ([]byte, error) {
 	manifest, err := ChromeManifest()
 	if err != nil {
 		return nil, err
@@ -199,7 +211,7 @@ func PackChromeZip() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pack(map[string][]byte{"manifest.json": manifest, chromeServiceWorker: worker})
+	return packAt(map[string][]byte{"manifest.json": manifest, chromeServiceWorker: worker}, modified)
 }
 
 // PackChrome returns the extension as a CRX3 file signed with key. The same

@@ -129,6 +129,50 @@ func TestPackChrome(t *testing.T) {
 	}
 }
 
+// 2.17: what the Chrome Web Store takes (make chrome-store-zip): Manifest V3
+// at the root of a plain zip, no key or update_url (the store gives the ID
+// and serves the updates), the 128 px icon, a description of at most 132
+// characters.
+func TestChromeStoreZip(t *testing.T) {
+	data, err := PackChromeStoreZip()
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]interface{}
+	if err := json.Unmarshal(readZipped(t, archive, "manifest.json"), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"key", "update_url", "browser_specific_settings"} {
+		if _, ok := manifest[field]; ok {
+			t.Errorf("the store package has %q", field)
+		}
+	}
+	if manifest["manifest_version"] != float64(3) {
+		t.Errorf("manifest_version %v, want 3", manifest["manifest_version"])
+	}
+	if d, _ := manifest["description"].(string); d == "" || len([]rune(d)) > 132 {
+		t.Errorf("description %q: the store takes 1 to 132 characters", d)
+	}
+	if name, _ := manifest["name"].(string); name == "" || len([]rune(name)) > 75 {
+		t.Errorf("name %q: the store takes 1 to 75 characters", name)
+	}
+	readZipped(t, archive, "icon-128.png")
+	readZipped(t, archive, chromeServiceWorker)
+	for _, f := range archive.File {
+		if f.ModifiedDate>>5&0xf == 0 || f.ModifiedDate&0x1f == 0 {
+			t.Errorf("%s has no real date (month or day 0)", f.Name)
+		}
+	}
+	again, _ := PackChromeStoreZip()
+	if !bytes.Equal(data, again) {
+		t.Error("the same files gave a different zip")
+	}
+}
+
 func TestChromeUpdateXML(t *testing.T) {
 	xml := string(ChromeUpdateXML("abc", "http://127.0.0.1:47613/chrome/kc9k-1.crx"))
 	for _, want := range []string{`appid="abc"`, `codebase="http://127.0.0.1:47613/chrome/kc9k-1.crx"`, `version="` + Version() + `"`} {

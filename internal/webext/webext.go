@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"time"
 
 	"github.com/smattermannen/kc9k/internal/platform"
 )
@@ -68,6 +69,12 @@ func Pack() ([]byte, error) {
 // pack zips the extension's files, with replace taking the place of (or
 // adding to) the files of the same names.
 func pack(replace map[string][]byte) ([]byte, error) {
+	return packAt(replace, time.Time{})
+}
+
+// packAt is pack with every file dated modified; the zero time leaves the
+// date out (DOS date 0), as the browsers' packages always had.
+func packAt(replace map[string][]byte, modified time.Time) ([]byte, error) {
 	entries, err := fs.ReadDir(files, "files")
 	if err != nil {
 		return nil, err
@@ -93,7 +100,7 @@ func pack(replace map[string][]byte) ([]byte, error) {
 				return nil, err
 			}
 		}
-		w, err := archive.Create(name)
+		w, err := archive.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate, Modified: modified})
 		if err != nil {
 			return nil, err
 		}

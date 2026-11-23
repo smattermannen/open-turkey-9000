@@ -14,7 +14,7 @@ on:
 jobs:
   gui:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 80
     env:
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -51,6 +51,8 @@ jobs:
         run: |
           $env:CGO_ENABLED = "0"
           go build -o "${{ runner.temp }}\kc9k\kc9k.exe" ./cmd/kc9k
+          # W32: the same exe on a scratch database (KC9K_DB), for the parity tests.
+          "KC9K_SCRATCH_EXE=${{ runner.temp }}\kc9k\kc9k.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
           & "${{ runner.temp }}\kc9k\kc9k.exe" install
           "KC9K_REAL_EXE=$env:ProgramFiles\KC9K\kc9k.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: UI Automation smoke tests
@@ -59,6 +61,33 @@ jobs:
           KC9K_FAKE_EXE: ${{ runner.temp }}\fake\kc9k.exe
           KC9K_SCREENSHOTS: ${{ github.workspace }}\screenshots
         run: dotnet test Kc9k.UiTests -c Release --logger "console;verbosity=normal" --logger "trx;LogFileName=ui.trx" --results-directory "${{ runner.temp }}\ui-results"
+      # W4/W54: the display itself at 150 % and 200 % (as the owner's laptop),
+      # not only the text size: the geometry and page tests again at that DPI.
+      # A scale the runner's display can't reach is said in the step's log.
+      - name: Display at 150 %
+        id: scale150
+        if: always()
+        continue-on-error: true
+        run: pwsh tools/display-scale.ps1 -Percent 150
+      - name: UI tests at 150 % display scale
+        if: always() && steps.scale150.outcome == 'success'
+        env:
+          KC9K_GUI_EXE: ${{ runner.temp }}\gui\kc9k-gui.exe
+          KC9K_FAKE_EXE: ${{ runner.temp }}\fake\kc9k.exe
+          KC9K_SCREENSHOTS: ${{ github.workspace }}\screenshots\display-150
+        run: dotnet test Kc9k.UiTests -c Release --no-build --filter "FullyQualifiedName~GeometryTests|FullyQualifiedName~SmokeTests.EveryPageOpens|FullyQualifiedName~AccessibilityTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=ui-150.trx" --results-directory "${{ runner.temp }}\ui-results"
+      - name: Display at 200 %
+        id: scale200
+        if: always()
+        continue-on-error: true
+        run: pwsh tools/display-scale.ps1 -Percent 200
+      - name: UI tests at 200 % display scale
+        if: always() && steps.scale200.outcome == 'success'
+        env:
+          KC9K_GUI_EXE: ${{ runner.temp }}\gui\kc9k-gui.exe
+          KC9K_FAKE_EXE: ${{ runner.temp }}\fake\kc9k.exe
+          KC9K_SCREENSHOTS: ${{ github.workspace }}\screenshots\display-200
+        run: dotnet test Kc9k.UiTests -c Release --no-build --filter "FullyQualifiedName~GeometryTests|FullyQualifiedName~SmokeTests.EveryPageOpens|FullyQualifiedName~AccessibilityTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=ui-200.trx" --results-directory "${{ runner.temp }}\ui-results"
       - name: Uninstall the real kc9k.exe
         if: always()
         continue-on-error: true
@@ -85,12 +114,14 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          $trx = Get-ChildItem "${{ runner.temp }}\ui-results" -Filter *.trx -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $trx) { "no trx"; exit 0 }
-          [xml]$x = Get-Content $trx.FullName
-          foreach ($r in $x.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' }) {
-            "FAILED $($r.testName)"
-            (($r.Output.ErrorInfo.Message | Out-String).Trim() -split "`n" | Select-Object -First 6) | ForEach-Object { "    $_" }
+          $all = Get-ChildItem "${{ runner.temp }}\ui-results" -Filter *.trx -ErrorAction SilentlyContinue
+          if (-not $all) { "no trx"; exit 0 }
+          foreach ($trx in $all) {
+            [xml]$x = Get-Content $trx.FullName
+            foreach ($r in $x.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' }) {
+              "FAILED ($($trx.Name)) $($r.testName)"
+              (($r.Output.ErrorInfo.Message | Out-String).Trim() -split "`n" | Select-Object -First 6) | ForEach-Object { "    $_" }
+            }
           }
 
   installer:

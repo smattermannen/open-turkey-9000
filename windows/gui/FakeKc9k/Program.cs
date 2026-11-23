@@ -7,6 +7,11 @@
 //                   in KC9K_FAKE_DIR)
 // responses.json lists canned answers: [{"args": ["start", "Work"], "ok":
 // false, "output": "..."}], matched by leading arguments, first match wins.
+//   KC9K_FAKE_REAL  a real kc9k.exe: each command not answered from
+//                   responses.json is logged, then run by it (with the
+//                   caller's KC9K_DB: a scratch database, nothing applied)
+//                   and its answer passed on (W32: the same test against
+//                   the fake and the real CLI)
 // An answer with "delay_ms" waits that long first (a slow kc9k); one with
 // only "delay_ms" (no "output") then goes on as if it weren't there.
 using System.Text;
@@ -59,6 +64,7 @@ public static class FakeCli
                 return (r["ok"]?.GetValue<bool>() == false ? 1 : 0, r["output"]?.GetValue<string>() ?? "");
             }
         }
+        if (Environment.GetEnvironmentVariable("KC9K_FAKE_REAL") is { Length: > 0 } real) return RunReal(real, args, stdin);
         if (rest.Count > 0 && rest[0] == "gui-state") return (0, File.ReadAllText(Path.Combine(dir, "gui-state.json")));
         if (rest.Count > 0 && rest[0] == "stats" && rest.Contains("--json")) return (0, File.ReadAllText(Path.Combine(dir, "stats.json")));
         if (rest.Count > 0 && rest[0] is "--version" or "version") return (0, "kc9k fake (windows/amd64)");
@@ -67,6 +73,24 @@ public static class FakeCli
                      (["guided-setup", "--json"], "guided-setup.json"), (["firmware-lock", "--json"], "firmware-lock.json") })
             if (rest.SequenceEqual(want) && File.Exists(Path.Combine(dir, file))) return (0, File.ReadAllText(Path.Combine(dir, file)));
         return (0, "Done (fake kc9k): kc9k " + string.Join(' ', rest));
+    }
+
+    static (int Code, string Output) RunReal(string exe, string[] args, string stdin)
+    {
+        var info = new System.Diagnostics.ProcessStartInfo(exe)
+        {
+            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
+        };
+        foreach (var a in args) info.ArgumentList.Add(a);
+        info.Environment.Remove("KC9K_FAKE_REAL");
+        using var p = System.Diagnostics.Process.Start(info)!;
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        var stderr = p.StandardError.ReadToEndAsync();
+        p.StandardInput.Write(stdin);
+        p.StandardInput.Close();
+        p.WaitForExit();
+        return (p.ExitCode, (stdout.Result + stderr.Result).TrimEnd());
     }
 
     /// <summary>The commands recorded in a log, oldest first.</summary>

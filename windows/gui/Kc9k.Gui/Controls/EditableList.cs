@@ -84,7 +84,10 @@ public sealed partial class EditableList : StackPanel
         cover = new Button { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
         cover.Named($"{title}: hidden entries, click to show", id + "_Cover");
         cover.Click += (_, _) => Reveal();
-        listHolder = new Grid { Height = Prefs.Current.ListHeights.GetValueOrDefault(this.sizeKey, 150) };
+        listHolder = new Grid { Height = Prefs.Current.ListHeights.GetValueOrDefault(this.sizeKey, UsualHeight) };
+        live.Add(new WeakReference<EditableList>(this));
+        // Shown again (another page meanwhile): the height kept for its kind.
+        Loaded += (_, _) => listHolder.Height = Prefs.Current.ListHeights.GetValueOrDefault(this.sizeKey, UsualHeight);
         listHolder.Children.Add(view);
         listHolder.Children.Add(cover);
         Children.Add(listHolder);
@@ -135,41 +138,77 @@ public sealed partial class EditableList : StackPanel
         Conceal();
     }
 
-    /// <summary>Drag down to make the list taller; double-click: back.</summary>
+    /// <summary>The usual height of a list, and the least a drag leaves (GTK ResizeGrip.MIN).</summary>
+    public const double UsualHeight = 150, LeastHeight = 80, MostHeight = 1400;
+
+    /// <summary>Lists made, by kind: dragging one sizes those on screen at
+    /// once (GTK ResizeGrip.live), the others when shown; a list let go is dropped.</summary>
+    static readonly List<WeakReference<EditableList>> live = [];
+    string GripId => AutomationProperties.GetAutomationId(view) + "_Grip";
+
+    void SetHeight(double height, bool keep)
+    {
+        height = Math.Clamp(height, LeastHeight, MostHeight);
+        live.RemoveAll(w => !w.TryGetTarget(out _));
+        foreach (var w in live)
+            if (w.TryGetTarget(out var l) && l.sizeKey == sizeKey) l.listHolder.Height = height;
+        listHolder.Height = height;
+        if (keep) Keep();
+    }
+
+    /// <summary>Drag down to make the list taller, up shorter; Up/Down keys
+    /// on it too; double-click: back to the usual height, forgotten.</summary>
     UIElement Grip()
     {
-        var grip = new Border
+        var grip = new Button
         {
-            Height = 8, Width = 48, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Center,
-            Background = Theme.Brush("ControlStrongFillColorDisabledBrush"), Margin = new Thickness(0, 2, 0, 2),
+            Height = 12, Width = 56, Padding = new Thickness(0), MinHeight = 0, MinWidth = 0,
+            HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 2),
+            Content = new Border { Height = 4, Width = 40, CornerRadius = new CornerRadius(2), Background = Theme.Brush("ControlStrongFillColorDisabledBrush") },
         };
-        grip.Named($"Resize {Title}").Tip("Drag to make the list taller; double-click for the usual height");
+        grip.Named($"Resize {(Title.Length > 0 ? Title : AutomationProperties.GetName(view))}", GripId)
+            .Tip("Drag to make the list taller; double-click for the usual height");
+        AutomationProperties.SetHelpText(grip, "Up and Down arrows change the height; Enter puts the usual height back");
         double? startY = null, startHeight = null;
-        grip.PointerPressed += (_, e) =>
+        grip.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
         {
             startY = e.GetCurrentPoint(this).Position.Y;
             startHeight = listHolder.Height;
             grip.CapturePointer(e.Pointer);
-        };
-        grip.PointerMoved += (_, e) =>
+        }), true);
+        grip.AddHandler(PointerMovedEvent, new PointerEventHandler((_, e) =>
         {
             if (startY is null) return;
-            listHolder.Height = Math.Clamp(startHeight!.Value + e.GetCurrentPoint(this).Position.Y - startY.Value, 80, 1400);
-        };
-        grip.PointerReleased += (_, e) =>
+            SetHeight(startHeight!.Value + e.GetCurrentPoint(this).Position.Y - startY.Value, keep: false);
+        }), true);
+        grip.AddHandler(PointerReleasedEvent, new PointerEventHandler((_, e) =>
         {
+            if (startY is null) return;
             startY = null;
             grip.ReleasePointerCapture(e.Pointer);
             Keep();
-        };
-        grip.DoubleTapped += (_, _) =>
+        }), true);
+        grip.DoubleTapped += (_, _) => Usual();
+        grip.Click += (_, _) => { if (startY is null && grip.FocusState == FocusState.Keyboard) Usual(); };
+        grip.KeyDown += (_, e) =>
         {
-            listHolder.Height = 150;
-            Keep();
+            if (e.Key is VirtualKey.Up or VirtualKey.Down)
+            {
+                SetHeight(listHolder.Height + (e.Key == VirtualKey.Down ? 40 : -40), keep: true);
+                e.Handled = true;
+            }
         };
         grip.PointerEntered += (_, _) => ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeNorthSouth);
         grip.PointerExited += (_, _) => ProtectedCursor = null;
         return grip;
+    }
+
+    /// <summary>Back to the usual height for every list of the kind, and
+    /// forgotten in gui.json (GTK: double-click).</summary>
+    void Usual()
+    {
+        SetHeight(UsualHeight, keep: false);
+        if (Prefs.Current.ListHeights.Remove(sizeKey)) Prefs.Current.Save();
     }
 
     void Keep()

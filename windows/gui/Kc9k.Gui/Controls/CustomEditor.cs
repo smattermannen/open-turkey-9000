@@ -10,6 +10,7 @@ namespace Kc9k.Gui;
 public sealed partial class CustomEditor : StackPanel
 {
     readonly MainWindow window;
+    readonly string id;
     readonly StackPanel rows = Ui.Column(4);
     readonly ComboBox kind;
     readonly TextBox entry;
@@ -19,6 +20,7 @@ public sealed partial class CustomEditor : StackPanel
     public CustomEditor(MainWindow window, IEnumerable<string>? items = null, string id = "Custom")
     {
         this.window = window;
+        this.id = id;
         Spacing = 8;
         Children.Add(rows);
         kind = new ComboBox { MinWidth = 220 }.Named("Kind of action", id + "_Kind");
@@ -30,7 +32,9 @@ public sealed partial class CustomEditor : StackPanel
             ? @"https://… or C:\Users\me\Documents\notes.docx" : "notepad.exe C:\\notes.txt";
         entry.KeyDown += (_, e) =>
         {
-            if (e.Key == Windows.System.VirtualKey.Enter) AddItem();
+            if (e.Key != Windows.System.VirtualKey.Enter) return;
+            e.Handled = true; // added, not the dialog's OK
+            AddItem();
         };
         Children.Add(Ui.Wrap(6, kind, entry,
             Ui.Button("Choose…", () => _ = Choose(), id + "_Choose").Tip("Choose a file to open"),
@@ -59,7 +63,7 @@ public sealed partial class CustomEditor : StackPanel
             t.IsTextSelectionEnabled = true;
             Grid.SetColumn(t, 1);
             g.Children.Add(t);
-            var remove = Ui.Button("Remove", () => RemoveItem(number));
+            var remove = Ui.Button("Remove", () => RemoveItem(number), $"{id}_Remove{number + 1}");
             Grid.SetColumn(remove, 2);
             g.Children.Add(remove);
             rows.Children.Add(g);

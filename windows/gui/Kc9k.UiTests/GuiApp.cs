@@ -29,8 +29,10 @@ public sealed class GuiApp : IDisposable
     readonly bool real_;
 
     public GuiApp(string name, string theme = "light", Action<string>? prepare = null, bool real = false, string ready = "Headline",
-        string arguments = "", bool multi = true, string? dir = null, IDictionary<string, string>? env = null)
+        string arguments = "", bool multi = true, string? dir = null, IDictionary<string, string>? env = null,
+        bool scratch = false, string[][]? setup = null)
     {
+        Scratch = scratch;
         real_ = real;
         this.name = name;
         // dir: start again in an earlier start's folder (W52: what a crash left).
@@ -42,6 +44,19 @@ public sealed class GuiApp : IDisposable
                 File.Copy(f, Path.Combine(Dir, Path.GetFileName(f)));
             File.WriteAllText(Path.Combine(Dir, "gui.json"), $$"""{"theme": "{{theme}}", "tray": false, "window_width": 1280, "window_height": 900}""");
         }
+        if (scratch)
+        {
+            // W32: the real kc9k.exe on a scratch database (KC9K_DB: it runs
+            // without the service and applies nothing), through the fake,
+            // which logs each command as it does for the fixtures.
+            ScratchExe = Environment.GetEnvironmentVariable("KC9K_SCRATCH_EXE") is { Length: > 0 } x && File.Exists(x) ? x
+                : throw new InvalidOperationException("KC9K_SCRATCH_EXE (a built kc9k.exe) is not set");
+            foreach (var args in setup ?? [])
+            {
+                var (ok, output) = Cli(args);
+                if (!ok) throw new InvalidOperationException($"setup kc9k {string.Join(' ', args)}: {output}");
+            }
+        }
         prepare?.Invoke(Dir);
         var exe = Environment.GetEnvironmentVariable("KC9K_GUI_EXE") ?? throw new InvalidOperationException("KC9K_GUI_EXE is not set");
         // KC9K_REAL_EXE: the real kc9k.exe (installed, its service running) instead of the fake.
@@ -52,6 +67,11 @@ public sealed class GuiApp : IDisposable
         info.Environment["KC9K_FAKE_DIR"] = Dir;
         info.Environment["KC9K_GUI_PREFS"] = Path.Combine(Dir, "gui.json");
         if (multi) info.Environment["KC9K_GUI_MULTI"] = "1";
+        if (scratch)
+        {
+            info.Environment["KC9K_FAKE_REAL"] = ScratchExe;
+            info.Environment["KC9K_DB"] = Db;
+        }
         foreach (var (k, v) in env ?? new Dictionary<string, string>()) info.Environment[k] = v;
         StartInfo = info;
         App = Application.Launch(info);
@@ -61,6 +81,37 @@ public sealed class GuiApp : IDisposable
         // The first state is read in the background.
         WaitFor(() => ById(ready)?.Name is { Length: > 0 } || ById("CoverUnlock_dashboard") is not null, "the first state", real_ ? 60 : 20);
     }
+
+    /// <summary>Whether the GUI runs the real kc9k.exe on a scratch database.</summary>
+    public bool Scratch { get; }
+    public string? ScratchExe { get; }
+    public string Db => Path.Combine(Dir, "scratch.db");
+
+    /// <summary>Runs the real kc9k.exe on the scratch database (setup, checks).</summary>
+    public (bool Ok, string Output) Cli(params string[] args)
+    {
+        var info = new ProcessStartInfo(ScratchExe!) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true };
+        foreach (var a in args) info.ArgumentList.Add(a);
+        info.Environment["KC9K_DB"] = Db;
+        using var p = Process.Start(info)!;
+        p.StandardInput.Close();
+        var output = p.StandardOutput.ReadToEndAsync();
+        var error = p.StandardError.ReadToEndAsync();
+        p.WaitForExit();
+        return (p.ExitCode == 0, (output.Result + error.Result).Trim());
+    }
+
+    /// <summary>The scratch database's state, as `kc9k gui-state` prints it.</summary>
+    public System.Text.Json.Nodes.JsonObject RealState()
+    {
+        var (ok, output) = Cli("gui-state");
+        if (!ok) throw new InvalidOperationException("kc9k gui-state: " + output);
+        return System.Text.Json.Nodes.JsonNode.Parse(output[output.IndexOf('{')..])!.AsObject();
+    }
+
+    /// <summary>A block of the scratch database's state.</summary>
+    public System.Text.Json.Nodes.JsonObject RealBlock(string name) =>
+        RealState()["blocks"]!.AsArray().First(b => (string?)b!["name"] == name)!.AsObject();
 
     public AutomationElement? ById(string id, AutomationElement? root = null) =>
         (root ?? Window).FindFirstDescendant(c => c.ByAutomationId(id)) ??
@@ -202,6 +253,32 @@ public sealed class GuiApp : IDisposable
                 ["ok"] = ok, ["output"] = output,
             });
         File.WriteAllText(Path.Combine(dir, "responses.json"), list.ToJsonString());
+    }
+
+    /// <summary>Answers Windows' own open dialog (W4: file dialogs) as a person
+    /// would: the full path typed into File name, then Enter.</summary>
+    public void PickFile(string path, int seconds = 30)
+    {
+        var dialog = Retry.WhileNull(() =>
+                Window.FindFirstDescendant(c => c.ByClassName("#32770")) ??
+                Automation.GetDesktop().FindFirstChild(c => c.ByClassName("#32770").And(c.ByProcessId(App.ProcessId))),
+            TimeSpan.FromSeconds(seconds), TimeSpan.FromMilliseconds(250), throwOnTimeout: true, timeoutMessage: "no file dialog").Result!;
+        var name = Retry.WhileNull(() => dialog.FindFirstDescendant(c => c.ByAutomationId("1148").And(c.ByControlType(ControlType.Edit))) ??
+                dialog.FindFirstDescendant(c => c.ByControlType(ControlType.Edit)),
+            TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: "no File name box").Result!;
+        name.Focus();
+        name.AsTextBox().Text = path;
+        Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.RETURN);
+        Wait.UntilInputIsProcessed();
+        WaitFor(() => Automation.GetDesktop().FindFirstChild(c => c.ByClassName("#32770").And(c.ByProcessId(App.ProcessId))) is null, "the file dialog closed");
+    }
+
+    /// <summary>A 1×1 PNG in the test's folder.</summary>
+    public string Picture(string name)
+    {
+        var path = Path.Combine(Dir, name);
+        File.WriteAllBytes(path, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="));
+        return path;
     }
 
     /// <summary>Makes the fake kc9k slow (for prepare:): commands starting with

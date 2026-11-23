@@ -4,7 +4,6 @@
 using Kc9k.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 
 namespace Kc9k.Gui;
@@ -23,20 +22,18 @@ public sealed class Dialogs(Func<XamlRoot?> root, Func<ElementTheme> theme)
         {
             dialog.XamlRoot = root();
             dialog.RequestedTheme = theme();
-            dialog.DefaultButton = dialog.IsPrimaryButtonEnabled && !string.IsNullOrEmpty(dialog.PrimaryButtonText)
-                ? ContentDialogButton.Primary : ContentDialogButton.None;
+            // Enter takes the main button once it can be used, also when it
+            // waits at first for what is typed (a name).
+            dialog.DefaultButton = !string.IsNullOrEmpty(dialog.PrimaryButtonText) ? ContentDialogButton.Primary : ContentDialogButton.None;
             Open = dialog;
-            // A15: Enter takes the main button wherever the focus is (a choice's
-            // drop-down too, which would open itself instead), except on a
-            // button (it presses that one), in a box that takes several lines
-            // and in an open drop-down.
+            // A15: Enter takes the main button on a closed drop-down too (it
+            // would only open itself); elsewhere ContentDialog's own default
+            // button does it, and boxes that use Enter keep it.
             var accepted = false;
             dialog.PreviewKeyDown += (_, e) =>
             {
                 if (e.Key != Windows.System.VirtualKey.Enter || !dialog.IsPrimaryButtonEnabled || string.IsNullOrEmpty(dialog.PrimaryButtonText)) return;
-                var focused = FocusManager.GetFocusedElement(dialog.XamlRoot);
-                if (focused is ButtonBase and not CheckBox and not RadioButton) return;
-                if (focused is TextBox { AcceptsReturn: true } or ComboBoxItem or ComboBox { IsDropDownOpen: true }) return;
+                if (FocusManager.GetFocusedElement(dialog.XamlRoot) is not ComboBox { IsDropDownOpen: false }) return;
                 accepted = true;
                 e.Handled = true;
                 dialog.Hide();

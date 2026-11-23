@@ -129,6 +129,7 @@ public sealed partial class MainWindow : Window
         {
             banner.Message = text ?? "";
             banner.IsOpen = text is not null;
+            AutomationProperties.SetHelpText(banner, text ?? ""); // what Narrator and the tests read
         };
         Controller.ExtensionMissing += () => _ = ExtensionDialog();
         Controller.OpenedBlock = () => CurrentPage == "blocks" ? Blocks.OpenedBlock : null;

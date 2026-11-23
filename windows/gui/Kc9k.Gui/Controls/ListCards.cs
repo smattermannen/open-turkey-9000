@@ -624,7 +624,7 @@ public sealed partial class PhraseEditor : StackPanel
         row.Children.Add(entry);
         Grid.SetColumn(check, 1);
         row.Children.Add(check);
-        var remove = Ui.IconButton(Glyphs.Delete, $"Remove word set {n}", () => { rows.Children.Remove(row); Change(); });
+        var remove = Ui.IconButton(Glyphs.Delete, $"Remove word set {n}", () => { rows.Children.Remove(row); Change(); }, $"{id}_RemoveSet{n}");
         Grid.SetColumn(remove, 2);
         row.Children.Add(remove);
         row.Tag = (entry, check, remove);

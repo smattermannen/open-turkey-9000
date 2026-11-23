@@ -26,6 +26,7 @@ its bypass prevention).
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
 | A17 | Flaky CI checks: `ci/match_test.js` timing, Android `RulesServerTest` | principle 9 | testing, extension | agent |
+| A18 | A draft's save refuses a phrase change that only adds terms (R-WEAK-5) | R-WEAK-5, §4.3 | lists, locks | agent |
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text: real use on the laptop | §3.9 | extension | owner |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
@@ -96,6 +97,17 @@ plan is SPEC §8, its items §3.1.
   (principle 9).
 
 ### 0.1 Code contradicting `SPEC.md`
+
+- [ ] `A18` **Draft save and R-WEAK-5** (found 2026-11-23 by the Windows
+  GUI session's W32 tests): with the block locked, `kc9k phrase-set change
+  B S OLD NEW` where NEW only adds terms is free, but the same change made
+  in the block's draft (as both GUIs make every edit of an opened block,
+  §4.3) is refused at `block draft B save` ("saved, except what would
+  weaken … removing OLD"): `internal/cli/draft.go` diffs a changed phrase
+  (and likely a changed entry) as remove + add. R-WEAK-5: not weakening
+  when the new entry clearly matches more. Done when: the draft's save
+  applies such a change whole, with a test (`ParityRealTests.
+  PhrasesChangedTheHardWay` then checks it on Windows too). (S)
 
 - [ ] **Owner report 2026-11-20** (D3 left).
   - **D3** Instagram `instagram:following-only`: `/` → `/?variant=following`

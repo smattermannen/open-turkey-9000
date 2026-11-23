@@ -65,8 +65,8 @@ public class StabilityTests
         gui.WaitFor(() => gui.Ran("stop", "Evening"), "kc9k stop Evening started");
         var watch = System.Diagnostics.Stopwatch.StartNew();
         gui.Page("settings");
-        gui.Find("Nav_overview", 3);
-        gui.Page("overview");
+        gui.Find("Nav_dashboard", 3);
+        gui.Page("dashboard");
         gui.Find("Headline", 3);
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(8), $"pages took {watch.Elapsed} while kc9k was slow");
         Assert.True(gui.ById("Busy") is { IsOffscreen: false }, "the progress bar shows while kc9k works");
@@ -85,7 +85,7 @@ public class StabilityTests
             GuiApp.Slow(dir, 4000, "gui-state");
             GuiApp.Slow(dir, 4000, "stats");
         });
-        foreach (var page in new[] { "blocks", "stats", "settings", "overview" })
+        foreach (var page in new[] { "blocks", "stats", "settings", "dashboard" })
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();
             gui.Page(page);
@@ -106,9 +106,9 @@ public class StabilityTests
     {
         var missing = Path.Combine(Path.GetTempPath(), "no-kc9k-" + Guid.NewGuid().ToString("N")[..8], "kc9k.exe");
         using var gui = new GuiApp("no-kc9k", ready: "Banner", env: new Dictionary<string, string> { ["KC9K_CLI"] = missing });
-        gui.WaitFor(() => gui.Find("Banner").FindAllDescendants().Any(e => e.Name.Contains("could not be started")), "the banner saying kc9k could not be started", 30);
+        gui.WaitFor(() => (gui.Find("Banner").HelpText ?? "").Contains("could not be started"), "the banner saying kc9k could not be started", 30);
         gui.Shot("banner");
-        foreach (var page in new[] { "blocks", "settings", "overview" }) gui.Page(page);
+        foreach (var page in new[] { "blocks", "settings", "dashboard" }) gui.Page(page);
         Thread.Sleep(11000);
         Assert.False(gui.App.HasExited);
         Assert.Null(gui.DesktopByName("Something went wrong"));
@@ -122,13 +122,14 @@ public class StabilityTests
     {
         using var gui = new GuiApp("two-refusals", prepare: dir =>
         {
-            GuiApp.Respond(dir, (["stop", "Evening"], false, "Error: first refusal"), (["stop", "Games"], false, "Error: second refusal"));
+            GuiApp.Respond(dir, (["stop", "Evening"], false, "Error: first refusal"), (["start", "Reading"], false, "Error: second refusal"));
             GuiApp.Slow(dir, 2000, "stop");
+            GuiApp.Slow(dir, 2000, "start");
         });
         gui.Page("blocks");
         gui.Invoke("BlockSwitch_Evening");
-        gui.Invoke("BlockSwitch_Games");
-        gui.WaitFor(() => gui.Ran("stop", "Games") && gui.Ran("stop", "Evening"), "both commands");
+        gui.Invoke("BlockSwitch_Reading");
+        gui.WaitFor(() => gui.Ran("start", "Reading") && gui.Ran("stop", "Evening"), "both commands");
         gui.FindName("Not done", 20);
         var text = gui.Find("MessageText").Name;
         gui.Shot("first-refusal");

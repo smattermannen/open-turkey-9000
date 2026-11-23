@@ -77,9 +77,8 @@ its bypass prevention).
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
 | W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
 | W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows | laptop |
-| W53 | Side menu pushes the page sideways; pin it like GTK | R-GUI-3 | gui-windows | agent, win-ci |
-| W54 | Windows page layout as in the GTK GUI, Windows look kept | §4.1–4.13 | gui-windows | agent, win-ci, owner |
 | A15 | Enter presses OK in every dialog (GTK and Windows GUI) | R-GUI-3 | gui, gui-windows | agent |
+| W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
 | A14 | Clip curves mirrored, tested in Go, C#, GTK; the owner's look on the laptop | §4.10 | circadian | owner |
 
 ## 0. Fix what exists
@@ -499,15 +498,17 @@ Stability (blocks every other Windows GUI test):
 
 Layout (owner: keep the Windows look, use the GTK layout):
 
-- [ ] `W53` **The side menu pushes the page sideways** (S; R-GUI-3).
+- [x] `W53` **The side menu pushes the page sideways** (S; R-GUI-3).
   Opening ☰ moves the page right and cuts off its right edge. Build: the
   menu never moves the page: pinned open like the GTK sidebar by default,
   the page fills the rest, no horizontal scroll at any width. Laptop
   (200 %, menu open): controls past the right edge at 400 and 512 DIP
   (Clusters, Stats, Circadian, Settings combo boxes), none from 683 DIP or
   with the menu folded. `gui.json` `window_width/height` are physical
-  pixels (800 opens 400 DIP at 200 %).
-- [ ] `W54` **Page layout as in the GTK GUI** (M; §4.1–4.13, R-GUI-3).
+  pixels (800 opens 400 DIP at 200 %). Built: sidebar pinned at 220 DIP
+  (icons only below 640 DIP), page fills the rest; `GeometryTests` (400–1920
+  DIP × text 100/150/200 %) green in windows-gui.yml.
+- [x] `W54` **Page layout as in the GTK GUI** (M; §4.1–4.13, R-GUI-3).
   Pages are centred with wide margins and cut off on the right; GTK pages
   fill the width, put switches and Lock… buttons in one right column, show
   blocks as rows (switch, type, breaks, lock). Build: Windows pages follow
@@ -516,6 +517,9 @@ Layout (owner: keep the Windows look, use the GTK layout):
   started" card (owner dropped it; W38 removed). Laptop: Circadian at 1440
   DIP is a centred column with ~260 DIP empty on the left; Blocks at 1024
   DIP fills the width.
+  Built: pages fill the width, a right column for switches and Lock…,
+  blocks as rows (`SidePanel`), "Get started" removed. Left: the owner's
+  look on the laptop.
 
 Import:
 

@@ -277,9 +277,23 @@ public sealed partial class MainWindow : Window
         Prefs.Current.LastPage = key;
         if (items.TryGetValue(key, out var item) && !ReferenceEquals(nav.SelectedItem, item)) nav.SelectedItem = item;
         nav.Content = pages[key].Holder;
+        ScrollToTop(pages[key].Holder);
         if (Controller.Locked(Area(key)) || Controller.Locked("app")) return;
         if (Controller.State is { } s) pages[key].Page.Update(s);
         if (Controller.Stats is { } stats) pages[key].Page.UpdateStats(stats);
+    }
+
+    /// <summary>A page shown from the sidebar starts at its top, as in the GTK GUI.</summary>
+    static void ScrollToTop(DependencyObject? root)
+    {
+        if (root is null) return;
+        if (root is ScrollViewer sv)
+        {
+            sv.ChangeView(null, 0, null, true);
+            return;
+        }
+        var n = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < n; i++) ScrollToTop(Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i));
     }
 
     /// <summary>Runs once the window's content is loaded (a dialog needs its XamlRoot).</summary>

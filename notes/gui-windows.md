@@ -113,7 +113,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   replaces a card under a click.
 - Sidebar (W53, `MainWindow.PinSidebar`): pinned at 220 DIP, no ☰; below
   640 DIP (220 + `NarrowestPage` 420) icons only (`LeftCompact`, titles as
-  tooltips), never over the page.
+  tooltips), never over the page. A page shown from it starts at its top
+  (`ScrollToTop`); Blocks pressed in a block returns to the cards.
 - Supported browsers (W30): `found` but not `installed` = unsupported, no
   Install button; Install shows `browsers install`'s words as "Getting
   NAME", not a refusal (`Controller.Run(refusalTitle:)`).

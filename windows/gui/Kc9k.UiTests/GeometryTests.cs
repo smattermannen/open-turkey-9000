@@ -138,7 +138,10 @@ public class GeometryTests(ITestOutputHelper output)
             if (sw is null) continue;
             try
             {
+                // A ToggleSwitch has no ScrollItem pattern; focusing it scrolls it
+                // into view (a held block's switch is disabled: its name then).
                 if (sw.Patterns.ScrollItem.IsSupported) sw.Patterns.ScrollItem.Pattern.ScrollIntoView();
+                else if (sw.IsEnabled) sw.Focus();
                 else gui.ById("BlockCard_" + name)?.Focus();
             }
             catch (Exception) { }

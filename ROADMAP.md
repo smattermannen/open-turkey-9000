@@ -25,7 +25,7 @@ its bypass prevention).
 
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
-| A17 | Flaky CI checks fixed: 10 green `Test` runs in a row | principle 9 | testing, extension | agent |
+| A17 | Flaky CI checks fixed: Linux and Android hold (17 green); Windows lost key left | principle 9 | testing, extension | agent, win-ci |
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text: real use on the laptop | §3.9 | extension | owner |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
@@ -91,7 +91,10 @@ plan is SPEC §8, its items §3.1.
   run 697) judges each step by its fastest of 3 timed rounds, still
   ≤ 16 ms (principle 9); Android `RulesServerTest` (`awaitListening`
   false at `@Before`, runs 680, 684: fixed port 47699 in Linux's ephemeral
-  range, retried only after 5 s) binds port 0. Also seen (Windows run 215,
+  range, retried only after 5 s) binds port 0. Both hold: `Test` runs
+  729–745 all green (17 in a row, 2026-11-23); the failures before (668–697)
+  were strict mode work, not flakes; no other flaky check found in
+  `test.yml`. Also seen (Windows run 215,
   no Windows change): `ci/windows_desktop_test.ps1`'s "the challenge typed
   in the window unlocks the block" got 50 % accuracy (a posted key lost),
   so `ci-lock` stayed locked and "uninstall" failed after it; passed in

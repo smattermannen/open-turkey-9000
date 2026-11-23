@@ -107,10 +107,16 @@ public sealed class GuiApp : IDisposable
         return (p.ExitCode == 0, (output.Result + error.Result).Trim());
     }
 
-    /// <summary>The scratch database's state, as `kc9k gui-state` prints it.</summary>
+    /// <summary>The scratch database's state, as `kc9k gui-state` prints it
+    /// (read again when caught between a draft's save and its removal).</summary>
     public System.Text.Json.Nodes.JsonObject RealState()
     {
         var (ok, output) = Cli("gui-state");
+        for (var i = 0; i < 5 && !ok; i++)
+        {
+            Thread.Sleep(500);
+            (ok, output) = Cli("gui-state");
+        }
         if (!ok) throw new InvalidOperationException("kc9k gui-state: " + output);
         return System.Text.Json.Nodes.JsonNode.Parse(output[output.IndexOf('{')..])!.AsObject();
     }
@@ -160,6 +166,19 @@ public sealed class GuiApp : IDisposable
 
     public void Invoke(AutomationElement e)
     {
+        // A tick box is clicked where a person clicks it.
+        if (e.ControlType == ControlType.CheckBox && !e.IsOffscreen && e.Properties.ProcessId.ValueOrDefault == App.ProcessId)
+        {
+            Show(e);
+            var r = e.BoundingRectangle;
+            if (!r.IsEmpty)
+            {
+                Front();
+                Mouse.Click(new System.Drawing.Point(r.Left + Math.Min(12, r.Width / 2), r.Top + r.Height / 2));
+                Wait.UntilInputIsProcessed();
+                return;
+            }
+        }
         if (e.Patterns.Invoke.IsSupported) e.Patterns.Invoke.Pattern.Invoke();
         else if (e.Patterns.SelectionItem.IsSupported) e.Patterns.SelectionItem.Pattern.Select();
         else if (e.Patterns.ExpandCollapse.IsSupported) e.Patterns.ExpandCollapse.Pattern.Expand();
@@ -197,6 +216,7 @@ public sealed class GuiApp : IDisposable
     /// rectangle) and gives it back, found again.</summary>
     public AutomationElement Show(string id)
     {
+        Front();
         var e = Find(id);
         try
         {
@@ -237,8 +257,22 @@ public sealed class GuiApp : IDisposable
         if (!ok) throw new TimeoutException("waited for " + what);
     }
 
+    /// <summary>The Blocks page's cards (out of an opened block, mode or automation).</summary>
+    public void Cards()
+    {
+        Page("blocks");
+        foreach (var back in new[] { "BackToBlock", "ModeBack", "BackToBlocks" })
+            if (ById(back) is { } b)
+            {
+                Invoke(b);
+                Thread.Sleep(300);
+            }
+        if (ById("BackToBlocks") is { } again) Invoke(again);
+    }
+
     public void Page(string key)
     {
+        Front();
         var item = Find("Nav_" + key);
         // Click its icon, where a person clicks: with the sidebar icons only
         // (below 640 DIP) the item's box is wider than the pane.

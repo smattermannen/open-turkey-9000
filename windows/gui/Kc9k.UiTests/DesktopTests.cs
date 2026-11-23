@@ -34,6 +34,7 @@ public class DesktopTests
         Assert.False(mode.BoundingRectangle.IsEmpty, "the mode card on screen with the block");
         // From the card's empty part right of its name (the name is a link).
         var r = block.BoundingRectangle;
+        gui.Front();
         Drag(new(r.Right + 120, r.Top + r.Height / 2), Center(mode));
         gui.FindName("Put Reading into Study?", 20);
         gui.Shot("dropped");
@@ -65,6 +66,7 @@ public class DesktopTests
         int Y(int minute) => (int)Math.Round(sixY + (minute - 360) * perMinute);
         var x = Center(mon).X;
         Assert.True(Center(tue).X > x, "Tue right of Mon");
+        gui.Front();
         Drag(new(x, Y(9 * 60 + 2)), new(x, Y(12 * 60 + 2)));
         gui.FindName("Add Mon 09:00–12:00?", 20);
         gui.Shot("drawn");
@@ -171,7 +173,7 @@ public class DesktopTests
         gui.FindName("Not done", 60);
         Assert.Contains("remains active and locked", gui.Find("MessageText").Name);
         gui.Invoke(gui.FindButton("OK"));
-        gui.Page("blocks");
+        gui.Cards();
         gui.WaitFor(() => gui.Find("BlockSwitch_CI text").IsEnabled == false, "the block still locked", 60);
         Assert.False(gui.App.HasExited);
     }

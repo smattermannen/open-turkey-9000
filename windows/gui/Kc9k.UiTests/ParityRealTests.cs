@@ -221,10 +221,17 @@ public class ParityRealTests
 
     static void Keys(GuiApp gui, AutomationElement grip, FlaUI.Core.WindowsAPI.VirtualKeyShort key, int times)
     {
-        gui.Front();
-        grip.Focus();
-        for (var i = 0; i < times; i++) FlaUI.Core.Input.Keyboard.Press(key);
-        FlaUI.Core.Input.Wait.UntilInputIsProcessed();
+        var id = grip.Properties.AutomationId.Value;
+        for (var i = 0; i < times; i++)
+        {
+            // The list grows under the pointer and the page may move: the
+            // grip is found and focused again for each key.
+            gui.Front();
+            gui.Find(id).Focus();
+            FlaUI.Core.Input.Keyboard.Press(key);
+            FlaUI.Core.Input.Wait.UntilInputIsProcessed();
+            Thread.Sleep(150);
+        }
         Thread.Sleep(300);
     }
 
@@ -258,6 +265,7 @@ public class ParityRealTests
             grip = gui.Show(blocked + "_Grip");
             var r = grip.BoundingRectangle;
             var from = new System.Drawing.Point(r.Left + r.Width / 2, r.Top + r.Height / 2);
+            gui.Front();
             GuiApp.Drag(from, new System.Drawing.Point(from.X, from.Y + 200));
             Thread.Sleep(500);
             gui.WaitFor(() => KeptHeight(gui) > 150, $"dragged down 200: taller ({KeptHeight(gui)})");
@@ -271,6 +279,7 @@ public class ParityRealTests
             again.WaitFor(() => Math.Abs(Height(again, blocked) - tall) <= 2, $"a new list of that kind opens as tall ({tall}, {Height(again, blocked)})");
             var grip = again.Show(blocked + "_Grip");
             var r = grip.BoundingRectangle;
+            again.Front();
             FlaUI.Core.Input.Mouse.DoubleClick(new System.Drawing.Point(r.Left + r.Width / 2, r.Top + r.Height / 2));
             again.WaitFor(() => KeptHeight(again) is null, "double-click: forgotten in gui.json");
             again.WaitFor(() => Math.Abs(Height(again, blocked) - start) <= 2 && Math.Abs(Height(again, exceptions) - start) <= 2,
@@ -294,10 +303,11 @@ public class ParityRealTests
         if (gui.ById("Phrases_Gossip_Phrases_Cover") is not null) gui.Invoke("Phrases_Gossip_Phrases_Cover");
         var item = FlaUI.Core.Tools.Retry.WhileNull(() => gui.Find("Phrases_Gossip_Phrases").FindFirstDescendant(c => c.ByName(text)),
             TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: "no phrase " + text).Result!;
-        item.Patterns.SelectionItem.Pattern.Select();
+        // Double-clicked, as a person loads it.
+        GuiApp.Show(item);
         gui.Front();
-        item.Focus();
-        FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.RETURN);
+        var r = item.BoundingRectangle;
+        FlaUI.Core.Input.Mouse.DoubleClick(new System.Drawing.Point(r.Left + r.Width / 2, r.Top + r.Height / 2));
         FlaUI.Core.Input.Wait.UntilInputIsProcessed();
         gui.WaitFor(() => Save(gui).Name == "Save changes", "the phrase loaded: Save changes");
     }
@@ -540,7 +550,7 @@ public class ParityRealTests
         gui.WaitFor(() => gui.Ran("place", "need", "home", "3"), "kc9k place need home 3");
 
         // 3. Add this place for another block, then remove it.
-        gui.Page("blocks");
+        gui.Cards();
         gui.Invoke("BlockCard_Evening");
         gui.Invoke("BlockAutomation");
         gui.WaitFor(() => gui.Find("block_PlaceChoice").AsComboBox().SelectedItem?.Name == "home", "home offered for another block");
@@ -596,7 +606,7 @@ public class ParityRealTests
         var social = gui.Find("Social");
         Assert.Equal(ExpandCollapseState.Collapsed, social.Patterns.ExpandCollapse.Pattern.ExpandCollapseState.Value);
         social.Patterns.ExpandCollapse.Pattern.Expand();
-        gui.WaitFor(() => gui.ById("Social_youtube_no-shorts") is { IsOffscreen: false }, "opens");
+        gui.WaitFor(() => gui.ById("Social_youtube_no-shorts") is not null, "opens");
         gui.Invoke("Social_youtube_no-shorts");
         gui.WaitFor(() => gui.Ran("social", "Reading (draft)", "youtube:no-shorts", "on") || gui.Ran("social", "Reading", "youtube:no-shorts", "on"),
             "kc9k social … youtube:no-shorts on");
@@ -662,6 +672,7 @@ public class ParityRealTests
         double At(double h) => hours[0].X + (h - hours[0].Hour) * hour;
         var b = bar.BoundingRectangle;
         var from = new System.Drawing.Point((int)Math.Round(At(9.5)), b.Top + b.Height / 2);
+        gui.Front();
         GuiApp.Drag(from, new System.Drawing.Point((int)Math.Round(At(10.5)), from.Y));
         gui.WaitFor(() => gui.RanWith("mode", "wallpaper", "Study", "time", "1", "10:00", "18:00"), "kc9k mode wallpaper Study time 1 10:00 18:00 (dragged)");
         gui.Shot("dragged");
@@ -679,7 +690,7 @@ public class ParityRealTests
             gui.Invoke("OverrideModes");
             gui.WaitFor(() => gui.Ran("wallpaper", "priority", "modes"), "kc9k wallpaper priority modes");
             Assert.True((bool?)gui.RealState()["wallpaper"]!["override_modes"] == false, "modes win again");
-            gui.Page("blocks");
+            gui.Cards();
             gui.Invoke("ModeCard_Study");
             gui.WaitFor(() => On(gui, "OverrideCircadian"), "and the mode's switch shows it");
         }

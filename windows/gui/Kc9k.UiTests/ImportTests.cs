@@ -117,7 +117,9 @@ public class ImportTests
         gui.Find("AskText").AsTextBox().Text = "poker, slot machine";
         gui.Invoke(gui.FindButton("OK"));
         gui.WaitFor(() => gui.Ran("list", "add", "Work (draft)", "Blocked", "poker", "slot machine"), "the words added");
-        Close(gui, "Done");
+        // kc9k says nothing when it adds them (the fake does): any words shown are closed.
+        if (FlaUI.Core.Tools.Retry.WhileNull(() => gui.DesktopByName("Done"), TimeSpan.FromSeconds(3), TimeSpan.FromMilliseconds(200)).Result is not null)
+            gui.Invoke(gui.FindButton("OK"));
         gui.Shot("imported");
 
         if (real)

@@ -26,6 +26,7 @@ user-facing docs.
 ```bash
 export PATH="/usr/local/go/bin:$PATH"
 make build            # CGO_ENABLED=0 go build -o kc9k ./cmd/kc9k
+make check            # go test, prints only failures (PKG=./internal/cli/... ARGS="-run TestX")
 make deb              # packaging/build-deb.sh (TAGS=devmaster for tests)
 sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 ```
@@ -87,4 +88,6 @@ sections, connected notes.
 | [gui-windows](notes/gui-windows.md) | Windows GUI (C#, WinUI 3), UI Automation tests |
 | [install-windows](notes/install-windows.md) | Windows MSI (WiX), signing |
 | [db-project](notes/db-project.md) | SQLite DB, project files, backup |
-| [windows](notes/windows.md) | Windows Go side: service, session agent, pipe, layers |
+| [windows](notes/windows.md) | Windows Go side: platform split, CI, service, session agent, pipe |
+| [windows-layers](notes/windows-layers.md) | Windows web layers, apps, desktop, places, circadian |
+| [windows-tamper](notes/windows-tamper.md) | Windows tamper protection, strict mode, no-escape, firmware lock |

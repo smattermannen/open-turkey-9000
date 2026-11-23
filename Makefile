@@ -72,6 +72,9 @@ install: build
 
 	@echo ">> Installing the graphical interface..."
 	install -m 755 gui/kc9k-gui.py $(INSTALL_PATH)/kc9k-gui
+	rm -rf /usr/local/lib/kc9k-gui
+	install -d /usr/local/lib/kc9k-gui
+	install -m 644 gui/kc9k_gui/*.py /usr/local/lib/kc9k-gui/
 	install -m 644 gui/kc9k.desktop /usr/share/applications/kc9k.desktop
 
 	@echo ">> Creating wrapper script at $(INSTALL_PATH)/$(BINARY_NAME)..."
@@ -171,6 +174,7 @@ uninstall:
 	rm -f $(INSTALL_PATH)/$(BINARY_NAME)
 	rm -f $(INSTALL_PATH)/$(BINARY_INSTALLED)
 	rm -f $(INSTALL_PATH)/kc9k-gui /usr/share/applications/kc9k.desktop
+	rm -rf /usr/local/lib/kc9k-gui
 
 	@echo ">> Removing sudoers rule..."
 	rm -f $(SUDOERS_FILE)
@@ -183,6 +187,22 @@ uninstall:
 .PHONY: deb
 deb:
 	TAGS="$(TAGS)" sh packaging/build-deb.sh
+
+# -------------------------------------------------------
+# check: runs every Go test, prints only failures and a summary
+# (passing packages are hidden to keep the output short).
+# Run as a normal user, never with sudo. PKG=./internal/cli/...
+# narrows it; ARGS="-run TestX" passes flags to go test.
+# -------------------------------------------------------
+PKG?=./...
+ARGS?=
+.PHONY: check
+check:
+	@out=$$(CGO_ENABLED=0 go test $(ARGS) $(PKG) 2>&1); rc=$$?; \
+	printf '%s\n' "$$out" | grep -v -e '^ok ' -e 'no test files' -e '^go: downloading'; \
+	n=$$(printf '%s\n' "$$out" | grep -c '^ok '); \
+	if [ $$rc -eq 0 ]; then echo ">> all passed ($$n packages)"; \
+	else echo ">> FAILED ($$n packages passed)"; fi; exit $$rc
 
 # -------------------------------------------------------
 # clean: removes build artifacts

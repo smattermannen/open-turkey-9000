@@ -39,7 +39,7 @@
   behind an app/settings access password). `ci/circadian_test.py`.
 - Hardware vars `circadian*` (`fakeCircadian`); `KC9K_DB` → `circadianDry`.
   Wallpapers in `<db dir>/wallpapers` (0644). Windows: PowerShell per
-  look/read/set ([windows](windows.md)).
+  look/read/set ([windows-layers](windows-layers.md)).
 - GUI: `CircadianPage`, `ClipEditor`, "Play the day" with playhead,
   `WallpaperTimeline` (5-min steps, Shift minutes). No Circadian section in
   Settings.

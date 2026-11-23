@@ -63,20 +63,20 @@ its bypass prevention).
 | N7 | Android protection, guided setup, circadian rhythm, accessibility layer | §8.4, R-ANDROID-4 | android/CLAUDE.md | agent, owner |
 | N8 | Android wide screens, accessibility, three phones end to end | §8.5, R-ANDROID-1 | android/CLAUDE.md | owner |
 | W1 | Windows service and agent: the console's raw mode | §3.13 | windows | win-vm |
-| W2 | Windows web layers: real browsers obeying; Chrome Web Store ID | §3.13, §4.10 | windows | win-vm, laptop, owner |
-| W3 | Windows apps and desktop: notifications, challenge window, hotkeys, lock freeze | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows | win-vm, laptop |
+| W2 | Windows web layers: real browsers obeying; Chrome Web Store ID | §3.13, §4.10 | windows-layers | win-vm, laptop, owner |
+| W3 | Windows apps and desktop: notifications, challenge window, hotkeys, lock freeze | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows-layers | win-vm, laptop |
 | W4 | Windows GUI on a real desktop: Narrator, scaling, drag and drop | §4.1–4.13, R-GUI-1–3 | gui-windows | win-vm, laptop |
-| W5 | Windows tamper protection: boot/Safe Mode | §3.10, §4.10 | windows | win-vm, laptop |
-| W6 | Windows circadian: gamma, wallpaper, brightness, Night light | §4.10 | windows | win-vm, laptop |
+| W5 | Windows tamper protection: boot/Safe Mode | §3.10, §4.10 | windows-tamper | win-vm, laptop |
+| W6 | Windows circadian: gamma, wallpaper, brightness, Night light | §4.10 | windows-layers | win-vm, laptop |
 | W7 | Windows MSI: signing certificate, first tag, Apps & features by a person | §4.11 | install-windows | owner, win-vm |
-| W10 | Places on Windows: real networks | §3.6, R-MODE-5 | windows, automation | laptop |
-| W13 | Recovery path on Windows: a real Safe Mode boot | R-ESCAPE-1 | windows, device | win-vm |
-| W18 | One-click browser install on Windows as SYSTEM | §4.10 | windows, browsers | win-vm |
-| W19 | Firmware lock on Windows: real firmware | §3.8, §4.10 | windows, device | laptop, owner |
-| W24 | Strict mode: real WSL, Sandbox, Hyper-V | §3.8 | windows, device | win-vm |
-| W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows, device | laptop |
+| W10 | Places on Windows: real networks | §3.6, R-MODE-5 | windows-layers, automation | laptop |
+| W13 | Recovery path on Windows: a real Safe Mode boot | R-ESCAPE-1 | windows-tamper, device | win-vm |
+| W18 | One-click browser install on Windows as SYSTEM | §4.10 | windows-layers, browsers | win-vm |
+| W19 | Firmware lock on Windows: real firmware | §3.8, §4.10 | windows-tamper, device | laptop, owner |
+| W24 | Strict mode: real WSL, Sandbox, Hyper-V | §3.8 | windows-tamper, device | win-vm |
+| W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows-tamper, device | laptop |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
-| W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows | laptop |
+| W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows, windows-layers | laptop |
 | A15 | Enter presses OK in every dialog (GTK and Windows GUI) | R-GUI-3 | gui, gui-windows | agent |
 | W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
 | A14 | Clip curves mirrored, tested in Go, C#, GTK; the owner's look on the laptop | §4.10 | circadian | owner |
@@ -456,100 +456,19 @@ Static findings still open (code read, not seen on the laptop):
   window: now a fixed frame (close only) with a background brush; still no
   manifest in `kc9k.exe` (classic controls, not DPI-aware).
 
-Stability (blocks every other Windows GUI test):
+Still open from the report (built and in CI; what was built is in
+`notes/windows*.md` and `notes/gui-windows.md`):
 
-- [x] `W50` **The whole computer froze** (L; principle 1). With the GUI
-  open the laptop stopped answering; only a forced power-off helped.
-  Cause: the extension guard killed Windows: `isBrowserProgram` globbed
-  `<exe dir>\*\msedge.dll`, and `System32\Microsoft-Edge-WebView\msedge.dll`
-  made every System32 program a "browser" (dwm, svchost, fontdrvhost,
-  sihost, ctfmon… closed every 5 s; Kernel-Power 41, a hang). Also load:
-  Group Policy forced refresh every 2.5 s, SYSTEM PowerShell
-  `WmiMonitorBrightness` every 5 s with circadian off.
-  Fixed, checked on windows-latest: nothing under %SystemRoot% or a
-  WindowsApps package is a browser; the engine dll counts only beside the
-  program or in a version folder; every kill path refuses `sessionCritical`
-  (`TestWinGuardSystem32NotBrowsers`, `TestWinGuardNeverClosesWindows`,
-  `TestWinKillDenyList`); SRP removal refreshes nothing when idle
-  (`TestStrictSRPRefreshOnlyOnChange`); panel PowerShell only with the
-  backlight clip on; `ci/windows_soak_test.ps1` in windows.yml's `system`
-  job. Laptop (MSI 0.1.1, 2-min soak): fixed — GP 0/min (was 24), no
-  System32 closing, no agent restart. Its two idle failures were then
-  fixed: a wake no longer re-reads the panel while the backlight clip is
-  off; the handle slope skips warm-up. Left: the laptop re-runs the soak
-  (idle must show 0 PowerShell by the service).
-- [x] `W51` **Screen black several times, "overrun detection" warning**
-  (M; §4.10). Cause: dwm.exe killed by the guard (W50; Dwminit exits every
-  ~65 s). Also built: one package-level `EnumDisplayMonitors` callback (Go
-  throws at 2000 callbacks; `TestWinDisplaysManyCalls`); agent screen calls
-  one at a time, newer gamma set replacing a queued one, handlers under
-  `recover()`; ramps checked (`CheckRamp`); identity ramp put back when
-  circadian goes off and when the agent ends; an agent reporting its own
-  crash is not tamper (SPEC §3.10, `TestAgentEndCrashVsKill`). Laptop 0.1.1
-  (circadian, Play the day, every setting on/off ×5): no black screen, no
-  DWM exit, gamma sane. "Overrun detection" found in no log.
-- [x] `W52` **Blank white window appears at random** (M; R-GUI-3). Most
-  likely ordinary windows drawn while dwm.exe was dead (classic frame;
-  fontdrvhost and others killed too). With 0.1.1 and the GUI open ~30 min
-  a window watcher saw no classic or blank KC9K window. Built: gui.log also
-  gets `AppDomain` and unobserved-task errors; a crash leaves a note shown
-  once at the next start; identical error dialogs collapse; only the page
-  shown is updated (`StabilityTests`, CI). The LibreWolf restarts seen
-  meanwhile: §5.
-
-Layout (owner: keep the Windows look, use the GTK layout):
-
-- [x] `W53` **The side menu pushes the page sideways** (S; R-GUI-3).
-  Opening ☰ moves the page right and cuts off its right edge. Build: the
-  menu never moves the page: pinned open like the GTK sidebar by default,
-  the page fills the rest, no horizontal scroll at any width. Laptop
-  (200 %, menu open): controls past the right edge at 400 and 512 DIP
-  (Clusters, Stats, Circadian, Settings combo boxes), none from 683 DIP or
-  with the menu folded. `gui.json` `window_width/height` are physical
-  pixels (800 opens 400 DIP at 200 %). Built: sidebar pinned at 220 DIP
-  (icons only below 640 DIP), page fills the rest; `GeometryTests` (400–1920
-  DIP × text 100/150/200 %) green in windows-gui.yml.
-- [x] `W54` **Page layout as in the GTK GUI** (M; §4.1–4.13, R-GUI-3).
-  Pages are centred with wide margins and cut off on the right; GTK pages
-  fill the width, put switches and Lock… buttons in one right column, show
-  blocks as rows (switch, type, breaks, lock). Build: Windows pages follow
-  GTK's page by page (Overview, Blocks with modes, Circadian rhythm,
-  Settings), keeping the Windows look (colours, fonts, Mica). No "Get
-  started" card (owner dropped it; W38 removed). Laptop: Circadian at 1440
-  DIP is a centred column with ~260 DIP empty on the left; Blocks at 1024
-  DIP fills the width.
-  Built: pages fill the width, a right column for switches and Lock…,
-  blocks as rows (`SidePanel`), "Get started" removed. Left: the owner's
-  look on the laptop.
-
-Import:
-
-- [x] `W55` **Import project is missing on Windows** (S; §3 Project).
-  Settings → Import project… opens a file dialog and runs `kc9k project
-  import <file>` (first `--dry-run`, shown for confirmation). Built:
-  `Files.ImportProject`; `ProjectImportTests.cs`.
-- [x] `W56` **A Linux project imports safely on Windows** (M; §3 Project,
-  R-WEAK-1/2). Linux app and format unchanged. Linux-only parts (paths,
-  process names, X11 classes, LibreWolf on Linux, PAM and systemd
-  settings) kept in the file, reported "not used on Windows" in the dry
-  run, never guessed or an error. Import only strengthens while anything
-  is locked; every lock confirmed (R-LOCK-12); CRLF and BOM accepted.
-  Built: `testdata/linux-project*.json`, `cli/projectlinux.go`,
-  `blocker/linuxonly.go`; `TestLinuxProjectOnWindows`,
-  `TestLinuxProjectOnRealWindows` (`unit` job).
-
-Both platforms:
-
-- [ ] `A15` **Enter presses OK** (R-GUI-3): in every dialog of the GTK and
-  Windows GUIs, Enter presses the default button. Done when: a GUI test
-  per platform opens dialogs, presses Enter and sees each accepted.
-- [x] `A14` **Automation clip curves bend one way only** (S; §4.10
-  automation clips). Dragging a point far up made a sharp corner, down a
-  soft curve, on Linux and Windows. Built: one mirrored curve (below
-  straight x^p, above 1 − (1 − x)^p) in Go, C# and GTK, same samples tested
-  in each; Go, C# and the GTK smoke test (`ci/gui_circadian_smoke.py`, in
-  test.yml: drags a handle 40 px up and down, gets mirror images) pass.
+- `W50` **The whole computer froze** (principle 1): fixed (the extension
+  guard closed System32 programs). Left: the laptop re-runs
+  `ci/windows_soak_test.ps1` (idle: 0 PowerShell by the service).
+- `W54` **Page layout as in the GTK GUI** (§4.1–4.13, R-GUI-3): built.
   Left: the owner's look on the laptop.
+- `A15` **Enter presses OK** (R-GUI-3): in every dialog of both GUIs.
+  Tests exist (`ci/gui_enter_smoke.py`, `DialogKeyTests.cs`, both in CI);
+  Unchecked whether they pass. Done when both are green.
+- `A14` **Automation clip curves bend one way only** (§4.10): one mirrored
+  curve in Go, C#, GTK. Left: the owner's look on the laptop.
 
 ## 5. Proposed, not agreed
 

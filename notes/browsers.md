@@ -59,7 +59,7 @@ with `ExtensionHeader` (`/usage`: `X-KC9K-Usage`), no CORS, no secret
 - GUI "isn't running" dialog (`extensionMissing`) only with no supported
   browser or one past the grace without check-in.
 - Windows: never counts/closes Windows' own programs, never kills
-  session-critical processes (W50, [windows](windows.md)).
+  session-critical processes (W50, [windows-layers](windows-layers.md)).
 
 ## LibreWolf (`librewolf*.go`)
 

@@ -16,7 +16,7 @@ jobs:
       - name: Unit tests
         run: CGO_ENABLED=0 go test ./...
       - name: Check the interface syntax
-        run: python3 -m py_compile gui/kc9k-gui.py
+        run: for f in gui/kc9k-gui.py gui/kc9k_gui/*.py; do python3 -m py_compile "$f" || exit 1; done
       - name: Extension matching
         run: node ci/match_test.js
       - name: Extension background as in IronFox (Android)

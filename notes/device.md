@@ -70,7 +70,7 @@
   Closed within a cycle, not prevented (B3). Still open: a person's file
   elsewhere (e.g. `/opt` tarball keeping its owner).
 - Boot param `kc9k.nofreeze` skips freeze and lockdown for that boot
-  (Windows: Safe Mode, [windows](windows.md)); `kc9k recover` boot:
+  (Windows: Safe Mode, [windows-tamper](windows-tamper.md)); `kc9k recover` boot:
   `recoveryBoot`, `cli/recover_*.go`.
 - `enforceLockdown` uses `enforce` vars `applyLockdown`, `removeLockdown`,
   `applyNoexec`, `removeNoexec`, `closeNoexecPrograms`, `kernelCmdline`,

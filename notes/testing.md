@@ -72,6 +72,11 @@
   clicks every button/switch of every page, tab and ⋯ menu, dialogs
   cancelled then answered OK (greyed-out not pressed); fails on handler
   exception or unreadable command. Others `ci/gui_*_smoke.py` (`xvfb-run -a`).
+  Cloud container (root, Python without `gi`): `apt-get install -y
+  gir1.2-gtk-3.0 python3-gi-cairo python3-cairo dbus-x11`, a user
+  (`useradd -m t`), then per test `runuser -u t -- env HOME=/home/t
+  PATH=/usr/local/go/bin:/usr/bin:/bin xvfb-run -a dbus-run-session --
+  /usr/bin/python3.12 ci/gui_X_smoke.py` (the Python `gi` was built for).
 - Weakening audit: `cli/weakening_audit_test.go`; add every new weakening command.
 - Race: `CGO_ENABLED=1 go test -race -timeout 30m ./internal/...`
   (`internal/cli` ~14 min). Spinning disk: `TMPDIR=/dev/shm/…` (else ~16 min).

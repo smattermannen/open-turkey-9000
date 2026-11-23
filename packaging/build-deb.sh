@@ -17,9 +17,10 @@ PATH="/usr/local/go/bin:$PATH"
 (cd "$root" && CGO_ENABLED=0 go build -tags "${TAGS:-}" -o "$stage/kc9k-bin" ./cmd/kc9k)
 
 pkg="$stage/pkg"
-install -d "$pkg/usr/local/bin" "$pkg/usr/share/applications" "$pkg/etc/systemd/system" "$pkg/DEBIAN"
+install -d "$pkg/usr/local/bin" "$pkg/usr/local/lib/kc9k-gui" "$pkg/usr/share/applications" "$pkg/etc/systemd/system" "$pkg/DEBIAN"
 install -m 755 "$stage/kc9k-bin" "$pkg/usr/local/bin/kc9k-bin"
 install -m 755 "$root/gui/kc9k-gui.py" "$pkg/usr/local/bin/kc9k-gui"
+install -m 644 "$root"/gui/kc9k_gui/*.py "$pkg/usr/local/lib/kc9k-gui/"
 install -m 644 "$root/gui/kc9k.desktop" "$pkg/usr/share/applications/kc9k.desktop"
 install -m 644 "$root/systemd/kc9k.service" "$pkg/etc/systemd/system/kc9k.service"
 printf '#!/bin/bash\n# Killer Chicken 9000: runs the real binary through sudo (see /etc/sudoers.d/kc9k).\nexec sudo /usr/local/bin/kc9k-bin "$@"\n' > "$pkg/usr/local/bin/kc9k"

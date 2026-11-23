@@ -1,11 +1,25 @@
 # GUI
 
-- Covers: `gui/kc9k-gui.py`, `gui/kc9k.desktop`, `ci/gui_*.py`, `cli/duration.go`
+- Covers: `gui/kc9k-gui.py`, `gui/kc9k_gui/*.py`, `gui/kc9k.desktop`, `ci/gui_*.py`, `cli/duration.go`
 - SPEC: §4.1–4.13, R-GUI-1–3
 - Connects to: every note (each GUI change runs a `kc9k` command); [testing](testing.md) (GUI smoke tests)
 
 ## Structure (`gui/kc9k-gui.py`, GTK 3)
 
+- Files: `kc9k-gui.py` holds the imports and runs the parts in
+  `gui/kc9k_gui/` (installed in `/usr/local/lib/kc9k-gui/`, the script as
+  `/usr/local/bin/kc9k-gui`) in `PARTS` order into its own namespace (`exec`):
+  one module as before, so tests replace `CLI`, `PREFS_PATH` there. Parts
+  have no imports; a new part goes in `PARTS`, `Makefile` and
+  `build-deb.sh` take `*.py`. `base` (constants, `run_cli`, prefs, theme,
+  card helpers), `fields` (durations, numbers, timer lock, `LockPicker`),
+  `lists` (`EditableList`, `ListCard`, phrase sets), `charts` (statistics
+  widgets), `circadian` (clips, wallpapers, `CircadianPage`), `automation`
+  (`AutomationEditor`, triggers, places), `window` (`Window`: build,
+  `run`, state, access passwords), one `win_*` mixin per page (places,
+  dashboard, blocks, modes + opened block, block actions, clusters, device,
+  stats, settings), `app` (`Tray`, `APP_CSS`, `App`). Find a method:
+  `grep -n 'def NAME' gui/kc9k_gui/*.py`.
 - Reads `kc9k gui-state`, `kc9k stats --json`; every change runs a `kc9k`
   command. Menu entry / `kc9k-gui` (`python3-gi`); theme in
   `~/.config/kc9k/gui.json`.

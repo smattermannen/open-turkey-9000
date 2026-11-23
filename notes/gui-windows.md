@@ -65,7 +65,8 @@
   mode, Frozen Chicken, new block), Open, Quit (blocks stay on).
 - **Preferences** (`Prefs.cs`): `%APPDATA%\kc9k\gui.json`
   (`KC9K_GUI_PREFS`): theme, darkness, clock, weekday, tray, list heights,
-  window geometry (only on a screen still there), open on. `Options` must
+  window geometry (only on a screen still there; `window_width/height` in
+  physical pixels: 800 opens 400 DIP at 200 %), open on. `Options` must
   be set before `Current` reads the file (static field order).
 
 ## Tests
@@ -140,5 +141,5 @@ Not fixed by `SPEC.md`; the code is the truth.
 - Core's Windows-only behaviour in the GUI (W49, `WindowsTests.cs`):
   guided setup steps (W15), help texts (W16), browser Install (W18),
   Close guest profiles' help names Windows' Guest account (W14). Every
-  Windows-only setting in [windows](windows.md) has a control (audit
+  Windows-only setting in [windows](windows.md), [windows-layers](windows-layers.md) and [windows-tamper](windows-tamper.md) has a control (audit
   2026-11-23); a new Core `GUI:` line gets its place and a test here.

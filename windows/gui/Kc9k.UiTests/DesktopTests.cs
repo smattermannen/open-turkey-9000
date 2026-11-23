@@ -36,6 +36,12 @@ public class DesktopTests
         var r = block.BoundingRectangle;
         gui.Front();
         Drag(new(r.Right + 120, r.Top + r.Height / 2), Center(mode));
+        if (FlaUI.Core.Tools.Retry.WhileNull(() => gui.DesktopByName("Put Reading into Study?"), TimeSpan.FromSeconds(6), TimeSpan.FromMilliseconds(200)).Result is null)
+        {
+            // A busy runner can drop the first drag's start: once more.
+            gui.Front();
+            Drag(new(r.Right + 120, r.Top + r.Height / 2), Center(gui.Find("ModeCard_Study")));
+        }
         gui.FindName("Put Reading into Study?", 20);
         gui.Shot("dropped");
         gui.Invoke(gui.FindButton("Put it in"));

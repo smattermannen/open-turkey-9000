@@ -51,7 +51,7 @@
   mode card, or context menu / Shift+F10) with `BlockView` (tab buttons
   Websites, Apps, Breaks & allowance, Bypass prevention; Start, then Add
   locks…), `AutomationView`, `ModeView` (monk mode, Frozen Chicken via
-  `Device.cs`), `SchedulesPlaces.cs`, `HotkeysPage` (worded win+; CLI
+  `Device.cs`; wallpapers for every mode, Frozen Chicken and monk mode too), `SchedulesPlaces.cs`, `HotkeysPage` (worded win+; CLI
   also takes super+), `PresetsPage`, `StatsPage` (own `stats --json` read
   with frame and filters; JSON export, GTK has none), `CircadianPage`,
   `SettingsPage` (Windows wording; `Startup`: Open at sign-in shortcut).
@@ -104,7 +104,11 @@
   service; `GuiApp.Cli`/`RealState` set up and check). No Wi-Fi on the
   runner: places' real run checks the "no network in range" path.
   `GuiApp.PickFile` answers Windows' own open dialog (#32770, File name,
-  Enter). `DesktopTests.cs` (W4): a block dragged onto a mode, a window
+  Enter); `GuiApp.Drag` drags through SendInput (FlaUI's SetCursorPos moves
+  are no drag to WinUI); `Front` before clicks and keys (the runner's own
+  console comes forward now and then); `Show` scrolls into view (an element
+  out of view has no rectangle). The workflow sets the display to
+  1920×1080 first; `--filter` input runs only some tests by hand. `DesktopTests.cs` (W4): a block dragged onto a mode, a window
   drawn on the week, the tray menu (its callback message posted), Open at
   sign-in's shortcut, the challenge window opened by Unlock… (installed
   kc9k.exe; leaves the runner's block locked). `WindowsTests.cs`: W30–W43.

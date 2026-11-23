@@ -77,7 +77,6 @@ its bypass prevention).
 | W19 | Firmware lock on Windows: real firmware | §3.8, §4.10 | windows-tamper, device | laptop, owner |
 | W24 | Strict mode: real WSL, Sandbox, Hyper-V | §3.8 | windows-tamper, device | win-vm |
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows-tamper, device | laptop |
-| W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
 | W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows, windows-layers | laptop |
 | W55 | Windows service without its pipe after an upgrade ("service is not running") | principle 1, §4.11 | windows | agent |
 | W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
@@ -445,12 +444,16 @@ needs it and the Linux tests prove nothing changed.
   `ci/windows_vm_test.ps1`): notifications seen, the challenge window
   (Raw Input refusing injected keys), hotkeys, the lock freeze.
 - [ ] `W4` GUI (L). C# WinUI 3, .NET LTS, unpackaged, self-contained, in
-  `windows/gui/` (no browser, no web view); every GTK page ported, checked
-  in CI against the fake kc9k and the real `kc9k.exe` with its service.
-  Unchecked (win-vm, laptop): the challenge window opened from the GUI;
-  drag and drop (block onto mode, calendar, clips, wallpaper bars); file
-  dialogs; tray menu (W35) and jump list (W36) by hand; Open at sign-in;
-  Narrator; high contrast; 150–200 % scaling; a second screen.
+  `windows/gui/`; every GTK page ported and every GTK smoke test has a UI
+  Automation counterpart (fake kc9k and real `kc9k.exe`). Checked on
+  `windows-latest` (2026-11-23): drag and drop (block onto mode, a window
+  drawn on the week, wallpaper bar, list grip), Windows' own open dialog,
+  the tray menu (its message posted, not the icon clicked), Open at
+  sign-in's shortcut, the challenge window opened by Unlock…, high
+  contrast, the display at 150 % and 175 % (the runner's most; 200 % only
+  as text size). Unchecked (win-vm, laptop): the display at 200 %, the
+  tray icon clicked, the jump list from the taskbar, Narrator, a second
+  screen, clip curves dragged.
 - [ ] `W5` Tamper protection against an administrator (L). Built, checked
   on `windows-latest` (service can't be stopped/changed/deleted,
   watchdog task back, strict deny entries, uninstall refused while
@@ -476,15 +479,6 @@ needs it and the Linux tests prove nothing changed.
 
 Every `kc9k` command and `gui-state` field the GTK GUI uses, the Windows
 GUI uses too; gaps are Windows-only behaviour and tests.
-
-- [ ] `W32` UI Automation counterparts of the GTK smoke tests (M;
-  R-GUI-1–3, §4.2–4.13). Built in `ParityTests.cs`: `gui_cards`,
-  `gui_extend`, `gui_duration`, `gui_lists`, `gui_presets`, `gui_modes`
-  (card's menu), `gui_freeze_lock`, `gui_automation`,
-  `gui_click_everything`. Not yet: `gui_actions` (run a mode locked,
-  custom action), `gui_list_resize`,
-  `gui_phrase`, `gui_phrase_edit`, `gui_places`, `gui_playlist`,
-  `gui_trigger`, `gui_wallpaper` (`gui_import`: `ProjectImportTests`). Needs: win-ci.
 
 Laptop findings on finished items (2026-11-22, at 200 % scaling):
 
@@ -569,10 +563,22 @@ Still open from the report (built and in CI; what was built is in
   `ci/windows_soak_test.ps1` (idle: 0 PowerShell by the service).
 - `W54` **Page layout as in the GTK GUI** (§4.1–4.13, R-GUI-3): built.
   Left: the owner's look on the laptop.
+- Stability (2026-11-23, `StabilityTests`): a slow, hung or missing
+  kc9k.exe never stops the window; dialogs one at a time; refusals shown;
+  Enter in every dialog. Left: the owner's use on the laptop.
 - `A14` **Automation clip curves bend one way only** (§4.10): one mirrored
   curve in Go, C#, GTK. Left: the owner's look on the laptop.
 
 ## 5. Proposed, not agreed
+
+- DECIDED (By claude) 2026-11-23 (`2.12`): the Windows GUI shows every
+  browser `gui-state.browsers` lists, with its extension's state and
+  Install when not on the computer; "found, no extension yet" names the
+  Chrome Web Store only for Chrome and Edge. Until Core lists Firefox
+  (and Bing), tested against the fake. Owner may overturn.
+- DECIDED (By claude) 2026-11-23 (`W4`): what `windows-latest` can't show
+  (200 % display, a person clicking the tray icon) stays on the laptop
+  list; CI proves 150/175 % and 200 % text size instead. Owner may overturn.
 
 - DECIDED (By claude) 2026-11-23 (`2.15`): supported engines = Google,
   Bing, DuckDuckGo (and its HTML version), Brave Search, Yahoo, Startpage,

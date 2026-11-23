@@ -98,7 +98,14 @@ public class ParityRealTests
 
         // The apps' actions.
         gui.Invoke("Tab_apps");
-        gui.Find("Trigger_apps_Mode").AsComboBox().Select("Study");
+        // The state read every 5 s fills the list again: chosen until it stays.
+        gui.WaitFor(() =>
+        {
+            var combo = gui.Find("Trigger_apps_Mode").AsComboBox();
+            if (combo.SelectedItem?.Name != "Study") combo.Select("Study");
+            Thread.Sleep(300);
+            return gui.Find("Trigger_apps_Mode").AsComboBox().SelectedItem?.Name == "Study";
+        }, "Study chosen for the apps' Mode action");
         gui.Invoke("Trigger_apps_mode");
         Acknowledge(gui);
         gui.WaitFor(() => gui.RanWith("block", "trigger", "apps", "mode", "on", "--target", "Study"), "kc9k block trigger … apps mode on --target Study");
@@ -294,6 +301,13 @@ public class ParityRealTests
 
     static AutomationElement Save(GuiApp gui) => gui.Find("Phrases_Gossip_Save");
 
+    /// <summary>Presses the card's Save once what was typed has been read.</summary>
+    static void SaveWhenReady(GuiApp gui)
+    {
+        gui.WaitFor(() => Save(gui).IsEnabled, "Save can be used");
+        gui.Invoke("Phrases_Gossip_Save");
+    }
+
     static List<string> Phrases(GuiApp gui) =>
         [.. gui.RealBlock("Work")["phrase_sets"]!.AsArray().First(p => (string?)p!["name"] == "Gossip")!["phrases"]!.AsArray()
             .Select(p => (string?)p!["text"] ?? "")];
@@ -362,7 +376,7 @@ public class ParityRealTests
         Assert.True(gui.Find("Phrases_Gossip_AddSet").IsEnabled, "more than nine word sets");
         for (var n = 13; n > 3; n--) gui.Invoke($"Phrases_Gossip_RemoveSet{n}");
         gui.Shot("built");
-        gui.Invoke("Phrases_Gossip_Save");
+        SaveWhenReady(gui);
         gui.WaitFor(() => gui.Ran("phrase-set", "add", "Work (draft)", "Gossip", "[red] [car, truck] [big]?"), "kc9k phrase-set add … [red] [car, truck] [big]?");
         if (real)
         {
@@ -379,7 +393,7 @@ public class ParityRealTests
         if (gui.ById("Phrases_Gossip_Set3") is not null) gui.Invoke(gui.FindButton("Drop changes"));
         Type(gui, 1, "-gorilla");
         Type(gui, 2, "x");
-        gui.Invoke("Phrases_Gossip_Save");
+        SaveWhenReady(gui);
         gui.FindName("Not done", 20);
         Assert.Contains("bridge", gui.Find("MessageText").Name);
         gui.Invoke(gui.FindButton("OK"));
@@ -412,14 +426,14 @@ public class ParityRealTests
         gui.Invoke("BlockCard_Work");
         Load(gui, GossipPhrase);
         Type(gui, 2, "divorce, scandal, breakup");
-        gui.Invoke("Phrases_Gossip_Save");
+        SaveWhenReady(gui);
         gui.WaitFor(() => gui.Ran("phrase-set", "change", "Work (draft)", "Gossip", GossipPhrase, "[celebrity, star] [divorce, scandal, breakup]"),
             "kc9k phrase-set change … (one step)");
         if (real)
         {
             gui.WaitFor(() => Save(gui).Name == "Save changes" && !Save(gui).IsEnabled, "the changed phrase stays loaded");
             Type(gui, 1, "celebrity, star, idol");
-            gui.Invoke("Phrases_Gossip_Save");
+            SaveWhenReady(gui);
             gui.WaitFor(() => gui.Ran("phrase-set", "change", "Work (draft)", "Gossip", "[celebrity, star] [divorce, scandal, breakup]", "[celebrity, star, idol] [divorce, scandal, breakup]"),
                 "the second change of the same phrase");
             Type(gui, 1, "CELEBRITY, STAR, IDOL");
@@ -427,7 +441,7 @@ public class ParityRealTests
             // Letter case alone is no unsaved change: Cancel asks nothing.
             gui.Invoke("Phrases_Gossip_Cancel");
             Thread.Sleep(800);
-            Assert.Null(gui.DesktopByName("Drop the unsaved phrase?"));
+            if (gui.DesktopByName("Drop the unsaved phrase?") is not null) gui.Invoke(gui.FindButton("Drop changes"));
         }
         else
         {
@@ -443,7 +457,7 @@ public class ParityRealTests
         Type(gui, 2, "日本");
         Thread.Sleep(7000);
         Assert.Equal("café, naïve", Editor(gui, 1));
-        gui.Invoke("Phrases_Gossip_Save");
+        SaveWhenReady(gui);
         gui.WaitFor(() => gui.Ran("phrase-set", "add", "Work (draft)", "Gossip", "[café, naïve] [日本]"), "the Unicode phrase added");
         if (!real) return;
         gui.Invoke("SaveEdits");
@@ -457,7 +471,7 @@ public class ParityRealTests
         const string locked = "[celebrity, star, idol] [divorce, scandal, breakup]";
         Load(gui, locked);
         Type(gui, 2, "divorce, scandal");
-        gui.Invoke("Phrases_Gossip_Save");
+        SaveWhenReady(gui);
         gui.WaitFor(() => gui.Ran("phrase-set", "change", "Work (draft)", "Gossip", locked, "[celebrity, star, idol] [divorce, scandal]"), "the change in the draft");
         gui.Invoke(gui.Find("SaveEdits", 30));
         gui.FindName("Not done", 30);

@@ -313,7 +313,10 @@ Only rows not fully built.
   Files and the Microsoft Store's) recognised, given policies and guarded,
   waiting only for a Mozilla-signed `.xpi` (`webext/signed/`, SPEC §7
   "Signing the extension for Firefox", owner); Bing is Edge there (§5);
-  gui-state `waiting` says which. Not built: Firefox and Edge on Linux,
+  gui-state `waiting` says which. Linux (`notes/browsers.md`): Edge and
+  Firefox recognised the same way (policies, guarded, `waiting`
+  `chrome-web-store` / `mozilla-signature`; GTK says it). Not built: Edge's
+  force-install on Linux once the store ID exists (with 2.17's agent task),
   every browser on Android (IronFox only), the Bing app on Android.
   Unchecked (win-vm, `ci/windows_vm_test.ps1`): Firefox and the Store's
   Firefox obeying, the guard closing a waiting Firefox.
@@ -325,7 +328,9 @@ Only rows not fully built.
   (`blocker.ChromeStoreExtensionID` empty: they get none, W2). Linux keeps
   its own signed `.crx` from the daemon.
   To do, agent:
-  - [ ] With the ID: set `ChromeStoreExtensionID`; release step uploading
+  - [ ] With the ID: set `ChromeStoreExtensionID` (and Linux's
+    `chromeStoreID` in `blocker/supported.go`, with Edge's
+    `ExtensionInstallForcelist` on Linux); release step uploading
     each new extension version (Chrome Web Store API; owner's OAuth client
     as GitHub secrets).
   To do, owner:
@@ -595,6 +600,12 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- DECIDED (By claude) 2026-11-23 (`2.12`): on Linux Microsoft Edge takes
+  the extension from the Chrome Web Store as on Windows (waits for 2.17's
+  ID), not from KC9K's own `.crx` like Chrome and Chromium: one source for
+  Edge everywhere, and Edge's off-store installs on Linux are untested.
+  Firefox on Linux: Mint's or Mozilla's `.deb`, ESR and the snap, all
+  reading `/etc/firefox/policies`. Owner may overturn.
 - DECIDED (By claude) 2026-11-23 (`A18`): list entries get `kc9k list
   change B L OLD NEW`, and a draft's save pairs an edited entry like a
   phrase. "Clearly matches more" (R-WEAK-5) is read narrowly: plain sites

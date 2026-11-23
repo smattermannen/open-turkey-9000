@@ -87,12 +87,23 @@ check("unsupported-browsers" in win.setting_locks and "strict" in win.setting_lo
 # Browsers list (§4.10): every supported browser, installed or not, Install
 # shown only where missing. Never clicked: it would install for real.
 ids = [b["id"] for b in win.state["browsers"]]
-check(ids == ["librewolf", "chrome", "chromium"], "supported browsers listed: " + ", ".join(ids))
+check(ids == ["librewolf", "chrome", "chromium", "edge", "firefox"], "supported browsers listed: " + ", ".join(ids))
+# 2.12: Edge and Firefox wait (store listing, Mozilla's signature): said,
+# and nothing to install yet.
+check({b["id"]: b.get("waiting", "") for b in win.state["browsers"]}
+      == {"librewolf": "", "chrome": "", "chromium": "", "edge": "chrome-web-store", "firefox": "mozilla-signature"},
+      "what Edge and Firefox wait for")
 for b in win.state["browsers"]:
     status, install = win.browser_rows[b["id"]]
-    check(status.get_text().startswith("Installed" if b["installed"] else "Not installed"),
+    check(status.get_text().startswith(("Installed" if b["found"] else "Not installed") if b.get("waiting") else
+                                       ("Installed" if b["installed"] else "Not installed")),
           f"{b['name']} status: {status.get_text()}")
-    check(install.get_visible() == (not b["installed"]), f"{b['name']} Install button only when missing")
+    if b.get("waiting"):
+        check("once" in status.get_text(), f"{b['name']} says what it waits for: {status.get_text()}")
+    check(install.get_visible() == (not b["installed"] and not b.get("waiting")),
+          f"{b['name']} Install button only when missing and installable")
+check(gui.browser_status({"installed": False, "found": True, "waiting": "mozilla-signature"}).startswith(
+    "Installed, no extension yet: it gets the extension once Mozilla has signed it"), "a found Firefox waiting")
 check(gui.browser_status({"installed": True, "checkin_seconds": 5}) == "Installed. Extension working.", "fresh check-in")
 check("not seen" in gui.browser_status({"installed": True, "checkin_seconds": -1}), "never checked in")
 # A fresh setup: only what KC9K always did is on (§4.10, 2026-11-21 By Opus).

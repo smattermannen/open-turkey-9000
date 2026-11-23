@@ -896,7 +896,8 @@ class _SettingsPages:
                 self.browser_rows[b["id"]] = (status, install)
             status, install = self.browser_rows[b["id"]]
             status.set_text(browser_status(b))
-            install.set_visible(not b.get("installed"))
+            # A waiting browser has nothing KC9K can install yet (2.12).
+            install.set_visible(not b.get("installed") and not b.get("waiting"))
         any_installed = any(b.get("installed") for b in browsers)
         if any_installed:
             self.extension_status.set_text("Extension: " + self.state.get("extension_status", ""))

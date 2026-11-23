@@ -1,7 +1,8 @@
 //go:build linux
 
 // supported.go — the supported browsers (§3.13): LibreWolf, Google Chrome
-// and Chromium, the browsers that run the KC9K extension. With block
+// and Chromium, the browsers that run the KC9K extension; Microsoft Edge
+// and Firefox once they can (Waiting). With block
 // unsupported browsers on (§4.10), every other browser is closed, and these
 // too unless their extension checks in (see ExtensionGuard).
 //
@@ -22,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/smattermannen/kc9k/internal/webext"
 )
 
 // SupportedBrowsers lists the supported browsers, in the order shown.
@@ -34,13 +37,32 @@ var SupportedBrowsers = []SupportedBrowser{
 	// /etc/chromium/policies); Ubuntu's chromium-browser is a snap, which
 	// ignores policies.
 	{ID: "chromium", Name: "Chromium", Exes: []string{"/usr/lib/chromium/chromium"}},
+	// 2.12: Microsoft Edge (Microsoft's .deb) takes the extension from the
+	// Chrome Web Store, as on Windows (2.17: the listing's ID); until then
+	// it is found and given the policies, but unsupported.
+	{ID: "edge", Name: "Microsoft Edge", Exes: []string{"/opt/microsoft/msedge/msedge"}},
+	// Release Firefox (Linux Mint's or Mozilla's .deb, Firefox ESR, the
+	// snap: all read /etc/firefox/policies) installs only Mozilla-signed
+	// add-ons: supported once webext.SignedXPI has this version.
+	{ID: "firefox", Name: "Firefox", Exes: []string{
+		"/usr/lib/firefox/firefox", "/usr/lib/firefox-esr/firefox-esr",
+		"/snap/firefox/current/usr/lib/firefox/firefox"}},
 }
+
+// chromeStoreID is the extension's Chrome Web Store ID on Linux (2.17;
+// empty until the listing exists); chromeStoreReady and mozillaSigned are
+// what Waiting asks, tests set them.
+var (
+	chromeStoreID    = ""
+	chromeStoreReady = func() bool { return chromeStoreID != "" }
+	mozillaSigned    = webext.MozillaSigned
+)
 
 // statFile is os.Stat, replaced in tests.
 var statFile = os.Stat
 
-// Installed reports whether the browser is installed.
-func (b SupportedBrowser) Installed() bool {
+// Found reports whether one of b's programs is on the computer.
+func (b SupportedBrowser) Found() bool {
 	for _, exe := range b.Exes {
 		if _, err := statFile(exe); err == nil {
 			return true
@@ -49,9 +71,25 @@ func (b SupportedBrowser) Installed() bool {
 	return false
 }
 
-// Waiting is what b waits for before KC9K can give it the extension: on
-// Linux nothing (each listed browser takes it as it is).
-func (b SupportedBrowser) Waiting() string { return "" }
+// Installed reports whether the browser is installed and KC9K can give it
+// the extension (Waiting is "").
+func (b SupportedBrowser) Installed() bool { return b.Waiting() == "" && b.Found() }
+
+// Waiting is what b waits for before KC9K can give it the extension, or ""
+// (LibreWolf, Chrome and Chromium take it as it is).
+func (b SupportedBrowser) Waiting() string {
+	switch b.ID {
+	case "edge":
+		if !chromeStoreReady() {
+			return WaitingChromeWebStore
+		}
+	case "firefox":
+		if !mozillaSigned() {
+			return WaitingMozillaSignature
+		}
+	}
+	return ""
+}
 
 // SupportedBrowserByID returns the supported browser with that ID.
 func SupportedBrowserByID(id string) (SupportedBrowser, bool) {
@@ -70,6 +108,9 @@ func supportedExePath(exe string) string {
 	for _, b := range SupportedBrowsers {
 		for _, path := range b.Exes {
 			if exe == path {
+				if b.Waiting() != "" {
+					return "" // can't run the extension yet: unsupported
+				}
 				return b.ID
 			}
 		}
@@ -104,6 +145,9 @@ func installSteps(id string) ([][]string, error) {
 	case "chromium":
 		// Linux Mint packages Chromium as a .deb in its own repository.
 		return [][]string{{"apt-get", "install", "-y", "chromium"}}, nil
+	case "firefox":
+		// Linux Mint packages Firefox as a .deb in its own repository.
+		return [][]string{{"apt-get", "install", "-y", "firefox"}}, nil
 	case "chrome":
 		// Google's repository, signed with the key installChromeRepo saves;
 		// the package keeps its own list file up to date afterwards.
@@ -112,7 +156,10 @@ func installSteps(id string) ([][]string, error) {
 			{"apt-get", "install", "-y", "google-chrome-stable"},
 		}, nil
 	}
-	return nil, fmt.Errorf("unknown browser %q (use librewolf, chrome or chromium)", id)
+	if id == "edge" {
+		return nil, fmt.Errorf("Microsoft Edge isn't installed by KC9K: install it from Microsoft (microsoft.com/edge)")
+	}
+	return nil, fmt.Errorf("unknown browser %q (use librewolf, chrome, chromium or firefox)", id)
 }
 
 // Google's apt repository for Chrome and the key that signs it.
@@ -179,6 +226,12 @@ func InstallBrowser(id string) error {
 	if !ok {
 		_, err := installSteps(id)
 		return err
+	}
+	switch b.Waiting() {
+	case WaitingChromeWebStore:
+		return fmt.Errorf("%s isn't installed by KC9K yet: it gets the extension once its Chrome Web Store listing exists", b.Name)
+	case WaitingMozillaSignature:
+		return fmt.Errorf("%s isn't installed by KC9K yet: it gets the extension once Mozilla has signed it (LibreWolf takes it now)", b.Name)
 	}
 	steps, err := installSteps(id)
 	if err != nil {

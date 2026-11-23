@@ -24,18 +24,18 @@ type guiBrowser struct {
 	Name      string `json:"name"`
 	Installed bool   `json:"installed"`
 	// Found: one of its executables is on the computer. Unlike Installed,
-	// it doesn't ask whether KC9K can give it the extension: on Windows,
-	// Chrome and Edge are found but not installed as supported browsers
-	// until the extension's Chrome Web Store listing exists (the GUI says
-	// so, W30). On Linux the two are the same.
+	// it doesn't ask whether KC9K can give it the extension: Edge (and on
+	// Windows Chrome) is found but not installed as a supported browser
+	// until the extension's Chrome Web Store listing exists, Firefox until
+	// Mozilla has signed it (the GUIs say so, W30, 2.12).
 	Found bool `json:"found"`
 	// CheckIn is how many seconds ago its extension last checked in; -1
 	// never (since this was recorded).
 	CheckIn int64 `json:"checkin_seconds"`
 	// Waiting is what KC9K waits for before it can give this browser the
-	// extension (2.12, Windows): "chrome-web-store" (Chrome, Edge: the
-	// listing, 2.17) or "mozilla-signature" (Firefox: Mozilla's signature,
-	// SPEC §7); left out when nothing (always on Linux).
+	// extension (2.12): "chrome-web-store" (Edge, and Chrome on Windows:
+	// the listing, 2.17) or "mozilla-signature" (Firefox: Mozilla's
+	// signature, SPEC §7); left out when nothing.
 	Waiting string `json:"waiting,omitempty"`
 }
 
@@ -89,15 +89,19 @@ func (g guiBrowser) extensionText() string {
 }
 
 var browsersCmd = &cobra.Command{
-	Use:   "browsers [install librewolf|chrome|chromium]",
+	Use:   "browsers [install BROWSER]",
 	Short: "Supported browsers: installed, extension status, install",
 	Long: `The supported browsers run the Killer Chicken extension: LibreWolf, Google
-Chrome and Chromium. Without arguments, lists each: installed or not, and
-whether its extension has checked in.
+Chrome and Chromium; Microsoft Edge once the extension is in the Chrome Web
+Store, Firefox once Mozilla has signed it (until then they get KC9K's
+policies but are closed like any unsupported browser). Without arguments,
+lists each: installed or not, and whether its extension has checked in.
 
   install librewolf   from LibreWolf's repository (via extrepo)
   install chromium    from Linux Mint's repository
   install chrome      from Google's repository (added, with its signing key)
+  install firefox     from Linux Mint's repository (once Mozilla has signed
+                      the extension)
 
 The extension is added the next time the browser starts. With 'kc9k tamper
 unsupported-browsers on', every other browser is closed.`,

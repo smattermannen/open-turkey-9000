@@ -55,7 +55,7 @@ func TestSupportedInstalled(t *testing.T) {
 	for _, b := range SupportedBrowsers {
 		got[b.ID] = b.Installed()
 	}
-	if !reflect.DeepEqual(got, map[string]bool{"librewolf": false, "chrome": false, "chromium": true}) {
+	if !reflect.DeepEqual(got, map[string]bool{"librewolf": false, "chrome": false, "chromium": true, "edge": false, "firefox": false}) {
 		t.Errorf("installed = %v", got)
 	}
 	if !ChromeInstalled() {
@@ -86,10 +86,48 @@ func TestInstallBrowser(t *testing.T) {
 		t.Errorf("librewolf steps = %v", ran)
 	}
 
-	if err := InstallBrowser("firefox"); err == nil {
-		t.Error("installed an unsupported browser")
+	if err := InstallBrowser("firefox"); err == nil || !strings.Contains(err.Error(), "Mozilla has signed") {
+		t.Errorf("installed Firefox before it can get the extension: %v", err)
+	}
+	if err := InstallBrowser("brave"); err == nil {
+		t.Error("installed an unknown browser")
 	}
 	if steps, err := installSteps("chrome"); err != nil || steps[len(steps)-1][3] != "google-chrome-stable" {
 		t.Errorf("chrome steps = %v, %v", steps, err)
+	}
+}
+
+// 2.12 on Linux: Edge and Firefox are found and named with what they wait
+// for (the Chrome Web Store listing, Mozilla's signature); until then they
+// are no supported browser (closed like any other with block unsupported
+// browsers on), afterwards they are.
+func TestEdgeAndFirefoxWait(t *testing.T) {
+	fakeInstalled(t, "/opt/microsoft/msedge/msedge", "/usr/lib/firefox/firefox")
+	oldStore, oldSigned := chromeStoreReady, mozillaSigned
+	t.Cleanup(func() { chromeStoreReady, mozillaSigned = oldStore, oldSigned })
+	chromeStoreReady = func() bool { return false }
+	mozillaSigned = func() bool { return false }
+	for id, want := range map[string]string{"edge": WaitingChromeWebStore, "firefox": WaitingMozillaSignature,
+		"chrome": "", "chromium": "", "librewolf": ""} {
+		b, _ := SupportedBrowserByID(id)
+		if got := b.Waiting(); got != want {
+			t.Errorf("%s waits for %q, want %q", id, got, want)
+		}
+	}
+	edge, _ := SupportedBrowserByID("edge")
+	firefox, _ := SupportedBrowserByID("firefox")
+	if !edge.Found() || !firefox.Found() || edge.Installed() || firefox.Installed() || ExtensionBrowserInstalled() {
+		t.Error("a waiting browser counts as a supported one")
+	}
+	for _, exe := range []string{"/opt/microsoft/msedge/msedge", "/usr/lib/firefox/firefox", "/snap/firefox/current/usr/lib/firefox/firefox"} {
+		if id := supportedExePath(exe); id != "" {
+			t.Errorf("%s supported while waiting: %q", exe, id)
+		}
+	}
+	chromeStoreReady = func() bool { return true }
+	mozillaSigned = func() bool { return true }
+	if supportedExePath("/usr/lib/firefox/firefox") != "firefox" || supportedExePath("/opt/microsoft/msedge/msedge") != "edge" ||
+		!firefox.Installed() || !ExtensionBrowserInstalled() || ChromeInstalled() {
+		t.Error("Firefox and Edge not supported once they can run the extension")
 	}
 }

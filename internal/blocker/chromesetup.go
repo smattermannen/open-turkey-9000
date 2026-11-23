@@ -21,7 +21,7 @@ var ChromeSetupPaths = []string{
 // is a browser without the extension (see browserdetect.go).
 func ChromeInstalled() bool {
 	for _, b := range SupportedBrowsers {
-		if b.ID != "librewolf" && b.Installed() {
+		if (b.ID == "chrome" || b.ID == "chromium") && b.Installed() {
 			return true
 		}
 	}
@@ -29,9 +29,17 @@ func ChromeInstalled() bool {
 }
 
 // ExtensionBrowserInstalled reports whether a browser that runs the KC9K
-// extension is installed: LibreWolf, Google Chrome or Chromium.
+// extension is installed: LibreWolf, or a supported browser not waiting.
 func ExtensionBrowserInstalled() bool {
-	return LibreWolfVersion() != "" || ChromeInstalled()
+	if LibreWolfVersion() != "" {
+		return true
+	}
+	for _, b := range SupportedBrowsers {
+		if b.Installed() {
+			return true
+		}
+	}
+	return false
 }
 
 // chromeSetupPolicy returns the policies for s.

@@ -190,10 +190,18 @@ TAMPER_SETTINGS = (
      ("tamper", "unsupported-browsers")),
 )
 
+# What a found browser waits for before it gets the extension (2.12,
+# gui-state 'waiting'); until then it is closed like any unsupported one.
+BROWSER_WAITING = {
+    "chrome-web-store": "it gets the extension once the Chrome Web Store listing exists.",
+    "mozilla-signature": "it gets the extension once Mozilla has signed it. LibreWolf runs it now.",
+}
+
 # Install notes for the supported browsers (SPEC §3.13), by ID.
 BROWSER_INSTALL_NOTES = {
     "librewolf": "It is installed from LibreWolf's official repository through extrepo.",
     "chromium": "It is installed from Linux Mint's own repository.",
+    "firefox": "It is installed from Linux Mint's own repository.",
     "chrome": "Google's repository and its signing key are added, and Chrome is installed from it; "
               "it then updates with the rest of the system.",
 }
@@ -330,6 +338,12 @@ def describe_setting_lock(info):
 
 def browser_status(browser):
     """A supported browser's line in the Browsers list (gui-state 'browsers')."""
+    waiting = browser.get("waiting")
+    if waiting:
+        why = BROWSER_WAITING.get(waiting, "it waits for " + waiting + ".")
+        if browser.get("found"):
+            return "Installed, no extension yet: " + why
+        return "Not installed. " + why[0].upper() + why[1:]
     if not browser.get("installed"):
         return "Not installed."
     seconds = browser.get("checkin_seconds", -1)

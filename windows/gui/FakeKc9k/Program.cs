@@ -90,7 +90,13 @@ public static class FakeCli
         p.StandardInput.Write(stdin);
         p.StandardInput.Close();
         p.WaitForExit();
-        return (p.ExitCode, (stdout.Result + stderr.Result).TrimEnd());
+        var answer = (p.ExitCode, (stdout.Result + stderr.Result).TrimEnd());
+        // What the real CLI said, for a failing test's log.
+        var dir = Environment.GetEnvironmentVariable("KC9K_FAKE_DIR");
+        if (!string.IsNullOrEmpty(dir))
+            try { File.AppendAllText(Path.Combine(dir, "real.log"), $"kc9k {string.Join(' ', args)} -> {answer.ExitCode}: {(answer.Item2.Length > 300 ? answer.Item2[..300] + "…" : answer.Item2)}\n"); }
+            catch (IOException) { }
+        return answer;
     }
 
     /// <summary>The commands recorded in a log, oldest first.</summary>

@@ -26,14 +26,14 @@ public sealed class Dialogs(Func<XamlRoot?> root, Func<ElementTheme> theme)
             // waits at first for what is typed (a name).
             dialog.DefaultButton = !string.IsNullOrEmpty(dialog.PrimaryButtonText) ? ContentDialogButton.Primary : ContentDialogButton.None;
             Open = dialog;
-            // A15: Enter takes the main button on a closed drop-down too (it
-            // would only open itself); elsewhere ContentDialog's own default
-            // button does it, and boxes that use Enter keep it.
+            // A15: Enter takes the main button once it can be used, from a
+            // closed drop-down (it would only open itself) and a one-line box
+            // too; buttons, number boxes and boxes that use Enter keep it.
             var accepted = false;
             dialog.PreviewKeyDown += (_, e) =>
             {
                 if (e.Key != Windows.System.VirtualKey.Enter || !dialog.IsPrimaryButtonEnabled || string.IsNullOrEmpty(dialog.PrimaryButtonText)) return;
-                if (FocusManager.GetFocusedElement(dialog.XamlRoot) is not ComboBox { IsDropDownOpen: false }) return;
+                if (!TakesEnter(FocusManager.GetFocusedElement(dialog.XamlRoot) as DependencyObject)) return;
                 accepted = true;
                 e.Handled = true;
                 dialog.Hide();
@@ -51,6 +51,25 @@ public sealed class Dialogs(Func<XamlRoot?> root, Func<ElementTheme> theme)
             Open = null;
             one.Release();
         }
+    }
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, object> keepEnter = new();
+
+    /// <summary>A box whose own Enter does something (adds an item): a
+    /// dialog's Enter leaves it alone.</summary>
+    public static T KeepsEnter<T>(T box) where T : DependencyObject
+    {
+        keepEnter.AddOrUpdate(box, true);
+        return box;
+    }
+
+    static bool TakesEnter(DependencyObject? focused)
+    {
+        if (focused is ComboBox { IsDropDownOpen: false }) return true;
+        if (focused is not (TextBox { AcceptsReturn: false } or PasswordBox) || keepEnter.TryGetValue(focused, out _)) return false;
+        for (var p = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(focused); p is not null; p = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(p))
+            if (p is NumberBox or AutoSuggestBox || keepEnter.TryGetValue(p, out _)) return false;
+        return true;
     }
 
     static ContentDialog New(string title, object? content, string primary, string close = "Cancel") => new()

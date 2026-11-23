@@ -27,7 +27,7 @@ public sealed partial class CustomEditor : StackPanel
         kind.Items.Add(new ComboBoxItem { Content = "Open a site, file or folder", Tag = "open" });
         kind.Items.Add(new ComboBoxItem { Content = "Run a program or command", Tag = "run" });
         kind.SelectedIndex = 0;
-        entry = new TextBox { PlaceholderText = @"https://… or C:\Users\me\Documents\notes.docx", MinWidth = 280 }.Named("What to open or run", id + "_Entry");
+        entry = Dialogs.KeepsEnter(new TextBox { PlaceholderText = @"https://… or C:\Users\me\Documents\notes.docx", MinWidth = 280 }.Named("What to open or run", id + "_Entry"));
         kind.SelectionChanged += (_, _) => entry.PlaceholderText = Kind == "open"
             ? @"https://… or C:\Users\me\Documents\notes.docx" : "notepad.exe C:\\notes.txt";
         entry.KeyDown += (_, e) =>

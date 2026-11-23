@@ -17,6 +17,15 @@ public class ParityRealTests
     static GuiApp Start(string name, bool real, string[][] setup, Action<string>? prepare = null) =>
         new(name + (real ? "-real" : ""), scratch: real, setup: setup, prepare: prepare);
 
+    /// <summary>The fixture's Work is in the mode Study (no card of its own on
+    /// the Blocks page); the phrase tests open it as its own block.</summary>
+    static void WorkOutOfStudy(string dir) => GuiApp.EditState(dir, s =>
+    {
+        s["blocks"]!.AsArray().First(b => (string?)b!["name"] == "Work")!["mode"] = "";
+        var blocks = s["modes"]!.AsArray().First(m => (string?)m!["name"] == "Study")!["blocks"]!.AsArray();
+        foreach (var b in blocks.Where(b => (string?)b == "Work").ToList()) blocks.Remove(b);
+    });
+
     static bool On(GuiApp gui, string id) => gui.Find(id).Patterns.Toggle.Pattern.ToggleState.Value == ToggleState.On;
 
     static void Acknowledge(GuiApp gui)
@@ -127,11 +136,11 @@ public class ParityRealTests
             Assert.True(ok, output);
         }
         gui.Invoke("ModeBack");
-        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => e.Name.StartsWith("Running, locked")), "the card says it runs, locked", 20);
+        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => (e.Properties.Name.ValueOrDefault ?? "").StartsWith("Running, locked")), "the card says it runs, locked", 20);
         gui.Shot("mode-running-locked");
         gui.Invoke("ModeCard_Study");
         gui.WaitFor(() => !gui.Find("ModeViewSwitch").IsEnabled, "its switch greyed out");
-        Assert.Contains(gui.Window.FindAllDescendants(), e => e.Name.StartsWith("Run by a Mode action: locked"));
+        Assert.Contains(gui.Window.FindAllDescendants(), e => (e.Properties.Name.ValueOrDefault ?? "").StartsWith("Run by a Mode action: locked"));
         Assert.Null(gui.DesktopByName("Something went wrong"));
     }
 
@@ -198,7 +207,7 @@ public class ParityRealTests
     }
 
     static double Height(GuiApp gui, string list) =>
-        (gui.ById(list + "_Cover") is { IsOffscreen: false } cover ? cover : gui.Find(list)).BoundingRectangle.Height;
+        (gui.ById(list) ?? gui.Find(list + "_Cover")).BoundingRectangle.Height;
 
     static JsonObject Prefs(GuiApp gui) =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(gui.Dir, "gui.json")))!.AsObject();
@@ -301,8 +310,11 @@ public class ParityRealTests
     [Theory, InlineData(false), InlineData(true)]
     public void PhraseSetsInTheCard(bool real)
     {
-        using var gui = Start("phrase", real, Gossip, prepare: real ? null : dir => GuiApp.Respond(dir,
-            (["phrase-set", "add", "Work (draft)", "Gossip", "[-gorilla] [x]"], false, "Error: a bridge needs both ends: a term ending in - and one starting with -")));
+        using var gui = Start("phrase", real, Gossip, prepare: real ? null : dir =>
+        {
+            WorkOutOfStudy(dir);
+            GuiApp.Respond(dir, (["phrase-set", "add", "Work (draft)", "Gossip", "[-gorilla] [x]"], false, "Error: a bridge needs both ends: a term ending in - and one starting with -"));
+        });
         gui.Page("blocks");
         gui.Invoke("BlockCard_Work");
         gui.Find("Phrases_Gossip_Where_title");
@@ -326,7 +338,7 @@ public class ParityRealTests
         gui.Invoke("Phrases_Gossip_AddSet");
         Type(gui, 3, "big");
         gui.Invoke("Phrases_Gossip_Necessary3");
-        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => e.Name == "Phrase: [red] [car, truck] [big]?"), "the phrase built");
+        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => (e.Properties.Name.ValueOrDefault ?? "") == "Phrase: [red] [car, truck] [big]?"), "the phrase built");
         for (var i = 0; i < 10; i++) gui.Invoke("Phrases_Gossip_AddSet");
         gui.Find("Phrases_Gossip_Set13");
         Assert.True(gui.Find("Phrases_Gossip_AddSet").IsEnabled, "more than nine word sets");
@@ -377,7 +389,7 @@ public class ParityRealTests
     [Theory, InlineData(false), InlineData(true)]
     public void PhrasesChangedTheHardWay(bool real)
     {
-        using var gui = Start("phrase-edit", real, Gossip);
+        using var gui = Start("phrase-edit", real, Gossip, prepare: real ? null : WorkOutOfStudy);
         gui.Page("blocks");
         gui.Invoke("BlockCard_Work");
         Load(gui, GossipPhrase);
@@ -437,7 +449,7 @@ public class ParityRealTests
         Assert.Null(gui.DesktopByName("Something went wrong"));
     }
 
-    static bool Shows(GuiApp gui, string text) => gui.Window.FindAllDescendants().Any(e => e.Name == text);
+    static bool Shows(GuiApp gui, string text) => gui.Window.FindAllDescendants().Any(e => (e.Properties.Name.ValueOrDefault ?? "") == text);
 
     static void SavePlaceDialog(GuiApp gui, string id, string name, bool rule)
     {
@@ -482,7 +494,7 @@ public class ParityRealTests
         gui.Page("blocks");
         gui.Invoke("BlockCard_Reading");
         gui.Invoke("BlockAutomation");
-        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => e.Name.StartsWith("No places saved yet")), "no places yet");
+        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => (e.Properties.Name.ValueOrDefault ?? "").StartsWith("No places saved yet")), "no places yet");
         if (real)
         {
             SavePlaceDialog(gui, "block_SaveHere", "nowhere", rule: true);
@@ -567,7 +579,7 @@ public class ParityRealTests
         gui.TypeEnter("List_Exceptions_Entries_Entry", "https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf&si=x");
         gui.WaitFor(() => gui.Commands().Any(c => c.Contains("Exceptions") && c.Any(a => a.Contains("playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf"))),
             "the playlist added to Exceptions");
-        Assert.Contains(gui.Window.FindAllDescendants(), e => e.Name.Contains("playlist"));
+        Assert.Contains(gui.Window.FindAllDescendants(), e => (e.Properties.Name.ValueOrDefault ?? "").Contains("playlist"));
         // The section's place: after the blacklists, above the exceptions.
         double Top(string id) => gui.Find(id).BoundingRectangle.Top;
         var social = gui.Find("Social");
@@ -587,7 +599,7 @@ public class ParityRealTests
             var exceptions = b["lists"]!.AsArray().First(l => (string?)l!["name"] == "Exceptions")!["entries"]!.AsArray().Select(e => (string?)e).ToList();
             Assert.Contains(Playlist, exceptions);
             Assert.Equal(["youtube:no-shorts"], b["social"]!.AsArray().Select(x => (string?)x).ToList());
-            gui.WaitFor(() => gui.Find("Social").Name.Contains("1 setting on") || gui.Window.FindAllDescendants().Any(e => e.Name == "Social media · 1 setting on"),
+            gui.WaitFor(() => gui.Find("Social").Name.Contains("1 setting on") || gui.Window.FindAllDescendants().Any(e => (e.Properties.Name.ValueOrDefault ?? "") == "Social media · 1 setting on"),
                 "the section says 1 setting on");
         }
         gui.Find("Social").Patterns.ExpandCollapse.Pattern.Collapse();
@@ -627,14 +639,20 @@ public class ParityRealTests
         var bar = FlaUI.Core.Tools.Retry.WhileNull(() => gui.Window.FindFirstDescendant(c => c.ByName("sky.png  09:00–17:00")),
             TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: "no bar sky.png 09:00–17:00").Result!;
         bar.Focus();
-        var nine = gui.Window.FindAllDescendants(c => c.ByName("09:00")).Select(e => e.BoundingRectangle).First(r => r.Top < bar.BoundingRectangle.Top);
-        var twelve = gui.Window.FindAllDescendants(c => c.ByName("12:00")).Select(e => e.BoundingRectangle).First(r => r.Top < bar.BoundingRectangle.Top);
-        // Hour labels stand 16 DIP left of their line (CI: 100 %); start at
-        // 09:30 on the bar, on the 5-minute grid a drag snaps to.
-        var hour = (twelve.Left - nine.Left) / 3.0;
+        // The timeline's hour labels (every 3 h) stand 16 DIP left of their
+        // line (CI: 100 %); from two of them, where 09:30 is and how long an
+        // hour is. Start there, on the 5-minute grid a drag snaps to.
+        var hours = gui.Window.FindAllDescendants()
+            .Select(e => (Name: e.Properties.Name.ValueOrDefault ?? "", Rect: e.BoundingRectangle))
+            .Where(x => x.Rect.Bottom <= bar.BoundingRectangle.Top + 2 && x.Rect.Bottom > bar.BoundingRectangle.Top - 60 &&
+                        System.Text.RegularExpressions.Regex.IsMatch(x.Name, @"^\d\d:00$"))
+            .Select(x => (Hour: int.Parse(x.Name[..2]), X: x.Rect.Left + 16.0)).Where(x => x.Hour is > 0 and < 24).OrderBy(x => x.Hour).ToList();
+        Assert.True(hours.Count >= 2, "two hour labels over the bar: " + string.Join(", ", hours));
+        var hour = (hours[^1].X - hours[0].X) / (hours[^1].Hour - hours[0].Hour);
+        double At(double h) => hours[0].X + (h - hours[0].Hour) * hour;
         var b = bar.BoundingRectangle;
-        var from = new System.Drawing.Point((int)Math.Round(nine.Left + 16 + hour / 2), b.Top + b.Height / 2);
-        FlaUI.Core.Input.Mouse.Drag(from, new System.Drawing.Point((int)Math.Round(nine.Left + 16 + hour * 1.5), from.Y));
+        var from = new System.Drawing.Point((int)Math.Round(At(9.5)), b.Top + b.Height / 2);
+        FlaUI.Core.Input.Mouse.Drag(from, new System.Drawing.Point((int)Math.Round(At(10.5)), from.Y));
         gui.WaitFor(() => gui.RanWith("mode", "wallpaper", "Study", "time", "1", "10:00", "18:00"), "kc9k mode wallpaper Study time 1 10:00 18:00 (dragged)");
         gui.Shot("dragged");
         if (real) Assert.Equal("10:00", (string?)RealMode(gui, "Study")["wallpapers"]![0]!["from"]);
@@ -682,18 +700,18 @@ public class ParityRealTests
         gui.Page("settings");
         var choice = gui.Find("WallpaperDefault").AsComboBox();
         Assert.Equal("Latest wallpaper", choice.SelectedItem?.Name);
-        Assert.Contains(gui.Window.FindAllDescendants(), e => e.Name.Contains("last place's"));
+        Assert.Contains(gui.Window.FindAllDescendants(), e => (e.Properties.Name.ValueOrDefault ?? "").Contains("last place's"));
         choice.Select("Circadian rhythm");
         gui.WaitFor(() => gui.Ran("wallpaper", "default", "circadian"), "kc9k wallpaper default circadian");
         if (!real) return;
-        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => e.Name.Contains("even with circadian rhythm switched off")), "what Circadian rhythm means");
+        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => (e.Properties.Name.ValueOrDefault ?? "").Contains("even with circadian rhythm switched off")), "what Circadian rhythm means");
         var plain = gui.Picture("plain.png");
         gui.Find("WallpaperDefault").AsComboBox().Select("Custom");
         gui.PickFile(plain);
         gui.WaitFor(() => gui.Ran("wallpaper", "default", "custom", plain), "Custom asks for a picture");
         var w2 = gui.RealState()["wallpaper"]!;
         Assert.True((string?)w2["default"] == "custom" && (string?)w2["custom_name"] == "plain.png", $"custom: {w2.ToJsonString()}");
-        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => e.Name.Contains("before the computer sleeps")), "and says when it shows");
+        gui.WaitFor(() => gui.Window.FindAllDescendants().Any(e => (e.Properties.Name.ValueOrDefault ?? "").Contains("before the computer sleeps")), "and says when it shows");
         gui.Find("WallpaperDefault").AsComboBox().Select("Latest wallpaper");
         gui.WaitFor(() => gui.Ran("wallpaper", "default", "latest"), "back to Latest");
         var count = gui.Commands().Count;

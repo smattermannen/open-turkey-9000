@@ -62,7 +62,7 @@ public sealed partial class EditableList : StackPanel
 
         if (searchBox)
         {
-            search = new TextBox { PlaceholderText = "Find in this list" }.Named($"Find in {title}", id + "_Find");
+            search = Dialogs.KeepsEnter(new TextBox { PlaceholderText = "Find in this list" }.Named($"Find in {title}", id + "_Find"));
             search.TextChanged += (_, _) => { filter = search.Text.Trim().ToLowerInvariant(); Fill(); };
             Children.Add(search);
         }
@@ -95,6 +95,8 @@ public sealed partial class EditableList : StackPanel
 
         entry = new TextBox { PlaceholderText = placeholder, HorizontalAlignment = HorizontalAlignment.Stretch };
         entry.Named($"Add to {title}", id + "_Entry");
+        Dialogs.KeepsEnter(entry);
+        Dialogs.KeepsEnter(view);
         entry.KeyDown += (_, e) =>
         {
             if (e.Key == VirtualKey.Enter)

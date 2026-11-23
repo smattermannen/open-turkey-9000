@@ -297,6 +297,13 @@ public sealed class GuiApp : IDisposable
 
     public void Dispose()
     {
+        // What was on screen at the end (a failure's last view), and what
+        // the real CLI answered.
+        try { if (!App.HasExited) Shot("last"); } catch (Exception) { }
+        var real = Path.Combine(Dir, "real.log");
+        if (File.Exists(real))
+            try { Console.WriteLine($"--- {name}: the real kc9k's answers (last 15)\n" + string.Join("\n", File.ReadAllLines(real).TakeLast(15))); }
+            catch (IOException) { }
         try { App.Close(); } catch (Exception) { }
         try { if (!App.HasExited) App.Kill(); } catch (Exception) { }
         App.Dispose();

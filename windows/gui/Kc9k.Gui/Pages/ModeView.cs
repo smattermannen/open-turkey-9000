@@ -102,7 +102,7 @@ public sealed class ModeView
         Shown(freezeSection, m.Freeze);
         Shown(automationSection, !m.Freeze);
         Shown(customSection, !m.Freeze);
-        Shown(wallpaperSection, !m.Freeze);
+        Shown(wallpaperSection, true); // R-MODE-5: Frozen Chicken and monk mode too, as in GTK
         filling = true;
         Ui.Set(overrideCircadian, !s.Wallpaper.OverrideModes);
         filling = false;

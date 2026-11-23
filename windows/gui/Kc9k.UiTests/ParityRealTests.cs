@@ -256,8 +256,9 @@ public class ParityRealTests
             start = Height(gui, blocked);
             Keys(gui, grip, FlaUI.Core.WindowsAPI.VirtualKeyShort.DOWN, 5);
             gui.WaitFor(() => Height(gui, blocked) >= start + 150, $"taller by keys ({start} -> {Height(gui, blocked)})");
-            Assert.True(Math.Abs(Height(gui, exceptions) - Height(gui, blocked)) <= 2,
-                $"the other list of that kind takes the height ({Height(gui, blocked)}, {Height(gui, exceptions)})");
+            var taller = Height(gui, blocked);
+            Assert.True(Math.Abs(Height(gui, exceptions) - taller) <= 2,
+                $"the other list of that kind takes the height ({taller}, {Height(gui, exceptions)})");
             gui.WaitFor(() => KeptHeight(gui) >= 300, $"height kept in gui.json: {Prefs(gui)}");
             Keys(gui, grip, FlaUI.Core.WindowsAPI.VirtualKeyShort.UP, 40);
             gui.WaitFor(() => KeptHeight(gui) == 80, $"far up: stops at the least height ({KeptHeight(gui)})");
@@ -423,8 +424,10 @@ public class ParityRealTests
                 "the second change of the same phrase");
             Type(gui, 1, "CELEBRITY, STAR, IDOL");
             gui.WaitFor(() => !Save(gui).IsEnabled, "a case-only change can't be saved");
+            // Letter case alone is no unsaved change: Cancel asks nothing.
             gui.Invoke("Phrases_Gossip_Cancel");
-            gui.Invoke(gui.FindButton("Drop changes"));
+            Thread.Sleep(800);
+            Assert.Null(gui.DesktopByName("Drop the unsaved phrase?"));
         }
         else
         {

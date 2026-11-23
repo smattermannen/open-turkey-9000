@@ -512,12 +512,11 @@ public sealed partial class PhraseSetCard : ActionCard
         save.IsEnabled = false;
         savedAs = PhraseText.Key(text);
         var ok = old is null ? await Window.Controller.Run(Command("add", text)) : await Window.Controller.Run(Command("change", old.Text, text));
-        if (!ok)
-        {
-            saving = false;
-            savedAs = null;
-            EditorChanged(editor.Text);
-        }
+        // The command and its state read are done: Save works again even if
+        // the state showed nothing new (savedAs still follows the phrase).
+        saving = false;
+        if (!ok) savedAs = null;
+        EditorChanged(editor.Text);
     }
 
     async Task RemoveLoaded()

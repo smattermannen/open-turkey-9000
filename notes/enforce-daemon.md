@@ -21,7 +21,9 @@
 ## Daemon (`internal/daemon/`)
 
 `Tick` every 5 s; foreground-app sampling every 5 s; screen relock every
-0.5 s during a lock freeze.
+0.5 s during a lock freeze. Linux: installs LibreWolf once if the install
+left it out (`installLibreWolf` → `blocker.AutoInstallLibreWolf`; see
+[install](install.md)).
 
 ## Affected users (§3.2; `db/users.go`, `cli/blockusers.go`)
 

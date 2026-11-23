@@ -1,0 +1,96 @@
+name: Linux release
+
+# 2.11 (§4.11): a tag v1.2.3 builds the .deb (amd64; kc9k version says
+# 1.2.3), checks it installs on a clean Ubuntu 24.04 (Linux Mint 22's base)
+# with ci/deb_install_check.sh (daemon, sudo rule, GUI in the menu,
+# extension policies, LibreWolf installed by the daemon, removal), and
+# attaches the .deb and its SHA-256 to the GitHub release. The Windows
+# release (windows-release.yml) runs on the same tag and creates the
+# release, failing if it already exists: this one waits for it to finish,
+# then adds its files to that release, or creates it if there is none.
+# Run by hand (workflow_dispatch) it builds and checks without publishing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (no release is published by hand)"
+        required: true
+        default: "0.0.1"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Version
+        id: v
+        run: |
+          if [ "${{ github.ref_type }}" = tag ]; then v=${GITHUB_REF_NAME#v}; else v="${{ inputs.version }}"; fi
+          if ! printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.]+)?$'; then echo "not a version: $v"; exit 1; fi
+          # Debian sorts "~" before the release: 1.2.3-beta.1 installs as
+          # 1.2.3~beta.1, older than 1.2.3 (a "-" would make it newer).
+          deb=$(printf '%s' "$v" | sed 's/-/~/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "deb=$deb" >> "$GITHUB_OUTPUT"
+          echo "version $v (.deb $deb)"
+      - name: Build the .deb
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          cd "$RUNNER_TEMP/out"
+          built=$(sh "$GITHUB_WORKSPACE/packaging/build-deb.sh" "${{ steps.v.outputs.deb }}")
+          mv "$built" "KillerChicken9000-${{ steps.v.outputs.version }}-amd64.deb"
+          dpkg-deb -I "KillerChicken9000-${{ steps.v.outputs.version }}-amd64.deb"
+      - name: The .deb installs, sets everything up and removes
+        timeout-minutes: 30
+        run: |
+          sudo apt-get update
+          sudo LIBREWOLF_MINUTES=20 bash ci/deb_install_check.sh "$RUNNER_TEMP/out/KillerChicken9000-${{ steps.v.outputs.version }}-amd64.deb" "${{ steps.v.outputs.deb }}"
+      - name: Checksum
+        run: |
+          cd "$RUNNER_TEMP/out"
+          f="KillerChicken9000-${{ steps.v.outputs.version }}-amd64.deb"
+          sha256sum "$f" > "$f.sha256"
+          cat "$f.sha256"
+      - name: Daemon log
+        if: always()
+        run: |
+          sudo journalctl -u kc9k --no-pager | tail -60
+          sudo journalctl -u kc9k-librewolf-install --no-pager | tail -40
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kc9k-linux-${{ steps.v.outputs.version }}
+          path: ${{ runner.temp }}/out/
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          v="${{ steps.v.outputs.version }}"
+          files=("$RUNNER_TEMP"/out/*)
+          notes="Linux (Linux Mint, Ubuntu, Debian; 64-bit PC): download KillerChicken9000-$v-amd64.deb, double-click it, then Install. A minute later KC9K installs LibreWolf, the browser that runs its extension (needs the internet; it keeps trying every half hour). The .deb.sha256 file holds the .deb's SHA-256."
+          # Wait for the Windows release on this commit (at most an hour):
+          # its `gh release create` fails if the release already exists.
+          for _ in $(seq 120); do
+            state=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow windows-release.yml --commit "$GITHUB_SHA" --event push --json status --jq '.[0].status // "none"')
+            echo "Windows release: $state"
+            case "$state" in completed|none) break ;; esac
+            sleep 30
+          done
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            body=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body)
+            case "$body" in *"$notes"*) ;; *) gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes "$body"$'\n\n'"$notes" ;; esac
+          else
+            gh release create "$tag" "${files[@]}" --repo "$GITHUB_REPOSITORY" --title "Killer Chicken 9000 $v" --notes "$notes"
+          fi

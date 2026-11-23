@@ -6,8 +6,38 @@ set -uo pipefail
 failures=0
 # A command that waits (a prompt, a lock) fails after 120 s instead of
 # hanging the job; each check says what it runs first, so a hang is named.
-kc9k() { timeout 120 command kc9k "$@"; }
+# timeout runs a program, not the shell builtin `command`: the wrapper's path
+# is looked up once and exported with the function, for `bash -c` checks.
+KC9K_BIN=$(command -v kc9k) || { echo "::error::kc9k is not installed"; exit 1; }
+export KC9K_BIN
+kc9k() { timeout 120 "$KC9K_BIN" "$@"; }
 export -f kc9k
+# A program of our own for the app checks: /bin/sleep may be the uutils
+# multicall binary (Ubuntu 25.10 and on), which refuses to run under another
+# name ("unknown program"), so a copy of it never runs and every "is killed"
+# check would pass without proving anything. Built before strict mode makes
+# /tmp noexec.
+sleeper=$(mktemp -d)
+cat > "$sleeper/main.go" <<'GO'
+package main
+
+import (
+	"os"
+	"strconv"
+	"time"
+)
+
+func main() {
+	seconds := 0.0
+	if len(os.Args) > 1 {
+		seconds, _ = strconv.ParseFloat(os.Args[1], 64)
+	}
+	time.Sleep(time.Duration(seconds * float64(time.Second)))
+}
+GO
+(cd "$sleeper" && CGO_ENABLED=0 go build -o sleep main.go) || { echo "::error::can't build the sleeper"; exit 1; }
+SLEEPER=$sleeper/sleep
+"$SLEEPER" 0 || { echo "::error::the sleeper doesn't run"; exit 1; }
 check() {
     local name=$1
     shift
@@ -25,6 +55,24 @@ ot() { kc9k "$@"; }
 check "sudo rule limited to group sudo" sudo grep -q '^%sudo ALL' /etc/sudoers.d/kc9k
 check "daemon is running" systemctl is-active --quiet kc9k
 
+# GitHub's runner runs from its user's home (/home/runner/...): strict mode
+# closes a person's programs running from /home (CloseNoexecPrograms), the
+# runner too, and the job is lost. Its folders are exempt, as a person's
+# own tools would be.
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    echo "::notice::programs of $(id -un): $(for p in $(pgrep -u "$(id -u)"); do readlink "/proc/$p/exe"; done 2>/dev/null | sort -u | tr '\n' ' ')"
+    for pid in $(pgrep -u "$(id -u)"); do
+        exe=$(readlink "/proc/$pid/exe" 2>/dev/null) || continue
+        case "$exe" in /home/* | /tmp/* | /var/tmp/* | /dev/shm/*) ;; *) continue ;; esac
+        dir=$(dirname "$exe")
+        [ "$(basename "$dir")" = bin ] && dir=$(dirname "$dir")
+        echo "$dir"
+    done | sort -u | while read -r dir; do
+        echo "::notice::strict mode exempt folder (the runner's): $dir"
+        kc9k strict exempt add "$dir" || echo "::error::can't exempt $dir"
+    done
+fi
+
 ot block create strictblock
 ot block add strictblock example.dev
 ot strict on --yes
@@ -33,7 +81,7 @@ ot start strictblock --for 90s --yes
 echo "::notice::start took $(($(date +%s) - started))s"
 for _ in $(seq 1 30); do sudo -n true 2>/dev/null || break; sleep 1; done
 check "strict mode denies sudo" fails sudo -n true
-cp /bin/sleep /tmp/otportable
+cp "$SLEEPER" /tmp/otportable
 chmod +x /tmp/otportable
 check "portable programs can't start" fails /tmp/otportable 0
 check "kc9k still works in strict mode" kc9k status
@@ -68,7 +116,7 @@ ot stop sites
 sleep 8
 check "stop clears hosts" fails grep -q 'example.com' /etc/hosts
 
-cp /bin/sleep /tmp/otsleep
+cp "$SLEEPER" /tmp/otsleep
 ot block create apps
 ot block add-app apps otsleep
 ot start apps
@@ -157,7 +205,7 @@ sleep 68
 check "delay ends the block" fails grep -q 'example.dl' /etc/hosts
 
 mkdir -p /tmp/otdir
-cp /bin/sleep /tmp/otdir/anything
+cp "$SLEEPER" /tmp/otdir/anything
 ot block create folder
 check "system folder refused" fails kc9k block add-app folder /usr/bin/
 ot block add-app folder /tmp/otdir/

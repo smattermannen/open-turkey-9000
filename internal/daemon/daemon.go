@@ -109,6 +109,9 @@ func RunUntil(stop <-chan struct{}) error {
 		}
 	}()
 
+	// LibreWolf, once, if the installation left it out (§4.11).
+	installLibreWolf(stop)
+
 	// The circadian rhythm (§4.10) keeps its own pace beside the cycle.
 	go func() {
 		defer reportCrash(database)

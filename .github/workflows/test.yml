@@ -63,6 +63,33 @@ jobs:
           path: screenshots/
           if-no-files-found: ignore
 
+  # The one-click installer (2.11): the .deb installs on a clean Ubuntu
+  # 24.04 (Linux Mint 22's base) and does all install.sh does, LibreWolf
+  # installed by the daemon included; then it removes.
+  deb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the .deb
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          cd "$RUNNER_TEMP/out"
+          sh "$GITHUB_WORKSPACE/packaging/build-deb.sh" 0.0.0~ci
+      - name: The .deb installs, sets everything up and removes
+        timeout-minutes: 25
+        run: |
+          sudo apt-get update
+          sudo LIBREWOLF_MINUTES=15 bash ci/deb_install_check.sh "$RUNNER_TEMP"/out/kc9k_0.0.0~ci_amd64.deb 0.0.0~ci
+      - name: Daemon log
+        if: always()
+        run: |
+          sudo journalctl -u kc9k --no-pager | tail -60
+          sudo journalctl -u kc9k-librewolf-install --no-pager | tail -40
+
   android:
     runs-on: ubuntu-latest
     timeout-minutes: 30

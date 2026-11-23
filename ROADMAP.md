@@ -43,7 +43,7 @@ its bypass prevention).
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings: LibreWolf parts (box); `ci/tamper_vm_test.sh` (never run) | §4.10 | browsers, extension, install | box, vm |
 | 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
-| 2.11 | One-click installer: `.deb`, MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, owner |
+| 2.11 | One-click installer: `.deb` built (clean Mint VM left), MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, vm, owner |
 | 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere | §3.13, §4.10 | browsers | agent |
 | 2.13 | Accountability partner | §4.15 | — | agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
@@ -87,15 +87,16 @@ its bypass prevention).
 plan is SPEC §8, its items §3.1.
 
 - [ ] `A16` **Linux CI `Test` red** (found 2026-11-23, run 669; unit tests
-  pass). `ci/integration.sh:9` wraps every call as
-  `kc9k() { timeout 120 command kc9k "$@"; }`: `timeout` gets the shell
-  builtin `command` ("failed to execute process"), so every `kc9k` call
-  fails (51 failures). Fix: look the binary up once and export it, e.g.
-  `KC9K_BIN=$(command -v kc9k); export KC9K_BIN` and
-  `kc9k() { timeout 120 "$KC9K_BIN" "$@"; }`. Then fix what is left; seen
-  before: commands without `--yes` where a lock is now confirmed
-  (R-LOCK-12), unchecked since. Done when: the `Integration tests` step of
-  `.github/workflows/test.yml` is green on main.
+  pass; runner now Ubuntu 26.04: uutils coreutils, sudo-rs). Fixed in
+  `ci/integration.sh`: `kc9k` runs through its looked-up path
+  (`KC9K_BIN`; `timeout` got the builtin `command`, so all 51 calls
+  failed); the app checks run a sleeper built from Go (a copy of uutils'
+  multicall `sleep` refuses to run under another name, so "is killed"
+  passed proving nothing); the runner's folders are strict mode exempt
+  folders (strict mode closed the runner, running from `/home/runner`, and
+  the job was lost). Unchecked: what fails after these. Done when:
+  the `Integration tests` step of `.github/workflows/test.yml` is green on
+  main.
 
 ### 0.1 Code contradicting `SPEC.md`
 
@@ -273,13 +274,18 @@ Only rows not fully built.
   package installer, one click Install). Windows: the signed MSI (W7).
   Both on GitHub Releases, later the website (`2.14`). Android: open (SPEC
   §7).
+  Linux built (`notes/install.md`): the `.deb` does all `install.sh` does,
+  LibreWolf by the daemon after install (retried every 30 min);
+  `linux-release.yml` (tag → `.deb` + `.sha256` on the release, checked
+  first); CI job `deb` runs `ci/deb_install_check.sh` on every push.
+  Unchecked: the first green `deb` job.
   To do, agent (Linux):
-  - [ ] `.deb` does all `install.sh` does: LibreWolf too (postinst can't
-    run apt: daemon installs it once on first start, retried later).
-  - [ ] Release workflow: tag `v1.2.3` builds `.deb` (amd64) + `.sha256`,
-    attaches both to the GitHub Release (as `windows-release.yml`).
   - [ ] Installed by double-click on a clean Mint VM: daemon running, GUI
-    in the menu, LibreWolf and Chrome get the extension (vm).
+    in the menu, LibreWolf and Chrome get the extension (vm):
+    `MANUAL=1 ci/deb_vm_test.sh host` (written, never run; needs a clean
+    Mint VM `kc9k-mint` with a snapshot `clean`, see `notes/testing.md`).
+  - [ ] `gui/kc9k.desktop`'s `Comment` is Swedish (principle 8: English
+    only); shown in Mint's menu (session B's area, `gui/`).
   To do, agent (Windows):
   - [ ] MSI sets up the extension in Chrome and Edge (needs `2.17`'s ID).
   To do, owner:
@@ -560,6 +566,19 @@ Still open from the report (built and in CI; what was built is in
   hidden, not deleted (the engine's scripts keep working): the largest
   part around the link holding no kept result and no search box. Owner may
   overturn.
+- DECIDED (By claude) 2026-11-23 (`2.11`): the daemon makes sure of
+  LibreWolf once per install, not once ever: `install.sh` and the `.deb`
+  clear the marker at every install, as `install.sh` already tried
+  LibreWolf at every run; a LibreWolf the user removes stays removed until
+  the next install (principle 7: no reinstalling behind the user's back).
+  `KC9K_NO_LIBREWOLF=1` skips it for both. Owner may overturn.
+- DECIDED (By claude) 2026-11-23 (`2.11`): Linux release file
+  `KillerChicken9000-<version>-amd64.deb` (as the MSI's name); a
+  pre-release `v1.2.3-beta.1` gets Debian version `1.2.3~beta.1` (sorts
+  before `1.2.3`; `kc9k version` says that); the Linux release job waits
+  for the Windows one on the same tag and adds its files to that release
+  (`windows-release.yml` fails on an existing release and is session B's).
+  Owner may overturn.
 - DECIDED (By claude) 2026-11-23 (`2.16`): with dark pages on, KC9K
   writes defaults into librewolf.cfg turning resistFingerprinting off and
   fingerprinting protection on for every target but

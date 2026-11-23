@@ -50,6 +50,23 @@ class Proxy(http.server.BaseHTTPRequestHandler):
 MARKS = """return [...document.querySelectorAll('[data-expect]')].map((el) => ({
     expect: el.dataset.expect, shown: el.getClientRects().length > 0, what: el.textContent.trim().slice(0, 50)}));"""
 
+def settled(want, seconds=10):
+    """The marks once want(marks) holds, or as they are after seconds: a
+    slower machine (the CI runner's first pages) takes longer than fixed
+    pauses allowed (A17). The end state is what is checked; that a result
+    is never painted is ci/search_results_test.js's check."""
+    end = time.time() + seconds
+    while True:
+        marks = driver.execute_script(MARKS)
+        if want(marks) or time.time() > end:
+            return marks
+        time.sleep(0.2)
+
+
+def as_expected(marks):
+    return marks and all(m["shown"] == (m["expect"] == "kept") for m in marks)
+
+
 start_daemon()
 proxy = serve(Proxy)
 state["rules"] = {"lists": LISTS}
@@ -63,7 +80,7 @@ try:
         wait_polls(1)
         driver.get(url)
         time.sleep(1.5)  # DuckDuckGo adds more results after 400 ms
-        marks = driver.execute_script(MARKS)
+        marks = settled(as_expected)
         gone = [m for m in marks if m["expect"] == "gone"]
         kept = [m for m in marks if m["expect"] == "kept"]
         check(f"{name}: results leading to Reddit or X are gone ({len(gone)})",
@@ -72,8 +89,7 @@ try:
               [m for m in kept if not m["shown"]])
         state["rules"] = {"lists": []}
         wait_polls(2)
-        time.sleep(0.3)
-        after = driver.execute_script(MARKS)
+        after = settled(lambda marks: all(m["shown"] for m in marks))
         check(f"{name}: with the block off every result is back", all(m["shown"] for m in after),
               [m for m in after if not m["shown"]])
 finally:

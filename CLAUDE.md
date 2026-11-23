@@ -52,6 +52,14 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - Device effects (network cuts, logout, shutdown, Wi-Fi, desktop, circadian
   hardware) via replaceable vars faked in tests; `KC9K_DB` never applies layers.
 
+## Git
+
+- One git command per Bash call, no `&&` chains: allow rules in
+  `.claude/settings.json` match a whole command only; a chain goes to the
+  permission check and may be stopped.
+- Merge to main: `git fetch -q origin main`, check it is an ancestor, then
+  `git push -q origin HEAD:main` on its own.
+
 ## Architecture
 
 `cmd/kc9k/main.go` → `cli.Execute()`; Cobra commands in `internal/cli/`.

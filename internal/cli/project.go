@@ -493,6 +493,93 @@ var projectCmd = &cobra.Command{
 	Short: "The whole setup in one file: export it, or import one",
 }
 
+// buildProject gathers the whole setup as a project file: a backup, or with
+// share a file that says nothing about this device or person (see the
+// export command's help). Cross-device sync uploads a backup less the
+// device's own items (syncSetup).
+func buildProject(cmd *cobra.Command, database *db.DB, share bool) (projectExport, error) {
+	out := projectExport{KC9KProject: projectVersion, Kind: "backup", Blocks: []projectBlock{}, Browser: map[string]bool{},
+		Options: map[string]bool{}, Images: map[string]string{}}
+	if share {
+		out.Kind = "share"
+	}
+	places, err := database.Places()
+	if err != nil {
+		return out, err
+	}
+	blockPlaces := map[string][]string{}
+	if !share {
+		for _, p := range places {
+			out.Places = append(out.Places, placeExport{Name: p.Name, Networks: p.Networks, Need: p.Need})
+			for _, b := range p.Blocks {
+				blockPlaces[b] = append(blockPlaces[b], p.Name)
+			}
+		}
+	}
+	blocks, err := database.ListBlocks()
+	if err != nil {
+		return out, err
+	}
+	for _, b := range blocks {
+		if draftOf(database, b.Name) != "" {
+			continue // §4.3: a draft isn't a block of its own
+		}
+		pb, err := exportBlock(database, b.Name, out.Images)
+		if err != nil {
+			return out, err
+		}
+		pb.Places = blockPlaces[b.Name]
+		out.Blocks = append(out.Blocks, pb)
+	}
+	if !share || exportPresetsChosen(cmd) {
+		if err := exportPresets(database, &out); err != nil {
+			return out, err
+		}
+	}
+	for _, name := range enforce.BrowserSettings {
+		out.Browser[name] = enforce.BrowserOn(database, name)
+	}
+	out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database),
+		"file-urls": enforce.FileURLsOn(database)}
+	for _, o := range enforce.Options {
+		out.Options[o.Name] = enforce.OptionOn(database, o.Name)
+	}
+	if n, err := database.GlobalNepsis(); err != nil {
+		return out, err
+	} else if n.On() {
+		out.Nepsis = &n
+	}
+	freezes, err := database.ListFreezeSchedules()
+	if err != nil {
+		return out, err
+	}
+	for _, f := range freezes {
+		w := exportWindow(f.Window)
+		w.Mode = f.Mode
+		if f.LockLead >= 0 {
+			lead := f.LockLead
+			w.LockLead = &lead
+		}
+		out.Freezes = append(out.Freezes, w)
+	}
+	out.Circadian = exportCircadian(database)
+	out.StrictUse = enforce.StrictUseOn(database)
+	if err := exportModes(database, &out, share); err != nil {
+		return out, err
+	}
+	exportWallpapers(database, &out)
+	if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
+		n := enforce.LoadNoticeOptions(database)
+		out.Notifications = &n
+	}
+	if !share {
+		if out.Backup, err = exportBackupExtras(database); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
 var projectExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Print the whole setup as JSON (redirect to a file to save it)",
@@ -511,84 +598,9 @@ answer the question on a terminal (elsewhere they are left out).`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		share, _ := cmd.Flags().GetBool("share")
-		out := projectExport{KC9KProject: projectVersion, Kind: "backup", Blocks: []projectBlock{}, Browser: map[string]bool{},
-			Options: map[string]bool{}, Images: map[string]string{}}
-		if share {
-			out.Kind = "share"
-		}
-		places, err := database.Places()
+		out, err := buildProject(cmd, database, share)
 		if err != nil {
 			return err
-		}
-		blockPlaces := map[string][]string{}
-		if !share {
-			for _, p := range places {
-				out.Places = append(out.Places, placeExport{Name: p.Name, Networks: p.Networks, Need: p.Need})
-				for _, b := range p.Blocks {
-					blockPlaces[b] = append(blockPlaces[b], p.Name)
-				}
-			}
-		}
-		blocks, err := database.ListBlocks()
-		if err != nil {
-			return err
-		}
-		for _, b := range blocks {
-			if draftOf(database, b.Name) != "" {
-				continue // §4.3: a draft isn't a block of its own
-			}
-			pb, err := exportBlock(database, b.Name, out.Images)
-			if err != nil {
-				return err
-			}
-			pb.Places = blockPlaces[b.Name]
-			out.Blocks = append(out.Blocks, pb)
-		}
-		if !share || exportPresetsChosen(cmd) {
-			if err := exportPresets(database, &out); err != nil {
-				return err
-			}
-		}
-		for _, name := range enforce.BrowserSettings {
-			out.Browser[name] = enforce.BrowserOn(database, name)
-		}
-		out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database),
-			"file-urls": enforce.FileURLsOn(database)}
-		for _, o := range enforce.Options {
-			out.Options[o.Name] = enforce.OptionOn(database, o.Name)
-		}
-		if n, err := database.GlobalNepsis(); err != nil {
-			return err
-		} else if n.On() {
-			out.Nepsis = &n
-		}
-		freezes, err := database.ListFreezeSchedules()
-		if err != nil {
-			return err
-		}
-		for _, f := range freezes {
-			w := exportWindow(f.Window)
-			w.Mode = f.Mode
-			if f.LockLead >= 0 {
-				lead := f.LockLead
-				w.LockLead = &lead
-			}
-			out.Freezes = append(out.Freezes, w)
-		}
-		out.Circadian = exportCircadian(database)
-		out.StrictUse = enforce.StrictUseOn(database)
-		if err := exportModes(database, &out, share); err != nil {
-			return err
-		}
-		exportWallpapers(database, &out)
-		if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
-			n := enforce.LoadNoticeOptions(database)
-			out.Notifications = &n
-		}
-		if !share {
-			if out.Backup, err = exportBackupExtras(database); err != nil {
-				return err
-			}
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {

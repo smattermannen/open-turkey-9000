@@ -191,7 +191,7 @@ Only rows not fully built.
 | §5 R-LOCK-12 | Partial | `A12` |
 | §4.11 One-click installer, every platform | Partial | `2.11` |
 | §3.13 Chrome, Edge, Firefox, Bing on every platform | Partial | `2.12` |
-| §4.14 Cross-device sync | Not built | `2.10` |
+| §4.14 Cross-device sync | Partial | `2.10` |
 | §4.15 Accountability partner | Not built | `2.13` |
 | §4.16 Website | Not built | `2.14` |
 
@@ -233,8 +233,9 @@ Only rows not fully built.
   `install.sh` refused, a newer `.deb` installs. A `.deb` built before the
   prerm `failed-upgrade` fix still gets in.
 - **2.10 Cross-device sync** (L; §4.14; backend Supabase, SPEC §6
-  2026-11-23): Not built. KC9K account and cloud (principle 6's one
-  exception); Upload all / Download all on Linux, Windows, Android; one to
+  2026-11-23): Partial: account and Upload all built against a fake
+  (`notes/sync.md`); Download all, GUIs, the real project not yet. KC9K
+  account and cloud (principle 6's one exception); Upload all / Download all on Linux, Windows, Android; one to
   one except §4.14's device-specific items. Download all replaces even
   while locked (an exception to R-WEAK-1: the weakening audit must name
   it). Project backup (`cli/projectbackup.go`) is nearest, but only adds.
@@ -247,23 +248,25 @@ Only rows not fully built.
   - [ ] Decide the plan: free projects pause after a week without use
     (Pro ~25 USD/month doesn't); principle 6 means users never pay.
   To do, agent:
-  - [ ] Schema as SQL in the repo (`cloud/supabase/`): private Storage
+  - [x] Schema as SQL in the repo (`cloud/supabase/schema.sql`): private Storage
     bucket `setups`, one object `<user id>/setup.json.gz` per account; a
     `setups` row (upload time, device name, format version, size);
     row-level security: an account reads and writes only its own.
-  - [ ] Setup file: versioned JSON from the backup's code, everything
-    §4.14 copies (lock state included), device-specific items left out.
-  - [ ] `internal/cloud/`: Supabase Auth and Storage over plain HTTPS
+  - [x] Setup file: versioned JSON from the backup's code (`buildProject`,
+    `syncSetup`), everything §4.14 copies (lock state included),
+    device-specific items left out.
+  - [x] `internal/cloud/`: Supabase Auth and Storage over plain HTTPS
     (`net/http`, no SDK); tokens root-only in the DB; fake server in tests.
-  - [ ] CLI: `kc9k account signup|login|logout|status`, `kc9k sync upload`,
-    `kc9k sync download [--dry-run]` (shows upload time and device, asks
+  - [x] CLI: `kc9k account signup|login|logout|status`, `kc9k sync upload`
+    (built, `sync_test.go`).
+  - [ ] CLI: `kc9k sync download [--dry-run]` (shows upload time and device, asks
     first, locks confirmed per R-LOCK-12; replaces in one transaction;
     device-specific items here kept).
   - [ ] Weakening audit entry for `sync download`; `refused()` untouched.
   - [ ] GTK and Windows GUI: account page, Upload all, Download all (each
     runs the command). Android with N-items.
   - [ ] Check against the real project: Linux → Windows → Linux round trip.
-  - [ ] Note `notes/sync.md` when built.
+  - [x] Note `notes/sync.md`.
 - **2.11 One-click installer** (M per platform; §4.11; methods SPEC §6
   2026-11-23): Partial (Linux built, Windows MSI waiting for W7 and
   `2.17`, Android open). Linux: the `.deb` (double-click opens Mint's

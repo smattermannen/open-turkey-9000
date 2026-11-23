@@ -1,28 +1,26 @@
 # KC9K Specification
 
-What KC9K is meant to be. Status lives in `ROADMAP.md`.
+What KC9K should be. Status: `ROADMAP.md`.
 
-Rules for this file:
-1. Changed only with the owner's agreement; log it in §6. An agent's
-   change is tagged *(By Opus)* or *(By claude)*; the owner can overrule it.
+1. Changed only with the owner's agreement, logged in §6. Untagged = the
+   owner's; an agent's change is tagged *(By Opus)*/*(By claude)*, and the
+   owner can overrule it.
 2. No status or work items.
-3. Use the glossary's words exactly, everywhere. New names go here first.
-4. Where code or docs disagree, this file wins. If it seems wrong, ask the owner
-   (unattended sessions: an entry in `ROADMAP.md` §5 for the resolver).
+3. Glossary words exactly, everywhere; new names go here first.
+4. Code or docs disagree: this file wins (code is fixed). Seems wrong: ask
+   the owner (unattended: `ROADMAP.md` §5 entry for the resolver).
 5. Rules (§5) have IDs; tests name the rule they prove.
-6. *CT: …* gives Cold Turkey's word.
+6. *CT: …* = Cold Turkey's word.
 
 ## Index
 
-Navigation only; the sections below hold the content. Read the sections
-for your topic, not the whole file: headings `## N.` and `### 3.N`,
-functions `- **4.N`, rules `- **R-…**` (`grep -n 'R-LOCK-6' SPEC.md`),
-decisions in §6 by date.
+Navigation only, adds no rules. Headings `## N.`/`### 3.N`, functions
+`- **4.N`, rules `- **R-…**` (`grep -n 'R-LOCK-6' SPEC.md`), §6 by date.
 
 | Topic | Read |
 |---|---|
 | Purpose, principles (speed: principle 9) | §1, §2 |
-| Glossary words to avoid | §3.14 |
+| Words to avoid | §3.14 |
 | Targets: sites, apps, window titles, files | §3.1, R-TITLE-1, R-DESKTOP-1 |
 | Blocks, lists, exceptions, matching | §3.1, §3.2, §4.2, §4.3, R-LIST-1–6 |
 | Phrase sets | §3.2, §4.3, R-PHRASE-1–10 |
@@ -42,83 +40,81 @@ decisions in §6 by date.
 | Settings, notifications, circadian rhythm, wallpapers | §4.10, R-MODE-5 |
 | Install, uninstall | §4.11, R-LOCK-9 |
 | Hotkeys | §4.13 |
-| Cross-device sync, accountability partner, website, one-click installer | §3.13, §4.11, §4.14–4.16, §6 2026-11-22 (owner) |
+| Sync, accountability partner, website, one-click installer | §3.13, §4.11, §4.14–4.16 |
 | GUI rules | R-GUI-1–3 |
+| Windows | §6 2026-11-21 onward |
 | Decisions, open decisions | §6, §7 |
-| Android app: platform, words, functions, protection, GUI | §8, R-ANDROID-1–5 |
+| Android | §8, R-ANDROID-1–5 |
 
 ## 1. Vision
 
-Goal: control over one's digital life; break harmful habits (gaming, doom
-scrolling, adult content). Fights software designed to exploit psychology.
+Control over one's digital life; break harmful habits (gaming, doom
+scrolling, adult content); fight software built to exploit psychology.
 
 - **Very hard to get around.** Strictest setup: only a factory reset gets
-  out, and that is made deliberate by options the user chooses.
+  out, made deliberate by options the user chooses.
 - **More than block.** Actions: remove images, greyscale, mute, stop video,
-  darken, close tab/browser, logout, shutdown, switching a mode on and
-  locking it (monk mode, Frozen Chicken), custom actions (open sites,
-  files, folders, programs; run commands). Enforce SafeSearch; social media
-  settings.
+  darken, close tab/browser, logout, shutdown, switch a mode on and lock it
+  (monk mode, Frozen Chicken), custom actions (open sites, files, folders,
+  programs; run commands). Enforce SafeSearch; social media settings.
 - **Recognises more than addresses.** Address, title, page text; planned:
-  the ads a page loads. Apps by name, sandbox ID, script, file fingerprint.
+  ads a page loads. Apps by name, sandbox ID, script, file fingerprint.
 - **Any trigger to any action.** Several lists per block, each with its own
   actions.
-- **Stops the loophole hunt.** Bypass prevention: a user-chosen ladder of
+- **Stops the loophole hunt.** Bypass prevention: user-chosen ladder of
   consequences.
-- **One button.** Hotkeys run any action: start and lock blocks and modes,
-  open sites, programs and folders.
-- **Circadian rhythm.** Dark mode, blue light filter, brightness, wallpapers
-  by time of day.
+- **One button.** Hotkeys run any action.
+- **Circadian rhythm.** Dark mode, blue light filter, brightness,
+  wallpapers by time of day.
 - **Shareable projects.** Export/import the whole setup.
 - **Free.** Young people can't pay for a blocker.
-- **Every device, one setup.** Cross-device sync (Upload all, Download
-  all), one-click installer, Chrome, Edge, Firefox and Bing on every
-  platform, an accountability partner, and a really neat website.
+- **Every device, one setup.** Cross-device sync, one-click installer,
+  Chrome, Edge, Firefox and Bing on every platform, accountability partner,
+  a really neat website.
 
 In short: everything Cold Turkey does, plus user-shaped bypass prevention,
 more triggers and actions, several lists per block, layered sequential
 locks, project export, monk mode, lockable SafeSearch, circadian rhythm.
 
-Windows support, built now (owner 2026-11-21, §6); the Android app after.
+Order: Windows now (2026-11-21), then Android.
 
 ## 2. Principles
 
 1. Fix current functionality before adding features (bugs, failing tests,
    undocumented behaviour, code contradicting this file).
-2. A locked block can't be weakened; an unlocked block is free. Strengthening
-   never needs unlocking. A settings password, when set, is needed to weaken
-   anything, and to set locks if the user chose that.
-3. **Custom security.** Nothing protects a block unless the user chose it: no
-   built-in locks, delays or lead times (R-LOCK-10). Describe KC9K by what the
-   chosen settings give. Levels: *basic* (user keeps `sudo`; locks outlast an
-   impulse); *strict mode* (while locked the user is an ordinary user: any
-   ordinary-user path to a blocked site is a real hole); *boot and hardware*
-   (no-escape; firmware password held by someone else; factory reset
-   protection).
+2. A locked block can't be weakened; an unlocked block is free.
+   Strengthening never needs unlocking. A settings password, when set, is
+   needed to weaken anything, and to set locks if the user chose that.
+3. **Custom security.** Nothing protects a block unless the user chose it:
+   no built-in locks, delays or lead times (R-LOCK-10). Describe KC9K by
+   what the chosen settings give. Levels: *basic* (user keeps `sudo`; locks
+   outlast an impulse); *strict mode* (while locked the user is an ordinary
+   user: any ordinary-user path to a blocked site is a real hole); *boot and
+   hardware* (no-escape; firmware password held by someone else; factory
+   reset protection).
 4. The user is never trapped by a bug: recovery (`kc9k.nofreeze`, recovery
    mode) exists unless no-escape is on.
 5. A refused weakening is logged, never counted by bypass prevention.
-6. Free forever: no paid tiers or telemetry. Data stays local;
-   outside queries (DNS) are stated plainly. The one exception is the
-   **KC9K account**, needed only for cross-device sync and the
-   accountability partner (owner 2026-11-22): with it, what those send is
-   kept in KC9K's cloud. Without an account nothing leaves the device.
+6. Free forever: no paid tiers or telemetry. Data stays local; outside
+   queries (DNS) stated plainly. Only exception: the **KC9K account**,
+   needed only for cross-device sync and the accountability partner; what
+   those send is kept in KC9K's cloud. No account: nothing leaves the
+   device.
 7. Build only what improves the experience. Behaviour changes are settings,
    not new defaults.
 8. Platform: Linux Mint Cinnamon on X11. Extension in LibreWolf and Google
-   Chrome/Chromium; Chrome, Edge, Firefox and Bing are to be supported
-   browsers on every platform (owner 2026-11-22). English only. The
-   Android app (`android/`, §8) is planned; built after the Linux project
-   is finished (owner, 2026-11-16, 2026-11-21).
+   Chrome/Chromium; Chrome, Edge, Firefox and Bing to be supported browsers
+   on every platform. English only. Android app (`android/`, §8) built
+   after the Linux project is finished.
 9. Browsing stays fast; page judging runs in the background:
    - no single piece of work in a page over 16 ms;
-   - a typical page with 1,000 rendered terms and 100 phrases judged in
-     under 50 ms total on the test laptop;
+   - typical page (1,000 rendered terms, 100 phrases) judged in < 50 ms
+     total on the test laptop;
    - address judged before load; page text within 0.5 s of appearing;
    - address check cost independent of list size (10 or 100,000 entries);
    - huge lists never slow the network or computer.
-10. One rule-maker: the CLI decides all weakening; GUI and extension only run
-    CLI commands or follow the daemon.
+10. One rule-maker: the CLI decides all weakening; GUI and extension only
+    run CLI commands or follow the daemon.
 
 ## 3. Glossary
 
@@ -146,15 +142,15 @@ Windows support, built now (owner 2026-11-21, §6); the Android app after.
 | Term | Meaning | Not |
 |---|---|---|
 | **Block** | Named group of lists, phrase sets, apps, folders, title entries, schedule, breaks, autostart, affected users, locks. | |
-| **Mode** | Named group of blocks with **one automation for all of them** (§3.6), or monk mode or Frozen Chicken (§3.8). Shown among the blocks; a block is dragged into a mode and is in at most one. A block in a mode has the mode's automation; its own is kept, unused, until it is taken out. A mode may have **wallpapers** (§4.10) and custom actions run when it becomes enabled; it can be locked like a block (R-MODE-3). | Block |
+| **Mode** | Named group of blocks with **one automation for all** (§3.6), or monk mode or Frozen Chicken (§3.8). Shown among the blocks; a block is dragged in and is in at most one mode. A block in a mode has the mode's automation; its own is kept, unused, until taken out. May have **wallpapers** (§4.10) and custom actions run when it becomes enabled; lockable (R-MODE-3). | Block |
 | **List** | Named entries in one block, with a **kind** and a **scope**. No list types: sites, URL entries and rendered terms can share a list. | Preset |
 | **Entry** | A site, URL entry or rendered term in a list. | |
 | **Scope** | Boxes *URL*, *title*, *text*. With URL: sites/URL entries match the address (and feed the layers); rendered terms match words in the address. | |
 | **Phrase set** | Named phrases in a block, with scope and actions, like a blacklist. Any number per block. | List |
 | **Blacklist** | Kind: matches get the list's actions. *CT: Websites.* | |
-| **Exception list** | Kind: spares matches from blacklists and phrase sets of its own block only. A YouTube playlist address in it (`youtube.com/playlist?list=…`) lets that playlist's videos through, and only them. No phrase exceptions. *CT: Website Exceptions.* | Allowlist block |
+| **Exception list** | Kind: spares matches from blacklists and phrase sets of its own block only. A YouTube playlist address in it (`youtube.com/playlist?list=…`) lets that playlist's videos through, and only them (a plain exception can't: YouTube plays any video with any `list=` added). No phrase exceptions. *CT: Website Exceptions.* | Allowlist block |
 | **Allowlist block** | Blacklist `*.*`; only exceptions reachable. | |
-| **Preset** | A saved copy kept outside blocks, of one type: **block preset**, **list preset**, **phrase set preset**, **schedule preset**, **automation preset**, **hotkey preset**. Never enforced, freely editable; using one copies it, and saving one copies too: a later change on either side changes nothing on the other. Kept on the Presets page. | Schedule |
+| **Preset** | Saved copy kept outside blocks, of one type: **block**, **list**, **phrase set**, **schedule**, **automation**, **hotkey preset**. Never enforced, freely editable; using or saving one copies (no link either way). Presets page. | Schedule |
 | **Affected users** | Local accounts a block applies to (default all); admin only. | |
 | **Social media setting** | Keeps a site but removes a part (YouTube without Shorts, …). | List |
 | **Test mode** | Per list/phrase set: report matches instead of acting. | |
@@ -167,18 +163,18 @@ Windows support, built now (owner 2026-11-21, §6); the Android app after.
 | **Inactive** | Switched off (`kc9k stop`); never enforces. | Unlocked |
 | **Enabled** | Enforcing now. | Active |
 | **Disabled** | Not enforcing now. | Inactive |
-| **Lifted** | Active but disabled (its automation says off, break, pause, Pomodoro rest, allowance time). | Inactive |
-| **Continuous** | Type: no schedule and no place rules: enabled whenever active (breaks, pauses, Pomodoro rest and allowance time still lift it). | Automated |
-| **Automated** | Type: has a schedule and/or places, which switch it from its default (enabled or disabled) while active (§3.6 Automation); in a mode, its mode's. | Scheduled |
+| **Lifted** | Active but disabled (automation says off, break, pause, Pomodoro rest, allowance time). | Inactive |
+| **Continuous** | Type: no schedule or place rules: enabled whenever active (breaks, pauses, Pomodoro rest, allowance time still lift it). | Automated |
+| **Automated** | Type: has a schedule and/or places, which switch it from its default (enabled or disabled) while active (§3.6); in a mode, the mode's. | Scheduled |
 | **Locked** | At least one lock on, its own or its mode's; can't be weakened. | Active |
 
 Enforcing ends by schedule or switch-off. A lock never ends or starts a block.
 
 ### 3.4 Locks
 
-A lock belongs to a block or a mode (R-MODE-3). While **on**, the block can't
-be weakened (so not switched off or deleted). **Unlocked** as its kind says, then gone unless
-it has re-lock. Never changes what is blocked.
+A lock belongs to a block or a mode (R-MODE-3). While **on**, the block
+can't be weakened (so not switched off or deleted). **Unlocked** as its
+kind says, then gone unless it has re-lock. Never changes what is blocked.
 
 | Term | Meaning | CT |
 |---|---|---|
@@ -186,47 +182,47 @@ it has re-lock. Never changes what is blocked.
 | **Text lock** | Unlocked by typing a challenge: random characters, random words or custom text, 1–5000 chars, no paste. | Random/custom text |
 | **Range lock** | On between set times on set days (or inverted). | Time range |
 | **Delay lock** | Unlock request starts a countdown (1 min–40 days). | Delay |
-| **Schedule lock** | On during windows, at places, and for a user-chosen lead time before a window; with allow windows: on outside them. | Schedule |
-| **Restart lock** | Unlocked by a restart. Any block. | Restart |
+| **Schedule lock** | On during windows, at places, and a user-chosen lead time before a window; with allow windows: on outside them. | Schedule |
+| **Restart lock** | Unlocked by a restart. Any block, scheduled ones too. | Restart |
 | **Password lock** | Unlocked by a password (e.g. a partner's). | Password |
-| **Re-lock** | Lock option: a set time after unlocking, the whole lock configuration the block had (every lock, in its order) comes on again. | |
+| **Re-lock** | Optional on every lock: a set time after unlocking, the block's whole lock configuration (every lock, in order) comes on again. | |
 | **Layered sequential locks** | Several locks on a block or setting, unlocked one by one in the user's order. | |
 | **Trusted time** | Real time, protected by the tamper settings the user enabled. All locks use it. | |
 
-While any block or setting is locked: uninstall refused, extension required,
-tamper protection settings can't be turned off.
+While any block or setting is locked: uninstall refused, extension
+required, tamper protection settings can't be turned off.
 
 ### 3.5 Weakening
 
 - **Strengthening**: a change that clearly blocks or protects more.
 - **Weakening**: every other change (removing/narrowing entries, adding
   exceptions, removing actions, raising thresholds, shrinking windows,
-  widening allow windows, looser break, test mode on, social media setting off,
-  changing a redirect target, pausing, switching off, deleting, uninstalling,
-  removing/shortening a lock).
+  widening allow windows, looser break, test mode on, social media setting
+  off, changing a redirect target, pausing, switching off, deleting,
+  uninstalling, removing/shortening a lock).
 - **No weakening during active locks**: global setting; while anything is
-  locked no setting (strict mode included) can be weakened. Unlocked blocks
-  stay editable.
+  locked no setting (strict mode included) can be weakened. Unlocked
+  blocks stay editable.
 
 ### 3.6 Time and breaks
 
 | Term | Meaning |
 |---|---|
-| **Block window** | Weekly time in the schedule of a block **disabled by default**: it enables the block. 5-minute steps; a block's windows never overlap. |
-| **Allow window** | Weekly time in the schedule of a block **enabled by default**: it lifts the block. |
+| **Block window** | Weekly time in the schedule of a block **disabled by default**: enables it. 5-minute steps; a block's windows never overlap. |
+| **Allow window** | Weekly time in the schedule of a block **enabled by default**: lifts it. |
 | **Break** | Lifts an enabled block for a while. One per continuous block, or one per block window. |
 | **Pomodoro** | Work (enabled) and rest (lifted) alternate, work first; optional long rest every N rounds. |
 | **Allowance** | N minutes of use per period (rolling 24 h, window, day, week, month; refill time), then enabled. |
-| **Reward** | Rest time earned by working (blocked, computer in use); saved up to one break, or accumulates until the window/day/week/month ends, or each part is kept for a time the user picks (no upper limit). |
+| **Reward** | Rest time earned by working (blocked, computer in use); saved up to one break, or accumulates until the window/day/week/month ends, or each part kept for a user-picked time (no upper limit on time or amount). |
 | **Text break** | Preset break after typing a challenge; block stays locked. |
 | **Delay break** | Preset break after a countdown; block stays locked. |
 | **Session limit** | N openings per period; a session ends 3 min after switching away. |
 | **Pause** | One-off lift until a set time. |
 | **Autostart** | Switches a block on: once, time of day on set days, sign-in/wake, or next block window. |
-| **Schedule** | Named weekly windows kept outside blocks (*Evening*, *Weekend*), made on the Schedules page. A block or mode uses any number of schedules besides windows of its own (*Apply schedule*); changing a schedule changes everything using it. Overlapping windows count once. |
-| **Place** | A set of Wi-Fi access points (no GPS), made on the Places page or from a block. The computer is there when as many of them as the user chooses (default 2) are in range. On Android a place is an area picked on a map and found by GPS; the Places page opens the map instead of reading Wi-Fi (owner 2026-11-22). |
-| **Place rule** | A place in a block's automation; a block may have **any number**. Arriving there switches the block as its default says (enabled by default: off; disabled by default: on). A place rule has **no actions of its own**. |
-| **Automation** | What switches an active block (or a mode's blocks, or monk mode, or Frozen Chicken) by itself: its windows (its own and its schedules') and its places. The user sets the block **Enabled by default** (a window or a place turns it off) or **Disabled by default** (a window or a place turns it on). With both a schedule and places, the user sets whether switching needs **both** (in a window and at a place at once) or **either** (one is enough). Without a schedule or places the block is continuous. A block in a mode keeps its own automation, unused, until it is taken out. |
+| **Schedule** | Named weekly windows kept outside blocks (*Evening*, *Weekend*), made on the Schedules page. A block or mode uses any number besides its own windows (*Apply schedule*); changing a schedule changes everything using it. Overlapping windows count once. |
+| **Place** | A set of Wi-Fi access points (no GPS), made on the Places page or from a block. The computer is there when the user-chosen number of them (default 2) are in range. Android: an area picked on a map, found by GPS (§8.2). |
+| **Place rule** | A place in a block's automation; **any number** per block (any block). Arriving switches the block as its default says (enabled by default: off; disabled by default: on). **No actions of its own.** |
+| **Automation** | What switches an active block (or a mode's blocks, monk mode, Frozen Chicken) by itself: its windows (own and its schedules') and places. **Enabled by default** (a window or place turns it off) or **Disabled by default** (turns it on). With schedule and places: switching needs **both** (at once) or **either**, user's choice. None: continuous. A block in a mode keeps its own automation, unused, until taken out. |
 
 ### 3.7 Use
 
@@ -241,7 +237,7 @@ tamper protection settings can't be turned off.
 | **Frozen Chicken** | A mode (§3.2), not a block: freezes the device in a freeze mode. Switched on only with an end time at most a week ahead, or by its automation (windows only: scheduled freezes, each with its freeze mode); nothing else editable but its allowed apps and locks. A running freeze can't end early. *CT: Frozen Turkey.* | Schedule lock |
 | **Freeze mode** | *lock screen*, *logout*, *shutdown*, *allowed apps only*. | |
 | **Allowed apps only** | Only programs on the freeze's app list run. | Allowlist block |
-| **Monk mode** | A mode, not a block; preconfigured, nothing editable but its automation and locks. Blocks `*.*` (exception `file://*` only) and cuts the whole computer's network while on. Switched on and off like any mode: by hand, by its automation (windows, schedules, places; disabled by default), or by a Mode action, which locks it as the action says. | Block |
+| **Monk mode** | A mode, not a block (a block could be edited or deleted while unlocked); preconfigured, nothing editable but its automation and locks. Blocks `*.*` (exception `file://*` only) and cuts the whole computer's network while on. Switched like any mode: by hand, by its automation (windows, schedules, places; disabled by default), or by a Mode action, which locks it as the action says. | Block |
 | **Consequence** | Device action: close tab, close browser, lock screen, logout, shutdown, Mode action. Announced 60 s ahead except from bypass prevention. | Page action |
 | **Strict mode** | Off by default. On and something locked: no `sudo`/`pkexec`; nothing runs from `/home` or `/tmp` except exempted folders (adding one weakens); no containers/VMs. Own setting lock. | |
 | **No-escape** | Closes boot exits: hides recovery entries and kernel options, GRUB password nobody knows. | Strict mode |
@@ -252,13 +248,13 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Action** | What a blacklist or phrase set does on a match, and what a block's apps and its window titles do when they fire (one set each): page action, consequence or custom action. Apps and window titles close by default; each may untick that and take consequences instead or too (fired when an app or window is found, at most once a minute). Any of them may have no action: it then does nothing (an action can be unticked before another is ticked). A place rule has no actions (§3.6). |
-| **Mode action** | Makes a chosen mode run now for a set time, locked for that time, whatever its automation says (R-MODE-4); then it is as it was. Frozen Chicken: also the freeze mode. |
-| **Custom action** | Opens sites, files, folders or programs, or runs a command, as the signed-in user. Offered wherever actions are (lists, phrase sets, apps, window titles, ladder steps), for when a mode becomes enabled, and in hotkeys (R-CUSTOM-1/2). |
-| **Hotkey action** | What a hotkey does, in the order set: switch a block on (with locks) or off, switch a mode on or off, Mode actions (monk mode, Frozen Chicken and modes of blocks, locked), every consequence (close the browsers, lock the screen, log out, shut down) and custom actions. |
+| **Action** | What a blacklist or phrase set does on a match, and what a block's apps and window titles do when they fire (one set each): page action, consequence or custom action. Apps and window titles close by default; may untick that and take consequences instead or too (fired when found, at most once a minute). Any of them may have no action (does nothing). Place rules have none (§3.6). |
+| **Mode action** | Makes a chosen mode run now for a set time, locked for that time, whatever its automation says (R-MODE-4); then as it was. Frozen Chicken: also the freeze mode. Replaces the old monk action and ladder step. |
+| **Custom action** | Opens sites, files, folders or programs, or runs a command, as the signed-in user. Wherever actions are (lists, phrase sets, apps, window titles, ladder steps), for a mode becoming enabled, and in hotkeys (R-CUSTOM-1/2). |
+| **Hotkey action** | What a hotkey does, in order: switch a block on (with locks) or off, switch a mode on or off, Mode actions (monk mode, Frozen Chicken, modes of blocks; locked), every consequence, custom actions. |
 | **Block page** | Replaces the page, with a motivational message. |
 | **Close tab / Redirect / Image** | Alternatives to the block page. |
-| **Look actions** | Greyscale, no images, no video, mute, dark. Change, don't block; combine. No images covers every image, animated GIFs included. |
+| **Look actions** | Greyscale, no images (every image, animated GIFs too), no video, mute, dark. Change, don't block; combine. |
 | **No downloads** | Cancels downloads from matching pages. |
 | **Strongest action** | Across all blocks: consequence > close tab > image > redirect > block page. Look actions only if none applies. |
 | **Threshold** | Per action. List: different rendered terms in page text. Phrase set: different phrases (default 1). |
@@ -270,21 +266,21 @@ tamper protection settings can't be turned off.
 
 | Term | Meaning |
 |---|---|
-| **Bypass prevention** | Counting stopped events and climbing a ladder. Command `kc9k bypass`. |
+| **Bypass prevention** | Counting stopped events and climbing a ladder. `kc9k bypass`. |
 | **Event** | Something stopped or noticed; kept a day. |
 | **Detector** | Event type a ladder counts: `page`, `search`, `app`, `title`, `browser`, `tamper`, `access` (wrong access password), `workaround`. |
-| **Ladder** | N events within T trigger consequences, step by step. Global or per block. |
+| **Ladder** | N events within T trigger consequences, step by step. Global or per block; one ladder for all detectors. |
 | **Step** | One rung: "N events within T: these consequences". |
 | **Quiet time** | Without tripping this long, the ladder drops a step. |
 | **Workaround** | Mirror, proxy address, alternative front-end, fetch tool. |
-| **Tamper** | Clock jump, or daemon restart other than upgrade, shutdown or self-reported crash; on Windows also a session agent ended from outside (not one that crashed and said so, or ended by itself). *(By claude)* |
+| **Tamper** | Clock jump, or daemon restart other than upgrade, shutdown or self-reported crash; Windows: also a session agent ended from outside (one that crashed and said so — Go crash report, exit code 2 — or ended by itself is logged only). *(By claude)* |
 
 ### 3.11 Passwords
 
 | Term | Meaning | Not |
 |---|---|---|
 | **Settings password** | Optional; needed to weaken anything; optionally to set locks. | Password lock |
-| **Access password** | Optional; needed to view areas: app, dashboard, blocks, device, stats, settings. | Password lock |
+| **Access password** | Optional; needed to view areas: app, dashboard, blocks, device, stats, settings. Commands ask for it too. | Password lock |
 | **Block password** | Optional per block; hides its contents until typed. Viewing only; locks unaffected. | Password lock |
 | **Setting lock** | A lock on a setting or browser setting. | Block lock |
 
@@ -302,19 +298,19 @@ mode unless no-escape is on.
 
 | Term | Meaning |
 |---|---|
-| **Daemon** | Service re-applying everything every few seconds: a systemd service on Linux, a Windows service on Windows. |
+| **Daemon** | Service re-applying everything every few seconds: systemd service (Linux), Windows service (Windows). |
 | **Layer** | Hosts file, firewall, browser policy, closing apps. The extension works on top. |
 | **Extension** | Bundled browser extension. Required while anything is locked or uses websites; browsers without it are closed. |
-| **Supported browser** | LibreWolf, Chrome or Chromium with the extension; Chrome, Edge, Firefox and Bing (the Microsoft Bing browser app) on Linux, Windows and Android (owner 2026-11-22). KC9K shows which are installed, whether each has it, and installs it in one click. |
-| **KC9K account** | The user's account in KC9K's cloud; needed only for cross-device sync and the accountability partner (principle 6). |
-| **Cross-device sync** | Copying the whole setup between the user's devices with two buttons: **Upload all** and **Download all** (§4.14). Not a project: a project only adds; Download all replaces. |
-| **Device-specific item** | Something that belongs to one device and is never synced (§4.14). |
-| **Accountability partner** | A person the user chooses to share their KC9K with (§4.15). |
-| **One-click installer** | One download that installs everything KC9K needs on its platform with one click (§4.11). |
-| **Website** | KC9K's own public website (§4.16). |
+| **Supported browser** | LibreWolf, Chrome or Chromium with the extension; Chrome, Edge, Firefox and Bing (the Microsoft Bing browser app) on Linux, Windows and Android. KC9K shows which are installed and whether each has the extension, and installs it in one click. |
+| **KC9K account** | The user's account in KC9K's cloud; only for cross-device sync and the accountability partner (principle 6). |
+| **Cross-device sync** | Copying the whole setup between the user's devices: **Upload all**, **Download all** (§4.14). Not a project: a project only adds; Download all replaces. |
+| **Device-specific item** | Belongs to one device; never synced (§4.14). |
+| **Accountability partner** | A person the user shares their KC9K with (§4.15). |
+| **One-click installer** | One download installing everything KC9K needs on its platform with one click (§4.11). |
+| **Website** | KC9K's public website (§4.16). |
 | **Setting** | Configured outside blocks: **browser setting** (lockable: `safesearch`, `force-search`, `web-only`, `block-devtools`, `no-private`), **tamper protection setting** (§4.10), **behaviour setting** (never locked, exempt from no-weakening: `polite-close`, `block-page-details`), **preference** (interface only). |
-| **Hotkey** | Desktop key that runs its hotkey actions (§3.9): starts a block with a lock, opens a set of sites, programs and folders, … |
-| **Project** | Whole setup in one file; presets (every type) included if the user chooses. *Backup*: everything. *Share*: without places and user names. Import previews, only adds, renames clashing blocks. |
+| **Hotkey** | Desktop key running its hotkey actions (§3.9). |
+| **Project** | Whole setup in one file; presets (every type) only if the user chooses. *Backup*: everything, presets included. *Share*: without places and user names. Import previews, only adds, renames clashing blocks; a file whose custom actions open or run something asks first *(By Opus)*. |
 | **Circadian rhythm** | Time-of-day settings: brightness and colour temperature (each an **automation clip**: 24-hour curve of points), wallpaper, dark mode in apps and pages. Never locked, never overrides the user. |
 
 ### 3.14 Words to avoid
@@ -346,122 +342,115 @@ mode unless no-escape is on.
 
 ## 4. Functions
 
-GUI and CLI offer the same functions.
+GUI and CLI offer the same functions. Users work in the GUI.
 
 - **4.1 Overview**: active blocks (enabled/lifted, locks), today's remaining
   windows, break status, ladder positions.
-- **4.2 Blocks**: create (empty, block preset, allowlist) · on/off · continuous
-  or automated · rename · duplicate (copy inactive) · delete (refused while
-  locked) · affected users · export/import.
-  - Modes (owner, 2026-11-17): on the same page as the blocks, each on a
-    card like a block's: name (opens the mode: its blocks as cards, and
-    its automation), on/off switch (switches its blocks on or off; monk
-    mode: lets its automation run it), Continuous/Automated, its blocks.
-    Drag a block onto a mode to put it in; take it out in the mode. Monk
-    mode and Frozen Chicken are always there; other modes are created,
-    renamed and deleted (its blocks stay). Frozen Chicken's switch asks for
-    an end time (at most a week ahead). A mode's view: its blocks as cards,
-    *Add blocks…* with *Create new block…*, its automation, its wallpapers,
-    custom actions for when it becomes enabled, its locks.
-  - Names (owner, 2026-11-17): blocks, modes and schedules each have their
-    own names; a block and a mode may share one.
-  - The list (owner, 2026-11-16; modern and sleek, R-GUI-3): each block on
-    one card with its **name** (opens the block), its **on/off switch**,
-    **"Continuous block" or "Automated block"** (opens the automation view:
-    schedule and places, §4.5), its **breaks** ("No breaks" or what it
-    allows; opens them) and **locked/unlocked** (opens the locks); nothing
-    else. Deleting an opened block comes back to this list.
+- **4.2 Blocks**: create (empty, block preset, allowlist) · on/off ·
+  continuous or automated · rename · duplicate (copy inactive) · delete
+  (refused while locked) · affected users · export/import.
+  - The list (R-GUI-3): one card per block: **name** (opens it), **on/off
+    switch**, **"Continuous block"/"Automated block"** (opens the
+    automation view, §4.5), **breaks** ("No breaks" or what it allows;
+    opens them), **locked/unlocked** (opens the locks); nothing else.
+    Deleting an opened block returns to the list.
+  - Modes: on the same page, a card each like a block's: name (opens the
+    mode), on/off switch (switches its blocks; monk mode: lets its
+    automation run it), Continuous/Automated, its blocks. Drag a block onto
+    a mode to put it in; take it out in the mode. Monk mode and Frozen
+    Chicken always there; other modes created, renamed, deleted (blocks
+    stay). Frozen Chicken's switch asks for an end time (≤ a week ahead).
+    Mode view: its blocks as cards, *Add blocks…* with *Create new
+    block…*, automation, wallpapers, custom actions on becoming enabled,
+    locks.
+  - Names: blocks, modes and schedules each have their own; a block and a
+    mode may share one.
 - **4.3 Block editor**:
   - Add: type, Enter; focus stays. Remove: button or Delete/Backspace;
     selection moves to next. Multi-select: Ctrl/Shift-click, Select all,
     Ctrl+A. Edit: double-click moves entry to text box (remove + add).
     Find: Ctrl+F.
-  - The block's menu: Start, Stop, Unlock, **Automation** (§4.5; greyed
-    out in a mode, saying "Automated by *mode*"). These apply at once.
-  - Save edits/Cancel: an opened block is always a draft; nothing changed in
-    it applies until *Save edits*. Locked block: Save edits refuses
-    weakening changes and names them. This holds for every tab, Breaks &
-    allowance and Bypass prevention too; what is done rather than set
-    (taking a break, opening or ending an allowance session), like the
-    block's menu, applies at once *(By Opus)*.
+  - Block menu: Start, Stop, Unlock, **Automation** (§4.5; greyed out in a
+    mode: "Automated by *mode*"). Apply at once.
+  - Save edits/Cancel: an opened block is always a draft; nothing applies
+    until *Save edits*, on every tab, Breaks & allowance and Bypass
+    prevention too (the last setting of each kind kept, shown as not saved,
+    applied through the same checks as when set directly). Locked block:
+    Save edits refuses weakening changes and names them. Things done
+    rather than set (taking a break, opening/ending an allowance session),
+    like the block menu, apply at once. *(By Opus)*
   - Import *From KC9K* (other blocks' lists/phrase sets, presets; several)
-    or *From file* (`.txt`, one entry per line); also *Whole internet* and
-    *All searches containing…*. Export list/phrase set to `.txt`.
-  - Import: one button; KC9K reads the file's layout itself. Phrases
-    (`[a, b] [c]`, one per line) go into a phrase set; rendered terms (one
-    per line, or a list in KC9K) become **one** word set: `[term 1, term
-    2, term 3]`; sites, also from hosts files (`0.0.0.0 example.com`) and
-    adblock rules (`||example.com^`), go into a list. Phrase sets export
-    in phrase format, one per line.
+    or *From file* (`.txt`); also *Whole internet* and *All searches
+    containing…*. Export list/phrase set to `.txt`.
+  - Import is one button; KC9K reads the layout: phrases (`[a, b] [c]`, one
+    per line) go into a phrase set; rendered terms (one per line, or a KC9K
+    list) become **one** word set `[term 1, term 2, …]`; sites, also from
+    hosts files (`0.0.0.0 example.com`) and adblock rules
+    (`||example.com^`), go into a list. Phrase sets export in phrase
+    format, one per line.
   - Lists: create (kind; scope boxes), rename, delete, scope, actions,
     threshold, hit count, rate, test mode. Block password.
   - Phrase sets: create (unnamed gets a name), rename, delete, scope,
     actions, threshold, test mode. Phrase editor inside the set's card (not
     a pop-up): any number of word sets, each necessary/optional, phrase
-    length; double-click a phrase to load it. Saving a loaded phrase changes
-    it (never adds a copy).
+    length; double-click a phrase to load it; saving a loaded phrase
+    changes it (never adds a copy).
   - Apps: program, folder, title entry; their actions. The block's own
     ladder.
-  - Social media settings: a section after the blacklists, above the
-    exceptions, opened and closed. YouTube playlists let through: a
-    playlist address in an exception list.
-  - *Save as preset*: on a block (block preset), on its lists (asks
-    *Blacklists*, *Exceptions* or *Both*, and *Include actions?*), on a
-    phrase set, on its automation.
-- **4.4 Presets and recording**: the Presets page shows presets by type
-  (blocks, lists, phrase sets, schedules, automations, hotkeys), tidily
-  grouped: create, edit, rename, delete, use (copied into a block, mode or
-  hotkey), save from one. Link recording into a list or list preset; word
-  recording, ranked, cut before saving.
-- **4.5 Automation** (schedules and places, §3.6): weekly grid; drag to
-  add/move, click to edit; 15-min grid, 5-min times; copy to days; similar
-  windows edited together; other blocks greyed; break per window; allow
-  windows. Enabled by default / Disabled by default; places, any number
-  per block, each added place showing plainly that it is added, whether
-  arriving there switches the block on or off, and whether the computer
-  is there now; with a schedule and places, both or either. The same for
-  a mode (one automation for its blocks) and monk mode; Frozen Chicken
-  has windows only.
-  - Schedules and Places each have a page in the sidebar (owner,
-    2026-11-17): made and changed there without a block; each shows what
-    uses it. A block's or mode's automation has **Apply schedule…**
-    (*Evening*, *Weekend*) and its places to tick.
+  - Social media settings: a collapsible section after the blacklists,
+    above the exceptions.
+  - *Save as preset*: on a block, on its lists (asks *Blacklists*,
+    *Exceptions* or *Both*, and *Include actions?*), on a phrase set, on its
+    automation.
+- **4.4 Presets and recording**: Presets page, grouped by type (blocks,
+  lists, phrase sets, schedules, automations, hotkeys): create, edit,
+  rename, delete, use (copied into a block, mode or hotkey), save from one.
+  Link recording into a list or list preset; word recording, ranked, cut
+  before saving.
+- **4.5 Automation** (§3.6): weekly grid; drag to add/move, click to edit;
+  15-min grid, 5-min times; copy to days; similar windows edited together;
+  other blocks greyed; break per window; allow windows. Enabled/Disabled by
+  default; places, any number, each showing plainly that it is added,
+  whether arriving switches the block on or off, and whether the computer
+  is there now; with schedule and places, both or either. Same for a mode
+  and monk mode; Frozen Chicken has windows only.
+  - Schedules and Places each have a sidebar page: made and changed
+    without a block, each showing what uses it. A block's or mode's
+    automation has **Apply schedule…** and its places to tick.
 - **4.6 Locks**: all of §3.4, alone or layered, on blocks, browser settings
-  and settings (global ladder too). Layer order fixed while locked; new lock
-  goes last. Timer locks always extendable; set for a duration or until a
-  date picked on a calendar (R-GUI-2).
-  - Several locks of one kind may be layered, each its own layer (two
-    partners' password locks; a timer lock, a text lock, then another timer
-    lock). A lock of a kind a block already has is added as another lock of
-    that kind, last, not a strengthening of the first (§6 2026-11-20).
-    No exceptions: a new timer or delay lock is its own layer (its duration
-    counts from the previous lock's unlocking, R-LOCK-6), extending a timer
-    lock is a separate action; range, text and password locks stack too,
-    with or without re-lock; each hotkey press adds its locks again
-    (confirmed per R-LOCK-12).
-  - A setting's locks (browser settings, tamper protection, strict mode,
-    the global ladder, scheduled freezes) stack the same way, and their
-    re-lock brings back the setting's whole lock configuration. Several
-    locks of one kind may be given at once: a lock option given twice is
-    two locks, in the order given. A hotkey or a mode's lock keeps one
-    password, so it sets at most one password lock. *(By Opus)*
-  - The text lock's challenge is typed in the terminal the command runs in
-    or, without one, in a window the command itself opens on the user's
-    desktop (§6 2026-11-14); only keys typed there count. A paste, a drop or
-    an answer piped to the command is refused (R-LOCK-5); the GUI only runs
-    the command. *(By Opus)*
+  and settings (global ladder too). Layer order fixed while locked; new
+  lock goes last. Timer locks always extendable; set for a duration or
+  until a calendar date (R-GUI-2).
+  - Stacking, no exceptions (2026-11-20): a lock of a kind already there is
+    another layer of that kind, last, never a strengthening of the first
+    (two partners' password locks; timer, text, then timer). A new timer
+    or delay lock counts from the previous lock's unlocking (R-LOCK-6);
+    extending a timer lock is a separate action; range, text and password
+    locks stack, with or without re-lock; each hotkey press adds its locks
+    again (confirmed per R-LOCK-12).
+  - Setting locks (browser settings, tamper protection, strict mode, global
+    ladder, scheduled freezes) stack the same way; their re-lock restores
+    the setting's whole lock configuration. A lock option given twice in
+    one command is two locks, in order. A hotkey or mode lock keeps one
+    password, so at most one password lock. *(By Opus)*
+  - Text lock challenge: typed in the command's terminal or, without one,
+    in a window the command itself opens on the user's desktop; only keys
+    typed there count. Paste, drop or piped answer refused (R-LOCK-5): the
+    CLI can tell typing from pasting only in input it reads itself. The
+    GUI only runs the command. *(By Opus)*
 - **4.7 Breaks and autostart**: all of §3.6. Break status also in the
   extension's toolbar button and popup.
-- **4.8 Frozen Chicken**: a mode among the blocks (no page of its own):
-  switched on for a time or until a date, at most a week ahead; its
-  automation schedules freezes; both may coexist.
-  - A running freeze in lock screen, logout or shutdown mode, extended by
-    hand or by a scheduled freeze, keeps its mode: it never becomes allowed
-    apps only, which lets programs run (that would weaken it). *(By Opus)*
-- **4.9 Statistics**: time used and times blocked per site, app, title. Time
-  frame (presets/custom), bar chart over time with one colour per site/app, per user, top 5/10, search, filter by block, JSON
-  export, delete, on/off, optionally skip private windows. Separate from
-  events; local only.
+- **4.8 Frozen Chicken**: a mode among the blocks (no own page): on for a
+  time or until a date, ≤ a week ahead; its automation schedules freezes;
+  both may coexist.
+  - A running lock screen/logout/shutdown freeze, extended by hand or by a
+    scheduled freeze, keeps its mode, never becoming allowed apps only
+    (`kc9k freeze --mode apps` from a text console would reopen programs).
+    The reverse strengthens and stays free. *(By Opus)*
+- **4.9 Statistics**: time used and times blocked per site, app, title.
+  Time frame (presets/custom), bar chart over time (a colour per site/app),
+  per user, top 5/10, search, filter by block, JSON export, delete, on/off,
+  optionally skip private windows. Separate from events; local only.
 - **4.10 Settings**:
   - Preferences: 24-hour clock, first weekday, theme with darkness slider
     (dark grey to black), open at login, tray.
@@ -471,109 +460,105 @@ GUI and CLI offer the same functions.
   - No weakening during active locks.
   - **Tamper protection** (one group; once on, can't be turned off while
     anything is locked, and its own lock must be unlocked; turning one on
-    shows an OK/Cancel window):
-    - close private windows and Tor; close guest profiles; close browsers
-      if the extension stops; grace for missing extension (default 60 s);
-      allow `file://` blocking (local files are then judged like web pages:
-      by a list's `file://` entries, its rendered terms and phrases in
-      their address, title and text, spared by the block's file exceptions,
-      `file://*` by default; *Whole internet* still leaves them reachable)
-      *(By Opus)*;
+    asks OK/Cancel):
+    - close private windows and Tor; close guest profiles (also turns off
+      the login screen's guest session); close browsers if the extension
+      stops; grace for missing extension (default 60 s);
+    - allow `file://` blocking: local files judged like web pages (their
+      `file://` entries, rendered terms and phrases in address, title and
+      text), spared by the block's file exceptions (`file://*` by default);
+      *Whole internet* still leaves them reachable *(By Opus)*;
     - block unsupported browsers (all but supported browsers with the
       extension);
-    - block the installer (no reinstall/downgrade/removal while locked, via
-      installer or package manager);
+    - block the installer: while anything is locked, no reinstall,
+      downgrade or removal via installer, package manager or `install.sh`;
+      a newer version installs;
     - block inactive tabs (background tabs blocked at once);
     - block embedded content (blocked site inside another page);
     - block task managers while locked (System Monitor, htop);
     - clock: block time/date changes; check against hardware clock and
-      internet time.
-    - Defaults: close browsers if the extension stops, block inactive tabs
-      and block embedded content were always done before they were
-      settings, so they are on until turned off; off, browsers without the
-      extension are closed only while anything is locked, a background tab
-      is blocked when switched to, and the extension leaves frames alone
-      (hosts and the firewall still block whole domains). The others are
-      off until turned on. Close guest profiles also turns off the login
-      screen's guest session. Block the installer refuses reinstalling and
-      installing an older version while anything is locked (the package
-      manager and `install.sh`); a newer version installs. *(By Opus)*
+      internet time (an outside query the owner agreed to, 2026-11-18).
+    - Defaults *(By Opus)*: close browsers if the extension stops, block
+      inactive tabs and block embedded content (always done before they
+      were settings) are on until turned off; the rest off until turned
+      on. Off, browsers without the extension are closed only while
+      anything is locked, a background tab is blocked when switched to,
+      and frames are left alone (hosts and firewall still block whole
+      domains; see §6 2026-11-21 policies).
   - Browsers: supported browsers found, extension status, one-click install.
   - **Browser settings**, each lockable: SafeSearch on Google, Bing,
-    DuckDuckGo, YouTube (Restricted Mode); *force-search* (Google only,
-    others blocked, browser search box uses Google); *web-only* (Google web
-    results only: no images, shopping, AI answers); block developer tools;
-    no private windows.
-    While SafeSearch on Google, Bing or DuckDuckGo is on, Brave, Yahoo and
-    SearXNG searches are kept strict too and search engines that can't be
-    kept strict (Startpage, Ecosia, Mojeek, Yandex, Marginalia) are blocked;
-    they have no setting of their own. YouTube Restricted Mode alone does
-    neither. *(By Opus)*
+    DuckDuckGo, YouTube (Restricted Mode), each its own setting;
+    *force-search* (Google only, others blocked, browser search box uses
+    Google); *web-only* (Google web results only: no images, shopping, AI
+    answers); block developer tools; no private windows. While SafeSearch
+    on Google, Bing or DuckDuckGo is on, Brave, Yahoo and SearXNG are kept
+    strict and engines that can't be (Startpage, Ecosia, Mojeek, Yandex,
+    Marginalia) are blocked; no settings of their own (each is a way
+    around the strict engine). YouTube Restricted Mode alone does neither.
+    *(By Opus)*
   - DNS: server asked for blocked sites' real addresses (firewall layer
-    only). Default: the network's own server; Quad9 if it can't answer.
+    only). Default: the network's own; Quad9 if it can't answer.
   - Use counting: strict use counting.
-  - **Circadian rhythm** (its own page in the sidebar, not on the Settings
-    page; kept under §4.10 so its references stay):
-    - automation clips (one set for all days) for backlight %, software
+  - **Circadian rhythm** (own sidebar page, not on Settings; listed here
+    so references stay):
+    - automation clips (one set for all days): backlight %, software
       brightness %, colour temperature K; add/move/remove points, bend the
-      curve between points; presets;
-    - wallpapers: picture plus times, on a timeline like a video editor's
-      (drag a bar to move it, an end to change it); no fixed periods;
-      *Override modes*: the same setting as a mode's *Override circadian
-      rhythm wallpapers*, the other way round (one on is the other off);
-    - *Play the day*: the next 24 hours shown on the screen in about 15
-      seconds, then everything is back to now;
+      curve between them; presets;
+    - wallpapers: picture plus times on a video-editor-like timeline (drag
+      a bar to move, an end to resize); no fixed periods; *Override modes*
+      = a mode's *Override circadian rhythm wallpapers* the other way round
+      (one on is the other off);
+    - *Play the day*: next 24 hours shown in about 15 s, then back to now;
     - dark mode = system dark mode: system default, always light, always
       dark, or light between two times;
-    - dark pages follow dark mode, with exempt sites; the extension's
-      toolbar button exempts a site (or shows it dark again); the switch is
-      *Show dark web pages while dark mode is on* and turns on the
-      browser's own dark mode (owner 2026-11-22);
+    - dark pages follow dark mode, with exempt sites (toolbar button
+      exempts a site or shows it dark again); switch *Show dark web pages
+      while dark mode is on* turns on the browser's own dark mode;
     - not lockable;
     - never overrides the user: never puts a level back; a manual change
       pauses that clip until its next point or resume; a hand-picked
       wallpaper/dark mode stays until the next scheduled change;
     - leaves the desktop's own brightness control and night light working;
-      off, it touches nothing.
+      off, touches nothing.
   - Device protection: strict mode, no-escape, factory reset protection,
     guided setup.
-    - The **firmware lock** (factory reset protection) changes the
-      firmware's settings where Linux can reach them: booting from USB and
-      the network and the one-time boot menu off, the boot order locked,
-      then a firmware password that the trusted person types and keeps;
-      KC9K never stores it. Setting it is confirmed like a lock
-      (R-LOCK-12). Removing it needs that password, puts back what it
-      changed, and is refused while anything is locked. It is not a KC9K
-      lock: it holds nothing else on. Settings the firmware doesn't offer
-      are named as steps to do in its own setup. *(By Opus)*
-    - The **guided setup** is a checklist, not a wizard: each step of the
-      strictest setup in order (settings password, no weakening, tamper
-      protection, strict mode and its lock, root-equivalent groups, the
-      root password, installer media guard, firmware lock, other systems
-      in the boot menu, no-escape last), whether it is done, and a button
-      that runs the same as that setting's own switch. It changes nothing
-      by itself. *(By Opus)*
-  - **Wallpaper default** (not part of circadian rhythm): what the desktop
-    shows when no mode's wallpaper and no circadian rhythm wallpaper
-    applies, and while the place isn't known yet: *Latest wallpaper*,
-    *Circadian rhythm* or *Custom* (a picture chosen here).
-  - Passwords: settings, access. Global ladder, lockable. Project:
-    backup, share, import. Behaviour settings.
-  - **Linux-only** parts of a project *(By claude)*: a block's app entry
-    that is a Linux path (starts with `/`, not `//`, or `~/`), a Linux app
-    ID or X11 window class (reverse-DNS, `org.gnome.Nautilus`), or a Linux
-    program (desktop, systemd and PAM tools such as
-    `gnome-terminal-server`, `systemctl`, `pkexec`); a custom action that
-    runs such a program or opens a Linux path; a setting lock of a Linux
-    device setting (strict mode's PAM guard, no-escape). Imported on
-    Windows they are kept as they are, unused, and listed by the dry run
-    as "not used on Windows"; never an error, never turned into Windows
-    names. The file may have CRLF line ends and a UTF-8 BOM.
+    - **Firmware lock** (factory reset protection) *(By Opus)*: sets
+      firmware settings Linux can reach: USB and network boot and the
+      one-time boot menu off (a password alone leaves it open on many
+      computers), boot order locked, then last a firmware password the
+      trusted person types and keeps (KC9K never stores it). Confirmed like
+      a lock (R-LOCK-12). Removing it needs that password, restores what
+      it changed, refused while anything is locked. Not a KC9K lock (holds
+      nothing else on). Settings the firmware lacks are named as steps in
+      its own setup.
+    - **Guided setup** *(By Opus)*: a read-only checklist, not a wizard (no
+      first-run wizard, 2026-11-14): each strictest-setup step in order
+      (settings password, no weakening, tamper protection, strict mode and
+      its lock, root-equivalent groups, root password, installer media
+      guard, firmware lock, other systems in the boot menu, no-escape
+      last), whether done, and a button running that setting's own switch.
+  - **Wallpaper default** (not circadian rhythm): shown when no mode or
+    circadian rhythm wallpaper applies, and while the place isn't known:
+    *Latest wallpaper*, *Circadian rhythm* or *Custom* (picture chosen
+    here).
+  - Passwords: settings, access. Global ladder, lockable. Project: backup,
+    share, import. Behaviour settings.
+  - **Linux-only** parts of a project *(By claude)*: app entries that are a
+    Linux path (`/` not `//`, or `~/`), Linux app ID or X11 window class
+    (`org.gnome.Nautilus`), or Linux program (desktop, systemd, PAM tools:
+    `gnome-terminal-server`, `systemctl`, `pkexec`); custom actions running
+    such a program or opening a Linux path; setting locks of Linux device
+    settings (PAM guard, no-escape). Imported on Windows: kept unused,
+    listed by the dry run as "not used on Windows"; never an error, never
+    mapped to Windows names (mapping would block programs never named;
+    dropping would lose them on the way back). File may have CRLF and a
+    UTF-8 BOM.
 - **4.11 Install**: `.deb`. No automatic updates for now. Uninstall refused
-  while anything is locked. Every platform (Linux, Windows, Android) gets
-  a one-click installer: one download, one click, and KC9K with its
-  extension in the supported browsers is set up (owner 2026-11-22).
-- **4.12 CLI**: every function has a command. Cold Turkey equivalents:
+  while anything is locked. Every platform (Linux, Windows, Android) gets a
+  one-click installer: one download, one click, KC9K and its extension in
+  the supported browsers set up.
+- **4.12 CLI**: every function has a command; commands ask for access
+  passwords too. Cold Turkey equivalents:
 
 | Cold Turkey | KC9K |
 |---|---|
@@ -589,42 +574,37 @@ GUI and CLI offer the same functions.
 
 Command/flag names follow the glossary; old names stay as aliases for a while.
 
-- **4.13 Hotkeys** (owner, 2026-11-17): their own page in the sidebar. Each
-  hotkey: its keys, its hotkey actions in order (§3.9), *Run without
-  confirmation* (§6 2026-11-14); add, change, remove, *Save as preset*.
-- **4.14 Cross-device sync** (owner, 2026-11-22), on Linux, Windows and
-  Android, signed in to a KC9K account: *Upload all* sends this device's
-  whole setup to KC9K's cloud; *Download all* replaces this device's whole
-  setup with the last upload. To begin with everything is copied one to
-  one except device-specific items: blocks, lists, phrase sets, locks and
-  their state, settings, presets. Download all is not refused by a lock
-  or counted as weakening (an exception to R-WEAK-1): what was unlocked
-  and deleted on one device is unlocked and deleted on the other after
-  Upload all there and Download all here; unlocking still needed the
-  lock to be lifted on the device that uploaded.
-  **Device-specific items** (never synced): places (Wi-Fi networks),
-  affected users and user names, strict mode, no-escape, factory reset
-  protection and the firmware lock, circadian rhythm's screens and
-  hardware, wallpapers, apps' paths and file fingerprints, statistics,
-  the device's own passwords for its system (root, firmware). *(By Opus:
-  the owner called the list obvious)*
-- **4.15 Accountability partner** (owner, 2026-11-22), on Linux, Windows
-  and Android, through the KC9K account: everything similar software
-  offers, except screenshots. The user invites a partner; the partner
-  gets activity reports (daily or weekly: time used per site and app,
-  times blocked, top blocked); alerts as they happen for bypass
-  prevention events, a block switched off, unlocked or deleted, a lock
-  ended early, tamper protection events, KC9K stopped, uninstalled or
-  not heard from; the partner can hold password locks (§3.4) and the
-  settings password, and approve unlock requests; reports and alerts
-  by email and on the partner's own KC9K. Several partners possible;
-  removing one is weakening (refused while locked).
-- **4.16 Website** (owner, 2026-11-22): KC9K's public website, like Cold
-  Turkey's in kind (own design, not a copy): what KC9K does, the
-  one-click installer for Linux, Windows and Android, free forever,
-  frequently asked questions, sign-in to the KC9K account. "No
-  user-facing docs" (`CLAUDE.md`) keeps the repository slim; it doesn't
-  apply to the website.
+- **4.13 Hotkeys**: own sidebar page. Each: keys, hotkey actions in order
+  (§3.9), *Run without confirmation* (§6 2026-11-14); add, change, remove,
+  *Save as preset*.
+- **4.14 Cross-device sync** (Linux, Windows, Android; KC9K account):
+  *Upload all* sends this device's whole setup to KC9K's cloud; *Download
+  all* replaces this device's whole setup with the last upload. Everything
+  copied one to one except device-specific items: blocks, lists, phrase
+  sets, locks and their state, settings, presets. Download all is not
+  refused by a lock or counted as weakening (exception to R-WEAK-1): a
+  block unlocked and deleted on one device is unlocked and deleted on the
+  other after Upload all there and Download all here; unlocking still
+  needed the lock lifted on the uploading device.
+  **Device-specific items** (never synced) *(By Opus; owner called the
+  list obvious)*: places, affected users and user names, strict mode,
+  no-escape, factory reset protection and firmware lock, circadian
+  rhythm's screens and hardware, wallpapers, apps' paths and file
+  fingerprints, statistics, the device's own system passwords (root,
+  firmware).
+- **4.15 Accountability partner** (Linux, Windows, Android; KC9K account):
+  everything similar software offers except screenshots. The user invites
+  a partner, who gets: activity reports (daily or weekly: time per site
+  and app, times blocked, top blocked); alerts as they happen (bypass
+  prevention events; a block switched off, unlocked or deleted; a lock
+  ended early; tamper events; KC9K stopped, uninstalled or not heard
+  from); can hold password locks and the settings password and approve
+  unlock requests. By email and on the partner's own KC9K. Several
+  partners; removing one is weakening.
+- **4.16 Website**: public, like Cold Turkey's in kind (own design): what
+  KC9K does, one-click installer for Linux, Windows, Android, free forever,
+  FAQ, KC9K account sign-in. "No user-facing docs" (`CLAUDE.md`) doesn't
+  apply to it.
 
 ## 5. Rules
 
@@ -650,7 +630,7 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-WEAK-5** Editing an entry is remove + add: weakening unless the new entry clearly matches more.
 
 **Schedules and breaks**
-- **R-SCHED-1** An active automated block is in its default state (enabled or disabled) unless its automation switches it (§3.6: a window, a place; both or either); an inactive block is never enabled. Automation never switches a block on or off (active/inactive), and has no actions of its own.
+- **R-SCHED-1** An active automated block is in its default state (enabled or disabled) unless its automation switches it (§3.6: window, place; both or either); an inactive block is never enabled. Automation never switches a block on or off (active/inactive) and has no actions.
 - **R-SCHED-2** A block's windows never overlap.
 - **R-SCHED-3** Pomodoro starts with work; its rhythm restarts each time the block is enabled.
 - **R-BREAK-1** Allowance counts only use.
@@ -663,12 +643,12 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 - **R-LIST-4** Text = rendered visible text; hidden/collapsed text doesn't count, text further down does. Each frame is judged on its own text.
 - **R-LIST-5** Case and accents ignored (é = e); look-alike letters from other alphabets count as Latin. Languages without word spaces are out of scope.
 - **R-LIST-6** Every count set on an action (threshold, hit count, rate) must be met.
-- **R-PHRASE-1** A phrase has ≥ 2 word sets; each set is freely necessary or optional (none necessary is allowed). Phrase length ≥ 2 and ≥ the number of necessary sets (owner, 2026-11-15).
+- **R-PHRASE-1** A phrase has ≥ 2 word sets; each freely necessary or optional (none necessary allowed). Phrase length ≥ 2 and ≥ the number of necessary sets.
 - **R-PHRASE-2** A match takes one term from each necessary set, plus optional ones up to the phrase length.
 - **R-PHRASE-3** One word set gives at most one term: `[long cat, neko] [running, sitting]` matches "long cat running", not "long cat neko".
 - **R-PHRASE-4** Terms in any order, directly adjacent, separated only by blank space. Punctuation breaks the match. An in-word apostrophe is part of the word ("let's"); a hyphen between letters is blank space (`long cat` matches "long-cat").
 - **R-PHRASE-5** A break between page parts (heading, paragraph, list item, button) ends a sentence; phrases and bridges don't cross it.
-- **R-PHRASE-6** URL: decoded first (`%20` = space); separators `-` `_` `/` `.` `?` `=` `&` `+` `#` `:` `,` are blank space.
+- **R-PHRASE-6** URL: decoded first (`%20` = space); separators `-` `_` `/` `.` `?` `=` `&` `+` `#` `:` `,` are blank space. (So no search lists: URL scope catches queries, text scope results.)
 - **R-PHRASE-7** A bridge skips 0–20 words between terms of different sets: `[big-, strong] [-gorilla, cat]` matches "big and long gorilla" and "big gorilla". Commas allowed, no `.` `!` `?`; order fixed (`big-` before `-gorilla`).
 - **R-PHRASE-8** A bridge needs both ends: `-gorilla` only after a `term-` of another set; `[-gorilla, cat] [jumping, river]` doesn't match "jumping gigantic gorilla". One-ended bridges are refused on entry. A middle link needs ≥ 3 word sets.
 - **R-PHRASE-9** Each phrase set action has a threshold of different phrases (default 1). No hit count or rate.
@@ -677,12 +657,12 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 
 **GUI**
 - **R-GUI-1** Every duration field takes days, hours and minutes (or typed text such as `2d 4h`, `300m`); never minutes only. A value outside the allowed range is never changed silently: the field says why and keeps what was typed.
-- **R-GUI-2** Every timer lock is set either for a duration (R-GUI-1) or until a date and time picked on a calendar (e.g. 24 December 2099, 18:00).
-- **R-GUI-3** The GUI follows the GNOME Human Interface Guidelines and the usual usability heuristics: tasks first (the overview shows what is on, until when and how locked; common tasks one or two clicks away); one primary action per view; advanced options behind *More options*; plain glossary words, short sentences; lock state shown wherever a locked thing appears; controls that can't be used are disabled with the reason; input checked where it is typed; one widget per concept everywhere; everything reachable by keyboard (Enter presses a dialog's OK button, owner 2026-11-22); the window never freezes while a command runs. The Android app works like the computer's GUI, with the same pages and behaviour; tapping something never moves the view back to the top of the page (owner 2026-11-22).
+- **R-GUI-2** Every timer lock is set either for a duration (R-GUI-1) or until a date and time picked on a calendar.
+- **R-GUI-3** Beautiful, intelligent, intuitive; GNOME Human Interface Guidelines and the usual usability heuristics: tasks first (overview shows what is on, until when, how locked; common tasks one or two clicks away); one primary action per view; advanced options behind *More options*; plain glossary words, short sentences; lock state shown wherever a locked thing appears; unusable controls disabled with the reason; input checked where typed; one widget per concept everywhere; everything reachable by keyboard (Enter presses a dialog's OK); the window never freezes while a command runs. The Android app has the same pages and behaviour; tapping never moves the view back to the top.
 
 **Browsing**
 - **R-PAGE-1** No flashing: a page that a list or phrase set will block, replace or give a look action never shows its content without it, also when moving within a site. Content stays hidden until judged, at most 3 s (then shown and judged as usual).
-- **R-PAGE-2** Search results that lead to a blacklisted address are removed from search results pages: with `reddit.com` blacklisted, no results from Reddit are shown (owner 2026-11-22).
+- **R-PAGE-2** Search results leading to a blacklisted address are removed from search results pages (`reddit.com` blacklisted: no Reddit results).
 
 **Events**
 - **R-EVENT-1** At most one event per tab and blocked site per minute. Restored tabs at browser start, preloaded pages and embedded frames don't count.
@@ -715,237 +695,178 @@ Command/flag names follow the glossary; old names stay as aliases for a while.
 
 ## 6. Decisions
 
-Decisions not already written into §1–5:
+Only what §1–5 don't say, or a pointer. One line each; untagged = owner.
+Windows mechanisms: `notes/windows.md`.
 
-- 2026-11-10: Users work in the GUI; commands exist and ask for access passwords too.
-- 2026-11-10: One ladder for all detectors (no ladder per detector).
-- 2026-11-13: Where code contradicts this file, the code is fixed.
-- 2026-11-14: Monk mode is a mode because a block could be edited or deleted while unlocked.
-- 2026-11-14: Each hotkey has "Run without confirmation". Off: pressing it with a lock asks in a desktop dialog. On: its lock is confirmed only at setup. Automatic monk mode (ladder step, `monk` action) asks nothing when it starts; setting it up needs ticking "I know this will not ask for confirmation".
-- 2026-11-14: Word combinations became phrases once: each box a word set, `:N` dropped; new phrase sets start at threshold 1.
-- 2026-11-14: No page score.
-- 2026-11-14: The root login and `su` PAM guard applies only during strict mode's lockdown. No boot order guard, no hiding other systems behind the GRUB password (friction only without a firmware password).
-- 2026-11-14: The rules server requires a secret given to the extension by policy. Every sudo-allowed command is checked for hostile arguments (symlinks, `..`, files under `/etc`). The typing challenge gets its own GTK window. No first-run wizard.
-- 2026-11-14: No categories: no shipped lists or phrase sets; `block create --template` lists removed.
-- 2026-11-14: `force-librewolf` becomes *block unsupported browsers* (tamper protection).
-- 2026-11-14: Declutter removed (broke pages).
-- 2026-11-14: No search lists: URL-scope terms catch queries (R-PHRASE-6), text scope catches results.
-- 2026-11-15: Phrase word sets are freely necessary or optional, none necessary allowed; phrase length (≥ 2) sets how many terms a match needs (R-PHRASE-1).
-- 2026-11-15: Lists and phrase sets may have no action.
-- 2026-11-15: Durations in days, hours and minutes, never minutes only, never silently changed (R-GUI-1); timer locks also by calendar date (R-GUI-2); the GUI is redesigned to be beautiful, intelligent and intuitive (R-GUI-3); no flashing (R-PAGE-1).
-- 2026-11-16: Restart locks on any block, scheduled ones too: the user decides how their locks work.
-- 2026-11-16: Reward can also be kept for a time the user picks, with no upper limit (on the time or the amount saved).
-- 2026-11-16: The user picks how many of a place's networks must be in range; a place rule can be given to any block.
-- 2026-11-16: One Import button: KC9K tells phrases, rendered terms and sites (hosts files, adblock rules) apart by their layout.
-- 2026-11-16: YouTube playlists let through belong to the exception list, not the social presets.
-- 2026-11-16: Circadian rhythm: its own page only (not in Settings); wallpapers on a draggable timeline; Play the day preview.
-- 2026-11-16: Any trigger to any action: a block's apps and window titles each get one action set (close by default, and consequences).
-- 2026-11-16 (later): A place rule only enables or lifts its block; it has no actions (withdrawn from the decision above). An automated block is Enabled by default (its windows and places turn it off) or Disabled by default (they turn it on); any number of places per block; with a schedule and places, the user picks whether switching needs both or either. Blocks are continuous or automated; the block list shows name, on/off switch, Continuous/Automated block (opens the automation view), breaks and lock state. Android is on hold until the Linux project is finished.
-- 2026-11-17: Modes: a group of blocks automated together (one schedule and places for all), or monk mode, which can be automated by schedule and place. Modes sit with the blocks; blocks are dragged into a mode and shown inside it. Schedules and places have their own pages, made without a block; a block or mode applies a schedule (*Evening*, *Weekend*).
-
-- 2026-11-17 (session, to confirm with the owner): wallpapers while the place isn't known. A mode switched by places shows none, and the wallpaper default shows in place of circadian rhythm's picture too when such a mode would override it (the home/school example); a mode by time alone still shows. The place is unknown at once at boot and after waking, otherwise after a minute without networks. With a picture or circadian rhythm as the default, it also goes on before the computer sleeps. The default's own picture is kept when another default is chosen. Importing a file whose custom actions open or run something asks first.
-- 2026-11-17 (session, to confirm with the owner): a mode is locked as its kind allows (R-MODE-3: a mode of blocks through its blocks' locks, monk mode and Frozen Chicken by a time); a Mode action runs its mode now for a time, locked, whatever its automation says (R-MODE-4), as the monk action and ladder step did.
-- 2026-11-17 (later): Frozen Chicken is a mode (no page of its own), up to a week. Monk mode is switched on and off like any mode; only locks keep it on, and modes take locks as blocks do. A **Mode action** switches a mode on and locks it as set, from any trigger (replaces the monk action and ladder step). A block keeps its own automation while in a mode and gets it back when taken out. Automation is opened from the block's menu. An opened block is always a draft until *Save edits*. Blocks and modes may share names. Clusters and templates become **presets** of every type, always copies; schedules stay shared. *Social preset* is renamed *social media setting*. YouTube playlists are let through by their address in an exception list (a separate box withdrawn): a plain exception can't do it safely, because YouTube plays any video with any `list=` added. **Custom actions** (open sites, files, folders, programs; commands) wherever actions are and for a mode becoming enabled; free commands, but never past a lock. Hotkeys get a page and run **hotkey actions**. Modes have wallpapers; circadian rhythm and modes override each other by one setting; a **wallpaper default** covers an unknown place.
-- 2026-11-18: An Index at the top of this file for navigation; it adds no rules (owner).
-- 2026-11-18: The clock check (§4.10 tamper protection) may ask internet time: an outside query the owner agreed to (principle 6).
-- 2026-11-18: SafeSearch is lockable per engine: Google, Bing, DuckDuckGo and YouTube are each their own browser setting (§4.10).
-- 2026-11-18: When Linux is finished, the owner's brothers test it on their computers while the Android app is built; Windows comes after Android.
-- 2026-11-20: A lock of a kind a block already has (§3.4) is added as a second lock of that kind, last in the unlock order, not a strengthening of the first (owner).
-- 2026-11-20 (later): Stacking has no exceptions (§4.6): a new timer or delay lock is its own layer, not a change to the last one (extending stays a separate action); range locks stack in their order; text and password locks stack on a block, with or without re-lock; each hotkey press adds its locks again. Re-lock brings back the whole lock configuration the block had, every lock in its order (§3.4) (owner).
-- 2026-11-20 (later): Re-lock is optional on every lock; stacking never depends on it (§4.6) (owner).
-- 2026-11-20 (later): A project includes presets of every type only if the user chooses (§3.13); a backup always does (owner).
-- 2026-11-20 (later): Circadian rhythm is a page of its own, as decided 2026-11-16; §4.10 only holds its functions (owner).
-- 2026-11-21 (By Opus): The Breaks & allowance and Bypass prevention tabs are part of the draft (§4.3): what they set is kept with the draft, the last setting of each kind, shown in the tab as not saved yet, and applied at *Save edits* through the same checks as when set directly (weakening ones refused and named on a locked block). Taking a break or an allowance session still happens at once, as the block's menu does: those are things done now, not settings. SPEC already said "nothing changed in it applies until Save edits"; the 2026-11-17 session had left these two tabs out only as the larger change.
-- 2026-11-21 (By Opus): With "allow `file://` blocking" on, the extension judges local files as it does web pages (§4.10 Tamper protection): their `file://` address entries, and rendered terms and phrases in their title and text; the block's file exceptions spare them (`file://*` by default, so nothing changes until the user narrows it). A local HTML page is a way around a block as much as a website is; the setting and the exception keep it opt-in.
-- 2026-11-20 (By Opus): The text lock's challenge window (2026-11-14) is opened by the command itself, which reads only keys typed in it and never an answer piped to it (§4.6): the CLI decides all weakening (principle 10) and can tell typing from pasting only in input it reads itself (R-LOCK-5).
-- 2026-11-21 (By Opus): The firmware lock sets the firmware's boot settings first and its password last, typed by the trusted person and never stored; removing it is refused while anything is locked and needs that password (§4.10). Making it a KC9K lock with kinds would add nothing: only the trusted person can lift it. Stronger blocking: the one-time boot menu goes off too, since a firmware password alone leaves it open on many computers.
-- 2026-11-21 (By Opus): Tamper protection settings that KC9K always enforced (close browsers if the extension stops, block inactive tabs, block embedded content) are on by default and can be turned off while nothing is locked; the new ones (close guest profiles, block the installer) are off by default (principle 7: behaviour changes are settings, not new defaults; principle 3: a new protection is chosen). Block the installer lets a newer version through, as §4.10 names only reinstalling, downgrading and removal.
-- 2026-11-21 (By Opus): Setting locks stack like a block's (§4.6) and their re-lock brings back the whole configuration: a setting lock is a lock in §3.4's sense, the owner's examples (two partners' passwords) fit settings as well, and one rule for both is simpler to learn. A lock option given twice in one command is two locks (it used to keep the last), so several locks of one kind need no second command. Settles ROADMAP §5 "setting locks stacking".
-- 2026-11-21 (By Opus): Extending a running freeze never switches it to allowed apps only (§4.8): from a text console during a lock-screen freeze, `kc9k freeze --mode apps` would otherwise open the desktop's programs again; the reverse (allowed apps only to lock screen) strengthens and stays free.
-- 2026-11-21: The Android app is planned (§8): every function but the
-  computer-only ones; GrapheneOS and the most common Android alike;
-  Compose with Material 3; a Kotlin rule-maker checked against cases
-  shared with Go (not Go compiled for Android); Device Owner required; an
-  optional accessibility layer, never the only protection; places also
-  as areas on the map; the built Nokia mode becomes an ordinary block
-  (All apps, the phone and SMS apps as app exceptions) automated by a
-  Home place, with monk mode for the network; no hotkeys; no sync with
-  the Linux app. Building waits until Linux is finished (owner).
-- 2026-11-21 (By Opus): The guided setup (§4.10) is a read-only checklist with each step's own command, no-escape last: the 2026-11-14 "no first-run wizard" decision rules out a wizard, and a checklist that shows what is left keeps the strictest setup deliberate (principle 3).
-
-- 2026-11-21 (By Opus): SafeSearch on the other search engines (§4.10) goes with Google's, Bing's or DuckDuckGo's: any one of them on keeps Brave, Yahoo and SearXNG strict and blocks the engines that can't be kept strict. Each of these engines is a way around whichever engine is kept strict, so a setting of their own could only open that hole; tying them to Google's alone would leave them open while only Bing's or DuckDuckGo's is on. YouTube Restricted Mode is about video, not search, so alone it blocks no search engine. The per-engine settings (2026-11-18) still let one of the three be lifted while another holds. Settles ROADMAP §5 "SafeSearch for the other engines".
-- 2026-11-21 (By Opus): The rules server has no secret; this replaces the secret of 2026-11-14, which the owner asked to have decided. Browsers run as the user, so a secret given by policy sits in files every local program can read, and the lists are in `/etc/hosts` and the browser policy files anyway; an extension that couldn't read the secret would fail every check-in, and the extension guard would close its browser. What holds without it, for every address the server answers: only requests addressed to its own address (no DNS rebinding); posts only with the extension's own header, which a web page can't send without a CORS preflight that is never answered; no CORS header in any answer; a check-in counts only for the browser whose own connection made it (`/proc/net/tcp`). No post weakens a block (principle 10). Settles ROADMAP §5 "rules server secret".
-- 2026-11-21 (By Opus): With block embedded content off (§4.10), a blacklist's paths and patterns stay out of the browser policies too, not only out of the extension's frame checks: Chrome's URL blocklist (and Firefox's website filter) block frames as well as pages, and no policy limits them to pages, so with the setting off a path-blocked embedded video stayed blocked. Whole sites stay in the policies, as hosts and the firewall block them in frames anyway; the extension still blocks the paths and patterns in pages. Monk mode's and factory reset protection's own lists keep theirs.
-- 2026-11-21 (By Opus): The ad trigger's industries (§3.9) ship only domains an ad request really goes to: named as ad hosts by the big ad-filter lists (EasyList, AdGuard, Peter Lowe's, StevenBlack's) or seen in a real page's requests. An entry no request ever reaches can't trigger anything, and an affiliate platform's or game maker's own site could only trigger falsely (a broker's site using the same platform counted as gambling). Gambling and dating ads mostly come through general ad exchanges, so those industries stay small.
-- 2026-11-21: Windows is built now, before the Android app and alongside the open Linux work; this replaces the order of 2026-11-18 (owner). KC9K on Windows is built for an **administrator account**: the user is an admin, so its bypass prevention has to hold against one. The GUI on Windows is a native Windows app, not a browser window or a web view (owner); the most serious choice is taken (owner left it to the agent): C# on WinUI 3. The extension reaches Chrome on Windows through an unlisted Chrome Web Store listing, since Chrome there force-installs only store extensions (owner). Windows is tested in the cloud (CI), in a VM, and on the owner's laptop, which runs Windows (owner).
-- 2026-11-21 (later): KC9K on Windows is to be better than Cold Turkey; that settles its open questions (owner). Strict mode is built on Windows too: while anything is locked, the administrator account is denied what would stop KC9K (its service, files, registry keys, boot and recovery settings). Edge is a supported browser on Windows. KC9K for Windows is code-signed. Everything works on Windows Home; nothing depends on Pro-only features (Group Policy Editor, AppLocker).
-- 2026-11-21 (By Opus): The Windows GUI keeps its appearance and conveniences (theme, darkness, clock, first weekday, tray, list heights, window size) per Windows user in `%APPDATA%\kc9k\gui.json`, as the GTK GUI keeps them in `~/.config/kc9k/gui.json`: they are the preferences of whoever runs it, not KC9K settings. One GUI runs per user; starting it again brings that window forward, so the tray and a second start never give two windows deciding from two states. It finds `kc9k.exe` next to itself or one folder up (the installed layout), else on `PATH`.
-- 2026-11-21 (By Opus): Windows, how a command runs (ROADMAP W1): `kc9k.exe` typed in a console hands its arguments to the service over the named pipe and relays the console; the service runs the command as a child of its own (LocalSystem) and names the caller in its environment, taken from the pipe client's token, never from what the client says; a file a command reads for the caller (an import) is opened while impersonating the caller's token, so the service never reads for anyone what they couldn't read themselves. Only members of Administrators may run commands, as only the sudo group may on Linux; an elevated console is not needed (the filtered token of UAC still names the group). A Windows account's ID, where Linux has a uid, is its relative ID (the last part of its SID): unique among the computer's accounts, 1000 and up for people. The client sends nothing unless the pipe's server process is the KC9K service's own (no program can answer in its place), and the pipe refuses remote clients and new instances by anyone else.
-- 2026-11-21 (By Opus): Windows install and uninstall (ROADMAP W1): `kc9k install` from an administrator's console puts `kc9k.exe` in Program Files\KC9K (owned by SYSTEM; administrators and users may read and run it) and on the system PATH, the data in ProgramData\kc9k (SYSTEM only), and the service (automatic start; started again after any failure, its own exit included). Running it again with a newer `kc9k.exe` upgrades: the service notices its program changed and exits as a failure, and Windows starts the new one. `kc9k uninstall` runs the same checks as on Linux (refused while anything is held) and removes the layers, the service, the program and the PATH entry; the data stays, as on Linux. The session agent takes no "one per session" lock a user's program could hold first: the service starts one per session and keeps the newest connection.
-- 2026-11-21 (By Opus): Windows equivalents where Linux's have none (ROADMAP W2–W6): the firewall is the Windows Filtering Platform under KC9K's own persistent provider, not Windows Firewall rules (the first thing an administrator turns off), so it holds from boot and while the service is stopped; Chrome and Edge count as supported browsers only once the extension's Chrome Web Store listing exists (until then they get no extension, and the extension guard treats them as any browser without it); strict mode's noexec is closing people's programs run from where downloaded and portable programs land: a profile's own folders (Downloads, Desktop, Documents; not AppData, where per-user installs such as OneDrive, Teams or a per-user Chrome live), its temporary folder, or a removable drive (Windows can't mount them noexec, and AppLocker is Pro-only); a logout freeze signs out every session that starts (Windows has no `/run/nologin`); Windows' Night light is read but never switched (no interface; its settings blob is not KC9K's to rewrite), so the circadian rhythm asks the person to turn it off; wallpaper and dark mode reach only people signed in (others' settings aren't loaded); the service runs in Safe Mode too, so Safe Mode is no way around a block, and factory reset protection and no-escape turn the recovery environment off (Reset this PC, its command prompt), which is where Windows' ways around start.
-- 2026-11-21 (By Opus): KC9K for Windows installs from one MSI (§4.11 on Windows): it ships the GUI and `kc9k.exe`, and `kc9k install` sets up the service, so the MSI decides nothing itself. Removal from Apps & features runs `kc9k uninstall`: refused while anything is locked, and with a settings password set, since an installer has no way to type it (`kc9k uninstall` in an administrator's console asks for it); the MSI then rolls back. A reinstall or an older version first asks the installed `kc9k.exe` (`prepare-install`), refused while locked with "block the installer" on; a newer version always installs, as on Linux. The certificate that signs it is the owner's: the build signs when one is configured and is unsigned otherwise.
-- 2026-11-22 (By Opus): Windows parity audit (ROADMAP §4.1, W10–W27). Not holes, so not built: a system proxy or a VPN (hosts, the extension and the browser policies judge names and addresses whichever way traffic goes, and WFP's connect filters see the real address before any tunnel); Windows' own DNS over HTTPS (the hosts file is read before any DNS, and the DoH filters cover the servers Windows knows); apps showing pages through WebView2 (hosts and the firewall block their sites, and they aren't browsers a person browses with). Holes in a protection the user chose are closed inside that protection rather than as new settings (principle 3): what strict mode stops on Windows grows to Windows' own ways to SYSTEM, administrators' privileges, new accounts, virtual machines and running downloaded programs, as Linux's strict mode stops sudo, root logins, container sockets, VMs and `/home`.
-- 2026-11-22 (By Opus): Windows' recovery path (principle 4, R-ESCAPE-1) is Safe Mode: booted in Safe Mode, freezes and strict mode's lockdown are skipped for that boot and `kc9k recover` works, unless no-escape is on; blocks stay enforced there, as the service runs in Safe Mode (2026-11-21). While the recovery environment is off (factory reset protection) and no-escape isn't on, the F8 boot menu stays on so Safe Mode can be reached; no-escape turns it off. Linux's `kc9k.nofreeze` and recovery entry do the same; without this a bug in a freeze could trap a Windows user, which principle 4 forbids.
-- 2026-11-22 (By Opus): Windows' hardware clock (§4.10 clock check) is read from what Windows itself logs at each boot, the time the operating system started (Kernel-General event 12, taken from the hardware clock before any time sync), plus the boot clock since: Windows lets programs read the hardware clock no other way, and the check only ever gives back less time with it. A cleared log leaves internet time alone, as before.
-- 2026-11-22 (By Opus): Tamper protection's "block time and date changes" on Windows, while anything is locked: a changed time zone is put back and counted, and a jump of the system clock against the boot clock that internet time doesn't confirm is put back and counted. On Windows any user may change the time zone and an administrator the clock, and schedules read local time, so ignoring the clock for trusted time alone left schedules open to it.
-- 2026-11-22 (By Opus): The firmware lock on Windows uses the firmware's own WMI interfaces (Dell, Lenovo, HP), which are the ones Linux's `firmware-attributes` drivers use, rather than the vendors' tools (Dell Command | Configure, HP BCU): they come with the firmware and Windows, need nothing installed, and keep one behaviour on both systems.
-- 2026-11-22 (owner): KC9K gets cross-device sync, a one-click installer, Chrome, Edge, Firefox and Bing as supported browsers, a really neat website and an accountability partner function, all on every platform (Linux, Windows, Android). Sync is two buttons, Upload all and Download all; to begin with everything is copied one to one except device-specific items, so a block unlocked and deleted on the computer is unlocked and deleted on the phone after Upload all there and Download all on the phone (§4.14). Settled the same day (owner): sync goes to KC9K's cloud and needs a KC9K account (principle 6 changed for it); Download all replaces everything even while locked; the accountability partner does what similar software does except screenshots; Bing means the Bing browser app; the website is like Cold Turkey's; every platform means Linux, Windows and Android.
-- 2026-11-22 (By Opus): One-click browser install on Windows (§4.10) runs winget as SYSTEM for the whole computer, with the browser's published package; the download is an outside query the command states (principle 6).
-- 2026-11-22 (By Opus): The Windows GUI's notification-area menu offers only actions that strengthen (start a block or a mode, monk mode, Frozen Chicken, a new block); stopping, unlocking and breaks stay in the window. A quick way that only weakens would make the tray an easier way past a block than the window, which locks and their confirmations never should be; each action brings the window forward first, so its questions and refusals are seen.
-- 2026-11-22 (By Opus): The Windows GUI's start arguments (its jump list, a shortcut, a second start) only open a page or one of the GUI's own dialogs (New block…, Monk mode…, Frozen Chicken…), never a kc9k command: a shortcut that started or stopped a block would act outside the window's questions and lock confirmations (R-LOCK-12), and one that weakened would be a way past them.
-- 2026-11-22 (owner): The Windows GUI has no first view: Overview's "Get started" card (W38) is dropped, since the GTK dashboard has none and the Windows pages follow the GTK layout (W54). *(By claude)*
-- 2026-11-22 (By claude): A project made on Linux imports on Windows as it is (W56, §4.10 "Linux-only"): its Linux-only parts are kept and listed as not used, not dropped and not mapped to Windows names. Dropping them would lose them when the project goes back to Linux; mapping (`gnome-terminal-server` to Windows Terminal, `/usr/bin/x` to `x.exe`) would block programs the user never named. The import is otherwise the same: only adds, so it can't weaken a locked block (R-WEAK-1/2), and its locks are confirmed (R-LOCK-12). The project format and the Linux app don't change.
-- 2026-11-22 (By claude): A Windows session agent that crashes and says so (Go's crash report on its output, exit code 2) or ends by itself is logged, not counted as tamper; only one ended from outside is (§3.10 Tamper), as Linux counts no self-reported daemon crash. *(By claude)*
-- 2026-11-22 (owner): The dark pages switch becomes *Show dark web pages while dark mode is on* and turns on the browser's own dark mode (§4.10); the extension removes search results that lead to blacklisted addresses (R-PAGE-2); Enter presses a dialog's OK button (R-GUI-3); the Android app works like the computer's GUI and never jumps to the top of the page when something is tapped (R-GUI-3); on Android places are picked on a map and found by GPS instead of Wi-Fi (§3 Place).
+- 2026-11-10: One ladder for all detectors.
+- 2026-11-14: Monk mode is a mode (§3.8). Hotkey *Run without confirmation* off: pressing it with a lock asks in a desktop dialog; on: confirmed only at setup ("I know this will not ask for confirmation"), as automatic Mode actions/ladder steps (R-LOCK-12). No page score. Root login/`su` PAM guard only during strict mode's lockdown; no boot order guard, no hiding other systems behind the GRUB password. Every sudo-allowed command checked for hostile arguments (symlinks, `..`, files under `/etc`). Text lock challenge in its own window (§4.6). No first-run wizard. No categories (no shipped lists or phrase sets). `force-librewolf` → *block unsupported browsers*. Declutter removed (broke pages). No search lists (R-PHRASE-6).
+- 2026-11-17 *(By Opus, to confirm with owner)*: Place unknown (R-MODE-5): at once at boot and after waking, else after a minute without networks; the wallpaper default also replaces circadian rhythm's picture when a places-switched mode would override it; a mode by time alone still shows; with a picture or circadian rhythm as default it also goes on before sleep; the default's own picture is kept when another default is chosen.
+- 2026-11-18: Clock check may ask internet time (§4.10). SafeSearch lockable per engine (§4.10). When Linux is finished, the owner's brothers test it.
+- 2026-11-20: Lock stacking, no exceptions; re-lock optional, restores the whole configuration (§3.4, §4.6). Project presets optional, backup always (§3.13).
+- 2026-11-20 (By Opus): Text lock challenge read by the command itself (§4.6).
+- 2026-11-21 (By Opus): Draft tabs (§4.3); `file://` blocking (§4.10); firmware lock (§4.10); tamper protection defaults (§4.10); setting locks stack (§4.6); freeze extension (§4.8); guided setup (§4.10); SafeSearch on other engines (§4.10).
+- 2026-11-21: Android app planned (§8); the built Nokia mode becomes an ordinary block (All apps; phone and SMS apps as app exceptions) automated by a Home place, monk mode for the network.
+- 2026-11-21 (By Opus): **Rules server has no secret** (replaces 2026-11-14's; a policy-given secret is readable by every local program). It holds by: answering only requests addressed to its own address (no DNS rebinding); posts only with the extension's own header (needs a CORS preflight, never answered); no CORS header in any answer; a check-in counts only for the browser whose own connection made it (`/proc/net/tcp`); no post weakens a block.
+- 2026-11-21 (By Opus): Block embedded content off: a blacklist's paths and patterns also stay out of browser policies (they block frames too); whole sites stay; the extension still blocks paths in pages; monk mode's and factory reset protection's own lists keep theirs.
+- 2026-11-21 (By Opus): Ad trigger industries ship only real ad-request domains (EasyList, AdGuard, Peter Lowe's, StevenBlack's, or seen in real pages), never an affiliate platform's or game maker's own site.
+- 2026-11-21: **Windows** now, before Android. Built for an **administrator account** (bypass prevention holds against an admin). Native GUI: C# on WinUI 3 (agent's choice). Chrome gets the extension via an unlisted Chrome Web Store listing. Tested in CI, a VM, the owner's laptop.
+- 2026-11-21 (later): Windows better than Cold Turkey. Strict mode on Windows: while locked, the admin is denied what would stop KC9K (service, files, registry keys, boot and recovery settings). Edge supported. Code-signed. Works on Windows Home (no Pro-only features).
+- 2026-11-21 (By Opus): Windows GUI preferences per Windows user (`%APPDATA%\kc9k\gui.json`); one GUI per user.
+- 2026-11-21 (By Opus): Windows commands run in the service via the named pipe; the caller is taken from the pipe client's token, never from what it says; files read for the caller are opened impersonating it; only Administrators run commands (no elevation needed); the client talks only to the KC9K service's own pipe; no remote clients.
+- 2026-11-21 (By Opus): Windows install: `kc9k install` sets up program (Program Files, SYSTEM-owned), data (ProgramData, SYSTEM only) and service (restarts after any failure); rerun with a newer exe upgrades; `kc9k uninstall` as on Linux, data stays. Session agent: no per-session lock a user program could take first.
+- 2026-11-21 (By Opus): Windows equivalents: firewall = WFP under KC9K's own persistent provider (holds from boot, while the service is stopped); Chrome/Edge supported only once the Web Store listing exists; strict mode's noexec = closing programs run from a profile's Downloads, Desktop, Documents (not AppData), temp, removable drives; logout freeze signs out every new session; Night light read, never switched (person asked to turn it off); wallpaper/dark mode reach only signed-in people; service runs in Safe Mode; factory reset protection and no-escape turn the recovery environment off.
+- 2026-11-21 (By Opus): Windows installs from one MSI that decides nothing (`kc9k install`/`uninstall`/`prepare-install` do). Removal refused while locked or with a settings password set (installer can't type it); reinstall/older refused while locked with *block the installer*; newer always installs. Signed with the owner's certificate when configured.
+- 2026-11-22: Sync, one-click installer, Chrome/Edge/Firefox/Bing, website, accountability partner on Linux, Windows, Android (§1, principle 6, §3.13, §4.11, §4.14–4.16); dark pages switch (§4.10), R-PAGE-2, R-GUI-3 additions, Android places by map (§3.6).
+- 2026-11-22 (By Opus): Windows parity audit: system proxy/VPN, Windows DoH and WebView2 apps are not holes (hosts, extension, policies, WFP cover them). Holes in a chosen protection are closed inside it, not as new settings (principle 3): Windows strict mode also stops ways to SYSTEM, admin privileges, new accounts, VMs, running downloaded programs.
+- 2026-11-22 (By Opus): Windows recovery (principle 4) is Safe Mode: freezes and strict lockdown skipped, `kc9k recover` works, unless no-escape; blocks still enforced. F8 menu stays on until no-escape.
+- 2026-11-22 (By Opus): Windows hardware clock = OS start time logged at boot (Kernel-General event 12) plus boot clock; only ever gives back less time.
+- 2026-11-22 (By Opus): Windows *block time and date changes* while locked: a changed time zone, or a clock jump internet time doesn't confirm, is put back and counted (schedules read local time).
+- 2026-11-22 (By Opus): Windows firmware lock via the firmwares' WMI interfaces (Dell, Lenovo, HP), not vendor tools.
+- 2026-11-22 (By Opus): Windows one-click browser install: winget as SYSTEM, an outside query the command states.
+- 2026-11-22 (By Opus): Windows tray menu offers only strengthening actions, each bringing the window forward first; weakening stays in the window.
+- 2026-11-22 (By Opus): Windows GUI start arguments (jump list, shortcut, second start) only open a page or GUI dialog, never a kc9k command (R-LOCK-12).
+- 2026-11-22 *(By claude)*: Windows GUI has no first view ("Get started" dropped); pages follow the GTK layout.
+- 2026-11-22 (By claude): Linux projects import on Windows as they are (§4.10 Linux-only); session agent crashes (§3.10 Tamper).
 
 ## 7. Open decisions
 
-- **Android recovery** (principle 4, §8.7): which way out the user has
-  when a bug traps them on the phone, and what becomes of the built
-  "Lift everything".
+- **Android recovery** (principle 4, §8.7): the user's way out when a bug
+  traps them on the phone; what becomes of the built "Lift everything".
 - **Factory reset protection with a trusted Google account** (§8.4):
-  offered on phones with Google's protection, or not (principle 6: the
+  offered on phones with Google's protection or not (principle 6: the
   account's address goes to Google's reset check).
 - **Signing the extension for Firefox** (§8.2): release Firefox installs
-  only add-ons Mozilla has signed; signing (unlisted) needs a Mozilla
-  account held by the owner, not by users.
+  only Mozilla-signed add-ons; signing (unlisted) needs a Mozilla account
+  held by the owner, not users.
 
 ## 8. Android
 
-The Android app (owner, 2026-11-21): KC9K on a phone, with every function
-of §4 except those that only make sense on a computer (§8.6). Built after
-the Linux project is finished (principle 8). Words of §3 mean the same on
-Android unless this section says otherwise.
+KC9K on a phone (2026-11-21): every function of §4 except computer-only
+ones (§8.6). Built after Linux is finished (principle 8). §3 words mean the
+same unless said here.
 
 ### 8.1 Platform
 
-- Works excellently on GrapheneOS and on the most common Android (stock
-  Android on Pixel phones, Samsung's One UI), with or without Google Play
-  Services; tested on all three (R-ANDROID-1).
+- Works excellently on GrapheneOS and the most common Android (stock on
+  Pixel, Samsung One UI), with or without Google Play Services; tested on
+  all three (R-ANDROID-1).
 - Kotlin. Jetpack Compose with Material 3 (AndroidX) allowed; no other
   third-party libraries. Never needs Google Play Services or an account
   (R-ANDROID-2).
-- **Device Owner** required: KC9K is made Device Owner once, at setup.
-- The rule-maker is the app's own command layer, in Kotlin, held to the
-  Linux behaviour by test cases shared with the Go code (as `match.js` is
-  shared) (R-ANDROID-3).
-- No sync: nothing is exchanged with the Linux app. A phone's projects
-  (backup, share, import, §3.13) are between phones.
+- **Device Owner** required, set once at setup.
+- Rule-maker: the app's own Kotlin command layer, held to Linux behaviour
+  by test cases shared with Go (as `match.js` is shared), not Go compiled
+  for Android (R-ANDROID-3).
+- No sync: nothing exchanged with the Linux app; a phone's projects
+  (§3.13) are between phones.
 
 ### 8.2 Words on Android
 
 | Term | Meaning | Not |
 |---|---|---|
-| **Device Owner** | Android's strongest app role, given once at setup (by `adb`, or a QR code on a freshly reset phone): lets KC9K suspend apps, restrict settings, keep its VPN on and refuse its own uninstall. | Device admin |
-| **App** (Android) | Matched by package name, app name, signing certificate (`cert:sha256:…`) or role (`role:dialer`, `role:sms`: the default phone and SMS apps). **All apps** (`*`) is every launchable app but the essentials (KC9K, launcher, system UI, emergency calls). | Window |
+| **Device Owner** | Android's strongest app role, given once at setup (`adb`, or a QR code on a freshly reset phone): lets KC9K suspend apps, restrict settings, keep its VPN on, refuse its own uninstall. | Device admin |
+| **App** (Android) | Matched by package name, app name, signing certificate (`cert:sha256:…`) or role (`role:dialer`, `role:sms`: default phone and SMS apps). **All apps** (`*`): every launchable app but the essentials (KC9K, launcher, system UI, emergency calls). | Window |
 | **App exception** | An app a block's All apps entry lets through; spares it from its own block only (as R-LIST-1). | Exception list |
-| **Area** | A circle on the map (centre, radius 50–2000 m). A **place** is Wi-Fi networks (§3.6) or an area: the phone is in an area when its location says so, and has left when its accuracy circle is fully outside for 10 minutes. | Wi-Fi place |
-| **Screen text entry** | Words matched against the text an app shows on screen (Shorts in the YouTube app); the phone's window title entry. Needs the accessibility layer. Never browsers (as R-TITLE-1). | Rendered term |
-| **Layer** (Android) | **VPN layer** (KC9K's own VPN filtering names: hosts and firewall), **app suspension**, **Device Owner restrictions**, and the optional **accessibility layer** (screen text entries). The extension works on top. | |
-| **Supported browser** (Android) | IronFox or Firefox with the extension. Other browsers (Chrome, Samsung Internet, Vanadium, …) are suspended while the extension is required. | |
-| **Block page** (Android) | Also shown when a blocked app is opened: full screen, with the motivational message. | |
+| **Area** | A circle on the map (centre, radius 50–2000 m). A **place** is Wi-Fi networks (§3.6) or an area: in it when the location says so; left when the accuracy circle is fully outside for 10 minutes. | Wi-Fi place |
+| **Screen text entry** | Words matched against text an app shows (Shorts in the YouTube app); the phone's window title entry. Needs the accessibility layer. Never browsers (as R-TITLE-1). | Rendered term |
+| **Layer** (Android) | **VPN layer** (KC9K's own VPN filtering names: hosts and firewall), **app suspension**, **Device Owner restrictions**, optional **accessibility layer** (screen text entries). Extension on top. | |
+| **Supported browser** (Android) | IronFox or Firefox with the extension. Others (Chrome, Samsung Internet, Vanadium, …) suspended while the extension is required. | |
+| **Block page** (Android) | Also shown full screen when a blocked app is opened. | |
 
 ### 8.3 Functions on Android
 
 - **Blocks, lists, phrase sets, social media settings, exceptions, test
-  mode, presets, recording**: as §4.2–4.4, websites through the extension
-  and the VPN layer; apps as §8.2, with app exceptions.
+  mode, presets, recording**: as §4.2–4.4; websites via extension and VPN
+  layer; apps as §8.2, with app exceptions.
 - **Locks**: every kind of §3.4, layered, re-lock, confirmation
-  (R-LOCK-12), setting locks, passwords. A restart lock is unlocked by a
-  later boot of the phone. The text lock's challenge is typed in KC9K's
-  own screen; only characters typed one by one count: a paste, swipe
-  typing, a suggestion or any other input of several characters at once
-  is refused (R-LOCK-5). Trusted time: automatic time is required and the
-  date, time and time zone can't be changed while anything is locked.
+  (R-LOCK-12), setting locks, passwords. Restart lock: a later boot of the
+  phone. Text lock challenge typed in KC9K's own screen; only characters
+  typed one by one count: paste, swipe typing, a suggestion or any input
+  of several characters at once refused (R-LOCK-5). Trusted time:
+  automatic time required; date, time and time zone unchangeable while
+  anything is locked.
 - **Automation**: schedules, places (§8.2 Area), modes, breaks, Pomodoro,
-  allowance, reward, session limit, pause as §3.6. Autostart's
-  *sign-in/wake* is the phone starting or being unlocked.
-- **Use** (§3.7): the blocked item in front while the screen is on and
-  unlocked; sound playing counts where Android tells KC9K.
-- **Monk mode** (R-MONK-2 on a phone): the VPN layer drops all traffic
-  but KC9K's own local traffic, and Wi-Fi is off (on but unused while
-  places decide). Calls and SMS over the mobile network keep working.
-- **Frozen Chicken**: freeze modes *lock screen* and *allowed apps only*
-  (only the freeze's apps can be opened).
+  allowance, reward, session limit, pause as §3.6. Autostart
+  *sign-in/wake* = phone starting or being unlocked.
+- **Use** (§3.7): blocked item in front, screen on and unlocked; sound
+  counts where Android tells KC9K.
+- **Monk mode** (R-MONK-2): VPN layer drops all but KC9K's local traffic;
+  Wi-Fi off (on but unused while places decide). Mobile calls and SMS
+  keep working.
+- **Frozen Chicken**: freeze modes *lock screen* and *allowed apps only*.
 - **Consequences**: close tab, close browser, lock screen, Mode action.
 - **Custom actions**: open sites, files, folders and apps; no commands.
 - **Bypass prevention**: as §3.10; detector `title` counts screen text
   entries.
-- **Statistics**: as §4.9, apps from Android's usage records, sites from
+- **Statistics**: as §4.9; apps from Android's usage records, sites from
   the extension.
 - **Settings**: preferences (24-hour clock, first weekday, theme with
   darkness slider), notifications, passwords, no weakening, browser
-  settings, DNS (the server the VPN layer asks), use counting, behaviour
-  setting `block-page-details`, global ladder, projects.
-- **Install**: an APK with KC9K's own updater; uninstalling refused while
+  settings, DNS (asked by the VPN layer), use counting, behaviour setting
+  `block-page-details`, global ladder, projects.
+- **Install**: APK with KC9K's own updater; uninstall refused while
   anything is locked (Device Owner).
 
 ### 8.4 Protection on Android
 
-- **Tamper protection** (§4.10), on a phone: close private windows and
-  guest profiles (here also: no other users, guests, work profiles or app
-  clones can be added, since an app's clone escapes its suspension);
-  close browsers if the extension stops; grace for a missing extension;
-  allow `file://` blocking; block unsupported browsers; block the
-  installer (no installs from unknown sources, no older KC9K); block
-  inactive tabs; block embedded content; block task managers becomes
-  *app controls* (KC9K can't be force-stopped, its data cleared or its
-  permissions taken); clock.
-- While the VPN layer is needed, KC9K's VPN is always on and traffic
-  can't go around it, and the VPN and Private DNS settings can't be
-  changed: that is the layer working, not a protection to choose.
-- **Strict mode** (§3.8) on a phone: on and something locked, the phone's
-  ways out are closed: safe mode, USB debugging, adding users, turning
-  location off, factory reset from Settings. Each can be left out
-  (leaving one out weakens); own setting lock.
-- **Factory reset protection**: a reset from Settings is closed by strict
-  mode; a reset from the phone's recovery can't be stopped by software
-  (§3.8). Open: §7.
-- **Guided setup** (§4.10): Device Owner, usage access, notifications,
-  the VPN layer, battery (never put to sleep), the extension in a
-  supported browser, the accessibility layer (optional; on Android 13+
-  an app not from a store first needs *Allow restricted settings*),
-  settings password, no weakening, tamper protection, strict mode and
-  its lock.
-- **Circadian rhythm**: one brightness clip (the phone has one
-  brightness), wallpapers (home and lock screen), dark mode, dark pages;
-  colour temperature where the phone allows it (Night Light, Eye comfort
-  shield). What a phone can't do is shown disabled, with the reason.
+- **Tamper protection** (§4.10) on a phone: close private windows and
+  guest profiles (also: no other users, guests, work profiles or app
+  clones can be added; a clone escapes suspension); close browsers if the
+  extension stops; grace for a missing extension; allow `file://`
+  blocking; block unsupported browsers; block the installer (no unknown
+  sources, no older KC9K); block inactive tabs; block embedded content;
+  block task managers becomes *app controls* (no force-stop, data clearing
+  or permission removal for KC9K); clock.
+- While the VPN layer is needed, KC9K's VPN is always on, traffic can't
+  bypass it, and VPN and Private DNS settings can't change: the layer
+  working, not a chosen protection.
+- **Strict mode** (§3.8): on and something locked, closes safe mode, USB
+  debugging, adding users, turning location off, factory reset from
+  Settings. Each can be left out (leaving one out weakens); own setting
+  lock.
+- **Factory reset protection**: reset from Settings closed by strict mode;
+  reset from recovery can't be stopped by software (§3.8). Open: §7.
+- **Guided setup** (§4.10): Device Owner, usage access, notifications, VPN
+  layer, battery (never put to sleep), extension in a supported browser,
+  accessibility layer (optional; Android 13+ sideloaded apps first need
+  *Allow restricted settings*), settings password, no weakening, tamper
+  protection, strict mode and its lock.
+- **Circadian rhythm**: one brightness clip, wallpapers (home and lock
+  screen), dark mode, dark pages; colour temperature where the phone
+  allows (Night Light, Eye comfort shield). What a phone can't do is shown
+  disabled, with the reason.
 
 ### 8.5 GUI on a phone
 
-- R-GUI-1–3 hold; on Android R-GUI-3 follows the Material 3 guidelines in
-  place of GNOME's, with the same heuristics.
-- It looks and speaks like the Linux app: same page names and order, same
-  words, cards (12 dp corners, a thin outline), status pills (on green,
-  locked red, lifted blue, warning amber), theme with darkness slider down
-  to black; KC9K's own colours, not the wallpaper's.
-- Phone: a bottom bar with **Overview · Blocks · Statistics · More**;
-  *More* holds Schedules, Places, Presets, Circadian rhythm, Settings.
-  Wider screens: a rail with every page.
-- Overview: what is on, until when and how locked first (a countdown ring
-  for timer locks); Start, monk mode and Frozen Chicken one tap away.
-- Blocks: modes above blocks; a card on two lines (name and switch; then
-  *Continuous/Automated block*, breaks and lock state, each opening its
-  part). A block goes into a mode by long-press and drag, or *Move to
-  mode…*.
+- R-GUI-1–3 hold; R-GUI-3 follows Material 3 in place of GNOME, same
+  heuristics.
+- Looks and speaks like the Linux app: same page names and order, same
+  words, cards (12 dp corners, thin outline), status pills (on green,
+  locked red, lifted blue, warning amber), theme with darkness slider to
+  black; KC9K's own colours, not the wallpaper's.
+- Phone: bottom bar **Overview · Blocks · Statistics · More**; *More*
+  holds Schedules, Places, Presets, Circadian rhythm, Settings. Wider
+  screens: a rail with every page.
+- Overview: what is on, until when, how locked first (countdown ring for
+  timer locks); Start, monk mode, Frozen Chicken one tap away.
+- Blocks: modes above blocks; two-line card (name and switch; then
+  *Continuous/Automated block*, breaks, lock state, each opening its
+  part). Into a mode by long-press and drag, or *Move to mode…*.
 - Block editor: tabs Websites · Apps · Breaks & allowance · Bypass
-  prevention; the draft's *Save edits* bar shows once something changed.
-  Lists full screen with the add field on top; long-press selects
-  several.
-- Automation: a week view like a calendar's (long-press and drag adds a
-  window, a tap edits it), and a list of windows for exact times.
-- Dialogs on a phone are bottom sheets; layered locks shown as a numbered
-  stack.
+  prevention; *Save edits* bar shows once something changed. Lists full
+  screen, add field on top; long-press selects several.
+- Automation: calendar-like week view (long-press and drag adds a window,
+  tap edits) and a list of windows for exact times.
+- Dialogs are bottom sheets; layered locks shown as a numbered stack.
 
 ### 8.6 Not on Android
 
-Hotkeys, hotkey presets and hotkey actions (owner, 2026-11-21); folder
-entries; scripts; affected users; logout and shutdown (freeze modes,
-consequences); commands in custom actions; no-escape; the firmware lock
-and installer media guard; behaviour setting `polite-close`; open at
-login and tray; window title entries (replaced by screen text entries);
-R-DESKTOP-1; projects exchanged with the Linux app.
+Hotkeys, hotkey presets and hotkey actions; folder entries; scripts;
+affected users; logout and shutdown (freeze modes, consequences); commands
+in custom actions; no-escape; firmware lock and installer media guard;
+behaviour setting `polite-close`; open at login and tray; window title
+entries (replaced by screen text entries); R-DESKTOP-1; projects exchanged
+with the Linux app.
 
 ### 8.7 Rules
 

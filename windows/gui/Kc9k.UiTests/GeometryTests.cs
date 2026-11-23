@@ -132,34 +132,38 @@ public class GeometryTests(ITestOutputHelper output)
             }
             catch (Exception) { }
         }
-        foreach (var name in names.Distinct())
+        // Step the page's own scroll from top to bottom; each row is checked
+        // the first time its switch and locks are on screen (a ToggleSwitch has
+        // no ScrollItem pattern, and focus doesn't always bring a row in).
+        var pending = names.Distinct().ToList();
+        var scroller = gui.Window.FindAllDescendants()
+            .Where(e => { try { return e.Patterns.Scroll.IsSupported && e.Patterns.Scroll.Pattern.VerticallyScrollable.Value; } catch (Exception) { return false; } })
+            .OrderByDescending(e => { try { var b = e.BoundingRectangle; return b.Width * b.Height; } catch (Exception) { return 0; } })
+            .FirstOrDefault(); // the page's, not the sidebar's
+        for (var step = 0; step <= 10 && pending.Count > 0; step++)
         {
-            var sw = gui.ById("BlockSwitch_" + name);
-            if (sw is null) continue;
-            try
+            if (scroller is not null)
             {
-                // A ToggleSwitch has no ScrollItem pattern; focusing it scrolls it
-                // into view (a held block's switch is disabled: its name then).
-                if (sw.Patterns.ScrollItem.IsSupported) sw.Patterns.ScrollItem.Pattern.ScrollIntoView();
-                else if (sw.IsEnabled) sw.Focus();
-                else gui.ById("BlockCard_" + name)?.Focus();
+                try { scroller.Patterns.Scroll.Pattern.SetScrollPercent(-1, step * 10); } catch (Exception) { }
+                Thread.Sleep(250);
             }
-            catch (Exception) { }
-            Thread.Sleep(300);
-            sw = gui.ById("BlockSwitch_" + name);
-            var locks = gui.ById("BlockLocks_" + name);
-            if (sw is null || locks is null || !Shown(sw, out var s) || !Shown(locks, out var l))
+            foreach (var name in pending.ToList())
             {
-                problems.Add($"{where}: {name}'s switch or locks not shown after scrolling to it");
-                continue;
+                var sw = gui.ById("BlockSwitch_" + name);
+                var locks = gui.ById("BlockLocks_" + name);
+                if (sw is null || locks is null || !Shown(sw, out var s) || !Shown(locks, out var l)) continue;
+                pending.Remove(name);
+                if (Math.Abs(s.Right - l.Right) > tol)
+                    problems.Add($"{where}: {name}'s switch ends at {s.Right}, its locks at {l.Right}: not one right column");
+                var title = gui.ById("BlockCard_" + name);
+                if (title is not null && Shown(title, out var tr) && s.Left <= tr.Left)
+                    problems.Add($"{where}: {name}'s switch is not right of its name");
+                rights.Add(s.Right);
             }
-            if (Math.Abs(s.Right - l.Right) > tol)
-                problems.Add($"{where}: {name}'s switch ends at {s.Right}, its locks at {l.Right}: not one right column");
-            var title = gui.ById("BlockCard_" + name);
-            if (title is not null && Shown(title, out var tr) && s.Left <= tr.Left)
-                problems.Add($"{where}: {name}'s switch is not right of its name");
-            rights.Add(s.Right);
+            if (scroller is null) break;
         }
+        foreach (var name in pending) problems.Add($"{where}: {name}'s switch or locks never on screen while scrolling the page");
+        if (scroller is not null) try { scroller.Patterns.Scroll.Pattern.SetScrollPercent(-1, 0); } catch (Exception) { }
         if (names.Count == 0) problems.Add($"{where}: no block row with a switch");
         else if (rights.Count > 0 && rights.Max() - rights.Min() > tol) problems.Add($"{where}: the switches end at {string.Join(", ", rights)}: not one column");
         return problems;

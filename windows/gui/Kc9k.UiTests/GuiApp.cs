@@ -148,7 +148,10 @@ public sealed class GuiApp : IDisposable
     public void Page(string key)
     {
         var item = Find("Nav_" + key);
-        item.Click();
+        // Click its icon, where a person clicks: with the sidebar icons only
+        // (below 640 DIP) the item's box is wider than the pane.
+        var r = item.BoundingRectangle;
+        Mouse.Click(new System.Drawing.Point(r.Left + Math.Min(24, r.Width / 2), r.Top + r.Height / 2));
         Wait.UntilInputIsProcessed();
         Thread.Sleep(400);
     }

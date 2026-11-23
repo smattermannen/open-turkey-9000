@@ -39,6 +39,11 @@ function K {
     if ($err.Result) { Write-Host $err.Result }
 }
 
+# W55: the pipe is held by someone else when the service starts (as by an
+# upgrade's old process that hasn't ended yet); the service must keep
+# trying and answer once it is free, not run without its pipe.
+$squat = New-Object System.IO.Pipes.NamedPipeServerStream('kc9k', [System.IO.Pipes.PipeDirection]::InOut, 1)
+
 & $Exe install
 Check 'install succeeds' { $LASTEXITCODE -eq 0 }
 if ($failures -gt 0) { exit 1 }
@@ -52,8 +57,21 @@ Check 'the service restarts on failure' { $sc -match 'RESTART' }
 Check 'Program Files\KC9K is on the system PATH' {
     [Environment]::GetEnvironmentVariable('Path', 'Machine') -split ';' -contains (Join-Path $env:ProgramFiles 'KC9K') }
 
-# Forwarded commands: output, exit codes, input.
+# W55, continued: the held pipe answers no command; let go, and the
+# service makes its own within its longest pause (5 s).
 Start-Sleep -Seconds 3
+K version 2>&1 | Out-Host
+Check 'no command runs while another program holds the pipe' { $LASTEXITCODE -ne 0 }
+$squat.Dispose()
+$back = $false
+foreach ($i in 1..20) {
+    $v = K version 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0 -and $v -match '\d') { $back = $true; break }
+    Start-Sleep -Seconds 1
+}
+Check 'the service makes its pipe once it is free again' { $back }
+
+# Forwarded commands: output, exit codes, input.
 $out = K block create ci-block 2>&1 | Out-String
 Check 'a forwarded command runs in the service' { $LASTEXITCODE -eq 0 -and $out -match 'ci-block' }
 K block info no-such-block 2>$null | Out-Null

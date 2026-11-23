@@ -52,26 +52,53 @@ type Caller struct {
 	token   windows.Token // impersonation token, for reading files as the caller
 }
 
-// Serve accepts forwarded commands until stop is closed.
+// Serve accepts forwarded commands until stop is closed. A failure never
+// ends it (W55): while the pipe can't be made (an upgrade's old process
+// still holds its first instance, or another program made it) or an
+// accept fails, it logs once per run of failures and tries again after a
+// growing pause, so the pipe comes back as soon as it can.
 func Serve(stop <-chan struct{}) error {
-	l, err := winapi.Listen(PipeName, pipeSDDL)
-	if err != nil {
-		return fmt.Errorf("pipe %s: %w", PipeName, err)
-	}
+	var l *winapi.Listener
 	slots := make(chan struct{}, maxCommands)
+	failures := 0
+	fail := func(err error) bool {
+		failures++
+		if failures == 1 {
+			log.Printf("service: commands can't reach the service: %v (trying again until it works)", err)
+		}
+		return pauseUntil(stop, retryPause(failures))
+	}
 	for {
 		select {
 		case <-stop:
 			return nil
 		case slots <- struct{}{}:
 		}
+		if l == nil {
+			var err error
+			if l, err = winapi.Listen(PipeName, pipeSDDL); err != nil {
+				<-slots
+				l = nil
+				if !fail(fmt.Errorf("pipe %s: %w", PipeName, err)) {
+					return nil
+				}
+				continue
+			}
+		}
 		conn, err := l.Accept()
 		if err != nil {
 			<-slots
 			if err == windows.ERROR_ACCESS_DENIED {
-				return fmt.Errorf("pipe %s exists already: another program created it", PipeName)
+				err = fmt.Errorf("pipe %s exists already (the service's old process, or another program made it)", PipeName)
+			}
+			if !fail(err) {
+				return nil
 			}
 			continue
+		}
+		if failures > 0 {
+			log.Printf("service: commands reach the service again (after %d failures)", failures)
+			failures = 0
 		}
 		go func() {
 			defer func() { <-slots }()

@@ -90,7 +90,11 @@
   still kills the command.
 - Server: pipe DACL SYSTEM all, signed-in users read/write (no new
   instances), network denied; `FILE_FLAG_FIRST_PIPE_INSTANCE`, no remote
-  clients, ≤ 32 commands. Caller via `ImpersonateNamedPipeClient` (SID,
+  clients, ≤ 32 commands. A failure never ends `Serve` (W55): pipe
+  held by another process (an upgrade's old one) or a failed accept is
+  logged once per run of failures and retried after 250 ms doubling to
+  5 s (`retry.go`) until stop; `ci/windows_service_test.ps1` holds the
+  pipe across install, then lets go. Caller via `ImpersonateNamedPipeClient` (SID,
   RID as uid, name, session; Administrators only). Child `kc9k.exe <args>`
   as LocalSystem, env minus `KC9K_*` plus
   `KC9K_CALLER_SID/_UID/_USER/_SESSION/_TOKEN` (inherited impersonation

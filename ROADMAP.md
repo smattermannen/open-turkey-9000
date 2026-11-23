@@ -75,7 +75,6 @@ its bypass prevention).
 | W24 | Strict mode: real WSL, Sandbox, Hyper-V | §3.8 | windows, device | win-vm |
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows, device | laptop |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
-| W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
 | W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows | laptop |
 | A15 | Enter presses OK in every dialog (GTK and Windows GUI) | R-GUI-3 | gui, gui-windows | agent |
 | W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
@@ -381,10 +380,6 @@ GUI uses too; gaps are Windows-only behaviour and tests.
   custom action), `gui_list_resize`,
   `gui_phrase`, `gui_phrase_edit`, `gui_places`, `gui_playlist`,
   `gui_trigger`, `gui_wallpaper` (`gui_import`: `ProjectImportTests`). Needs: win-ci.
-- [ ] `W49` Core's `GUI:` lines (W10–W29) given their place in the GUI,
-  each with a UI Automation test, once on `main`. Done so far: W15's
-  Windows steps (`WindowsGuidedSetupSteps`), W16's help texts as kc9k.exe
-  gives them, W18's result via W30's Install. Recheck at each rebase.
 
 Laptop findings on finished items (2026-11-22, at 200 % scaling):
 

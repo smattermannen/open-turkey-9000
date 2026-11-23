@@ -162,6 +162,22 @@ public class WindowsTests
         gui.Shot("second-start");
     }
 
+    // W49 (Core W14): close guest profiles also keeps Windows' Guest
+    // account off, and the tamper dialog says so.
+    [Fact]
+    public void GuestProfilesIncludeWindowsGuestAccount()
+    {
+        using var gui = new GuiApp("guest-account");
+        gui.Page("settings");
+        gui.Invoke("TamperChange");
+        gui.Find("Tamper_guest");
+        gui.FindName("Guest browsing is turned off in every Chrome-like browser, Edge included, and Windows' Guest account stays off.");
+        gui.Shot("guest-account");
+        gui.Invoke("Tamper_guest");
+        gui.Invoke(gui.FindButton("OK"));
+        gui.WaitFor(() => gui.Ran("tamper", "guest", "on"), "kc9k tamper guest on");
+    }
+
     // W49 (Core W15): Windows' guided setup steps; the account steps open
     // Windows' own settings, Safe Mode is information only.
     [Fact]

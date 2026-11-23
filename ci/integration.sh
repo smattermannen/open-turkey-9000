@@ -140,8 +140,10 @@ ot block add-app apps otsleep
 ot start apps
 /tmp/otsleep 60 &
 pid=$!
-sleep 8
-check "blocked app is killed" fails kill -0 "$pid"
+# The daemon's cycle kills it (5 s); a fixed wait raced it once.
+alive() { kill -0 "$1" 2>/dev/null; }
+check "blocked app is killed" within 20 fails alive "$pid"
+alive "$pid" && ps -o pid,ppid,user,stat,comm,args -p "$pid" # what wasn't killed
 ot stop apps
 
 ot tamper clock on
@@ -164,7 +166,9 @@ ot quota start daily --for 15s
 check "session opens the block" fails grep -q 'example.net' /etc/hosts
 sleep 25
 check "block returns after the session" grep -q 'example.net' /etc/hosts
-check "time was spent" bash -c 'kc9k gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_used\"] >= 10 and not b[\"quota_open\"] else 1)"'
+# Allowance counts only use (R-BREAK-1): nothing blocked was in front with
+# input here (no desktop), so the session spent nothing.
+check "an unused session spends no allowance (R-BREAK-1)" bash -c 'kc9k gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_used\"] == 0 and not b[\"quota_open\"] else 1)"'
 ot quota set daily 10m
 check "a raise on an unlocked block applies at once (R-LOCK-10)" bash -c 'kc9k gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_limit\"]==600 else 1)"'
 
@@ -232,8 +236,7 @@ ot block add-app folder /tmp/otdir/
 ot start folder
 /tmp/otdir/anything 60 &
 pid=$!
-sleep 8
-check "program in a blocked folder is killed" fails kill -0 "$pid"
+check "program in a blocked folder is killed" within 20 fails alive "$pid"
 
 ot block duplicate folder folder2
 check "duplicate copies lists" bash -c 'kc9k block info folder2 | grep -q otdir'

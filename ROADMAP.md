@@ -98,7 +98,9 @@ plan is SPEC §8, its items §3.1.
   now set what they test (strict mode's own lock, tamper `clock`, a
   freeze schedule's `--lock-lead`), check nftables (KC9K's `inet kc9k`
   table), and follow today's allowance, delay lock, settings password
-  and `file://*` exception. Unchecked: the next CI run. Done when:
+  and `file://*` exception; allowance use is never counted on a runner
+  (R-BREAK-1: no desktop); kills are polled for, not waited out. Run 697:
+  2 failures left, both fixed here. Unchecked: the next CI run. Done when:
   the `Integration tests` step of `.github/workflows/test.yml` is green on
   main.
 

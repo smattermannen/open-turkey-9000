@@ -117,7 +117,12 @@
   `WM_DPICHANGED` (kc9k.exe is per-monitor aware, [windows](windows.md)), no text field, opened by the caller's agent (`OpChallenge`, ≤ 4 h); GTK's
   events (`k`, `b`, `n`, `p`, `s`, `c`). Raw Input: key with no device
   (SendInput, on-screen keyboard) → `s`; Ctrl+V/Shift+Insert → `p`.
-  Read by `lock/window_windows.go`.
+  Read by `lock/window_windows.go`. The asking command ending (killed,
+  Ctrl-C) closes it: the service sees the command's internal pipe close
+  and sends `OpChallengeCancel` (else the window stayed and refused every
+  later unlock: "open already"). Another process finds it by title, not
+  class. Gamma a driver refuses without an error code: "the display driver
+  refused the colour ramp" (GitHub's runner does).
 
 ## Circadian rhythm and wallpapers (W6)
 

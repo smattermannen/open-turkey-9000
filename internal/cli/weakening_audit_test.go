@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/smattermannen/kc9k/internal/cloud/cloudtest"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
 )
@@ -58,8 +59,19 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		t.Fatal(err)
 	}
 	beforeSets, _ := d.PhraseSets("b")
+	// §4.14 Download all (2.10): an exception to R-WEAK-1 for locks that
+	// came by sync; a lock set here refuses it (ROADMAP §5 DECIDED
+	// 2026-11-23). Signed in, with an upload, so the lock is the reason.
+	cloudFake := cloudtest.New()
+	defer cloudFake.Close()
+	mustRun(t, "account", "server", cloudFake.URL, cloudtest.AnonKey)
+	if err := runWith(t, 0, []string{"secret123"}, "account", "signup", "audit@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "sync", "upload")
 
 	for _, args := range [][]string{
+		{"sync", "download", "--yes"},
 		{"stop", "b"},
 		{"toggle", "b"},
 		{"block", "remove", "b"},

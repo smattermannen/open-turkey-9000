@@ -1,6 +1,6 @@
 # KC9K account and cross-device sync
 
-- Covers: `internal/cloud/` (client, `cloudtest/` fake), `cli/sync.go`, `cloud/supabase/schema.sql`
+- Covers: `internal/cloud/` (client, `cloudtest/` fake), `cli/sync.go`, `db/syncclear.go`, `cloud/supabase/schema.sql`
 - SPEC: §4.14, principle 6, §6 2026-11-23 (Supabase)
 - Connects to: [db-project](db-project.md) (the setup file is a backup, `buildProject`), [locks](locks.md), [windows](windows.md) (commands run in the service)
 
@@ -38,6 +38,25 @@
   circadian wallpapers, statistics, setting locks `strict`, `no-escape`,
   `firmware-lock`, app entries that are paths or `sha256:` fingerprints
   (`deviceApp`). Kind `"sync"`.
-- Not built: `sync download` (replace, keep device items, not refused by
-  locks: R-WEAK-1 exception), GUIs, Android.
-- Tests: `cloud/cloud_test.go`, `cli/sync_test.go`.
+- `sync download [--dry-run] [--yes]`: `Latest` + `Get`, gunzip,
+  `syncSetup` again (a file never brings device items). Refused (via
+  `refused()`, naming them) while a lock runs here that didn't come by
+  Download all from this account unchanged (`localLocks`: each running
+  lock of `exportBackupExtras` as JSON, compared with setting
+  `sync.locks` = account + prints written after each download; ROADMAP §5
+  DECIDED 2026-11-23). Then a check pass (`importProject` dry,
+  `replacing`, output discarded by `quietly`) validates the file and
+  collects its locks; confirm the replace (`confirmReplace`: typed yes or
+  `--yes`), monk ack, custom actions, locks (R-LOCK-12); save device items
+  by name (`saveDeviceItems`: place rules, affected users, device app
+  entries, modes' places and wallpapers, circadian wallpapers);
+  `db.ClearForSync` (one transaction: blocks, clusters, templates,
+  presets, saved schedules, modes but monk's row, freezes, hotkeys,
+  setting locks but strict/no-escape/firmware-lock, synced settings);
+  `importProject(confirmed)`; `restore`; remember the locks; apply. Not
+  one transaction end to end: a failure after the clear leaves part of the
+  file (the check pass makes that unlikely; said in the error).
+- Not built: GUIs, Android, the real project.
+- Tests: `cloud/cloud_test.go`, `cli/sync_test.go` (two devices on two
+  databases, one fake), `weakening_audit_test.go` (download over a lock
+  set here).

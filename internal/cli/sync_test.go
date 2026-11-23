@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -108,4 +110,95 @@ func TestSyncSetupLeavesDeviceItems(t *testing.T) {
 	if got := strings.Join(p.Blocks[0].Apps, ","); got != "steam,Discord.exe" || p.Blocks[0].Users != nil || p.Blocks[0].Places != nil {
 		t.Errorf("block: apps %s users %v places %v", got, p.Blocks[0].Users, p.Blocks[0].Places)
 	}
+}
+
+// §4.14 Download all: device A's setup replaces device B's; B keeps its own
+// items (affected users, apps' paths); locks come along; a lock set on B
+// stops the download, one that came by sync doesn't (ROADMAP §5 DECIDED
+// 2026-11-23).
+func TestSyncDownload(t *testing.T) {
+	notTerminal(t)
+	f := cloudtest.New()
+	defer f.Close()
+	old := accounts
+	accounts = func() []string { return []string{"anna", "ben"} }
+	defer func() { accounts = old }()
+	device := func() (*db.DB, string) {
+		path := filepath.Join(t.TempDir(), "t.db")
+		t.Setenv("KC9K_DB", path)
+		d, err := db.OpenDB(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { d.Close() })
+		mustRun(t, "account", "server", f.URL, cloudtest.AnonKey)
+		return d, path
+	}
+	a, _ := device()
+	if err := runWith(t, 0, []string{"secret123"}, "account", "signup", "me@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "create", "work")
+	mustRun(t, "block", "add", "work", "reddit.com")
+	mustRun(t, "block", "create", "games")
+	mustRun(t, "block", "add-app", "games", "steam")
+	mustRun(t, "start", "work", "--for", "2h", "--yes")
+	mustRun(t, "sync", "upload")
+
+	b, _ := device()
+	if err := runWith(t, 0, []string{"secret123"}, "account", "login", "me@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "block", "create", "old")
+	mustRun(t, "block", "create", "games")
+	mustRun(t, "block", "add-app", "games", "/opt/x/run.bin")
+	mustRun(t, "block", "users", "games", "anna")
+	if out := capture(t, "sync", "download", "--dry-run"); !strings.Contains(out, "Would: add block 'work'") ||
+		!strings.Contains(out, "Would: set a lock") {
+		t.Errorf("dry run: %s", out)
+	}
+	if _, err := b.GetBlock("old"); err != nil {
+		t.Fatal("the dry run changed something")
+	}
+	if err := runCLI(t, "sync", "download"); err == nil || !strings.Contains(err.Error(), "--yes") {
+		t.Fatalf("download without confirming: %v", err)
+	}
+	mustRun(t, "sync", "download", "--yes")
+	if _, err := b.GetBlock("old"); err == nil {
+		t.Error("a block of this device stayed")
+	}
+	work, err := b.GetBlock("work")
+	if err != nil || !work.Active || work.LockedUntil == 0 {
+		t.Errorf("the locked block came without its lock: %+v %v", work, err)
+	}
+	games, _ := b.GetBlock("games")
+	if !slices.Contains(games.Apps, "steam") || !slices.Contains(games.Apps, "/opt/x/run.bin") {
+		t.Errorf("games' apps: %v", games.Apps)
+	}
+	if u, _ := b.BlockUsers("games"); !slices.Equal(u, []string{"anna"}) {
+		t.Errorf("the device's affected users: %v", u)
+	}
+	// The lock came by sync: downloading again is allowed.
+	mustRun(t, "sync", "download", "--yes")
+	// A lock set here stops it, and nothing changes.
+	mustRun(t, "start", "games", "--for", "1h", "--yes")
+	err = runCLI(t, "sync", "download", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "block 'games'") || strings.Contains(err.Error(), "'work'") {
+		t.Fatalf("download over a lock set here: %v", err)
+	}
+	if g, _ := b.GetBlock("games"); !g.Active {
+		t.Error("the refused download changed the block")
+	}
+
+	// Signed in to another account, the lock that came from the first one
+	// counts as set here: its empty upload lifts nothing.
+	if err := runWith(t, 0, []string{"secret456"}, "account", "signup", "other@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "sync", "upload")
+	err = runCLI(t, "sync", "download", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "block 'work'") {
+		t.Errorf("another account's download over a synced lock: %v", err)
+	}
+	_ = a
 }

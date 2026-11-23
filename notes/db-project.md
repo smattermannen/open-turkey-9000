@@ -2,7 +2,7 @@
 
 - Covers: `internal/db/` (`db.go`, `openlock.go`, `features.go`, `pending.go`, `clock.go`), `cli/project.go`, `projectbackup.go`, `projectlinux.go`, `blocker/linuxonly.go`, `testdata/`
 - SPEC: §4.2 export/import, §4.10 Project
-- Connects to: every note (each table belongs to an area); [lists](lists.md) and [automation](automation.md) for imports
+- Connects to: [sync](sync.md); every note (each table belongs to an area); [lists](lists.md) and [automation](automation.md) for imports
 
 ## DB (`internal/db/`)
 
@@ -16,6 +16,9 @@ busy_timeout doesn't cover concurrent column adds
 
 ## Project files (`cli/project.go`)
 
+- `buildProject` (export) and `importProject(cmd, in, importOptions)`
+  (import; options for sync download: dry check as onto an empty setup,
+  locks collected, confirmations done by the caller), [sync](sync.md).
 - Versioned JSON; import validates all, then only adds (existing
   untouched, options only strengthened); `--dry-run` lists additions and
   locks. Schedules/modes: `cli/projectmodes.go` (`copy_of`, `in_mode`,

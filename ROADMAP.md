@@ -233,8 +233,9 @@ Only rows not fully built.
   `install.sh` refused, a newer `.deb` installs. A `.deb` built before the
   prerm `failed-upgrade` fix still gets in.
 - **2.10 Cross-device sync** (L; §4.14; backend Supabase, SPEC §6
-  2026-11-23): Partial: account and Upload all built against a fake
-  (`notes/sync.md`); Download all, GUIs, the real project not yet. KC9K
+  2026-11-23): Partial: account, Upload all and Download all built
+  against a fake (`notes/sync.md`); GUIs, Android, the real project not
+  yet. KC9K
   account and cloud (principle 6's one exception); Upload all / Download all on Linux, Windows, Android; one to
   one except §4.14's device-specific items. Download all replaces even
   while locked (an exception to R-WEAK-1: the weakening audit must name
@@ -259,10 +260,15 @@ Only rows not fully built.
     (`net/http`, no SDK); tokens root-only in the DB; fake server in tests.
   - [x] CLI: `kc9k account signup|login|logout|status`, `kc9k sync upload`
     (built, `sync_test.go`).
-  - [ ] CLI: `kc9k sync download [--dry-run]` (shows upload time and device, asks
-    first, locks confirmed per R-LOCK-12; replaces in one transaction;
-    device-specific items here kept).
-  - [ ] Weakening audit entry for `sync download`; `refused()` untouched.
+  - [x] CLI: `kc9k sync download [--dry-run] [--yes]` (shows upload time
+    and device, asks first, locks confirmed per R-LOCK-12, device items
+    kept). Differs: the clear is one transaction, the import after it is
+    not (checked whole first).
+  - [x] Weakening audit entry for `sync download`; `refused()` untouched.
+  - [ ] Tamper protection settings beyond `file-urls` and unsupported
+    browsers (embedded, extension stop, inactive tabs, guest, installer,
+    private, task managers, clock) are in no project file, so neither in a
+    backup (§3.13 "Backup: everything") nor in sync.
   - [ ] GTK and Windows GUI: account page, Upload all, Download all (each
     runs the command). Android with N-items.
   - [ ] Check against the real project: Linux → Windows → Linux round trip.
@@ -560,6 +566,13 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- DECIDED (By claude) 2026-11-23 (`2.10`, owner away, asked the agent to
+  decide): Download all refuses while a lock runs on this device that
+  didn't come by an earlier Download all from the same account (unchanged
+  since), naming it. SPEC §4.14 says Download all is "not refused by a
+  lock"; taken literally, an empty setup uploaded from a second account
+  would lift every lock here. §4.14's own example (unlocked on the
+  uploading device, then downloaded) still works. Owner: keep, or loosen.
 - DECIDED (By claude) 2026-11-23 (`2.12`): on Windows the Microsoft Bing
   app is Edge: Microsoft ships no separate Bing browser for Windows (Bing's
   app there is a web app in `msedge.exe`), so Edge's policies, extension

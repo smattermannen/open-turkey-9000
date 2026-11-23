@@ -10,7 +10,12 @@
       "Bash(git push origin HEAD:main)",
       "Bash(git push -q origin HEAD:main)",
       "Bash(git fetch origin main)",
-      "Bash(git fetch -q origin main)"
+      "Bash(git fetch -q origin main)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git fetch:*)",
+      "Bash(git add:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

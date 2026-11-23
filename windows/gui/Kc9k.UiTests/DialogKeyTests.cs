@@ -15,18 +15,22 @@ public class DialogKeyTests
     public void EnterPressesOk()
     {
         using var gui = new GuiApp("enter");
-        gui.Window.Focus();
+        gui.Front();
         Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_N);
         gui.FindName("New block");
         if (gui.ById("AskText") is null)
         {
             // The preset choice: Empty is chosen; Enter takes it.
+            gui.Front();
             Keyboard.Press(VirtualKeyShort.RETURN);
             Wait.UntilInputIsProcessed();
         }
-        var box = gui.Find("AskText").AsTextBox();
-        box.Focus();
-        box.Text = "Enter test";
+        // Typed as a person types: the box has the focus when the dialog opens.
+        gui.Find("AskText");
+        gui.Front();
+        Keyboard.Type("Enter test");
+        Wait.UntilInputIsProcessed();
+        gui.WaitFor(() => gui.Find("AskText").AsTextBox().Text == "Enter test", "the name typed");
         Keyboard.Press(VirtualKeyShort.RETURN);
         try { gui.WaitFor(() => gui.Ran("block", "create", "Enter test"), "kc9k block create by Enter"); }
         finally { Console.WriteLine("dialog keys: " + string.Join("\n", GuiApp.LogLines("dialog"))); }

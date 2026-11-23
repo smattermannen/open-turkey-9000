@@ -28,9 +28,10 @@ public class DesktopTests
     {
         using var gui = new GuiApp("drag-mode");
         gui.Page("blocks");
-        var block = gui.Find("BlockCard_Reading");
-        block.Focus(); // in view
+        gui.Show("ModeCard_Study");
+        var block = gui.Show("BlockCard_Reading");
         var mode = gui.Find("ModeCard_Study");
+        Assert.False(mode.BoundingRectangle.IsEmpty, "the mode card on screen with the block");
         // From the card's empty part right of its name (the name is a link).
         var r = block.BoundingRectangle;
         Drag(new(r.Right + 120, r.Top + r.Height / 2), Center(mode));
@@ -54,7 +55,7 @@ public class DesktopTests
                 TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: "no label " + text).Result!;
         var mon = Label("Mon");
         var tue = Label("Tue", r => Math.Abs(r.Top - mon.BoundingRectangle.Top) < 4);
-        mon.Focus();
+        GuiApp.Show(mon);
         mon = Label("Mon");
         // Hour labels sit 8 DIP above their line (CI: 100 %).
         // The week's own hour labels: left of Mon, below it.

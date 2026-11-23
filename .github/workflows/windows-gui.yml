@@ -60,6 +60,10 @@ jobs:
           "KC9K_SCRATCH_EXE=${{ runner.temp }}\kc9k\kc9k.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
           & "${{ runner.temp }}\kc9k\kc9k.exe" install
           "KC9K_REAL_EXE=$env:ProgramFiles\KC9K\kc9k.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+      # The runner's 1024×768 holds little of a page: 1920×1080 at 100 %, so
+      # the window (1280×900 in the tests) is all on screen.
+      - name: Display at 1920×1080
+        run: pwsh tools/display-scale.ps1 -Percent 100 -Width 1920 -Height 1080
       - name: UI Automation smoke tests
         env:
           KC9K_GUI_EXE: ${{ runner.temp }}\gui\kc9k-gui.exe

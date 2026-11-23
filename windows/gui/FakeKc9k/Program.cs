@@ -43,7 +43,16 @@ public static class FakeCli
             ["args"] = new JsonArray([.. args.Select(a => (JsonNode)JsonValue.Create(a)!)]),
             ["stdin"] = stdin,
         };
-        try { File.AppendAllText(log, line.ToJsonString() + "\n"); } catch (IOException) { }
+        // Two fakes at once (commands run side by side): one waits its turn.
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            try
+            {
+                File.AppendAllText(log, line.ToJsonString() + "\n");
+                break;
+            }
+            catch (IOException) { Thread.Sleep(20); }
+        }
 
         // The GUI's own flags before the command: --access-lines N, --settings-line.
         var rest = args.ToList();

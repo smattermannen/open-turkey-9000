@@ -210,8 +210,7 @@ public class ParityRealTests
     /// an element scrolled out of the window has no rectangle).</summary>
     static double Height(GuiApp gui, string list)
     {
-        gui.Find(list + "_Grip").Focus();
-        Thread.Sleep(200);
+        gui.Show(list + "_Grip");
         return (gui.ById(list) ?? gui.Find(list + "_Cover")).BoundingRectangle.Height;
     }
 
@@ -220,8 +219,9 @@ public class ParityRealTests
 
     static double? KeptHeight(GuiApp gui) => (double?)Prefs(gui)["list_heights"]?["website list"];
 
-    static void Keys(AutomationElement grip, FlaUI.Core.WindowsAPI.VirtualKeyShort key, int times)
+    static void Keys(GuiApp gui, AutomationElement grip, FlaUI.Core.WindowsAPI.VirtualKeyShort key, int times)
     {
+        gui.Front();
         grip.Focus();
         for (var i = 0; i < times; i++) FlaUI.Core.Input.Keyboard.Press(key);
         FlaUI.Core.Input.Wait.UntilInputIsProcessed();
@@ -247,15 +247,15 @@ public class ParityRealTests
             gui.Invoke("BlockCard_Reading");
             var grip = gui.Find(blocked + "_Grip");
             start = Height(gui, blocked);
-            Keys(grip, FlaUI.Core.WindowsAPI.VirtualKeyShort.DOWN, 5);
+            Keys(gui, grip, FlaUI.Core.WindowsAPI.VirtualKeyShort.DOWN, 5);
             gui.WaitFor(() => Height(gui, blocked) >= start + 150, $"taller by keys ({start} -> {Height(gui, blocked)})");
             Assert.True(Math.Abs(Height(gui, exceptions) - Height(gui, blocked)) <= 2,
                 $"the other list of that kind takes the height ({Height(gui, blocked)}, {Height(gui, exceptions)})");
             gui.WaitFor(() => KeptHeight(gui) >= 300, $"height kept in gui.json: {Prefs(gui)}");
-            Keys(grip, FlaUI.Core.WindowsAPI.VirtualKeyShort.UP, 40);
+            Keys(gui, grip, FlaUI.Core.WindowsAPI.VirtualKeyShort.UP, 40);
             gui.WaitFor(() => KeptHeight(gui) == 80, $"far up: stops at the least height ({KeptHeight(gui)})");
             // By mouse, where a person drags it.
-            grip = gui.Find(blocked + "_Grip");
+            grip = gui.Show(blocked + "_Grip");
             var r = grip.BoundingRectangle;
             var from = new System.Drawing.Point(r.Left + r.Width / 2, r.Top + r.Height / 2);
             GuiApp.Drag(from, new System.Drawing.Point(from.X, from.Y + 200));
@@ -269,7 +269,7 @@ public class ParityRealTests
             again.Page("blocks");
             again.Invoke("BlockCard_Reading");
             again.WaitFor(() => Math.Abs(Height(again, blocked) - tall) <= 2, $"a new list of that kind opens as tall ({tall}, {Height(again, blocked)})");
-            var grip = again.Find(blocked + "_Grip");
+            var grip = again.Show(blocked + "_Grip");
             var r = grip.BoundingRectangle;
             FlaUI.Core.Input.Mouse.DoubleClick(new System.Drawing.Point(r.Left + r.Width / 2, r.Top + r.Height / 2));
             again.WaitFor(() => KeptHeight(again) is null, "double-click: forgotten in gui.json");
@@ -295,6 +295,7 @@ public class ParityRealTests
         var item = FlaUI.Core.Tools.Retry.WhileNull(() => gui.Find("Phrases_Gossip_Phrases").FindFirstDescendant(c => c.ByName(text)),
             TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: "no phrase " + text).Result!;
         item.Patterns.SelectionItem.Pattern.Select();
+        gui.Front();
         item.Focus();
         FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.RETURN);
         FlaUI.Core.Input.Wait.UntilInputIsProcessed();
@@ -646,7 +647,8 @@ public class ParityRealTests
         // The bar dragged an hour later on the timeline.
         var bar = FlaUI.Core.Tools.Retry.WhileNull(() => gui.Window.FindFirstDescendant(c => c.ByName("sky.png  09:00–17:00")),
             TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: "no bar sky.png 09:00–17:00").Result!;
-        bar.Focus();
+        GuiApp.Show(bar);
+        bar = gui.Window.FindFirstDescendant(c => c.ByName("sky.png  09:00–17:00"))!;
         // The timeline's hour labels (every 3 h) stand 16 DIP left of their
         // line (CI: 100 %); from two of them, where 09:30 is and how long an
         // hour is. Start there, on the 5-minute grid a drag snaps to.

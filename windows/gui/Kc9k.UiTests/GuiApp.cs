@@ -185,10 +185,45 @@ public sealed class GuiApp : IDisposable
                 Automation.GetDesktop().FindFirstDescendant(c => c.ByControlType(ControlType.Button).And(c.ByName(text)).And(c.ByProcessId(App.ProcessId))),
             TimeSpan.FromSeconds(seconds), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: $"no button {text}").Result!;
 
+    /// <summary>The window in front, so keys reach it (the runner's own
+    /// console can come forward now and then).</summary>
+    public void Front()
+    {
+        try { Window.SetForeground(); } catch (Exception) { }
+        Thread.Sleep(150);
+    }
+
+    /// <summary>Scrolls an element into the window (one out of view has no
+    /// rectangle) and gives it back, found again.</summary>
+    public AutomationElement Show(string id)
+    {
+        var e = Find(id);
+        try
+        {
+            if (e.Patterns.ScrollItem.IsSupported) e.Patterns.ScrollItem.Pattern.ScrollIntoView();
+            else e.Focus();
+        }
+        catch (Exception) { try { e.Focus(); } catch (Exception) { } }
+        Thread.Sleep(400);
+        return Find(id);
+    }
+
+    public static void Show(AutomationElement e)
+    {
+        try
+        {
+            if (e.Patterns.ScrollItem.IsSupported) e.Patterns.ScrollItem.Pattern.ScrollIntoView();
+            else e.Focus();
+        }
+        catch (Exception) { }
+        Thread.Sleep(400);
+    }
+
     /// <summary>Types into a text box and presses Enter in it.</summary>
     public void TypeEnter(string id, string text)
     {
         var box = Find(id).AsTextBox();
+        Front();
         box.Focus();
         box.Text = text;
         Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.RETURN);

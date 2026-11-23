@@ -296,8 +296,6 @@ Only rows not fully built.
     in the menu, LibreWolf and Chrome get the extension (vm):
     `MANUAL=1 ci/deb_vm_test.sh host` (written, never run; needs a clean
     Mint VM `kc9k-mint` with a snapshot `clean`, see `notes/testing.md`).
-  - [ ] `gui/kc9k.desktop`'s `Comment` is Swedish (principle 8: English
-    only); shown in Mint's menu (session B's area, `gui/`).
   To do, agent (Windows):
   - [ ] MSI sets up the extension in Chrome and Edge (needs `2.17`'s ID).
   To do, owner:

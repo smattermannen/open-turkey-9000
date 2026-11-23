@@ -27,6 +27,9 @@
   install makes sure of LibreWolf once; one removed by the user later stays
   removed until the next install. `install.sh` still installs it itself at
   once (the daemon's first try finds it).
+- Menu entry `gui/kc9k.desktop` (`/usr/share/applications/` from the
+  `.deb`): English `Comment` (principle 8), checked by
+  `ci/deb_install_check.sh`.
 - Release (`.github/workflows/linux-release.yml`): tag `v1.2.3` →
   `KillerChicken9000-1.2.3-amd64.deb` (Debian version: first `-` → `~`, so
   a pre-release sorts older) + `.sha256`, checked by

@@ -177,6 +177,11 @@ func TestSyncDownload(t *testing.T) {
 	if !enforce.TamperOn(b, enforce.SettingTamperGuest) || enforce.TamperOn(b, enforce.SettingTamperInstaller) {
 		t.Error("tamper protection isn't the uploaded one")
 	}
+	// Written, not left unset: an unset clock setting is decided again at
+	// the next start (db.migrateTamperClock: on where trusted time ran).
+	if v, _ := b.GetSetting(db.SettingTamperClock); v != "off" {
+		t.Errorf("clock tamper protection after download: %q", v)
+	}
 	games, _ := b.GetBlock("games")
 	if !slices.Contains(games.Apps, "steam") || !slices.Contains(games.Apps, "/opt/x/run.bin") {
 		t.Errorf("games' apps: %v", games.Apps)

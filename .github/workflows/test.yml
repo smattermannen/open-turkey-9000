@@ -33,6 +33,8 @@ jobs:
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 ci/gui_circadian_smoke.py
       - name: GTK dialogs, Enter presses OK (A15)
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 ci/gui_enter_smoke.py
+      - name: GTK Account page against the fake cloud (2.10)
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 ci/gui_account_smoke.py
       - name: Extension background (frames, ad trigger, local files)
         run: node ci/background_test.js
       - name: Search results in Chromium (R-PAGE-2)

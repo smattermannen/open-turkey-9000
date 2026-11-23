@@ -75,5 +75,11 @@ func (d *DB) ClearForSync(keepLocks []string) error {
 			return err
 		}
 	}
+	// Left unset, the clock setting would be decided again at the next
+	// open (migrateTamperClock: on where trusted time ran), over the file's
+	// value: it gets a fresh install's "off", which the file then changes.
+	if _, err := tx.Exec("INSERT INTO settings (key, value) VALUES (?, 'off')", SettingTamperClock); err != nil {
+		return err
+	}
 	return tx.Commit()
 }

@@ -242,8 +242,8 @@ Only rows not fully built.
   prerm `failed-upgrade` fix still gets in.
 - **2.10 Cross-device sync** (L; §4.14; backend Supabase, SPEC §6
   2026-11-23): Partial: account, Upload all and Download all built
-  against a fake (`notes/sync.md`); GUIs, Android, the real project not
-  yet. KC9K
+  against a fake, GTK account page (`notes/sync.md`); Windows GUI,
+  Android, the real project not yet. KC9K
   account and cloud (principle 6's one exception); Upload all / Download all on Linux, Windows, Android; one to
   one except §4.14's device-specific items. Download all replaces even
   while locked (an exception to R-WEAK-1: the weakening audit must name
@@ -275,8 +275,10 @@ Only rows not fully built.
   - [x] Weakening audit entry for `sync download`; `refused()` untouched.
   - [x] Every tamper protection setting and the extension's grace in the
     project file, so in backups and sync (`importTamper`, `notes/db-project.md`).
-  - [ ] GTK and Windows GUI: account page, Upload all, Download all (each
-    runs the command). Android with N-items.
+  - [x] GTK account page, Upload all, Download all (`win_account.py`,
+    `ci/gui_account_smoke.py` against the fake).
+  - [ ] Windows GUI account page (Windows session); Android with N-items.
+  - [ ] GTK account page on a real screen (box).
   - [ ] Check against the real project: Linux → Windows → Linux round trip.
   - [x] Note `notes/sync.md`.
 - **2.11 One-click installer** (M per platform; §4.11; methods SPEC §6

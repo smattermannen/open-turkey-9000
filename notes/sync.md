@@ -1,6 +1,6 @@
 # KC9K account and cross-device sync
 
-- Covers: `internal/cloud/` (client, `cloudtest/` fake), `cli/sync.go`, `db/syncclear.go`, `cloud/supabase/schema.sql`
+- Covers: `internal/cloud/` (client, `cloudtest/` fake), `cmd/fake-cloud`, `cli/sync.go`, `db/syncclear.go`, `cloud/supabase/schema.sql`, `gui/kc9k_gui/win_account.py`, `ci/gui_account_smoke.py`
 - SPEC: §4.14, principle 6, §6 2026-11-23 (Supabase)
 - Connects to: [db-project](db-project.md) (the setup file is a backup, `buildProject`), [locks](locks.md), [windows](windows.md) (commands run in the service)
 
@@ -53,11 +53,22 @@
   `db.ClearForSync` (one transaction: blocks, clusters, templates,
   presets, saved schedules, modes but monk's row, freezes, hotkeys,
   setting locks but strict/no-escape/firmware-lock, synced settings, every
-  `tamper.*` setting included);
+  `tamper.*` setting included; `tamper.clock` set to a fresh install's
+  "off", else a reopen's `migrateTamperClock` turns it on over the file);
   `importProject(confirmed)`; `restore`; remember the locks; apply. Not
   one transaction end to end: a failure after the clear leaves part of the
   file (the check pass makes that unlikely; said in the error).
-- Not built: GUIs, Android, the real project.
+- Access area Settings (`commandAreas` `account`, `sync`).
+- GTK Account page (`gui/kc9k_gui/win_account.py`, sidebar "Account",
+  covered by Settings' access password): status from `account status
+  --json` when shown (in the background); Sign up… (email, password twice,
+  ≥ 8), Log in…, Log out (asks), Refresh; Upload all (asks before replacing
+  an upload); Download all… runs `sync download --dry-run` (monk
+  acknowledgement asked if the dry run needs `--no-confirm-ok`), shows it,
+  confirms the replace and its locks (`confirm_lock`), then `--yes`.
+  `ci/gui_account_smoke.py`: two devices on scratch databases against
+  `cmd/fake-cloud` (serves `cloudtest`; test only, in `test.yml`).
+- Not built: Windows GUI, Android, the real project.
 - Tests: `cloud/cloud_test.go`, `cli/sync_test.go` (two devices on two
   databases, one fake), `weakening_audit_test.go` (download over a lock
   set here).

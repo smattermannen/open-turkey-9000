@@ -18,7 +18,7 @@
   (`AutomationEditor`, triggers, places), `window` (`Window`: build,
   `run`, state, access passwords), one `win_*` mixin per page (places,
   dashboard, blocks, modes + opened block, block actions, clusters, device,
-  stats, settings), `app` (`Tray`, `APP_CSS`, `App`). Find a method:
+  stats, settings, account ([sync](sync.md))), `app` (`Tray`, `APP_CSS`, `App`). Find a method:
   `grep -n 'def NAME' gui/kc9k_gui/*.py`.
 - Reads `kc9k gui-state`, `kc9k stats --json`; every change runs a `kc9k`
   command. Menu entry / `kc9k-gui` (`python3-gi`); theme in

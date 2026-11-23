@@ -52,8 +52,10 @@
   entries, modes' places and wallpapers, circadian wallpapers);
   `db.ClearForSync` (one transaction: blocks, clusters, templates,
   presets, saved schedules, modes but monk's row, freezes, hotkeys,
-  setting locks but strict/no-escape/firmware-lock, synced settings);
-  `importProject(confirmed)`; `restore`; remember the locks; apply. Not
+  setting locks but strict/no-escape/firmware-lock, synced settings, the
+  tamper protection settings and grace among them);
+  `importProject(confirmed, oneToOne)` (tamper settings written as the
+  file has them, off too; `TestTamperSettingsInProjectAndSync`); `restore`; remember the locks; apply. Not
   one transaction end to end: a failure after the clear leaves part of the
   file (the check pass makes that unlikely; said in the error).
 - Not built: GUIs, Android, the real project.

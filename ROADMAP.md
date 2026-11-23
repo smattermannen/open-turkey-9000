@@ -269,10 +269,8 @@ Only rows not fully built.
     kept). Differs: the clear is one transaction, the import after it is
     not (checked whole first).
   - [x] Weakening audit entry for `sync download`; `refused()` untouched.
-  - [ ] Tamper protection settings beyond `file-urls` and unsupported
-    browsers (embedded, extension stop, inactive tabs, guest, installer,
-    private, task managers, clock) are in no project file, so neither in a
-    backup (§3.13 "Backup: everything") nor in sync.
+  - [x] Tamper protection settings and the grace in the project file
+    (backup and sync; a project import only turns them on).
   - [ ] GTK and Windows GUI: account page, Upload all, Download all (each
     runs the command). Android with N-items.
   - [ ] Check against the real project: Linux → Windows → Linux round trip.
@@ -594,6 +592,12 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- DECIDED (By claude) 2026-11-23 (`2.10`): every tamper protection
+  setting and the extension's grace are in the project file. A project
+  import (a backup too) only turns protection on and the grace only
+  shorter, saying what it leaves (turning off is weakening, `kc9k tamper
+  X off`); Download all writes them as the file has them (§4.14 one to
+  one). Owner may overturn.
 - DECIDED (By claude) 2026-11-23 (`A18`): list entries get `kc9k list
   change B L OLD NEW`, and a draft's save pairs an edited entry like a
   phrase. "Clearly matches more" (R-WEAK-5) is read narrowly: plain sites

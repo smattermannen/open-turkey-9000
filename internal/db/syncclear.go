@@ -14,7 +14,9 @@ import "fmt"
 // only ones.
 var (
 	syncedSettingPrefixes = []string{"browser.", "option.", AccessPasswordSetting, SettingDraftOf, "draft.", "mode.wallpapers."}
-	syncedSettings        = []string{"tamper.file-urls", SettingUnsupportedBrowsers, SettingNepsis, "use.strict", "notifications",
+	syncedSettings        = []string{"tamper.file-urls", "tamper.clock", "tamper.task-managers", "tamper.private",
+		"tamper.guest", "tamper.extension-stop", "tamper.installer", "tamper.inactive-tabs", "tamper.embedded",
+		"tamper.grace", SettingUnsupportedBrowsers, SettingNepsis, "use.strict", "notifications",
 		"settings.password", "settings.password.locks", "circadian"}
 )
 

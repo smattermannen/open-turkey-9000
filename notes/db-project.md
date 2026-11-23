@@ -25,8 +25,12 @@ busy_timeout doesn't cover concurrent column adds
   `applied_schedules`).
 - Holds blocks (lists, apps, titles, schedules, schedule lock, social,
   allowance, Pomodoro, breaks, ladders), browser and behaviour settings,
-  global ladder, freeze schedules, list images. Clashing block → `name-2`;
-  browser settings only on; ladder replaced only by a stricter one.
+  global ladder, freeze schedules, list images, tamper protection
+  (`tamper_protection`: every `tamperOrder` name + unsupported browsers;
+  `tamper_grace`; 2.10). Clashing block → `name-2`; browser settings and
+  tamper protection only on, grace only shorter (else said, left), except
+  with `oneToOne` (sync download: as the file); ladder replaced only by a
+  stricter one.
 - Presets (`exportPresets`): always in a backup; in `--share` only with
   `--presets` (terminal asks on stderr; GUI Share… asks). Import: same
   name+content skipped, taken name → `name-2` (`freeName`).

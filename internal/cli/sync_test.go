@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/smattermannen/kc9k/internal/circadian"
 	"github.com/smattermannen/kc9k/internal/cloud/cloudtest"
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
 // §4.14 (2.10): an account made and signed in to; Upload all sends the
@@ -201,4 +203,70 @@ func TestSyncDownload(t *testing.T) {
 		t.Errorf("another account's download over a synced lock: %v", err)
 	}
 	_ = a
+}
+
+// §3.13 "Backup: everything", §4.14 (2.10): every tamper protection
+// setting and the extension's grace are in the project file. A project
+// import turns protection on but never off; Download all copies them one
+// to one.
+func TestTamperSettingsInProjectAndSync(t *testing.T) {
+	notTerminal(t)
+	f := cloudtest.New()
+	defer f.Close()
+	device := func() *db.DB {
+		path := filepath.Join(t.TempDir(), "t.db")
+		t.Setenv("KC9K_DB", path)
+		d, err := db.OpenDB(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { d.Close() })
+		mustRun(t, "account", "server", f.URL, cloudtest.AnonKey)
+		return d
+	}
+	device()
+	if err := runWith(t, 0, []string{"secret123"}, "account", "signup", "me@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"tamper", "embedded", "off"}, {"tamper", "guest", "on"}, {"tamper", "private", "on"},
+		{"tamper", "clock", "on"}, {"tamper", "grace", "30"},
+	} {
+		mustRun(t, args...)
+	}
+	file := filepath.Join(t.TempDir(), "p.json")
+	if err := os.WriteFile(file, []byte(capture(t, "project", "export")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "sync", "upload")
+	want := func(d *db.DB, embedded, guest, private, clock bool, grace int) {
+		t.Helper()
+		got := []bool{enforce.TamperOn(d, enforce.SettingEmbedded), enforce.TamperOn(d, enforce.SettingTamperGuest),
+			enforce.TamperOn(d, enforce.SettingTamperPrivate), enforce.TamperOn(d, db.SettingTamperClock)}
+		if !slices.Equal(got, []bool{embedded, guest, private, clock}) || enforce.ExtensionGraceSeconds(d) != grace {
+			t.Errorf("embedded, guest, private, clock = %v, grace %d; want %v, %d", got, enforce.ExtensionGraceSeconds(d),
+				[]bool{embedded, guest, private, clock}, grace)
+		}
+	}
+
+	// A backup onto a new device: on comes, off doesn't (embedded is on by
+	// default and stays so); a shorter grace is stricter.
+	c := device()
+	out := capture(t, "project", "import", file)
+	if !strings.Contains(out, "embedded is left on") {
+		t.Errorf("import didn't say embedded stays on: %s", out)
+	}
+	want(c, true, true, true, true, 30)
+
+	// Download all: one to one, off included; a longer grace too.
+	b := device()
+	if err := runWith(t, 0, []string{"secret123"}, "account", "login", "me@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "tamper", "installer", "on")
+	mustRun(t, "sync", "download", "--yes")
+	want(b, false, true, true, true, 30)
+	if enforce.TamperOn(b, enforce.SettingTamperInstaller) {
+		t.Error("installer stayed on: the upload has it off")
+	}
 }

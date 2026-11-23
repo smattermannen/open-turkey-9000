@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -143,10 +144,14 @@ type projectExport struct {
 	// chose presets, and always in a backup (§3.13).
 	Presets []presetExport  `json:"presets,omitempty"`
 	Browser map[string]bool `json:"browser_options,omitempty"`
-	// Tamper holds block unsupported browsers (in older files the browser
-	// option force-librewolf).
-	Tamper  map[string]bool   `json:"tamper_protection,omitempty"`
-	Options map[string]bool   `json:"options,omitempty"`
+	// Tamper holds the tamper protection settings by their 'kc9k tamper'
+	// names, block unsupported browsers included (in older files the
+	// browser option force-librewolf; files before 2.10 hold only it and
+	// file-urls: a name missing is left as it is).
+	Tamper map[string]bool `json:"tamper_protection,omitempty"`
+	// TamperGrace is the extension's grace in seconds (0: not in the file).
+	TamperGrace int               `json:"tamper_grace,omitempty"`
+	Options     map[string]bool   `json:"options,omitempty"`
 	Nepsis  *db.Nepsis        `json:"bypass_detection,omitempty"`
 	Freezes []windowExport    `json:"frozen_chicken_schedules,omitempty"`
 	Images  map[string]string `json:"images,omitempty"` // name -> base64
@@ -539,8 +544,11 @@ func buildProject(cmd *cobra.Command, database *db.DB, share bool) (projectExpor
 	for _, name := range enforce.BrowserSettings {
 		out.Browser[name] = enforce.BrowserOn(database, name)
 	}
-	out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database),
-		"file-urls": enforce.FileURLsOn(database)}
+	out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database)}
+	for _, name := range tamperOrder { // §3.13 "Backup: everything", §4.14
+		out.Tamper[name] = enforce.TamperOn(database, simpleTamper[name])
+	}
+	out.TamperGrace = enforce.ExtensionGraceSeconds(database)
 	for _, o := range enforce.Options {
 		out.Options[o.Name] = enforce.OptionOn(database, o.Name)
 	}
@@ -652,6 +660,7 @@ With --dry-run, says what would happen and changes nothing.`,
 type importOptions struct {
 	dry       bool
 	replacing bool         // judge names and freezes as if nothing were here
+	oneToOne  bool         // Download all: settings as the file has them, weaker ones too (§4.14)
 	confirmed bool         // monk mode, custom actions, locks confirmed by the caller
 	locks     *[]lockToSet // filled with the locks the file sets
 }
@@ -1018,11 +1027,37 @@ func importProject(cmd *cobra.Command, in projectExport, o importOptions) error 
 			}
 		}
 	}
-	if in.Tamper["file-urls"] && !enforce.FileURLsOn(database) {
-		say("turn on file:// blocking")
+	// Tamper protection: on is free; off (and a longer grace) weakens, so
+	// only Download all, which replaces the setup, takes it (2.10).
+	for _, name := range tamperOrder {
+		want, given := in.Tamper[name]
+		// Replacing writes each one, even as it reads now: the setup was
+		// cleared, and an unset clock setting is decided again on the next
+		// start (db.migrateTamperClock).
+		if !given || (!o.oneToOne && want == enforce.TamperOn(database, simpleTamper[name])) {
+			continue
+		}
+		if !want && !o.oneToOne {
+			fmt.Printf("Tamper protection %s is left on (the file has it off; 'kc9k tamper %s off' turns it off).\n", name, name)
+			continue
+		}
+		say("turn tamper protection %s %s", name, onOff(want))
 		if !dry {
-			if err := database.SetSetting(enforce.SettingFileURLs, "on"); err != nil {
+			if err := database.SetSetting(simpleTamper[name], onOff(want)); err != nil {
 				return err
+			}
+		}
+	}
+	if g := in.TamperGrace; g >= 10 && g <= 600 && g != enforce.ExtensionGraceSeconds(database) {
+		if g > enforce.ExtensionGraceSeconds(database) && !o.oneToOne {
+			fmt.Printf("The extension's grace is left at %ds (the file has %ds; 'kc9k tamper grace %d' sets it).\n",
+				enforce.ExtensionGraceSeconds(database), g, g)
+		} else {
+			say("set the extension's grace to %ds", g)
+			if !dry {
+				if err := database.SetSetting(enforce.SettingExtensionGrace, strconv.Itoa(g)); err != nil {
+					return err
+				}
 			}
 		}
 	}

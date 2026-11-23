@@ -634,7 +634,7 @@ only locks that came here by an earlier Download all from the same account
 		// anything, and gather the locks it sets.
 		var locks []lockToSet
 		if err := quietly(func() error {
-			return importProject(cmd, in, importOptions{dry: true, replacing: true, locks: &locks})
+			return importProject(cmd, in, importOptions{dry: true, replacing: true, oneToOne: true, locks: &locks})
 		}); err != nil {
 			return fmt.Errorf("the uploaded setup can't be used here: %w", err)
 		}
@@ -683,7 +683,7 @@ only locks that came here by an earlier Download all from the same account
 		if err := database.ClearForSync(deviceSettingLocks); err != nil {
 			return err
 		}
-		if err := importProject(cmd, in, importOptions{confirmed: true}); err != nil {
+		if err := importProject(cmd, in, importOptions{confirmed: true, oneToOne: true}); err != nil {
 			return fmt.Errorf("the download stopped halfway (upload this device's setup again from a device that has it, or download again): %w", err)
 		}
 		if err := keep.restore(database); err != nil {

@@ -347,7 +347,7 @@ Only rows not fully built.
   GTK built against the fake (`notes/sync.md` Accountability partner):
   invite/accept/leave/remove, reports daily/weekly/off, alerts (bypass
   prevention, block switched off, unlocked, deleted, tamper events,
-  uninstall), heartbeat, password locks and the settings password held by
+  uninstall, the daemon stopped by hand on Linux), heartbeat, password locks and the settings password held by
   partners (`--partner-holds`), unlock requests approved or denied;
   removing a partner and fewer reports weakening (audit, `refused()`).
   To do, owner:
@@ -363,8 +363,6 @@ Only rows not fully built.
   - [ ] `--partner-holds` for browser and tamper setting locks, mode and
     hotkey password locks, and in the GTK lock picker (now: CLI `start`
     and `password set`).
-  - [ ] "KC9K stopped": an alert when the daemon is stopped by hand (now
-    only "not heard from", the cloud's).
 - **2.14 Website** (M; §4.16): Not built. Content per §4.16; hosting the
   owner's choice when built.
 - **2.15 Search results from blacklisted addresses** (M; R-PAGE-2): Built

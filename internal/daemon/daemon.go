@@ -52,6 +52,10 @@ func Run() error {
 // starts: package cli adds the accountability partner's sending).
 var EveryMinute []func(*db.DB)
 
+// OnStop are run when the daemon is told to stop (a signal on Linux),
+// before it returns.
+var OnStop []func(*db.DB)
+
 func RunUntil(stop <-chan struct{}) error {
 	database, err := db.OpenDB(db.ResolveDBPath())
 	if err != nil {
@@ -152,6 +156,9 @@ func RunUntil(stop <-chan struct{}) error {
 				log.Printf("daemon: error in enforcement cycle: %v", err)
 			}
 		case <-stop:
+			for _, f := range OnStop {
+				f(database)
+			}
 			return nil
 		}
 	}

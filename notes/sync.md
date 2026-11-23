@@ -1,6 +1,6 @@
 # KC9K account, cross-device sync, accountability partner
 
-- Covers: `internal/cloud/` (client, `partner.go`, `cloudtest/` fake), `cli/sync.go`, `cli/partner.go`, `db/syncclear.go`, `db/partner.go`, `cloud/supabase/schema.sql`, `ci/cloudfake/`
+- Covers: `internal/cloud/` (client, `partner.go`, `cloudtest/` fake), `cli/sync.go`, `cli/partner*.go`, `db/syncclear.go`, `db/partner.go`, `cloud/supabase/schema.sql`, `ci/cloudfake/`
 - SPEC: §4.14, §4.15, principle 6, §6 2026-11-23 (Supabase)
 - Connects to: [db-project](db-project.md) (the setup file is a backup, `buildProject`), [locks](locks.md), [windows](windows.md) (commands run in the service)
 
@@ -79,7 +79,9 @@
   every 30 min by the daemon); `PartnerAlert` drops the same alert within
   10 min. Alerts: `stop`, `unlock` (and an unlock break), `block remove`,
   bypass prevention step (`enforce/nepsis.go`), every `EventTamper`
-  (`db.RecordEventFor`), `prepare-uninstall` (sent at once).
+  (`db.RecordEventFor`), `prepare-uninstall` (sent at once), the daemon
+  stopped by hand on Linux (`daemon.OnStop` → `partnerDaemonStopped`, not
+  while systemd is `stopping`: a shutdown; sent at once).
 - `partnerFlush`: heartbeat (10 min), partners (30 min), report when due
   (`partner.reports` daily/weekly(default)/off, `partner.report.last`;
   first report a period after the first send; `partnerReport`: top sites

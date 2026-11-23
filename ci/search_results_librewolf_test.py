@@ -50,6 +50,19 @@ class Proxy(http.server.BaseHTTPRequestHandler):
 MARKS = """return [...document.querySelectorAll('[data-expect]')].map((el) => ({
     expect: el.dataset.expect, shown: el.getClientRects().length > 0, what: el.textContent.trim().slice(0, 50)}));"""
 
+
+
+def settled(done, seconds=10):
+    """The page's marks once done(marks) holds, or as they are after the
+    time is up (then the check after it fails and names them)."""
+    deadline = time.time() + seconds
+    while True:
+        marks = driver.execute_script(MARKS)
+        if done(marks) or time.time() > deadline:
+            return marks
+        time.sleep(0.2)
+
+
 start_daemon()
 proxy = serve(Proxy)
 state["rules"] = {"lists": LISTS}
@@ -63,7 +76,9 @@ try:
         wait_polls(1)
         driver.get(url)
         time.sleep(1.5)  # DuckDuckGo adds more results after 400 ms
-        marks = driver.execute_script(MARKS)
+        # The page is judged once the rules are read: on a slow runner that
+        # can take longer than the sleep, so wait (≤ 10 s) for the kept ones.
+        marks = settled(lambda m: all(x["shown"] for x in m if x["expect"] == "kept"))
         gone = [m for m in marks if m["expect"] == "gone"]
         kept = [m for m in marks if m["expect"] == "kept"]
         check(f"{name}: results leading to Reddit or X are gone ({len(gone)})",
@@ -72,8 +87,7 @@ try:
               [m for m in kept if not m["shown"]])
         state["rules"] = {"lists": []}
         wait_polls(2)
-        time.sleep(0.3)
-        after = driver.execute_script(MARKS)
+        after = settled(lambda m: all(x["shown"] for x in m))
         check(f"{name}: with the block off every result is back", all(m["shown"] for m in after),
               [m for m in after if not m["shown"]])
 finally:

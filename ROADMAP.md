@@ -238,8 +238,8 @@ Only rows not fully built.
   prerm `failed-upgrade` fix still gets in.
 - **2.10 Cross-device sync** (L; §4.14; backend Supabase, SPEC §6
   2026-11-23): Partial: account, Upload all and Download all built
-  against a fake (`notes/sync.md`); GUIs, Android, the real project not
-  yet. KC9K
+  against a fake (`notes/sync.md`), the GTK page too; Windows GUI,
+  Android, the real project not yet. KC9K
   account and cloud (principle 6's one exception); Upload all / Download all on Linux, Windows, Android; one to
   one except §4.14's device-specific items. Download all replaces even
   while locked (an exception to R-WEAK-1: the weakening audit must name
@@ -271,8 +271,10 @@ Only rows not fully built.
   - [x] Weakening audit entry for `sync download`; `refused()` untouched.
   - [x] Tamper protection settings and the grace in the project file
     (backup and sync; a project import only turns them on).
-  - [ ] GTK and Windows GUI: account page, Upload all, Download all (each
-    runs the command). Android with N-items.
+  - [x] GTK: Account page (sign up, log in, log out, status, Upload all,
+    Download all with its dry run and one confirmation;
+    `ci/gui_account_smoke.py` against the fake).
+  - [ ] Windows GUI: the same page (session B). Android with N-items.
   - [ ] Check against the real project: Linux → Windows → Linux round trip.
   - [x] Note `notes/sync.md`.
 - **2.11 One-click installer** (M per platform; §4.11; methods SPEC §6
@@ -345,10 +347,7 @@ Only rows not fully built.
   `ci/search_results_librewolf_test.py` (LibreWolf 160) pass on fixtures
   of 11 results pages. Left (box): each engine's real results page with a
   blacklisted site (markup drifts; DuckDuckGo Lite not covered).
-  - [ ] For session A (`test.yml`): run `node ci/search_results_test.js`,
-    `node ci/background_test.js` (Playwright Chromium) and, before the
-    daemon is installed (they stand in for it on 47613),
-    `ci/search_results_librewolf_test.py`, `ci/dark_browser_test.py`.
+  In `test.yml` (Chromium and LibreWolf, `notes/testing.md`).
 - **2.16 Dark pages turn on the browser's dark mode** (S; §4.10): Built
   (`notes/circadian.md`); `ci/dark_browser_test.py` passes in LibreWolf
   160 headless (cloud: own dark design shown, light page turned over,

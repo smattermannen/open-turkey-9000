@@ -1,6 +1,6 @@
 # GUI
 
-- Covers: `gui/kc9k-gui.py`, `gui/kc9k_gui/*.py`, `gui/kc9k.desktop`, `ci/gui_*.py`, `cli/duration.go`
+- Covers: `gui/kc9k-gui.py`, `gui/kc9k_gui/*.py`, `gui/kc9k.desktop`, `ci/gui_*.py`, `ci/cloudfake/`, `cli/duration.go`
 - SPEC: §4.1–4.13, R-GUI-1–3
 - Connects to: every note (each GUI change runs a `kc9k` command); [testing](testing.md) (GUI smoke tests)
 
@@ -18,7 +18,7 @@
   (`AutomationEditor`, triggers, places), `window` (`Window`: build,
   `run`, state, access passwords), one `win_*` mixin per page (places,
   dashboard, blocks, modes + opened block, block actions, clusters, device,
-  stats, settings), `app` (`Tray`, `APP_CSS`, `App`). Find a method:
+  stats, settings, account), `app` (`Tray`, `APP_CSS`, `App`). Find a method:
   `grep -n 'def NAME' gui/kc9k_gui/*.py`.
 - Reads `kc9k gui-state`, `kc9k stats --json`; every change runs a `kc9k`
   command. Menu entry / `kc9k-gui` (`python3-gi`); theme in
@@ -61,3 +61,12 @@
 - Phrase editor (`PhraseSetCard`): Save runs `phrase-set change`, stays off
   until the new state is read; Cancel asks before dropping unsaved work;
   Delete phrase asks, then empties the editor (`remove_loaded`).
+- Account page (`win_account.py`, §4.14, area settings): `account status
+  --json` read in the background when shown and after each command
+  (`refresh_account`); email + Log in / Sign up (password asked, twice
+  for sign-up; `account signup|login` with it on stdin), Log out (asks).
+  Upload all (`sync upload`; asks when an upload would be replaced).
+  Download all: `sync download --dry-run` first, its lines and the locks
+  it sets in one confirmation (R-LOCK-12), then `sync download --yes`
+  (`--no-confirm-ok` after the monk tick if the CLI asks).
+  `ci/gui_account_smoke.py` against `ci/cloudfake` (`cloudtest` served).

@@ -190,3 +190,5 @@ class _SchedulesPlacesPages:
             self.circadian.refresh()
         if self.stack.get_visible_child_name() in ("stats", "dashboard"):
             self.refresh_stats()
+        if self.stack.get_visible_child_name() == "account":
+            self.refresh_account()

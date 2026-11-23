@@ -58,7 +58,8 @@
   file has them, off too; `TestTamperSettingsInProjectAndSync`); `restore`; remember the locks; apply. Not
   one transaction end to end: a failure after the clear leaves part of the
   file (the check pass makes that unlikely; said in the error).
-- Not built: GUIs, Android, the real project.
+- GTK: Account page ([gui](gui.md)). Not built: Windows GUI, Android,
+  the real project.
 - Tests: `cloud/cloud_test.go`, `cli/sync_test.go` (two devices on two
   databases, one fake), `weakening_audit_test.go` (download over a lock
   set here).

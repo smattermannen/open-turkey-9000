@@ -1041,7 +1041,9 @@ func importProject(cmd *cobra.Command, in projectExport, o importOptions) error 
 			fmt.Printf("Tamper protection %s is left on (the file has it off; 'kc9k tamper %s off' turns it off).\n", name, name)
 			continue
 		}
-		say("turn tamper protection %s %s", name, onOff(want))
+		if want != enforce.TamperOn(database, simpleTamper[name]) {
+			say("turn tamper protection %s %s", name, onOff(want))
+		}
 		if !dry {
 			if err := database.SetSetting(simpleTamper[name], onOff(want)); err != nil {
 				return err

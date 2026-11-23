@@ -30,7 +30,7 @@ from gi.repository import Gdk, Gio, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 # PREFS_PATH and others here).
 PARTS = ("base", "fields", "lists", "charts", "circadian", "automation",
          "win_places", "win_dashboard", "win_blocks", "win_modes", "win_block_actions",
-         "win_clusters", "win_device", "win_stats", "win_settings", "window", "app")
+         "win_clusters", "win_device", "win_stats", "win_settings", "win_account", "window", "app")
 
 
 def _parts_dir():

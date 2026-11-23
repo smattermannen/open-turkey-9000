@@ -11,10 +11,11 @@ import "fmt"
 
 // syncedSettingPrefixes and syncedSettings are the settings a project file
 // holds (cli/project.go buildProject), cleared so the file's values are the
-// only ones.
+// only ones. tamper.clock isn't cleared (TrustedNow needs it set; the
+// import writes the file's value).
 var (
 	syncedSettingPrefixes = []string{"browser.", "option.", AccessPasswordSetting, SettingDraftOf, "draft.", "mode.wallpapers."}
-	syncedSettings        = []string{"tamper.file-urls", "tamper.clock", "tamper.task-managers", "tamper.private",
+	syncedSettings        = []string{"tamper.file-urls", "tamper.task-managers", "tamper.private",
 		"tamper.guest", "tamper.extension-stop", "tamper.installer", "tamper.inactive-tabs", "tamper.embedded",
 		"tamper.grace", SettingUnsupportedBrowsers, SettingNepsis, "use.strict", "notifications",
 		"settings.password", "settings.password.locks", "circadian"}

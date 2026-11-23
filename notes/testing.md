@@ -103,6 +103,11 @@
   several rounds (a pause hits one round, too much work every round);
   servers in unit tests bind port 0 (fixed ports in 32768–60999 get
   taken: Android `RulesServerTest`).
+- `test.yml` runs, before KC9K is installed: `ci/background_test.js`,
+  `ci/search_results_test.js` (Playwright Chromium from npm, `NODE_PATH`),
+  `ci/gui_account_smoke.py` (fake cloud `ci/cloudfake`), then LibreWolf
+  with `ci/fake_daemon.py` on 47613: `ci/search_results_librewolf_test.py`
+  (waits ≤ 10 s for each state, not a fixed sleep), `ci/dark_browser_test.py`.
 - Extension, Node: `node ci/match_test.js` (huge page: each step's fastest
   of 3 timed rounds ≤ 16 ms), `node ci/background_test.js`
   (APIs stubbed: frame reports, ad trigger), `node

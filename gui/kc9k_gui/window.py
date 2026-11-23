@@ -3,7 +3,7 @@
 # (imports and every other part's names are there; see notes/gui.md).
 
 class Window(_SchedulesPlacesPages, _DashboardPage, _BlocksPage, _ModesAndBlockView, _BlockActions,
-             _ClustersPage, _DevicePage, _StatsPage, _SettingsPages, Gtk.ApplicationWindow):
+             _ClustersPage, _DevicePage, _StatsPage, _SettingsPages, _AccountPage, Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="Killer Chicken 9000")
         self.set_default_size(980, 680)
@@ -72,7 +72,8 @@ class Window(_SchedulesPlacesPages, _DashboardPage, _BlocksPage, _ModesAndBlockV
                 ("clusters", "Presets", "view-list-symbolic", self.build_clusters),
                 ("stats", "Statistics", "x-office-presentation-symbolic", self.build_stats),
                 ("circadian", "Circadian rhythm", "weather-clear-night-symbolic", self.build_circadian),
-                ("settings", "Settings", "emblem-system-symbolic", self.build_settings)):
+                ("settings", "Settings", "emblem-system-symbolic", self.build_settings),
+                ("account", "Account", "avatar-default-symbolic", self.build_account)):
             self.stack.add_titled(self.guarded(name, title, build()), name, title)
             row = Gtk.ListBoxRow()
             row.page = name
@@ -771,7 +772,8 @@ class Window(_SchedulesPlacesPages, _DashboardPage, _BlocksPage, _ModesAndBlockV
     def locked(self, area):
         # The Clusters page belongs to the Blocks area.
         return self.access.get({"clusters": "blocks", "schedules": "blocks", "places": "blocks",
-                                "circadian": "settings", "hotkeys": "settings"}.get(area, area)) == "locked"
+                                "circadian": "settings", "hotkeys": "settings",
+                                "account": "settings"}.get(area, area)) == "locked"
 
     def update_covers(self):
         app_locked = self.access.get("app") == "locked"

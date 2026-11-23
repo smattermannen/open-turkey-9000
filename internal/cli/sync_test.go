@@ -10,6 +10,7 @@ import (
 	"github.com/smattermannen/kc9k/internal/circadian"
 	"github.com/smattermannen/kc9k/internal/cloud/cloudtest"
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
 // §4.14 (2.10): an account made and signed in to; Upload all sends the
@@ -143,9 +144,11 @@ func TestSyncDownload(t *testing.T) {
 	mustRun(t, "block", "create", "games")
 	mustRun(t, "block", "add-app", "games", "steam")
 	mustRun(t, "start", "work", "--for", "2h", "--yes")
+	mustRun(t, "tamper", "guest", "on") // tamper protection travels too (2.10)
 	mustRun(t, "sync", "upload")
 
 	b, _ := device()
+	mustRun(t, "tamper", "installer", "on")
 	if err := runWith(t, 0, []string{"secret123"}, "account", "login", "me@example.org"); err != nil {
 		t.Fatal(err)
 	}
@@ -170,6 +173,9 @@ func TestSyncDownload(t *testing.T) {
 	work, err := b.GetBlock("work")
 	if err != nil || !work.Active || work.LockedUntil == 0 {
 		t.Errorf("the locked block came without its lock: %+v %v", work, err)
+	}
+	if !enforce.TamperOn(b, enforce.SettingTamperGuest) || enforce.TamperOn(b, enforce.SettingTamperInstaller) {
+		t.Error("tamper protection isn't the uploaded one")
 	}
 	games, _ := b.GetBlock("games")
 	if !slices.Contains(games.Apps, "steam") || !slices.Contains(games.Apps, "/opt/x/run.bin") {

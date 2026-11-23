@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -143,14 +144,17 @@ type projectExport struct {
 	// chose presets, and always in a backup (§3.13).
 	Presets []presetExport  `json:"presets,omitempty"`
 	Browser map[string]bool `json:"browser_options,omitempty"`
-	// Tamper holds block unsupported browsers (in older files the browser
-	// option force-librewolf).
-	Tamper  map[string]bool   `json:"tamper_protection,omitempty"`
-	Options map[string]bool   `json:"options,omitempty"`
-	Nepsis  *db.Nepsis        `json:"bypass_detection,omitempty"`
-	Freezes []windowExport    `json:"frozen_chicken_schedules,omitempty"`
-	Images  map[string]string `json:"images,omitempty"` // name -> base64
-	Backup  *backupExtras     `json:"backup,omitempty"` // backups only
+	// Tamper holds the tamper protection settings by their 'kc9k tamper'
+	// names (§4.10, §3.13 "Backup: everything"; in older files only
+	// unsupported-browsers, or the browser option force-librewolf, and
+	// file-urls), TamperGrace the extension's grace in seconds.
+	Tamper      map[string]bool   `json:"tamper_protection,omitempty"`
+	TamperGrace int               `json:"tamper_grace,omitempty"`
+	Options     map[string]bool   `json:"options,omitempty"`
+	Nepsis      *db.Nepsis        `json:"bypass_detection,omitempty"`
+	Freezes     []windowExport    `json:"frozen_chicken_schedules,omitempty"`
+	Images      map[string]string `json:"images,omitempty"` // name -> base64
+	Backup      *backupExtras     `json:"backup,omitempty"` // backups only
 	// Circadian is the circadian rhythm with its wallpapers (2.1).
 	Circadian *circadianExport `json:"circadian,omitempty"`
 	// Notifications are the notification choices (§4.10).
@@ -539,8 +543,11 @@ func buildProject(cmd *cobra.Command, database *db.DB, share bool) (projectExpor
 	for _, name := range enforce.BrowserSettings {
 		out.Browser[name] = enforce.BrowserOn(database, name)
 	}
-	out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database),
-		"file-urls": enforce.FileURLsOn(database)}
+	out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database)}
+	for _, name := range tamperOrder {
+		out.Tamper[name] = enforce.TamperOn(database, simpleTamper[name])
+	}
+	out.TamperGrace = enforce.ExtensionGraceSeconds(database)
 	for _, o := range enforce.Options {
 		out.Options[o.Name] = enforce.OptionOn(database, o.Name)
 	}
@@ -1018,13 +1025,8 @@ func importProject(cmd *cobra.Command, in projectExport, o importOptions) error 
 			}
 		}
 	}
-	if in.Tamper["file-urls"] && !enforce.FileURLsOn(database) {
-		say("turn on file:// blocking")
-		if !dry {
-			if err := database.SetSetting(enforce.SettingFileURLs, "on"); err != nil {
-				return err
-			}
-		}
+	if err := importTamper(database, in, o, say); err != nil {
+		return err
 	}
 	if (in.Tamper[db.UnsupportedBrowsers] || in.Browser[forceLibreWolfAlias]) && !enforce.UnsupportedBrowsersOn(database) {
 		if !extensionBrowserInstalled() {
@@ -1347,4 +1349,61 @@ func rewardKeep(keep string) string {
 		return keep
 	}
 	return ""
+}
+
+// importTamper brings the file's tamper protection settings (§4.10). On
+// and a shorter grace are free; off and a longer grace weaken, so they are
+// taken only from a backup or a sync (a shared file never loosens), and
+// only while nothing is locked, as 'kc9k tamper' (refused and logged
+// otherwise). Sync download, replacing, has passed its own lock check.
+func importTamper(database *db.DB, in projectExport, o importOptions, say func(string, ...any)) error {
+	restoring := in.Kind == "backup" || in.Kind == "sync"
+	mayWeaken := func(what string) bool {
+		if !restoring {
+			return false
+		}
+		if o.replacing {
+			return true
+		}
+		now := time.Now()
+		trusted, err := database.TrustedNow(now)
+		if err != nil {
+			return false
+		}
+		if locked, err := enforce.AnyLock(database, now, trusted); err != nil || locked {
+			if !o.dry {
+				_ = refused(database, "", fmt.Errorf("the file's %s is left out: it weakens tamper protection while a block or setting is locked", what))
+			}
+			fmt.Printf("Left as it is while anything is locked: %s.\n", what)
+			return false
+		}
+		return true
+	}
+	for _, name := range tamperOrder {
+		want, given := in.Tamper[name]
+		key := simpleTamper[name]
+		if !given || want == enforce.TamperOn(database, key) {
+			continue
+		}
+		if !want && !mayWeaken("tamper protection "+name+" off") {
+			continue
+		}
+		say("turn tamper protection %s %s", name, onOff(want))
+		if !o.dry {
+			if err := database.SetSetting(key, onOff(want)); err != nil {
+				return err
+			}
+		}
+	}
+	if g := in.TamperGrace; g >= 10 && g <= 600 && g != enforce.ExtensionGraceSeconds(database) {
+		if g < enforce.ExtensionGraceSeconds(database) || mayWeaken(fmt.Sprintf("the extension's grace of %d s", g)) {
+			say("set the extension's grace to %d s", g)
+			if !o.dry {
+				if err := database.SetSetting(enforce.SettingExtensionGrace, strconv.Itoa(g)); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }

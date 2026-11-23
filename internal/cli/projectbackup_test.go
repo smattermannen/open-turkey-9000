@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
 	"github.com/smattermannen/kc9k/internal/db"
+	"github.com/smattermannen/kc9k/internal/enforce"
 )
 
 // §3.13: a backup holds running locks, passwords, hotkeys and statistics; a
@@ -86,5 +89,68 @@ func TestBackupHoldsEverything(t *testing.T) {
 	}
 	if h, _ := d2.Hotkeys(); len(h) != 1 {
 		t.Errorf("hotkey doubled: %+v", h)
+	}
+}
+
+// 2.10, §3.13 "Backup: everything", §4.14: every tamper protection setting
+// and the extension's grace are in the project file. A backup brings them
+// back as they were; a shared file only turns settings on; while anything
+// is locked here the loosening part is left out and logged.
+func TestTamperSettingsInProjectFile(t *testing.T) {
+	notTerminal(t)
+	testDB(t)
+	for _, args := range [][]string{
+		{"tamper", "guest", "on"}, {"tamper", "installer", "on"}, {"tamper", "private", "on"},
+		{"tamper", "task-managers", "on"}, {"tamper", "file-urls", "on"},
+		{"tamper", "embedded", "off"}, {"tamper", "inactive-tabs", "off"}, {"tamper", "grace", "120"},
+	} {
+		mustRun(t, args...)
+	}
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	backup := write("backup.json", capture(t, "project", "export"))
+	share := write("share.json", capture(t, "project", "export", "--share"))
+	want := map[string]bool{"guest": true, "installer": true, "private": true, "task-managers": true,
+		"file-urls": true, "embedded": false, "inactive-tabs": false, "extension-stop": true, "clock": false}
+	check := func(d *db.DB, what string, want map[string]bool, grace int) {
+		t.Helper()
+		for name, on := range want {
+			if got := enforce.TamperOn(d, simpleTamper[name]); got != on {
+				t.Errorf("%s: %s is %v, want %v", what, name, got, on)
+			}
+		}
+		if g := enforce.ExtensionGraceSeconds(d); g != grace {
+			t.Errorf("%s: grace %d, want %d", what, g, grace)
+		}
+	}
+
+	d := testDB(t)
+	capture(t, "project", "import", backup, "--yes")
+	check(d, "backup", want, 120)
+
+	d = testDB(t)
+	capture(t, "project", "import", share, "--yes")
+	onlyOn := maps.Clone(want)
+	onlyOn["embedded"], onlyOn["inactive-tabs"] = true, true
+	check(d, "share", onlyOn, 60)
+
+	d = testDB(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	if out := capture(t, "project", "import", backup, "--yes"); !strings.Contains(out, "Left as it is while anything is locked") {
+		t.Errorf("import while locked says nothing of what it left: %s", out)
+	}
+	check(d, "backup while locked", onlyOn, 60)
+	if ev, _ := d.RecentEvents(0, 50); !slices.ContainsFunc(ev, func(e db.Event) bool {
+		return e.Kind == db.EventRefused && strings.Contains(e.Detail, "embedded off")
+	}) {
+		t.Error("the refused loosening wasn't logged")
 	}
 }

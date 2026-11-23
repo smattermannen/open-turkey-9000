@@ -270,10 +270,8 @@ Only rows not fully built.
     kept). Differs: the clear is one transaction, the import after it is
     not (checked whole first).
   - [x] Weakening audit entry for `sync download`; `refused()` untouched.
-  - [ ] Tamper protection settings beyond `file-urls` and unsupported
-    browsers (embedded, extension stop, inactive tabs, guest, installer,
-    private, task managers, clock) are in no project file, so neither in a
-    backup (§3.13 "Backup: everything") nor in sync.
+  - [x] Every tamper protection setting and the extension's grace in the
+    project file, so in backups and sync (`importTamper`, `notes/db-project.md`).
   - [ ] GTK and Windows GUI: account page, Upload all, Download all (each
     runs the command). Android with N-items.
   - [ ] Check against the real project: Linux → Windows → Linux round trip.

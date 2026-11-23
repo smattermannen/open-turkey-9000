@@ -27,6 +27,13 @@ busy_timeout doesn't cover concurrent column adds
   allowance, Pomodoro, breaks, ladders), browser and behaviour settings,
   global ladder, freeze schedules, list images. Clashing block → `name-2`;
   browser settings only on; ladder replaced only by a stricter one.
+- Tamper protection (`tamper_protection` by `kc9k tamper` names: every
+  `simpleTamper` setting plus `unsupported-browsers`; `tamper_grace`):
+  `importTamper` turns on what the file has on and takes a shorter grace;
+  off and a longer grace only from a backup or a sync, and only while
+  nothing is locked (else left, said, logged via `refused()`); sync
+  download (replacing) after its own lock check
+  (`TestTamperSettingsInProjectFile`).
 - Presets (`exportPresets`): always in a backup; in `--share` only with
   `--presets` (terminal asks on stderr; GUI Share… asks). Import: same
   name+content skipped, taken name → `name-2` (`freeName`).

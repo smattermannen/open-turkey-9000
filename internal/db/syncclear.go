@@ -13,8 +13,8 @@ import "fmt"
 // holds (cli/project.go buildProject), cleared so the file's values are the
 // only ones.
 var (
-	syncedSettingPrefixes = []string{"browser.", "option.", AccessPasswordSetting, SettingDraftOf, "draft.", "mode.wallpapers."}
-	syncedSettings        = []string{"tamper.file-urls", SettingUnsupportedBrowsers, SettingNepsis, "use.strict", "notifications",
+	syncedSettingPrefixes = []string{"browser.", "option.", "tamper.", AccessPasswordSetting, SettingDraftOf, "draft.", "mode.wallpapers."}
+	syncedSettings        = []string{SettingNepsis, "use.strict", "notifications",
 		"settings.password", "settings.password.locks", "circadian"}
 )
 

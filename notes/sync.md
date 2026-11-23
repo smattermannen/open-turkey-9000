@@ -52,7 +52,8 @@
   entries, modes' places and wallpapers, circadian wallpapers);
   `db.ClearForSync` (one transaction: blocks, clusters, templates,
   presets, saved schedules, modes but monk's row, freezes, hotkeys,
-  setting locks but strict/no-escape/firmware-lock, synced settings);
+  setting locks but strict/no-escape/firmware-lock, synced settings, every
+  `tamper.*` setting included);
   `importProject(confirmed)`; `restore`; remember the locks; apply. Not
   one transaction end to end: a failure after the clear leaves part of the
   file (the check pass makes that unlikely; said in the error).

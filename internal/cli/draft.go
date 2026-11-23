@@ -714,10 +714,41 @@ func saveDraftPhraseSets(database *db.DB, block string, base, nextSets []db.Phra
 			b = o // made meanwhile under the same name: the draft's set is the change
 		}
 		label := "phrase set " + o.Name
+		// A phrase changed in the draft into one that only adds terms is
+		// one change, not remove + add (R-WEAK-5, as `phrase-set change`):
+		// each phrase gone from the draft is paired with the first new one
+		// that widens it, and the pair replaced in one step.
+		paired := map[string]bool{} // keys of phrases handled as a pair, old and new
+		for _, r := range b.Phrases {
+			if _, inN := storedPhrase(n, r); inN {
+				continue
+			}
+			stored, has := storedPhrase(o, r)
+			if !has {
+				continue
+			}
+			for _, a := range n.Phrases {
+				if paired[a.Key()] {
+					continue
+				}
+				if _, inB := storedPhrase(b, a); inB {
+					continue
+				}
+				if _, inO := storedPhrase(o, a); inO || !a.Widens(stored) {
+					continue
+				}
+				paired[a.Key()], paired[r.Key()] = true, true
+				try("changing "+r.String()+" to "+a.String()+" in "+label, gate(true, func() error {
+					_, err := database.ReplacePhrase(o.ID, stored, a)
+					return err
+				}))
+				break
+			}
+		}
 		// Stronger first: phrases added, places ticked, actions on or
 		// stricter, lower thresholds, test mode off.
 		for _, p := range n.Phrases {
-			if _, inB := storedPhrase(b, p); inB {
+			if _, inB := storedPhrase(b, p); inB || paired[p.Key()] {
 				continue
 			}
 			if _, has := storedPhrase(o, p); !has {
@@ -762,7 +793,7 @@ func saveDraftPhraseSets(database *db.DB, block string, base, nextSets []db.Phra
 		// Then what weakens: phrases removed, places unticked, actions
 		// off, test mode on.
 		for _, p := range b.Phrases {
-			if _, inN := storedPhrase(n, p); inN {
+			if _, inN := storedPhrase(n, p); inN || paired[p.Key()] {
 				continue
 			}
 			if stored, has := storedPhrase(o, p); has {

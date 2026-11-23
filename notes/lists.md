@@ -106,7 +106,10 @@ changes by any program are re-read.
 - `saveDraft` applies only base → draft changes onto the block as it is now
   (entries added meanwhile stay), each through its gate
   (`listAdd`/`listWhere`/…, `saveDraftPhraseSets`, `saveDraftTriggers`),
-  naming refusals.
+  naming refusals. A phrase gone from the draft paired with a new one that
+  `Widens` it is one free `ReplacePhrase` (R-WEAK-5, as `phrase-set
+  change`; A18, `TestDraftPhraseChangeWidens`); list entries have no change
+  command, so an edited entry stays remove + add.
 - Breaks & allowance and Bypass prevention commands (`draftQueued`) on a
   draft are kept, not run (`queueOnDraft` → `keepOnDraft`,
   `draft.queue.<draft>`, last of each kind; gui-state `draft_kept`);

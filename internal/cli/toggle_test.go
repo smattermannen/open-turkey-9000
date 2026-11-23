@@ -801,6 +801,36 @@ func TestDraftPhraseSets(t *testing.T) {
 	}
 }
 
+// A18, R-WEAK-5: a phrase changed in a draft into one that only adds
+// terms saves on a locked block as one change, as `phrase-set change`
+// does (both GUIs edit an opened block through its draft); a change that
+// narrows is still refused and the old phrase kept.
+func TestDraftPhraseChangeWidens(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "phrase-set", "create", "b", "talk")
+	mustRun(t, "phrase-set", "add", "b", "talk", "[eat] [hello]", "[bad] [word]")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	mustRun(t, "block", "draft", "b")
+	draft := "b (draft)"
+	mustRun(t, "phrase-set", "change", draft, "talk", "[eat] [hello]", "[eat, nice] [hello, hi]")
+	mustRun(t, "phrase-set", "change", draft, "talk", "[bad] [word]", "[bad] [word] [now]")
+	err := runCLI(t, "block", "draft", "b", "save")
+	if err == nil || strings.Contains(err.Error(), "[eat] [hello]") || !strings.Contains(err.Error(), "[bad] [word]") {
+		t.Fatalf("save names only the narrowing change: %v", err)
+	}
+	sets, _ := d.PhraseSets("b")
+	var got []string
+	for _, p := range sets[0].Phrases {
+		got = append(got, p.String())
+	}
+	if !slices.Contains(got, "[eat, nice] [hello, hi]") || slices.Contains(got, "[eat] [hello]") ||
+		!slices.Contains(got, "[bad] [word]") || len(got) != 3 {
+		t.Errorf("after save: %v", got)
+	}
+}
+
 // §3.11 with §4.3: a draft of a password-protected block needs the block
 // password and keeps it.
 func TestDraftBlockPassword(t *testing.T) {

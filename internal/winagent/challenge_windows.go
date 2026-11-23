@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 
@@ -150,7 +151,19 @@ var (
 	className    = windows.StringToUTF16Ptr("KC9KChallenge")
 )
 
+// challengeHwnd is the open challenge window, 0 when none (read from other
+// goroutines: OpChallengeCancel).
+var challengeHwnd atomic.Uintptr
+
 func init() {
+	Register(OpChallengeCancel, func(json.RawMessage) (any, error) {
+		if h := challengeHwnd.Load(); h != 0 {
+			const wmClose = 0x0010
+			procPostMessageW.Call(h, wmClose, 0, 0)
+			return true, nil
+		}
+		return false, nil
+	})
 	Register(OpChallenge, func(raw json.RawMessage) (any, error) {
 		var a ChallengeArgs
 		if err := json.Unmarshal(raw, &a); err != nil {
@@ -388,6 +401,8 @@ func runChallenge(a ChallengeArgs) (string, error) {
 		state.hwnd = hwnd
 		state.setDPI(windowDPI(hwnd))
 		log.Printf("agent: challenge window %#x open (%d pages, %d DPI)", hwnd, len(a.Pages), state.dpi)
+		challengeHwnd.Store(hwnd)
+		defer challengeHwnd.Store(0)
 		defer func() {
 			if state.font != 0 {
 				procDeleteObject.Call(state.font)

@@ -100,8 +100,11 @@ function UnlockNoConsole([string]$name) {
     return @($p, $outFile)
 }
 function ChallengeWindow {
-    Until 30 { [Kc9kDesk]::FindWindow('KC9KChallenge', $null) -ne [IntPtr]::Zero } | Out-Null
-    $h = [Kc9kDesk]::FindWindow('KC9KChallenge', $null)
+    # By its title: another process's FindWindow by class doesn't see a
+    # class the agent registered without a module handle.
+    $title = 'Killer Chicken 9000: unlock challenge'
+    Until 30 { [Kc9kDesk]::FindWindow($null, $title) -ne [IntPtr]::Zero } | Out-Null
+    $h = [Kc9kDesk]::FindWindow($null, $title)
     if ($h -eq [IntPtr]::Zero) {
         # What there is instead, for the log.
         Get-Process kc9k -IncludeUserName -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  kc9k pid $($_.Id) session $($_.SessionId) user $($_.UserName) window $($_.MainWindowHandle) '$($_.MainWindowTitle)'" }
@@ -126,6 +129,11 @@ Check 'the challenge window opens through the service and agent (no console)' { 
 if ($hwnd -ne [IntPtr]::Zero) { [Kc9kDesk]::Keys(0x4B) | Out-Null } # K
 $u[0].WaitForExit(30000) | Out-Null
 $said = UnlockSaid $u
+# A killed unlock leaves no window behind (the service closes it).
+$u = UnlockNoConsole 'ci-lock'
+$hwnd = ChallengeWindow
+Stop-Process -Id $u[0].Id -Force -ErrorAction SilentlyContinue
+Check 'the challenge window closes when the unlock asking for it is ended' { Until 20 { [Kc9kDesk]::FindWindow($null, 'Killer Chicken 9000: unlock challenge') -eq [IntPtr]::Zero } }
 Check "the challenge window refuses an injected key (Raw Input, no device)" { $said -match "wasn't typed on the keyboard" -and (BlockLocked 'ci-lock') }
 # Typed keys (window messages, as a keyboard's reach it) unlock it.
 $u = UnlockNoConsole 'ci-lock'

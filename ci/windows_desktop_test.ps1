@@ -143,9 +143,10 @@ $u = UnlockNoConsole 'ci-lock'
 $hwnd = ChallengeWindow
 foreach ($c in @(0x6B, 0x63, 0x0D)) { [Kc9kDesk]::PostMessage($hwnd, 0x0102, [IntPtr]$c, [IntPtr]::Zero) | Out-Null; Start-Sleep -Milliseconds 150 }
 $u[0].WaitForExit(30000) | Out-Null
-UnlockSaid $u | Out-Null
-Check 'the challenge typed in the window unlocks the block' { Until 10 { -not (BlockLocked 'ci-lock') } }
+$said = UnlockSaid $u
 & $k stop ci-lock | Out-Host
+$stopped = $LASTEXITCODE -eq 0
+Check 'the challenge typed in the window unlocks the block (it can be switched off)' { $said -match 'unlock authorized' -and $stopped }
 
 # A hotkey pressed in the session runs its action through the service.
 & $k block create ci-hotkey | Out-Host

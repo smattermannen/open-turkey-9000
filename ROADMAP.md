@@ -93,8 +93,9 @@ plan is SPEC §8, its items §3.1.
   false at `@Before`, runs 680, 684: fixed port 47699 in Linux's ephemeral
   range, retried only after 5 s) binds port 0. Both hold: `Test` runs
   729–745 all green (17 in a row, 2026-11-23); the failures before (668–697)
-  were strict mode work, not flakes; no other flaky check found in
-  `test.yml`. Also seen (Windows run 215,
+  were strict mode work, not flakes. Also fixed: `TestInputsKeptForTheSameBlocks`
+  (108 ms against 100, run 748, branch) and `TestPolicySetsFollowThePolicy`
+  judge by the fastest of 5 rounds, same bound. Also seen (Windows run 215,
   no Windows change): `ci/windows_desktop_test.ps1`'s "the challenge typed
   in the window unlocks the block" got 50 % accuracy (a posted key lost),
   so `ci-lock` stayed locked and "uninstall" failed after it; passed in
@@ -351,10 +352,6 @@ Only rows not fully built.
   `ci/search_results_librewolf_test.py` (LibreWolf 160) pass on fixtures
   of 11 results pages. Left (box): each engine's real results page with a
   blacklisted site (markup drifts; DuckDuckGo Lite not covered).
-  - [ ] For session A (`test.yml`): run `node ci/search_results_test.js`,
-    `node ci/background_test.js` (Playwright Chromium) and, before the
-    daemon is installed (they stand in for it on 47613),
-    `ci/search_results_librewolf_test.py`, `ci/dark_browser_test.py`.
 - **2.16 Dark pages turn on the browser's dark mode** (S; §4.10): Built
   (`notes/circadian.md`); `ci/dark_browser_test.py` passes in LibreWolf
   160 headless (cloud: own dark design shown, light page turned over,

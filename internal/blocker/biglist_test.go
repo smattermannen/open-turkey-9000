@@ -171,9 +171,15 @@ func TestPolicySetsFollowThePolicy(t *testing.T) {
 	}
 	p := BrowserPolicy{BlockDomains: domains}
 	setsOf(p)
-	start := time.Now()
-	setsOf(p)
-	if took := time.Since(start); took > 100*time.Millisecond {
+	// The fastest of 5 rounds: one round on a loaded CI runner can stall
+	// (A17).
+	took := time.Hour
+	for range 5 {
+		start := time.Now()
+		setsOf(p)
+		took = min(took, time.Since(start))
+	}
+	if took > 100*time.Millisecond {
 		t.Errorf("the same policy again took %s", took)
 	}
 	small := BrowserPolicy{BlockDomains: []string{"a.example"}}

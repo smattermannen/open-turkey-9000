@@ -100,7 +100,9 @@
   (`LIBREWOLF_MINUTES`, default 15), removes.
 
 - Timing checks on shared runners (A17): a time judged by its fastest of
-  several rounds (a pause hits one round, too much work every round);
+  several rounds (a pause hits one round, too much work every round;
+  `match_test.js`, `TestInputsKeptForTheSameBlocks`,
+  `TestPolicySetsFollowThePolicy`);
   servers in unit tests bind port 0 (fixed ports in 32768–60999 get
   taken: Android `RulesServerTest`).
 - Extension, Node: `node ci/match_test.js` (huge page: each step's fastest
@@ -109,6 +111,12 @@
   ci/android_background_test.js`; Playwright Chromium (cloud only): `node
   ci/content_harness_test.js` (principle 9: each extension callback ≤ 16 ms
   on a huge page; whole-page delay printed, not checked).
+- In `test.yml`'s `test` job, before KC9K is installed: `background_test.js`,
+  `search_results_test.js` (`npm install playwright@1.63.0`, its Chromium
+  with `--with-deps`), LibreWolf from extrepo, then
+  `search_results_librewolf_test.py` and `dark_browser_test.py` (the
+  runner's `GECKOWEBDRIVER`; nothing else on 47613 yet);
+  `gui_account_smoke.py` with the other GTK smokes.
 - GUI smoke tests: own binary, wrapper with `KC9K_DB` = scratch file, load
   `gui/kc9k-gui.py` as module with `CLI` replaced, other application ID,
   never `show()`; normal user only. `ci/gui_click_everything_smoke.py`

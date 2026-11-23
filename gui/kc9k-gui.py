@@ -46,8 +46,13 @@ def enter_presses_ok(dialog):
         if button is not None:
             button.set_can_default(True)
             dialog.set_default_response(response)
-            for entry in _entries(dialog.get_content_area()):
+            entries = list(_entries(dialog.get_content_area()))
+            for entry in entries:
                 entry.set_activates_default(True)
+            if not entries:
+                # Enter presses the focused button: with nothing to type,
+                # that is OK (GTK would focus the first button, Cancel/No).
+                button.grab_focus()
             return response
     return None
 

@@ -55,7 +55,15 @@ with `ExtensionHeader` (`/usage`: `X-KC9K-Usage`), no CORS, no secret
   gui-state `found`: executable present even where it can't get the extension, W30); `browsers install librewolf|chromium|chrome`
   (`InstallBrowser`: extrepo; Mint's chromium .deb; Google's repo, key
   `/etc/apt/keyrings/google-chrome.asc`, amd64 only). Firefox needs signed
-  extensions; Brave/Edge/Opera/Vivaldi not set up.
+  extensions; Brave/Edge/Opera/Vivaldi not set up. gui-state/`browsers`
+  `waiting` (2.12): what a found browser waits for before it can get the
+  extension (`chrome-web-store`, `mozilla-signature`; Windows only).
+- Mozilla-signed copy (`webext/signed.go`, 2.12, SPEC §7): a file
+  `webext/signed/kc9k-<version>.xpi` carrying `META-INF/mozilla.rsa` and
+  exactly the embedded files is installed instead of the packed `.xpi`
+  (every Firefox-family browser; release Firefox needs it). None yet.
+- `install_url` is a real file URL (`fileURL`: `file:///C:/Program%20Files/…`
+  on Windows, where `"file://"+path` wasn't one).
 - GUI "isn't running" dialog (`extensionMissing`) only with no supported
   browser or one past the grace without check-in.
 - Windows: never counts/closes Windows' own programs, never kills

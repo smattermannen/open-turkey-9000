@@ -31,12 +31,22 @@
   distribution file; setting locks (`librewolfprefs.go`) at the end of
   `librewolf.cfg`, per-account overrides in
   `Program Files\KC9K\share\librewolf\<name>.cfg` via `USERNAME`.
-- Chrome/Edge are supported browsers (extension by `ExtensionSettings`/
-  `ExtensionInstallForcelist`) only once `ChromeStoreExtensionID` is set
-  (empty until the owner publishes). LibreWolf gets the bundled `.xpi`.
+- Supported browsers (`extguard_windows.go`, 2.12): LibreWolf (bundled
+  `.xpi`); Chrome and Edge once `ChromeStoreExtensionID` is set (the only
+  step left, 2.17: `ExtensionSettings` force-install from the Chrome Web
+  Store update URL, pinned by Chrome's `toolbar_pin` / Edge's
+  `toolbar_state`, plus `ExtensionInstallForcelist`); Firefox in Program
+  Files and the Store's (`WindowsApps\Mozilla.Firefox_*\VFS\ProgramFiles\
+  Firefox Package Root\firefox.exe`) once the signed `.xpi` exists
+  ([browsers](browsers.md)). `Waiting()` names what is missing; until then
+  `Installed()` is false and the guard treats it as unsupported. Per-user
+  AppData Firefox gets the policies but is no supported browser. The
+  Microsoft Bing app is Edge on Windows. `supportedExeOf` matches the path
+  only (`*` = one folder), no folder read per process.
 - One-click install (W18, `InstallBrowser`): winget as SYSTEM (newest
   `winget.exe` in WindowsApps), `--scope machine --silent`; skipped if
-  present.
+  present; librewolf, chrome, edge, firefox (a found browser still waiting
+  for its extension says so).
 - Processes (`procs_windows.go`): Toolhelp snapshot, full path, owner RID,
   service-account flag, session, start time; a parent counts only if
   started before its child (PID reuse). `tcpOwner`: connection → process.
@@ -102,7 +112,9 @@
 - Monk mode's physical cut (`netcut_windows.go`): `Get-NetAdapter
   -Physical`, `Enable-/Disable-NetAdapter`.
 - Challenge window (`winagent/challenge_windows.go`): Win32 window (topmost,
-  fixed frame, close only = cancel, system window brush), no text field, opened by the caller's agent (`OpChallenge`, ≤ 4 h); GTK's
+  fixed frame, close only = cancel, system window brush), 900×560 and
+  Consolas 16 px at 100 %, scaled to its screen's DPI and again on
+  `WM_DPICHANGED` (kc9k.exe is per-monitor aware, [windows](windows.md)), no text field, opened by the caller's agent (`OpChallenge`, ≤ 4 h); GTK's
   events (`k`, `b`, `n`, `p`, `s`, `c`). Raw Input: key with no device
   (SendInput, on-screen keyboard) → `s`; Ctrl+V/Shift+Insert → `p`.
   Read by `lock/window_windows.go`.

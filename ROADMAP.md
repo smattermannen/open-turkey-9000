@@ -44,7 +44,7 @@ its bypass prevention).
 | 2.9 | Tamper settings: LibreWolf parts (box); `ci/tamper_vm_test.sh` (never run) | §4.10 | browsers, extension, install | box, vm |
 | 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
 | 2.11 | One-click installer: `.deb` built (clean Mint VM left), MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, vm, owner |
-| 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere | §3.13, §4.10 | browsers | agent |
+| 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere (Windows: waiting for 2.17 and Mozilla's signature) | §3.13, §4.10 | browsers, windows-layers | agent, owner, win-vm |
 | 2.13 | Accountability partner | §4.15 | — | agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
 | 2.15 | Search results from blacklisted addresses: the engines' real pages | R-PAGE-2 | extension | box |
@@ -77,7 +77,7 @@ its bypass prevention).
 | W24 | Strict mode: real WSL, Sandbox, Hyper-V | §3.8 | windows-tamper, device | win-vm |
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows-tamper, device | laptop |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
-| W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows, windows-layers | laptop |
+| W50 | Freeze fixed, idle soak hard in CI; the laptop confirms it | principle 1 | windows, windows-layers | laptop |
 | W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
 | A14 | Clip curves mirrored, tested in Go, C#, GTK; the owner's look on the laptop | §4.10 | circadian | owner |
 
@@ -293,9 +293,15 @@ Only rows not fully built.
   - [ ] First release tag; install both by a person (W7, C1).
   - [ ] Android: answer SPEC §7 "Android one-click installer".
 - **2.12 Chrome, Edge, Firefox, Bing everywhere** (L; §3.13): Partial.
-  Built: Chrome, Chromium on Linux; Chrome, Edge on Windows waiting for the
-  store ID (W2). Not built: Firefox (LibreWolf only), Edge on Linux, every
-  browser on Android (IronFox only), Bing (Microsoft Bing browser app).
+  Built: Chrome, Chromium on Linux. Windows (`notes/windows-layers.md`):
+  Chrome and Edge waiting only for the store ID (2.17); Firefox (Program
+  Files and the Microsoft Store's) recognised, given policies and guarded,
+  waiting only for a Mozilla-signed `.xpi` (`webext/signed/`, SPEC §7
+  "Signing the extension for Firefox", owner); Bing is Edge there (§5);
+  gui-state `waiting` says which. Not built: Firefox and Edge on Linux,
+  every browser on Android (IronFox only), the Bing app on Android.
+  Unchecked (win-vm, `ci/windows_vm_test.ps1`): Firefox and the Store's
+  Firefox obeying, the guard closing a waiting Firefox.
 - **2.17 Chrome Web Store listing** (S agent, owner's review wait;
   §3.13, SPEC §6 2026-11-21): Partial. Built (`notes/browsers.md`
   Chrome): `make chrome-store-zip`, listing texts and privacy policy
@@ -526,24 +532,35 @@ The owner ran the Windows GUI on the laptop and removed it ("it was
 horrible"): looks better than GTK, but the GTK layout is better.
 Stability first, then layout, then import. Order: top to bottom.
 
-Static findings still open (code read, not seen on the laptop):
-
-- The challenge window (`winagent/challenge_windows.go`) is a plain Win32
-  window: now a fixed frame (close only) with a background brush; still no
-  manifest in `kc9k.exe` (classic controls, not DPI-aware).
-
 Still open from the report (built and in CI; what was built is in
 `notes/windows*.md` and `notes/gui-windows.md`):
 
 - `W50` **The whole computer froze** (principle 1): fixed (the extension
-  guard closed System32 programs). Left: the laptop re-runs
-  `ci/windows_soak_test.ps1` (idle: 0 PowerShell by the service).
+  guard closed System32 programs). Idle (6 min, no PowerShell started by
+  the service or its commands, no policy refresh) is a failing check in
+  `windows.yml`, the trace proven to see PowerShell starts. Left: the
+  laptop confirms with `ci/windows_soak_test.ps1` (idle: 0 PowerShell).
 - `W54` **Page layout as in the GTK GUI** (§4.1–4.13, R-GUI-3): built.
   Left: the owner's look on the laptop.
 - `A14` **Automation clip curves bend one way only** (§4.10): one mirrored
   curve in Go, C#, GTK. Left: the owner's look on the laptop.
 
 ## 5. Proposed, not agreed
+
+- DECIDED (By claude) 2026-11-23 (`2.12`): on Windows the Microsoft Bing
+  app is Edge: Microsoft ships no separate Bing browser for Windows (Bing's
+  app there is a web app in `msedge.exe`), so Edge's policies, extension
+  and guard cover it; no own entry. Owner may overturn.
+- DECIDED (By claude) 2026-11-23 (`2.12`): release Firefox (Windows; later
+  Linux) is a supported browser once a Mozilla-signed `.xpi` of the
+  current version is committed in `internal/webext/signed/` (checked to be
+  Mozilla's signature over exactly the extension's files); every
+  Firefox-family browser then gets that file. Until then Firefox is found,
+  gets the policies and is guarded as unsupported (gui-state `waiting`:
+  `mozilla-signature`). Signing itself stays SPEC §7 (owner's Mozilla
+  account). Firefox installed per user in AppData gets the policies but
+  is no supported browser (its folder is the user's to change); Program
+  Files and the Microsoft Store's are. Owner may overturn.
 
 - DECIDED (By claude) 2026-11-23 (`2.15`): supported engines = Google,
   Bing, DuckDuckGo (and its HTML version), Brave Search, Yahoo, Startpage,

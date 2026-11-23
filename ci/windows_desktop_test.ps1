@@ -93,12 +93,27 @@ function BlockLocked([string]$name) { $b = ((& $k gui-state) | ConvertFrom-Json)
 # 'kc9k unlock' with no console: the service asks this session's agent
 # for the challenge window (R-LOCK-5); returns the process and its output file.
 function UnlockNoConsole([string]$name) {
-    $outFile = Join-Path $env:RUNNER_TEMP "unlock-$name-$(Get-Random).txt"
-    $empty = Join-Path $env:RUNNER_TEMP 'empty.txt'; Set-Content $empty ''
-    $p = Start-Process $k "unlock $name" -WindowStyle Hidden -RedirectStandardInput $empty -RedirectStandardOutput $outFile -PassThru
+    $id = Get-Random
+    $outFile = Join-Path $env:RUNNER_TEMP "unlock-$id.txt"
+    $empty = Join-Path $env:RUNNER_TEMP "empty-$id.txt"; Set-Content $empty ''
+    $p = Start-Process $k "unlock $name" -WindowStyle Hidden -RedirectStandardInput $empty -RedirectStandardOutput $outFile -RedirectStandardError "$outFile.err" -PassThru
     return @($p, $outFile)
 }
-function ChallengeWindow { Until 30 { [Kc9kDesk]::FindWindow('KC9KChallenge', $null) -ne [IntPtr]::Zero } | Out-Null; [Kc9kDesk]::FindWindow('KC9KChallenge', $null) }
+function ChallengeWindow {
+    Until 30 { [Kc9kDesk]::FindWindow('KC9KChallenge', $null) -ne [IntPtr]::Zero } | Out-Null
+    $h = [Kc9kDesk]::FindWindow('KC9KChallenge', $null)
+    if ($h -eq [IntPtr]::Zero) {
+        # What there is instead, for the log.
+        Get-Process kc9k -IncludeUserName -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  kc9k pid $($_.Id) session $($_.SessionId) user $($_.UserName) window $($_.MainWindowHandle) '$($_.MainWindowTitle)'" }
+    }
+    return $h
+}
+function UnlockSaid($u) {
+    if (-not $u[0].HasExited) { Write-Host '  (unlock still running: stopped)'; Stop-Process -Id $u[0].Id -Force -ErrorAction SilentlyContinue }
+    $text = (Get-Content $u[1] -Raw -ErrorAction SilentlyContinue) + (Get-Content "$($u[1]).err" -Raw -ErrorAction SilentlyContinue)
+    Write-Host "  unlock said: $text"
+    return $text
+}
 
 & $k block create ci-lock | Out-Host
 & $k block add ci-lock example.org | Out-Host
@@ -110,15 +125,14 @@ $hwnd = ChallengeWindow
 Check 'the challenge window opens through the service and agent (no console)' { $hwnd -ne [IntPtr]::Zero }
 if ($hwnd -ne [IntPtr]::Zero) { [Kc9kDesk]::Keys(0x4B) | Out-Null } # K
 $u[0].WaitForExit(30000) | Out-Null
-$said = Get-Content $u[1] -Raw -ErrorAction SilentlyContinue
-Write-Host "  unlock said: $said"
+$said = UnlockSaid $u
 Check "the challenge window refuses an injected key (Raw Input, no device)" { $said -match "wasn't typed on the keyboard" -and (BlockLocked 'ci-lock') }
 # Typed keys (window messages, as a keyboard's reach it) unlock it.
 $u = UnlockNoConsole 'ci-lock'
 $hwnd = ChallengeWindow
 foreach ($c in @(0x6B, 0x63, 0x0D)) { [Kc9kDesk]::PostMessage($hwnd, 0x0102, [IntPtr]$c, [IntPtr]::Zero) | Out-Null; Start-Sleep -Milliseconds 150 }
 $u[0].WaitForExit(30000) | Out-Null
-Write-Host "  unlock said: $(Get-Content $u[1] -Raw -ErrorAction SilentlyContinue)"
+UnlockSaid $u | Out-Null
 Check 'the challenge typed in the window unlocks the block' { Until 10 { -not (BlockLocked 'ci-lock') } }
 & $k stop ci-lock | Out-Host
 
@@ -139,8 +153,13 @@ if ($null -eq $plain) {
 } else {
     & $k circadian lane kelvin on --points '00:00=6500' | Out-Host
     & $k circadian on | Out-Host
-    & $k circadian preview kelvin 2500 | Out-Host
-    Check 'a warm preview reaches the screen (blue below red at the top)' { Until 20 { $r = [Kc9kDesk]::Ramp(); $r -and $r[767] -lt $r[255] - 4000 } }
+    $preview = (& $k circadian preview kelvin 2500 2>&1 | Out-String)
+    Write-Host $preview
+    if ($preview -match "driver refused the colour ramp") {
+        Write-Host "::warning::this runner's display driver refuses gamma ramps: gamma left to the VM"
+    } else {
+        Check 'a warm preview reaches the screen (blue below red at the top)' { Until 20 { $r = [Kc9kDesk]::Ramp(); $r -and $r[767] -lt $r[255] - 4000 } }
+    }
     & $k circadian preview kelvin --end | Out-Host
     & $k circadian off | Out-Host
     Check 'circadian rhythm off gives the plain ramp back' { Until 20 { $r = [Kc9kDesk]::Ramp(); $r -and [math]::Abs($r[767] - $r[255]) -lt 600 } }

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"runtime"
 	"strings"
 	"sync"
@@ -380,11 +381,13 @@ func runChallenge(a ChallengeArgs) (string, error) {
 		hwnd, _, err := procCreateWindowExW.Call(wsExTopmost, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(title)),
 			wsCaption|wsSysMenu, cwUseDefault, cwUseDefault, challengeWidth, challengeHeight, 0, 0, 0, 0)
 		if hwnd == 0 {
+			log.Printf("agent: challenge window: CreateWindowEx: %v", err)
 			result <- err
 			return
 		}
 		state.hwnd = hwnd
 		state.setDPI(windowDPI(hwnd))
+		log.Printf("agent: challenge window %#x open (%d pages, %d DPI)", hwnd, len(a.Pages), state.dpi)
 		defer func() {
 			if state.font != 0 {
 				procDeleteObject.Call(state.font)
@@ -422,6 +425,7 @@ func runChallenge(a ChallengeArgs) (string, error) {
 			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 		}
 		procDestroyWindow.Call(hwnd)
+		log.Printf("agent: challenge window %#x closed", hwnd)
 		result <- nil
 	}()
 	if err := <-result; err != nil {

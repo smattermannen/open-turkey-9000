@@ -501,6 +501,9 @@ func (m *Manager) serveInternal(stop <-chan struct{}) {
 			} else if c.List {
 				rep.Sessions = m.Sessions()
 			} else {
+				if c.Op == OpChallenge {
+					log.Printf("agent: a command asks session %d for the challenge window", c.Session)
+				}
 				var raw json.RawMessage
 				var args any
 				if len(c.Args) > 0 {

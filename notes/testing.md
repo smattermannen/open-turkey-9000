@@ -68,8 +68,9 @@
 
 ## Other commands
 
-- `ci/integration.sh` (CI `Integration tests`, after `install.sh`; changes
-  the clock, firewall, hosts: never on a computer in use): `kc9k` runs
+- `ci/integration.sh` (CI `Integration tests`, after `install.sh`, on
+  `ubuntu-latest` = Ubuntu 26.04: uutils coreutils, sudo-rs; changes the
+  clock, firewall, hosts: never on a computer in use): `kc9k` runs
   through `$KC9K_BIN` under a 120 s `timeout`; the app checks run a sleeper
   built from Go (uutils' multicall `sleep`, Ubuntu 25.10+, refuses to run
   under another name); on GitHub the runner's folders (`/home/runner/…`)

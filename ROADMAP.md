@@ -25,7 +25,7 @@ its bypass prevention).
 
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
-| A16 | Linux CI `Test` red: `ci/integration.sh` can't run `kc9k` | — | testing | agent |
+| A17 | Flaky CI checks: `ci/match_test.js` timing, Android `RulesServerTest` | principle 9 | testing, extension | agent |
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text: real use on the laptop | §3.9 | extension | owner |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
@@ -86,28 +86,13 @@ its bypass prevention).
 **Android is on hold until the Linux project is finished** (owner): its
 plan is SPEC §8, its items §3.1.
 
-- [ ] `A16` **Linux CI `Test` red** (found 2026-11-23, run 669; unit tests
-  pass; runner now Ubuntu 26.04: uutils coreutils, sudo-rs). Fixed in
-  `ci/integration.sh`: `kc9k` runs through its looked-up path
-  (`KC9K_BIN`; `timeout` got the builtin `command`, so all 51 calls
-  failed); the app checks run a sleeper built from Go (a copy of uutils'
-  multicall `sleep` refuses to run under another name, so "is killed"
-  passed proving nothing); the runner's folders are strict mode exempt
-  folders (strict mode closed the runner, running from `/home/runner`, and
-  the job was lost); 15 checks written before R-LOCK-10 and principle 3
-  now set what they test (strict mode's own lock, tamper `clock`, a
-  freeze schedule's `--lock-lead`), check nftables (KC9K's `inet kc9k`
-  table), and follow today's allowance, delay lock, settings password
-  and `file://*` exception; allowance use is never counted on a runner
-  (R-BREAK-1: no desktop); kills are polled for, not waited out. Run 697:
-  2 failures left, both fixed here. Unchecked: the next CI run. Done when:
-  the `Integration tests` step of `.github/workflows/test.yml` is green on
-  main.
-  Seen meanwhile, not in this item's files (for their owners): `node
-  ci/match_test.js` failed once on its timing ("huge page: slowest step
-  52.5 ms", run 697; passed on re-run), skipping every later step;
-  Android `RulesServerTest > noPreflight` failed twice (runs 680, 684;
-  passes on re-run).
+- [ ] `A17` **Flaky CI checks** (found 2026-11-23 while fixing A16):
+  `node ci/match_test.js` failed once on its timing ("huge page: slowest
+  step 52.5 ms", run 697; passed on re-run), skipping every later step of
+  `Test`; Android `RulesServerTest > noPreflight` failed twice (runs 680,
+  684; passes on re-run). Done when: each passes 10 runs in a row, or its
+  limit is made fit for a shared runner without losing what it proves
+  (principle 9).
 
 ### 0.1 Code contradicting `SPEC.md`
 
@@ -537,8 +522,6 @@ W26 the Store's Firefox obeying the registry policies (win-vm).
 Never on a computer in use; the laptop runs only what is marked laptop.
 win-vm (Windows 11, snapshot, admin): `pwsh ci/windows_vm_test.ps1
 kc9k.exe`, then `-Reboots` from a fresh snapshot.
-
-Also seen: the Linux workflow `Test` fails in `ci/integration.sh` (`A16`, §0).
 
 ### 4.3 Owner report 2026-11-22: Windows GUI on the laptop
 

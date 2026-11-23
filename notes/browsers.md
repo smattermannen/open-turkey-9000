@@ -4,136 +4,115 @@
 - SPEC: §3.13, §4.10 Tamper protection / Browsers / Browser settings, R-LOCK-9
 - Connects to: [extension](extension.md), [locks](locks.md) (setting locks), [layers-net](layers-net.md), [device](device.md) (strict mode)
 
-## Code
+## Browser policies
 
-- State the Chrome service worker must keep across restarts goes in
-  `storage.session` (e.g. `kc9kDownloadPages`).
-- LibreWolf's policy file is rewritten only by the daemon (Firefox's at once
-  by the CLI): wait ~12 s before starting a browser after a change.
-- Browser policies (Firefox, Chrome, Chromium, Brave, Edge, Opera,
-  Vivaldi): blocklist, allowlist, wildcards, DoH off.
-  `file://` entries (`BlockFiles`, `FilePatterns`) only with tamper
-  `file-urls` on (`enforce.SettingFileURLs`), minus the block's file exceptions
-  (Chromium family without the trailing `*`, `chromiumFilePatterns`: Chrome
-  reads a policy path as a prefix and `*` literally);
-  the same setting has the extension judge file pages (`withFilePages`,
-  [extension](extension.md)).
-  URL lists hold at most 1,000 entries (the browsers ignore the rest):
-  `FirefoxPolicyLimit` (WebsiteFilter Block/Exceptions, Firefox and
-  LibreWolf), `ChromiumPolicyLimit` (URLBlocklist/URLAllowlist). Past it,
-  patterns, file URLs and sites past `MaxHostsDomains` first (`capSet`;
-  the allowlist's `*://*/*` always); exceptions cut (blocks more). Sets
-  built once per policy (`setsOf`, also `Empty`): the daemon checks drift
-  every cycle.
-- Rules server (`enforce.ServeRules`, `RulesAddress`): its addresses are
-  `rulesRoutes`; each answers only its own host name, posts only with the
-  extension's header (`ExtensionHeader`; `/usage`: `X-KC9K-Usage`), no
-  CORS. No secret (SPEC §6 2026-11-21 *(By Opus)*);
-  `TestRulesServerGuardsEveryRoute` holds every route to it.
-- `extguard.go`: extension mandatory while `enforce.ExtensionRequired` and
-  a supported browser is installed, in the accounts that need it
-  (`EnforceFor`, `enforce.extensionUsers`, §3.2); closes browsers whose extension hasn't
-  fetched `/rules` with `X-KC9K-Extension` within 60 s (traced via
-  `/proc/net/tcp`), at once if remote-controlled (`remotecontrol.go`; the switches and
-  variables in `remotecontrol_shared.go`, read on Windows too) or
-  started before the last protecting settings change
-  (`noteSettingsChange`). Browsers known by name or engine
-  (`browserdetect.go`: libxul.so or icudtl.dat/V8 snapshot mapped by a
-  user-owned exe, minus Electron: an `.asar` mapped or open, or a renderer
-  child with `--app-path=`, an unpacked app; Chromium rewrites children's
-  cmdlines with spaces; judged once 15 s old). An exe on FUSE (an
-  AppImage's: shown as root's, closed to root) counts as user-owned
-  (`userPlacedExe`). Decision in `closeReason`. With block
-  unsupported browsers on, runs always and closes at once every browser
-  whose exe isn't a root-owned package file of `SupportedBrowsers`
-  (`supported.go`: LibreWolf, Chrome, Chromium; `InstallBrowser`, fakes
-  `statFile`/`runInstall`). LibreWolf: `block-devtools` policy;
-  five prefs locked in librewolf.cfg, user overrides replaced by a cleaned
-  copy (`librewolfprefs.go`).
-- **Tamper settings with defaults** (`enforce/tampersettings.go`,
-  `TamperOn`): stored on/off; `extension-stop`, `inactive-tabs`, `embedded`
-  are on when unset (`tamperDefaultOn`), the rest off. `cli/tamper.go`
+- Firefox, LibreWolf, Chrome, Chromium, Brave, Edge, Opera, Vivaldi:
+  blocklist, allowlist, wildcards, DoH off. LibreWolf's policy is rewritten
+  only by the daemon (Firefox's at once by the CLI): wait ~12 s before
+  starting a browser after a change.
+- `file://` entries (`BlockFiles`, `FilePatterns`) only with tamper
+  `file-urls` on (`enforce.SettingFileURLs`), minus file exceptions;
+  Chromium family without trailing `*` (`chromiumFilePatterns`: prefix
+  match, `*` literal).
+- ≤ 1,000 URL entries (browsers ignore the rest: `FirefoxPolicyLimit`,
+  `ChromiumPolicyLimit`). Past it, patterns, file URLs and sites past
+  `MaxHostsDomains` go first (`capSet`; allowlist's `*://*/*` always kept);
+  exceptions cut (blocks more). `setsOf` built once per policy; daemon
+  checks drift every cycle.
+- Translate proxy (`*.translate.goog`) and archives (`web.archive.org`,
+  `archive.ph`) blocked as the site. `web-only` uses Google `udm=14`.
+
+## Rules server (`enforce.ServeRules`, `RulesAddress`)
+
+Routes in `rulesRoutes`; each answers only its own host name, posts only
+with `ExtensionHeader` (`/usage`: `X-KC9K-Usage`), no CORS, no secret
+(SPEC §6, agent). `TestRulesServerGuardsEveryRoute` covers every route.
+
+## Extension guard (`extguard.go`)
+
+- Required while an active block has a non-empty blacklist,
+  web-only/force-search is on, or anything is locked (R-LOCK-9); tamper
+  `extension-stop` off: only while locked (`AnyLock`). Only in accounts
+  that need it (`EnforceFor`, `enforce.extensionUsers`, §3.2).
+- Closes a browser whose extension hasn't fetched `/rules` with
+  `X-KC9K-Extension` within 60 s (traced via `/proc/net/tcp`); at once if
+  remote-controlled (`remotecontrol.go`, `remotecontrol_shared.go`: Chrome
+  `--disable-extensions[-except]`, `--remote-debugging-pipe`, Firefox
+  `--marionette`/remote debugging) or started before the last protecting
+  change (`noteSettingsChange`; older windows close a minute later).
+  Decision in `closeReason`.
+- Browser detection (`browserdetect.go`): by name or engine (libxul.so or
+  icudtl.dat/V8 snapshot mapped by a user-owned exe), minus Electron
+  (`.asar`, or renderer child with `--app-path=`); judged once 15 s old.
+  FUSE exe (AppImage) counts as user-owned (`userPlacedExe`). Engine-based
+  apps (Thunderbird, Spotify, Steam) aren't browsers.
+- Block unsupported browsers on: guard always runs; closes at once every
+  browser whose exe isn't a root-owned package file of `SupportedBrowsers`
+  (`supported.go`: LibreWolf, Chrome, Chromium); supported ones after 60 s
+  without check-in. Nothing closed without a supported browser installed
+  (`status` says so).
+- `kc9k browsers` lists them with check-in (`extension.last_checkin.<id>`;
+  gui-state `found`: executable present even where it can't get the extension, W30); `browsers install librewolf|chromium|chrome`
+  (`InstallBrowser`: extrepo; Mint's chromium .deb; Google's repo, key
+  `/etc/apt/keyrings/google-chrome.asc`, amd64 only). Firefox needs signed
+  extensions; Brave/Edge/Opera/Vivaldi not set up.
+- GUI "isn't running" dialog (`extensionMissing`) only with no supported
+  browser or one past the grace without check-in.
+- Windows: never counts/closes Windows' own programs, never kills
+  session-critical processes (W50, [windows](windows.md)).
+
+## LibreWolf (`librewolf*.go`)
+
+`block-devtools` policy; locked prefs in librewolf.cfg
+(`extensions.webextensions.restrictedDomains`, two
+`extensions.quarantinedDomains*`, `devtools.chrome.enabled`,
+`devtools.debugger.remote-enabled`); user overrides replaced by a cleaned
+copy `/var/lib/kc9k/librewolf/<user>.cfg` (only `pref`/`defaultPref`/
+`lockPref` lines).
+
+## Chrome (`webext/chrome.go`, `blocker/chromesetup.go`)
+
+- `PackChrome`: MV3 manifest + service worker (`chrome-worker.js`), CRX3
+  signed with per-computer key `/var/lib/kc9k/chrome-extension.pem` (root
+  only); daemon serves `/chrome/update.xml` and `.crx`;
+  `rules.extension_version` triggers updates. `compat.js` aliases
+  `browser`; keepalive.
+- `/etc/opt/chrome/policies/managed/kc9k-setup.json` (Chromium
+  `/etc/chromium/…`; Chrome for Testing `/etc/opt/chrome_for_testing/policies`):
+  force-install, pinned, incognito/guest/dev mode off, no devtools on the
+  extension; `force-search` sets Google web results as default.
+- Worker state across restarts: `storage.session` (e.g.
+  `kc9kDownloadPages`). A restarted worker may let the first page through
+  (URL policy still blocks plain sites).
+
+## Tamper settings (`enforce/tampersettings.go`, `TamperOn`)
+
+- `extension-stop`, `inactive-tabs`, `embedded` on when unset
+  (`tamperDefaultOn`); rest off. `cli/tamper.go`
   `simpleTamper`/`tamperOrder`/`tamperMessages`; gui-state `tamper_*`.
-  `guest` → `blocker.SyncGuestOff` from `enforceBrowser`
-  (`kc9k-guest.json` beside each Chromium-family `kc9k.json`, LightDM
-  drop-in `lightdm.conf.d/90-kc9k-no-guest.conf` where `/etc/lightdm`
-  exists). `extension-stop` off: `extensionUsers` asks only `AnyLock`.
-  `inactive-tabs`/`embedded` off → rules `inactive_tabs_off`/`embedded_off`
-  (extension note). `embedded` off also keeps the blacklists' paths and
-  patterns out of the browser policies (`enforce.Inputs`, `embeddedOff`
-  loaded in `loadDNSChoice`; not monk mode's or factory reset protection's
-  lists): Chrome's URLBlocklist blocks frames too, so a path-blocked
-  embedded video stayed blocked with the setting off (seen live
-  2026-11-21). Whole sites stay in the policies. `installer` → hidden `prepare-install`
-  (`cli/installguard.go`; install note).
-- **Browser setting locks** (`db/settinglocks.go`, `cli/browser.go`): per
-  option (time, challenge, password, restart); `enforce.AnyLock` counts
-  them. The same code serves the tamper setting block unsupported browsers
-  (`db.UnsupportedBrowsers`, stored `tamper.unsupported-browsers`,
-  `enforce.IsLockableSetting`/`SettingKey`, `cli/tamper.go`), formerly the
-  browser setting `force-librewolf` (`migrateForceLibreWolf` moves state
-  and lock row; hidden alias in `kc9k browser`; old project files read).
-  `GuardsBlocks`: it and `block-devtools`.
-- **SafeSearch per engine** (§4.10, SPEC §6 2026-11-18): browser settings
-  `safesearch-google|bing|duckduckgo|youtube` (`enforce.SafeSearchEngines`,
-  `SafeSearchSetting`, `SafeSearchOn`; `db.SafeSearchSettings` the same
-  names), each with its own lock. `kc9k browser safesearch on|off` is the
-  group (`cli/browser.go` `safeSearchGroup`): lock flags read once and
-  set on each engine, one confirmation for all; off engine by engine;
-  `unlock safesearch` refused (names the engines). `migrateSafeSearch`
-  copies the old `browser.safesearch` state and its lock row to every
-  engine (every column, so a running lock holds each); old project files'
-  `browser_options.safesearch` and backup setting locks named `safesearch`
-  become all four. Hosts: `blocker.SyncSafeSearch(engines)` pins only those
-  engines' targets and removes the others'. Rules: `safesearch` (any on)
-  plus `safesearch_engines`; the extension's `kc9kSafeSearch(url, form,
-  engines)` (no list: all, for Android and older rules); Brave, Yahoo,
-  SearXNG and blocked engines go with Google's, Bing's or DuckDuckGo's
-  (SPEC §4.10 *(By Opus)*); the YouTube-Restrict header with YouTube's.
-- **Chrome** (`webext/chrome.go`, `blocker/chromesetup.go`): `PackChrome`
-  builds MV3 manifest + service worker (`chrome-worker.js`), signs CRX3 with
-  a per-computer key (`webext.ChromeKeyPath`); daemon serves
-  `/chrome/update.xml` and `.crx`; `kc9k-setup.json` force-installs, disables
-  incognito/guest/dev mode. `compat.js` aliases `browser`; keepalive;
-  `rules.extension_version` triggers updates. Chrome for Testing reads
-  `/etc/opt/chrome_for_testing/policies`.
+- `guest` → `blocker.SyncGuestOff` (`kc9k-guest.json` beside each
+  Chromium-family `kc9k.json`; LightDM drop-in
+  `lightdm.conf.d/90-kc9k-no-guest.conf`).
+- `inactive-tabs`/`embedded` off → rules `inactive_tabs_off`/`embedded_off`.
+  `embedded` off also keeps blacklists' paths/patterns out of browser
+  policies (`embeddedOff`; Chrome's URLBlocklist blocks frames too; not
+  monk mode's or factory reset protection's lists); whole sites stay.
+- `installer` → hidden `prepare-install` ([install](install.md)).
 
-## Built behaviour
+## Browser setting locks (`db/settinglocks.go`, `cli/browser.go`)
 
-Not fixed by `SPEC.md`; the code is the truth.
-
-- **Extension guard**: the GUI's "isn't running" dialog (`extensionMissing`)
-  only with no supported browser, or one running past the grace without a
-  check-in (`browsersWithoutExtension`, `runningSupportedBrowsers`).
-  Required while an active block has a non-empty
-  blacklist, web-only/force-search is on, or anything is locked (R-LOCK-9);
-  with tamper `extension-stop` off, only while anything is locked;
-  unlocked app-only blocks leave browsers alone. With block unsupported browsers on, always: other browsers
-  (Firefox too) close at once, supported ones after 60 s without a check-in.
-  Nothing closed without LibreWolf, Chrome or Chromium installed (`status`
-  says so). `kc9k browsers` lists them with per-browser check-in
-  (`extension.last_checkin.<id>`; `gui-state` also says `found`: an
-  executable is there, even where it can't get the extension, as Chrome
-  and Edge on Windows before the store listing, W30); `browsers install librewolf|chromium|chrome`
-  (extrepo; Mint's chromium .deb; Google's repo with key in
-  `/etc/apt/keyrings/google-chrome.asc`, amd64 only). Firefox needs signed extensions; Brave/Edge/Opera/Vivaldi not set
-  up. Installed engine-based apps (Thunderbird, Spotify, Steam, Electron)
-  aren't browsers. On Windows the guard never counts or closes a program
-  of Windows' own (under %SystemRoot% or a Microsoft package in
-  WindowsApps) and no kill path ends a session-critical process (W50;
-  details and tests in `notes/windows.md`, Web layers). *(By claude)* Chrome flags `--disable-extensions[-except]`,
-  `--remote-debugging-pipe` and Firefox `--marionette`/remote-debugging
-  close at once. After a protecting change, older browser windows close a
-  minute later. LibreWolf locked prefs: `extensions.webextensions.restrictedDomains`,
-  two `extensions.quarantinedDomains*`, `devtools.chrome.enabled`,
-  `devtools.debugger.remote-enabled`; overrides copy at
-  `/var/lib/kc9k/librewolf/<user>.cfg` keeps only `pref`/`defaultPref`/
-  `lockPref` lines. Translate proxy (`*.translate.goog`) and archives
-  (`web.archive.org`, `archive.ph`) blocked as the site. `web-only` uses
-  Google `udm=14`.
-- **Chrome**: policy `/etc/opt/chrome/policies/managed/kc9k-setup.json`
-  (Chromium `/etc/chromium/…`); key `/var/lib/kc9k/chrome-extension.pem`
-  (root only, ID per computer); pinned; devtools never on the extension;
-  `force-search` sets Google web results as default engine. A restarted
-  service worker may let the first page through the extension (URL policy
-  still blocks plain sites) until the page reports in.
+- Per option (time, challenge, password, restart); `enforce.AnyLock` counts
+  them. Same code serves tamper block unsupported browsers
+  (`db.UnsupportedBrowsers`, `tamper.unsupported-browsers`,
+  `IsLockableSetting`/`SettingKey`; was browser `force-librewolf`,
+  `migrateForceLibreWolf`). `GuardsBlocks`: it and `block-devtools`.
+- SafeSearch per engine (§4.10): `safesearch-google|bing|duckduckgo|youtube`
+  (`enforce.SafeSearchEngines`, `SafeSearchOn`), each own lock. `kc9k
+  browser safesearch on|off` = group (`safeSearchGroup`: lock flags set on
+  each engine, one confirmation; off per engine; `unlock safesearch`
+  refused). `migrateSafeSearch` copies old `browser.safesearch` + lock to
+  all four. Hosts: `blocker.SyncSafeSearch(engines)` pins only those
+  engines. Rules `safesearch` + `safesearch_engines`; `kc9kSafeSearch(url,
+  form, engines)` (no list = all). Brave, Yahoo, SearXNG and blocked
+  engines go with Google/Bing/DuckDuckGo (agent); YouTube-Restrict header
+  with YouTube.

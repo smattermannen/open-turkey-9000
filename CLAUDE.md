@@ -1,101 +1,82 @@
 # Killer Chicken 9000 (KC9K)
 
 Productivity blocker: CLI + daemon + browser extension + GUI. Linux: systemd
-daemon, GTK GUI. Windows: being built (`ROADMAP.md` §4; nothing built yet).
+daemon, GTK GUI. Windows: in progress (`ROADMAP.md` §4).
 
 ## Documents
 
-| File | Holds | Changes |
-|---|---|---|
-| `SPEC.md` | What KC9K should be: principles, glossary, rules, decisions | With the owner; agents' changes tagged *(By claude)* |
-| `ROADMAP.md` | Status against `SPEC.md`; next work. Only status file | Same commit as the code |
-| `CLAUDE.md` | Shared rules, build, test, note index | Agents |
-| `notes/*.md` | Code layout and built behaviour, one note per area | Agents, same commit as the code |
-| `android/CLAUDE.md` | Android app | Agents |
+- `SPEC.md`: vision, principles, glossary, rules. Changed with the owner;
+  agents' changes tagged *(By claude)*.
+- `ROADMAP.md`: only status file (status vs `SPEC.md`, next work).
+- `notes/*.md`: built behaviour per area. `ROADMAP.md` and notes change in
+  the same commit as the code; a fact lives in one note.
 
-## Reading, not everything
+Read only what your work needs: `ROADMAP.md` Index → your item; `SPEC.md`
+Index → cited sections/rule IDs (`grep -n 'R-LOCK-6' SPEC.md`); glossary
+words (§3) exactly, §3.14 = words to avoid; notes for files you touch, plus
+their "Connects to" notes your change reaches (unsure: read one more).
 
-Read only what your work needs:
-
-1. `ROADMAP.md`: its Index, then only your item.
-2. `SPEC.md`: its Index, then only the sections and rule IDs your item cites
-   or the Index names for your topic (`grep -n 'R-LOCK-6' SPEC.md`, a
-   heading such as `### 3.4`, a function `**4.3`). Use glossary words
-   (§3) exactly; §3.14 lists words to avoid.
-3. `notes/`: the notes for the files you touch (table below), then each
-   note in their "Connects to" line that your change reaches. When unsure,
-   read one more note rather than guess.
-
-Code vs `SPEC.md`: `SPEC.md` wins; log the gap in `ROADMAP.md`. If `SPEC.md`
-seems wrong or silent, ask the owner (unattended: a `ROADMAP.md` §5 entry). Fix before adding (`ROADMAP.md` §0). No
-other planning/status files. No user-facing docs. A change to code updates
-its note in the same commit; a fact lives in exactly one note.
+Code vs `SPEC.md`: `SPEC.md` wins; log the gap in `ROADMAP.md`. `SPEC.md`
+wrong or silent: ask the owner (unattended: `ROADMAP.md` §5 entry). Fix
+before adding (`ROADMAP.md` §0). No other planning/status files, no
+user-facing docs.
 
 ## Build and test
 
 ```bash
 export PATH="/usr/local/go/bin:$PATH"
 make build            # CGO_ENABLED=0 go build -o kc9k ./cmd/kc9k
-make deb              # packaging/build-deb.sh: kc9k_<version>_<arch>.deb (TAGS=devmaster for tests)
+make deb              # packaging/build-deb.sh (TAGS=devmaster for tests)
 sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 ```
 
-- No CGo (`modernc.org/sqlite`). Check: `CGO_ENABLED=0 go build ./...`.
-- Race check (tests only, needs gcc): `CGO_ENABLED=1 go test -race ./internal/...`.
-- Run tests as a normal user, never `sudo`: as root `KC9K_DB` is ignored and
-  `internal/cli` tests would hit the real DB (they refuse).
+- No CGo (`modernc.org/sqlite`): `CGO_ENABLED=0 go build ./...`.
+- Race (tests only, gcc): `CGO_ENABLED=1 go test -race ./internal/...`.
+- Tests as a normal user, never `sudo` (root ignores `KC9K_DB`; `internal/cli` tests refuse).
+- Testing anything that locks, blocks or restarts the daemon: read
+  [notes/testing.md](notes/testing.md) first; the owner's laptop is used for real.
 
-Before testing anything that locks, blocks or restarts the daemon, read
-[notes/testing.md](notes/testing.md): the owner's test laptop is used for real.
+## Shared rules
 
-## Rules shared by every area
-
-- `enforce` is the single source of truth: active blocks → layer inputs
-  (unioned); `Apply` (CLI, on change) and `Tick` (daemon).
-- Active vs enabled (§3.3): only the user switches blocks on or off;
-  windows, place rules, breaks, pauses and allowance sessions only lift an
-  active block; a lock keeps it on, not enabled.
-- Strengthening is always free; weakening a locked block is refused
-  (R-WEAK-1/2: decided in the CLI only, `ensureEditable`, `gateEdit`,
-  `gateAutomation`), logged via `refused()`, never counted as a bypass. Every
-  command that could weaken goes into `cli/weakening_audit_test.go`.
-- Every lock of every kind is confirmed before it is written (R-LOCK-12,
-  `confirmLocks`, `--yes`).
-- The GUI decides nothing: every change runs a `kc9k` command.
-- Device effects (network cuts, logout, shutdown, Wi-Fi, desktop and
-  circadian hardware) go through replaceable vars faked in tests; `KC9K_DB`
-  never applies layers.
+- `enforce` is the single source of truth: active blocks → unioned layer
+  inputs; `Apply` (CLI, on change), `Tick` (daemon).
+- Active vs enabled (§3.3): only the user switches blocks on/off; windows,
+  place rules, breaks, pauses, allowance sessions only lift an active block;
+  a lock keeps it on, not enabled.
+- Strengthening free; weakening a locked block refused (R-WEAK-1/2, CLI only:
+  `ensureEditable`, `gateEdit`, `gateAutomation`), logged via `refused()`,
+  never a bypass. Every possibly-weakening command goes in
+  `cli/weakening_audit_test.go`.
+- Every lock confirmed before written (R-LOCK-12, `confirmLocks`, `--yes`).
+- GUI decides nothing: every change runs a `kc9k` command.
+- Device effects (network cuts, logout, shutdown, Wi-Fi, desktop, circadian
+  hardware) via replaceable vars faked in tests; `KC9K_DB` never applies layers.
 
 ## Architecture
 
-- `cmd/kc9k/main.go` → `cli.Execute()`. Cobra commands in `internal/cli/`
-  (`block.go`, `control.go`: start/stop/unlock/status; `toggle.go`). `kc9k --help` lists them.
-- **Android**: `android/CLAUDE.md`. Its `RulesServer` serves `/rules`;
-  its `rules.safesearch` has no `safesearch_engines` (every engine;
-  `kc9kSafeSearch` in `match.js`).
+`cmd/kc9k/main.go` → `cli.Execute()`; Cobra commands in `internal/cli/`.
+Android: `android/CLAUDE.md`. Each note opens with files covered, SPEC
+sections, connected notes.
 
-| Note | Area (main paths; `blocker/` = `internal/blocker/`, etc.) |
+| Note | Area |
 |---|---|
-| [testing](notes/testing.md) | Test laptop, browser/GUI/harness tests, weakening audit (`ci/`) |
-| [install](notes/install.md) | Install, uninstall, devmaster (`install.sh`, `packaging/`, `cli/uninstall.go`, `cli/master.go`) |
-| [enforce-daemon](notes/enforce-daemon.md) | `enforce/enforce.go`, `enabled.go`, `internal/daemon/`, affected users |
-| [layers-net](notes/layers-net.md) | hosts, firewall, DNS (`blocker/hosts.go`, `firewall.go`, `resolve.go`) |
-| [browsers](notes/browsers.md) | Policies, extension guard, supported browsers, LibreWolf, Chrome, browser setting locks, tamper protection settings |
-| [extension](notes/extension.md) | `webext/files/` (`match.js`, `content.js`, `background.js`, `social.js`) |
-| [apps-titles](notes/apps-titles.md) | Process kill, scripts, window titles, X11, polite close, behaviour settings |
+| [testing](notes/testing.md) | Test laptop, browser/GUI/harness tests, weakening audit |
+| [install](notes/install.md) | Install, uninstall, devmaster, packaging |
+| [enforce-daemon](notes/enforce-daemon.md) | `enforce`, `daemon`, affected users |
+| [layers-net](notes/layers-net.md) | hosts, firewall, DNS |
+| [browsers](notes/browsers.md) | Policies, extension guard, browsers, browser setting locks, tamper protection |
+| [extension](notes/extension.md) | `internal/webext/files/` |
+| [apps-titles](notes/apps-titles.md) | Process kill, scripts, window titles, polite close |
 | [lists](notes/lists.md) | Blocks, website lists, phrase sets, import, presets, recording, drafts, test mode |
-| [actions](notes/actions.md) | Actions, ad trigger, trigger actions, consequences, bypass prevention, workarounds |
-| [locks](notes/locks.md) | Locks, layered locks, confirmation, text lock, settings/access/block passwords, no weakening |
-| [automation](notes/automation.md) | Automation, schedules, modes, places, autostart (`internal/schedule/`, `cli/modes.go`) |
-| [device](notes/device.md) | Monk mode, Frozen Chicken, allowed apps, strict mode (PAM guard), no-escape, factory reset protection (firmware lock), guided setup, sockets |
-| [allowance](notes/allowance.md) | Allowance, Pomodoro, breaks, pauses, statistics (`internal/quota/`) |
-| [circadian](notes/circadian.md) | Circadian rhythm, mode wallpapers, sleep hook (`internal/circadian/`) |
+| [actions](notes/actions.md) | Actions, triggers, consequences, bypass prevention |
+| [locks](notes/locks.md) | Locks, confirmation, text lock, passwords, no weakening |
+| [automation](notes/automation.md) | Schedules, modes, places, autostart |
+| [device](notes/device.md) | Monk mode, Frozen Chicken, allowed apps, strict mode, no-escape, firmware lock, guided setup, sockets |
+| [allowance](notes/allowance.md) | Allowance, Pomodoro, breaks, pauses, statistics |
+| [circadian](notes/circadian.md) | Circadian rhythm, mode wallpapers, sleep hook |
 | [hotkeys](notes/hotkeys.md) | Hotkeys, notifications |
-| [gui](notes/gui.md) | `gui/kc9k-gui.py`, design layer, inputs |
-| [gui-windows](notes/gui-windows.md) | Windows GUI: `windows/gui/` (C#, WinUI 3), fake kc9k, UI Automation tests, `windows-gui.yml` |
-| [install-windows](notes/install-windows.md) | Windows MSI: `windows/installer/` (WiX), its custom actions, signing |
-| [db-project](notes/db-project.md) | SQLite DB, project files, backup (`internal/db/db.go`, `cli/project*.go`) |
-| [windows](notes/windows.md) | Windows, Go side: platform split (`*_linux.go`, `*_windows.go`), service, session agent, named pipe, every Windows layer |
-
-Each note starts with the files it covers, its SPEC sections and the notes
-it connects to.
+| [gui](notes/gui.md) | GTK GUI, design layer, inputs |
+| [gui-windows](notes/gui-windows.md) | Windows GUI (C#, WinUI 3), UI Automation tests |
+| [install-windows](notes/install-windows.md) | Windows MSI (WiX), signing |
+| [db-project](notes/db-project.md) | SQLite DB, project files, backup |
+| [windows](notes/windows.md) | Windows Go side: service, session agent, pipe, layers |

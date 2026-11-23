@@ -4,52 +4,40 @@
 - SPEC: §4.2 export/import, §4.10 Project
 - Connects to: every note (each table belongs to an area); [lists](lists.md) and [automation](automation.md) for imports
 
-## Code
+## DB (`internal/db/`)
 
-- **Project** (`cli/project.go`): versioned JSON; import validates all, then
-  only adds (existing untouched, options only strengthened). Schedules and
-  modes: `cli/projectmodes.go` (`copy_of` on a block's window, `in_mode`,
+SQLite `/var/lib/kc9k/kc9k.db`, WAL, busy_timeout and foreign_keys per
+connection via `_pragma`. `KC9K_DB` overrides (tests only). Schema setup in
+`OpenDB` runs under an flock on `<db>.setup-lock` (`openlock.go`; ≤ 30 s):
+on a fresh install daemon and `install-librewolf` open at once and
+busy_timeout doesn't cover concurrent column adds
+(`TestFreshDatabaseOpenedByManyAtOnce`). `DB.entries` caches list entries
+([lists](lists.md)).
+
+## Project files (`cli/project.go`)
+
+- Versioned JSON; import validates all, then only adds (existing
+  untouched, options only strengthened); `--dry-run` lists additions and
+  locks. Schedules/modes: `cli/projectmodes.go` (`copy_of`, `in_mode`,
   `applied_schedules`).
-- **DB** (`internal/db/`): SQLite `/var/lib/kc9k/kc9k.db`, WAL, busy_timeout
-  and foreign_keys per connection via `_pragma`. `KC9K_DB` overrides (tests
-  only). `db.go`, `features.go` (schedules, time locks, upgrades),
-  `weblists.go`, `pending.go`. Schema setup in `OpenDB` (WAL switch,
-  `CREATE … IF NOT EXISTS`, upgrades) runs under an flock on
-  `<db>.setup-lock` (`openlock.go`; waits ≤ 30 s, then unlocked): on a
-  fresh install the daemon and `install-librewolf` create the DB at once,
-  and busy_timeout doesn't cover a stale-snapshot write or two processes
-  adding one column (`TestFreshDatabaseOpenedByManyAtOnce`). `DB` keeps
-  lists' entries between reads (`entries`; [lists](lists.md), Huge lists).
+- Holds blocks (lists, apps, titles, schedules, schedule lock, social,
+  allowance, Pomodoro, breaks, ladders), browser and behaviour settings,
+  global ladder, freeze schedules, list images. Clashing block → `name-2`;
+  browser settings only on; ladder replaced only by a stricter one.
+- Presets (`exportPresets`): always in a backup; in `--share` only with
+  `--presets` (terminal asks on stderr; GUI Share… asks). Import: same
+  name+content skipped, taken name → `name-2` (`freeName`).
+- Backup (`cli/projectbackup.go`) adds places and place rules (existing
+  kept), running locks (range, queued, re-lock config), password hashes,
+  hotkeys, statistics: import adds only where nothing is here, confirms
+  the locks, starts blocks that come with running locks.
 
-## Built behaviour
+## Linux project on Windows (W56)
 
-Not fixed by `SPEC.md`; the code is the truth.
-
-- **Project**: holds blocks (lists, apps, titles, schedules, schedule lock,
-  social, allowance, Pomodoro, breaks, ladders), browser and
-  behaviour settings, global ladder, freeze schedules, list images. Presets
-  of every type (`exportPresets`: `clusters`, `templates`, `presets` table
-  rows) go in a backup always and in a `--share` only by choice
-  (`--presets`; without it a terminal asks on stderr, elsewhere none; the
-  GUI's Share… asks). Import adds presets like blocks: one with the same
-  name and content is skipped, a different one whose name is taken comes
-  in as `name-2` (`freeName`, `importPresets`). Backup
-  adds places and place rules, and (`cli/projectbackup.go`) running locks
-  (with range lock, queued locks and the configuration re-lock restores),
-  password hashes, hotkeys, statistics: import adds only where nothing is
-  here, confirms the locks, starts blocks that come with running locks. Clashing block → `name-2`; existing
-  places kept; browser settings only on; ladder replaced only by a
-  stricter one. `--dry-run` lists additions and locks.
-- **A Linux project on Windows** (W56) *(By claude)*: `projectText` takes a
-  UTF-8 BOM off (CRLF needs nothing). On Windows (`projectOS`, a seam
-  tests set) `sayLinuxOnly` lists `linuxOnlyParts` first as "Not used on
-  Windows", in the dry run and the import alike; `checkBlock` skips
-  `ValidAppEntry` for such app entries, which are stored as they are.
-  What is Linux-only: `blocker.LinuxOnlyApp`/`LinuxOnlyCommand`
-  (`linuxonly.go`, shared); the Windows app matcher skips those entries
-  (`newAppMatcher`), so nothing is guessed into a Windows name. Fixture:
-  `testdata/linux-project.json`, exported by the Linux build (share; apps,
-  custom action, schedule lock), and its `-crlf`/`-bom` copies
-  (`testdata/.gitattributes`: `-text`). Tests: `projectlinux_test.go`
-  (`TestLinuxProjectOnWindows` with the seam, on Linux),
-  `projectlinux_windows_test.go` (the same on Windows, windows.yml `unit`).
+`projectText` strips a UTF-8 BOM. On Windows (`projectOS` seam)
+`sayLinuxOnly` lists `linuxOnlyParts` as "Not used on Windows" (dry run and
+import); `checkBlock` skips `ValidAppEntry` for them, stored as is.
+Linux-only = `blocker.LinuxOnlyApp`/`LinuxOnlyCommand` (`linuxonly.go`);
+Windows app matcher skips them (`newAppMatcher`). Fixture
+`testdata/linux-project.json` + `-crlf`/`-bom` copies (`.gitattributes`
+`-text`). Tests `projectlinux_test.go`, `projectlinux_windows_test.go`.

@@ -4,126 +4,88 @@
 - SPEC: §2 principle 9, §3.1, §3.9, R-LIST-4–6, R-PHRASE-1–9, R-PAGE-1, R-EVENT-1
 - Connects to: [lists](lists.md) (what it matches), [actions](actions.md) (what it does), [browsers](browsers.md), [allowance](allowance.md) (usage, toolbar), [circadian](circadian.md) (dark pages)
 
-## Code
+## Matching (`match.js`)
 
+- Plain term = whole word (`porn` ∉ "pornhub"); `*` inside words; case
+  ignored. Address/title match fires every action; text needs threshold
+  (distinct) and hits (total), default 1; once met the page stays acted on
+  until left. Phrase `[a, b] [c]? :N` (`?` optional, `:N` length).
+- Title/text exceptions leave that block's sites to the extension only
+  (page flashes before blocking); address exceptions remove their domain
+  from hosts/firewall.
+- Folding (R-LIST-5, `kc9kFold`): Latin-looking capitals first
+  (`KC9K_LOOKALIKES_UPPER`), NFKD, lower case, marks and format characters
+  dropped, then `KC9K_LOOKALIKES`. Terms folded the same; long text folded
+  in pieces (`kc9kFoldSteps`).
+- Principle 9: judging is resumable (`*Steps` generators, `kc9kDrain`);
+  content script runs READ_SLICE_MS at a time (`judgeOn`/`judged`); term
+  regexes made at first use (`kc9kKeywordMatcher`), one-word terms via the
+  word index; first read waits for idle after DOMContentLoaded
+  (`queueScan`).
+- Frames judge their own text (`scanFrame`, R-LIST-4) and ask the
+  background (`frame-hits` → `frameHit`) for the block page.
 - Browser policy stops many pages before the extension sees the request; it
   then learns from the tab every 3 s. Request-dependent features need a
   fallback (`trail` in `background.js`).
-- Judging is resumable (`kc9kListMatchesSteps` and the other `*Steps`
-  generators in `match.js`; `kc9kDrain` runs them to the end): the content
-  script runs it READ_SLICE_MS at a time (`judgeOn`/`judged`; principle 9).
-  Frames judge their own text (`scanFrame`, R-LIST-4) and ask the
-  background (`frame-hits` → `frameHit`) for the block page.
-- Folding (R-LIST-5, `kc9kFold`): capitals that look Latin first
-  (`KC9K_LOOKALIKES_UPPER`: Greek "Η" is "h", not "η" = "n"), NFKD
-  (fullwidth, mathematical, circled letters, ligatures), lower case, marks
-  and format characters (zero-width, soft hyphen) dropped, then
-  `KC9K_LOOKALIKES` (Cyrillic, Greek, Armenian, small capitals). Terms are
-  folded the same way; a long page text is folded in pieces between steps
-  (`kc9kFoldSteps`, cut after a blank; principle 9). A term's regular
-  expression is made at its first use (`kc9kKeywordMatcher`): one-word
-  terms are counted by the word index, and making 1,000 at load was a
-  70 ms long task. The first read waits for idle time after
-  DOMContentLoaded (`queueScan`): read at once, its first visibility check
-  forced the browser's layout of the whole page inside the event.
-  `ci/match_test.js`; frames in Chromium
-  (`ci/content_harness_test.js`); `frameHit` in `ci/background_test.js`.
-- **File pages** (§3.1): judged only when a rule has `file_pages`
-  (tamper "allow file:// blocking"; `enforce.withFilePages`), by `files`
-  and `except.files` (`kc9kFilePaths`, `kc9kFileMatch`: decoded path,
-  `*` only at the end) and the list's terms; `kc9kJudgedAddress` is the
-  one check for "is this address judged" (match, content `judgedHere`,
-  background `pageHit`, `frameHit`, `blockTitledTab`,
-  `closeNewlyBlockedTabs`). `*.*` never matches a file. Chrome sends no
-  request events for files: `blockTitledTab` judges their address and
-  title, and leaves `reason=title` off when the address alone did it.
-- No flashing (R-PAGE-1, `content.js`): while a list could still act on the
-  top page by its title or text (`mayActByText`), what its root holds stays
-  at opacity 0 (`hidePage`; not the root itself, which takes the canvas and
-  flashes white; the page's own background shows) until judged and settled (`SETTLE_MS` after DOMContentLoaded
-  or an address change seen in the MutationObserver), never over
-  `HIDE_CAP_MS`. Don't hide with `visibility`: `innerText` skips it.
-  Reading lays the page out, and Firefox paints a page laid out before its
-  stylesheets apply (unstyled, white canvas, dark sites too): the top page
-  and frames read only once `styled()` (body there and every stylesheet
-  `link` loaded or failed, seen by capture `load`/`error` listeners; or
-  complete; or `SHEETS_WAIT_MS` after the document started).
-  `ci/flash_test.py` "darklate" checks it per frame.
-- `no-images` pictures drawn as CSS content: `content.js` marks elements
-  (`data-kc9k-noimg` before/after/self, idle-time `scanPseudoImages`) and
-  both sheets empty them; shadow roots get an adopted sheet. Page script
-  harness (Node + Playwright, cloud only): `node ci/content_harness_test.js`.
-- No downloads (§3.9, background `downloadSources`, `downloadBlocked`,
-  `downloads` permission): a download is cancelled (finished: its file
-  removed) when its referrer, its address or a page it may come from
-  matched no-downloads (address, or text hits kept in `downloadPages`).
-  Chrome gives a file from another host only the origin as referrer and a
-  page may send none: then the tabs of that origin, or with no referrer the
-  tabs in front, stand in. Tests: `ci/download_test.py` (LibreWolf),
-  `node ci/download_background_test.js` (fake APIs: origin referrer, none,
-  `blob:`, a worker restart).
-- Looks a page earned from its title or text are carried to the tab's next
-  address until that page is read (`carryLooks`, `page-judged`, ≤
-  `CARRY_MS`); carried, they only hide (the sheets). Picture and media
-  requests are cancelled only for the page's own no-images/no-video (its
-  address, or `keywordNoImages` for its own text): a cancelled picture
-  stays broken on a next page that doesn't earn the look
-  (`ci/extras_test.py`).
-- Frame looks (no-video, no-images, greyscale) are also a user sheet in
-  every frame (`LOOK_CSS`, `syncLookCss`). Chrome stacks the same sheet
-  inserted twice into a document and `removeCSS` takes one copy away, so
-  each tab counts what it was given (`cssGiven`) and removal repeats that
-  often; the new sheet goes in before the old one goes. Test:
-  `node ci/looks_background_test.js` (fake APIs with Chrome's stacking).
-- `dark` (and dark pages) in `render`: only light pages (`pageIsLight`);
-  `html` inverted, `DARK_MEDIA` (pictures, video, canvas, frames,
-  background images) inverted back once; nested inside a background image:
-  `filter: none` (else turned over twice; `picture` not listed, its img
-  is). SVG `img` turn with the page (logos: a black wordmark stays
-  readable). `ci/extras_test.py` counts the turns.
-- **Tamper protection** (§4.10): rules `inactive_tabs_off` (then
-  `closeNewlyBlockedTabs` skips background tabs and `onActivated` runs
-  `judgeTab` on the tab switched to) and `embedded_off` (then sub-frame
-  requests aren't blocked by address and `frameHit` answers nothing);
-  absent = on (Android, older daemons). `node ci/tamper_tabs_test.js`
-  (stub browser, background script).
-- **Workarounds**: `kc9kUnwrap` reads addresses in query/path; `checkMirror`
-  (content.js) reports canonical addresses/front-ends; `/hit` with `via`
-  logs `EventWorkaround`.
-- **Social** (`db/social.go`, `cli/social.go`): `block_social`,
-  `BlockDetail.Social`; `rules.social` → `webext/files/social.js`
-  (`KC9K_SOCIAL`). Playlist = only its address in an exception list
-  (`youtube.com/playlist?list=<id>`; `kc9k social B playlist ID on|off`
-  adds/removes it); `db.withPlaylists` adds `youtube:playlist=<id>` and
-  the `youtube.com/watch` exception to the active block, unstored
-  (`migratePlaylistExceptions`, `OldPlaylists` for older projects);
-  `checkPlaylistVideo` (`ci/gui_playlist_smoke.py`).
-  A redirect may take `query` (a regex on `?…`): matching it stops the
-  redirect (`instagram:following-only` → `/?variant=following`).
+- File pages (§3.1): judged only when a rule has `file_pages` (tamper "allow
+  file:// blocking"; `enforce.withFilePages`), by `files`/`except.files`
+  (`kc9kFileMatch`: decoded path, `*` only at end) and terms.
+  `kc9kJudgedAddress` is the one "is this address judged" check. `*.*`
+  never matches a file. Chrome sends no request events for files:
+  `blockTitledTab` judges address and title.
+- Tests: `ci/match_test.js`, `ci/content_harness_test.js`, `ci/background_test.js`.
 
-## Built behaviour
+## Page behaviour (`content.js`, `background.js`)
 
-Not fixed by `SPEC.md`; the code is the truth.
+- No flashing (R-PAGE-1): while a list could act on the top page by title
+  or text (`mayActByText`), the root's children stay at opacity 0
+  (`hidePage`; not the root: it flashes white; never `visibility`:
+  `innerText` skips it) until judged and settled (`SETTLE_MS`), max
+  `HIDE_CAP_MS`. Read only once `styled()` (every stylesheet loaded/failed
+  or `SHEETS_WAIT_MS`): Firefox paints a page laid out before its
+  stylesheets apply. `ci/flash_test.py` "darklate".
+- `no-images` CSS-content pictures: elements marked `data-kc9k-noimg`
+  (`scanPseudoImages`); shadow roots get an adopted sheet.
+- No downloads (§3.9, `downloadSources`, `downloadBlocked`): cancelled
+  (finished: file removed) when referrer, address or a source page matched
+  no-downloads (`downloadPages`). Chrome gives cross-host files only an
+  origin referrer, or none: then that origin's tabs, or the front tabs,
+  stand in. Tests `ci/download_test.py`, `ci/download_background_test.js`.
+- Looks earned by title/text carry to the tab's next address until read
+  (`carryLooks`, ≤ `CARRY_MS`; only hide). Picture/media requests cancelled
+  only for the page's own no-images/no-video.
+- Frame looks (no-video, no-images, greyscale) also as a user sheet
+  (`LOOK_CSS`, `syncLookCss`). Chrome stacks duplicate sheets and
+  `removeCSS` removes one copy: each tab counts `cssGiven`; insert new
+  before removing old. `ci/looks_background_test.js`.
+- `dark`: light pages only (`pageIsLight`); `html` inverted, `DARK_MEDIA`
+  inverted back once (nested in a background image: `filter: none`); SVG
+  `img` turn with the page.
+- Tamper protection (§4.10): `inactive_tabs_off` (`closeNewlyBlockedTabs`
+  skips background tabs; `onActivated` → `judgeTab`), `embedded_off`
+  (sub-frames not blocked by address, `frameHit` silent); absent = on.
+  `ci/tamper_tabs_test.js`.
+- Workarounds: `kc9kUnwrap` reads addresses in `?url=`, base64, after a
+  slash (searches for an address don't count); `checkMirror` reports
+  front-ends (Invidious, Piped, Nitter, Redlib, ProxiTok…); `/hit` with
+  `via` logs `EventWorkaround`.
 
-- **Matching**: plain term = whole word (`porn` ∉ "pornhub", `18+` ∉
-  "1118+"); `*` inside words; case ignored. Address/title match fires every
-  action; text needs threshold (distinct) and hits (total), both default 1;
-  once met the page stays acted on until left. Typed phrase `[a, b] [c]? :N`
-  (`?` optional, third set on; `:N` length). Exceptions by title/text leave
-  that block's sites to the extension only (page flashes before blocking);
-  address exceptions remove their domain from hosts/firewall.
-- **Social media settings**: YouTube (no Shorts, no home feed → Subscriptions, no
-  recommendations, no comments); Instagram/Facebook/X (messages only, no
-  Reels/Explore); Reddit (no Popular/All, no home feed); TikTok (Following
-  only); LinkedIn (no feed, no news). Disabled parts redirect; leftovers
-  hidden. Playlist: videos need `list=` and must appear in the shown
-  playlist panel.
-- **Toolbar button**: time left (allowance, break, schedule within 2 h); red
-  in the last 5 min; `!` when the daemon is unreachable; popup lists covering
-  blocks and adds the site to Blocked. The popup sends its own window's
-  front tab (`popupTab`; a non-web tab: the background's `frontTab`): in
-  Chrome the window isn't the focused one while the panel is open. Test:
-  `node ci/popup_background_test.js`.
-- **Workarounds**: proxied addresses in `?url=`, base64, or after a slash;
-  searches for an address don't count. Front-ends: Invidious, Piped, Nitter,
-  Redlib, ProxiTok….
+## Social media (`db/social.go`, `cli/social.go`, `social.js`)
+
+- `block_social`; `rules.social` → `KC9K_SOCIAL`. YouTube (no Shorts, home
+  feed → Subscriptions, no recommendations, no comments);
+  Instagram/Facebook/X (messages only, no Reels/Explore); Reddit (no
+  Popular/All, no home feed); TikTok (Following only); LinkedIn (no feed,
+  no news). Disabled parts redirect; leftovers hidden. A redirect's `query`
+  regex on `?…` stops it when matched.
+- Playlist = its address in an exception list (`kc9k social B playlist ID
+  on|off`); `db.withPlaylists` adds `youtube:playlist=<id>` and the
+  `youtube.com/watch` exception, unstored. Videos need `list=` and must be
+  in the shown playlist panel (`checkPlaylistVideo`).
+
+## Toolbar button (`popup.js`)
+
+Time left (allowance, break, schedule within 2 h); red in last 5 min; `!`
+when daemon unreachable; popup lists covering blocks, adds the site to
+Blocked. Uses its own window's front tab (`popupTab`; Chrome's panel
+window isn't focused). `ci/popup_background_test.js`.

@@ -4,86 +4,78 @@
 - SPEC: §3.9, §3.10, R-CUSTOM-1–2, R-WARN-1–2, R-EVENT-1, R-MODE-4
 - Connects to: [extension](extension.md), [device](device.md), [automation](automation.md) (mode runs), [lists](lists.md)
 
-## Code
+## Actions (`db/actions.go`, Param/Minutes)
 
-- **Actions** (`db/actions.go`, Param/Minutes): block, greyscale,
-  no-images, mute (`applyMute`), no-video, dark, no-downloads ([extension](extension.md)), redirect, image
-  (`db.ImagesDir`, served `/image/`), close-tab; device: close-browser, logout, shutdown, monk. Extension `kc9kOutcome`
-  picks the strongest, closes tab/browser itself, POSTs `/hit`
-  (`enforce/hits.go`, header required) so the daemon logs and runs
-  logout/shutdown/monk. `no-video`/`no-images` reach every frame:
-  background `tellFrames` pushes `tab-looks`, new frames ask for it; mute
-  is tab-wide (`applyMute`). Removed actions (declutter):
-  `migrateRemovedActions` drops them on open (emptied → block), imports
-  skip them (`db.IsRemovedAction`).
-- **Ad trigger** (§3.9, `db/adnetworks.go`): scope `ads` (`Where.Ads`,
-  `in_ads`; not exception lists or phrase sets); `WebList.AdNetworks`
-  expands industries (`AdIndustries`: adult, gambling, crypto, dating;
-  `TestAdIndustries`: plain domains, one industry each; only domains ad
-  filter lists name or real pages loaded, the ones seen live in
-  `TestAdIndustriesSeenLive`); rules `ads`; background `noteAdRequest` →
-  `kc9kAdMatches` → `pageHit`, once per page and list (`adSeen`); address
-  and URL-term exceptions spare the page. A list whose block has
-  exceptions by title or text (`kc9kAdsByPage`) is left to the page: the
-  content script collects the other hosts it loaded (resource timing,
-  `noteResource`, `adHosts`) and `kc9kListMatchesSteps` matches them like
-  an address, after every exception. Tests: `ci/match_test.js`,
-  `ci/background_test.js`, `ci/content_harness_test.js`; browser test in
-  `ci/extras_test.py` (block `extraads`; ad hosts resolved to the test
-  server through `network.dns.localDomains`).
-- **Trigger actions** (`db/triggers.go`, `enforce/trigger.go`,
-  `cli/triggers.go`; owner 2026-11-16): table `trigger_actions` (block,
-  group `apps`|`titles`, JSON actions); no row = default (`close`). `kc9k
-  block trigger B apps|titles ACTION on|off [--for D]` (on/longer free,
-  off/shorter weakens; monk needs `--no-confirm-ok`). Daemon:
-  `appsTrigger` (close or `RunningApps`), titles via
-  `TitleGuard.EnforceUsers` (`TitleTargets.Watch`: watch without closing;
-  per user, `titleTargets`); `fireTrigger` ≤ once
-  a minute per block+group → `runAnnounced`. GUI `TriggerEditor`,
-  gui-state `triggers`, projects `triggers`. A place rule has **no
-  actions** (§3.6, owner 2026-11-16: they existed for a day;
-  `migratePlaceTriggers` drops stored `place:` sets, project files' are
-  ignored). `ci/gui_trigger_smoke.py`.
-- **Consequences** (`enforce/consequence.go`): close browsers, lock
-  screen/logout/shutdown (via Frozen Chicken, only extended; ≤ once per 10
-  min), monk, mode (`StartModeRun`, `enforce/moderun.go`: `db.ModeRun` in
-  setting `mode.runs`; `modeRunning` in `enabledBlocks`, `ModeRunUntil` in
-  `blockHold`, `endModeRuns` in `Tick`), custom (`runCustom` →
-  `blocker.RunCustom`, `customDue` once a minute; a mode's own:
-  `runModeCustoms`, column `modes.custom`). `Consequence.Param`,
-  `TriggerAction.Param`, `NepsisAction.Param` carry the mode or the custom
-  items (`db.CustomItem`, `CustomParam`); CLI `--target`/`--custom`
-  (`addActionParamFlags`), ladder `--step-json`. Device effects via
-  replaceable vars.
-- **Events and bypass prevention** (`db/events.go`, `db/nepsis.go`,
-  `enforce/nepsis.go`, `cli/nepsis.go`): events kept a day; refused
-  weakening logged via `refused()`, never counted. `db.Nepsis`: detectors,
-  ladder, quiet time; global lockable as setting lock `nepsis`; per block
-  gated; state in `nepsis.ladder[.<block>]`; old one-step settings read as
-  ladders (`normalize`). `/hit` judges at once, answers `close_tab`.
-  `search` = `page` from a search origin (`fromSearch`). Multi-block events
-  (`RecordEventFor`) get a row per block, `extra` on all but the first.
+- Page: block, greyscale, no-images, mute, no-video, dark, no-downloads
+  ([extension](extension.md)), redirect, image (`db.ImagesDir`, served
+  `/image/`; PNG/JPEG/GIF/WebP), close-tab. Device: close-browser, logout,
+  shutdown, monk.
+- Extension `kc9kOutcome` picks the strongest (close-tab > image > redirect
+  > block; redirect to a blocked page shows the block page), closes
+  tab/browser itself, POSTs `/hit` (`enforce/hits.go`, header required);
+  daemon logs and runs logout/shutdown/monk. Only the top page triggers
+  close-tab/device actions; embedded content gets the block page.
+- `no-video`/`no-images` reach every frame (`tellFrames` → `tab-looks`);
+  mute tab-wide (`applyMute`).
+- Removed actions: `migrateRemovedActions` drops them (emptied → block);
+  imports skip them (`db.IsRemovedAction`).
+- Edits: longer time or another picture free; new redirect address weakens.
+  List logout/shutdown/lock-screen notified 60 s ahead; one-off
+  logout/shutdown ≤ every 10 min; `--for` via Frozen Chicken (≤ a week).
 
-## Built behaviour
+## Ad trigger (§3.9, `db/adnetworks.go`)
 
-Not fixed by `SPEC.md`; the code is the truth.
+Scope `ads` (`Where.Ads`; not exception lists or phrase sets);
+`WebList.AdNetworks` expands industries (`AdIndustries`: adult, gambling,
+crypto, dating; `TestAdIndustries`: plain domains, one industry each,
+only domains ad filter lists name or seen live). Background
+`noteAdRequest` → `kc9kAdMatches` → `pageHit`, once per page and list
+(`adSeen`); address/URL-term exceptions spare the page. Block with
+title/text exceptions (`kc9kAdsByPage`): content script collects loaded
+hosts (`noteResource`, `adHosts`), matched like an address after every
+exception. Browser test: `ci/extras_test.py` block `extraads` (ad hosts
+via `network.dns.localDomains`).
 
-- **Actions**: strongest page action close-tab > image > redirect > block;
-  redirect to a blocked page shows the block page. Only the top page triggers
-  close-tab/device actions; embedded content gets the block page. Image:
-  PNG/JPEG/GIF/WebP. Action edits: longer time or another picture free; new
-  redirect address weakens. List logout/shutdown/lock-screen notified 60 s
-  ahead; one-off logout/shutdown ≤ every 10 min; `--for` goes through
-  Frozen Chicken (≤ a week).
-- **Bypass prevention**: `bypass set --step "3 in 10m: warning, close-tab,
-  logout 1m" … --quiet 2h [--block B] [--detect …] [lock flags]`, short
-  form `--count --within --then [--then-for]`. Actions: `warning`,
-  `close-tab`, `close-browser`, `lock-screen D`, `logout [D]`,
-  `shutdown [D]`, `monk D`. Past the last step repeats the last. `page`
-  excludes look-only actions; `search` = page opened from search results
-  (Google, Bing, DDG, Brave, Startpage…, any `/search?q=`); `tamper` =
-  daemon restart within a boot (not upgrade or self-reported crash) or clock
-  moved > 2 min against the boot clock. Global counts all; per block counts
-  while on; both apply. Stricter = more detectors, later fall-back, steps
-  tripping on fewer events over longer windows with ≥ actions, more steps
-  at the end; free. Global lockable (`--for`).
+## Trigger actions (`db/triggers.go`, `enforce/trigger.go`, `cli/triggers.go`)
+
+Table `trigger_actions` (block, group `apps`|`titles`, JSON actions); no
+row = `close`. `kc9k block trigger B apps|titles ACTION on|off [--for D]`
+(on/longer free, off/shorter weakens; monk needs `--no-confirm-ok`).
+Daemon: `appsTrigger` (close or `RunningApps`), titles via
+`TitleGuard.EnforceUsers` (`TitleTargets.Watch`: watch without closing);
+`fireTrigger` ≤ once a minute per block+group → `runAnnounced`. GUI
+`TriggerEditor`. Place rules have **no actions** (§3.6;
+`migratePlaceTriggers` drops old `place:` sets).
+
+## Consequences (`enforce/consequence.go`)
+
+Close browsers; lock screen/logout/shutdown (via Frozen Chicken, only
+extended, ≤ once per 10 min); monk; mode (`StartModeRun`,
+`enforce/moderun.go`: `db.ModeRun` in `mode.runs`; `modeRunning` in
+`enabledBlocks`, `ModeRunUntil` in `blockHold`, `endModeRuns` in `Tick`);
+custom (`runCustom` → `blocker.RunCustom`, `customDue` once a minute; a
+mode's own: `runModeCustoms`, `modes.custom`). `*.Param` carries the mode
+or custom items (`db.CustomItem`); CLI `--target`/`--custom`
+(`addActionParamFlags`), ladder `--step-json`. Device effects via
+replaceable vars.
+
+## Events and bypass prevention (`db/events.go`, `db/nepsis.go`, `enforce/nepsis.go`, `cli/nepsis.go`)
+
+- Events kept a day. Refused weakening logged via `refused()`, never
+  counted. Multi-block events (`RecordEventFor`): a row per block, `extra`
+  on all but the first. `/hit` judges at once, answers `close_tab`.
+- `db.Nepsis`: detectors, ladder, quiet time; state in
+  `nepsis.ladder[.<block>]`; old one-step settings read as ladders
+  (`normalize`). Global lockable as setting lock `nepsis` (`--for`); per
+  block gated. Global counts all; per block counts while on; both apply.
+- `bypass set --step "3 in 10m: warning, close-tab, logout 1m" … --quiet 2h
+  [--block B] [--detect …] [lock flags]`; short form `--count --within
+  --then [--then-for]`. Actions: `warning`, `close-tab`, `close-browser`,
+  `lock-screen D`, `logout [D]`, `shutdown [D]`, `monk D`. Past the last
+  step repeats the last.
+- Detectors: `page` (excludes look-only actions); `search` = page from a
+  search origin (`fromSearch`: Google, Bing, DDG, Brave, Startpage…, any
+  `/search?q=`); `tamper` = daemon restart within a boot (not upgrade or
+  self-reported crash) or clock moved > 2 min vs the boot clock.
+- Stricter (free): more detectors, later fall-back, steps tripping on fewer
+  events over longer windows with ≥ actions, more steps at the end.

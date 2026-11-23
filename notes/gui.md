@@ -4,65 +4,43 @@
 - SPEC: §4.1–4.13, R-GUI-1–3
 - Connects to: every note (each GUI change runs a `kc9k` command); [testing](testing.md) (GUI smoke tests)
 
-## Code
+## Structure (`gui/kc9k-gui.py`, GTK 3)
 
-- **GUI** (`gui/kc9k-gui.py`, GTK 3): reads `kc9k gui-state`,
-  `kc9k stats --json`; every change runs a `kc9k` command. Blocks page
-  (§4.2): `blocks_stack` "cards" (`update_block_cards`, `block_card`:
-  name, switch, Continuous/Automated, `breaks_words`, `lock_words`) and
-  "detail" (the block, `open_block(name, tab)`) and "mode" (`open_mode`,
-  `update_mode_view`); modes above the blocks (`mode_card`, drop target
-  `BLOCK_TARGET`; block cards' title is the drag source, ⋯ "Move to the
-  mode"); `AutomationEditor` (kind mode/monk/schedule) runs the same
-  commands with the mode's or schedule's name; sidebar pages Schedules
-  (`build_schedules_page`, `open_schedule`) and Places
-  (`build_places_page`); a block in a mode greys `block_auto_widgets`.
-  An opened block's top (← All blocks to the Start/⋯ row) stays put;
-  only its tabs scroll (`detail_scroll`).
-  `ci/gui_cards_smoke.py`, `ci/gui_modes_smoke.py`. Design layer
-  (R-GUI-3, `APP_CSS`): `page_header`, `section` (a card; `help=` puts
-  long text behind a ? popover), `card`, `pill`/`block_pills`,
-  `flow_row` (a row into a `WrapBox`: laid out like words, natural widths,
-  a new line only when the next doesn't fit; GTK 3's FlowBox put one per
-  line). `WrapBox` is a `Gtk.Fixed` overriding only size vfuncs: never
-  write a container in Python (`do_forall`): GTK calls it on a fresh
-  wrapper when a destroyed one is finalized and spins. Inputs (R-GUI-1/2):
-  `DurationField` (typed `2d 4h`, says why when wrong, never clamps),
-  `NumberField`, `TimerLockField` (none / for / until a calendar date),
-  `LockPicker` (every lock kind; `lock_dialog` reads it before closing).
-  A block's Start runs `kc9k start` at once (`start_block`, D2); once on it
-  is Add locks… (`add_locks`, the lock dialog; a card's lock state too).
-  Lock state follows the unlock order (`lock_order`, R-LOCK-6): a card
-  names the lock unlocked next (`lock_words`), `block_pills` puts lock
-  pills in that order. `waiting_words` (after `choose_lock_order`, and
-  in `add_locks` against the locks on) words a `--for` timer or restart
-  lock behind a non-timer lock as waiting for it, as the CLI's
-  confirmation does.
-  Extend timer… (`extend_timer`, a `TimerLockField` without "none") runs
-  `kc9k extend`, offered while `lock_order` has a timer lock
-  (`ci/gui_extend_smoke.py`). `LockPicker(relock_any=True)` for blocks,
-  modes and hotkeys: re-lock goes with any lock (`relock_lines` in the
-  confirmation); setting locks keep it to text/password locks.
-  `EditableList` has a `ResizeGrip` under it (drag down: taller; double-click:
-  back), height kept in gui.json `list_heights` under `size_key` (website
-  list, phrase set) or the list's title; a new height goes to every list of
-  that key on screen too (`ResizeGrip.live`: a kept card, such as the
-  exception list of a block opened again); `ci/gui_list_resize_smoke.py`.
-  CLI side: `cli/duration.go` (`parseUserDuration` with d/w,
-  `humanDuration`, `untilToday` with dates).
-
-## Built behaviour
-
-Not fixed by `SPEC.md`; the code is the truth.
-
-- **GUI**: menu entry / `kc9k-gui` (`python3-gi`); theme in
-  `~/.config/kc9k/gui.json`. Schedule grid: drag adds, click removes,
-  filled = block window, outlined = allow window, one-click presets.
-  ClipEditor: right-click add/remove point, drag (Shift = minute), drag
-  the small handle mid-segment up or down to bend (`handles`, D4),
-  double-click (a point or handle) to type.
-- **Phrase editor** (`PhraseSetCard`): Save changes runs `phrase-set
-  change` and stays off until the new state is read; Cancel asks before
-  dropping unsaved work; Delete phrase asks, then empties the editor (also
-  when a periodic refresh read the set before the command's result,
-  `remove_loaded`). `ci/gui_phrase_smoke.py`, `ci/gui_phrase_edit_smoke.py`.
+- Reads `kc9k gui-state`, `kc9k stats --json`; every change runs a `kc9k`
+  command. Menu entry / `kc9k-gui` (`python3-gi`); theme in
+  `~/.config/kc9k/gui.json`.
+- Blocks page (§4.2): `blocks_stack` "cards" (`update_block_cards`,
+  `block_card`: name, switch, Continuous/Automated, `breaks_words`,
+  `lock_words`), "detail" (`open_block(name, tab)`; top fixed, only tabs
+  scroll in `detail_scroll`), "mode" (`open_mode`, `update_mode_view`).
+  Modes above blocks (`mode_card`, drop target `BLOCK_TARGET`; drag a
+  card's title, or ⋯ "Move to the mode"); a block in a mode greys
+  `block_auto_widgets`. `AutomationEditor` (kind mode/monk/schedule);
+  sidebar Schedules (`build_schedules_page`) and Places
+  (`build_places_page`).
+- Design layer (R-GUI-3, `APP_CSS`): `page_header`, `section` (card;
+  `help=` → ? popover), `card`, `pill`/`block_pills`, `flow_row` (into a
+  `WrapBox`: laid out like words). `WrapBox` is a `Gtk.Fixed` overriding
+  only size vfuncs: never write a container in Python (`do_forall`): GTK
+  calls it on a finalized wrapper and spins.
+- Inputs (R-GUI-1/2): `DurationField` (typed `2d 4h`, says why when wrong,
+  never clamps), `NumberField`, `TimerLockField` (none / for / until
+  date), `LockPicker` (every lock kind; `relock_any=True` for blocks,
+  modes, hotkeys; setting locks: re-lock only with text/password).
+  CLI side `cli/duration.go` (`parseUserDuration` with d/w,
+  `humanDuration`, `untilToday`).
+- Locks: Start runs `kc9k start` at once (`start_block`, D2); once on, Add
+  locks… (`add_locks`). Lock state follows unlock order (`lock_order`,
+  R-LOCK-6): cards name the next lock to unlock, pills in that order;
+  `waiting_words` words a timer/restart lock behind a non-timer one as
+  waiting, as the CLI confirmation does. Extend timer… (`extend_timer`)
+  runs `kc9k extend` while `lock_order` has a timer lock.
+- `EditableList` + `ResizeGrip` (drag taller, double-click resets); height
+  in gui.json `list_heights` per `size_key`, applied live to same-key lists.
+- Schedule grid: drag adds, click removes, filled = block window, outlined
+  = allow window, one-click presets.
+- ClipEditor: right-click add/remove point, drag (Shift = minute), drag
+  mid-segment handle to bend (D4), double-click to type.
+- Phrase editor (`PhraseSetCard`): Save runs `phrase-set change`, stays off
+  until the new state is read; Cancel asks before dropping unsaved work;
+  Delete phrase asks, then empties the editor (`remove_loaded`).

@@ -141,7 +141,10 @@ Check "the challenge window refuses an injected key (Raw Input, no device)" { $s
 # Typed keys (window messages, as a keyboard's reach it) unlock it.
 $u = UnlockNoConsole 'ci-lock'
 $hwnd = ChallengeWindow
-foreach ($c in @(0x6B, 0x63, 0x0D)) { [Kc9kDesk]::PostMessage($hwnd, 0x0102, [IntPtr]$c, [IntPtr]::Zero) | Out-Null; Start-Sleep -Milliseconds 150 }
+# Each post's result is printed: a lost key (ROADMAP A17, run 215) is then
+# told apart from a post that failed.
+$posted = foreach ($c in @(0x6B, 0x63, 0x0D)) { [Kc9kDesk]::PostMessage($hwnd, 0x0102, [IntPtr]$c, [IntPtr]::Zero); Start-Sleep -Milliseconds 150 }
+Write-Host "  posted k c Enter to window $($hwnd): $($posted -join ' ')"
 $u[0].WaitForExit(30000) | Out-Null
 $said = UnlockSaid $u
 & $k stop ci-lock | Out-Host

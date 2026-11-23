@@ -383,7 +383,10 @@ func runChallenge(a ChallengeArgs) (string, error) {
 			return
 		}
 		challengeCur = state
-		defer func() { challengeCur = nil }()
+		// Cleared before the result is sent (below), never by a deferred
+		// call: runChallenge returns on the result and the next challenge
+		// may open at once, and a late clear would leave its window
+		// ignoring keys, or OpChallengeCancel unable to close it.
 		title := windows.StringToUTF16Ptr("Killer Chicken 9000: unlock challenge")
 		// A fixed frame with a close button only (closing cancels): no
 		// minimise or maximise, so it never passes for an empty app window.
@@ -395,6 +398,7 @@ func runChallenge(a ChallengeArgs) (string, error) {
 			wsCaption|wsSysMenu, cwUseDefault, cwUseDefault, challengeWidth, challengeHeight, 0, 0, 0, 0)
 		if hwnd == 0 {
 			log.Printf("agent: challenge window: CreateWindowEx: %v", err)
+			challengeCur = nil
 			result <- err
 			return
 		}
@@ -402,12 +406,16 @@ func runChallenge(a ChallengeArgs) (string, error) {
 		state.setDPI(windowDPI(hwnd))
 		log.Printf("agent: challenge window %#x open (%d pages, %d DPI)", hwnd, len(a.Pages), state.dpi)
 		challengeHwnd.Store(hwnd)
-		defer challengeHwnd.Store(0)
-		defer func() {
+		closed := func() {
+			challengeHwnd.CompareAndSwap(hwnd, 0)
+			if challengeCur == state {
+				challengeCur = nil
+			}
 			if state.font != 0 {
 				procDeleteObject.Call(state.font)
+				state.font = 0
 			}
-		}()
+		}
 		const swpNoMove, swpNoZOrder, swpNoActivate = 0x2, 0x4, 0x10
 		procSetWindowPos.Call(hwnd, 0, 0, 0, uintptr(scale(challengeWidth, state.dpi)), uintptr(scale(challengeHeight, state.dpi)), swpNoMove|swpNoZOrder|swpNoActivate)
 		// Every key also as Raw Input, to tell typed keys from injected.
@@ -415,6 +423,7 @@ func runChallenge(a ChallengeArgs) (string, error) {
 		dev := rawInputDevice{usagePage: 1, usage: 6, flags: ridevInputSink, target: hwnd}
 		if r, _, err := procRegisterRawInputDevices.Call(uintptr(unsafe.Pointer(&dev)), 1, unsafe.Sizeof(dev)); r == 0 {
 			procDestroyWindow.Call(hwnd)
+			closed()
 			result <- fmt.Errorf("raw input: %w", err)
 			return
 		}
@@ -440,7 +449,8 @@ func runChallenge(a ChallengeArgs) (string, error) {
 			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 		}
 		procDestroyWindow.Call(hwnd)
-		log.Printf("agent: challenge window %#x closed", hwnd)
+		closed()
+		log.Printf("agent: challenge window %#x closed (%d events, page %d of %d)", hwnd, len(state.events), state.page, len(a.Pages))
 		result <- nil
 	}()
 	if err := <-result; err != nil {

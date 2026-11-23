@@ -457,7 +457,9 @@ needs it and the Linux tests prove nothing changed.
   (win-vm, a person; `ci/windows_vm_test.ps1`): notifications seen, the
   challenge window typed on a real keyboard and the on-screen keyboard
   refused, the lock freeze (locking the runner's desktop would stop the
-  job).
+  job). A17's lost key (run 215): one race fixed (2026-11-23: a closed
+  window's deferred clear could wipe the next window's state and handle);
+  the check now prints each posted key's result. Cause not proven.
 - [ ] `W4` GUI (L). C# WinUI 3, .NET LTS, unpackaged, self-contained, in
   `windows/gui/` (no browser, no web view); every GTK page ported, checked
   in CI against the fake kc9k and the real `kc9k.exe` with its service.

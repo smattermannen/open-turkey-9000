@@ -120,8 +120,10 @@
   Read by `lock/window_windows.go`. The asking command ending (killed,
   Ctrl-C) closes it: the service sees the command's internal pipe close
   and sends `OpChallengeCancel` (else the window stayed and refused every
-  later unlock: "open already"). Another process finds it by title, not
-  class. Gamma a driver refuses without an error code: "the display driver
+  later unlock: "open already"). Its state and handle are cleared when it
+  closes, before the next challenge can open (only if still its own), never
+  by a deferred call that could clear the next window's. Another process
+  finds it by title, not class. Gamma a driver refuses without an error code: "the display driver
   refused the colour ramp" (GitHub's runner does).
 
 ## Circadian rhythm and wallpapers (W6)

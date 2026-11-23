@@ -198,7 +198,7 @@ Only rows not fully built.
 | Item | Status | Notes |
 |---|---|---|
 | §5 R-LOCK-12 | Partial | `A12` |
-| §4.11 One-click installer, every platform | Not built | `2.11` |
+| §4.11 One-click installer, every platform | Partial | `2.11` |
 | §3.13 Chrome, Edge, Firefox, Bing on every platform | Partial | `2.12` |
 | §4.14 Cross-device sync | Not built | `2.10` |
 | §4.15 Accountability partner | Not built | `2.13` |
@@ -274,15 +274,18 @@ Only rows not fully built.
   - [ ] Check against the real project: Linux → Windows → Linux round trip.
   - [ ] Note `notes/sync.md` when built.
 - **2.11 One-click installer** (M per platform; §4.11; methods SPEC §6
-  2026-11-23): Not built. Linux: the `.deb` (double-click opens Mint's
+  2026-11-23): Partial (Linux built, Windows MSI waiting for W7 and
+  `2.17`, Android open). Linux: the `.deb` (double-click opens Mint's
   package installer, one click Install). Windows: the signed MSI (W7).
   Both on GitHub Releases, later the website (`2.14`). Android: open (SPEC
   §7).
   Linux built (`notes/install.md`): the `.deb` does all `install.sh` does,
   LibreWolf by the daemon after install (retried every 30 min);
   `linux-release.yml` (tag → `.deb` + `.sha256` on the release, checked
-  first); CI job `deb` runs `ci/deb_install_check.sh` on every push.
-  Unchecked: the first green `deb` job.
+  first); CI job `deb` runs `ci/deb_install_check.sh` on every push
+  (green since run 684: daemon installs LibreWolf ~1 min after install);
+  `linux-release.yml` run by hand green (`0.0.1-beta.1`). Unchecked: its
+  publish step (first tag, owner).
   To do, agent (Linux):
   - [ ] Installed by double-click on a clean Mint VM: daemon running, GUI
     in the menu, LibreWolf and Chrome get the extension (vm):

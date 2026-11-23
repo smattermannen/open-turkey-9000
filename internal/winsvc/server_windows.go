@@ -212,7 +212,12 @@ func runForwarded(conn io.Reader, caller Caller, req Request, stdout, stderr io.
 		return 1
 	}
 	go func() {
-		defer in.Close()
+		var closeIn sync.Once
+		defer closeIn.Do(func() { in.Close() })
+		// Read frames until the client goes away, also after its input
+		// ended: a Ctrl-C or the client's end must still stop the command
+		// (an unlock with its input from a file kept its challenge window
+		// open after the client was killed).
 		for {
 			kind, payload, err := ReadFrame(conn)
 			if err != nil {
@@ -223,11 +228,9 @@ func runForwarded(conn io.Reader, caller Caller, req Request, stdout, stderr io.
 			}
 			switch kind {
 			case FrameStdin:
-				if _, err := in.Write(payload); err != nil {
-					return
-				}
+				_, _ = in.Write(payload) // a command that stopped reading: dropped
 			case FrameStdinEOF:
-				return
+				closeIn.Do(func() { in.Close() })
 			case FrameInterrupt:
 				_ = cmd.Process.Kill()
 				return

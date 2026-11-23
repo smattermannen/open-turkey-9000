@@ -66,7 +66,6 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public static class Kc9kDesk {
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hwnd);
     [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
@@ -99,14 +98,18 @@ function UnlockNoConsole([string]$name) {
     $p = Start-Process $k "unlock $name" -WindowStyle Hidden -RedirectStandardInput $empty -RedirectStandardOutput $outFile -RedirectStandardError "$outFile.err" -PassThru
     return @($p, $outFile)
 }
+# The open challenge window: the agent's main window with its title.
+# (PowerShell hands $null to a C# string as "", so FindWindow by class or
+# title alone never matched.)
+$challengeTitle = 'Killer Chicken 9000: unlock challenge'
+function ChallengeHwnd {
+    $p = Get-Process kc9k -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq $challengeTitle } | Select-Object -First 1
+    if ($p) { return $p.MainWindowHandle } else { return [IntPtr]::Zero }
+}
 function ChallengeWindow {
-    # By its title: another process's FindWindow by class doesn't see a
-    # class the agent registered without a module handle.
-    $title = 'Killer Chicken 9000: unlock challenge'
-    Until 30 { [Kc9kDesk]::FindWindow($null, $title) -ne [IntPtr]::Zero } | Out-Null
-    $h = [Kc9kDesk]::FindWindow($null, $title)
+    Until 30 { (ChallengeHwnd) -ne [IntPtr]::Zero } | Out-Null
+    $h = ChallengeHwnd
     if ($h -eq [IntPtr]::Zero) {
-        # What there is instead, for the log.
         Get-Process kc9k -IncludeUserName -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  kc9k pid $($_.Id) session $($_.SessionId) user $($_.UserName) window $($_.MainWindowHandle) '$($_.MainWindowTitle)'" }
     }
     return $h
@@ -133,7 +136,7 @@ $said = UnlockSaid $u
 $u = UnlockNoConsole 'ci-lock'
 $hwnd = ChallengeWindow
 Stop-Process -Id $u[0].Id -Force -ErrorAction SilentlyContinue
-Check 'the challenge window closes when the unlock asking for it is ended' { Until 20 { [Kc9kDesk]::FindWindow($null, 'Killer Chicken 9000: unlock challenge') -eq [IntPtr]::Zero } }
+Check 'the challenge window closes when the unlock asking for it is ended' { $hwnd -ne [IntPtr]::Zero -and (Until 20 { (ChallengeHwnd) -eq [IntPtr]::Zero }) }
 Check "the challenge window refuses an injected key (Raw Input, no device)" { $said -match "wasn't typed on the keyboard" -and (BlockLocked 'ci-lock') }
 # Typed keys (window messages, as a keyboard's reach it) unlock it.
 $u = UnlockNoConsole 'ci-lock'

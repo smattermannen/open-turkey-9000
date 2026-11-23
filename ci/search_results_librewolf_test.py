@@ -76,11 +76,23 @@ driver = librewolf({
 }, pack())
 try:
     for name, url in PAGES.items():
-        state["rules"] = {"lists": LISTS}
+        # First with no lists: what is hidden then is another add-on's doing
+        # (LibreWolf's bundled uBlock Origin hides the engines' ads), not
+        # KC9K's; those are left out below. Chromium, without it, checks
+        # ads too (ci/search_results_test.js).
+        state["rules"] = {"lists": []}
         wait_polls(1)
         driver.get(url)
         time.sleep(1.5)  # DuckDuckGo adds more results after 400 ms
-        marks = settled(as_expected)
+        others = {m["what"] for m in driver.execute_script(MARKS) if not m["shown"]}
+        if others:
+            print(f"note: {name}: hidden with no lists (another add-on): {sorted(others)}")
+        mine = lambda marks: [m for m in marks if m["what"] not in others]
+        state["rules"] = {"lists": LISTS}
+        wait_polls(1)
+        driver.get(url)
+        time.sleep(1.5)
+        marks = mine(settled(lambda marks: as_expected(mine(marks))))
         gone = [m for m in marks if m["expect"] == "gone"]
         kept = [m for m in marks if m["expect"] == "kept"]
         check(f"{name}: results leading to Reddit or X are gone ({len(gone)})",
@@ -89,7 +101,7 @@ try:
               [m for m in kept if not m["shown"]])
         state["rules"] = {"lists": []}
         wait_polls(2)
-        after = settled(lambda marks: all(m["shown"] for m in marks))
+        after = mine(settled(lambda marks: all(m["shown"] for m in mine(marks))))
         check(f"{name}: with the block off every result is back", all(m["shown"] for m in after),
               [m for m in after if not m["shown"]])
 finally:

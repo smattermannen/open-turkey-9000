@@ -279,7 +279,9 @@ Only rows not fully built.
   Unchecked: the first green `deb` job.
   To do, agent (Linux):
   - [ ] Installed by double-click on a clean Mint VM: daemon running, GUI
-    in the menu, LibreWolf and Chrome get the extension (vm).
+    in the menu, LibreWolf and Chrome get the extension (vm):
+    `MANUAL=1 ci/deb_vm_test.sh host` (written, never run; needs a clean
+    Mint VM `kc9k-mint` with a snapshot `clean`, see `notes/testing.md`).
   - [ ] `gui/kc9k.desktop`'s `Comment` is Swedish (principle 8: English
     only); shown in Mint's menu (session B's area, `gui/`).
   To do, agent (Windows):

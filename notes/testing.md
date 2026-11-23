@@ -58,6 +58,13 @@
   login/su on a pty, one boot with `kc9k.nofreeze`), `ci/tamper_vm_test.sh`
   (2.9: installer guard via dpkg and `install.sh`, needs Go in the VM;
   LightDM `HasGuestAccount`). Both never run yet.
+- `ci/deb_vm_test.sh host [domain] [ssh-alias]` (2.11; never run; needs a
+  clean Mint VM, default `kc9k-mint`, snapshot `clean`: no KC9K, no
+  LibreWolf, user with passwordless sudo and ssh key): reverts, builds a
+  release `.deb` (`9000.1~vmcheck`), runs `ci/deb_install_check.sh` in the
+  VM through the user's sudo (apt install), reverts shut off. `MANUAL=1`:
+  the `.deb` goes to `~/Downloads`, a person double-clicks it and presses
+  Install, then only the checks run.
 
 ## Other commands
 

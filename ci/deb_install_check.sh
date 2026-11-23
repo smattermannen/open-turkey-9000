@@ -10,6 +10,9 @@
 #
 # The version, when given, must be what `kc9k version` says. When run
 # through sudo, kc9k is also run as that user, through the wrapper.
+# DEB_INSTALLED=1: a person installed the .deb already (double-click,
+# Install: ci/deb_vm_test.sh with MANUAL=1); only the checks run, and
+# LIBREWOLF_BEFORE=yes|no says whether LibreWolf was there before.
 # LIBREWOLF_MINUTES (default 15): how long the daemon gets for LibreWolf
 # (its first try is a minute after it starts). Exit status: the number of
 # failed checks.
@@ -47,13 +50,22 @@ within() {
 librewolf_installed() { [ -x /usr/bin/librewolf ] && dpkg-query -W -f='${Status}' librewolf 2>/dev/null | grep -q 'install ok installed'; }
 policy_has_extension() { grep -q force_installed "$1" 2>/dev/null; }
 
-had_librewolf=no
-librewolf_installed && had_librewolf=yes
+# LIBREWOLF_BEFORE=yes|no: whether LibreWolf was there before the install
+# (given with DEB_INSTALLED=1, as the install is over by now).
+had_librewolf=${LIBREWOLF_BEFORE:-}
+if [ -z "$had_librewolf" ]; then
+	had_librewolf=no
+	librewolf_installed && had_librewolf=yes
+fi
 echo "LibreWolf before the install: $had_librewolf"
 
-echo "Installing $deb"
 export DEBIAN_FRONTEND=noninteractive
-check "the .deb installs" apt-get install -y "$deb"
+if [ "${DEB_INSTALLED:-}" = 1 ]; then
+	echo "Installed by a person: checking only"
+else
+	echo "Installing $deb"
+	check "the .deb installs" apt-get install -y "$deb"
+fi
 check "package installed" bash -c "dpkg-query -W -f='\${Status}' kc9k | grep -q 'install ok installed'"
 if [ -n "$want" ]; then
 	check "kc9k version says $want" bash -c "/usr/local/bin/kc9k-bin version | grep -qF -- '$want'"

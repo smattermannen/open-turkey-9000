@@ -76,15 +76,11 @@ its bypass prevention).
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows, device | laptop |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
 | W49 | Core's `GUI:` lines given their place in the GUI | §4 | gui-windows | agent, win-ci |
-| W50 | Windows GUI froze the whole laptop: soak on real hardware | principle 1 | gui-windows, windows | win-vm, laptop |
-| W51 | Screen went black, "overrun detection" warning when switching settings | §4.10 | gui-windows, windows | win-vm, laptop |
-| W52 | Blank white classic window over the GUI | R-GUI-3 | gui-windows | win-vm |
+| W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows | laptop |
 | W53 | Side menu pushes the page sideways; pin it like GTK | R-GUI-3 | gui-windows | agent, win-ci |
 | W54 | Windows page layout as in the GTK GUI, Windows look kept | §4.1–4.13 | gui-windows | agent, win-ci, owner |
-| W55 | Import project in the Windows GUI | §3 Project | gui-windows, db-project | agent, win-ci |
-| W56 | A Linux project imports safely on Windows | §3 Project, R-WEAK-1/2 | db-project, windows | agent, win-ci |
 | A15 | Enter presses OK in every dialog (GTK and Windows GUI) | R-GUI-3 | gui, gui-windows | agent |
-| A14 | Automation clip curves: GTK smoke test and laptop look Unchecked | §4.10 | circadian, gui, gui-windows | agent, laptop |
+| A14 | Clip curves mirrored, tested in Go, C#, GTK; the owner's look on the laptop | §4.10 | circadian | owner |
 
 ## 0. Fix what exists
 
@@ -457,10 +453,8 @@ Static findings still open (code read, not seen on the laptop):
 - **The challenge window looks like W52's white window**: topmost 900×560
   Win32 window with its own buttons (`winagent/challenge_windows.go:306`),
   no background brush, `kc9k.exe` has no manifest.
-- **The GUI**: only WinUI's `UnhandledException` is logged (`App.cs`): no
-  `AppDomain`/`TaskScheduler` handler, no note after a crash; every state
-  change updates all nine pages, hidden ones too (`MainWindow.Apply`), and
-  `gui-state` changes every read while a countdown runs.
+- `gui-state` changes every read while a countdown runs (each read
+  redraws the page shown).
 
 Stability (blocks every other Windows GUI test):
 
@@ -479,12 +473,12 @@ Stability (blocks every other Windows GUI test):
   `TestWinKillDenyList`); SRP removal refreshes nothing when idle
   (`TestStrictSRPRefreshOnlyOnChange`); panel PowerShell only with the
   backlight clip on; `ci/windows_soak_test.ps1` in windows.yml's `system`
-  job. Laptop (MSI 0.1.1, 2-min soak): GP 0/min, no System32 closing, no
-  agent restart; the soak still exits 1 on idle ("PowerShell by the
-  service": the once-a-minute panel read, `panelReadEvery`, against an
-  idle limit of 0; agent handles +5.9 % in the first 2.6 min, flat after).
-  Left: the soak on real hardware.
-- [ ] `W51` **Screen black several times, "overrun detection" warning**
+  job. Laptop (MSI 0.1.1, 2-min soak): fixed — GP 0/min (was 24), no
+  System32 closing, no agent restart. Its two idle failures were then
+  fixed: a wake no longer re-reads the panel while the backlight clip is
+  off; the handle slope skips warm-up. Left: the laptop re-runs the soak
+  (idle must show 0 PowerShell by the service).
+- [x] `W51` **Screen black several times, "overrun detection" warning**
   (M; §4.10). Cause: dwm.exe killed by the guard (W50; Dwminit exits every
   ~65 s). Also built: one package-level `EnumDisplayMonitors` callback (Go
   throws at 2000 callbacks; `TestWinDisplaysManyCalls`); agent screen calls
@@ -492,17 +486,16 @@ Stability (blocks every other Windows GUI test):
   `recover()`; ramps checked (`CheckRamp`); identity ramp put back when
   circadian goes off and when the agent ends; an agent reporting its own
   crash is not tamper (SPEC §3.10, `TestAgentEndCrashVsKill`). Laptop 0.1.1
-  (2-min phases): no black screen. Open: the switching soak's `settings`
-  phase at length on win-vm or laptop; "overrun detection" not found in any
-  log. Done when: each setting switched on and off repeatedly on win-vm
-  with no blank screen and no warning.
-- [ ] `W52` **Blank white window appears at random** (M; R-GUI-3). Most
+  (circadian, Play the day, every setting on/off ×5): no black screen, no
+  DWM exit, gamma sane. "Overrun detection" found in no log.
+- [x] `W52` **Blank white window appears at random** (M; R-GUI-3). Most
   likely ordinary windows drawn while dwm.exe was dead (classic frame;
   fontdrvhost and others killed too). With 0.1.1 and the GUI open ~30 min
-  a window watcher saw no classic or blank KC9K window. Left: a GUI crash
-  writes a log and says so (see the static finding above). Done when: the
-  window is gone or shows what it is, and a GUI crash writes a log. The
-  LibreWolf restarts seen meanwhile: §5.
+  a window watcher saw no classic or blank KC9K window. Built: gui.log also
+  gets `AppDomain` and unobserved-task errors; a crash leaves a note shown
+  once at the next start; identical error dialogs collapse; only the page
+  shown is updated (`StabilityTests`, CI). The LibreWolf restarts seen
+  meanwhile: §5.
 
 Layout (owner: keep the Windows look, use the GTK layout):
 
@@ -545,14 +538,13 @@ Both platforms:
 - [ ] `A15` **Enter presses OK** (R-GUI-3): in every dialog of the GTK and
   Windows GUIs, Enter presses the default button. Done when: a GUI test
   per platform opens dialogs, presses Enter and sees each accepted.
-- [ ] `A14` **Automation clip curves bend one way only** (S; §4.10
+- [x] `A14` **Automation clip curves bend one way only** (S; §4.10
   automation clips). Dragging a point far up made a sharp corner, down a
   soft curve, on Linux and Windows. Built: one mirrored curve (below
   straight x^p, above 1 − (1 − x)^p) in Go, C# and GTK, same samples tested
-  in each; Go and C# tests pass. Unchecked: the GTK smoke test (drags a
-  handle 40 px up and down, expects mirror images; written, not run: no
-  GTK) and the owner's look on the laptop. Done when: a test drags a point
-  up and down by the same amount and gets mirror-image curves.
+  in each; Go, C# and the GTK smoke test (`ci/gui_circadian_smoke.py`, in
+  test.yml: drags a handle 40 px up and down, gets mirror images) pass.
+  Left: the owner's look on the laptop.
 
 ## 5. Proposed, not agreed
 

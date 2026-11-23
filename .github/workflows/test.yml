@@ -36,6 +36,7 @@ jobs:
       - name: Install Killer Chicken 9000
         run: sudo env "PATH=$PATH" ./install.sh
       - name: Integration tests
+        timeout-minutes: 25
         run: bash ci/integration.sh
       - name: Boot lock
         run: bash ci/bootlock.sh

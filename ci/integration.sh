@@ -4,9 +4,14 @@
 set -uo pipefail
 
 failures=0
+# A command that waits (a prompt, a lock) fails after 120 s instead of
+# hanging the job; each check says what it runs first, so a hang is named.
+kc9k() { timeout 120 command kc9k "$@"; }
+export -f kc9k
 check() {
     local name=$1
     shift
+    echo "RUN: $name"
     if "$@"; then
         echo "PASS: $name"
     else

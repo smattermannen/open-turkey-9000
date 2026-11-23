@@ -11,8 +11,8 @@
   drift reapply).
 - `Inputs` reads tamper settings file:// blocking and block embedded
   content from package vars loaded before each apply (`loadDNSChoice`);
-  caches its result per blocks (`lastInputs`, `inputsKey` sha256, those
-  settings included).
+  keeps its results per blocks (`keptInputs`, ≤ 32, keyed by `inputsKey`:
+  maphash via `blocker.ListsKey`, those settings included).
 - Firewall filled only by `Tick` (`deferFirewall`), never waiting on
   lookups (`blocker.ApplyFirewallKnown`), reapplied when the background run
   ends (`firewallLookups`): waiting held the apply lock and every `kc9k`

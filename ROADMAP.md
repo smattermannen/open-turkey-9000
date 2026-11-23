@@ -430,8 +430,11 @@ Never on a computer in use; the laptop runs only what is marked laptop.
 win-vm (Windows 11, snapshot, admin): `pwsh ci/windows_vm_test.ps1
 kc9k.exe`, then `-Reboots` from a fresh snapshot.
 
-Also seen: the Linux workflow `Test` fails in `ci/integration.sh` (commands
-without `--yes` where a lock is now confirmed, R-LOCK-12); unit tests pass.
+Also seen: the Linux workflow `Test` fails in `ci/integration.sh`; unit
+tests pass. Since 2026-11-23 (run 669) every `kc9k` call there fails: the
+wrapper `timeout 120 command kc9k` hands `timeout` the shell builtin
+`command` ("failed to execute process"; 51 failures). Before that: commands
+without `--yes` where a lock is now confirmed (R-LOCK-12), unchecked since.
 
 ### 4.3 Owner report 2026-11-22: Windows GUI on the laptop
 

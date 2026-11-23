@@ -265,7 +265,8 @@
   Scheduler root denies `0xd0116`; new SYSTEM/service-account tasks
   outside `\Microsoft\Windows\`, `\KC9K\` deleted; new WMI consumers in
   `root\subscription` deleted with bindings. All counted. Ending: quick
-  parts at once, heavy after the running pass (`startHeavyUndo`, marker
+  parts and service DACLs at once, the rest after the running pass, which
+  stops between steps once ended (`startHeavyUndo`, `undoHeavy`, marker
   `strict-heavy`); `kc9k uninstall` waits (`WaitStrictUndone`).
 - VMs (W24, `closeVirtualMachines`): people's VM, WSL, Sandbox, QEMU,
   Docker programs (`vmPrograms`, `isVMProcess`) closed with children,

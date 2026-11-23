@@ -1,6 +1,6 @@
 # Locks, weakening, passwords, access
 
-- Covers: `internal/lock/`, `db/locks.go`, `db/layers.go`, `cli/lockflags.go`, `layers.go`, `confirm.go`, `loosen.go`, `control.go`, `toggle.go`, `extend.go`, `textlock.go`, `settingspassword.go`, `noweakening.go`, `access.go`, `blockpassword.go`, `enforce/lock.go`, `enforce/clockcheck.go`
+- Covers: `internal/lock/`, `db/locks.go`, `db/layers.go`, `cli/lockflags.go`, `layers.go`, `confirm.go`, `loosen.go`, `control.go`, `toggle.go`, `extend.go`, `textlock.go`, `settingspassword.go`, `noweakening.go`, `access.go`, `blockpassword.go`, `enforce/clockcheck.go`
 - SPEC: §3.4, §3.5, §3.11, §4.6, R-LOCK-1–12, R-WEAK-1–5
 - Connects to: everything gated: [lists](lists.md), [automation](automation.md), [browsers](browsers.md), [hotkeys](hotkeys.md), [device](device.md); [testing](testing.md) (weakening audit)
 

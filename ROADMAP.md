@@ -77,7 +77,6 @@ its bypass prevention).
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows-tamper, device | laptop |
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
 | W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows, windows-layers | laptop |
-| A15 | Enter presses OK in every dialog (GTK and Windows GUI) | R-GUI-3 | gui, gui-windows | agent |
 | W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
 | A14 | Clip curves mirrored, tested in Go, C#, GTK; the owner's look on the laptop | §4.10 | circadian | owner |
 
@@ -464,9 +463,6 @@ Still open from the report (built and in CI; what was built is in
   `ci/windows_soak_test.ps1` (idle: 0 PowerShell by the service).
 - `W54` **Page layout as in the GTK GUI** (§4.1–4.13, R-GUI-3): built.
   Left: the owner's look on the laptop.
-- `A15` **Enter presses OK** (R-GUI-3): in every dialog of both GUIs.
-  Tests exist (`ci/gui_enter_smoke.py`, `DialogKeyTests.cs`, both in CI);
-  Unchecked whether they pass. Done when both are green.
 - `A14` **Automation clip curves bend one way only** (§4.10): one mirrored
   curve in Go, C#, GTK. Left: the owner's look on the laptop.
 

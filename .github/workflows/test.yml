@@ -31,6 +31,8 @@ jobs:
           sudo apt-get install -y iptables python3-gi python3-gi-cairo python3-cairo gir1.2-gtk-3.0 xvfb imagemagick dbus-x11
       - name: GTK circadian smoke (clip curves, A14)
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 ci/gui_circadian_smoke.py
+      - name: GTK dialogs, Enter presses OK (A15)
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 ci/gui_enter_smoke.py
       - name: Install Killer Chicken 9000
         run: sudo env "PATH=$PATH" ./install.sh
       - name: Integration tests

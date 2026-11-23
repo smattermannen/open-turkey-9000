@@ -23,6 +23,45 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("PangoCairo", "1.0")
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango, PangoCairo  # noqa: E402
 
+
+# A15 (R-GUI-3): Enter presses a dialog's OK. Every dialog is run through
+# Gtk.Dialog.run, so the default response and the entries' activates-default
+# are set there, once, for all of them.
+_OK_RESPONSES = (Gtk.ResponseType.OK, Gtk.ResponseType.ACCEPT, Gtk.ResponseType.YES, Gtk.ResponseType.APPLY)
+
+
+def _entries(widget):
+    if isinstance(widget, Gtk.Entry):
+        yield widget
+    if isinstance(widget, Gtk.Container):
+        for child in widget.get_children():
+            yield from _entries(child)
+
+
+def enter_presses_ok(dialog):
+    """Makes the dialog's OK (or Accept/Yes/Apply) its default and lets
+    Enter in any of its entries press it."""
+    for response in _OK_RESPONSES:
+        button = dialog.get_widget_for_response(response)
+        if button is not None:
+            button.set_can_default(True)
+            dialog.set_default_response(response)
+            for entry in _entries(dialog.get_content_area()):
+                entry.set_activates_default(True)
+            return response
+    return None
+
+
+_dialog_run = Gtk.Dialog.run
+
+
+def _run_with_enter(dialog):
+    enter_presses_ok(dialog)
+    return _dialog_run(dialog)
+
+
+Gtk.Dialog.run = _run_with_enter
+
 CLI = "kc9k"
 REFRESH_SECONDS = 5
 STATS_REFRESH_SECONDS = 30

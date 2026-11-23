@@ -36,6 +36,8 @@
   accessible name and `AutomationId`; charts are plain elements.
   ContentDialogs show one at a time, so a dialog asking a second question
   hides, asks, and reopens with what was typed. `ConfirmLock` = R-LOCK-12.
+  `Dialogs.Show` makes the primary button the default: Enter presses OK
+  (A15, `DialogKeyTests`).
 - **Pages** (`Pages/`, one per GTK sidebar entry, `Tables.Pages`; Settings
   last; covered while its access area is closed, §3.11): `OverviewPage`
   (no "Get started" card, owner), `BlocksPage` (drag a block card onto a

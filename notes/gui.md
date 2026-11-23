@@ -9,6 +9,9 @@
 - Reads `kc9k gui-state`, `kc9k stats --json`; every change runs a `kc9k`
   command. Menu entry / `kc9k-gui` (`python3-gi`); theme in
   `~/.config/kc9k/gui.json`.
+- Dialogs: all run through `Gtk.Dialog.run`, wrapped at import
+  (`enter_presses_ok`): OK/Accept/Yes/Apply is the default response and
+  entries activate it, so Enter presses OK (A15, `ci/gui_enter_smoke.py`).
 - Blocks page (§4.2): `blocks_stack` "cards" (`update_block_cards`,
   `block_card`: name, switch, Continuous/Automated, `breaks_words`,
   `lock_words`), "detail" (`open_block(name, tab)`; top fixed, only tabs

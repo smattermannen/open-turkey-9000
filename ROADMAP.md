@@ -90,8 +90,12 @@ plan is SPEC §8, its items §3.1.
   run 697) judges each step by its fastest of 3 timed rounds, still
   ≤ 16 ms (principle 9); Android `RulesServerTest` (`awaitListening`
   false at `@Before`, runs 680, 684: fixed port 47699 in Linux's ephemeral
-  range, retried only after 5 s) binds port 0. Done when: each passes 10
-  runs in a row (`Test` dispatched by hand on the fix).
+  range, retried only after 5 s) binds port 0. Also seen (Windows run 215,
+  no Windows change): `ci/windows_desktop_test.ps1`'s "the challenge typed
+  in the window unlocks the block" got 50 % accuracy (a posted key lost),
+  so `ci-lock` stayed locked and "uninstall" failed after it; passed in
+  runs 211 and 213. Not fixed. Done when: each passes 10 runs in a row
+  (`Test` dispatched by hand on the fix).
 
 ### 0.1 Code contradicting `SPEC.md`
 

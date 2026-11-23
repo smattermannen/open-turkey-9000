@@ -204,8 +204,8 @@
   adapter enabled); `SetWifiRadio(true)` sets both, so `keepWifiOn` holds.
 - Monk mode's physical cut (`netcut_windows.go`): `Get-NetAdapter
   -Physical`, `Enable-/Disable-NetAdapter`.
-- Challenge window (`winagent/challenge_windows.go`): Win32 window, no
-  text field, opened by the caller's agent (`OpChallenge`, ≤ 4 h); GTK's
+- Challenge window (`winagent/challenge_windows.go`): Win32 window (topmost,
+  fixed frame, close only = cancel, system window brush), no text field, opened by the caller's agent (`OpChallenge`, ≤ 4 h); GTK's
   events (`k`, `b`, `n`, `p`, `s`, `c`). Raw Input: key with no device
   (SendInput, on-screen keyboard) → `s`; Ctrl+V/Shift+Insert → `p`.
   Read by `lock/window_windows.go`.

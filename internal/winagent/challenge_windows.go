@@ -290,7 +290,10 @@ func runChallenge(a ChallengeArgs) (string, error) {
 		defer runtime.UnlockOSThread()
 		wndProcOnce.Do(func() { wndProcPtr = syscall.NewCallback(wndProc) })
 		classOnce.Do(func() {
-			wc := wndClassEx{wndProc: wndProcPtr, className: className}
+			// The same system brush the paint uses (COLOR_WINDOW+1): never a
+			// blank window before the first paint (W52's look-alike).
+			const colorWindowBrush = 5 + 1
+			wc := wndClassEx{wndProc: wndProcPtr, className: className, background: windows.Handle(colorWindowBrush)}
 			wc.size = uint32(unsafe.Sizeof(wc))
 			if r, _, err := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
 				classErr = err
@@ -303,10 +306,12 @@ func runChallenge(a ChallengeArgs) (string, error) {
 		challengeCur = state
 		defer func() { challengeCur = nil }()
 		title := windows.StringToUTF16Ptr("Killer Chicken 9000: unlock challenge")
-		const wsOverlappedWindow, wsVisible, wsExTopmost = 0x00CF0000, 0x10000000, 0x8
+		// A fixed frame with a close button only (closing cancels): no
+		// minimise or maximise, so it never passes for an empty app window.
+		const wsCaption, wsSysMenu, wsVisible, wsExTopmost = 0x00C00000, 0x00080000, 0x10000000, 0x8
 		const cwUseDefault = 0x80000000
 		hwnd, _, err := procCreateWindowExW.Call(wsExTopmost, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(title)),
-			wsOverlappedWindow|wsVisible, cwUseDefault, cwUseDefault, 900, 560, 0, 0, 0, 0)
+			wsCaption|wsSysMenu|wsVisible, cwUseDefault, cwUseDefault, 900, 560, 0, 0, 0, 0)
 		if hwnd == 0 {
 			result <- err
 			return

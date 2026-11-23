@@ -378,9 +378,9 @@ GUI uses too; gaps are Windows-only behaviour and tests.
   `gui_extend`, `gui_duration`, `gui_lists`, `gui_presets`, `gui_modes`
   (card's menu), `gui_freeze_lock`, `gui_automation`,
   `gui_click_everything`. Not yet: `gui_actions` (run a mode locked,
-  custom action), `gui_import` (file dialogs), `gui_list_resize`,
+  custom action), `gui_list_resize`,
   `gui_phrase`, `gui_phrase_edit`, `gui_places`, `gui_playlist`,
-  `gui_trigger`, `gui_wallpaper`. Needs: win-ci.
+  `gui_trigger`, `gui_wallpaper` (`gui_import`: `ProjectImportTests`). Needs: win-ci.
 - [ ] `W49` Core's `GUI:` lines (W10–W29) given their place in the GUI,
   each with a UI Automation test, once on `main`. Done so far: W15's
   Windows steps (`WindowsGuidedSetupSteps`), W16's help texts as kc9k.exe
@@ -388,13 +388,10 @@ GUI uses too; gaps are Windows-only behaviour and tests.
 
 Laptop findings on finished items (2026-11-22, at 200 % scaling):
 
-- **Hazard** (W33): `HighContrast` (`AccessibilityTests.cs:73`) sets the
-  high-contrast flags to 1/0 and cleared the owner's 126 (put back by
-  hand); it must read the flags and change only `HCF_HIGHCONTRASTON`.
-- W33, W37: `EveryControlHasANameAndTakesFocus` fails on 33 ScrollBar parts (skip
-  them); `GuiApp.Shot` captures only the top-left quarter (test process
-  not DPI-aware); `WindowStateIsKept` fails (`gui.json` stores physical
-  pixels, the test reads logical; fix the test or store DIPs).
+- Fixed in the tests (2026-11-22), to recheck at 200 % on the laptop:
+  `HighContrast` reads and restores the owner's flags; scroll bar parts are
+  skipped by `EveryControlHasANameAndTakesFocus`; the test process is
+  per-monitor DPI aware (`GuiApp.Shot`, `WindowStateIsKept`).
 
 ### 4.2 Windows Core: parity audit (W10–W27)
 
@@ -449,9 +446,9 @@ Stability first, then layout, then import. Order: top to bottom.
 
 Static findings still open (code read, not seen on the laptop):
 
-- **The challenge window looks like W52's white window**: topmost 900×560
-  Win32 window with its own buttons (`winagent/challenge_windows.go:306`),
-  no background brush, `kc9k.exe` has no manifest.
+- The challenge window (`winagent/challenge_windows.go`) is a plain Win32
+  window: now a fixed frame (close only) with a background brush; still no
+  manifest in `kc9k.exe` (classic controls, not DPI-aware).
 - `gui-state` changes every read while a countdown runs (each read
   redraws the page shown).
 

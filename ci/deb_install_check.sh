@@ -75,7 +75,7 @@ check "daemon enabled at boot" systemctl is-enabled --quiet kc9k
 check "sudo rule valid, limited to group sudo" bash -c "visudo -cf /etc/sudoers.d/kc9k >/dev/null && grep -q '^%sudo ALL=(root) NOPASSWD: /usr/local/bin/kc9k-bin' /etc/sudoers.d/kc9k"
 check "wrapper runs kc9k-bin through sudo" grep -q 'exec sudo /usr/local/bin/kc9k-bin' /usr/local/bin/kc9k
 check "database folder" test -d /var/lib/kc9k
-check "GUI in the menu" bash -c "grep -qx 'Exec=kc9k-gui' /usr/share/applications/kc9k.desktop && test -x /usr/local/bin/kc9k-gui && test -f /usr/local/lib/kc9k-gui/window.py"
+check "GUI in the menu" bash -c "grep -qx 'Exec=kc9k-gui' /usr/share/applications/kc9k.desktop && grep -qx 'Comment=Block websites and apps' /usr/share/applications/kc9k.desktop && test -x /usr/local/bin/kc9k-gui && test -f /usr/local/lib/kc9k-gui/window.py"
 check "GUI's Python compiles" python3 -c "import sys, py_compile; [py_compile.compile(f, doraise=True) for f in sys.argv[1:]]" /usr/local/bin/kc9k-gui /usr/local/lib/kc9k-gui/*.py
 check "kc9k status as root" /usr/local/bin/kc9k-bin status
 if [ -n "$user" ]; then

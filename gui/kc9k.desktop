@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Killer Chicken 9000
-Comment=Blockera webbplatser och program
+Comment=Block websites and apps
 Exec=kc9k-gui
 Icon=changes-prevent
 Terminal=false

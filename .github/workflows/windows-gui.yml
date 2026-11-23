@@ -64,12 +64,22 @@ jobs:
       # the window (1280×900 in the tests) is all on screen.
       - name: Display at 1920×1080
         run: pwsh tools/display-scale.ps1 -Percent 100 -Width 1920 -Height 1080
-      - name: UI Automation smoke tests
+      # Drag and drop and the desktop's own parts first, on a fresh desktop
+      # (after the whole suite a drag's start is lost on the runner).
+      - name: UI Automation desktop tests (drag and drop, tray, dialogs)
+        if: inputs.filter == ''
         env:
           KC9K_GUI_EXE: ${{ runner.temp }}\gui\kc9k-gui.exe
           KC9K_FAKE_EXE: ${{ runner.temp }}\fake\kc9k.exe
           KC9K_SCREENSHOTS: ${{ github.workspace }}\screenshots
-          KC9K_UI_FILTER: ${{ inputs.filter }}
+        run: dotnet test Kc9k.UiTests -c Release --filter "FullyQualifiedName~DesktopTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=ui-desktop.trx" --results-directory "${{ runner.temp }}\ui-results"
+      - name: UI Automation smoke tests
+        if: always()
+        env:
+          KC9K_GUI_EXE: ${{ runner.temp }}\gui\kc9k-gui.exe
+          KC9K_FAKE_EXE: ${{ runner.temp }}\fake\kc9k.exe
+          KC9K_SCREENSHOTS: ${{ github.workspace }}\screenshots
+          KC9K_UI_FILTER: ${{ inputs.filter != '' && inputs.filter || 'FullyQualifiedName!~DesktopTests' }}
         run: dotnet test Kc9k.UiTests -c Release $(if ($env:KC9K_UI_FILTER) { "--filter", $env:KC9K_UI_FILTER }) --logger "console;verbosity=normal" --logger "trx;LogFileName=ui.trx" --results-directory "${{ runner.temp }}\ui-results"
       # W4/W54: the display itself at 150 % and 200 % (as the owner's laptop),
       # not only the text size: the geometry and page tests again at that DPI.

@@ -108,7 +108,9 @@
   are no drag to WinUI); `Front` before clicks and keys (the runner's own
   console comes forward now and then); `Show` scrolls into view (an element
   out of view has no rectangle). The workflow sets the display to
-  1920×1080 first; `--filter` input runs only some tests by hand. `DesktopTests.cs` (W4): a block dragged onto a mode, a window
+  1920×1080 first and runs `DesktopTests` in a step of their own before
+  the rest (after the whole suite the runner loses a drag's start); its
+  `filter` input runs only some tests by hand. `DesktopTests.cs` (W4): a block dragged onto a mode, a window
   drawn on the week, the tray menu (its callback message posted), Open at
   sign-in's shortcut, the challenge window opened by Unlock… (installed
   kc9k.exe; leaves the runner's block locked). `WindowsTests.cs`: W30–W43.

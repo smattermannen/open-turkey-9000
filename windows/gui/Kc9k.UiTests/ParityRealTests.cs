@@ -290,8 +290,9 @@ public class ParityRealTests
             again.Front();
             FlaUI.Core.Input.Mouse.DoubleClick(new System.Drawing.Point(r.Left + r.Width / 2, r.Top + r.Height / 2));
             again.WaitFor(() => KeptHeight(again) is null, "double-click: forgotten in gui.json");
-            again.WaitFor(() => Math.Abs(Height(again, blocked) - start) <= 2 && Math.Abs(Height(again, exceptions) - start) <= 2,
-                $"double-click: both back to the usual height ({start}: {Height(again, blocked)}, {Height(again, exceptions)})");
+            Thread.Sleep(1000);
+            double hb = Height(again, blocked), he = Height(again, exceptions);
+            Assert.True(Math.Abs(hb - start) <= 2 && Math.Abs(he - start) <= 2, $"double-click: both back to the usual height ({start}: {hb}, {he})");
         }
     }
 

@@ -87,15 +87,14 @@ its bypass prevention).
 plan is SPEC §8, its items §3.1.
 
 - [ ] `A16` **Linux CI `Test` red** (found 2026-11-23, run 669; unit tests
-  pass). `ci/integration.sh:9` wraps every call as
-  `kc9k() { timeout 120 command kc9k "$@"; }`: `timeout` gets the shell
-  builtin `command` ("failed to execute process"), so every `kc9k` call
-  fails (51 failures). Fix: look the binary up once and export it, e.g.
-  `KC9K_BIN=$(command -v kc9k); export KC9K_BIN` and
-  `kc9k() { timeout 120 "$KC9K_BIN" "$@"; }`. Then fix what is left; seen
-  before: commands without `--yes` where a lock is now confirmed
-  (R-LOCK-12), unchecked since. Done when: the `Integration tests` step of
-  `.github/workflows/test.yml` is green on main.
+  pass; runner now Ubuntu 26.04: uutils coreutils, sudo-rs). Fixed in
+  `ci/integration.sh`: `kc9k` runs through its looked-up path
+  (`KC9K_BIN`; `timeout` got the builtin `command`, so all 51 calls
+  failed); the app checks run a sleeper built from Go (a copy of uutils'
+  multicall `sleep` refuses to run under another name, so "is killed"
+  passed proving nothing). Unchecked: what fails after these. Done when:
+  the `Integration tests` step of `.github/workflows/test.yml` is green on
+  main.
 
 ### 0.1 Code contradicting `SPEC.md`
 

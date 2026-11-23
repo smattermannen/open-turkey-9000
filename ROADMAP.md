@@ -78,6 +78,7 @@ its bypass prevention).
 | W32 | Windows GUI: UI Automation counterparts of the GTK smoke tests | R-GUI-1–3 | gui-windows | win-ci |
 | W50 | Freeze fixed, idle soak hard in CI; the laptop confirms it | principle 1 | windows, windows-layers | laptop |
 | W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
+| W55 | CI time: parallel Windows GUI jobs, concurrency, paths, caches | §5 | testing, gui-windows | agent, win-ci |
 | A14 | Clip curves mirrored, tested in Go, C#, GTK; the owner's look on the laptop | §4.10 | circadian | owner |
 
 ## 0. Fix what exists
@@ -510,6 +511,16 @@ Laptop findings on finished items (2026-11-22, at 200 % scaling):
   `HighContrast` reads and restores the owner's flags; scroll bar parts are
   skipped by `EveryControlHasANameAndTakesFocus`; the test process is
   per-monitor DPI aware (`GuiApp.Shot`, `WindowStateIsKept`).
+
+- [ ] `W55` CI time, nothing dropped (M; §5 tests). After
+  `ngr/modest-lovelace-l0zu0w` (adds `filter`, display passes) merges.
+  Not built: (1) Windows GUI job split into parallel jobs (unit and
+  build; smoke and parity; real CLI: `ParityRealTests`, `ImportTests`;
+  geometry and accessibility incl. 150/175/200 %; desktop), GUI and fake
+  built once and passed as artifacts; (2) `concurrency:` per branch with
+  `cancel-in-progress: true` in every workflow; (3) tighter `paths:` so
+  ROADMAP/notes-only commits start no Windows GUI run; (4) `setup-go` /
+  `setup-dotnet` caching. Needs: agent, win-ci.
 
 ### 4.2 Windows Core: parity audit (W10–W27)
 

@@ -66,6 +66,20 @@
   the `.deb` goes to `~/Downloads`, a person double-clicks it and presses
   Install, then only the checks run.
 
+## CI runners (GitHub)
+
+- Time: Windows GUI full run ~35 min (one job, ~130 UI tests serially,
+  then the display-scale passes); a `filter` run 5–10 min. Iterate with
+  `filter`, full run once at the end (CLAUDE.md "CI and long tasks").
+  Faster split: ROADMAP `W55`.
+- `windows-latest` quirks (handled in `GuiApp` and `windows-gui.yml`;
+  details in [gui-windows](gui-windows.md)):
+  - screen is 1024×768 (the workflow sets 1920×1080);
+  - a console window steals focus: bring the GUI forward (`Front()`);
+  - elements out of view have no rectangle: scroll them in (`Show()`);
+  - FlaUI's mouse moves are not drags: `GuiApp.Drag`;
+  - a fresh database shows the extension-missing dialog first.
+
 ## Other commands
 
 - `ci/integration.sh` (CI `Integration tests`, after `install.sh`, on

@@ -85,7 +85,9 @@
   `completion` go to `\\.\pipe\kc9k` unless LocalSystem or `KC9K_DB`
   set; client first checks the server PID is `ServicePID`. Frames: type,
   4-byte length, payload (request JSON with args, cwd, console size,
-  nonce; input; input end; Ctrl-C; output; errors; exit code).
+  nonce; input; input end; Ctrl-C; output; errors; exit code). After
+  "input end" the server keeps reading frames: Ctrl-C or the client's end
+  still kills the command.
 - Server: pipe DACL SYSTEM all, signed-in users read/write (no new
   instances), network denied; `FILE_FLAG_FIRST_PIPE_INSTANCE`, no remote
   clients, ≤ 32 commands. Caller via `ImpersonateNamedPipeClient` (SID,

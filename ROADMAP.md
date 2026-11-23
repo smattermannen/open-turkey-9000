@@ -65,14 +65,13 @@ its bypass prevention).
 | N8 | Android wide screens, accessibility, three phones end to end | §8.5, R-ANDROID-1 | android/CLAUDE.md | owner |
 | W1 | Windows service and agent: the console's raw mode | §3.13 | windows | win-vm |
 | W2 | Windows web layers: real browsers obeying; Chrome Web Store ID | §3.13, §4.10 | windows-layers | win-vm, laptop, owner |
-| W3 | Windows apps and desktop: notifications, challenge window, hotkeys, lock freeze | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows-layers | win-vm, laptop |
+| W3 | Windows apps and desktop: notifications, challenge window on a real keyboard, lock freeze | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows-layers | win-vm, laptop |
 | W4 | Windows GUI on a real desktop: Narrator, scaling, drag and drop | §4.1–4.13, R-GUI-1–3 | gui-windows | win-vm, laptop |
 | W5 | Windows tamper protection: boot/Safe Mode | §3.10, §4.10 | windows-tamper | win-vm, laptop |
-| W6 | Windows circadian: gamma, wallpaper, brightness, Night light | §4.10 | windows-layers | win-vm, laptop |
+| W6 | Windows circadian: gamma, brightness, Night light | §4.10 | windows-layers | win-vm, laptop |
 | W7 | Windows MSI: signing certificate, first tag, Apps & features by a person | §4.11 | install-windows | owner, win-vm |
 | W10 | Places on Windows: real networks | §3.6, R-MODE-5 | windows-layers, automation | laptop |
 | W13 | Recovery path on Windows: a real Safe Mode boot | R-ESCAPE-1 | windows-tamper, device | win-vm |
-| W18 | One-click browser install on Windows as SYSTEM | §4.10 | windows-layers, browsers | win-vm |
 | W19 | Firmware lock on Windows: real firmware | §3.8, §4.10 | windows-tamper, device | laptop, owner |
 | W24 | Strict mode: real WSL, Sandbox, Hyper-V | §3.8 | windows-tamper, device | win-vm |
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows-tamper, device | laptop |
@@ -424,19 +423,28 @@ sides. Neither touches the Linux GUI, extension or Android unless its item
 needs it and the Linux tests prove nothing changed.
 
 - [ ] `W1` Service and agent (M). Built, checked on `windows-latest`
-  (`ci/windows_service_test.ps1`, `ci/windows_desktop_test.ps1`). Left:
-  the console's raw mode for the challenge needs a person (win-vm).
+  (`ci/windows_service_test.ps1`, `ci/windows_desktop_test.ps1`,
+  including a command killed after its input ended). Left (win-vm,
+  `ci/windows_vm_test.ps1`, a person): the console's raw mode while
+  typing the challenge on a real keyboard, and a paste refused there.
 - [ ] `W2` Web layers (L). Built: hosts, WFP, registry Chromium policies,
   Firefox-family `policies.json`, extension guard, browser recognition;
-  WFP and policies checked in CI. Unchecked (win-vm): real browsers
-  obeying, the guard closing a browser (also W11's remote-control
-  switches), monk mode's cut. Needs owner: the Chrome Web Store listing's
+  WFP and policies checked in CI. Unchecked (win-vm, all in
+  `ci/windows_vm_test.ps1`): real browsers obeying (Edge, LibreWolf,
+  Firefox, the Store's Firefox), the guard closing a browser (W11's
+  remote-control switches; a Firefox waiting for its extension), monk
+  mode's cut and the network coming back. Needs owner: the Chrome Web Store listing's
   ID (`blocker.ChromeStoreExtensionID`); until then Chrome and Edge get no
   extension and are not supported browsers.
-- [ ] `W3` Apps and desktop (L). Built; apps and titles closed through
-  the agent checked on `windows-latest`. Unchecked (win-vm, laptop;
-  `ci/windows_vm_test.ps1`): notifications seen, the challenge window
-  (Raw Input refusing injected keys), hotkeys, the lock freeze.
+- [ ] `W3` Apps and desktop (L). Built; on `windows-latest`
+  (`ci/windows_desktop_test.ps1`): apps and titles closed through the
+  agent; the challenge window from `kc9k unlock` without a console (a
+  `SendInput` key refused by Raw Input, posted keys unlocking, a killed
+  unlock closing it); a hotkey press starting its block. Unchecked
+  (win-vm, a person; `ci/windows_vm_test.ps1`): notifications seen, the
+  challenge window typed on a real keyboard and the on-screen keyboard
+  refused, the lock freeze (locking the runner's desktop would stop the
+  job).
 - [ ] `W4` GUI (L). C# WinUI 3, .NET LTS, unpackaged, self-contained, in
   `windows/gui/` (no browser, no web view); every GTK page ported, checked
   in CI against the fake kc9k and the real `kc9k.exe` with its service.
@@ -451,9 +459,13 @@ needs it and the Linux tests prove nothing changed.
   Mode boot, no-escape and the recovery environment on a real boot,
   takeown against strict mode, Reset this PC failing during a lock; W39's
   per-level claims rest on this. Firmware lock: `W19`.
-- [ ] `W6` Circadian rhythm and wallpapers (M). Built; dark mode checked
-  on `windows-latest`. Unchecked: gamma, wallpaper (win-vm); panel
-  brightness, external screens, Night light and its note (laptop).
+- [ ] `W6` Circadian rhythm and wallpapers (M). Built; on
+  `windows-latest`: dark mode, a wallpaper of the person's own reaching
+  HKCU (copied to Program Files), the plain ramp back after circadian
+  off. The runner's display driver refuses every gamma ramp (now said as
+  such, not "operation completed successfully"), so gamma stays win-vm
+  (`ci/windows_vm_test.ps1`: warm preview seen); panel brightness,
+  external screens, Night light and its note (laptop).
 - [ ] `W7` Installer and release (M). MSI (WiX 6) with service, agent,
   GUI; refuses removal, repair and downgrade while locked; upgrade over a
   lock, full-UI removal, release workflow (`windows-release.yml`) and
@@ -503,9 +515,6 @@ W26 the Store's Firefox obeying the registry policies (win-vm).
   environment off and no no-escape, F8 (`bootmenupolicy Legacy`) keeps Safe
   Mode reachable. Unchecked (win-vm, `-Reboots`): a real Safe Mode boot,
   F8 while factory reset protection acts.
-- [ ] `W18` One-click browser install on Windows (S; §4.10). Built
-  (`InstallBrowser`, winget `--scope machine --silent`; librewolf and
-  chrome, no chromium). Unchecked (win-vm): as SYSTEM through the service.
 - [ ] `W19` Firmware lock on Windows (M; §3.8, §4.10). Built through
   vendors' WMI (Dell `root\dcim\sysman\biosattributes`, Lenovo `root\wmi`,
   HP `root\HP\InstrumentedBIOS`; settings first, password last over

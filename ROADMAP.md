@@ -47,7 +47,7 @@ its bypass prevention).
 | 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere | §3.13, §4.10 | browsers | agent |
 | 2.13 | Accountability partner | §4.15 | — | agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
-| 2.15 | Remove search results leading to blacklisted addresses | R-PAGE-2 | extension | agent, box |
+| 2.15 | Search results from blacklisted addresses: the engines' real pages | R-PAGE-2 | extension | box |
 | 2.16 | "Show dark web pages while dark mode is on": real sites, LibreWolf's window and Chrome on the desktop | §4.10 | circadian, browsers | box |
 | 2.17 | Chrome extension in the Chrome Web Store (unlisted) | §3.13, §6 2026-11-21 | browsers, windows-layers | owner, agent |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
@@ -329,10 +329,16 @@ Only rows not fully built.
   locks and the settings password, unlock approval; no screenshots.
 - **2.14 Website** (M; §4.16): Not built. Content per §4.16; hosting the
   owner's choice when built.
-- **2.15 Search results from blacklisted addresses** (M; R-PAGE-2): Not
-  built. The extension removes each search result linking to a
-  blacklisted address. Done when: a browser test on the supported engines
-  shows no such result and the others untouched.
+- **2.15 Search results from blacklisted addresses** (M; R-PAGE-2): Built
+  (`notes/extension.md` Search results, extension 1.37.0);
+  `ci/search_results_test.js` (Chromium) and
+  `ci/search_results_librewolf_test.py` (LibreWolf 160) pass on fixtures
+  of 11 results pages. Left (box): each engine's real results page with a
+  blacklisted site (markup drifts; DuckDuckGo Lite not covered).
+  - [ ] For session A (`test.yml`): run `node ci/search_results_test.js`,
+    `node ci/background_test.js` (Playwright Chromium) and, before the
+    daemon is installed (they stand in for it on 47613),
+    `ci/search_results_librewolf_test.py`, `ci/dark_browser_test.py`.
 - **2.16 Dark pages turn on the browser's dark mode** (S; §4.10): Built
   (`notes/circadian.md`); `ci/dark_browser_test.py` passes in LibreWolf
   160 headless (cloud: own dark design shown, light page turned over,
@@ -545,6 +551,21 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- DECIDED (By claude) 2026-11-23 (`2.15`): supported engines = Google,
+  Bing, DuckDuckGo (and its HTML version), Brave Search, Yahoo, Startpage,
+  Ecosia, Yandex, Mojeek, SearXNG: those KC9K already knows (SafeSearch,
+  engines it can't keep strict); not DuckDuckGo Lite (a result spans
+  several table rows). Owner may overturn.
+- DECIDED (By claude) 2026-11-23 (`2.15`): a result "leads to a
+  blacklisted address" when its link, followed through the engine's
+  redirect, an ad's click address or a web archive, goes where a visit is
+  taken away by address alone (a page or device action, after the block's
+  exceptions); ads count. Looks-only lists (greyscale, no images…) and
+  lists whose block has title/text exceptions leave results alone (a visit
+  isn't taken away, or can't be known from the address). The result is
+  hidden, not deleted (the engine's scripts keep working): the largest
+  part around the link holding no kept result and no search box. Owner may
+  overturn.
 - DECIDED (By claude) 2026-11-23 (`2.11`): the daemon makes sure of
   LibreWolf once per install, not once ever: `install.sh` and the `.deb`
   clear the marker at every install, as `install.sh` already tried

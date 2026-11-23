@@ -1,7 +1,7 @@
 # Browser extension: matching, page behaviour, social, toolbar
 
-- Covers: `internal/webext/files/` (`match.js`, `content.js`, `background.js`, `social.js`, `popup.js`), `webext/webext.go`, `db/social.go`, `cli/social.go`
-- SPEC: §2 principle 9, §3.1, §3.9, R-LIST-4–6, R-PHRASE-1–9, R-PAGE-1, R-EVENT-1
+- Covers: `internal/webext/files/` (`match.js`, `content.js`, `background.js`, `social.js`, `search.js`, `popup.js`), `webext/webext.go`, `db/social.go`, `cli/social.go`
+- SPEC: §2 principle 9, §3.1, §3.9, R-LIST-4–6, R-PHRASE-1–9, R-PAGE-1–2, R-EVENT-1
 - Connects to: [lists](lists.md) (what it matches), [actions](actions.md) (what it does), [browsers](browsers.md), [allowance](allowance.md) (usage, toolbar), [circadian](circadian.md) (dark pages)
 
 ## Matching (`match.js`)
@@ -34,6 +34,12 @@
   never matches a file. Chrome sends no request events for files:
   `blockTitledTab` judges address and title.
 - Tests: `ci/match_test.js`, `ci/content_harness_test.js`, `ci/background_test.js`.
+- Real LibreWolf in the cloud, no KC9K installed (`ci/fake_daemon.py`
+  answers on 47613 and refuses to start beside a daemon): LibreWolf from
+  `repo.librewolf.net` (apt, key `pubkey.gpg`), `cargo install geckodriver`
+  (GitHub downloads are refused), `pip install selenium`; as a normal user
+  with `GECKOWEBDRIVER=<dir>`: `ci/dark_browser_test.py`,
+  `ci/search_results_librewolf_test.py`.
 
 ## Page behaviour (`content.js`, `background.js`)
 
@@ -71,9 +77,37 @@
   (sub-frames not blocked by address, `frameHit` silent); absent = on.
   `ci/tamper_tabs_test.js`.
 - Workarounds: `kc9kUnwrap` reads addresses in `?url=`, base64, after a
-  slash (searches for an address don't count); `checkMirror` reports
+  slash, Wayback with or without a time (searches for an address don't count); `checkMirror` reports
   front-ends (Invidious, Piped, Nitter, Redlib, ProxiTok…); `/hit` with
   `via` logs `EventWorkaround`.
+
+## Search results (R-PAGE-2, `search.js`)
+
+- Results pages known by address (`KC9K_SEARCH_ENGINES`, `kc9kSearchEngine`):
+  Google, Bing, DuckDuckGo (and `/html/`; not Lite), Brave Search, Yahoo,
+  Startpage, Ecosia, Yandex, Mojeek, SearXNG (hosts as SafeSearch knows
+  them). Top frame only.
+- A link's target (`kc9kResultTarget`): the engine's redirect (Google
+  `/url?q=`, `/amp/s/`; Bing `/ck/a?u=a1…`; DuckDuckGo `/l/?uddg=`, ads'
+  `y.js?ad_domain=`; Yahoo `/RU=…/RK=`), else `kc9kUnwrap` (Bing ads'
+  `?u=<base64>`, Google ads' `adurl=`, archives), else the link. Links to
+  the engine's own sites (`own`) are menus, never results.
+- A result leads away when a visit to its target is taken away by address
+  alone (`kc9kTakesAway` of `kc9kListMatches({url})`: page or device
+  actions, after the block's exceptions). Looks-only lists, and lists whose
+  block has title/text exceptions, leave results alone. Ads count.
+- Hidden, not deleted (`data-kc9k-removed`, `display: none`; the engine's
+  scripts keep working): the largest part around the link, inside the
+  results area (`results`, else the body), holding no result kept and no
+  search box or navigation (`KC9K_RESULT_GUARD`). Rechecked as the page
+  grows: a part holding a kept result later is shown and judged again.
+- `content.js`: judged in `load` before the page shows, then by a
+  MutationObserver on added links (before they paint); lists changed →
+  `forget` and judged afresh.
+- Tests: `ci/search_results_test.js` (Chromium, engines' fixtures
+  `ci/search_results/` at their real addresses, every frame checked:
+  R-PAGE-1), `ci/search_results_librewolf_test.py` (real LibreWolf and
+  extension, fixtures through a local proxy, `ci/fake_daemon.py`).
 
 ## Social media (`db/social.go`, `cli/social.go`, `social.js`)
 

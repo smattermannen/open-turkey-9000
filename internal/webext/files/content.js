@@ -398,6 +398,33 @@ function checkPlaylistVideo(url) {
 
 setInterval(enforceSocial, 1000);
 
+// Search results leading to an address the lists take away are taken off
+// the page (R-PAGE-2, search.js): judged when the lists are known, before
+// the page shows, and again each time the page adds links (before it
+// paints them).
+const searchEngine = window === window.top ? kc9kSearchEngine(location.href) : null;
+let searchResults = null;
+
+function judgeResults() {
+  if (!searchEngine || !lists) {
+    return;
+  }
+  if (!searchResults) {
+    searchResults = kc9kSearchResults(document, searchEngine, location.href,
+      (url) => kc9kTakesAway(kc9kOutcome(kc9kListMatches(lists, { url }))));
+  }
+  searchResults.judge();
+}
+
+if (searchEngine) {
+  const addsLinks = (node) => node.nodeType === 1 && (node.matches("a[href]") || node.querySelector("a[href]") !== null);
+  new MutationObserver((records) => {
+    if (lists && records.some((r) => [...r.addedNodes].some(addsLinks))) {
+      judgeResults();
+    }
+  }).observe(document, { childList: true, subtree: true });
+}
+
 function load(page) {
   wordsMode = (page && page.words) || "";
   social = (page && page.social) || [];
@@ -405,6 +432,10 @@ function load(page) {
   lists = kc9kCompileLists(page && page.lists);
   quotaOpen = Boolean(page && page.quota);
   textChanged = true;
+  if (searchResults) {
+    searchResults.forget();
+  }
+  judgeResults();
   if (window === window.top) {
     const url = topUrl();
     if (!mayActByText(url)) {

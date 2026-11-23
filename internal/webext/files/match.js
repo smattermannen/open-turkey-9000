@@ -175,9 +175,10 @@ function kc9kUnwrap(url) {
     const site = label.replace(/--/g, "\u0000").replace(/-/g, ".").replace(/\u0000/g, "-");
     out.push("https://" + site + u.pathname + u.search);
   }
-  // The Wayback Machine: web.archive.org/web/<time>/<address>.
+  // The Wayback Machine: web.archive.org/web/<time>/<address>, or without
+  // the time (its latest copy).
   if (host === "web.archive.org" || host === "wayback.archive.org") {
-    const m = (u.pathname + u.search).match(/^\/web\/[^/]*\/(.+)$/);
+    const m = (u.pathname + u.search).match(/^\/web\/(?:(?!https?:)[^/]*\/)?(.+)$/i);
     if (m) {
       out.push(kc9kEmbedded(m[1]));
     }

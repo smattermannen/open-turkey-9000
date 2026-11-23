@@ -1,0 +1,23 @@
+<!doctype html><html lang="en-US"><head><meta charset="utf-8"><title>productivity at DuckDuckGo</title></head>
+<body class="body--serp"><div id="react-layout"><div class="site-wrapper">
+<div id="header_wrapper" class="header-wrap"><form id="search_form" class="search--adv" action="/" role="search" data-expect="kept"><input id="search_form_input" name="q" value="productivity"></form>
+<nav class="zcm-wrap" aria-label="Search categories"><a href="?q=productivity&amp;ia=images&amp;iax=images">Images</a></nav></div>
+<div id="web_content_wrapper" class="content-wrap"><div class="cw"><div id="links_wrapper" class="serp__results">
+<section data-testid="mainline" data-area="mainline" class="Wo6ZAEmESLNUuWBkbMxx"><ol class="react-results--main">
+ <li data-layout="ad" class="wLL07_0Xnd1QZpzpfR4W" data-expect="gone"><article data-testid="ad"><a href="https://duckduckgo.com/y.js?ad_domain=reddit.com&amp;ad_provider=bingv7aa&amp;u3=https%3A%2F%2Fwww.bing.com%2Faclick%3Fld%3De8&amp;rut=x" data-testid="result-title-a"><span>Reddit official</span></a></article></li>
+ <li data-layout="organic" class="wLL07_0Xnd1QZpzpfR4W" data-expect="gone"><article id="r1-0" data-testid="result" data-nrn="result" class="yQDlj3B5DI5YO8c8Ulio"><div class="OHr0VX9IuNcv6iakvT6A"><div class="pAgARfGNTRe_uaK72TAD"><a href="https://www.reddit.com/r/productivity/" rel="noopener" target="_self" data-testid="result-extras-url-link" class="Rn_JXVtoPVAFyGkcaXyK"><span>reddit.com</span><span>/r/productivity</span></a></div></div><h2 class="LnpumSThxEWMIsDdAT17"><a href="https://www.reddit.com/r/productivity/" rel="noopener" target="_self" data-testid="result-title-a"><span class="EKtkFWMYpwzMKOYr0GYm">r/productivity - Reddit</span></a></h2><div data-result="snippet" class="E2eLOJr8HctVnDOTM8fs"><div><span>A community for productivity tips.</span></div></div></article></li>
+ <li data-layout="organic" data-expect="kept"><article data-testid="result"><h2><a href="https://en.wikipedia.org/wiki/Productivity" data-testid="result-title-a"><span>Productivity - Wikipedia</span></a></h2><div data-result="snippet">Productivity is the efficiency of production.</div></article></li>
+ <li data-layout="organic" data-expect="kept"><article data-testid="result"><h2><a href="https://www.reddit.com/r/allowed/" data-testid="result-title-a"><span>r/allowed</span></a></h2></article></li>
+ <li data-layout="organic" data-expect="kept"><article data-testid="result"><h2><a href="https://looks.example/" data-testid="result-title-a"><span>Looks only</span></a></h2></article></li>
+ <li data-layout="organic" data-expect="gone"><article data-testid="result"><h2><a href="https://x.com/someone" data-testid="result-title-a"><span>someone on X</span></a></h2></article></li>
+</ol><div class="results--more" data-expect="kept"><button id="more-results" type="button">More results</button></div></section>
+</div></div></div></div></div>
+<script>
+  // "More results": DuckDuckGo adds the next page of results to the list.
+  setTimeout(() => {
+    const list = document.querySelector(".react-results--main");
+    list.insertAdjacentHTML("beforeend",
+      '<li data-layout="organic" data-expect="gone" id="late-gone"><article data-testid="result"><h2><a href="https://old.reddit.com/r/productivity/top/" data-testid="result-title-a"><span>Top of r/productivity</span></a></h2><div data-result="snippet">Later result.</div></article></li>' +
+      '<li data-layout="organic" data-expect="kept" id="late-kept"><article data-testid="result"><h2><a href="https://www.gutenberg.org/" data-testid="result-title-a"><span>Project Gutenberg</span></a></h2></article></li>');
+  }, 400);
+</script></body></html>

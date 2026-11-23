@@ -193,6 +193,94 @@ func listRemove(cmd *cobra.Command, database *db.DB, block, list string, entries
 	return settle(database, block)
 }
 
+// entryCovers reports whether the site entry wide clearly matches every
+// page narrow matches (R-WEAK-5: changing narrow into wide in a blacklist,
+// or wide into narrow in an exception list, is not weakening). Only plain
+// site and address entries, no patterns: the same site or a parent domain
+// with no path ("youtube.com" covers "m.youtube.com/shorts"), or the same
+// site with a path that is a whole-part prefix ("reddit.com/r" covers
+// "reddit.com/r/funny", not "reddit.com/rx"). A list that also reads titles
+// or page text matches entries as text there, so a parent domain counts
+// only in a list that reads the address alone or ad networks.
+func entryCovers(where db.Where, wide, narrow string) bool {
+	split := func(e string) (host, path string, ok bool) {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if strings.Contains(e, "*") || !urlEntry(e) {
+			return "", "", false
+		}
+		if _, playlist := db.PlaylistInEntry(e); playlist {
+			return "", "", false
+		}
+		if i := strings.Index(e, "://"); i >= 0 {
+			if s := e[:i]; s != "http" && s != "https" {
+				return "", "", false
+			}
+			e = e[i+3:]
+		}
+		e = strings.TrimPrefix(e, "www.")
+		host, path, _ = strings.Cut(e, "/")
+		return host, strings.TrimSuffix(path, "/"), host != ""
+	}
+	wh, wp, ok1 := split(wide)
+	nh, np, ok2 := split(narrow)
+	if !ok1 || !ok2 || (wh == nh && wp == np) {
+		return false
+	}
+	if wp == "" {
+		return wh == nh || (!where.Title && !where.Text && strings.HasSuffix(nh, "."+wh))
+	}
+	if wh != nh || !strings.HasPrefix(np, wp) {
+		return false
+	}
+	rest := np[len(wp):]
+	return rest == "" || strings.ContainsRune("/?#&", rune(rest[0]))
+}
+
+// entryChangeStrengthens reports whether changing a list's entry old into
+// entry is free on a locked block (R-WEAK-5): a blacklist's entry matching
+// more, an exception list's matching less.
+func entryChangeStrengthens(l db.WebList, old, entry string) bool {
+	if l.IsExceptions() {
+		return entryCovers(l.Where, old, entry)
+	}
+	return entryCovers(l.Where, entry, old)
+}
+
+// listChange changes one entry of a list into another in one step: free
+// when the change strengthens (entryChangeStrengthens), else gated as a
+// removal (R-WEAK-5).
+func listChange(cmd *cobra.Command, database *db.DB, block, list, old, entry string) error {
+	_, l, err := findList(database, block, list)
+	if err != nil {
+		return err
+	}
+	if err := refuseCombinations([]string{entry}); err != nil {
+		return err
+	}
+	prepared, err := prepareEntries(l.Where, []string{entry})
+	if err != nil {
+		return err
+	}
+	entry = prepared[0]
+	old = storedEntries(l.Entries, []string{old})[0]
+	if err := requireAll("entry", block, l.Entries, []string{old}); err != nil {
+		return err
+	}
+	if old == entry {
+		fmt.Println("No change.")
+		return nil
+	}
+	if _, err := gateEdit(cmd, database, block, entryChangeStrengthens(l, old, entry), listEdit(db.EditListRemove, l, old)); err != nil {
+		return err
+	}
+	if err := database.ReplaceListEntry(l.ID, old, entry); err != nil {
+		return err
+	}
+	fmt.Printf("Changed in '%s' of '%s': %s\n", l.Name, block, entry)
+	notePlaylists(block, l, []string{entry})
+	return settle(database, block)
+}
+
 // storedEntries returns entries as the list or cluster stores them: domains
 // and old word combinations are kept normalized, so look them up the same
 // way.
@@ -667,6 +755,15 @@ var listRemoveCmd = &cobra.Command{
 	}),
 }
 
+var listChangeCmd = &cobra.Command{
+	Use:   "change [block] [list] [old entry] [new entry]",
+	Short: "Change one entry into another (free on a locked block only if it strengthens: a blacklist's entry matching more, an exception's less)",
+	Args:  cobra.ExactArgs(4),
+	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
+		return listChange(cmd, database, args[0], args[1], args[2], args[3])
+	}),
+}
+
 var listWhereCmd = &cobra.Command{
 	Use:     "scope [block] [list] [url|title|text] [on|off]",
 	Aliases: []string{"where"},
@@ -915,7 +1012,7 @@ func init() {
 	listCreateCmd.Flags().Bool("text", false, "Look at the page text")
 	listCreateCmd.Flags().Bool("ads", false, "Look at the ad networks a page loads (§3.9 ad trigger): entries are ad network domains or industries ("+strings.Join(db.AdIndustryNames(), ", ")+")")
 	addNowFlag(listDeleteCmd, listAddCmd, listRemoveCmd, listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listImportCmd)
-	listCmd.AddCommand(listShowCmd, listCreateCmd, listRenameCmd, listDeleteCmd, listAddCmd, listRemoveCmd,
+	listCmd.AddCommand(listShowCmd, listCreateCmd, listRenameCmd, listDeleteCmd, listAddCmd, listRemoveCmd, listChangeCmd,
 		listWhereCmd, listActionCmd, listThresholdCmd, listHitsCmd, listRateCmd, listExportCmd, listImportCmd, listCopyCmd)
 	rootCmd.AddCommand(listCmd)
 }

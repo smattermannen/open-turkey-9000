@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -367,5 +368,74 @@ func TestImportSkipsDeclutter(t *testing.T) {
 	mustRun(t, "project", "import", projectFile, "--yes")
 	if got := actions("b-2", "Words"); !reflect.DeepEqual(got, []string{"block"}) {
 		t.Errorf("b-2 Words actions = %v; want [block]", got)
+	}
+}
+
+// R-WEAK-5: which entry changes clearly match more.
+func TestEntryCovers(t *testing.T) {
+	url := db.Where{URL: true}
+	text := db.Where{URL: true, Text: true}
+	for _, c := range []struct {
+		where        db.Where
+		wide, narrow string
+		want         bool
+	}{
+		{url, "youtube.com", "youtube.com/shorts", true},
+		{url, "youtube.com", "m.youtube.com/shorts", true},
+		{url, "https://www.youtube.com/", "youtube.com/shorts", true},
+		{text, "youtube.com", "m.youtube.com", false}, // text: matched as text there
+		{text, "youtube.com", "youtube.com/shorts", true},
+		{url, "reddit.com/r", "reddit.com/r/funny", true},
+		{url, "reddit.com/r", "reddit.com/rx", false},
+		{url, "reddit.com/watch", "reddit.com/watch?v=1", true},
+		{url, "reddit.com/r/funny", "reddit.com/r", false},
+		{url, "old.reddit.com", "reddit.com", false},
+		{url, "reddit.com", "reddit.com", false},
+		{url, "*.reddit.com", "x.reddit.com", false}, // patterns: never "clearly"
+		{url, "reddit.com", "*reddit*", false},
+		{url, "casino", "online casino", false}, // rendered terms: never
+		{url, "youtube.com", "youtube.com/playlist?list=PL1234567890", false},
+		{url, "ftp://example.com", "example.com/x", false},
+	} {
+		if got := entryCovers(c.where, c.wide, c.narrow); got != c.want {
+			t.Errorf("entryCovers(%+v, %q, %q) = %v; want %v", c.where, c.wide, c.narrow, got, c.want)
+		}
+	}
+}
+
+// R-WEAK-5, §4.3: `list change` on a locked block takes a blacklist entry
+// matching more and an exception matching less whole; the opposite is
+// refused whole, the list left as it was.
+func TestListChangeLocked(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com/r/funny", "x.com")
+	mustRun(t, "list", "add", "b", "Exceptions", "example.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	entries := func(list string) []string {
+		detail, _ := d.GetBlock("b")
+		l, _ := detail.Lists.Find(list)
+		return slices.Sorted(slices.Values(l.Entries))
+	}
+	if err := runCLI(t, "list", "change", "b", "Blocked", "x.com", "x.com/home"); err == nil {
+		t.Error("a blacklist entry narrowed on a locked block")
+	}
+	if err := runCLI(t, "list", "change", "b", "Exceptions", "example.com", "example.org"); err == nil {
+		t.Error("an exception changed to another site on a locked block")
+	}
+	if got := entries("Blocked"); !reflect.DeepEqual(got, []string{"reddit.com/r/funny", "x.com"}) {
+		t.Errorf("Blocked after refused changes: %v", got)
+	}
+	mustRun(t, "list", "change", "b", "Blocked", "reddit.com/r/funny", "reddit.com")
+	mustRun(t, "list", "change", "b", "Exceptions", "example.com", "example.com/news")
+	if got := entries("Blocked"); !reflect.DeepEqual(got, []string{"reddit.com", "x.com"}) {
+		t.Errorf("Blocked after widening: %v", got)
+	}
+	if got := entries("Exceptions"); !slices.Contains(got, "example.com/news") || slices.Contains(got, "example.com") {
+		t.Errorf("Exceptions after narrowing: %v", got)
+	}
+	if err := runCLI(t, "list", "change", "b", "Blocked", "nothere.com", "x.org"); err == nil {
+		t.Error("a missing entry was changed")
 	}
 }

@@ -468,6 +468,17 @@ func only(values, have []string, in bool) []string {
 // saveDraft applies what was changed in the draft since it was made to
 // block as it is now, each change through its command's gate; it returns
 // the changes refused.
+// filter keeps the values keep is true for.
+func filter(values []string, keep func(string) bool) []string {
+	var out []string
+	for _, v := range values {
+		if keep(v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 func saveDraft(cmd *cobra.Command, database *db.DB, block, draft string) ([]string, error) {
 	base, err := draftBase(database, block, draft)
 	if err != nil {
@@ -522,7 +533,24 @@ func saveDraft(cmd *cobra.Command, database *db.DB, block, draft string) ([]stri
 				try("looking at "+place+" in "+l.Name, listWhere(cmd, database, block, l.Name, place, true))
 			}
 		}
-		if add := only(missing(b.Entries, l.Entries), o.Entries, false); len(add) > 0 {
+		// An entry changed in the draft into one that strengthens (a
+		// blacklist's matching more, an exception's less) is one change, not
+		// add + remove (R-WEAK-5, as `list change`).
+		added := only(missing(b.Entries, l.Entries), o.Entries, false)
+		removed := only(missing(l.Entries, b.Entries), o.Entries, true)
+		changed := map[string]bool{}
+		for _, r := range removed {
+			for _, a := range added {
+				if changed[a] || !entryChangeStrengthens(o, r, a) {
+					continue
+				}
+				changed[a], changed[r] = true, true
+				try("changing "+r+" to "+a+" in "+l.Name, listChange(cmd, database, block, l.Name, r, a))
+				break
+			}
+		}
+		notChanged := func(e string) bool { return !changed[e] }
+		if add := filter(added, notChanged); len(add) > 0 {
 			try("adding to "+l.Name, listAdd(cmd, database, block, l.Name, add))
 		}
 		if !l.IsExceptions() {
@@ -565,7 +593,7 @@ func saveDraft(cmd *cobra.Command, database *db.DB, block, draft string) ([]stri
 			}
 			try(map[bool]string{true: "test mode on in ", false: "test mode off in "}[test]+l.Name, err)
 		}
-		if remove := only(missing(l.Entries, b.Entries), o.Entries, true); len(remove) > 0 {
+		if remove := filter(removed, notChanged); len(remove) > 0 {
 			try("removing "+strings.Join(remove, ", ")+" from "+l.Name, listRemove(cmd, database, block, l.Name, remove))
 		}
 		for _, place := range db.Places {

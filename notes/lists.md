@@ -31,6 +31,13 @@
   its exceptions need unread page parts). Per action: threshold (distinct
   entries), hit count, rate (`list rate`, % of page words, pages ≥ 200
   words). Lists/phrase sets may have no action (do nothing).
+- `list change B L OLD NEW` (`listChange`, `db.ReplaceListEntry`, one
+  transaction; R-WEAK-5): free when `entryCovers` says the blacklist's new
+  entry clearly matches more (or the exception's less): plain sites/
+  addresses only, same site or parent domain without path (parent domain
+  only in lists reading just url/ads; title/text match as text), or a
+  path prefix ending at `/?#&`. Patterns, rendered terms, playlists:
+  never; else gated as a removal (`TestListChangeLocked`).
 - Strengthening free; else gated (`EditList*` by id). Shortcuts (`block
   add`, `add-exception`, `add-term`/`add-keyword`, `threshold`, `action`)
   use default lists Blocked / Exceptions / Rendered terms on page.
@@ -108,8 +115,10 @@ changes by any program are re-read.
   (`listAdd`/`listWhere`/…, `saveDraftPhraseSets`, `saveDraftTriggers`),
   naming refusals. A phrase gone from the draft paired with a new one that
   `Widens` it is one free `ReplacePhrase` (R-WEAK-5, as `phrase-set
-  change`; A18, `TestDraftPhraseChangeWidens`); list entries have no change
-  command, so an edited entry stays remove + add.
+  change`; A18, `TestDraftPhraseChangeWidens`); a list entry gone paired
+  with a new one that strengthens (`entryChangeStrengthens`) is one
+  `listChange` (`TestDraftListEntryChange`). Other edits stay add + remove
+  (the add may apply, the removal refused).
 - Breaks & allowance and Bypass prevention commands (`draftQueued`) on a
   draft are kept, not run (`queueOnDraft` → `keepOnDraft`,
   `draft.queue.<draft>`, last of each kind; gui-state `draft_kept`);

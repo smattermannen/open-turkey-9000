@@ -831,6 +831,39 @@ func TestDraftPhraseChangeWidens(t *testing.T) {
 	}
 }
 
+// A18, R-WEAK-5: a list entry changed in a draft into one that matches
+// more (blacklist) or less (exception list) saves on a locked block as one
+// change, as `list change` does; a narrowing one still has its removal
+// refused.
+func TestDraftListEntryChange(t *testing.T) {
+	d := testDB(t)
+	notTerminal(t)
+	mustRun(t, "block", "create", "b")
+	mustRun(t, "block", "add", "b", "reddit.com/r/funny", "x.com")
+	mustRun(t, "list", "add", "b", "Exceptions", "example.com")
+	mustRun(t, "start", "b", "--for", "1h", "--yes")
+	mustRun(t, "block", "draft", "b")
+	draft := "b (draft)"
+	mustRun(t, "list", "change", draft, "Blocked", "reddit.com/r/funny", "reddit.com")
+	mustRun(t, "list", "change", draft, "Blocked", "x.com", "x.com/home")
+	mustRun(t, "list", "change", draft, "Exceptions", "example.com", "example.com/news")
+	err := runCLI(t, "block", "draft", "b", "save")
+	if err == nil || strings.Contains(err.Error(), "reddit.com") || strings.Contains(err.Error(), "example.com") ||
+		!strings.Contains(err.Error(), "x.com") {
+		t.Fatalf("save names only the narrowing change: %v", err)
+	}
+	detail, _ := d.GetBlock("b")
+	blocked, _ := detail.Lists.Find("Blocked")
+	exceptions, _ := detail.Lists.Find("Exceptions")
+	if !slices.Contains(blocked.Entries, "reddit.com") || slices.Contains(blocked.Entries, "reddit.com/r/funny") ||
+		!slices.Contains(blocked.Entries, "x.com") {
+		t.Errorf("Blocked after save: %v", blocked.Entries)
+	}
+	if !slices.Contains(exceptions.Entries, "example.com/news") || slices.Contains(exceptions.Entries, "example.com") {
+		t.Errorf("Exceptions after save: %v", exceptions.Entries)
+	}
+}
+
 // §3.11 with §4.3: a draft of a password-protected block needs the block
 // password and keeps it.
 func TestDraftBlockPassword(t *testing.T) {

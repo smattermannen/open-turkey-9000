@@ -707,6 +707,23 @@ func (d *DB) RemoveListEntries(listID int, entries []string) error {
 	return tx.Commit()
 }
 
+// ReplaceListEntry swaps one entry of a list for another in one
+// transaction, so a changed entry is never lost or doubled (R-WEAK-5).
+func (d *DB) ReplaceListEntry(listID int, old, entry string) error {
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM web_list_entries WHERE list_id = ? AND entry = ?", listID, old); err != nil {
+		return fmt.Errorf("failed to remove %q: %w", old, err)
+	}
+	if err := addListEntries(tx, listID, []string{entry}); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // SetListAction turns one of a blacklist's actions on or off. Turning one on
 // starts it at one entry for page text; an action that needs an address,
 // an image or minutes is turned on with SetListActionParams instead.

@@ -97,6 +97,10 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		{"list", "rate", "b", "Rendered terms on page", "block", "5"},
 		{"list", "test", "b", "Rendered terms on page", "on"},
 		{"list", "add", "b", "Exceptions", "example.com"},
+		// R-WEAK-5: an entry changed into one matching less (blacklist) or
+		// more (exception list).
+		{"list", "change", "b", "Blocked", "x.com", "x.com/home"},
+		{"list", "change", "b", "Exceptions", "file://*", "example.com"},
 		{"phrase-set", "remove", "b", "P", "[eat] [grandpa]"},
 		{"phrase-set", "delete", "b", "P"},
 		{"phrase-set", "scope", "b", "P", "text", "off"},

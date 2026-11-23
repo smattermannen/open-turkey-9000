@@ -103,6 +103,11 @@ plan is SPEC §8, its items §3.1.
   2 failures left, both fixed here. Unchecked: the next CI run. Done when:
   the `Integration tests` step of `.github/workflows/test.yml` is green on
   main.
+  Seen meanwhile, not in this item's files (for their owners): `node
+  ci/match_test.js` failed once on its timing ("huge page: slowest step
+  52.5 ms", run 697; passed on re-run), skipping every later step;
+  Android `RulesServerTest > noPreflight` failed twice (runs 680, 684;
+  passes on re-run).
 
 ### 0.1 Code contradicting `SPEC.md`
 

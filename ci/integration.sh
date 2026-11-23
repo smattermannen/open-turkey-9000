@@ -22,9 +22,9 @@ check "daemon is running" systemctl is-active --quiet kc9k
 
 ot block create strictblock
 ot block add strictblock example.dev
-ot strict on
+ot strict on --yes
 started=$(date +%s)
-ot start strictblock --for 90s
+ot start strictblock --for 90s --yes
 echo "::notice::start took $(($(date +%s) - started))s"
 for _ in $(seq 1 30); do sudo -n true 2>/dev/null || break; sleep 1; done
 check "strict mode denies sudo" fails sudo -n true
@@ -75,7 +75,7 @@ ot stop apps
 
 ot block create locked
 ot block add-site locked example.org
-ot start locked --for 1m
+ot start locked --for 1m --yes
 check "time lock refuses stop" fails kc9k stop locked
 sudo systemctl stop systemd-timesyncd 2>/dev/null
 sudo date -s '+2 hours' >/dev/null
@@ -127,25 +127,25 @@ ot block create lists2
 check "import blocked" kc9k block import-list lists2 blocked /tmp/blocked.txt
 check "import exceptions" kc9k block import-list lists2 exceptions /tmp/exceptions.txt
 check "imports stay separate" bash -c '[ "$(kc9k block export-list lists2 blocked | wc -l)" = 2 ] && [ "$(kc9k block export-list lists2 exceptions)" = c.example.com ]'
-ot start lists --for 1h
+ot start lists --for 1h --yes
 check "exception refused while locked" fails kc9k block add-exception lists example.info
 check "removing an exception stays allowed" kc9k block remove-exception lists reddit.com/r/programming
 
 ot block create pw
 ot block add pw example.pw
-echo hemligt | ot start pw --password-stdin
+echo hemligt | ot start pw --password-stdin --yes
 check "password lock refuses stop" fails kc9k stop pw
 check "wrong password refused" fails bash -c 'echo fel | kc9k unlock pw'
 check "right password unlocks" bash -c 'echo hemligt | kc9k unlock pw'
 
 ot block create rs
 ot block add rs example.rs
-ot start rs --restart
+ot start rs --restart --yes
 check "restart lock refuses stop" fails kc9k stop rs
 
 ot block create dl
 ot block add dl example.dl
-ot start dl --delay 1m
+ot start dl --delay 1m --yes
 ot stop dl
 check "delay keeps the block on" grep -q 'example.dl' /etc/hosts
 sleep 68
@@ -183,7 +183,7 @@ ot block add pwtest example.pw
 check "plain start needs no settings password" kc9k start pwtest </dev/null
 check "stop needs the settings password" fails kc9k stop pwtest </dev/null
 check "wrong settings password refused" fails bash -c 'echo wrong | kc9k stop pwtest'
-check "settings password, then the lock's own" bash -c "printf 'secret1\nlockpw\n' | kc9k start pwtest --password-stdin"
+check "settings password, then the lock's own" bash -c "printf 'secret1\nlockpw\n' | kc9k start pwtest --password-stdin --yes"
 check "unlock takes both passwords" bash -c "printf 'secret1\nlockpw\n' | kc9k unlock pwtest"
 check "loosening an edit needs it" fails kc9k block remove-site pwtest example.pw </dev/null
 check "status shows the settings password" bash -c 'kc9k status | grep -q "Settings password: on"'

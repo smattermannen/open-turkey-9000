@@ -4,157 +4,138 @@
 - SPEC: §3.4, §3.5, §3.11, §4.6, R-LOCK-1–12, R-WEAK-1–5
 - Connects to: everything gated: [lists](lists.md), [automation](automation.md), [browsers](browsers.md), [hotkeys](hotkeys.md), [device](device.md); [testing](testing.md) (weakening audit)
 
-## Code
+## Lock kinds and flags
 
-- **Locks** (`internal/cli/`): `blockHold` decides lock state (text, timer,
-  password, restart, delay, schedule lock `db/schedulelock.go`). Layered
-  (R-LOCK-6/7, `db/layers.go`, `cli/layers.go`): `LockExtras.Order` from
-  the lock flags' order (`trackLockFlagOrder`), `LayersOn`, `unlock` lifts
-  only the first; `TimerAfter`/`RestartPending` wait behind others;
-  `AdvanceLayers` in `blockHold` and the daemon (`finishDelayedStops`).
-  Several of one kind (§3.4, owner 2026-11-20): a kind already there waits
-  in `LockExtras.Queue` (`lock_queue`, JSON `QueuedLock`) after all placed
-  locks (`PlacedLayers`; `Layers`/`LayersOn` append it); `AdvanceLayers`
-  `promote`s the first once no placed lock is on. Once anything is queued,
-  every new lock queues (order kept); every kind queues, range included
-  (`QueuedLock.Range*`). Setting locks the same (`SettingLock.Queue`,
-  `Config`, `lock_queue`/`lock_config` in `setting_locks`, mapped through
-  `asBlock`/`fromBlock`; `strengthenSettingLock` mirrors
-  `strengthenLocks`; `advancedSettingLock` is what `settingLocks` diffs
-  against for the confirmation).
-- **Lock flags given twice** (§3.4): `orderedValue` keeps every `Set`
-  (`sets`); `lockOccurrences` lists each, `lockSpecs` turns them into one
-  `QueuedLock` per lock (`--lock-chars`, `--lock-words` with `--lock`,
-  `--range-invert` apply to all; one password read per password lock),
-  `splitSpecs` places each kind's first until the first repeat and queues
-  the rest. `lockArgs` keeps every occurrence (hotkeys);
-  `parseStartLocks` resets `startCmd`'s lock flags before stored ones are
-  parsed (hotkey actions, a mode's blocks); `clearLockOccurrences` in the
-  tests' `resetFlags`. Hotkeys and mode locks: one password lock at most.
-- **Re-lock** (§3.4, owner 2026-11-20): a block keeps every lock it was
-  given, in order and as given (a duration, not an end), in
-  `LockExtras.Config` (`lock_config`; `start` and `strengthenLocks` append
-  each spec; a block without one gets `db.Snapshot` of its locks).
-  With `Relock` and a `Config` (`relocksConfig`), unlocking removes a lock
-  as without re-lock; `AdvanceLayers` starts `LiftedUntil` once no lock is
-  on, clears it if one is added meanwhile, and when it is over
-  `restoreConfig` empties every place and queues `Config`, so the first
-  lock is on and the rest wait (durations count from then). `--relock`
-  goes with any lock. Without a `Config` (blocks and settings locked
-  before they kept one) the old lift of text/password locks
-  (`LiftedKinds`) stays; a new lock gives them a `Config` (`Snapshot`).
-  `SettingLock.PendingRelock`/`RelockAt`: unlocked, re-lock time running.
-- **Extend** (`cli/extend.go`, §4.6: its own action): `kc9k extend B --for D`
-  adds D, `--until T` moves the end later; to the running timer lock, else
-  the waiting one (`TimerAfter`, `--for` only), else the first queued.
-  Confirmed (`--yes`). `Config` keeps the duration as first given.
-  `ensureEditable` refuses only weakening of locked blocks; `start` on an
-  active block only strengthens. `gateEdit` (`loosen.go`) no longer queues;
-  daemon still applies old queued edits (`pending.go`). `unlock` lifts
-  text/password locks and starts delay countdown (`delay_until`).
-- **Lock confirmation** (`cli/confirm.go`, R-LOCK-12): every lock path builds
-  `lockToSet` items and calls `confirmLocks` before writing (the firmware
-  lock too); terminal asks
-  "yes", otherwise needs `--yes` (`addYesFlag`). Tests `confirm_test.go`
-  (`lockCases`). GUI: `confirm_lock` then `--yes`. Hotkeys: confirmed at
-  `hotkey add`, and at each press via `blocker.ConfirmDesktop` (zenity as
-  session user; none = no) unless `no_confirm`. Automatic monk mode needs
-  `--no-confirm-ok` (`requireMonkAck`).
-- **Text lock** (`internal/lock/`): raw-mode, paste-resistant; 60% letters,
-  35% digits, 5% symbols; 98% accuracy; default 300 chars;
-  `--lock-words`, `--lock-text`. Without a terminal (the GUI, scripts) the
-  command opens its own window (`lock/window.go`, R-LOCK-5, SPEC §4.6):
-  `challenge_window.py` is embedded and run with `python3 -I -c`, as
-  `SUDO_UID` on the `DISPLAY`/`XAUTHORITY` sudo kept (never as root;
-  without root, as the user in their environment), `GDK_BACKEND=x11`. It
-  has no text field and only reports keys (`k code time`, `b`, `n` per
-  page, `p` paste/drop/middle click, `s` an XSendEvent key, `c` cancel);
-  `readWindowKeys` rebuilds the text, refuses more than `pasteBurst` keys
-  within `burstMillis` (5 ms), and scores. Standard input is never read
-  for it (`runChallengeLine` is gone): no window → refused. The GUI's
-  Unlock runs the command (`run_challenge`, 6 h timeout) instead of a
-  terminal. `lock.StartWindow` is the test seam
-  (`TestTextLockUnlocksOnlyFromItsWindow`); the real window:
-  `TestChallengeWindowOnX` (xdotool, under `xvfb-run`).
-- **Settings password** (`cli/settingspassword.go`):
-  `requireSettingsPassword` in `gateEdit`, `ensureEditable`, stop/unlock,
-  settings off, strict off, no-escape, prepare-uninstall;
-  `requireLockPassword` only with `password locks on`. Passwords one per
-  line via `stdinLines` (settings password first). The GUI sends the one it
-  remembers with hidden `--settings-line` (`readSettingsLine`: read whether
-  needed or not, so it is never taken for a lock's password). GUI retries
-  once after asking.
-- **No weakening** (`cli/noweakening.go`, R-WEAK-4):
-  `refuseSettingWeakening` in every setting's weakening path. Strict mode's
-  lock `enforce.StrictLockName` counts in `AnySettingLocked` but doesn't
-  start lockdown.
-- **Access passwords** (`cli/access.go`): per area, setting
-  `access.password.<area>` (shared hash when set together). `accessGate`
-  (root `PersistentPreRunE`, `commandAreas`) needs the app password plus one
-  area; `daemon`, `hotkey run`, `gui-state` exempt. Passwords first on
-  stdin, counted by hidden `--access-lines N`. `gui-state` reports
-  `access`/`access_unused`, `hideLocked` empties locked pages.
-- **Block password** (`cli/blockpassword.go`, `blocks.view_password`, §3.11):
-  `revealBlock` before showing contents; gui-state `--reveal B` (password on
-  stdin) else `hidden` with entries emptied; GUI `block_passwords`.
+- Flags: `--for`, `--until`, `--lock` (`--text-lock`), `--password-stdin`,
+  `--restart`, `--delay`, `--range "DAYS HH:MM-HH:MM"` (`--range-invert`;
+  `LockExtras.InRange`), `--relock D` (with any lock). Each flag given twice
+  = two locks. `blockHold` (`internal/cli/`) decides lock state, incl.
+  schedule lock (`db/schedulelock.go`).
+- Browser setting locks: same kinds minus delay; also strict mode, global
+  ladder, tamper. `kc9k browser unlock O` unlocks and turns off. While a
+  browser setting is locked: strict mode and no-escape hold, uninstall
+  refused. `block-devtools` can't go off while a block is locked or a
+  freeze runs. Block unsupported browsers (`kc9k tamper
+  unsupported-browsers on [lock flags]`, `tamper unlock
+  unsupported-browsers`; hidden alias `browser force-librewolf`): own lock;
+  off refused while anything is locked; on refused with no supported
+  browser installed.
 
-## Built behaviour
+## Layered locks (R-LOCK-6/7, `db/layers.go`, `cli/layers.go`)
 
-Not fixed by `SPEC.md`; the code is the truth.
+- `LockExtras.Order` from flag order (`trackLockFlagOrder`), `LayersOn`;
+  `unlock` lifts only the first; `TimerAfter`/`RestartPending` wait behind
+  others; `AdvanceLayers` in `blockHold` and daemon (`finishDelayedStops`).
+- Several of one kind (§3.4): a kind already there waits in
+  `LockExtras.Queue` (`lock_queue`, JSON `QueuedLock`, range included)
+  after all placed locks (`PlacedLayers`); `AdvanceLayers` `promote`s the
+  first once no placed lock is on. Once anything is queued, every new lock
+  queues. Setting locks the same (`SettingLock.Queue`/`Config`, via
+  `asBlock`/`fromBlock`).
+- Repeated flags: `orderedValue` keeps every `Set`; `lockOccurrences` →
+  `lockSpecs` (one `QueuedLock` per lock; `--lock-chars`, `--lock-words`,
+  `--range-invert` apply to all; one password read per password lock) →
+  `splitSpecs` places each kind's first until the first repeat, queues the
+  rest. `lockArgs` keeps every occurrence (hotkeys); `parseStartLocks`
+  resets `startCmd` lock flags before stored ones parse. Hotkeys and mode
+  locks: at most one password lock.
+- Start on an active block only adds locks, last in unlock order; a kind it
+  already has (also from a hotkey) queues last; a set lock is never
+  changed. A second range lock replaces the first only once the first is
+  off with nothing before it on.
 
-- **Starting on an active block** only adds locks: any lock kind can be
-  added, last in the unlock order (a duration timer or restart lock waits
-  behind locks on). A kind it already has, of any kind and also from a
-  hotkey press, is a second lock of it, queued last (`db.QueuedLock`); a lock
-  already set is never changed. A second range lock replaces the first
-  only once the first is off (out of its times) with nothing before it on.
-  A challenge longer than the
-  terminal is paged (Enter per page), accuracy over all.
-- **Trusted time** (`db/clock.go`): the clock; with `tamper clock` on and a
-  timer lock running (blocks, setting locks, monk mode), only the boot
-  clock moves it, powered-off time not counted. **Clock check** (§4.10,
-  SPEC §6 2026-11-18; `enforce/clockcheck.go`, daemon every 5 min): once
-  per boot while that holds, two of google/cloudflare/microsoft over HTTPS
-  must agree (Date header, no-cache, the earlier taken; the DoH resolvers'
-  IPs are firewalled) and the RTC is read (`/sys/class/rtc/rtc0`; on Windows its reading at
-  boot, notes/windows.md);
-  `CheckClock` keeps an anchor (real, trusted, boot clock, RTC). The next
-  anchor raises trusted to anchor trusted + real time passed, capped by
-  the RTC's count; the system clock plays no part. The anchor is a floor
-  in `TrustedNow` for its boot, dropped whenever no timer lock runs (else
-  a clock set back before the next lock would shorten it,
-  `TestClockAnchorDoesNotShortenNextLock`). Offline: nothing given back. Journal:
-  "clock check: … counted".
-- **Strengthening allowed while locked**: add apps/titles/blacklist entries,
+## Re-lock (§3.4)
+
+- A block keeps every lock as given (duration, not end), in order, in
+  `LockExtras.Config` (`lock_config`; `start`/`strengthenLocks` append; a
+  block without one gets `db.Snapshot`).
+- With `Relock` + `Config` (`relocksConfig`): unlock removes a lock
+  normally; once no lock is on `AdvanceLayers` starts `LiftedUntil`
+  (cleared if a lock is added meanwhile); when over, `restoreConfig` empties
+  every place and queues `Config` (first lock on, durations count from
+  then). Without `Config` (older data): old lift of text/password locks
+  (`LiftedKinds`); a new lock gives a `Config`.
+- `SettingLock.PendingRelock`/`RelockAt`: unlocked, re-lock time running.
+
+## Extend, editing, unlock
+
+- `kc9k extend B --for D | --until T` (§4.6, own action, confirmed): to the
+  running timer lock, else waiting one (`TimerAfter`, `--for` only), else
+  first queued. `Config` keeps the original duration.
+- `ensureEditable` refuses only weakening of locked blocks. `gateEdit`
+  (`loosen.go`) no longer queues; `Tick` still applies old queued edits
+  (`db/pending.go`). `unlock` lifts text/password locks, starts delay
+  countdown (`delay_until`).
+- Strengthening allowed while locked: add apps/titles/blacklist entries,
   `list create`, blacklist scope/action on, lower threshold/hits, remove
   exceptions or exception scopes, delete an exception list, copy a cluster
   into a blacklist, record into a blacklist. Everything else weakens.
-- **Locks**: flags `--for`, `--until`, `--lock` (`--text-lock`),
-  `--password-stdin`, `--restart`, `--delay`, `--range "DAYS HH:MM-HH:MM"`
-  (`--range-invert`; `LockExtras.InRange`), `--relock D` (with any lock;
-  re-locks unless stopped meanwhile); each given twice is two locks.
-  Browser setting locks: same kinds minus delay (re-lock too:
-  `SettingLock.LiftedUntil`, `unlockSetting`; also strict mode, global
-  ladder, tamper); a lock added later goes last, a kind already there is
-  another lock of it (never a change to the first);
-  `kc9k browser unlock O` unlocks and turns off. While a browser setting is
-  locked, strict mode and no-escape hold and uninstall is refused.
-  `block-devtools` also can't go off while a block is locked or a freeze
-  runs. Block unsupported browsers (`kc9k tamper unsupported-browsers on
-  [lock flags]`, `tamper unlock unsupported-browsers`; old `browser
-  force-librewolf` hidden): own lock as a browser setting's; off refused
-  while anything is locked; on refused with no supported browser installed.
-- **Settings password**: needed for weakening, `stop`, `unlock`, schedules,
-  a new or larger allowance, browser settings off, strict off, no-escape,
-  uninstall. Free: reading, starting, adding entries, actions on, opening a
-  session, less allowance or removing it. GUI
-  remembers it until closed. Lost: `kc9k-bin recover` as root in a recovery boot
-  (not with no-escape) removes it and password locks;
+
+## Confirmation (R-LOCK-12, `cli/confirm.go`)
+
+Every lock path (firmware lock too) builds `lockToSet` items →
+`confirmLocks` before writing; terminal asks "yes", else `--yes`
+(`addYesFlag`). Tests `confirm_test.go` (`lockCases`). GUI: `confirm_lock`
+then `--yes`. Hotkeys: at `hotkey add`, and each press via
+`blocker.ConfirmDesktop` (zenity as session user; none = no) unless
+`no_confirm`. Automatic monk mode needs `--no-confirm-ok` (`requireMonkAck`).
+
+## Text lock (`internal/lock/`)
+
+- Raw-mode, paste-resistant; 60% letters, 35% digits, 5% symbols; 98%
+  accuracy over all; default 300 chars; `--lock-words`, `--lock-text`.
+  Longer than the terminal: paged (Enter per page).
+- No terminal (GUI, scripts): own window (`lock/window.go`, R-LOCK-5):
+  embedded `challenge_window.py` via `python3 -I -c`, as `SUDO_UID` on the
+  kept `DISPLAY`/`XAUTHORITY` (never root), `GDK_BACKEND=x11`. No text
+  field; reports keys, pastes/drops, synthetic (XSendEvent) keys;
+  `readWindowKeys` rebuilds text, refuses bursts (`pasteBurst` keys within
+  5 ms). Stdin never read: no window → refused. GUI Unlock
+  runs the command (`run_challenge`, 6 h timeout). Test seam
+  `lock.StartWindow`; real window `TestChallengeWindowOnX`.
+
+## Trusted time (`db/clock.go`, `enforce/clockcheck.go`)
+
+- With `tamper clock` on and a timer lock running (blocks, setting locks,
+  monk mode): only the boot clock moves trusted time; powered-off time not
+  counted.
+- Clock check (§4.10; daemon every 5 min, once per boot while that holds):
+  two of google/cloudflare/microsoft over HTTPS must agree (Date header,
+  no-cache, earlier taken; DoH resolvers' IPs firewalled); RTC read
+  (`/sys/class/rtc/rtc0`; Windows: [windows](windows.md)). `CheckClock`
+  keeps an anchor (real, trusted, boot clock, RTC); next anchor raises
+  trusted to anchor + real time passed, capped by RTC count; system clock
+  ignored. Anchor is a floor in `TrustedNow` for its boot, dropped when no
+  timer lock runs (`TestClockAnchorDoesNotShortenNextLock`). Offline:
+  nothing given back. Journal: "clock check: … counted".
+
+## Passwords
+
+- **Settings password** (`cli/settingspassword.go`): needed for weakening,
+  `stop`, `unlock`, schedules, new/larger allowance, browser settings off,
+  strict off, no-escape, uninstall (`requireSettingsPassword` in
+  `gateEdit`, `ensureEditable`, …). Free: reading, starting, adding
+  entries, actions on, opening a session, less/no allowance.
+  `requireLockPassword` only with `password locks on`. Passwords one per
+  line on stdin (`stdinLines`, settings password first); GUI sends its
+  remembered one (until close) via hidden `--settings-line`
+  (`readSettingsLine`: always read, never mistaken for a lock password);
+  retries once after asking. Lost: `kc9k-bin recover` as root in a
+  recovery boot (not with no-escape) removes it and password locks;
   devmaster `master` clears it.
-- **Access passwords**: command areas — `block`, `list`, `schedule`,
-  `quota`… → blocks; `freeze`, `strict`, `no-escape` → device; `browser`,
-  `hotkey`, `password`, `access` → settings; `status`, `start`, `stop`,
-  `unlock` → dashboard or blocks. Wrong password: 1 s delay + `access`
-  event. Changing one asks for it (and the settings password). GUI unlock
-  lasts until close, Lock or idle timeout (own settings file). Root can
-  remove all.
+- **No weakening** (`cli/noweakening.go`, R-WEAK-4):
+  `refuseSettingWeakening` in every setting's weakening path.
+  `enforce.StrictLockName` counts in `AnySettingLocked` but doesn't start lockdown.
+- **Access passwords** (`cli/access.go`): per area, `access.password.<area>`
+  (shared hash when set together). `accessGate` (root `PersistentPreRunE`,
+  `commandAreas`) needs app password + one area; `daemon`, `hotkey run`,
+  `gui-state` exempt. Areas: `block`, `list`, `schedule`, `quota`… →
+  blocks; `freeze`, `strict`, `no-escape` → device; `browser`, `hotkey`,
+  `password`, `access` → settings; `status`, `start`, `stop`, `unlock` →
+  dashboard or blocks. Passwords first on stdin (hidden `--access-lines
+  N`). Wrong: 1 s delay + `access` event. Changing one asks for it (and
+  settings password). GUI unlock lasts until close, Lock or idle timeout;
+  `hideLocked` empties locked pages. Root can remove all.
+- **Block password** (`cli/blockpassword.go`, `blocks.view_password`,
+  §3.11): `revealBlock` before showing contents; gui-state `--reveal B`
+  (password on stdin) else `hidden`, entries emptied; GUI `block_passwords`.

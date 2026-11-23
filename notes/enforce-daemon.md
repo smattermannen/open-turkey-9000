@@ -4,35 +4,35 @@
 - SPEC: §3.2 (affected users), §3.3
 - Connects to: all notes; most often [automation](automation.md), [locks](locks.md), [layers-net](layers-net.md)
 
-## Code
+## Enforce (`internal/enforce/`)
 
-- **Enforce** (`internal/enforce/`): active blocks → layer inputs (unioned).
-  `Apply` (CLI, on change) and `Tick` (daemon: due old queued edits (`applyDueEditsAt`; nothing queues now), schedule
-  reconciliation, drift reapply). Single source of truth. `Inputs` reads
-  two tamper settings from package vars loaded before each apply
-  (`loadDNSChoice`: file:// blocking, block embedded content; browsers
-  note).
-  The firewall is filled only by `Tick` (`deferFirewall`), never waiting
-  on lookups (`blocker.ApplyFirewallKnown`): applied again when the
-  background run ends (`firewallLookups`). Waiting held the cycle and the
-  apply lock, so every `kc9k` command, half an hour and more at 5,000
-  unknown sites (2026-11-21, desktop). `Inputs` keeps its last result for
-  the same blocks (`lastInputs`, sha256 of what it reads, `inputsKey`: the
-  file URL and embedded content settings included).
-- **Daemon** (`internal/daemon/`): `Tick` every 5 s; foreground-app
-  sampling every 5 s; screen relock every 0.5 s during a lock freeze.
-- **Affected users** (`db/users.go`, `cli/blockusers.go`, §3.2):
-  `blocks.users`; `enforce.forEveryone` keeps partial blocks out of shared
-  layers, `blockUIDs` → `blocker.KillBlockedFor`, `BuildRulesFor(user)`
-  with `clientUser` (socket uid, `blocker.ClientUser`); `regularUsers` /
-  cli `accounts` faked in tests. Also per user (2026-11-21): window titles
-  and folder entries (`titleTargets` → `blocker.TitlesByUser`, each
-  desktop user's windows judged by every account's targets and their own;
-  `titleHitBlocks` blames only blocks for that user), fetch tools
-  (`blockDomains` → `blocker.KillNamingFor`), the extension guard
-  (`extensionUsers` → `ExtensionGuard.EnforceFor`: options, locks
-  (R-LOCK-9), a block for everyone and block unsupported browsers need it
-  in every account). The GUI's "isn't running" dialog
-  (`cli.extensionMissing`) asks `ExtensionRequiredNowFor(callerUID)` and
-  looks at that account's browsers (`RunningSupportedBrowsersFor`);
-  check-ins are kept per browser, not per account.
+- Active blocks → unioned layer inputs. `Apply` (CLI, on change); `Tick`
+  (daemon: old queued edits `applyDueEditsAt`, schedule reconciliation,
+  drift reapply).
+- `Inputs` reads tamper settings file:// blocking and block embedded
+  content from package vars loaded before each apply (`loadDNSChoice`);
+  caches its result per blocks (`lastInputs`, `inputsKey` sha256, those
+  settings included).
+- Firewall filled only by `Tick` (`deferFirewall`), never waiting on
+  lookups (`blocker.ApplyFirewallKnown`), reapplied when the background run
+  ends (`firewallLookups`): waiting held the apply lock and every `kc9k`
+  command.
+
+## Daemon (`internal/daemon/`)
+
+`Tick` every 5 s; foreground-app sampling every 5 s; screen relock every
+0.5 s during a lock freeze.
+
+## Affected users (§3.2; `db/users.go`, `cli/blockusers.go`)
+
+- `blocks.users`; `enforce.forEveryone` keeps partial blocks out of shared
+  layers. Per user: kills (`blockUIDs` → `blocker.KillBlockedFor`), rules
+  (`BuildRulesFor(user)`, `clientUser` = socket uid), window titles and
+  folder entries (`titleTargets` → `blocker.TitlesByUser`; `titleHitBlocks`
+  blames only that user's blocks), fetch tools (`blockDomains` →
+  `KillNamingFor`), extension guard (`extensionUsers` →
+  `ExtensionGuard.EnforceFor`; options, locks (R-LOCK-9), a block for
+  everyone and block unsupported browsers need it in every account).
+- GUI "isn't running" dialog: `ExtensionRequiredNowFor(callerUID)`,
+  `RunningSupportedBrowsersFor`; check-ins per browser, not per account.
+- `regularUsers` / cli `accounts` faked in tests.

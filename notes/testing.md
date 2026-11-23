@@ -74,7 +74,10 @@
   built from Go (uutils' multicall `sleep`, Ubuntu 25.10+, refuses to run
   under another name); on GitHub the runner's folders (`/home/runner/…`)
   are made strict mode exempt folders first, else strict mode closes the
-  runner. Locking commands take `--yes` (R-LOCK-12).
+  runner. Locking commands take `--yes` (R-LOCK-12); protections are set
+  by the test, never assumed (R-LOCK-10: strict mode's own lock, tamper
+  `clock`, `--lock-lead`); the firewall is checked as nftables' `inet
+  kc9k` table where `nft` exists, else the iptables `KC9K` jump.
 - `ci/deb_install_check.sh <deb> [version]` (root, disposable machine: CI
   job `deb` and `linux-release.yml` on `ubuntu-24.04`): installs the `.deb`
   with apt, checks what `install.sh` sets up (daemon, sudo rule, wrapper,

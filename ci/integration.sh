@@ -51,6 +51,25 @@ check() {
 }
 fails() { ! "$@"; }
 ot() { kc9k "$@"; }
+# within SECS CMD...: CMD succeeds within SECS seconds (the daemon's cycle
+# is 5 s; the firewall is filled only there).
+within() {
+    local end=$((SECONDS + $1))
+    shift
+    until "$@"; do
+        [ $SECONDS -ge $end ] && return 1
+        sleep 1
+    done
+}
+# The firewall: KC9K's own nftables table where nft is installed, else the
+# KC9K chain jumped to from OUTPUT (blocker.applyAddresses).
+if sudo sh -c 'command -v nft' >/dev/null; then
+    firewall_on() { sudo nft list table inet kc9k >/dev/null 2>&1; }
+    firewall_cut() { sudo nft delete table inet kc9k; }
+else
+    firewall_on() { sudo iptables -C OUTPUT -j KC9K 2>/dev/null; }
+    firewall_cut() { sudo iptables -D OUTPUT -j KC9K; }
+fi
 
 check "sudo rule limited to group sudo" sudo grep -q '^%sudo ALL' /etc/sudoers.d/kc9k
 check "daemon is running" systemctl is-active --quiet kc9k
@@ -75,7 +94,7 @@ fi
 
 ot block create strictblock
 ot block add strictblock example.dev
-ot strict on --yes
+ot strict on --for 90s --yes # its own lock: else it turns off any time
 started=$(date +%s)
 ot start strictblock --for 90s --yes
 echo "::notice::start took $(($(date +%s) - started))s"
@@ -96,14 +115,13 @@ ot block create sites
 ot block add-site sites example.com
 ot start sites
 check "hosts entry" grep -q 'example.com' /etc/hosts
-check "firewall jump" sudo iptables -C OUTPUT -j KC9K
+check "firewall" within 15 firewall_on
 check "browser policy" sudo test -f /etc/opt/chrome/policies/managed/kc9k.json
 check "chrome extension policy" sudo grep -q force_installed /etc/opt/chrome/policies/managed/kc9k-setup.json
 check "chrome update manifest" sh -c 'curl -fs http://127.0.0.1:47613/chrome/update.xml | grep -q codebase'
 
-sudo iptables -D OUTPUT -j KC9K
-sleep 8
-check "daemon restores firewall jump" sudo iptables -C OUTPUT -j KC9K
+firewall_cut
+check "daemon restores the firewall" within 15 firewall_on
 
 sudo sed -i '/example.com/d' /etc/hosts
 sleep 8
@@ -126,14 +144,15 @@ sleep 8
 check "blocked app is killed" fails kill -0 "$pid"
 ot stop apps
 
+ot tamper clock on
 ot block create locked
 ot block add-site locked example.org
 ot start locked --for 1m --yes
 check "time lock refuses stop" fails kc9k stop locked
 sudo systemctl stop systemd-timesyncd 2>/dev/null
-sudo date -s '+2 hours' >/dev/null
+sudo date -s "@$(($(date +%s) + 7200))" >/dev/null
 check "time lock ignores a clock moved forward" fails kc9k stop locked
-sudo date -s '-2 hours' >/dev/null
+sudo date -s "@$(($(date +%s) - 7200))" >/dev/null
 sleep 65
 check "time lock ends after real time" kc9k stop locked
 
@@ -141,15 +160,13 @@ ot block create daily
 ot block add-site daily example.net
 ot quota set daily 2m
 check "quota turns the block on" grep -q 'example.net' /etc/hosts
-check "stop refused on a quota block" fails kc9k stop daily
-check "removing a site refused" fails kc9k block remove-site daily example.net
 ot quota start daily --for 15s
 check "session opens the block" fails grep -q 'example.net' /etc/hosts
 sleep 25
 check "block returns after the session" grep -q 'example.net' /etc/hosts
 check "time was spent" bash -c 'kc9k gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_used\"] >= 10 and not b[\"quota_open\"] else 1)"'
 ot quota set daily 10m
-check "a raise waits for midnight" bash -c 'kc9k gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_limit\"]==120 and b[\"quota_next\"]==600 else 1)"'
+check "a raise on an unlocked block applies at once (R-LOCK-10)" bash -c 'kc9k gui-state | python3 -c "import json,sys; b=[x for x in json.load(sys.stdin)[\"blocks\"] if x[\"name\"]==\"daily\"][0]; sys.exit(0 if b[\"quota_limit\"]==600 else 1)"'
 
 ot block create race
 ot block add-site race example.edu
@@ -173,13 +190,13 @@ check "wildcard reaches Chromium" sudo grep -q '"xxx"' "$CR"
 check "excepted domain leaves hosts" fails grep -q ' reddit.com' /etc/hosts
 check "other domain stays in hosts" grep -q 'example.info' /etc/hosts
 check "blocked export" bash -c 'kc9k block export-list lists blocked | grep -qx "\*.xxx"'
-check "exceptions export" bash -c '[ "$(kc9k block export-list lists exceptions)" = reddit.com/r/programming ]'
+check "exceptions export" bash -c 'kc9k block export-list lists exceptions | grep -qx reddit.com/r/programming'
 printf 'a.example.com\n# comment\nb.example.com/path\n' > /tmp/blocked.txt
 printf 'c.example.com\n' > /tmp/exceptions.txt
 ot block create lists2
 check "import blocked" kc9k block import-list lists2 blocked /tmp/blocked.txt
 check "import exceptions" kc9k block import-list lists2 exceptions /tmp/exceptions.txt
-check "imports stay separate" bash -c '[ "$(kc9k block export-list lists2 blocked | wc -l)" = 2 ] && [ "$(kc9k block export-list lists2 exceptions)" = c.example.com ]'
+check "imports stay separate" bash -c '[ "$(kc9k block export-list lists2 blocked | wc -l)" = 2 ] && kc9k block export-list lists2 exceptions | grep -qx c.example.com && ! kc9k block export-list lists2 exceptions | grep -q a.example.com'
 ot start lists --for 1h --yes
 check "exception refused while locked" fails kc9k block add-exception lists example.info
 check "removing an exception stays allowed" kc9k block remove-exception lists reddit.com/r/programming
@@ -199,10 +216,13 @@ check "restart lock refuses stop" fails kc9k stop rs
 ot block create dl
 ot block add dl example.dl
 ot start dl --delay 1m --yes
-ot stop dl
+check "delay lock refuses stop" fails kc9k stop dl
+ot unlock dl </dev/null
+check "the delay keeps the block locked" fails kc9k stop dl
 check "delay keeps the block on" grep -q 'example.dl' /etc/hosts
-sleep 68
-check "delay ends the block" fails grep -q 'example.dl' /etc/hosts
+sleep 65
+check "stop works after the delay" kc9k stop dl
+check "stop ends the block" within 10 fails grep -q 'example.dl' /etc/hosts
 
 mkdir -p /tmp/otdir
 cp "$SLEEPER" /tmp/otdir/anything
@@ -236,7 +256,7 @@ ot block add pwtest example.pw
 check "plain start needs no settings password" kc9k start pwtest </dev/null
 check "stop needs the settings password" fails kc9k stop pwtest </dev/null
 check "wrong settings password refused" fails bash -c 'echo wrong | kc9k stop pwtest'
-check "settings password, then the lock's own" bash -c "printf 'secret1\nlockpw\n' | kc9k start pwtest --password-stdin --yes"
+check "a lock needs no settings password" bash -c "echo lockpw | kc9k start pwtest --password-stdin --yes"
 check "unlock takes both passwords" bash -c "printf 'secret1\nlockpw\n' | kc9k unlock pwtest"
 check "loosening an edit needs it" fails kc9k block remove-site pwtest example.pw </dev/null
 check "status shows the settings password" bash -c 'kc9k status | grep -q "Settings password: on"'
@@ -251,8 +271,8 @@ if [ "$later" \< "$laterend" ]; then
 fi
 soon=$(date -d '+1 hour' +%H:%M); soonend=$(date -d '+1 hour 30 minutes' +%H:%M)
 if [ "$soon" \< "$soonend" ]; then
-    ot freeze schedule add --days daily --from "$soon" --to "$soonend" --yes
-    check "a freeze schedule starting within 2 hours can't be removed" fails kc9k freeze schedule remove 1
+    ot freeze schedule add --days daily --from "$soon" --to "$soonend" --lock-lead 2h --yes
+    check "a freeze schedule within its lock's lead time can't be removed" fails kc9k freeze schedule remove 1
     check "uninstall refused before a scheduled freeze" fails sudo kc9k-bin prepare-uninstall
 fi
 

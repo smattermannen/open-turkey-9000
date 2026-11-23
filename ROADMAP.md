@@ -94,7 +94,11 @@ plan is SPEC §8, its items §3.1.
   multicall `sleep` refuses to run under another name, so "is killed"
   passed proving nothing); the runner's folders are strict mode exempt
   folders (strict mode closed the runner, running from `/home/runner`, and
-  the job was lost). Unchecked: what fails after these. Done when:
+  the job was lost); 15 checks written before R-LOCK-10 and principle 3
+  now set what they test (strict mode's own lock, tamper `clock`, a
+  freeze schedule's `--lock-lead`), check nftables (KC9K's `inet kc9k`
+  table), and follow today's allowance, delay lock, settings password
+  and `file://*` exception. Unchecked: the next CI run. Done when:
   the `Integration tests` step of `.github/workflows/test.yml` is green on
   main.
 

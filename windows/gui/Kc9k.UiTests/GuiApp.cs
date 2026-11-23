@@ -96,7 +96,11 @@ public sealed class GuiApp : IDisposable
     /// <summary>Runs the real kc9k.exe on the scratch database (setup, checks).</summary>
     public (bool Ok, string Output) Cli(params string[] args)
     {
-        var info = new ProcessStartInfo(ScratchExe!) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true };
+        var info = new ProcessStartInfo(ScratchExe!)
+        {
+            UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8, StandardErrorEncoding = System.Text.Encoding.UTF8,
+        };
         foreach (var a in args) info.ArgumentList.Add(a);
         info.Environment["KC9K_DB"] = Db;
         using var p = Process.Start(info)!;

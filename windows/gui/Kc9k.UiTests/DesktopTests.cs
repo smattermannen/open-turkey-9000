@@ -139,7 +139,7 @@ public class DesktopTests
         Assert.True(exe is { Length: > 0 } && File.Exists(exe), "KC9K_REAL_EXE (the installed kc9k.exe) is not set");
         (bool, string) Kc9k(params string[] args)
         {
-            var info = new System.Diagnostics.ProcessStartInfo(exe!) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true };
+            var info = new System.Diagnostics.ProcessStartInfo(exe!) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true, StandardOutputEncoding = System.Text.Encoding.UTF8, StandardErrorEncoding = System.Text.Encoding.UTF8 };
             foreach (var a in args) info.ArgumentList.Add(a);
             using var p = System.Diagnostics.Process.Start(info)!;
             p.StandardInput.Close();

@@ -271,7 +271,7 @@ public class ParityRealTests
             Thread.Sleep(500);
             gui.WaitFor(() => KeptHeight(gui) > 150, $"dragged down 200: taller ({KeptHeight(gui)})");
             gui.Shot("tall");
-            tall = Height(gui, blocked);
+            tall = KeptHeight(gui)!.Value; // DIP; CI's display is at 100 %
         }
         using (var again = new GuiApp("list-resize-again" + (real ? "-real" : ""), dir: dir, scratch: real))
         {

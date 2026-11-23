@@ -224,7 +224,9 @@ var circadianCmd = &cobra.Command{
   wallpapers, each shown between two times
   dark mode: left to the system, always light, always dark, or light
   between two times
-  dark pages: light web pages are shown dark while dark mode is on
+  dark pages: web pages are shown dark while dark mode is on: the browser's
+  own dark mode, so sites with a dark design show it, and other light pages
+  turned dark
 
 None of it can be locked, and KC9K never overrides you: change a level by
 hand and its clip pauses until its next point (or 'kc9k circadian resume').
@@ -643,8 +645,18 @@ var circadianDarkCmd = &cobra.Command{
 
 var circadianDarkPagesCmd = &cobra.Command{
 	Use:   "dark-pages on|off",
-	Short: "Show light web pages dark while dark mode is on",
-	Args:  cobra.ExactArgs(1),
+	Short: "Show dark web pages while dark mode is on",
+	Long: `Show dark web pages while dark mode is on: the browser's own dark mode
+comes on, so sites with a dark design of their own show it, and light pages
+without one are shown dark. Exempt sites are left as they are.
+
+Chrome, Chromium and Edge follow the dark mode of the desktop. LibreWolf
+tells sites the light colour scheme to make you harder to recognise
+(resistFingerprinting); with dark pages on, KC9K swaps that for its
+fingerprinting protection minus the colour scheme, as LibreWolf's FAQ
+describes, from LibreWolf's next start. A setting you made yourself in
+LibreWolf wins.`,
+	Args: cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if args[0] != "on" && args[0] != "off" {
 			return fmt.Errorf("usage: kc9k circadian dark-pages on|off")
@@ -653,6 +665,9 @@ var circadianDarkPagesCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("Dark pages %s.\n", args[0])
+		if args[0] == "on" {
+			fmt.Println("LibreWolf shows the dark design of sites from its next start.")
+		}
 		return nil
 	}),
 }

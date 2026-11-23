@@ -63,12 +63,19 @@ with `ExtensionHeader` (`/usage`: `X-KC9K-Usage`), no CORS, no secret
 
 ## LibreWolf (`librewolf*.go`)
 
-`block-devtools` policy; locked prefs in librewolf.cfg
-(`extensions.webextensions.restrictedDomains`, two
-`extensions.quarantinedDomains*`, `devtools.chrome.enabled`,
-`devtools.debugger.remote-enabled`); user overrides replaced by a cleaned
-copy `/var/lib/kc9k/librewolf/<user>.cfg` (only `pref`/`defaultPref`/
-`lockPref` lines).
+- `block-devtools` policy; locked prefs in librewolf.cfg
+  (`extensions.webextensions.restrictedDomains`, two
+  `extensions.quarantinedDomains*`, `devtools.chrome.enabled`,
+  `devtools.debugger.remote-enabled`); user overrides replaced by a cleaned
+  copy `/var/lib/kc9k/librewolf/<user>.cfg` (only `pref`/`defaultPref`/
+  `lockPref` lines).
+- Dark pages (§4.10, `SyncLibreWolfDarkPages`, `darkPrefs`): own section in
+  librewolf.cfg while `enforce.DarkPagesOn` (circadian on and dark pages
+  on): `defaultPref` resistFingerprinting off, `fingerprintingProtection`
+  on with `+AllTargets,-CSSPrefersColorScheme` (LibreWolf FAQ; RFP tells
+  every site light, nothing overrides it). Defaults: a value set by hand
+  wins. Not in `LibreWolfLocksVersion`: read at LibreWolf's next start,
+  never closes it. Uninstall (`SyncLibreWolfLocks(false)`) removes it.
 
 ## Chrome (`webext/chrome.go`, `blocker/chromesetup.go`)
 

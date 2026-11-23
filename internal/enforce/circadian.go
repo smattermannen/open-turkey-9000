@@ -944,12 +944,22 @@ func PreviewCircadian(d *db.DB, lane string, value float64, end bool, now time.T
 
 // DarkRule is what the extension needs for dark pages (§4.10).
 type DarkRule struct {
-	// On: show light pages dark now.
+	// On: dark mode is on now. The extension turns on the browser's own
+	// dark mode, so sites with a dark design show it, and shows light pages
+	// dark.
 	On bool `json:"on"`
 	// FollowSystem: KC9K leaves dark mode alone, so the page follows what
 	// the browser says the system prefers.
 	FollowSystem bool     `json:"follow_system"`
 	Exempt       []string `json:"exempt"`
+}
+
+// DarkPagesOn reports whether the switch "Show dark web pages while dark
+// mode is on" is on, with the circadian rhythm (§4.10). LibreWolf then
+// tells sites the real colour scheme (blocker.SyncLibreWolfDarkPages).
+func DarkPagesOn(d *db.DB) bool {
+	cfg := CircadianConfig(d)
+	return cfg.On && cfg.DarkPages
 }
 
 // CircadianDarkRule is the dark pages rule at now, or nil when dark pages

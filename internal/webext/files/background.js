@@ -912,6 +912,31 @@ let social = [];
 let daemonUp = true;
 let darkRule = null; // dark pages (§4.10): on, follow_system, exempt sites
 
+// The browser's own dark mode (§4.10, "Show dark web pages while dark mode
+// is on"): while KC9K's dark mode is on, Firefox tells every page so
+// (prefers-color-scheme: dark), and sites with a dark design show it;
+// otherwise the browser's own setting holds again. It is one setting for
+// the whole browser: an exempt site isn't shown dark by KC9K, but may show
+// its own dark design. LibreWolf passes it on to pages only with KC9K's
+// fingerprinting protection (blocker.SyncLibreWolfDarkPages). Chrome has
+// no such setting: it follows the desktop's dark mode, which KC9K switches.
+let schemeGiven = null; // "dark", "" (the browser's own), null: not yet told
+
+function applyColorScheme() {
+  const setting = browser.browserSettings && browser.browserSettings.overrideContentColorScheme;
+  if (!setting) {
+    return;
+  }
+  const want = darkRule && darkRule.on ? "dark" : "";
+  if (want === schemeGiven) {
+    return;
+  }
+  schemeGiven = want;
+  Promise.resolve(want ? setting.set({ value: "dark" }) : setting.clear({})).catch(() => {
+    schemeGiven = null; // tried again with the next rules
+  });
+}
+
 function apply(rules) {
   showWhy = Boolean(rules.details);
   ends = rules.ends || {};
@@ -921,6 +946,7 @@ function apply(rules) {
   blockNames = rules.blocks || [];
   social = rules.social || [];
   darkRule = rules.dark || null;
+  applyColorScheme();
   lists = kc9kCompileLists(rules.lists);
   quotaLists = kc9kCompileLists(rules.quota);
   webOnly = Boolean(rules.web_only);

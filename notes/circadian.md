@@ -34,9 +34,20 @@
   `TestShapeMirrors`, `ci/gui_circadian_smoke.py`, `CoreTests.cs`): middle
   m = 0.5 + 0.49·tension at the bend handle; below x^p, above 1 − (1 −
   x)^p, so ±t mirror, no corner (A14). Drag: 80 px = tension 1.
-- Dark pages: `rules.dark` (`CircadianDarkRule`) → `darkPage`; popup
-  "Exempt from dark pages" → `darkExempt` → daemon `/dark-exempt` (refused
-  behind an app/settings access password). `ci/circadian_test.py`.
+- Dark pages, switch "Show dark web pages while dark mode is on"
+  (`dark-pages`): `rules.dark` (`CircadianDarkRule`) → `darkPage` (light
+  pages turned over) and the browser's own dark mode (`applyColorScheme`,
+  [extension](extension.md)): sites with a dark design show it. LibreWolf
+  tells sites the real colour scheme only with `DarkPagesOn` →
+  `blocker.SyncLibreWolfDarkPages` ([browsers](browsers.md)), from its next
+  start. Chrome, Chromium, Edge: no policy or extension setting; they
+  follow the desktop's dark mode (their default "Device"). Exempt sites
+  aren't turned over but may show their own dark design (one setting per
+  browser). Popup "Exempt from dark pages" → `darkExempt` → daemon
+  `/dark-exempt` (refused behind an app/settings access password).
+  `ci/circadian_test.py` (box, real daemon); `ci/dark_browser_test.py`
+  (real LibreWolf, no KC9K: stands in for the daemon on 47613; passes with
+  LibreWolf 160 headless).
 - Hardware vars `circadian*` (`fakeCircadian`); `KC9K_DB` → `circadianDry`.
   Wallpapers in `<db dir>/wallpapers` (0644). Windows: PowerShell per
   look/read/set ([windows-layers](windows-layers.md)).

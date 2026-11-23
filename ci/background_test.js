@@ -121,6 +121,35 @@ const list = (id, extra) => Object.assign({
     "moz-extension://id/blocked.html?url=" + encodeURIComponent("file:///home/u/notes/casino.html") + "&reason=title",
   ]);
 
+  // §4.10 "Show dark web pages while dark mode is on": while dark mode is
+  // on, Firefox tells pages so; otherwise its own setting holds; the
+  // browser is told only when that changes, and again after a failure.
+  const scheme = [];
+  let refuse = false;
+  browser.browserSettings = { overrideContentColorScheme: {
+    set: async (d) => { scheme.push("set " + d.value); if (refuse) throw new Error("no"); return true; },
+    clear: async () => { scheme.push("clear"); return true; },
+  } };
+  const settled = () => new Promise((done) => setTimeout(done, 0));
+  apply({ lists: [] });
+  apply({ lists: [], dark: { on: true, follow_system: false, exempt: [] } });
+  apply({ lists: [], dark: { on: true, follow_system: false, exempt: ["docs.example"] } });
+  apply({ lists: [], dark: { on: false, follow_system: true, exempt: [] } });
+  apply({ lists: [], dark: { on: false, follow_system: false, exempt: [] } });
+  await settled();
+  check("browser's dark mode: off at first, on with dark mode, back to the browser's own", scheme,
+    ["clear", "set dark", "clear"]);
+  scheme.length = 0;
+  refuse = true;
+  apply({ lists: [], dark: { on: true, exempt: [] } });
+  await settled();
+  refuse = false;
+  apply({ lists: [], dark: { on: true, exempt: [] } });
+  await settled();
+  check("browser's dark mode: asked again after a refusal", scheme, ["set dark", "set dark"]);
+  delete browser.browserSettings;
+  apply({ lists: [] }); // Chrome: no such setting, nothing happens
+
   console.log(failed ? `${failed} of ${passed + failed} failed` : `all ${passed} passed`);
   process.exit(failed ? 1 : 0);
 })();

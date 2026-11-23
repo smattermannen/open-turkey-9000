@@ -132,6 +132,10 @@ func SyncLibreWolfLocks(on bool) error {
 		}
 	}
 	if !on {
+		// Off is uninstalling: the dark pages section goes too.
+		if err := SyncLibreWolfDarkPages(false); err != nil {
+			return err
+		}
 		return removeCleanedOverrides()
 	}
 	return syncCleanedOverrides(librewolfUsers())
@@ -216,6 +220,83 @@ func cleanOverrides(content, source string) string {
 		out = append(out, fmt.Sprintf("// %d line(s) were left out: code, or settings that protect the extension.", dropped))
 	}
 	return strings.Join(out, "\n") + "\n"
+}
+
+// darkPrefs let sites see dark mode while the circadian rhythm's switch
+// "Show dark web pages while dark mode is on" is on (§4.10). LibreWolf's
+// resistFingerprinting tells every site the colour scheme is light, whatever
+// the browser and the desktop use; KC9K swaps it for fingerprinting
+// protection with every protection but that one, the way LibreWolf's FAQ
+// describes. Defaults only: a value set by hand (LibreWolf's settings,
+// about:config, the overrides file) still wins. LibreWolf reads them when
+// it starts; KC9K never closes it for them.
+var darkPrefs = []struct {
+	name  string
+	value string // as JavaScript
+}{
+	{"privacy.resistFingerprinting", "false"},
+	{"privacy.fingerprintingProtection", "true"},
+	{"privacy.fingerprintingProtection.overrides", `"+AllTargets,-CSSPrefersColorScheme"`},
+}
+
+const (
+	darkBegin = "// BEGIN kc9k dark pages: sites see dark mode (Show dark web pages while dark mode is on)"
+	darkEnd   = "// END kc9k dark pages"
+)
+
+// darkSection renders KC9K's dark pages part of librewolf.cfg.
+func darkSection() string {
+	lines := []string{darkBegin}
+	for _, p := range darkPrefs {
+		lines = append(lines, fmt.Sprintf("defaultPref(%q, %s);", p.name, p.value))
+	}
+	return strings.Join(append(lines, darkEnd), "\n")
+}
+
+// withDarkPrefs returns librewolf.cfg content with the dark pages section,
+// or without it. A section already there stays where it is, so this, the
+// locks and the signing setting never take turns rewriting the file.
+func withDarkPrefs(config string, on bool) string {
+	if on && strings.Contains(config, darkSection()+"\n") {
+		return config
+	}
+	var kept []string
+	inside := false
+	for _, line := range strings.Split(strings.TrimRight(config, "\n"), "\n") {
+		switch {
+		case line == darkBegin:
+			inside = true
+		case line == darkEnd:
+			inside = false
+		case !inside:
+			kept = append(kept, line)
+		}
+	}
+	out := strings.TrimRight(strings.Join(kept, "\n"), "\n")
+	if on {
+		out += "\n\n" + darkSection()
+	}
+	return out + "\n"
+}
+
+// SyncLibreWolfDarkPages adds the dark pages section to LibreWolf's config
+// while on, and removes it otherwise.
+func SyncLibreWolfDarkPages(on bool) error {
+	for _, path := range librewolfConfigs {
+		data, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if want := withDarkPrefs(string(data), on); want != string(data) {
+			if err := atomicWriteFile(path, []byte(want), 0644); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func isProtectedPref(name string) bool {

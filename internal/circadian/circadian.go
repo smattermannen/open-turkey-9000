@@ -107,7 +107,8 @@ type Config struct {
 	Lanes      map[string]*Lane `json:"lanes"`
 	Wallpapers []Wallpaper      `json:"wallpapers"`
 	Dark       Dark             `json:"dark"`
-	// DarkPages: the browser shows light pages dark while dark mode is on.
+	// DarkPages: "Show dark web pages while dark mode is on": the browser's
+	// own dark mode, and light pages shown dark.
 	DarkPages  bool     `json:"dark_pages"`
 	DarkExempt []string `json:"dark_exempt"`
 }

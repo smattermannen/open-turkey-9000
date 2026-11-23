@@ -80,6 +80,12 @@ public sealed class GuiApp : IDisposable
         Window.SetForeground();
         // The first state is read in the background.
         WaitFor(() => ById(ready)?.Name is { Length: > 0 } || ById("CoverUnlock_dashboard") is not null, "the first state", real_ ? 60 : 20);
+        if (scratch)
+        {
+            // A new database has no browser checking in: the GUI asks once.
+            var later = Retry.WhileNull(() => FindButtonOrNull("Later"), TimeSpan.FromSeconds(8), TimeSpan.FromMilliseconds(250)).Result;
+            if (later is not null) Invoke(later);
+        }
     }
 
     /// <summary>Whether the GUI runs the real kc9k.exe on a scratch database.</summary>
@@ -253,6 +259,50 @@ public sealed class GuiApp : IDisposable
                 ["ok"] = ok, ["output"] = output,
             });
         File.WriteAllText(Path.Combine(dir, "responses.json"), list.ToJsonString());
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    struct MouseInput { public int Dx, Dy; public uint Data, Flags, Time; public IntPtr Extra; }
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    struct Input { public uint Type; public MouseInput Mouse; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint SendInput(uint count, Input[] inputs, int size);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
+
+    static void Send(System.Drawing.Point p, uint flags)
+    {
+        const uint Move = 0x1, Absolute = 0x8000;
+        int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
+        var input = new Input { Type = 0, Mouse = new MouseInput { Dx = (int)Math.Round(p.X * 65535.0 / (w - 1)), Dy = (int)Math.Round(p.Y * 65535.0 / (h - 1)), Flags = flags | Move | Absolute } };
+        SendInput(1, [input], System.Runtime.InteropServices.Marshal.SizeOf<Input>());
+    }
+
+    /// <summary>A pointer drag as a hand makes it, all through SendInput (the
+    /// pointer moved with SetCursorPos is no drag to WinUI): press, a slow
+    /// path, release.</summary>
+    public static void Drag(System.Drawing.Point from, System.Drawing.Point to, int steps = 24)
+    {
+        const uint Down = 0x2, Up = 0x4;
+        Send(from, 0);
+        Thread.Sleep(100);
+        Send(from, Down);
+        Thread.Sleep(150);
+        for (var i = 1; i <= steps; i++)
+        {
+            Send(new(from.X + (to.X - from.X) * i / steps, from.Y + (to.Y - from.Y) * i / steps), 0);
+            Thread.Sleep(30);
+        }
+        Thread.Sleep(150);
+        Send(to, Up);
+        Wait.UntilInputIsProcessed();
+        Thread.Sleep(300);
+    }
+
+    /// <summary>The GUI's log lines (shared by the tests; for a failure's output).</summary>
+    public static IEnumerable<string> LogLines(string contains)
+    {
+        var log = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kc9k", "gui.log");
+        try { return File.Exists(log) ? File.ReadAllLines(log).Where(l => l.Contains(contains)).TakeLast(20).ToList() : []; }
+        catch (IOException) { return []; }
     }
 
     /// <summary>Answers Windows' own open dialog (W4: file dialogs) as a person

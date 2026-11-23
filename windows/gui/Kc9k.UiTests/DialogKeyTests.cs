@@ -28,6 +28,7 @@ public class DialogKeyTests
         box.Focus();
         box.Text = "Enter test";
         Keyboard.Press(VirtualKeyShort.RETURN);
-        gui.WaitFor(() => gui.Ran("block", "create", "Enter test"), "kc9k block create by Enter");
+        try { gui.WaitFor(() => gui.Ran("block", "create", "Enter test"), "kc9k block create by Enter"); }
+        finally { Console.WriteLine("dialog keys: " + string.Join("\n", GuiApp.LogLines("dialog"))); }
     }
 }

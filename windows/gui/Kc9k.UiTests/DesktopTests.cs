@@ -13,21 +13,7 @@ namespace Kc9k.UiTests;
 [Collection("gui")]
 public class DesktopTests
 {
-    /// <summary>A pointer drag as a hand makes it: press, a slow path, release.</summary>
-    static void Drag(System.Drawing.Point from, System.Drawing.Point to)
-    {
-        Mouse.MoveTo(from);
-        Mouse.Down(MouseButton.Left);
-        Thread.Sleep(150);
-        for (var i = 1; i <= 20; i++)
-        {
-            Mouse.MoveTo(new System.Drawing.Point(from.X + (to.X - from.X) * i / 20, from.Y + (to.Y - from.Y) * i / 20));
-            Thread.Sleep(25);
-        }
-        Thread.Sleep(150);
-        Mouse.Up(MouseButton.Left);
-        Wait.UntilInputIsProcessed();
-    }
+    static void Drag(System.Drawing.Point from, System.Drawing.Point to) => GuiApp.Drag(from, to);
 
     static System.Drawing.Point Center(AutomationElement e)
     {
@@ -45,7 +31,9 @@ public class DesktopTests
         var block = gui.Find("BlockCard_Reading");
         block.Focus(); // in view
         var mode = gui.Find("ModeCard_Study");
-        Drag(Center(block), Center(mode));
+        // From the card's empty part right of its name (the name is a link).
+        var r = block.BoundingRectangle;
+        Drag(new(r.Right + 120, r.Top + r.Height / 2), Center(mode));
         gui.FindName("Put Reading into Study?", 20);
         gui.Shot("dropped");
         gui.Invoke(gui.FindButton("Put it in"));
@@ -178,6 +166,10 @@ public class DesktopTests
         gui.Find("PrefLogin", 10);
         challenge.AsWindow().Close();
         gui.WaitFor(() => gui.Automation.GetDesktop().FindFirstChild(c => c.ByClassName("KC9KChallenge")) is null, "the challenge window closed", 30);
+        // kc9k's words: cancelled, still locked.
+        gui.FindName("Not done", 60);
+        Assert.Contains("remains active and locked", gui.Find("MessageText").Name);
+        gui.Invoke(gui.FindButton("OK"));
         gui.Page("blocks");
         gui.WaitFor(() => gui.Find("BlockSwitch_CI text").IsEnabled == false, "the block still locked", 60);
         Assert.False(gui.App.HasExited);

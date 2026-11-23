@@ -32,8 +32,10 @@ public sealed class Dialogs(Func<XamlRoot?> root, Func<ElementTheme> theme)
             var accepted = false;
             dialog.PreviewKeyDown += (_, e) =>
             {
-                if (e.Key != Windows.System.VirtualKey.Enter || !dialog.IsPrimaryButtonEnabled || string.IsNullOrEmpty(dialog.PrimaryButtonText)) return;
-                if (!TakesEnter(FocusManager.GetFocusedElement(dialog.XamlRoot) as DependencyObject)) return;
+                if (e.Key != Windows.System.VirtualKey.Enter) return;
+                var focused = FocusManager.GetFocusedElement(dialog.XamlRoot) as DependencyObject;
+                Log.Write($"dialog Enter: {dialog.Title} focus {focused?.GetType().Name ?? "none"}, OK {(dialog.IsPrimaryButtonEnabled ? "on" : "off")}");
+                if (!dialog.IsPrimaryButtonEnabled || string.IsNullOrEmpty(dialog.PrimaryButtonText) || !TakesEnter(focused)) return;
                 accepted = true;
                 e.Handled = true;
                 dialog.Hide();

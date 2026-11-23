@@ -19,7 +19,7 @@ public class ParityRealTests
 
     /// <summary>The fixture's Work is in the mode Study (no card of its own on
     /// the Blocks page); the phrase tests open it as its own block.</summary>
-    static void WorkOutOfStudy(string dir) => GuiApp.EditState(dir, s =>
+    internal static void WorkOutOfStudy(string dir) => GuiApp.EditState(dir, s =>
     {
         s["blocks"]!.AsArray().First(b => (string?)b!["name"] == "Work")!["mode"] = "";
         var blocks = s["modes"]!.AsArray().First(m => (string?)m!["name"] == "Study")!["blocks"]!.AsArray();
@@ -206,8 +206,14 @@ public class ParityRealTests
         Assert.Null(gui.DesktopByName("Not done"));
     }
 
-    static double Height(GuiApp gui, string list) =>
-        (gui.ById(list) ?? gui.Find(list + "_Cover")).BoundingRectangle.Height;
+    /// <summary>A list's height on screen (its grip brought into view first:
+    /// an element scrolled out of the window has no rectangle).</summary>
+    static double Height(GuiApp gui, string list)
+    {
+        gui.Find(list + "_Grip").Focus();
+        Thread.Sleep(200);
+        return (gui.ById(list) ?? gui.Find(list + "_Cover")).BoundingRectangle.Height;
+    }
 
     static JsonObject Prefs(GuiApp gui) =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(gui.Dir, "gui.json")))!.AsObject();
@@ -252,7 +258,7 @@ public class ParityRealTests
             grip = gui.Find(blocked + "_Grip");
             var r = grip.BoundingRectangle;
             var from = new System.Drawing.Point(r.Left + r.Width / 2, r.Top + r.Height / 2);
-            FlaUI.Core.Input.Mouse.Drag(from, new System.Drawing.Point(from.X, from.Y + 200));
+            GuiApp.Drag(from, new System.Drawing.Point(from.X, from.Y + 200));
             Thread.Sleep(500);
             gui.WaitFor(() => KeptHeight(gui) > 150, $"dragged down 200: taller ({KeptHeight(gui)})");
             gui.Shot("tall");
@@ -285,7 +291,7 @@ public class ParityRealTests
     /// <summary>Loads a phrase into the card's editor (Enter on it, as a double-click).</summary>
     static void Load(GuiApp gui, string text)
     {
-        if (gui.ById("Phrases_Gossip_Phrases_Cover") is { IsOffscreen: false }) gui.Invoke("Phrases_Gossip_Phrases_Cover");
+        if (gui.ById("Phrases_Gossip_Phrases_Cover") is not null) gui.Invoke("Phrases_Gossip_Phrases_Cover");
         var item = FlaUI.Core.Tools.Retry.WhileNull(() => gui.Find("Phrases_Gossip_Phrases").FindFirstDescendant(c => c.ByName(text)),
             TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(200), throwOnTimeout: true, timeoutMessage: "no phrase " + text).Result!;
         item.Patterns.SelectionItem.Pattern.Select();
@@ -487,7 +493,7 @@ public class ParityRealTests
     [Theory, InlineData(false), InlineData(true)]
     public void PlacesSavedAndAddedToBlocks(bool real)
     {
-        using var gui = Start("places", real, [["block", "create", "Reading"], ["block", "create", "Games"]],
+        using var gui = Start("places", real, [["block", "create", "Reading"], ["block", "create", "Evening"]],
             prepare: real ? null : dir => GuiApp.Respond(dir, (["place", "add", "home"], true, "Place 'home' saved: 4 networks in range (needs 2)."),
                 (["place", "add", "library"], true, "Place 'library' saved: 2 networks in range (needs 2)."),
                 (["place", "add", "nowhere"], false, "Error: no Wi-Fi network is in range: a place is the networks seen where you save it")));
@@ -534,14 +540,14 @@ public class ParityRealTests
 
         // 3. Add this place for another block, then remove it.
         gui.Page("blocks");
-        gui.Invoke("BlockCard_Games");
+        gui.Invoke("BlockCard_Evening");
         gui.Invoke("BlockAutomation");
         gui.WaitFor(() => gui.Find("block_PlaceChoice").AsComboBox().SelectedItem?.Name == "home", "home offered for another block");
         gui.Invoke("block_AddPlace");
-        gui.WaitFor(() => gui.RanWith("place", "rule", "Games", "home", "on"), "kc9k place rule Games home on");
-        Place(gui.Dir, "home", 4, 3, true, "Reading", "Games");
+        gui.WaitFor(() => gui.RanWith("place", "rule", "Evening", "home", "on"), "kc9k place rule Evening home on");
+        Place(gui.Dir, "home", 4, 3, true, "Reading", "Evening");
         gui.Invoke(gui.Find("RemovePlace_home", 20));
-        gui.WaitFor(() => gui.RanWith("place", "rule", "Games", "home", "off"), "kc9k place rule Games home off");
+        gui.WaitFor(() => gui.RanWith("place", "rule", "Evening", "home", "off"), "kc9k place rule Evening home off");
         Place(gui.Dir, "home", 4, 3, true, "Reading");
         gui.WaitFor(() => gui.ById("RemovePlace_home") is null, "the rule gone from the list", 20);
 
@@ -580,11 +586,13 @@ public class ParityRealTests
         gui.WaitFor(() => gui.Commands().Any(c => c.Contains("Exceptions") && c.Any(a => a.Contains("playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf"))),
             "the playlist added to Exceptions");
         Assert.Contains(gui.Window.FindAllDescendants(), e => (e.Properties.Name.ValueOrDefault ?? "").Contains("playlist"));
-        // The section's place: after the blacklists, above the exceptions.
-        double Top(string id) => gui.Find(id).BoundingRectangle.Top;
+        // The section's place: after the blacklists, above the exceptions (in
+        // the page's order, whatever is scrolled into view).
+        var order = gui.Window.FindAllDescendants().Select(e => e.Properties.AutomationId.ValueOrDefault ?? "").ToList();
+        int At(string id) => order.IndexOf(id);
+        Assert.True(At("List_Blocked_Entries_Grip") >= 0 && At("List_Blocked_Entries_Grip") < At("Social") && At("Social") < At("List_Exceptions_Entries_Grip"),
+            $"Social media between the blacklists and the exceptions ({At("List_Blocked_Entries_Grip")}, {At("Social")}, {At("List_Exceptions_Entries_Grip")})");
         var social = gui.Find("Social");
-        Assert.True(Top("List_Blocked_Entries") < social.BoundingRectangle.Top && social.BoundingRectangle.Top < Top("List_Exceptions_Entries"),
-            "Social media between the blacklists and the exceptions");
         Assert.Equal(ExpandCollapseState.Collapsed, social.Patterns.ExpandCollapse.Pattern.ExpandCollapseState.Value);
         social.Patterns.ExpandCollapse.Pattern.Expand();
         gui.WaitFor(() => gui.ById("Social_youtube_no-shorts") is { IsOffscreen: false }, "opens");
@@ -652,7 +660,7 @@ public class ParityRealTests
         double At(double h) => hours[0].X + (h - hours[0].Hour) * hour;
         var b = bar.BoundingRectangle;
         var from = new System.Drawing.Point((int)Math.Round(At(9.5)), b.Top + b.Height / 2);
-        FlaUI.Core.Input.Mouse.Drag(from, new System.Drawing.Point((int)Math.Round(At(10.5)), from.Y));
+        GuiApp.Drag(from, new System.Drawing.Point((int)Math.Round(At(10.5)), from.Y));
         gui.WaitFor(() => gui.RanWith("mode", "wallpaper", "Study", "time", "1", "10:00", "18:00"), "kc9k mode wallpaper Study time 1 10:00 18:00 (dragged)");
         gui.Shot("dragged");
         if (real) Assert.Equal("10:00", (string?)RealMode(gui, "Study")["wallpapers"]![0]!["from"]);

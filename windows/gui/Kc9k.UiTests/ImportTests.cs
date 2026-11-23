@@ -59,6 +59,7 @@ public class ImportTests
                 ["phrase-set", "create", "Work", "Gossip"], ["phrase-set", "add", "Work", "Gossip", "[celebrity, star] [divorce, scandal]"]],
             prepare: dir =>
             {
+                if (!real) ParityRealTests.WorkOutOfStudy(dir);
                 foreach (var (name, text, _) in Files) File.WriteAllText(Path.Combine(dir, name), text);
                 if (!real) GuiApp.Respond(dir, [.. Files.Select(f => (new[] { "list", "read", Path.Combine(dir, f.Name) }, true, f.Read))]);
             });

@@ -43,6 +43,88 @@ func TestWithLocksStable(t *testing.T) {
 	}
 }
 
+// §4.10 dark pages: the section joins the locks and the signing setting
+// without the three taking turns, and leaves the file as it was when off.
+func TestWithDarkPrefsStable(t *testing.T) {
+	all := withSigningPref(withLocks(withDarkPrefs(sampleConfig, true), true), true)
+	for _, want := range []string{darkSection(), locksSection(), signingPref} {
+		if !strings.Contains(all, want) {
+			t.Fatalf("missing %q:\n%s", want, all)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		next := withDarkPrefs(withSigningPref(withLocks(all, true), true), true)
+		if next != all {
+			t.Fatalf("round %d rewrote the file:\n%s", i, next)
+		}
+	}
+	// The locks changing (a new version of KC9K) keeps the dark pages.
+	if moved := withDarkPrefs(withLocks(withLocks(all, false), true), true); !strings.Contains(moved, darkSection()) {
+		t.Fatalf("dark pages lost:\n%s", moved)
+	}
+	if off := withLocks(withSigningPref(withDarkPrefs(all, false), false), false); off != sampleConfig {
+		t.Fatalf("not restored:\n%q\nwant\n%q", off, sampleConfig)
+	}
+}
+
+// The prefs are LibreWolf FAQ's fingerprinting protection without the
+// forced light colour scheme (ci/dark_browser_test.py sets the same three),
+// as defaults, so a value set by hand wins.
+func TestDarkPrefsAreDefaults(t *testing.T) {
+	want := `defaultPref("privacy.resistFingerprinting", false);
+defaultPref("privacy.fingerprintingProtection", true);
+defaultPref("privacy.fingerprintingProtection.overrides", "+AllTargets,-CSSPrefersColorScheme");`
+	if !strings.Contains(darkSection(), want) {
+		t.Fatalf("dark pages section:\n%s", darkSection())
+	}
+	if strings.Contains(darkSection(), "lockPref") || strings.Contains(darkSection(), "\npref(") {
+		t.Fatal("dark pages must not lock or set user values")
+	}
+}
+
+func TestSyncLibreWolfDarkPages(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "librewolf.cfg")
+	if err := os.WriteFile(cfg, []byte(sampleConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+	saved := librewolfConfigs
+	librewolfConfigs = []string{cfg, filepath.Join(dir, "missing", "librewolf.cfg")}
+	defer func() { librewolfConfigs = saved }()
+	read := func() string {
+		data, err := os.ReadFile(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	if err := SyncLibreWolfDarkPages(true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(read(), darkSection()) {
+		t.Fatalf("not added:\n%s", read())
+	}
+	if err := SyncLibreWolfDarkPages(false); err != nil {
+		t.Fatal(err)
+	}
+	if read() != sampleConfig {
+		t.Fatalf("not removed:\n%s", read())
+	}
+	// Uninstalling (locks off) takes the dark pages away too.
+	if err := SyncLibreWolfDarkPages(true); err != nil {
+		t.Fatal(err)
+	}
+	savedDir := LibreWolfOverridesDir
+	LibreWolfOverridesDir = filepath.Join(dir, "overrides")
+	defer func() { LibreWolfOverridesDir = savedDir }()
+	if err := SyncLibreWolfLocks(false); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(read(), darkBegin) {
+		t.Fatalf("uninstall left the dark pages:\n%s", read())
+	}
+}
+
 func TestCleanOverrides(t *testing.T) {
 	input := strings.Join([]string{
 		`// my settings`,

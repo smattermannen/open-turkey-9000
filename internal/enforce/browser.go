@@ -825,6 +825,9 @@ func enforceBrowser(d *db.DB) {
 	if err := blocker.SyncLibreWolfSigning(setup.ExtensionID != ""); err != nil {
 		log.Printf("browser: %v", err)
 	}
+	if err := blocker.SyncLibreWolfDarkPages(DarkPagesOn(d)); err != nil {
+		log.Printf("browser: LibreWolf dark pages: %v", err)
+	}
 	if err := blocker.SyncLibreWolfLocks(true); err != nil {
 		log.Printf("browser: locking LibreWolf settings: %v", err)
 	}

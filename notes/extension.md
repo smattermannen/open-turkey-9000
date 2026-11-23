@@ -61,6 +61,11 @@
 - `dark`: light pages only (`pageIsLight`); `html` inverted, `DARK_MEDIA`
   inverted back once (nested in a background image: `filter: none`); SVG
   `img` turn with the page.
+- Browser's own dark mode (`applyColorScheme`, permission
+  `browserSettings`): `rules.dark.on` → Firefox
+  `browserSettings.overrideContentColorScheme` "dark", else cleared (the
+  browser's own setting); told only on change, again after a refusal.
+  Chrome has no such setting (skipped). Test `ci/background_test.js`.
 - Tamper protection (§4.10): `inactive_tabs_off` (`closeNewlyBlockedTabs`
   skips background tabs; `onActivated` → `judgeTab`), `embedded_off`
   (sub-frames not blocked by address, `frameHit` silent); absent = on.

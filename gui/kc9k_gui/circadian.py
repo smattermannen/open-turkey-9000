@@ -965,7 +965,7 @@ class CircadianPage(Gtk.ScrolledWindow):
             "The dark mode of the desktop and its apps, like a phone's."), dark_box), False, False, 0)
 
         pages_row = Gtk.Box(spacing=12)
-        pages_row.pack_start(Gtk.Label(label="Show light web pages dark while dark mode is on", xalign=0),
+        pages_row.pack_start(Gtk.Label(label="Show dark web pages while dark mode is on", xalign=0),
                              False, False, 0)
         self.dark_pages = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.dark_pages.connect("state-set", self.switch_dark_pages)
@@ -979,9 +979,10 @@ class CircadianPage(Gtk.ScrolledWindow):
         exempt_row.pack_start(self.exempt_entry, False, False, 0)
         exempt_row.pack_start(exempt_add, False, False, 0)
         box.pack_start(section("Dark pages", pages_row, self.exempt, exempt_row, help=(
-            "Pages that are dark already stay as they are. With the system's setting, pages follow "
-            "what the browser says the system prefers. The extension's toolbar button exempts a "
-            "site too.")), False, False, 0)
+            "The browser's own dark mode comes on: sites with a dark design show it, and light "
+            "pages without one are shown dark (LibreWolf from its next start). With the system's "
+            "setting, pages follow what the browser says the system prefers. The extension's "
+            "toolbar button exempts a site too.")), False, False, 0)
 
     # Reading the state
     def refresh(self, force=False):

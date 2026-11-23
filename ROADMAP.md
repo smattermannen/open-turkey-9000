@@ -48,7 +48,7 @@ its bypass prevention).
 | 2.13 | Accountability partner | §4.15 | — | agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
 | 2.15 | Remove search results leading to blacklisted addresses | R-PAGE-2 | extension | agent, box |
-| 2.16 | "Show dark web pages while dark mode is on" turns on the browser's dark mode | §4.10 | circadian, browsers, gui, gui-windows | agent, box |
+| 2.16 | "Show dark web pages while dark mode is on": real sites, LibreWolf's window and Chrome on the desktop | §4.10 | circadian, browsers | box |
 | 2.17 | Chrome extension in the Chrome Web Store (unlisted) | §3.13, §6 2026-11-21 | browsers, windows-layers | owner, agent |
 | C1 | Build for the brothers' computers with `TAGS=devmaster` | §4.11 | install | agent |
 | C2 | Remove test helpers | §4.11 | install | agent |
@@ -327,12 +327,13 @@ Only rows not fully built.
   built. The extension removes each search result linking to a
   blacklisted address. Done when: a browser test on the supported engines
   shows no such result and the others untouched.
-- **2.16 Dark pages turn on the browser's dark mode** (S; §4.10): rename
-  "Show light web pages dark while dark mode is on" to "Show dark web
-  pages while dark mode is on" (GTK GUI, Windows GUI, `kc9k circadian
-  dark-pages` help); it turns on the browser's own dark mode (theme and
-  `prefers-color-scheme: dark`). Done when: switch and dark mode on, a
-  supported browser is dark and a site with its own dark design shows it.
+- **2.16 Dark pages turn on the browser's dark mode** (S; §4.10): Built
+  (`notes/circadian.md`); `ci/dark_browser_test.py` passes in LibreWolf
+  160 headless (cloud: own dark design shown, light page turned over,
+  light again with dark mode off; LibreWolf's window follows a dark
+  desktop). Left (box): on Mint with KC9K's dark mode, LibreWolf's window
+  and Chrome turn dark, and a real site with a dark design shows it in
+  both (Chrome follows the desktop, not checked anywhere yet).
 
 ## 3. Testers and Android
 
@@ -538,6 +539,22 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- DECIDED (By claude) 2026-11-23 (`2.16`): with dark pages on, KC9K
+  writes defaults into librewolf.cfg turning resistFingerprinting off and
+  fingerprinting protection on for every target but
+  `CSSPrefersColorScheme` (LibreWolf FAQ's alternative). Why: RFP tells
+  every site light and nothing overrides it (Mozilla bug 1535189,
+  WONTFIX); a value set by hand still wins; read at LibreWolf's next
+  start, KC9K never closes it for this. Owner may overturn (e.g. keep RFP
+  and only turn light pages over).
+- DECIDED (By claude) 2026-11-23 (`2.16`): "the browser's own dark mode"
+  = Firefox/LibreWolf's website appearance set to dark by the extension
+  while KC9K's dark mode is on (released otherwise); the browser's window
+  follows the desktop's dark mode, which KC9K switches, and a theme picked
+  by hand stays (never overrides the user). Chrome, Chromium and Edge
+  have no policy or extension setting for it: they follow the desktop
+  (their default "Device"). One setting per browser: an exempt site isn't
+  turned over but may show its own dark design. Owner may overturn.
 - PROPOSED 2026-11-23 (`2.10`): the setup file holds password hashes and
   lock state. Encrypt it on the device with a passphrase only the user
   knows (Supabase sees only ciphertext)? Lost passphrase = upload lost.

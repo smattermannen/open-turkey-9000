@@ -67,12 +67,12 @@ public sealed class CircadianPage : IPage
         var darkSection = Ui.Section("Dark mode", Ui.Dim("The dark mode of Windows and its apps, like a phone's."), dark,
             Ui.Wrap(8, Ui.Text("Light between"), lightFrom, Ui.Text("and"), lightTo, Ui.Button("Set", () => _ = SetDarkTimes(), "DarkTimesSet")));
 
-        darkPages = Ui.Switch("Show light web pages dark while dark mode is on", false, on => { if (!filling) _ = C.Run(["circadian", "dark-pages", on ? "on" : "off"], then: _ => Read()); }, "DarkPages");
+        darkPages = Ui.Switch("Show dark web pages while dark mode is on", false, on => { if (!filling) _ = C.Run(["circadian", "dark-pages", on ? "on" : "off"], then: _ => Read()); }, "DarkPages");
         exemptEntry = new TextBox { PlaceholderText = "A site to leave as it is (example.com)", MinWidth = 200, MaxWidth = 300 }.Named("Site to leave as it is", "DarkExempt");
         exemptEntry.KeyDown += (_, e) => { if (e.Key == Windows.System.VirtualKey.Enter) _ = AddExempt(); };
         var pagesSection = Ui.Section("Dark pages",
-            "Pages that are dark already stay as they are. With Windows' own setting, pages follow what the browser says Windows prefers. The extension's toolbar button exempts a site too.",
-            Ui.SettingRow("Show light web pages dark while dark mode is on", "", darkPages), exempt,
+            "The browser's own dark mode comes on: sites with a dark design show it, and light pages without one are shown dark (LibreWolf from its next start). With Windows' own setting, pages follow what the browser says Windows prefers. The extension's toolbar button exempts a site too.",
+            Ui.SettingRow("Show dark web pages while dark mode is on", "", darkPages), exempt,
             Ui.Wrap(6, exemptEntry, Ui.Button("Add", () => _ = AddExempt(), "DarkExemptAdd")));
 
         View = Ui.Page(Ui.Column(18, head, warnings, clipsSection, wallpaperSection, darkSection, pagesSection));

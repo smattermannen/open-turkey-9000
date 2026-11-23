@@ -21,6 +21,14 @@ jobs:
         run: node ci/match_test.js
       - name: Extension background as in IronFox (Android)
         run: node ci/android_background_test.js
+      - name: Extension background (frames, ad trigger, file pages)
+        run: node ci/background_test.js
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright@1.48.2
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Search results in Chromium (R-PAGE-2, 2.15)
+        run: NODE_PATH="$RUNNER_TEMP/pw/node_modules" node ci/search_results_test.js
       - name: Typing challenge in a terminal
         run: |
           CGO_ENABLED=0 go build -o /tmp/try-challenge ./cmd/try-challenge
@@ -33,6 +41,19 @@ jobs:
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 ci/gui_circadian_smoke.py
       - name: GTK dialogs, Enter presses OK (A15)
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 ci/gui_enter_smoke.py
+      - name: Install LibreWolf
+        run: |
+          sudo apt-get install -y extrepo
+          sudo extrepo enable librewolf
+          sudo apt-get update
+          sudo apt-get install -y librewolf
+          python3 -m pip install --break-system-packages selenium
+      # Before KC9K is installed: ci/fake_daemon.py stands in for the
+      # daemon on its port.
+      - name: Search results in LibreWolf (R-PAGE-2, 2.15)
+        run: python3 ci/search_results_librewolf_test.py
+      - name: Dark pages turn LibreWolf dark (2.16)
+        run: python3 ci/dark_browser_test.py
       - name: Install Killer Chicken 9000
         run: sudo env "PATH=$PATH" ./install.sh
       - name: Integration tests
@@ -44,13 +65,6 @@ jobs:
         run: bash ci/master.sh
       - name: Interface screenshot
         run: bash ci/screenshot.sh
-      - name: Install LibreWolf
-        run: |
-          sudo apt-get install -y extrepo
-          sudo extrepo enable librewolf
-          sudo apt-get update
-          sudo apt-get install -y librewolf
-          python3 -m pip install --break-system-packages selenium
       - name: Browser tests
         run: python3 ci/browser_test.py
       - name: Daemon log

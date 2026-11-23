@@ -172,8 +172,19 @@ public sealed partial class EditableList : StackPanel
             .Tip("Drag to make the list taller; double-click for the usual height");
         AutomationProperties.SetHelpText(grip, "Up and Down arrows change the height; Enter puts the usual height back");
         double? startY = null, startHeight = null;
+        long lastPress = 0;
         grip.AddHandler(PointerPressedEvent, new PointerEventHandler((_, e) =>
         {
+            // Two presses within the double-click time: the usual height.
+            var now = Environment.TickCount64;
+            if (now - lastPress <= DoubleClickMs)
+            {
+                lastPress = 0;
+                startY = null;
+                Usual();
+                return;
+            }
+            lastPress = now;
             startY = e.GetCurrentPoint(this).Position.Y;
             startHeight = listHolder.Height;
             grip.CapturePointer(e.Pointer);
@@ -192,8 +203,6 @@ public sealed partial class EditableList : StackPanel
             // double-click's second release) leaves gui.json as it is.
             if (Math.Abs(listHolder.Height - startHeight!.Value) >= 1) Keep();
         }), true);
-        // A button takes the clicks for itself: the double-click is heard anyway.
-        grip.AddHandler(DoubleTappedEvent, new DoubleTappedEventHandler((_, _) => Usual()), true);
         grip.Click += (_, _) => { if (startY is null && grip.FocusState == FocusState.Keyboard) Usual(); };
         grip.KeyDown += (_, e) =>
         {
@@ -210,6 +219,9 @@ public sealed partial class EditableList : StackPanel
 
     /// <summary>Back to the usual height for every list of the kind, and
     /// forgotten in gui.json (GTK: double-click).</summary>
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetDoubleClickTime();
+    static long DoubleClickMs => GetDoubleClickTime();
+
     void Usual()
     {
         SetHeight(UsualHeight, keep: false);

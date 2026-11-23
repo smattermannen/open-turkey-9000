@@ -355,6 +355,9 @@ public sealed class GuiApp : IDisposable
     public static void Drag(System.Drawing.Point from, System.Drawing.Point to, int steps = 24)
     {
         const uint Down = 0x2, Up = 0x4;
+        // No modifier left down by an earlier test (Ctrl changes a drop).
+        foreach (var key in new[] { FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL, FlaUI.Core.WindowsAPI.VirtualKeyShort.SHIFT, FlaUI.Core.WindowsAPI.VirtualKeyShort.ALT })
+            Keyboard.Release(key);
         Send(from, 0);
         Thread.Sleep(100);
         Send(from, Down);

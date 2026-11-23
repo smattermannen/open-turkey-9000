@@ -49,6 +49,10 @@ func (b SupportedBrowser) Installed() bool {
 	return false
 }
 
+// Waiting is what b waits for before KC9K can give it the extension: on
+// Linux nothing (each listed browser takes it as it is).
+func (b SupportedBrowser) Waiting() string { return "" }
+
 // SupportedBrowserByID returns the supported browser with that ID.
 func SupportedBrowserByID(id string) (SupportedBrowser, bool) {
 	for _, b := range SupportedBrowsers {

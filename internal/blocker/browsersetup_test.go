@@ -1,6 +1,7 @@
 package blocker
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -76,5 +77,19 @@ func TestSigningPref(t *testing.T) {
 	}
 	if off := withSigningPref(on, false); off != base {
 		t.Fatalf("not removed: %q", off)
+	}
+}
+
+// 2.12: the extension's install_url is a real file: URL on both systems
+// (Firefox and LibreWolf on Windows got file://C:\..., which isn't one).
+func TestFileURL(t *testing.T) {
+	cases := map[string]string{"/usr/share/kc9k/kc9k-1.2.xpi": "file:///usr/share/kc9k/kc9k-1.2.xpi"}
+	if runtime.GOOS == "windows" {
+		cases = map[string]string{`C:\Program Files\KC9K\share\kc9k-1.2.xpi`: "file:///C:/Program%20Files/KC9K/share/kc9k-1.2.xpi"}
+	}
+	for in, want := range cases {
+		if got := fileURL(in); got != want {
+			t.Errorf("fileURL(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

@@ -216,6 +216,13 @@ type SupportedBrowser struct {
 	Exes []string
 }
 
+// What a supported browser waits for before KC9K can give it the
+// extension (SupportedBrowser.Waiting).
+const (
+	WaitingChromeWebStore   = "chrome-web-store"  // 2.17: the listing's ID
+	WaitingMozillaSignature = "mozilla-signature" // SPEC §7: Mozilla's signature
+)
+
 // FirmwarePurpose is what one firmware setting is changed for.
 type FirmwarePurpose struct {
 	Name string   // shown to the user, e.g. "USB boot"

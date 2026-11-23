@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/smattermannen/kc9k/internal/platform"
+	"github.com/smattermannen/kc9k/internal/webext"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
@@ -36,9 +37,14 @@ var guardedBrowsers = map[string]bool{
 // notBrowsers use a browser engine but aren't browsers.
 var notBrowsers = map[string]bool{"thunderbird": true, "betterbird": true, "msedgewebview2": true}
 
-// SupportedBrowsers on Windows: LibreWolf with the bundled extension;
-// Google Chrome and Microsoft Edge with the extension from the Chrome Web
-// Store (supported once ChromeStoreExtensionID is set).
+// SupportedBrowsers on Windows (§3.13, 2.12): LibreWolf with the bundled
+// extension; Google Chrome and Microsoft Edge with the extension from the
+// Chrome Web Store (once ChromeStoreExtensionID is set); Firefox, the
+// installed one and the Microsoft Store one (W26: it reads the registry's
+// policies), with the Mozilla-signed extension (once webext.SignedXPI has
+// one). The Microsoft Bing app on Windows is Edge (Bing's web app runs in
+// msedge.exe): it is Edge here, with Edge's policies and extension. Exes
+// may hold * for one folder name (the Store's versioned package folder).
 var SupportedBrowsers = []SupportedBrowser{
 	{ID: "librewolf", Name: "LibreWolf", Exes: []string{
 		filepath.Join(programFilesDir(), "LibreWolf", "librewolf.exe")}},
@@ -48,21 +54,50 @@ var SupportedBrowsers = []SupportedBrowser{
 	{ID: "edge", Name: "Microsoft Edge", Exes: []string{
 		filepath.Join(programFilesX86Dir(), "Microsoft", "Edge", "Application", "msedge.exe"),
 		filepath.Join(programFilesDir(), "Microsoft", "Edge", "Application", "msedge.exe")}},
+	{ID: "firefox", Name: "Firefox", Exes: []string{
+		filepath.Join(programFilesDir(), "Mozilla Firefox", "firefox.exe"),
+		filepath.Join(programFilesX86Dir(), "Mozilla Firefox", "firefox.exe"),
+		filepath.Join(programFilesDir(), "WindowsApps", "Mozilla.Firefox_*", "VFS", "ProgramFiles", "Firefox Package Root", "firefox.exe")}},
 }
 
-// Installed reports whether the browser is installed (for Chrome and
-// Edge: and the store extension exists to give them).
-func (b SupportedBrowser) Installed() bool {
-	if b.ID != "librewolf" && ChromeStoreExtensionID == "" {
-		return false
+// chromeStoreReady and mozillaSigned are what Waiting asks; tests set them.
+var (
+	chromeStoreReady = func() bool { return chromeStoreID != "" }
+	mozillaSigned    = webext.MozillaSigned
+)
+
+// Waiting is what b waits for before it is a supported browser, or "".
+func (b SupportedBrowser) Waiting() string {
+	switch b.ID {
+	case "chrome", "edge":
+		if !chromeStoreReady() {
+			return WaitingChromeWebStore
+		}
+	case "firefox":
+		if !mozillaSigned() {
+			return WaitingMozillaSignature
+		}
 	}
+	return ""
+}
+
+// Found reports whether one of b's programs is on the computer.
+func (b SupportedBrowser) Found() bool {
 	for _, exe := range b.Exes {
-		if _, err := os.Stat(exe); err == nil {
+		if strings.Contains(exe, "*") {
+			if m, _ := filepath.Glob(exe); len(m) > 0 {
+				return true
+			}
+		} else if _, err := os.Stat(exe); err == nil {
 			return true
 		}
 	}
 	return false
 }
+
+// Installed reports whether the browser is installed and KC9K can give it
+// the extension (Waiting is "").
+func (b SupportedBrowser) Installed() bool { return b.Waiting() == "" && b.Found() }
 
 // SupportedBrowserByID finds a supported browser.
 func SupportedBrowserByID(id string) (SupportedBrowser, bool) {
@@ -75,14 +110,19 @@ func SupportedBrowserByID(id string) (SupportedBrowser, bool) {
 }
 
 // supportedExeOf is the ID of the supported browser whose program path is
-// exe, or "".
+// exe, or "". The path alone decides (no folder is read: it runs for
+// every process each cycle).
 func supportedExeOf(exe string) string {
+	if exe == "" {
+		return ""
+	}
+	exe = strings.ToLower(filepath.Clean(exe))
 	for _, b := range SupportedBrowsers {
-		if !b.Installed() {
-			continue
-		}
 		for _, e := range b.Exes {
-			if strings.EqualFold(filepath.Clean(e), filepath.Clean(exe)) {
+			if ok, _ := filepath.Match(strings.ToLower(filepath.Clean(e)), exe); ok {
+				if b.Waiting() != "" {
+					return ""
+				}
 				return b.ID
 			}
 		}
@@ -91,7 +131,8 @@ func supportedExeOf(exe string) string {
 }
 
 // wingetIDs are the supported browsers' packages in winget's own source.
-var wingetIDs = map[string]string{"librewolf": "LibreWolf.LibreWolf", "chrome": "Google.Chrome"}
+var wingetIDs = map[string]string{"librewolf": "LibreWolf.LibreWolf", "chrome": "Google.Chrome",
+	"edge": "Microsoft.Edge", "firefox": "Mozilla.Firefox"}
 
 // wingetPath finds winget (App Installer) for SYSTEM, which has it on no
 // PATH: the newest App Installer package's winget.exe.
@@ -113,16 +154,17 @@ func wingetPath() string {
 func InstallBrowser(id string) error {
 	pkg := wingetIDs[id]
 	if pkg == "" {
-		return errorf("unknown browser %q (use librewolf or chrome)", id)
+		return errorf("unknown browser %q (use librewolf, chrome, edge or firefox)", id)
 	}
 	b, _ := SupportedBrowserByID(id)
-	for _, exe := range b.Exes {
-		if fileExists(exe) {
-			if id == "chrome" && ChromeStoreExtensionID == "" {
-				return errorf("Google Chrome is installed; it gets the extension once its Chrome Web Store listing exists")
-			}
-			return nil
+	if b.Found() {
+		switch b.Waiting() {
+		case WaitingChromeWebStore:
+			return errorf("%s is installed; it gets the extension once its Chrome Web Store listing exists", b.Name)
+		case WaitingMozillaSignature:
+			return errorf("%s is installed; it gets the extension once Mozilla has signed it", b.Name)
 		}
+		return nil
 	}
 	winget := wingetPath()
 	if winget == "" {
@@ -137,10 +179,8 @@ func InstallBrowser(id string) error {
 		}
 		return errorf("winget install %s: %v: %s", pkg, err, text)
 	}
-	for _, exe := range b.Exes {
-		if fileExists(exe) {
-			return nil
-		}
+	if b.Found() {
+		return nil
 	}
 	return errorf("winget finished but %s is missing", b.Exes[0])
 }
@@ -153,7 +193,7 @@ var installRun = func(name string, args ...string) ([]byte, error) {
 // ChromeInstalled reports whether Chrome or Edge can run the extension.
 func ChromeInstalled() bool {
 	for _, b := range SupportedBrowsers {
-		if b.ID != "librewolf" && b.Installed() {
+		if (b.ID == "chrome" || b.ID == "edge") && b.Installed() {
 			return true
 		}
 	}
@@ -162,7 +202,17 @@ func ChromeInstalled() bool {
 
 // ExtensionBrowserInstalled reports whether a browser that runs the
 // extension is installed.
-func ExtensionBrowserInstalled() bool { return LibreWolfVersion() != "" || ChromeInstalled() }
+func ExtensionBrowserInstalled() bool {
+	if LibreWolfVersion() != "" {
+		return true
+	}
+	for _, b := range SupportedBrowsers[1:] {
+		if b.Installed() {
+			return true
+		}
+	}
+	return false
+}
 
 // LibreWolfVersion is the installed LibreWolf's version, or "".
 func LibreWolfVersion() string {

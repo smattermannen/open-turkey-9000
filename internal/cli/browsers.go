@@ -8,6 +8,8 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/smattermannen/kc9k/internal/blocker"
@@ -30,13 +32,18 @@ type guiBrowser struct {
 	// CheckIn is how many seconds ago its extension last checked in; -1
 	// never (since this was recorded).
 	CheckIn int64 `json:"checkin_seconds"`
+	// Waiting is what KC9K waits for before it can give this browser the
+	// extension (2.12, Windows): "chrome-web-store" (Chrome, Edge: the
+	// listing, 2.17) or "mozilla-signature" (Firefox: Mozilla's signature,
+	// SPEC §7); left out when nothing (always on Linux).
+	Waiting string `json:"waiting,omitempty"`
 }
 
 // supportedBrowsers lists the supported browsers' state.
 func supportedBrowsers(database *db.DB) []guiBrowser {
 	var out []guiBrowser
 	for _, b := range blocker.SupportedBrowsers {
-		g := guiBrowser{ID: b.ID, Name: b.Name, Installed: b.Installed(), CheckIn: -1}
+		g := guiBrowser{ID: b.ID, Name: b.Name, Installed: b.Installed(), CheckIn: -1, Waiting: b.Waiting()}
 		g.Found = g.Installed || browserFound(b.Exes)
 		if last, ok := enforce.LastBrowserCheckIn(database, b.ID); ok {
 			g.CheckIn = max(0, int64(time.Since(last).Seconds()))
@@ -49,10 +56,15 @@ func supportedBrowsers(database *db.DB) []guiBrowser {
 // browserFileStat is os.Stat, replaced in tests.
 var browserFileStat = os.Stat
 
-// browserFound reports whether any of a browser's executables exists.
+// browserFound reports whether any of a browser's executables exists (a
+// * stands for one folder name: the Microsoft Store's Firefox).
 func browserFound(exes []string) bool {
 	for _, exe := range exes {
-		if _, err := browserFileStat(exe); err == nil {
+		if strings.Contains(exe, "*") {
+			if m, _ := filepath.Glob(exe); len(m) > 0 {
+				return true
+			}
+		} else if _, err := browserFileStat(exe); err == nil {
 			return true
 		}
 	}
@@ -62,6 +74,10 @@ func browserFound(exes []string) bool {
 // extensionText describes a browser's extension for people.
 func (g guiBrowser) extensionText() string {
 	switch {
+	case g.Waiting == blocker.WaitingChromeWebStore && g.Found:
+		return "installed; gets the extension once its Chrome Web Store listing exists"
+	case g.Waiting == blocker.WaitingMozillaSignature && g.Found:
+		return "installed; gets the extension once Mozilla has signed it"
 	case !g.Installed:
 		return "not installed"
 	case g.CheckIn < 0:
@@ -89,7 +105,7 @@ unsupported-browsers on', every other browser is closed.`,
 		if len(args) == 0 || (len(args) == 2 && args[0] == "install") {
 			return nil
 		}
-		return fmt.Errorf("give no arguments to list, or install and librewolf, chrome or chromium")
+		return fmt.Errorf("give no arguments to list, or install and %s", browserIDs())
 	},
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		if len(args) == 2 {
@@ -105,7 +121,7 @@ unsupported-browsers on', every other browser is closed.`,
 func installBrowser(id string) error {
 	b, ok := blocker.SupportedBrowserByID(id)
 	if !ok {
-		return fmt.Errorf("unknown browser %q (use librewolf, chrome or chromium)", id)
+		return fmt.Errorf("unknown browser %q (use %s)", id, browserIDs())
 	}
 	if b.Installed() {
 		fmt.Printf("%s is already installed.\n", b.Name)
@@ -117,6 +133,18 @@ func installBrowser(id string) error {
 	}
 	fmt.Printf("%s installed. The extension is added the next time it starts.\n", b.Name)
 	return nil
+}
+
+// browserIDs names the supported browsers: "librewolf, chrome or chromium".
+func browserIDs() string {
+	var ids []string
+	for _, b := range blocker.SupportedBrowsers {
+		ids = append(ids, b.ID)
+	}
+	if len(ids) < 2 {
+		return strings.Join(ids, "")
+	}
+	return strings.Join(ids[:len(ids)-1], ", ") + " or " + ids[len(ids)-1]
 }
 
 func init() {

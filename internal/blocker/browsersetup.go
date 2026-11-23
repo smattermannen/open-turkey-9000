@@ -2,10 +2,22 @@ package blocker
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// fileURL is path as a file: URL, as browsers' policies take it:
+// file:///usr/share/... on Linux, file:///C:/Program%20Files/... on
+// Windows (where "file://" + path gave file://C:\Program Files\..., no URL).
+func fileURL(path string) string {
+	p := filepath.ToSlash(path)
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return (&url.URL{Scheme: "file", Path: p}).String()
+}
 
 const googleWebEngine = "Google Web"
 
@@ -29,7 +41,7 @@ func setupPolicies(s BrowserSetup, policies map[string]interface{}) {
 		policies["ExtensionSettings"] = map[string]interface{}{
 			s.ExtensionID: map[string]interface{}{
 				"installation_mode": "force_installed",
-				"install_url":       "file://" + s.ExtensionXPI,
+				"install_url":       fileURL(s.ExtensionXPI),
 				"private_browsing":  true,
 			},
 		}

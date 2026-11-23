@@ -111,14 +111,22 @@ type chromiumBrowser struct {
 	key  string // under HKLM
 	// incognito is its name for the private window policy.
 	incognito string
+	// pin is how its ExtensionSettings keeps the extension's button in
+	// the toolbar: Chrome's toolbar_pin, Edge's own toolbar_state.
+	pin [2]string
 }
 
+var (
+	chromePin = [2]string{"toolbar_pin", "force_pinned"}
+	edgePin   = [2]string{"toolbar_state", "force_shown"}
+)
+
 var chromiumBrowsers = []chromiumBrowser{
-	{"Google Chrome", `SOFTWARE\Policies\Google\Chrome`, "IncognitoModeAvailability"},
-	{"Chromium", `SOFTWARE\Policies\Chromium`, "IncognitoModeAvailability"},
-	{"Microsoft Edge", `SOFTWARE\Policies\Microsoft\Edge`, "InPrivateModeAvailability"},
-	{"Brave", `SOFTWARE\Policies\BraveSoftware\Brave`, "IncognitoModeAvailability"},
-	{"Vivaldi", `SOFTWARE\Policies\Vivaldi`, "IncognitoModeAvailability"},
+	{"Google Chrome", `SOFTWARE\Policies\Google\Chrome`, "IncognitoModeAvailability", chromePin},
+	{"Chromium", `SOFTWARE\Policies\Chromium`, "IncognitoModeAvailability", chromePin},
+	{"Microsoft Edge", `SOFTWARE\Policies\Microsoft\Edge`, "InPrivateModeAvailability", edgePin},
+	{"Brave", `SOFTWARE\Policies\BraveSoftware\Brave`, "IncognitoModeAvailability", chromePin},
+	{"Vivaldi", `SOFTWARE\Policies\Vivaldi`, "IncognitoModeAvailability", chromePin},
 }
 
 // blocklistValues are the values the blocklist owns in each key.
@@ -484,8 +492,13 @@ func BrowserPoliciesPresent() bool {
 // (its unlisted listing, SPEC §6 2026-11-21): Chrome and Edge on Windows
 // force-install only store extensions. Empty until the owner publishes
 // the listing; until then Chrome and Edge get no extension, and the
-// extension guard treats them as running without it.
+// extension guard treats them as running without it. Setting it is the
+// only step left for both (2.17): Edge force-installs Chrome Web Store
+// extensions from the same update URL.
 const ChromeStoreExtensionID = ""
+
+// chromeStoreID is ChromeStoreExtensionID; tests set it.
+var chromeStoreID = ChromeStoreExtensionID
 
 // chromeStoreUpdateURL is the Chrome Web Store's update URL.
 const chromeStoreUpdateURL = "https://clients2.google.com/service/update2/crx"
@@ -502,15 +515,15 @@ func chromeSetupFor(s ChromeSetup, b chromiumBrowser) map[string]any {
 		"ExtensionDeveloperModeSettings": 1,
 		"DeveloperToolsAvailability":     devTools,
 	}
-	if s.ExtensionID != "" && ChromeStoreExtensionID != "" {
+	if s.ExtensionID != "" && chromeStoreID != "" {
 		p["ExtensionSettings"] = map[string]any{
-			ChromeStoreExtensionID: map[string]any{
+			chromeStoreID: map[string]any{
 				"installation_mode": "force_installed",
 				"update_url":        chromeStoreUpdateURL,
-				"toolbar_pin":       "force_pinned",
+				b.pin[0]:            b.pin[1],
 			},
 		}
-		p["ExtensionInstallForcelist"] = []string{ChromeStoreExtensionID + ";" + chromeStoreUpdateURL}
+		p["ExtensionInstallForcelist"] = []string{chromeStoreID + ";" + chromeStoreUpdateURL}
 	}
 	if s.ForceSearch {
 		p["DefaultSearchProviderEnabled"] = true

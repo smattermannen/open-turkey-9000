@@ -219,3 +219,77 @@ func TestWFPHostsIPv6(t *testing.T) {
 		}
 	}
 }
+
+// 2.12: Firefox (installed and the Microsoft Store's) and Edge are
+// supported browsers on Windows once KC9K can give them the extension;
+// recognised by their program's path alone.
+func TestWinBrowserSupport(t *testing.T) {
+	oldStore, oldSigned := chromeStoreReady, mozillaSigned
+	t.Cleanup(func() { chromeStoreReady, mozillaSigned = oldStore, oldSigned })
+	pf := programFilesDir()
+	paths := map[string]string{
+		filepath.Join(pf, "Mozilla Firefox", "firefox.exe"):                                                                                            "firefox",
+		strings.ToUpper(filepath.Join(pf, "Mozilla Firefox", "FIREFOX.EXE")):                                                                           "firefox",
+		filepath.Join(pf, "WindowsApps", "Mozilla.Firefox_133.0.0.0_x64__n80bbvh6b1yt2", "VFS", "ProgramFiles", "Firefox Package Root", "firefox.exe"): "firefox",
+		filepath.Join(programFilesX86Dir(), "Microsoft", "Edge", "Application", "msedge.exe"):                                                          "edge",
+		filepath.Join(pf, "Google", "Chrome", "Application", "chrome.exe"):                                                                             "chrome",
+		filepath.Join(pf, "LibreWolf", "librewolf.exe"):                                                                                                "librewolf",
+		filepath.Join(pf, "WindowsApps", "Mozilla.Firefox_1_x64__n", "evil", "firefox.exe"):                                                            "",
+		filepath.Join(`C:\Users\me\Downloads`, "Mozilla Firefox", "firefox.exe"):                                                                       "",
+	}
+	// Nothing ready: only LibreWolf.
+	chromeStoreReady, mozillaSigned = func() bool { return false }, func() bool { return false }
+	for p, id := range paths {
+		want := ""
+		if id == "librewolf" {
+			want = id
+		}
+		if got := supportedExeOf(p); got != want {
+			t.Errorf("nothing ready: %s → %q, want %q", p, got, want)
+		}
+	}
+	for id, want := range map[string]string{"chrome": WaitingChromeWebStore, "edge": WaitingChromeWebStore, "firefox": WaitingMozillaSignature, "librewolf": ""} {
+		b, ok := SupportedBrowserByID(id)
+		if !ok || b.Waiting() != want {
+			t.Errorf("%s waits for %q, want %q", id, b.Waiting(), want)
+		}
+	}
+	// Store listing and Mozilla's signature there: all of them.
+	chromeStoreReady, mozillaSigned = func() bool { return true }, func() bool { return true }
+	for p, want := range paths {
+		if got := supportedExeOf(p); got != want {
+			t.Errorf("all ready: %s → %q, want %q", p, got, want)
+		}
+	}
+}
+
+// 2.12, 2.17: with the store ID set, Chrome and Edge get the extension
+// force-installed from the Chrome Web Store, each pinned in its own words.
+func TestWinEdgeReadyWithStoreID(t *testing.T) {
+	old := chromeStoreID
+	chromeStoreID = "abcdefghijklmnopabcdefghijklmnop"
+	t.Cleanup(func() { chromeStoreID = old })
+	for _, b := range chromiumBrowsers {
+		p := chromeSetupFor(ChromeSetup{ExtensionID: "x"}, b)
+		list, _ := p["ExtensionInstallForcelist"].([]string)
+		if len(list) != 1 || list[0] != chromeStoreID+";"+chromeStoreUpdateURL {
+			t.Errorf("%s forcelist %v", b.name, list)
+		}
+		settings, _ := p["ExtensionSettings"].(map[string]any)
+		ext, _ := settings[chromeStoreID].(map[string]any)
+		if ext["installation_mode"] != "force_installed" || ext["update_url"] != chromeStoreUpdateURL {
+			t.Errorf("%s settings %v", b.name, ext)
+		}
+		wantKey := "toolbar_pin"
+		if b.name == "Microsoft Edge" {
+			wantKey = "toolbar_state"
+		}
+		if _, ok := ext[wantKey]; !ok {
+			t.Errorf("%s: no %s in %v", b.name, wantKey, ext)
+		}
+	}
+	chromeStoreID = ""
+	if _, ok := chromeSetupFor(ChromeSetup{ExtensionID: "x"}, chromiumBrowsers[2])["ExtensionSettings"]; ok {
+		t.Error("Edge got an extension without the store ID")
+	}
+}

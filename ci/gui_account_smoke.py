@@ -136,6 +136,27 @@ try:
     work = [b for b in json.loads(cli(B, "gui-state").stdout)["blocks"] if b["name"] == "work"]
     check(work and work[0]["active"] and work[0].get("lock_seconds"), "the block came on and locked")
 
+    # §4.15: invite a partner, who accepts on their own computer (C); the
+    # page shows them; removing them is refused while 'work' is locked.
+    check(win.partner_section.get_visible(), "partner section shown while signed in")
+    win.partner_invite_email.set_text("pat@example.org")
+    win.partner_invite(None)
+    check(pump(lambda: any(p.get("partner_email") == "pat@example.org"
+                           for p in ((win.partner_state or {}).get("partners") or []))), "partner invited")
+    C = wrapper("c")
+    r = subprocess.run([C, "account", "signup", "pat@example.org"], input="secret789\n", capture_output=True, text=True)
+    check(r.returncode == 0, "partner's account: " + r.stderr.strip())
+    r = cli(C, "partner", "accept", "me@example.org")
+    check(r.returncode == 0, "partner accepts: " + r.stderr.strip())
+    account()
+    rows = [c.get_children()[0].get_text() for c in win.partner_box.get_children()]
+    check(any("pat@example.org (active)" in t for t in rows), f"active partner shown: {rows}")
+    msgs.clear()
+    answers["confirm"] = True
+    win.partner_remove("pat@example.org")
+    check(pump(lambda: any("refused while" in m for m in msgs)), f"removing refused while locked: {msgs}")
+    check(win.partner_reports.get_active_id() == "weekly", "reports weekly by default")
+
     answers["confirm"] = True
     win.account_log_out(None)
     check(pump(lambda: win.account_state is not None and not win.account_state.get("email")

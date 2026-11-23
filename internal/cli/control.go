@@ -124,8 +124,19 @@ lock; --password-stdin twice reads two passwords (two partners').`,
 			if count > 1 {
 				prompt = fmt.Sprintf("Block password %d of %d", nth, count)
 			}
-			password, err := readPasswordStdin(prompt)
-			if err != nil {
+			var password string
+			if held, _ := cmd.Flags().GetBool("partner-holds"); held {
+				// §4.15: made up here, only the partners get it.
+				pdb, err := openDB()
+				if err != nil {
+					return err
+				}
+				password, err = partnerHeldPassword(pdb, "block:"+blockName)
+				pdb.Close()
+				if err != nil {
+					return err
+				}
+			} else if password, err = readPasswordStdin(prompt); err != nil {
 				return err
 			}
 			if specs[i].PasswordHash, err = db.HashPassword(password); err != nil {
@@ -575,6 +586,7 @@ var stopCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("Block '%s' deactivated successfully\n", blockName)
+		database.PartnerAlert(fmt.Sprintf("Block '%s' was switched off", blockName), "")
 		notify("Killer Chicken 9000", fmt.Sprintf("Block '%s' deactivated", blockName))
 		return nil
 	},
@@ -671,6 +683,7 @@ var unlockCmd = &cobra.Command{
 				}
 				fmt.Printf("Block '%s' is lifted for %s, then it is back with its locks. Unlock it again before then to end it.\n",
 					blockName, seconds(breaks.Relock))
+				database.PartnerAlert(fmt.Sprintf("Block '%s' was lifted for %s (unlock break)", blockName, seconds(breaks.Relock)), "")
 				return nil
 			}
 		}
@@ -699,6 +712,7 @@ var unlockCmd = &cobra.Command{
 		} else {
 			fmt.Printf("Block '%s': its %s is unlocked.\n", blockName, db.LayerName(hold.layers[0]))
 		}
+		database.PartnerAlert(fmt.Sprintf("Block '%s': its %s was unlocked", blockName, db.LayerName(hold.layers[0])), "")
 		if len(rest) == 0 {
 			fmt.Printf("Block '%s' is unlocked and stays on. 'kc9k stop %s' switches it off.\n", blockName, blockName)
 		} else {
@@ -1077,6 +1091,7 @@ func blockHold(database *db.DB, name string, now time.Time) (holdState, error) {
 
 func init() {
 	addStartLockFlags(startCmd)
+	startCmd.Flags().Bool("partner-holds", false, "Password locks: KC9K makes the password up and sends it only to your accountability partners (§4.15); you never see it")
 	addYesFlag(startCmd)
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)

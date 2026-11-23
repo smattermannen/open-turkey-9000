@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/smattermannen/kc9k/internal/cloud"
 	"github.com/smattermannen/kc9k/internal/cloud/cloudtest"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
@@ -69,9 +70,23 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustRun(t, "sync", "upload")
+	// §4.15 (2.13): an active accountability partner, accepted on their
+	// own account.
+	mustRun(t, "partner", "invite", "pat@example.org")
+	pc := cloud.New(cloudFake.URL, cloudtest.AnonKey)
+	ps, err := pc.SignUp("pat@example.org", "secret789")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, err := pc.Partners(ps); err != nil || len(list) != 1 || pc.AcceptPartner(ps, list[0].ID) != nil {
+		t.Fatalf("partner: %+v %v", list, err)
+	}
+	mustRun(t, "partner")
 
 	for _, args := range [][]string{
 		{"sync", "download", "--yes"},
+		{"partner", "remove", "pat@example.org"},
+		{"partner", "reports", "off"},
 		{"stop", "b"},
 		{"toggle", "b"},
 		{"block", "remove", "b"},
@@ -127,6 +142,12 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		if err := runCLI(t, args...); err == nil {
 			t.Errorf("%v: a locked block was weakened", args)
 		}
+	}
+	if list, err := pc.Partners(ps); err != nil || len(list) != 1 || list[0].Status != cloud.PartnerActive {
+		t.Errorf("the partner went while locked: %+v %v", list, err)
+	}
+	if partnerReports(d) != "weekly" {
+		t.Errorf("reports changed while locked: %s", partnerReports(d))
 	}
 
 	// §4.3: the same settings through the block's draft are kept there, and

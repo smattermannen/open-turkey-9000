@@ -137,6 +137,14 @@ func prepareUninstall() error {
 		fmt.Fprintf(os.Stderr, "warning: %s\n", warning)
 	}
 
+	// §4.15: the partners hear it now, before KC9K is gone.
+	database.PartnerAlert("Killer Chicken 9000 is being uninstalled on "+deviceName(), "")
+	if loadSession(database) != nil {
+		if c, s, err := signedIn(database); err == nil {
+			_, _ = partnerFlush(database, c, s, time.Now(), true)
+		}
+	}
+
 	fmt.Println("Killer Chicken 9000 blocking layers removed; ready to uninstall.")
 	return nil
 }

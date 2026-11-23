@@ -79,6 +79,9 @@ func (d *DB) RecordEventFor(kind string, blocks []string, detail string) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to log an event: %w", err)
 	}
+	if kind == EventTamper { // §4.15: tamper events reach the partner
+		d.PartnerAlert("Tamper protection: "+detail, "")
+	}
 	return nil
 }
 

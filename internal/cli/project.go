@@ -152,10 +152,10 @@ type projectExport struct {
 	// TamperGrace is the extension's grace in seconds (0: not in the file).
 	TamperGrace int               `json:"tamper_grace,omitempty"`
 	Options     map[string]bool   `json:"options,omitempty"`
-	Nepsis  *db.Nepsis        `json:"bypass_detection,omitempty"`
-	Freezes []windowExport    `json:"frozen_chicken_schedules,omitempty"`
-	Images  map[string]string `json:"images,omitempty"` // name -> base64
-	Backup  *backupExtras     `json:"backup,omitempty"` // backups only
+	Nepsis      *db.Nepsis        `json:"bypass_detection,omitempty"`
+	Freezes     []windowExport    `json:"frozen_chicken_schedules,omitempty"`
+	Images      map[string]string `json:"images,omitempty"` // name -> base64
+	Backup      *backupExtras     `json:"backup,omitempty"` // backups only
 	// Circadian is the circadian rhythm with its wallpapers (2.1).
 	Circadian *circadianExport `json:"circadian,omitempty"`
 	// Notifications are the notification choices (§4.10).

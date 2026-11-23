@@ -125,14 +125,21 @@ var passwordSetCmd = &cobra.Command{
 		if err := requireSettingsPassword(database); err != nil {
 			return err
 		}
-		password, err := readPasswordStdin("New settings password")
+		held, _ := cmd.Flags().GetBool("partner-holds")
+		var password string
+		var err error
+		if held { // §4.15: made up here, only the partners get it
+			password, err = partnerHeldPassword(database, "settings")
+		} else {
+			password, err = readPasswordStdin("New settings password")
+		}
 		if err != nil {
 			return err
 		}
 		if len(password) < 4 {
 			return fmt.Errorf("use at least 4 characters")
 		}
-		if isTerminalInput() {
+		if isTerminalInput() && !held {
 			again, err := readPasswordStdin("Repeat it")
 			if err != nil {
 				return err
@@ -226,6 +233,7 @@ var passwordLocksCmd = &cobra.Command{
 }
 
 func init() {
+	passwordSetCmd.Flags().Bool("partner-holds", false, "KC9K makes the password up and sends it only to your accountability partners (§4.15); you never see it")
 	passwordCmd.AddCommand(passwordSetCmd, passwordRemoveCmd, passwordLocksCmd)
 	rootCmd.AddCommand(passwordCmd)
 }

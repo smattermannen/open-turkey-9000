@@ -166,8 +166,8 @@ func when(t time.Time) string { return t.Local().Format("2006-01-02 15:04") }
 var accountCmd = &cobra.Command{
 	Use:   "account",
 	Short: "Your KC9K account, for cross-device sync",
-	Long: `A KC9K account is needed only for cross-device sync (and later the
-accountability partner): nothing else ever leaves this device. Passwords are
+	Long: `A KC9K account is needed only for cross-device sync and the
+accountability partner ('kc9k partner'): nothing else ever leaves this device. Passwords are
 read from standard input; this device keeps only the session.`,
 }
 

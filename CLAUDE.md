@@ -107,7 +107,7 @@ sections, connected notes.
 | [gui-windows](notes/gui-windows.md) | Windows GUI (C#, WinUI 3), UI Automation tests |
 | [install-windows](notes/install-windows.md) | Windows MSI (WiX), signing |
 | [db-project](notes/db-project.md) | SQLite DB, project files, backup |
-| [sync](notes/sync.md) | KC9K account, cross-device sync (Supabase) |
+| [sync](notes/sync.md) | KC9K account, cross-device sync, accountability partner (Supabase) |
 | [windows](notes/windows.md) | Windows Go side: platform split, CI, service, session agent, pipe |
 | [windows-layers](notes/windows-layers.md) | Windows web layers, apps, desktop, places, circadian |
 | [windows-tamper](notes/windows-tamper.md) | Windows tamper protection, strict mode, no-escape, firmware lock |

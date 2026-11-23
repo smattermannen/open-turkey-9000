@@ -4,7 +4,7 @@
 
 class _AccountPage:
     """Methods of Window (window.py). Every change runs a kc9k command:
-    account signup|login|logout|status, sync upload|download."""
+    account signup|login|logout|status, sync upload|download, partner …"""
 
     # Account -------------------------------------------------------------
     def build_account(self):
@@ -49,6 +49,43 @@ class _AccountPage:
         buttons.pack_start(self.sync_upload, False, False, 0)
         buttons.pack_start(self.sync_download, False, False, 0)
         box.pack_start(section("Cross-device sync", self.sync_status, buttons), False, False, 0)
+
+        # §4.15 Accountability partner.
+        self.partner_state, self.partner_requests = None, []
+        self.partner_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.partner_invite_email = Gtk.Entry(placeholder_text="Your partner's email", width_chars=28,
+                                              input_purpose=Gtk.InputPurpose.EMAIL)
+        invite = Gtk.Button(label="Invite")
+        invite.connect("clicked", self.partner_invite)
+        self.partner_invite_email.connect("activate", self.partner_invite)
+        invite_row = Gtk.Box(spacing=6)
+        invite_row.pack_start(self.partner_invite_email, True, True, 0)
+        invite_row.pack_start(invite, False, False, 0)
+        self.partner_reports = Gtk.ComboBoxText()
+        for kind, label in (("daily", "Reports every day"), ("weekly", "Reports every week"), ("off", "No reports")):
+            self.partner_reports.append(kind, label)
+        self.partner_reports.connect("changed", self.partner_reports_changed)
+        ask = Gtk.Button(label="Ask to unlock…")
+        ask.set_tooltip_text("Ask your partners to unlock a block's password lock or the settings password they hold")
+        ask.connect("clicked", self.partner_ask)
+        inbox = Gtk.Button(label="Inbox…")
+        inbox.set_tooltip_text("As a partner: the reports, alerts and passwords of the people you partner")
+        inbox.connect("clicked", self.partner_inbox)
+        send = Gtk.Button(label="Send now")
+        send.set_tooltip_text("Send waiting alerts, a due report and this computer's sign of life now")
+        send.connect("clicked", lambda _b: self.run(["partner", "send"], then=self.account_done, timeout=120))
+        actions = Gtk.Box(spacing=6)
+        for widget in (self.partner_reports, ask, inbox, send):
+            actions.pack_start(widget, False, False, 0)
+        self.partner_section = section(
+            "Accountability partner", self.partner_box, invite_row, actions,
+            help="A partner gets your reports (daily or weekly: time per site and app, times blocked, top "
+                 "blocked) and alerts as they happen (bypass prevention, a block switched off, unlocked or "
+                 "deleted, tamper events, Killer Chicken uninstalled). A partner can hold password locks and "
+                 "the settings password, so you never see them, and approve your unlock requests. Removing "
+                 "a partner or getting fewer reports weakens: refused while anything is locked.")
+        self.partner_section.set_no_show_all(True)
+        box.pack_start(self.partner_section, False, False, 0)
         self.update_account()
         return scroll
 
@@ -62,12 +99,24 @@ class _AccountPage:
 
         def work():
             ok, output = cli_with_access(passwords, ["account", "status", "--json"])
-            GLib.idle_add(self.account_read, ok, output)
+            partner = requests = None
+            if ok and '"email"' in output:
+                partner = cli_with_access(passwords, ["partner", "--json"])
+                requests = cli_with_access(passwords, ["partner", "requests", "--json"])
+            GLib.idle_add(self.account_read, ok, output, partner, requests)
 
         threading.Thread(target=work, daemon=True).start()
 
-    def account_read(self, ok, output):
+    def account_read(self, ok, output, partner=None, requests=None):
         self.account_busy = False
+        self.partner_state, self.partner_requests = None, []
+        try:
+            if partner and partner[0]:
+                self.partner_state = json.loads(partner[1])
+            if requests and requests[0]:
+                self.partner_requests = json.loads(requests[1]) or []
+        except ValueError:
+            pass
         try:
             self.account_state = json.loads(output) if ok else {"available": True, "error": output}
         except ValueError:
@@ -105,6 +154,124 @@ class _AccountPage:
             self.sync_status.set_text("Nothing uploaded yet.")
         self.sync_upload.set_sensitive(signed_in)
         self.sync_download.set_sensitive(signed_in and bool(upload))
+        # no_show_all keeps the window's show_all off it; shown here.
+        self.partner_section.set_visible(signed_in)
+        if signed_in:
+            for child in self.partner_section.get_children():
+                child.show_all()
+            self.update_partners()
+
+    def update_partners(self):
+        """The partner section from `partner --json` and `partner requests
+        --json`."""
+        for child in self.partner_box.get_children():
+            self.partner_box.remove(child)
+        st = self.partner_state or {}
+        me = (self.account_state or {}).get("email", "")
+
+        def row(text, *buttons):
+            line = Gtk.Box(spacing=6)
+            line.pack_start(Gtk.Label(label=text, xalign=0, wrap=True), True, True, 0)
+            for label, handler in buttons:
+                button = Gtk.Button(label=label)
+                button.connect("clicked", handler)
+                line.pack_start(button, False, False, 0)
+            self.partner_box.pack_start(line, False, False, 0)
+
+        partners = st.get("partners") or []
+        if not partners:
+            row("No partner yet. Invite someone you trust; they need a KC9K account.")
+        for p in partners:
+            state = "active" if p.get("status") == "active" else "invited, not accepted yet"
+            row(f"Your partner: {p['partner_email']} ({state})",
+                ("Remove…", lambda _b, e=p["partner_email"]: self.partner_remove(e)))
+        for p in st.get("partnered") or []:
+            if p.get("status") == "active":
+                row(f"You are the partner of {p['owner_email']}.",
+                    ("Leave…", lambda _b, e=p["owner_email"]: self.partner_leave(e)))
+            else:
+                row(f"{p['owner_email']} asks you to be their partner.",
+                    ("Accept", lambda _b, e=p["owner_email"]: self.run(["partner", "accept", e], then=self.account_done)),
+                    ("Decline", lambda _b, e=p["owner_email"]: self.run(["partner", "leave", e], then=self.account_done)))
+        for q in self.partner_requests:
+            what = target_words(q.get("target", ""))
+            if q.get("owner_email") == me:
+                if q.get("status") == "approved":
+                    arg = "settings" if q["target"] == "settings" else q["target"].split(":", 1)[-1]
+                    row(f"Your request to unlock {what}: approved by {q.get('decided_by')}.",
+                        ("Unlock", lambda _b, a=arg: self.run(["partner", "unlock", a], then=self.account_done)))
+                else:
+                    row(f"Your request to unlock {what}: {q.get('status')}.")
+            elif q.get("status") == "pending":
+                reason = f" ({q['reason']})" if q.get("reason") else ""
+                row(f"{q['owner_email']} asks to unlock {what}{reason}.",
+                    ("Approve", lambda _b, i=q["id"]: self.partner_decide(i, True)),
+                    ("Deny", lambda _b, i=q["id"]: self.partner_decide(i, False)))
+        if st.get("queued"):
+            row(f"{st['queued']} alert(s) waiting to be sent.")
+        self.partner_box.show_all()
+        self.updating_reports = True
+        self.partner_reports.set_active_id(st.get("reports") or "weekly")
+        self.updating_reports = False
+
+    def partner_invite(self, _widget):
+        email = self.partner_invite_email.get_text().strip()
+        if not email:
+            self.message("Type your partner's email first.")
+            return
+        self.partner_invite_email.set_text("")
+        self.run(["partner", "invite", email], then=self.account_done)
+
+    def partner_remove(self, email):
+        if self.confirm(f"Remove {email} as your partner?",
+                        "They are told, and get no more reports or alerts. This weakens your setup, so it is "
+                        "refused while anything is locked.", "Remove", destructive=True):
+            self.run(["partner", "remove", email], then=self.account_done)
+
+    def partner_leave(self, email):
+        if self.confirm(f"Stop being the partner of {email}?", "You get no more of their reports and alerts.",
+                        "Leave", destructive=True):
+            self.run(["partner", "leave", email], then=self.account_done)
+
+    def partner_reports_changed(self, combo):
+        if getattr(self, "updating_reports", False) or not combo.get_active_id():
+            return
+        if combo.get_active_id() != (self.partner_state or {}).get("reports"):
+            self.run(["partner", "reports", combo.get_active_id()], then=self.account_done)
+
+    def partner_decide(self, request_id, approve):
+        if approve and not self.confirm("Approve this unlock?",
+                                        "The password you hold goes to them, for one use.", "Approve"):
+            return
+        self.run(["partner", "approve" if approve else "deny", request_id], then=self.account_done)
+
+    def partner_ask(self, _button):
+        dialog = Gtk.Dialog(title="Ask to unlock", transient_for=self, modal=True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Ask", Gtk.ResponseType.OK)
+        area = dialog.get_content_area()
+        area.set_spacing(8)
+        area.set_border_width(12)
+        choice = Gtk.ComboBoxText()
+        for name in sorted(getattr(self, "blocks", {}) or {}):
+            choice.append(name, f"Block '{name}'")
+        choice.append("settings", "The settings password")
+        choice.set_active(0)
+        reason = Gtk.Entry(placeholder_text="Why (your partners see it)")
+        area.pack_start(Gtk.Label(label="What should your partners unlock?", xalign=0), False, False, 0)
+        area.pack_start(choice, False, False, 0)
+        area.pack_start(reason, False, False, 0)
+        dialog.show_all()
+        answer = dialog.run()
+        target, why = choice.get_active_id(), reason.get_text().strip()
+        dialog.destroy()
+        if answer == Gtk.ResponseType.OK and target:
+            args = ["partner", "request", target] + (["--reason", why] if why else [])
+            self.run(args, then=self.account_done)
+
+    def partner_inbox(self, _button):
+        self.run(["partner", "inbox"], then=lambda output: self.message(output or "Nothing yet.",
+                                                                         Gtk.MessageType.INFO))
 
     def account_sign_in(self, new):
         email = self.account_email.get_text().strip()
@@ -209,3 +376,12 @@ def upload_time(value):
     except ValueError:
         return value
     return when.strftime("%Y-%m-%d %H:%M")
+
+
+def target_words(target):
+    """A request's target for people (as the CLI's targetWords)."""
+    if target.startswith("block:"):
+        return f"block '{target[6:]}' (password lock)"
+    if target == "settings":
+        return "the settings password"
+    return target

@@ -48,6 +48,10 @@ func Run() error {
 
 // RunUntil starts the enforcement loop and blocks until stop is closed (the
 // Windows service's stop request; a signal on Linux).
+// EveryMinute are run once a minute while the daemon runs (set before it
+// starts: package cli adds the accountability partner's sending).
+var EveryMinute []func(*db.DB)
+
 func RunUntil(stop <-chan struct{}) error {
 	database, err := db.OpenDB(db.ResolveDBPath())
 	if err != nil {
@@ -106,6 +110,19 @@ func RunUntil(stop <-chan struct{}) error {
 		defer check.Stop()
 		for now := range check.C {
 			enforce.CheckClock(database, now)
+		}
+	}()
+
+	// Work other packages hang on the daemon (the accountability partner's
+	// sending, §4.15), once a minute.
+	go func() {
+		defer reportCrash(database)
+		minute := time.NewTicker(time.Minute)
+		defer minute.Stop()
+		for range minute.C {
+			for _, f := range EveryMinute {
+				f(database)
+			}
 		}
 	}()
 

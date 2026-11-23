@@ -1,7 +1,7 @@
-# KC9K account and cross-device sync
+# KC9K account, cross-device sync, accountability partner
 
-- Covers: `internal/cloud/` (client, `cloudtest/` fake), `cli/sync.go`, `db/syncclear.go`, `cloud/supabase/schema.sql`
-- SPEC: §4.14, principle 6, §6 2026-11-23 (Supabase)
+- Covers: `internal/cloud/` (client, `partner.go`, `cloudtest/` fake), `cli/sync.go`, `cli/partner.go`, `db/syncclear.go`, `db/partner.go`, `cloud/supabase/schema.sql`, `ci/cloudfake/`
+- SPEC: §4.14, §4.15, principle 6, §6 2026-11-23 (Supabase)
 - Connects to: [db-project](db-project.md) (the setup file is a backup, `buildProject`), [locks](locks.md), [windows](windows.md) (commands run in the service)
 
 ## Cloud (`internal/cloud/`)
@@ -63,3 +63,37 @@
 - Tests: `cloud/cloud_test.go`, `cli/sync_test.go` (two devices on two
   databases, one fake), `weakening_audit_test.go` (download over a lock
   set here).
+
+## Accountability partner (`cli/partner.go`, `cloud/partner.go`, §4.15)
+
+- Cloud tables (schema.sql, RLS): `partners` (owner, partner_email,
+  partner_id, invited/active; the user reads own, the invited email reads
+  theirs, only that email accepts as itself; either side deletes),
+  `partner_messages` (report/alert/password; sent by the user; read by
+  the user except passwords, and by active partners: `active_partner()`),
+  `unlock_requests` (pending → approved/denied by a partner → used by the
+  user, secret cleared), `heartbeats` (user, device, seen_at). Email: the
+  cloud's job (owner step), `cloud.Mailer`; `cloudtest` records `Mail`.
+- Local: `db/partner.go` outbox `partner_outbox` (≤ 500), queued only
+  while setting `partner.active` (refreshed from the cloud by `partner`,
+  every 30 min by the daemon); `PartnerAlert` drops the same alert within
+  10 min. Alerts: `stop`, `unlock` (and an unlock break), `block remove`,
+  bypass prevention step (`enforce/nepsis.go`), every `EventTamper`
+  (`db.RecordEventFor`), `prepare-uninstall` (sent at once).
+- `partnerFlush`: heartbeat (10 min), partners (30 min), report when due
+  (`partner.reports` daily/weekly(default)/off, `partner.report.last`;
+  first report a period after the first send; `partnerReport`: top sites
+  and apps, times blocked, refused attempts and tamper events), outbox.
+  Daemon: `daemon.EveryMinute` (`partnerTick`, quiet when signed out).
+- Held passwords (`--partner-holds` on `start`, `password set`):
+  `partnerHeldPassword` makes 16 letters, sends them (kind password,
+  target `block:<name>` / `settings`) before locking, needs an active
+  partner. `partner request` → partner `approve` (the newest password the
+  user sent for that target) / `deny` → `partner unlock`: block via
+  `unlock` with it on stdin (settings password asked first), settings
+  password removed if it matches; request marked used, alert.
+- Weakening (`gatePartnerWeakening`: settings password, `refused()` while
+  `AnyLock`): `partner remove` of an active partner (told first),
+  `partner reports` less often. Free: invite, accept, leave, more reports.
+- GTK: Account page section ([gui](gui.md)). Tests:
+  `TestAccountabilityPartner`, weakening audit, `ci/gui_account_smoke.py`.

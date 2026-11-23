@@ -536,6 +536,7 @@ var blockRemoveCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Block '%s' removed successfully.\n", name)
+		database.PartnerAlert(fmt.Sprintf("Block '%s' was deleted", name), "")
 		return nil
 	},
 }

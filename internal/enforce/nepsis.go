@@ -182,6 +182,7 @@ func checkNepsis(d *db.DB, now time.Time, scope string, n db.Nepsis) (r judgemen
 	why := fmt.Sprintf("%s stopped %d things within %s (step %d of %d): %s.",
 		who, count, fmtMinutes(step.Minutes), fired+1, len(n.Steps), describeActions(step))
 	log.Printf("nepsis: %s", why)
+	d.PartnerAlert("Bypass prevention: step "+fmt.Sprint(fired+1)+" fired", why) // §4.15
 	notifyDesktop("Killer Chicken 9000: bypass prevention", why)
 	for _, a := range step.Actions {
 		if a.Kind == db.ConsequenceCloseTab {

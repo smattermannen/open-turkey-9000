@@ -45,7 +45,7 @@ its bypass prevention).
 | 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
 | 2.11 | One-click installer: `.deb` built (clean Mint VM left), MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, vm, owner |
 | 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere (Windows, Linux: waiting for 2.17 and Mozilla's signature) | §3.13, §4.10 | browsers, windows-layers | agent, owner, win-vm |
-| 2.13 | Accountability partner | §4.15 | — | agent |
+| 2.13 | Accountability partner: email provider, Windows GUI, more lock kinds | §4.15 | sync | owner, agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
 | 2.15 | Search results from blacklisted addresses: the engines' real pages | R-PAGE-2 | extension | box |
 | 2.16 | "Show dark web pages while dark mode is on": real sites, LibreWolf's window and Chrome on the desktop | §4.10 | circadian, browsers | box |
@@ -196,7 +196,7 @@ Only rows not fully built.
 | §4.11 One-click installer, every platform | Partial | `2.11` |
 | §3.13 Chrome, Edge, Firefox, Bing on every platform | Partial | `2.12` |
 | §4.14 Cross-device sync | Partial | `2.10` |
-| §4.15 Accountability partner | Not built | `2.13` |
+| §4.15 Accountability partner | Partial | `2.13` |
 | §4.16 Website | Not built | `2.14` |
 
 ## 2. Next features (after §0)
@@ -343,9 +343,28 @@ Only rows not fully built.
     Web Store extensions by policy anyway).
   Done when: on the laptop Chrome and Edge get the extension by policy,
   pinned, the guard sees their check-ins (W2).
-- **2.13 Accountability partner** (L; §4.15): Not built. Needs the KC9K
-  account (`2.10`): invites, reports, alerts, partner holding password
-  locks and the settings password, unlock approval; no screenshots.
+- **2.13 Accountability partner** (L; §4.15): Partial: CLI, cloud and
+  GTK built against the fake (`notes/sync.md` Accountability partner):
+  invite/accept/leave/remove, reports daily/weekly/off, alerts (bypass
+  prevention, block switched off, unlocked, deleted, tamper events,
+  uninstall), heartbeat, password locks and the settings password held by
+  partners (`--partner-holds`), unlock requests approved or denied;
+  removing a partner and fewer reports weakening (audit, `refused()`).
+  To do, owner:
+  - [ ] Email: pick a provider (e.g. Resend, Postmark), add its key as a
+    Supabase secret, deploy an Edge Function sending each new
+    `partners`, `partner_messages` and `unlock_requests` row to the
+    partner(s) (`cloud.Mailer` is the interface; the fake records), and
+    database webhooks on those inserts; a scheduled function alerting
+    partners of a device not heard from for a day (`heartbeats`).
+  - [ ] Run the new part of `cloud/supabase/schema.sql`.
+  To do, agent:
+  - [ ] Windows GUI partner section (session B), Android (N-items).
+  - [ ] `--partner-holds` for browser and tamper setting locks, mode and
+    hotkey password locks, and in the GTK lock picker (now: CLI `start`
+    and `password set`).
+  - [ ] "KC9K stopped": an alert when the daemon is stopped by hand (now
+    only "not heard from", the cloud's).
 - **2.14 Website** (M; §4.16): Not built. Content per §4.16; hosting the
   owner's choice when built.
 - **2.15 Search results from blacklisted addresses** (M; R-PAGE-2): Built
@@ -598,6 +617,15 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- DECIDED (By claude) 2026-11-23 (`2.13`): a partner holds a password by
+  KC9K making it up (`--partner-holds`) and sending it only to the active
+  partners through the cloud (row-level security: the user's own account
+  can't read it back); approving an unlock request hands it over for one
+  use (`partner unlock`: a block's password lock unlocked, or the settings
+  password removed). Removing an active partner and fewer reports are
+  weakening (settings password, refused while anything is locked; the
+  partner is told first); an invitation not accepted yet goes freely; a
+  partner may always leave. Reports default weekly. Owner may overturn.
 - DECIDED (By claude) 2026-11-23 (`2.12`): on Linux Edge waits for the
   Chrome Web Store listing as on Windows, though Linux Chrome takes KC9K's
   own `.crx`: whether Edge on Linux force-installs an extension from

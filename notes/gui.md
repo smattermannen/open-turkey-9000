@@ -69,4 +69,10 @@
   Download all: `sync download --dry-run` first, its lines and the locks
   it sets in one confirmation (R-LOCK-12), then `sync download --yes`
   (`--no-confirm-ok` after the monk tick if the CLI asks).
-  `ci/gui_account_smoke.py` against `ci/cloudfake` (`cloudtest` served).
+  Accountability partner section (§4.15, signed in only): `partner
+  --json` and `partner requests --json` read with the status; partners
+  with Remove… (asks), invitations with Accept/Decline, partnered with
+  Leave…, requests with Approve/Deny (others') or Unlock (own, approved);
+  invite, reports combo, Ask to unlock… (a block or settings), Inbox…,
+  Send now. `ci/gui_account_smoke.py` against `ci/cloudfake` (`cloudtest`
+  served).

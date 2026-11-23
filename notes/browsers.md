@@ -48,7 +48,12 @@ with `ExtensionHeader` (`/usage`: `X-KC9K-Usage`), no CORS, no secret
   apps (Thunderbird, Spotify, Steam) aren't browsers.
 - Block unsupported browsers on: guard always runs; closes at once every
   browser whose exe isn't a root-owned package file of `SupportedBrowsers`
-  (`supported.go`: LibreWolf, Chrome, Chromium); supported ones after 60 s
+  (`supported.go`: LibreWolf, Chrome, Chromium; Edge
+  `/opt/microsoft/msedge/msedge` and Firefox `/usr/lib/firefox*`,
+  `/opt/firefox` only once not `Waiting`: Edge `chrome-web-store` until
+  `chromeStoreReady`, Firefox `mozilla-signature` until
+  `webext.MozillaSigned`; until then `Found`, not `Installed`, policies
+  as any browser, never installed by KC9K, 2.12, `TestEdgeFirefoxWaiting`); supported ones after 60 s
   without check-in. Nothing closed without a supported browser installed
   (`status` says so).
 - `kc9k browsers` lists them with check-in (`extension.last_checkin.<id>`;
@@ -57,7 +62,8 @@ with `ExtensionHeader` (`/usage`: `X-KC9K-Usage`), no CORS, no secret
   `/etc/apt/keyrings/google-chrome.asc`, amd64 only). Firefox needs signed
   extensions; Brave/Edge/Opera/Vivaldi not set up. gui-state/`browsers`
   `waiting` (2.12): what a found browser waits for before it can get the
-  extension (`chrome-web-store`, `mozilla-signature`; Windows only).
+  extension (`chrome-web-store`, `mozilla-signature`); GTK says so
+  (`browser_status`), no Install button for a waiting one.
 - Mozilla-signed copy (`webext/signed.go`, 2.12, SPEC §7): a file
   `webext/signed/kc9k-<version>.xpi` carrying `META-INF/mozilla.rsa` and
   exactly the embedded files is installed instead of the packed `.xpi`

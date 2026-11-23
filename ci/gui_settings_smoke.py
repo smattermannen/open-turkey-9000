@@ -87,12 +87,19 @@ check("unsupported-browsers" in win.setting_locks and "strict" in win.setting_lo
 # Browsers list (§4.10): every supported browser, installed or not, Install
 # shown only where missing. Never clicked: it would install for real.
 ids = [b["id"] for b in win.state["browsers"]]
-check(ids == ["librewolf", "chrome", "chromium"], "supported browsers listed: " + ", ".join(ids))
+check(ids == ["librewolf", "chrome", "chromium", "edge", "firefox"], "supported browsers listed: " + ", ".join(ids))
 for b in win.state["browsers"]:
     status, install = win.browser_rows[b["id"]]
-    check(status.get_text().startswith("Installed" if b["installed"] else "Not installed"),
+    check(status.get_text().startswith("Installed" if b["installed"] or b.get("found") else "Not installed"),
           f"{b['name']} status: {status.get_text()}")
-    check(install.get_visible() == (not b["installed"]), f"{b['name']} Install button only when missing")
+    check(install.get_visible() == (not b["installed"] and not b.get("waiting")),
+          f"{b['name']} Install button only when missing and ready")
+# 2.12: Edge and Firefox wait (the listing, Mozilla's signature).
+waits = {b["id"]: b.get("waiting") for b in win.state["browsers"]}
+check(waits.get("edge") == "chrome-web-store" and waits.get("firefox") in ("mozilla-signature", None),
+      f"Edge and Firefox wait: {waits}")
+check("Mozilla's signature" in gui.browser_status({"found": True, "waiting": "mozilla-signature"}),
+      "a found Firefox says what it waits for")
 check(gui.browser_status({"installed": True, "checkin_seconds": 5}) == "Installed. Extension working.", "fresh check-in")
 check("not seen" in gui.browser_status({"installed": True, "checkin_seconds": -1}), "never checked in")
 # A fresh setup: only what KC9K always did is on (§4.10, 2026-11-21 By Opus).

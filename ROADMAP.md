@@ -44,7 +44,7 @@ its bypass prevention).
 | 2.9 | Tamper settings: LibreWolf parts (box); `ci/tamper_vm_test.sh` (never run) | §4.10 | browsers, extension, install | box, vm |
 | 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
 | 2.11 | One-click installer: `.deb` built (clean Mint VM left), MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, vm, owner |
-| 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere (Windows: waiting for 2.17 and Mozilla's signature) | §3.13, §4.10 | browsers, windows-layers | agent, owner, win-vm |
+| 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere (Windows, Linux: waiting for 2.17 and Mozilla's signature) | §3.13, §4.10 | browsers, windows-layers | agent, owner, win-vm |
 | 2.13 | Accountability partner | §4.15 | — | agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
 | 2.15 | Search results from blacklisted addresses: the engines' real pages | R-PAGE-2 | extension | box |
@@ -308,8 +308,12 @@ Only rows not fully built.
   Files and the Microsoft Store's) recognised, given policies and guarded,
   waiting only for a Mozilla-signed `.xpi` (`webext/signed/`, SPEC §7
   "Signing the extension for Firefox", owner); Bing is Edge there (§5);
-  gui-state `waiting` says which. Not built: Firefox and Edge on Linux,
-  every browser on Android (IronFox only), the Bing app on Android.
+  gui-state `waiting` says which. Linux (`notes/browsers.md`): Edge and
+  Firefox found, given policies and guarded as unsupported, waiting the
+  same way (Edge for the listing, Firefox for Mozilla's signature); GTK
+  says which. Not built: every browser on Android (IronFox only), the Bing
+  app on Android. Unchecked (box): a real Firefox and Edge on Mint
+  closed by the guard while they wait.
   Unchecked (win-vm, `ci/windows_vm_test.ps1`): Firefox and the Store's
   Firefox obeying, the guard closing a waiting Firefox.
 - **2.17 Chrome Web Store listing** (S agent, owner's review wait;
@@ -320,7 +324,10 @@ Only rows not fully built.
   (`blocker.ChromeStoreExtensionID` empty: they get none, W2). Linux keeps
   its own signed `.crx` from the daemon.
   To do, agent:
-  - [ ] With the ID: set `ChromeStoreExtensionID`; release step uploading
+  - [ ] With the ID: set `ChromeStoreExtensionID` (Windows) and Linux's
+    `chromeStoreReady` with an Edge `kc9k-setup.json`
+    (`/etc/opt/edge/policies/managed/`, store ID and update URL, as
+    `chromeSetupFor` on Windows); release step uploading
     each new extension version (Chrome Web Store API; owner's OAuth client
     as GitHub secrets).
   To do, owner:
@@ -591,6 +598,12 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- DECIDED (By claude) 2026-11-23 (`2.12`): on Linux Edge waits for the
+  Chrome Web Store listing as on Windows, though Linux Chrome takes KC9K's
+  own `.crx`: whether Edge on Linux force-installs an extension from
+  outside its stores is unchecked, and one way for Edge everywhere is
+  simpler. KC9K installs neither Edge nor Firefox (`browsers install`
+  offers LibreWolf, Chrome, Chromium). Owner may overturn.
 - DECIDED (By claude) 2026-11-23 (`2.10`): every tamper protection
   setting and the extension's grace are in the project file. A project
   import (a backup too) only turns protection on and the grace only

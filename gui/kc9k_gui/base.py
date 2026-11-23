@@ -330,6 +330,12 @@ def describe_setting_lock(info):
 
 def browser_status(browser):
     """A supported browser's line in the Browsers list (gui-state 'browsers')."""
+    waiting = {"chrome-web-store": "the extension's Chrome Web Store listing",
+               "mozilla-signature": "Mozilla's signature on the extension"}.get(browser.get("waiting") or "")
+    if waiting and browser.get("found"):
+        return f"Installed. Gets the extension once there is {waiting}; until then it is closed as a browser without it."
+    if waiting:
+        return f"Not installed. Supported once there is {waiting}."
     if not browser.get("installed"):
         return "Not installed."
     seconds = browser.get("checkin_seconds", -1)

@@ -449,8 +449,6 @@ Static findings still open (code read, not seen on the laptop):
 - The challenge window (`winagent/challenge_windows.go`) is a plain Win32
   window: now a fixed frame (close only) with a background brush; still no
   manifest in `kc9k.exe` (classic controls, not DPI-aware).
-- `gui-state` changes every read while a countdown runs (each read
-  redraws the page shown).
 
 Stability (blocks every other Windows GUI test):
 

@@ -165,18 +165,19 @@ func TestAutoInstallLibreWolfWaitsForARunningUnit(t *testing.T) {
 	dir := t.TempDir()
 	f := &fakeLibreWolfAuto{active: 4}
 	useFakeLibreWolfAuto(t, f)
-	go func() {
-		for {
-			f.mu.Lock()
-			if f.active == 0 {
-				f.present = true
-				f.mu.Unlock()
-				return
-			}
-			f.mu.Unlock()
-			time.Sleep(time.Millisecond)
+	// The unit installs LibreWolf by the time it reads as ended.
+	libreWolfUnitActive = func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if f.active == 0 {
+			return false
 		}
-	}()
+		f.active--
+		if f.active == 0 {
+			f.present = true
+		}
+		return true
+	}
 	runAuto(t, dir, f)
 	if len(f.starts) != 0 {
 		t.Fatalf("started a second unit: %q", f.starts)

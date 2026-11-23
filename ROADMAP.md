@@ -272,13 +272,16 @@ Only rows not fully built.
   package installer, one click Install). Windows: the signed MSI (W7).
   Both on GitHub Releases, later the website (`2.14`). Android: open (SPEC
   §7).
+  Linux built (`notes/install.md`): the `.deb` does all `install.sh` does,
+  LibreWolf by the daemon after install (retried every 30 min);
+  `linux-release.yml` (tag → `.deb` + `.sha256` on the release, checked
+  first); CI job `deb` runs `ci/deb_install_check.sh` on every push.
+  Unchecked: the first green `deb` job.
   To do, agent (Linux):
-  - [ ] `.deb` does all `install.sh` does: LibreWolf too (postinst can't
-    run apt: daemon installs it once on first start, retried later).
-  - [ ] Release workflow: tag `v1.2.3` builds `.deb` (amd64) + `.sha256`,
-    attaches both to the GitHub Release (as `windows-release.yml`).
   - [ ] Installed by double-click on a clean Mint VM: daemon running, GUI
     in the menu, LibreWolf and Chrome get the extension (vm).
+  - [ ] `gui/kc9k.desktop`'s `Comment` is Swedish (principle 8: English
+    only); shown in Mint's menu (session B's area, `gui/`).
   To do, agent (Windows):
   - [ ] MSI sets up the extension in Chrome and Edge (needs `2.17`'s ID).
   To do, owner:
@@ -536,6 +539,20 @@ Still open from the report (built and in CI; what was built is in
   curve in Go, C#, GTK. Left: the owner's look on the laptop.
 
 ## 5. Proposed, not agreed
+
+- DECIDED (By claude) 2026-11-23 (`2.11`): the daemon makes sure of
+  LibreWolf once per install, not once ever: `install.sh` and the `.deb`
+  clear the marker at every install, as `install.sh` already tried
+  LibreWolf at every run; a LibreWolf the user removes stays removed until
+  the next install (principle 7: no reinstalling behind the user's back).
+  `KC9K_NO_LIBREWOLF=1` skips it for both. Owner may overturn.
+- DECIDED (By claude) 2026-11-23 (`2.11`): Linux release file
+  `KillerChicken9000-<version>-amd64.deb` (as the MSI's name); a
+  pre-release `v1.2.3-beta.1` gets Debian version `1.2.3~beta.1` (sorts
+  before `1.2.3`; `kc9k version` says that); the Linux release job waits
+  for the Windows one on the same tag and adds its files to that release
+  (`windows-release.yml` fails on an existing release and is session B's).
+  Owner may overturn.
 
 - PROPOSED 2026-11-23 (`2.10`): the setup file holds password hashes and
   lock state. Encrypt it on the device with a passphrase only the user

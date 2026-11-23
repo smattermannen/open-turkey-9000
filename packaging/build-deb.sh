@@ -1,8 +1,9 @@
 #!/bin/sh
 # Builds a .deb of Killer Chicken 9000 (§4.11): kc9k_<version>_<arch>.deb in
-# the current folder. Same files and paths as 'make install'; the package
-# scripts do what install.sh does after copying (sudoers, database folder,
-# service), and removal runs 'kc9k-bin prepare-uninstall', which refuses
+# the current folder; `kc9k version` says <version>. Same files and paths as
+# 'make install'; the package scripts do what install.sh does after copying
+# (sudoers, database folder, service; LibreWolf is left to the daemon, see
+# postinst), and removal runs 'kc9k-bin prepare-uninstall', which refuses
 # while anything is locked (R-LOCK-9). TAGS=devmaster for a testing build.
 #
 #   sh packaging/build-deb.sh [version]
@@ -14,7 +15,8 @@ stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 
 PATH="/usr/local/go/bin:$PATH"
-(cd "$root" && CGO_ENABLED=0 go build -tags "${TAGS:-}" -o "$stage/kc9k-bin" ./cmd/kc9k)
+(cd "$root" && CGO_ENABLED=0 go build -tags "${TAGS:-}" \
+	-ldflags "-X github.com/smattermannen/kc9k/internal/cli.Version=$version" -o "$stage/kc9k-bin" ./cmd/kc9k)
 
 pkg="$stage/pkg"
 install -d "$pkg/usr/local/bin" "$pkg/usr/local/lib/kc9k-gui" "$pkg/usr/share/applications" "$pkg/etc/systemd/system" "$pkg/DEBIAN"
@@ -57,6 +59,16 @@ if [ "$1" = configure ]; then
 	fi
 	rm -f "$tmp"
 	mkdir -p /var/lib/kc9k
+	# LibreWolf: apt can't run here (dpkg holds its lock), so the daemon
+	# installs it a minute after it starts, retrying every half hour
+	# (blocker.AutoInstallLibreWolf). The marker tells it to leave LibreWolf
+	# alone: removed at every install, as install.sh tries at every run;
+	# KC9K_NO_LIBREWOLF=1 skips it, as in install.sh.
+	if [ "${KC9K_NO_LIBREWOLF:-}" = 1 ]; then
+		echo "skipped: KC9K_NO_LIBREWOLF=1 at install, $(date -Iseconds)" > /var/lib/kc9k/librewolf-auto
+	else
+		rm -f /var/lib/kc9k/librewolf-auto
+	fi
 	systemctl daemon-reload || true
 	systemctl enable kc9k.service || true
 	systemctl restart kc9k.service || true
@@ -107,5 +119,6 @@ sed -i "s/@VERSION@/$version/" "$pkg/DEBIAN/prerm"
 chmod 755 "$pkg/DEBIAN/postinst" "$pkg/DEBIAN/prerm" "$pkg/DEBIAN/postrm"
 
 out="kc9k_${version}_${arch}.deb"
-dpkg-deb --root-owner-group --build "$pkg" "$out" >/dev/null
+# xz: every dpkg reads it (Ubuntu's default, zstd, needs dpkg 1.21.18 or later).
+dpkg-deb -Zxz --root-owner-group --build "$pkg" "$out" >/dev/null
 echo "$out"

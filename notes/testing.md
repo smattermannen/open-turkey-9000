@@ -61,6 +61,17 @@
 
 ## Other commands
 
+- `ci/integration.sh` (CI `Integration tests`, after `install.sh`; changes
+  the clock, firewall, hosts: never on a computer in use): `kc9k` runs
+  through `$KC9K_BIN` under a 120 s `timeout`; the app checks run a sleeper
+  built from Go (uutils' multicall `sleep`, Ubuntu 25.10+, refuses to run
+  under another name). Locking commands take `--yes` (R-LOCK-12).
+- `ci/deb_install_check.sh <deb> [version]` (root, disposable machine: CI
+  job `deb` and `linux-release.yml` on `ubuntu-24.04`): installs the `.deb`
+  with apt, checks what `install.sh` sets up (daemon, sudo rule, wrapper,
+  GUI, extension policies), waits for the daemon's LibreWolf
+  (`LIBREWOLF_MINUTES`, default 15), removes.
+
 - Extension, Node: `node ci/match_test.js`, `node ci/background_test.js`
   (APIs stubbed: frame reports, ad trigger), `node
   ci/android_background_test.js`; Playwright Chromium (cloud only): `node

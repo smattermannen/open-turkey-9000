@@ -36,16 +36,26 @@ make install
 # --- Install LibreWolf, the browser that runs the Killer Chicken extension ---
 # Without it, wildcards, keywords, greyscale, images and web-only aren't
 # enforced in the browser. It needs the internet, so a failure (offline, say)
-# doesn't stop the installation: 'kc9k status' keeps reminding, and
-# 'kc9k browser install-librewolf' tries again. Set KC9K_NO_LIBREWOLF=1 to skip.
+# doesn't stop the installation: the daemon tries again every half hour
+# until it is installed (as after a .deb install, whose postinst can't run
+# apt), and 'kc9k browser install-librewolf' tries at once. The marker file
+# tells the daemon to leave LibreWolf alone (blocker.LibreWolfAutoFile):
+# removed here, so this install's daemon makes sure of it once. Set
+# KC9K_NO_LIBREWOLF=1 to skip, the daemon's tries included.
 echo "==> Step 3/3: Installing LibreWolf..."
+LIBREWOLF_MARKER=/var/lib/kc9k/librewolf-auto
 if [ "${KC9K_NO_LIBREWOLF:-}" = "1" ]; then
+    echo "skipped: KC9K_NO_LIBREWOLF=1 at install, $(date -Iseconds)" > "$LIBREWOLF_MARKER"
     echo "Skipped (KC9K_NO_LIBREWOLF=1)."
-elif ! /usr/local/bin/kc9k-bin browser install-librewolf; then
-    echo ""
-    echo "WARNING: LibreWolf couldn't be installed. Killer Chicken 9000 works, but"
-    echo "until LibreWolf is installed, website rules beyond plain domains aren't"
-    echo "enforced in the browser. Try again later with: kc9k browser install-librewolf"
+else
+    rm -f "$LIBREWOLF_MARKER"
+    if ! /usr/local/bin/kc9k-bin browser install-librewolf; then
+        echo ""
+        echo "WARNING: LibreWolf couldn't be installed. Killer Chicken 9000 works, but"
+        echo "until LibreWolf is installed, website rules beyond plain domains aren't"
+        echo "enforced in the browser. The daemon tries again every half hour, or"
+        echo "try now with: kc9k browser install-librewolf"
+    fi
 fi
 
 # --- Success message with usage instructions ---

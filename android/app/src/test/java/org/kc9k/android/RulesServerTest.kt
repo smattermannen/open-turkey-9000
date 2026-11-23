@@ -7,21 +7,23 @@ import org.junit.Before
 import org.junit.Test
 import java.net.Socket
 
-/** Talks HTTP to RulesServer on a spare port, the way the extension does. */
+/**
+ * Talks HTTP to RulesServer on a port the system picks, the way the extension does. A fixed
+ * port (47699, in Linux's ephemeral range) was sometimes taken on CI runners (A17).
+ */
 class RulesServerTest {
-    private val port = 47699
     private lateinit var server: RulesServer
 
     @Before fun up() {
         ExtensionStatus.last = null
-        server = RulesServer({ "{\"lists\":[]}" }, { byteArrayOf(80, 75, 3, 4) }, port)
+        server = RulesServer({ "{\"lists\":[]}" }, { byteArrayOf(80, 75, 3, 4) }, 0)
         server.start()
         assertTrue(server.awaitListening())
     }
 
     @After fun down() = server.stop()
 
-    private fun request(raw: String): Pair<Int, String> = Socket("127.0.0.1", port).use { s ->
+    private fun request(raw: String): Pair<Int, String> = Socket("127.0.0.1", server.localPort).use { s ->
         s.getOutputStream().write(raw.toByteArray()); s.getOutputStream().flush()
         val text = s.getInputStream().readBytes().decodeToString()
         text.substringAfter(" ").substringBefore(" ").toInt() to text.substringAfter("\r\n\r\n")

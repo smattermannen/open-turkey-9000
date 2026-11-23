@@ -49,6 +49,9 @@ const (
 	OpConfirm    = "confirm"    // ConfirmArgs → bool
 	OpHotkeys    = "hotkeys"    // []Hotkey: register these, drop the rest
 	OpChallenge  = "challenge"  // ChallengeArgs → the key events, one per line
+	// OpChallengeCancel closes the open challenge window (as cancelled):
+	// the command that asked for it went away.
+	OpChallengeCancel = "challenge-cancel"
 
 	EventHotkey = "hotkey" // data: the hotkey's ID
 )

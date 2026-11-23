@@ -372,7 +372,7 @@ public class CliTests
     public void BrowserFoundButNotSupported()
     {
         Assert.Equal("Not installed.", Words.BrowserStatus(new BrowserInfo { Id = "edge" }));
-        Assert.Contains("can't give it the extension yet", Words.BrowserStatus(new BrowserInfo { Id = "edge", Found = true }));
+        Assert.Contains("Chrome Web Store", Words.BrowserStatus(new BrowserInfo { Id = "edge", Found = true, Waiting = "chrome-web-store" }));
         Assert.StartsWith("Installed. Extension working", Words.BrowserStatus(new BrowserInfo { Id = "chrome", Installed = true, Found = true, CheckinSeconds = 5 }));
     }
 

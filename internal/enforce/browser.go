@@ -809,6 +809,10 @@ func enforceBrowser(d *db.DB) {
 		DisableDevTools: BrowserOn(d, "block-devtools") && !blocker.RemoteControlAllowed(),
 		DisablePrivate:  BrowserOn(d, "no-private") || PrivateTamperOn(d)}
 	xpi, err := webext.Pack()
+	if signed, ok := webext.SignedXPI(); ok {
+		// Mozilla's signed copy (release Firefox needs it; LibreWolf takes it too).
+		xpi, err = signed, nil
+	}
 	if err == nil {
 		err = blocker.EnsureFile(webext.Path(), xpi)
 	}

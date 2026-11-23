@@ -156,8 +156,8 @@ Not fixed by `SPEC.md`; the code is the truth.
   (`ScrollToTop`); Blocks pressed in a block returns to the cards.
 - Supported browsers (W30, 2.12): every entry of `browsers` is a row
   (name, whether its extension runs); `found` but not `installed` =
-  unsupported, no Install button (the Chrome Web Store named only for
-  Chrome and Edge); Install shows `browsers install`'s words as "Getting
+  unsupported, no Install button, saying what KC9K waits for (Core's
+  `waiting`: the Chrome Web Store listing, Mozilla's signature); Install shows `browsers install`'s words as "Getting
   NAME", not a refusal (`Controller.Run(refusalTitle:)`).
 - Overview (W31, §4.1): each block on says its break and bypass prevention
   ladder position (`nepsis_level`, `nepsis_count`); Device line the global

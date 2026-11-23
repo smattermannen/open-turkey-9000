@@ -21,9 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 
@@ -60,6 +62,22 @@ var (
 	procSelectObject            = gdi32.NewProc("SelectObject")
 	procFillRect                = user32.NewProc("FillRect")
 	procGetSysColorBrush        = user32.NewProc("GetSysColorBrush")
+	procGetDpiForWindow         = user32.NewProc("GetDpiForWindow")
+	procSetWindowPos            = user32.NewProc("SetWindowPos")
+	procCreateFontW             = gdi32.NewProc("CreateFontW")
+	procDeleteObject            = gdi32.NewProc("DeleteObject")
+)
+
+// The window's size and text at 96 DPI (100 %). kc9k.exe is per-monitor
+// DPI aware (its manifest, cmd/kc9k/kc9k.manifest): the window scales
+// these to its screen and again when moved to another (WM_DPICHANGED).
+const (
+	challengeWidth   = 900
+	challengeHeight  = 560
+	challengeMargin  = 16
+	challengeFontPx  = 16
+	challengeFont    = "Consolas"
+	challengeBaseDPI = 96
 )
 
 type wndClassEx struct {
@@ -119,6 +137,8 @@ type challengeState struct {
 	events []string
 	done   bool
 	hwnd   uintptr
+	dpi    uint32
+	font   uintptr
 }
 
 var (
@@ -131,7 +151,19 @@ var (
 	className    = windows.StringToUTF16Ptr("KC9KChallenge")
 )
 
+// challengeHwnd is the open challenge window, 0 when none (read from other
+// goroutines: OpChallengeCancel).
+var challengeHwnd atomic.Uintptr
+
 func init() {
+	Register(OpChallengeCancel, func(json.RawMessage) (any, error) {
+		if h := challengeHwnd.Load(); h != 0 {
+			const wmClose = 0x0010
+			procPostMessageW.Call(h, wmClose, 0, 0)
+			return true, nil
+		}
+		return false, nil
+	})
 	Register(OpChallenge, func(raw json.RawMessage) (any, error) {
 		var a ChallengeArgs
 		if err := json.Unmarshal(raw, &a); err != nil {
@@ -154,6 +186,36 @@ func (c *challengeState) finish(line string) {
 	procPostQuitMessage.Call(0)
 }
 
+// windowDPI is the DPI of the screen hwnd is on (96 where Windows is too
+// old to say).
+func windowDPI(hwnd uintptr) uint32 {
+	if procGetDpiForWindow.Find() != nil {
+		return challengeBaseDPI
+	}
+	if d, _, _ := procGetDpiForWindow.Call(hwnd); d != 0 {
+		return uint32(d)
+	}
+	return challengeBaseDPI
+}
+
+// scale turns a size at 96 DPI into pixels at dpi.
+func scale(px int, dpi uint32) int32 {
+	return int32((px*int(dpi) + challengeBaseDPI/2) / challengeBaseDPI)
+}
+
+// setDPI makes the font for dpi (a fixed-width one, so pages line up as in
+// the console).
+func (c *challengeState) setDPI(dpi uint32) {
+	c.dpi = dpi
+	if c.font != 0 {
+		procDeleteObject.Call(c.font)
+	}
+	const fwNormal, defaultCharset, cleartypeQuality, fixedPitchModern = 400, 1, 5, 1 | 0x30
+	face := windows.StringToUTF16Ptr(challengeFont)
+	h := -scale(challengeFontPx, dpi)
+	c.font, _, _ = procCreateFontW.Call(uintptr(h), 0, 0, 0, fwNormal, 0, 0, 0, defaultCharset, 0, 0, cleartypeQuality, fixedPitchModern, uintptr(unsafe.Pointer(face)))
+}
+
 func messageTime() int64 {
 	t, _, _ := procGetMessageTime.Call()
 	return int64(uint32(t))
@@ -172,6 +234,7 @@ func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		wmKeyDown = 0x0100
 		wmChar    = 0x0102
 		wmInput   = 0x00FF
+		wmDPI     = 0x02E0
 		vkInsert  = 0x2D
 		vkShift   = 0x10
 		vkControl = 0x11
@@ -182,6 +245,13 @@ func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		return r
 	}
 	switch msg {
+	case wmDPI:
+		// Moved to a screen with another scale: the same size at its scale.
+		c.setDPI(uint32(wParam & 0xFFFF))
+		const swpNoMove, swpNoZOrder, swpNoActivate = 0x2, 0x4, 0x10
+		procSetWindowPos.Call(hwnd, 0, 0, 0, uintptr(scale(challengeWidth, c.dpi)), uintptr(scale(challengeHeight, c.dpi)), swpNoMove|swpNoZOrder|swpNoActivate)
+		procInvalidateRect.Call(hwnd, 0, 1)
+		return 0
 	case wmInput:
 		var size uint32 = 64
 		buf := make([]byte, 64)
@@ -238,10 +308,15 @@ func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		const colorWindow = 5
 		brush, _, _ := procGetSysColorBrush.Call(colorWindow)
 		procFillRect.Call(hdc, uintptr(unsafe.Pointer(&r)), brush)
-		const ansiFixedFont = 11
-		font, _, _ := procGetStockObject.Call(ansiFixedFont)
-		procSelectObject.Call(hdc, font)
-		r.left, r.top, r.right = r.left+16, r.top+16, r.right-16
+		font := c.font
+		if font == 0 {
+			const ansiFixedFont = 11
+			font, _, _ = procGetStockObject.Call(ansiFixedFont)
+		}
+		old, _, _ := procSelectObject.Call(hdc, font)
+		defer procSelectObject.Call(hdc, old)
+		m := scale(challengeMargin, c.dpi)
+		r.left, r.top, r.right = r.left+m, r.top+m, r.right-m
 		const dtWordBreak, dtNoPrefix = 0x10, 0x800
 		page := ""
 		if c.page < len(c.args.Pages) {
@@ -276,6 +351,10 @@ func wrapText(s string, width int) string {
 	return strings.Join(lines, "\r\n")
 }
 
+// RunChallenge is OpChallenge run in this process (cmd/kc9k's manifest
+// test opens it under kc9k.exe's manifest).
+func RunChallenge(a ChallengeArgs) (string, error) { return runChallenge(a) }
+
 // runChallenge opens the window, runs it until the last page or a cancel,
 // and returns the events.
 func runChallenge(a ChallengeArgs) (string, error) {
@@ -304,24 +383,47 @@ func runChallenge(a ChallengeArgs) (string, error) {
 			return
 		}
 		challengeCur = state
-		defer func() { challengeCur = nil }()
+		// Cleared before the result is sent (below), never by a deferred
+		// call: runChallenge returns on the result and the next challenge
+		// may open at once, and a late clear would leave its window
+		// ignoring keys, or OpChallengeCancel unable to close it.
 		title := windows.StringToUTF16Ptr("Killer Chicken 9000: unlock challenge")
 		// A fixed frame with a close button only (closing cancels): no
 		// minimise or maximise, so it never passes for an empty app window.
-		const wsCaption, wsSysMenu, wsVisible, wsExTopmost = 0x00C00000, 0x00080000, 0x10000000, 0x8
+		// Made hidden at its 100 % size, then sized for its screen's scale
+		// and shown.
+		const wsCaption, wsSysMenu, wsExTopmost = 0x00C00000, 0x00080000, 0x8
 		const cwUseDefault = 0x80000000
 		hwnd, _, err := procCreateWindowExW.Call(wsExTopmost, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(title)),
-			wsCaption|wsSysMenu|wsVisible, cwUseDefault, cwUseDefault, 900, 560, 0, 0, 0, 0)
+			wsCaption|wsSysMenu, cwUseDefault, cwUseDefault, challengeWidth, challengeHeight, 0, 0, 0, 0)
 		if hwnd == 0 {
+			log.Printf("agent: challenge window: CreateWindowEx: %v", err)
+			challengeCur = nil
 			result <- err
 			return
 		}
 		state.hwnd = hwnd
+		state.setDPI(windowDPI(hwnd))
+		log.Printf("agent: challenge window %#x open (%d pages, %d DPI)", hwnd, len(a.Pages), state.dpi)
+		challengeHwnd.Store(hwnd)
+		closed := func() {
+			challengeHwnd.CompareAndSwap(hwnd, 0)
+			if challengeCur == state {
+				challengeCur = nil
+			}
+			if state.font != 0 {
+				procDeleteObject.Call(state.font)
+				state.font = 0
+			}
+		}
+		const swpNoMove, swpNoZOrder, swpNoActivate = 0x2, 0x4, 0x10
+		procSetWindowPos.Call(hwnd, 0, 0, 0, uintptr(scale(challengeWidth, state.dpi)), uintptr(scale(challengeHeight, state.dpi)), swpNoMove|swpNoZOrder|swpNoActivate)
 		// Every key also as Raw Input, to tell typed keys from injected.
 		const ridevInputSink = 0x100
 		dev := rawInputDevice{usagePage: 1, usage: 6, flags: ridevInputSink, target: hwnd}
 		if r, _, err := procRegisterRawInputDevices.Call(uintptr(unsafe.Pointer(&dev)), 1, unsafe.Sizeof(dev)); r == 0 {
 			procDestroyWindow.Call(hwnd)
+			closed()
 			result <- fmt.Errorf("raw input: %w", err)
 			return
 		}
@@ -347,6 +449,8 @@ func runChallenge(a ChallengeArgs) (string, error) {
 			procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 		}
 		procDestroyWindow.Call(hwnd)
+		closed()
+		log.Printf("agent: challenge window %#x closed (%d events, page %d of %d)", hwnd, len(state.events), state.page, len(a.Pages))
 		result <- nil
 	}()
 	if err := <-result; err != nil {

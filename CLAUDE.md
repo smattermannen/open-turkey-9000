@@ -37,6 +37,25 @@ sudo ./install.sh     # binary, wrapper, sudoers, systemd unit, DB, LibreWolf
 - Testing anything that locks, blocks or restarts the daemon: read
   [notes/testing.md](notes/testing.md) first; the owner's laptop is used for real.
 
+## CI and long tasks
+
+- Local gate first: `make check`, and `windows/gui/check.sh` for
+  `windows/` (compiles the GUI and its tests on Linux, ~45 s). Never use
+  CI to find compile errors.
+- While fixing, run only the tests you changed: `-run` / `--filter`
+  locally, in CI a `workflow_dispatch` run with the workflow's `filter`
+  input (5–10 min; the full Windows GUI run is ~35 min). Push for a full
+  run only once the filtered run is green; one full run at the end.
+- Before CI on Windows, read "CI runners" in
+  [notes/testing.md](notes/testing.md): don't rediscover the runner.
+- Cancel your own superseded runs; one live run per branch.
+- One step per merge: each step merged to main as it goes green (Git
+  below), never held on the branch for one final merge.
+- Status messages only at milestones (a step merged, blocked, done).
+- Keep each failing UI test's last screenshot and the real CLI's logged
+  answers; read them before rerunning.
+- Never drop, skip or weaken a test to save time.
+
 ## Shared rules
 
 - `enforce` is the single source of truth: active blocks → unioned layer
@@ -88,6 +107,7 @@ sections, connected notes.
 | [gui-windows](notes/gui-windows.md) | Windows GUI (C#, WinUI 3), UI Automation tests |
 | [install-windows](notes/install-windows.md) | Windows MSI (WiX), signing |
 | [db-project](notes/db-project.md) | SQLite DB, project files, backup |
+| [sync](notes/sync.md) | KC9K account, cross-device sync (Supabase) |
 | [windows](notes/windows.md) | Windows Go side: platform split, CI, service, session agent, pipe |
 | [windows-layers](notes/windows-layers.md) | Windows web layers, apps, desktop, places, circadian |
 | [windows-tamper](notes/windows-tamper.md) | Windows tamper protection, strict mode, no-escape, firmware lock |

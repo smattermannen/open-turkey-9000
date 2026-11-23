@@ -348,8 +348,12 @@ public static class Words
     {
         if (!b.Installed && b.Found)
             return "Installed, but Killer Chicken 9000 can't give it the extension yet" +
-                   (b.Id is "chrome" or "edge" ? " (its Chrome Web Store listing doesn't exist yet)" : "") +
-                   ", so it counts as an unsupported browser: closed while anything is locked.";
+                   (b.Waiting switch
+                   {
+                       "chrome-web-store" => " (its Chrome Web Store listing doesn't exist yet)",
+                       "mozilla-signature" => " (Mozilla hasn't signed it yet)",
+                       _ => "",
+                   }) + ", so it counts as an unsupported browser: closed while anything is locked.";
         if (!b.Installed) return "Not installed.";
         var s = b.CheckinSeconds;
         if (s < 0) return "Installed. Extension not seen yet: open it once.";

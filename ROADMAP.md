@@ -25,7 +25,7 @@ its bypass prevention).
 
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
-| A17 | Flaky CI checks: `ci/match_test.js` timing, Android `RulesServerTest` | principle 9 | testing, extension | agent |
+| A17 | Flaky CI checks fixed: 10 green `Test` runs in a row | principle 9 | testing, extension | agent |
 | A18 | A draft's save refuses a phrase change that only adds terms (R-WEAK-5) | R-WEAK-5, §4.3 | lists, locks | agent |
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text: real use on the laptop | §3.9 | extension | owner |
@@ -45,7 +45,7 @@ its bypass prevention).
 | 2.9 | Tamper settings: LibreWolf parts (box); `ci/tamper_vm_test.sh` (never run) | §4.10 | browsers, extension, install | box, vm |
 | 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
 | 2.11 | One-click installer: `.deb` built (clean Mint VM left), MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, vm, owner |
-| 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere | §3.13, §4.10 | browsers | agent |
+| 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere (Windows: waiting for 2.17 and Mozilla's signature) | §3.13, §4.10 | browsers, windows-layers | agent, owner, win-vm |
 | 2.13 | Accountability partner | §4.15 | — | agent |
 | 2.14 | Website | §4.16 | — | agent, owner |
 | 2.15 | Search results from blacklisted addresses: the engines' real pages | R-PAGE-2 | extension | box |
@@ -66,20 +66,20 @@ its bypass prevention).
 | N8 | Android wide screens, accessibility, three phones end to end | §8.5, R-ANDROID-1 | android/CLAUDE.md | owner |
 | W1 | Windows service and agent: the console's raw mode | §3.13 | windows | win-vm |
 | W2 | Windows web layers: real browsers obeying; Chrome Web Store ID | §3.13, §4.10 | windows-layers | win-vm, laptop, owner |
-| W3 | Windows apps and desktop: notifications, challenge window, hotkeys, lock freeze | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows-layers | win-vm, laptop |
+| W3 | Windows apps and desktop: notifications, challenge window on a real keyboard, lock freeze | §3.1, §3.7, §3.8, §4.8, §4.13, R-LOCK-5 | windows-layers | win-vm, laptop |
 | W4 | Windows GUI on a real desktop: Narrator, scaling, drag and drop | §4.1–4.13, R-GUI-1–3 | gui-windows | win-vm, laptop |
 | W5 | Windows tamper protection: boot/Safe Mode | §3.10, §4.10 | windows-tamper | win-vm, laptop |
-| W6 | Windows circadian: gamma, wallpaper, brightness, Night light | §4.10 | windows-layers | win-vm, laptop |
+| W6 | Windows circadian: gamma, brightness, Night light | §4.10 | windows-layers | win-vm, laptop |
 | W7 | Windows MSI: signing certificate, first tag, Apps & features by a person | §4.11 | install-windows | owner, win-vm |
 | W10 | Places on Windows: real networks | §3.6, R-MODE-5 | windows-layers, automation | laptop |
 | W13 | Recovery path on Windows: a real Safe Mode boot | R-ESCAPE-1 | windows-tamper, device | win-vm |
-| W18 | One-click browser install on Windows as SYSTEM | §4.10 | windows-layers, browsers | win-vm |
 | W19 | Firmware lock on Windows: real firmware | §3.8, §4.10 | windows-tamper, device | laptop, owner |
-| W24 | Strict mode: real WSL, Sandbox, Hyper-V | §3.8 | windows-tamper, device | win-vm |
+| W24 | Strict mode: Sandbox, Hyper-V, WSL 2 | §3.8 | windows-tamper, device | win-vm |
 | W25 | Strict mode's noexec on Windows 11 Home | §3.8 | windows-tamper, device | laptop |
-| W50 | Freeze fixed; laptop re-runs the soak (idle: 0 PowerShell by the service) | principle 1 | windows, windows-layers | laptop |
+| W50 | Freeze fixed, idle soak hard in CI; the laptop confirms it | principle 1 | windows, windows-layers | laptop |
 | W55 | Windows service without its pipe after an upgrade ("service is not running") | principle 1, §4.11 | windows | agent |
 | W54 | Windows layout as GTK: built, CI green; the owner's look on the laptop | §4.1–4.13 | gui-windows | owner |
+| W55 | CI time: parallel Windows GUI jobs, concurrency, paths, caches | §5 | testing, gui-windows | agent, win-ci |
 | A14 | Clip curves mirrored, tested in Go, C#, GTK; the owner's look on the laptop | §4.10 | circadian | owner |
 
 ## 0. Fix what exists
@@ -87,13 +87,17 @@ its bypass prevention).
 **Android is on hold until the Linux project is finished** (owner): its
 plan is SPEC §8, its items §3.1.
 
-- [ ] `A17` **Flaky CI checks** (found 2026-11-23 while fixing A16):
-  `node ci/match_test.js` failed once on its timing ("huge page: slowest
-  step 52.5 ms", run 697; passed on re-run), skipping every later step of
-  `Test`; Android `RulesServerTest > noPreflight` failed twice (runs 680,
-  684; passes on re-run). Done when: each passes 10 runs in a row, or its
-  limit is made fit for a shared runner without losing what it proves
-  (principle 9).
+- [ ] `A17` **Flaky CI checks** (found 2026-11-23 while fixing A16).
+  Fixed (2026-11-23): `ci/match_test.js`'s huge page (one 52.5 ms step,
+  run 697) judges each step by its fastest of 3 timed rounds, still
+  ≤ 16 ms (principle 9); Android `RulesServerTest` (`awaitListening`
+  false at `@Before`, runs 680, 684: fixed port 47699 in Linux's ephemeral
+  range, retried only after 5 s) binds port 0. Also seen (Windows run 215,
+  no Windows change): `ci/windows_desktop_test.ps1`'s "the challenge typed
+  in the window unlocks the block" got 50 % accuracy (a posted key lost),
+  so `ci-lock` stayed locked and "uninstall" failed after it; passed in
+  runs 211 and 213. Not fixed. Done when: each passes 10 runs in a row
+  (`Test` dispatched by hand on the fix).
 
 ### 0.1 Code contradicting `SPEC.md`
 
@@ -204,7 +208,7 @@ Only rows not fully built.
 | §5 R-LOCK-12 | Partial | `A12` |
 | §4.11 One-click installer, every platform | Partial | `2.11` |
 | §3.13 Chrome, Edge, Firefox, Bing on every platform | Partial | `2.12` |
-| §4.14 Cross-device sync | Not built | `2.10` |
+| §4.14 Cross-device sync | Partial | `2.10` |
 | §4.15 Accountability partner | Not built | `2.13` |
 | §4.16 Website | Not built | `2.14` |
 
@@ -246,8 +250,10 @@ Only rows not fully built.
   `install.sh` refused, a newer `.deb` installs. A `.deb` built before the
   prerm `failed-upgrade` fix still gets in.
 - **2.10 Cross-device sync** (L; §4.14; backend Supabase, SPEC §6
-  2026-11-23): Not built. KC9K account and cloud (principle 6's one
-  exception); Upload all / Download all on Linux, Windows, Android; one to
+  2026-11-23): Partial: account, Upload all and Download all built
+  against a fake (`notes/sync.md`); GUIs, Android, the real project not
+  yet. KC9K
+  account and cloud (principle 6's one exception); Upload all / Download all on Linux, Windows, Android; one to
   one except §4.14's device-specific items. Download all replaces even
   while locked (an exception to R-WEAK-1: the weakening audit must name
   it). Project backup (`cli/projectbackup.go`) is nearest, but only adds.
@@ -260,23 +266,30 @@ Only rows not fully built.
   - [ ] Decide the plan: free projects pause after a week without use
     (Pro ~25 USD/month doesn't); principle 6 means users never pay.
   To do, agent:
-  - [ ] Schema as SQL in the repo (`cloud/supabase/`): private Storage
+  - [x] Schema as SQL in the repo (`cloud/supabase/schema.sql`): private Storage
     bucket `setups`, one object `<user id>/setup.json.gz` per account; a
     `setups` row (upload time, device name, format version, size);
     row-level security: an account reads and writes only its own.
-  - [ ] Setup file: versioned JSON from the backup's code, everything
-    §4.14 copies (lock state included), device-specific items left out.
-  - [ ] `internal/cloud/`: Supabase Auth and Storage over plain HTTPS
+  - [x] Setup file: versioned JSON from the backup's code (`buildProject`,
+    `syncSetup`), everything §4.14 copies (lock state included),
+    device-specific items left out.
+  - [x] `internal/cloud/`: Supabase Auth and Storage over plain HTTPS
     (`net/http`, no SDK); tokens root-only in the DB; fake server in tests.
-  - [ ] CLI: `kc9k account signup|login|logout|status`, `kc9k sync upload`,
-    `kc9k sync download [--dry-run]` (shows upload time and device, asks
-    first, locks confirmed per R-LOCK-12; replaces in one transaction;
-    device-specific items here kept).
-  - [ ] Weakening audit entry for `sync download`; `refused()` untouched.
+  - [x] CLI: `kc9k account signup|login|logout|status`, `kc9k sync upload`
+    (built, `sync_test.go`).
+  - [x] CLI: `kc9k sync download [--dry-run] [--yes]` (shows upload time
+    and device, asks first, locks confirmed per R-LOCK-12, device items
+    kept). Differs: the clear is one transaction, the import after it is
+    not (checked whole first).
+  - [x] Weakening audit entry for `sync download`; `refused()` untouched.
+  - [ ] Tamper protection settings beyond `file-urls` and unsupported
+    browsers (embedded, extension stop, inactive tabs, guest, installer,
+    private, task managers, clock) are in no project file, so neither in a
+    backup (§3.13 "Backup: everything") nor in sync.
   - [ ] GTK and Windows GUI: account page, Upload all, Download all (each
     runs the command). Android with N-items.
   - [ ] Check against the real project: Linux → Windows → Linux round trip.
-  - [ ] Note `notes/sync.md` when built.
+  - [x] Note `notes/sync.md`.
 - **2.11 One-click installer** (M per platform; §4.11; methods SPEC §6
   2026-11-23): Partial (Linux built, Windows MSI waiting for W7 and
   `2.17`, Android open). Linux: the `.deb` (double-click opens Mint's
@@ -305,9 +318,15 @@ Only rows not fully built.
   - [ ] First release tag; install both by a person (W7, C1).
   - [ ] Android: answer SPEC §7 "Android one-click installer".
 - **2.12 Chrome, Edge, Firefox, Bing everywhere** (L; §3.13): Partial.
-  Built: Chrome, Chromium on Linux; Chrome, Edge on Windows waiting for the
-  store ID (W2). Not built: Firefox (LibreWolf only), Edge on Linux, every
-  browser on Android (IronFox only), Bing (Microsoft Bing browser app).
+  Built: Chrome, Chromium on Linux. Windows (`notes/windows-layers.md`):
+  Chrome and Edge waiting only for the store ID (2.17); Firefox (Program
+  Files and the Microsoft Store's) recognised, given policies and guarded,
+  waiting only for a Mozilla-signed `.xpi` (`webext/signed/`, SPEC §7
+  "Signing the extension for Firefox", owner); Bing is Edge there (§5);
+  gui-state `waiting` says which. Not built: Firefox and Edge on Linux,
+  every browser on Android (IronFox only), the Bing app on Android.
+  Unchecked (win-vm, `ci/windows_vm_test.ps1`): Firefox and the Store's
+  Firefox obeying, the guard closing a waiting Firefox.
 - **2.17 Chrome Web Store listing** (S agent, owner's review wait;
   §3.13, SPEC §6 2026-11-21): Partial. Built (`notes/browsers.md`
   Chrome): `make chrome-store-zip`, listing texts and privacy policy
@@ -430,19 +449,30 @@ sides. Neither touches the Linux GUI, extension or Android unless its item
 needs it and the Linux tests prove nothing changed.
 
 - [ ] `W1` Service and agent (M). Built, checked on `windows-latest`
-  (`ci/windows_service_test.ps1`, `ci/windows_desktop_test.ps1`). Left:
-  the console's raw mode for the challenge needs a person (win-vm).
+  (`ci/windows_service_test.ps1`, `ci/windows_desktop_test.ps1`,
+  including a command killed after its input ended). Left (win-vm,
+  `ci/windows_vm_test.ps1`, a person): the console's raw mode while
+  typing the challenge on a real keyboard, and a paste refused there.
 - [ ] `W2` Web layers (L). Built: hosts, WFP, registry Chromium policies,
   Firefox-family `policies.json`, extension guard, browser recognition;
-  WFP and policies checked in CI. Unchecked (win-vm): real browsers
-  obeying, the guard closing a browser (also W11's remote-control
-  switches), monk mode's cut. Needs owner: the Chrome Web Store listing's
+  WFP and policies checked in CI. Unchecked (win-vm, all in
+  `ci/windows_vm_test.ps1`): real browsers obeying (Edge, LibreWolf,
+  Firefox, the Store's Firefox), the guard closing a browser (W11's
+  remote-control switches; a Firefox waiting for its extension), monk
+  mode's cut and the network coming back. Needs owner: the Chrome Web Store listing's
   ID (`blocker.ChromeStoreExtensionID`); until then Chrome and Edge get no
   extension and are not supported browsers.
-- [ ] `W3` Apps and desktop (L). Built; apps and titles closed through
-  the agent checked on `windows-latest`. Unchecked (win-vm, laptop;
-  `ci/windows_vm_test.ps1`): notifications seen, the challenge window
-  (Raw Input refusing injected keys), hotkeys, the lock freeze.
+- [ ] `W3` Apps and desktop (L). Built; on `windows-latest`
+  (`ci/windows_desktop_test.ps1`): apps and titles closed through the
+  agent; the challenge window from `kc9k unlock` without a console (a
+  `SendInput` key refused by Raw Input, posted keys unlocking, a killed
+  unlock closing it); a hotkey press starting its block. Unchecked
+  (win-vm, a person; `ci/windows_vm_test.ps1`): notifications seen, the
+  challenge window typed on a real keyboard and the on-screen keyboard
+  refused, the lock freeze (locking the runner's desktop would stop the
+  job). A17's lost key (run 215): one race fixed (2026-11-23: a closed
+  window's deferred clear could wipe the next window's state and handle);
+  the check now prints each posted key's result. Cause not proven.
 - [ ] `W4` GUI (L). C# WinUI 3, .NET LTS, unpackaged, self-contained, in
   `windows/gui/`; every GTK page ported and every GTK smoke test has a UI
   Automation counterpart (fake kc9k and real `kc9k.exe`). Checked on
@@ -461,9 +491,13 @@ needs it and the Linux tests prove nothing changed.
   Mode boot, no-escape and the recovery environment on a real boot,
   takeown against strict mode, Reset this PC failing during a lock; W39's
   per-level claims rest on this. Firmware lock: `W19`.
-- [ ] `W6` Circadian rhythm and wallpapers (M). Built; dark mode checked
-  on `windows-latest`. Unchecked: gamma, wallpaper (win-vm); panel
-  brightness, external screens, Night light and its note (laptop).
+- [ ] `W6` Circadian rhythm and wallpapers (M). Built; on
+  `windows-latest`: dark mode, a wallpaper of the person's own reaching
+  HKCU (copied to Program Files), the plain ramp back after circadian
+  off. The runner's display driver refuses every gamma ramp (now said as
+  such, not "operation completed successfully"), so gamma stays win-vm
+  (`ci/windows_vm_test.ps1`: warm preview seen); panel brightness,
+  external screens, Night light and its note (laptop).
 - [ ] `W7` Installer and release (M). MSI (WiX 6) with service, agent,
   GUI; refuses removal, repair and downgrade while locked; upgrade over a
   lock, full-UI removal, release workflow (`windows-release.yml`) and
@@ -487,6 +521,16 @@ Laptop findings on finished items (2026-11-22, at 200 % scaling):
   skipped by `EveryControlHasANameAndTakesFocus`; the test process is
   per-monitor DPI aware (`GuiApp.Shot`, `WindowStateIsKept`).
 
+- [ ] `W55` CI time, nothing dropped (M; §5 tests). After
+  `ngr/modest-lovelace-l0zu0w` (adds `filter`, display passes) merges.
+  Not built: (1) Windows GUI job split into parallel jobs (unit and
+  build; smoke and parity; real CLI: `ParityRealTests`, `ImportTests`;
+  geometry and accessibility incl. 150/175/200 %; desktop), GUI and fake
+  built once and passed as artifacts; (2) `concurrency:` per branch with
+  `cancel-in-progress: true` in every workflow; (3) tighter `paths:` so
+  ROADMAP/notes-only commits start no Windows GUI run; (4) `setup-go` /
+  `setup-dotnet` caching. Needs: agent, win-ci.
+
 ### 4.2 Windows Core: parity audit (W10–W27)
 
 Not holes, so no item: a system proxy or VPN, Windows' DNS over HTTPS,
@@ -506,9 +550,6 @@ W26 the Store's Firefox obeying the registry policies (win-vm).
   environment off and no no-escape, F8 (`bootmenupolicy Legacy`) keeps Safe
   Mode reachable. Unchecked (win-vm, `-Reboots`): a real Safe Mode boot,
   F8 while factory reset protection acts.
-- [ ] `W18` One-click browser install on Windows (S; §4.10). Built
-  (`InstallBrowser`, winget `--scope machine --silent`; librewolf and
-  chrome, no chromium). Unchecked (win-vm): as SYSTEM through the service.
 - [ ] `W19` Firmware lock on Windows (M; §3.8, §4.10). Built through
   vendors' WMI (Dell `root\dcim\sysman\biosattributes`, Lenovo `root\wmi`,
   HP `root\HP\InstrumentedBIOS`; settings first, password last over
@@ -516,8 +557,9 @@ W26 the Store's Firefox obeying the registry policies (win-vm).
   owner): which vendor, and a trusted person to type and keep the
   password.
 - [ ] `W24` Strict mode: VMs, WSL, Windows Sandbox, containers (S; §3.8).
-  Built (`closeVirtualMachines`; VM program and Docker engine checked in
-  CI). Unchecked (win-vm): a real WSL distribution, Sandbox, Hyper-V VM.
+  Built (`closeVirtualMachines`; in CI: a VM program, Docker's engine, a
+  real WSL 1 Ubuntu closed and closed again when restarted). Unchecked
+  (win-vm, `ci/windows_vm_test.ps1`): Windows Sandbox, a Hyper-V VM, WSL 2.
 - [ ] `W25` Strict mode's noexec on Windows (M; §3.8). Built: Software
   Restriction Policies in the registry (profile folders but not AppData,
   temp folders, removable drives; exempt folders unrestricted); processes
@@ -549,18 +591,14 @@ The owner ran the Windows GUI on the laptop and removed it ("it was
 horrible"): looks better than GTK, but the GTK layout is better.
 Stability first, then layout, then import. Order: top to bottom.
 
-Static findings still open (code read, not seen on the laptop):
-
-- The challenge window (`winagent/challenge_windows.go`) is a plain Win32
-  window: now a fixed frame (close only) with a background brush; still no
-  manifest in `kc9k.exe` (classic controls, not DPI-aware).
-
 Still open from the report (built and in CI; what was built is in
 `notes/windows*.md` and `notes/gui-windows.md`):
 
 - `W50` **The whole computer froze** (principle 1): fixed (the extension
-  guard closed System32 programs). Left: the laptop re-runs
-  `ci/windows_soak_test.ps1` (idle: 0 PowerShell by the service).
+  guard closed System32 programs). Idle (6 min, no PowerShell started by
+  the service or its commands, no policy refresh) is a failing check in
+  `windows.yml`, the trace proven to see PowerShell starts. Left: the
+  laptop confirms with `ci/windows_soak_test.ps1` (idle: 0 PowerShell).
 - `W54` **Page layout as in the GTK GUI** (§4.1–4.13, R-GUI-3): built.
   Left: the owner's look on the laptop.
 - Stability (2026-11-23, `StabilityTests`): a slow, hung or missing
@@ -573,12 +611,33 @@ Still open from the report (built and in CI; what was built is in
 
 - DECIDED (By claude) 2026-11-23 (`2.12`): the Windows GUI shows every
   browser `gui-state.browsers` lists, with its extension's state and
-  Install when not on the computer; "found, no extension yet" names the
-  Chrome Web Store only for Chrome and Edge. Until Core lists Firefox
-  (and Bing), tested against the fake. Owner may overturn.
+  Install when not on the computer; "found, no extension yet" says what
+  it waits for (`waiting`). Bing on Windows is Edge (decision
+  below); Firefox's `waiting` reason is shown as Core sends it. Owner may overturn.
 - DECIDED (By claude) 2026-11-23 (`W4`): what `windows-latest` can't show
   (200 % display, a person clicking the tray icon) stays on the laptop
   list; CI proves 150/175 % and 200 % text size instead. Owner may overturn.
+- DECIDED (By claude) 2026-11-23 (`2.10`, owner away, asked the agent to
+  decide): Download all refuses while a lock runs on this device that
+  didn't come by an earlier Download all from the same account (unchanged
+  since), naming it. SPEC §4.14 says Download all is "not refused by a
+  lock"; taken literally, an empty setup uploaded from a second account
+  would lift every lock here. §4.14's own example (unlocked on the
+  uploading device, then downloaded) still works. Owner: keep, or loosen.
+- DECIDED (By claude) 2026-11-23 (`2.12`): on Windows the Microsoft Bing
+  app is Edge: Microsoft ships no separate Bing browser for Windows (Bing's
+  app there is a web app in `msedge.exe`), so Edge's policies, extension
+  and guard cover it; no own entry. Owner may overturn.
+- DECIDED (By claude) 2026-11-23 (`2.12`): release Firefox (Windows; later
+  Linux) is a supported browser once a Mozilla-signed `.xpi` of the
+  current version is committed in `internal/webext/signed/` (checked to be
+  Mozilla's signature over exactly the extension's files); every
+  Firefox-family browser then gets that file. Until then Firefox is found,
+  gets the policies and is guarded as unsupported (gui-state `waiting`:
+  `mozilla-signature`). Signing itself stays SPEC §7 (owner's Mozilla
+  account). Firefox installed per user in AppData gets the policies but
+  is no supported browser (its folder is the user's to change); Program
+  Files and the Microsoft Store's are. Owner may overturn.
 
 - DECIDED (By claude) 2026-11-23 (`2.15`): supported engines = Google,
   Bing, DuckDuckGo (and its HTML version), Brave Search, Yahoo, Startpage,

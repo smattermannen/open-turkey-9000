@@ -44,3 +44,25 @@ func TestBrowsersFound(t *testing.T) {
 		t.Errorf("gui-state browser: %s %v", out, err)
 	}
 }
+
+// 2.12: the GUI reads why a found browser isn't supported yet (additive
+// "waiting"; left out when nothing is awaited).
+func TestBrowsersWaitingJSON(t *testing.T) {
+	out, _ := json.Marshal(guiBrowser{ID: "firefox", Waiting: blocker.WaitingMozillaSignature, Found: true})
+	if !strings.Contains(string(out), `"waiting":"mozilla-signature"`) {
+		t.Errorf("waiting missing: %s", out)
+	}
+	out, _ = json.Marshal(guiBrowser{ID: "librewolf"})
+	if strings.Contains(string(out), "waiting") {
+		t.Errorf("nothing awaited but waiting shown: %s", out)
+	}
+	for _, b := range supportedBrowsers(testDB(t)) {
+		sb, _ := blocker.SupportedBrowserByID(b.ID)
+		if b.Waiting != sb.Waiting() || (b.Waiting != "" && b.Installed) {
+			t.Errorf("%s: waiting %q, installed %v", b.ID, b.Waiting, b.Installed)
+		}
+	}
+	if text := (guiBrowser{Found: true, Waiting: blocker.WaitingChromeWebStore}).extensionText(); !strings.Contains(text, "Chrome Web Store") {
+		t.Errorf("text %q", text)
+	}
+}

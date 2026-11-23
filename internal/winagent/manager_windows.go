@@ -490,7 +490,8 @@ func (m *Manager) serveInternal(stop <-chan struct{}) {
 		}
 		go func() {
 			defer conn.Close()
-			line, err := bufio.NewReader(conn).ReadBytes('\n')
+			r := bufio.NewReader(conn)
+			line, err := r.ReadBytes('\n')
 			if err != nil {
 				return
 			}
@@ -501,6 +502,25 @@ func (m *Manager) serveInternal(stop <-chan struct{}) {
 			} else if c.List {
 				rep.Sessions = m.Sessions()
 			} else {
+				var answered chan struct{}
+				if c.Op == OpChallenge {
+					log.Printf("agent: a command asks session %d for the challenge window", c.Session)
+					// The command sends nothing more: its pipe closing
+					// means it ended (killed, Ctrl-C), so its window closes
+					// too, never left open holding the next unlock off.
+					answered = make(chan struct{})
+					go func(session uint32) {
+						_, err := r.ReadByte()
+						select {
+						case <-answered:
+						default:
+							if err != nil {
+								log.Printf("agent: the command asking for the challenge window in session %d ended: closing it", session)
+								_ = m.Call(session, OpChallengeCancel, nil, nil)
+							}
+						}
+					}(c.Session)
+				}
 				var raw json.RawMessage
 				var args any
 				if len(c.Args) > 0 {
@@ -508,6 +528,9 @@ func (m *Manager) serveInternal(stop <-chan struct{}) {
 				}
 				if err := m.Call(c.Session, c.Op, args, &raw); err != nil {
 					rep.Error = err.Error()
+				}
+				if answered != nil {
+					close(answered) // before the reply: the command then closes its pipe
 				}
 				rep.Result = raw
 			}

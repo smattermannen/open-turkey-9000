@@ -169,10 +169,13 @@ const failed0 = [];
       phrase_scope: ["text"], actions: [{ action: "greyscale" }] },
     { id: 3, text: ["nowhere"], except: { text: ["absent one", "absent two"] }, actions: [{ action: "block" }] },
   ]);
-  let worst = 0;
-  let worstAt = 0;
+  // Each step's time is its fastest over the timed rounds: a step that does
+  // too much is slow every round, while a shared runner's pause (garbage
+  // collection, another job) hits one round's step only (A17: one 52.5 ms
+  // step seen once in CI).
+  const times = []; // times[step] = ms of each timed round
   let same = true;
-  for (let round = 0; round < 3; round++) {
+  for (let round = 0; round < 4; round++) {
     const hugePage = { url: "https://example.org/", title: "t", text: page.join(" ") + " alpha3 gamma3 long term7 r" + round };
     const steps = kc9kListMatchesSteps(hugeLists, hugePage);
     let r;
@@ -181,9 +184,8 @@ const failed0 = [];
       const t0 = process.hrtime.bigint();
       r = steps.next();
       const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-      if (round > 0 && ms > worst) {
-        worst = ms;
-        worstAt = stepped;
+      if (round > 0) {
+        (times[stepped] = times[stepped] || []).push(ms);
       }
       stepped++;
     } while (!r.done);
@@ -191,10 +193,22 @@ const failed0 = [];
     same = same && JSON.stringify(r.value.map((m) => [m.list.id, m.actions])) ===
       JSON.stringify(once.map((m) => [m.list.id, m.actions])) && once.length === 2 && stepped > 40;
   }
+  let worst = 0;
+  let worstAt = 0;
+  let worstOnce = 0;
+  times.forEach((t, i) => {
+    const fastest = Math.min(...t);
+    worstOnce = Math.max(worstOnce, ...t);
+    if (fastest > worst) {
+      worst = fastest;
+      worstAt = i;
+    }
+  });
   if (worst > 16 || !same) {
     failed0.push("a huge page judged in steps: slowest step " + worst.toFixed(1) + " ms, same result " + same);
   }
-  console.log("huge page: slowest step " + worst.toFixed(1) + " ms (step " + worstAt + ")");
+  console.log("huge page: slowest step " + worst.toFixed(1) + " ms (step " + worstAt + "; slowest single run " +
+    worstOnce.toFixed(1) + " ms)");
 }
 
 // §3.9 strongest action across blocks: consequence > close tab > image >

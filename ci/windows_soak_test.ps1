@@ -3,8 +3,14 @@
 # refreshes, PowerShell and kc9k.exe started by the service, agent
 # restarts, tamper events, CPU, handles and memory, display driver resets,
 # crashes, the gamma ramp, and browsers "closed" that are Windows' own.
-#   pwsh ci/windows_soak_test.ps1 -Kc9k kc9k.exe [-Minutes 3]
+#   pwsh ci/windows_soak_test.ps1 -Kc9k kc9k.exe [-Minutes 3] [-IdleMinutes N]
 #        [-Phases idle,circadian,play,settings] [-Gui kc9k-gui.exe] [-Out dir]
+#        [-Strict]
+# -Strict (CI): the process-start trace must work and must see a
+# PowerShell this script starts (a blind trace would pass "idle: no
+# PowerShell by the service" without looking). PowerShell counts as the
+# service's when its parent is the service or a kc9k.exe the service
+# started (the commands it runs for the pipe).
 # Runs in Windows PowerShell 5.1 and pwsh 7, as an administrator, in the
 # signed-in session. It never touches a lock, monk mode, Frozen Chicken,
 # strict mode, no-escape, factory reset protection, the firmware lock, any
@@ -24,7 +30,9 @@ param(
     [double]$Minutes = 3,
     [string[]]$Phases = @('idle', 'circadian', 'play', 'settings'),
     [string]$Gui = '',
-    [string]$Out = ''
+    [string]$Out = '',
+    [double]$IdleMinutes = -1,
+    [switch]$Strict
 )
 $ErrorActionPreference = 'Continue'
 $Phases = @($Phases | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ })
@@ -221,7 +229,9 @@ try {
     Register-CimIndicationEvent -ClassName Win32_ProcessStartTrace -SourceIdentifier kc9kSoakStart -ErrorAction Stop | Out-Null
     $traced = $true
 } catch { $traced = $false; Note "process start events unavailable ($_): polling instead" }
+if ($Strict -and -not $traced) { Write-Host '::error::soak test: no process start trace (-Strict)'; exit 1 }
 $seenPids = @{}
+$svcKids = @{} # kc9k.exe the service started: their PowerShell is the service's too
 function NewStarts {
     $out = @()
     if ($traced) {
@@ -239,6 +249,20 @@ function NewStarts {
         }
     }
     return $out
+}
+
+# The trace must see a PowerShell start, or "0 PowerShell" proves nothing.
+if ($traced) {
+    NewStarts | Out-Null
+    $probe = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile', '-Command', 'exit 0' -WindowStyle Hidden -PassThru -Wait
+    $seen = $false
+    for ($i = 0; $i -lt 10 -and -not $seen; $i++) {
+        Start-Sleep -Seconds 1
+        foreach ($s in NewStarts) { if ($s.Pid -eq $probe.Id -and $s.Name -ieq 'powershell.exe') { $seen = $true } }
+    }
+    if ($seen) { Note 'process start trace sees PowerShell starts' }
+    elseif ($Strict) { Write-Host '::error::soak test: the process start trace missed a PowerShell start (-Strict)'; exit 1 }
+    else { Note 'process start trace missed a PowerShell start: counts may be low' }
 }
 
 function Agents([int]$svc) {
@@ -369,7 +393,7 @@ try {
 
     foreach ($phase in $Phases) {
         if ($stopReason) { break }
-        Note "phase $phase ($Minutes min)"
+        Note "phase $phase"
         switch ($phase) {
             'idle' { Kc @('circadian', 'off') | Out-Null; Start-Sleep -Seconds 10 }
             'circadian' { SetUpCircadian }
@@ -382,16 +406,22 @@ try {
         $agents = Agents $svc
         $series = @{ svcH = @(); svcP = @(); agH = @(); agP = @(); guiH = @(); guiP = @() }
         $cpu = @(); $hot = 0; $ps = 0; $kc = 0; $restarts = 0; $mostPs = 0; $gammaBad = ''; $guiDead = 0
-        $samples = [int][math]::Max([math]::Ceiling($Minutes * 60 / $sampleSeconds), 2)
+        $phaseMinutes = $Minutes
+        if ($phase -eq 'idle' -and $IdleMinutes -gt 0) { $phaseMinutes = $IdleMinutes }
+        $samples = [int][math]::Max([math]::Ceiling($phaseMinutes * 60 / $sampleSeconds), 2)
         for ($tick = 0; $tick -lt $samples; $tick++) {
             Act $phase $tick
             Start-Sleep -Seconds $sampleSeconds
             $now = Get-Date
             $svcNow = ServicePid
             foreach ($s in NewStarts) {
-                if ($s.Parent -ne $svc -and $s.Parent -ne $svcNow) { continue }
-                if ($s.Name -ieq 'powershell.exe') { $ps++ }
-                if ($s.Name -ieq 'kc9k.exe') { $kc++ }
+                $bySvc = ($s.Parent -eq $svc -or $s.Parent -eq $svcNow)
+                if (-not $bySvc -and -not $svcKids.ContainsKey($s.Parent)) { continue }
+                if ($s.Name -ieq 'powershell.exe' -or $s.Name -ieq 'pwsh.exe') {
+                    $ps++
+                    if ($phase -eq 'idle') { Note "idle: PowerShell $($s.Pid) started by $($s.Parent)" }
+                }
+                if ($s.Name -ieq 'kc9k.exe' -and $bySvc) { $kc++; $svcKids[$s.Pid] = $true }
             }
             $c = Cpu; $cpu += $c
             if ($c -gt 90) { $hot++ } else { $hot = 0 }

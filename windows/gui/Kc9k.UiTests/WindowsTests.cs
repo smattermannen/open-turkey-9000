@@ -46,8 +46,8 @@ public class WindowsTests
     {
         BrowserInfoNode[] browsers =
         [
-            new("librewolf", "LibreWolf", true, true, 30), new("firefox", "Firefox", false, true, -1),
-            new("edge", "Microsoft Edge", false, true, -1), new("chrome", "Google Chrome", true, true, -1),
+            new("librewolf", "LibreWolf", true, true, 30), new("firefox", "Firefox", false, true, -1, "mozilla-signature"),
+            new("edge", "Microsoft Edge", false, true, -1, "chrome-web-store"), new("chrome", "Google Chrome", true, true, -1),
             new("bing", "Microsoft Bing", false, false, -1),
         ];
         using var gui = new GuiApp("browsers-212", prepare: dir =>
@@ -58,12 +58,12 @@ public class WindowsTests
         gui.Page("settings");
         foreach (var b in browsers)
         {
-            var info = new Kc9k.Core.BrowserInfo { Id = b.Id, Name = b.Name, Installed = b.Installed, Found = b.Found, CheckinSeconds = b.Checkin };
+            var info = new Kc9k.Core.BrowserInfo { Id = b.Id, Name = b.Name, Installed = b.Installed, Found = b.Found, CheckinSeconds = b.Checkin, Waiting = b.Waiting };
             gui.FindName(b.Name);
             gui.FindName(Kc9k.Core.Words.BrowserStatus(info));
             Assert.Equal(!b.Installed && !b.Found, gui.ById("InstallBrowser_" + b.Id) is not null);
         }
-        Assert.DoesNotContain("Chrome Web Store", Kc9k.Core.Words.BrowserStatus(new() { Id = "firefox", Found = true }));
+        Assert.Contains("Mozilla", Kc9k.Core.Words.BrowserStatus(new() { Id = "firefox", Found = true, Waiting = "mozilla-signature" }));
         gui.Shot("browsers-212");
         gui.Invoke("InstallBrowser_bing");
         gui.Invoke(gui.FindButton("Continue"));
@@ -72,9 +72,9 @@ public class WindowsTests
         gui.Invoke(gui.FindButton("OK"));
     }
 
-    sealed record BrowserInfoNode(string Id, string Name, bool Installed, bool Found, long Checkin)
+    sealed record BrowserInfoNode(string Id, string Name, bool Installed, bool Found, long Checkin, string Waiting = "")
     {
-        public JsonObject Json() => new() { ["id"] = Id, ["name"] = Name, ["installed"] = Installed, ["found"] = Found, ["checkin_seconds"] = Checkin };
+        public JsonObject Json() => new() { ["id"] = Id, ["name"] = Name, ["installed"] = Installed, ["found"] = Found, ["checkin_seconds"] = Checkin, ["waiting"] = Waiting };
     }
 
     // W31 (§4.1): break status and ladder positions on the Overview.

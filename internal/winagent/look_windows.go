@@ -137,6 +137,10 @@ func screenDC(name string) uintptr {
 	return dc
 }
 
+// errNoGamma: the screen's driver refused the ramp (some, such as a
+// virtual machine's basic display adapter, take none).
+var errNoGamma = errors.New("the display driver refused the colour ramp (this screen can't change its colour temperature)")
+
 func init() {
 	Register(OpGetGamma, func(json.RawMessage) (any, error) {
 		names, _ := displays()
@@ -180,6 +184,10 @@ func init() {
 			procDeleteDC.Call(dc)
 			if r != 0 {
 				set++
+			} else if errors.Is(err, windows.ERROR_SUCCESS) {
+				// The driver refuses ramps without saying why (no error
+				// code): say so, not "The operation completed successfully".
+				lastErr = errNoGamma
 			} else {
 				lastErr = err
 			}

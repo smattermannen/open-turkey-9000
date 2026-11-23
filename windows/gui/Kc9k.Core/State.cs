@@ -401,6 +401,9 @@ public sealed class BrowserInfo
     /// <summary>On the computer, whether or not KC9K can give it the extension (W30).</summary>
     public bool Found { get; set; }
     public long CheckinSeconds { get; set; } = -1;
+    /// <summary>What KC9K waits for before it can give it the extension (2.12):
+    /// "chrome-web-store", "mozilla-signature", or "" for nothing.</summary>
+    public string Waiting { get; set; } = "";
 }
 
 public sealed class SocialPreset

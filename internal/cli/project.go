@@ -493,6 +493,93 @@ var projectCmd = &cobra.Command{
 	Short: "The whole setup in one file: export it, or import one",
 }
 
+// buildProject gathers the whole setup as a project file: a backup, or with
+// share a file that says nothing about this device or person (see the
+// export command's help). Cross-device sync uploads a backup less the
+// device's own items (syncSetup).
+func buildProject(cmd *cobra.Command, database *db.DB, share bool) (projectExport, error) {
+	out := projectExport{KC9KProject: projectVersion, Kind: "backup", Blocks: []projectBlock{}, Browser: map[string]bool{},
+		Options: map[string]bool{}, Images: map[string]string{}}
+	if share {
+		out.Kind = "share"
+	}
+	places, err := database.Places()
+	if err != nil {
+		return out, err
+	}
+	blockPlaces := map[string][]string{}
+	if !share {
+		for _, p := range places {
+			out.Places = append(out.Places, placeExport{Name: p.Name, Networks: p.Networks, Need: p.Need})
+			for _, b := range p.Blocks {
+				blockPlaces[b] = append(blockPlaces[b], p.Name)
+			}
+		}
+	}
+	blocks, err := database.ListBlocks()
+	if err != nil {
+		return out, err
+	}
+	for _, b := range blocks {
+		if draftOf(database, b.Name) != "" {
+			continue // §4.3: a draft isn't a block of its own
+		}
+		pb, err := exportBlock(database, b.Name, out.Images)
+		if err != nil {
+			return out, err
+		}
+		pb.Places = blockPlaces[b.Name]
+		out.Blocks = append(out.Blocks, pb)
+	}
+	if !share || exportPresetsChosen(cmd) {
+		if err := exportPresets(database, &out); err != nil {
+			return out, err
+		}
+	}
+	for _, name := range enforce.BrowserSettings {
+		out.Browser[name] = enforce.BrowserOn(database, name)
+	}
+	out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database),
+		"file-urls": enforce.FileURLsOn(database)}
+	for _, o := range enforce.Options {
+		out.Options[o.Name] = enforce.OptionOn(database, o.Name)
+	}
+	if n, err := database.GlobalNepsis(); err != nil {
+		return out, err
+	} else if n.On() {
+		out.Nepsis = &n
+	}
+	freezes, err := database.ListFreezeSchedules()
+	if err != nil {
+		return out, err
+	}
+	for _, f := range freezes {
+		w := exportWindow(f.Window)
+		w.Mode = f.Mode
+		if f.LockLead >= 0 {
+			lead := f.LockLead
+			w.LockLead = &lead
+		}
+		out.Freezes = append(out.Freezes, w)
+	}
+	out.Circadian = exportCircadian(database)
+	out.StrictUse = enforce.StrictUseOn(database)
+	if err := exportModes(database, &out, share); err != nil {
+		return out, err
+	}
+	exportWallpapers(database, &out)
+	if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
+		n := enforce.LoadNoticeOptions(database)
+		out.Notifications = &n
+	}
+	if !share {
+		if out.Backup, err = exportBackupExtras(database); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
 var projectExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Print the whole setup as JSON (redirect to a file to save it)",
@@ -511,84 +598,9 @@ answer the question on a terminal (elsewhere they are left out).`,
 	Args: cobra.NoArgs,
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		share, _ := cmd.Flags().GetBool("share")
-		out := projectExport{KC9KProject: projectVersion, Kind: "backup", Blocks: []projectBlock{}, Browser: map[string]bool{},
-			Options: map[string]bool{}, Images: map[string]string{}}
-		if share {
-			out.Kind = "share"
-		}
-		places, err := database.Places()
+		out, err := buildProject(cmd, database, share)
 		if err != nil {
 			return err
-		}
-		blockPlaces := map[string][]string{}
-		if !share {
-			for _, p := range places {
-				out.Places = append(out.Places, placeExport{Name: p.Name, Networks: p.Networks, Need: p.Need})
-				for _, b := range p.Blocks {
-					blockPlaces[b] = append(blockPlaces[b], p.Name)
-				}
-			}
-		}
-		blocks, err := database.ListBlocks()
-		if err != nil {
-			return err
-		}
-		for _, b := range blocks {
-			if draftOf(database, b.Name) != "" {
-				continue // §4.3: a draft isn't a block of its own
-			}
-			pb, err := exportBlock(database, b.Name, out.Images)
-			if err != nil {
-				return err
-			}
-			pb.Places = blockPlaces[b.Name]
-			out.Blocks = append(out.Blocks, pb)
-		}
-		if !share || exportPresetsChosen(cmd) {
-			if err := exportPresets(database, &out); err != nil {
-				return err
-			}
-		}
-		for _, name := range enforce.BrowserSettings {
-			out.Browser[name] = enforce.BrowserOn(database, name)
-		}
-		out.Tamper = map[string]bool{db.UnsupportedBrowsers: enforce.UnsupportedBrowsersOn(database),
-			"file-urls": enforce.FileURLsOn(database)}
-		for _, o := range enforce.Options {
-			out.Options[o.Name] = enforce.OptionOn(database, o.Name)
-		}
-		if n, err := database.GlobalNepsis(); err != nil {
-			return err
-		} else if n.On() {
-			out.Nepsis = &n
-		}
-		freezes, err := database.ListFreezeSchedules()
-		if err != nil {
-			return err
-		}
-		for _, f := range freezes {
-			w := exportWindow(f.Window)
-			w.Mode = f.Mode
-			if f.LockLead >= 0 {
-				lead := f.LockLead
-				w.LockLead = &lead
-			}
-			out.Freezes = append(out.Freezes, w)
-		}
-		out.Circadian = exportCircadian(database)
-		out.StrictUse = enforce.StrictUseOn(database)
-		if err := exportModes(database, &out, share); err != nil {
-			return err
-		}
-		exportWallpapers(database, &out)
-		if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
-			n := enforce.LoadNoticeOptions(database)
-			out.Notifications = &n
-		}
-		if !share {
-			if out.Backup, err = exportBackupExtras(database); err != nil {
-				return err
-			}
 		}
 		data, err := json.MarshalIndent(out, "", "  ")
 		if err != nil {
@@ -629,489 +641,517 @@ With --dry-run, says what would happen and changes nothing.`,
 			return fmt.Errorf("%s was made by a newer Killer Chicken 9000", args[0])
 		}
 
-		sayLinuxOnly(in) // W56: kept, not used here, never an error
+		return importProject(cmd, in, importOptions{dry: dry})
+	},
+}
 
-		if what := projectMonk(in); what != "" {
-			if err := requireMonkAck(cmd, what); err != nil {
-				return err
-			}
-		}
-		// R-CUSTOM-1: what the file would open or run here is shown first.
-		if customs := projectCustoms(in); len(customs) > 0 {
-			if dry {
-				for _, c := range customs {
-					fmt.Printf("Would: add a custom action that can %s\n", c)
-				}
-			} else if err := confirmCustoms(cmd, customs); err != nil {
-				return err
-			}
-		}
+// importOptions: how importProject runs. The project import uses only dry;
+// sync download checks the file first (dry, replacing: as onto an empty
+// setup, the locks collected), confirms, clears the setup, then imports
+// with everything confirmed.
+type importOptions struct {
+	dry       bool
+	replacing bool         // judge names and freezes as if nothing were here
+	confirmed bool         // monk mode, custom actions, locks confirmed by the caller
+	locks     *[]lockToSet // filled with the locks the file sets
+}
 
-		// Validate everything before writing anything.
-		var blocks []checkedBlock
-		for _, b := range in.Blocks {
-			c, err := checkBlock(b)
-			if err != nil {
-				return fmt.Errorf("block '%s': %w", b.Name, err)
+// importProject adds what a checked project file holds (see the import
+// command's help).
+func importProject(cmd *cobra.Command, in projectExport, o importOptions) error {
+	dry := o.dry
+	sayLinuxOnly(in) // W56: kept, not used here, never an error
+
+	if what := projectMonk(in); what != "" && !o.confirmed {
+		if err := requireMonkAck(cmd, what); err != nil {
+			return err
+		}
+	}
+	// R-CUSTOM-1: what the file would open or run here is shown first.
+	if customs := projectCustoms(in); len(customs) > 0 && !o.confirmed {
+		if dry {
+			for _, c := range customs {
+				fmt.Printf("Would: add a custom action that can %s\n", c)
 			}
-			blocks = append(blocks, c)
+		} else if err := confirmCustoms(cmd, customs); err != nil {
+			return err
 		}
-		modes, err := checkModes(in)
-		if err == nil {
-			modes.pictures, err = checkWallpapers(in)
-		}
+	}
+
+	// Validate everything before writing anything.
+	var blocks []checkedBlock
+	for _, b := range in.Blocks {
+		c, err := checkBlock(b)
 		if err != nil {
-			return err
+			return fmt.Errorf("block '%s': %w", b.Name, err)
 		}
-		type checkedCluster struct {
-			c     clusterExport
-			where db.Where
+		blocks = append(blocks, c)
+	}
+	modes, err := checkModes(in)
+	if err == nil {
+		modes.pictures, err = checkWallpapers(in)
+	}
+	if err != nil {
+		return err
+	}
+	type checkedCluster struct {
+		c     clusterExport
+		where db.Where
+	}
+	var clusters []checkedCluster
+	for _, c := range in.Clusters {
+		if err := db.CheckListName(c.Name); err != nil {
+			return fmt.Errorf("list preset '%s': %w", c.Name, err)
 		}
-		var clusters []checkedCluster
-		for _, c := range in.Clusters {
-			if err := db.CheckListName(c.Name); err != nil {
-				return fmt.Errorf("list preset '%s': %w", c.Name, err)
+		var where db.Where
+		for _, place := range c.Where {
+			if !db.IsPlace(place) {
+				return fmt.Errorf("list preset '%s': unknown place %q", c.Name, place)
 			}
-			var where db.Where
-			for _, place := range c.Where {
-				if !db.IsPlace(place) {
-					return fmt.Errorf("list preset '%s': unknown place %q", c.Name, place)
-				}
-				where = where.With(place, true)
-			}
-			if !where.Any() {
-				return fmt.Errorf("list preset '%s' looks nowhere", c.Name)
-			}
-			// An old file's type is ignored (§3.2).
-			check := func(entries []string) ([]string, error) { return prepareEntries(where, entries) }
-			if c.Phrases {
-				check = typedPhrases
-			}
-			entries, err := check(c.Entries)
-			if err != nil {
-				return fmt.Errorf("preset '%s': %w", c.Name, err)
-			}
-			c.Entries = entries
-			clusters = append(clusters, checkedCluster{c, where})
+			where = where.With(place, true)
 		}
-		type checkedFreeze struct {
-			w    schedule.Window
-			mode string
-			lead int
+		if !where.Any() {
+			return fmt.Errorf("list preset '%s' looks nowhere", c.Name)
 		}
-		var freezes []checkedFreeze
-		for _, f := range in.Freezes {
-			w, err := f.window()
-			lead := db.NoScheduleLock
-			if f.LockLead != nil {
-				lead = *f.LockLead
-			}
-			if err != nil || !freeze.ValidMode(f.Mode) || lead > db.MaxScheduleLockLead || lead < db.NoScheduleLock {
-				return fmt.Errorf("a Frozen Chicken window is invalid")
-			}
-			freezes = append(freezes, checkedFreeze{w, f.Mode, lead})
+		// An old file's type is ignored (§3.2).
+		check := func(entries []string) ([]string, error) { return prepareEntries(where, entries) }
+		if c.Phrases {
+			check = typedPhrases
 		}
-		if in.Nepsis != nil && in.Nepsis.On() {
-			if err := in.Nepsis.Check(); err != nil {
-				return fmt.Errorf("bypass prevention: %w", err)
-			}
-		}
-		images := map[string][]byte{}
-		for name, encoded := range in.Images {
-			raw, err := base64.StdEncoding.DecodeString(encoded)
-			sum := sha256.Sum256(raw)
-			if err != nil || !db.IsImageName(name) || !strings.HasPrefix(name, hex.EncodeToString(sum[:])+".") || len(raw) > maxImportSize {
-				return fmt.Errorf("the picture %s in the file is damaged", name)
-			}
-			images[name] = raw
-		}
-
-		database, err := openDB()
+		entries, err := check(c.Entries)
 		if err != nil {
-			return err
+			return fmt.Errorf("preset '%s': %w", c.Name, err)
 		}
-		defer database.Close()
-		say := func(format string, a ...any) {
-			if dry {
-				format = "Would: " + format
-			}
-			fmt.Printf(format+"\n", a...)
+		c.Entries = entries
+		clusters = append(clusters, checkedCluster{c, where})
+	}
+	type checkedFreeze struct {
+		w    schedule.Window
+		mode string
+		lead int
+	}
+	var freezes []checkedFreeze
+	for _, f := range in.Freezes {
+		w, err := f.window()
+		lead := db.NoScheduleLock
+		if f.LockLead != nil {
+			lead = *f.LockLead
 		}
+		if err != nil || !freeze.ValidMode(f.Mode) || lead > db.MaxScheduleLockLead || lead < db.NoScheduleLock {
+			return fmt.Errorf("a Frozen Chicken window is invalid")
+		}
+		freezes = append(freezes, checkedFreeze{w, f.Mode, lead})
+	}
+	if in.Nepsis != nil && in.Nepsis.On() {
+		if err := in.Nepsis.Check(); err != nil {
+			return fmt.Errorf("bypass prevention: %w", err)
+		}
+	}
+	images := map[string][]byte{}
+	for name, encoded := range in.Images {
+		raw, err := base64.StdEncoding.DecodeString(encoded)
+		sum := sha256.Sum256(raw)
+		if err != nil || !db.IsImageName(name) || !strings.HasPrefix(name, hex.EncodeToString(sum[:])+".") || len(raw) > maxImportSize {
+			return fmt.Errorf("the picture %s in the file is damaged", name)
+		}
+		images[name] = raw
+	}
 
-		// Scheduled freezes are locks: they need the settings password.
-		existing, err := database.ListFreezeSchedules()
-		if err != nil {
-			return err
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	say := func(format string, a ...any) {
+		if dry {
+			format = "Would: " + format
 		}
-		var newFreezes []checkedFreeze
-		for _, f := range freezes {
-			have := false
-			for _, e := range existing {
-				have = have || (e.Window == f.w && e.Mode == f.mode)
-			}
-			if !have {
-				newFreezes = append(newFreezes, f)
-			}
-		}
-		if !dry && (len(newFreezes) > 0 || len(blocks) > 0) {
-			if err := requireLockPassword(database); err != nil {
-				return err
-			}
-		}
-		{
-			// R-LOCK-12: the locks in the file are confirmed before anything
-			// is written; a dry run lists them (the interface asks with them).
-			var locks []lockToSet
-			for _, c := range blocks {
-				if l := c.in.ScheduleLock; l != nil {
-					locks = append(locks, lockToSet{"imported block '" + c.in.Name + "'", "schedule lock", leadLength(*l)})
-				}
-			}
-			for _, f := range newFreezes {
-				if f.lead >= 0 {
-					locks = append(locks, lockToSet{fmt.Sprintf("imported freeze schedule %s (%s mode)", f.w, f.mode), "schedule lock", leadLength(f.lead)})
-				}
-			}
-			if in.Backup != nil {
-				// Block names as they will be: rename like the loop below.
-				names, taken := map[string]string{}, map[string]bool{}
-				for _, c := range blocks {
-					name := c.in.Name
-					for n := 2; ; n++ {
-						if _, err := database.GetBlock(name); err != nil && !taken[name] {
-							break
-						}
-						name = fmt.Sprintf("%s-%d", c.in.Name, n)
-					}
-					taken[name], names[c.in.Name] = true, name
-				}
-				trusted, err := database.TrustedNow(time.Now())
-				if err != nil {
-					return err
-				}
-				locks = append(locks, in.Backup.backupLocks(names, database, trusted)...)
-			}
-			if dry {
-				for _, l := range locks {
-					say("set a lock: %s", l)
-				}
-			} else if err := confirmLocks(cmd, locks...); err != nil {
-				return err
-			}
-		}
+		fmt.Printf(format+"\n", a...)
+	}
 
-		if !dry && len(images) > 0 {
-			if err := os.MkdirAll(db.ImagesDir(), 0o755); err != nil {
-				return err
-			}
-			for name, raw := range images {
-				path := filepath.Join(db.ImagesDir(), name)
-				if _, err := os.Stat(path); err != nil {
-					if err := os.WriteFile(path, raw, 0o644); err != nil {
-						return err
-					}
-				}
-			}
+	// Scheduled freezes are locks: they need the settings password.
+	existing, err := database.ListFreezeSchedules()
+	if err != nil {
+		return err
+	}
+	if o.replacing {
+		existing = nil
+	}
+	var newFreezes []checkedFreeze
+	for _, f := range freezes {
+		have := false
+		for _, e := range existing {
+			have = have || (e.Window == f.w && e.Mode == f.mode)
 		}
-		// Places first, so the blocks' rules can name them.
-		placeIDs := map[string]int{}
-		if have, err := database.Places(); err != nil {
+		if !have {
+			newFreezes = append(newFreezes, f)
+		}
+	}
+	if !dry && !o.confirmed && (len(newFreezes) > 0 || len(blocks) > 0) {
+		if err := requireLockPassword(database); err != nil {
 			return err
-		} else {
-			for _, p := range have {
-				placeIDs[p.Name] = p.ID
-			}
 		}
-		for _, p := range in.Places {
-			if _, ok := placeIDs[p.Name]; ok {
-				fmt.Printf("Place '%s' exists already: left as it is.\n", p.Name)
-				continue
-			}
-			say("add place '%s' (%d networks)", p.Name, len(p.Networks))
-			if !dry {
-				if _, err := database.SavePlace(p.Name, p.Networks); err != nil {
-					return fmt.Errorf("place '%s': %w", p.Name, err)
-				}
-				saved, err := database.GetPlace(p.Name)
-				if err != nil {
-					return err
-				}
-				if p.Need > 0 {
-					if err := database.SetPlaceNeed(saved.ID, min(p.Need, len(saved.Networks))); err != nil {
-						return err
-					}
-				}
-				placeIDs[p.Name] = saved.ID
-			} else {
-				placeIDs[p.Name] = -1
-			}
-		}
-		var fileBlocks []string
+	}
+	{
+		// R-LOCK-12: the locks in the file are confirmed before anything
+		// is written; a dry run lists them (the interface asks with them).
+		var locks []lockToSet
 		for _, c := range blocks {
-			fileBlocks = append(fileBlocks, c.in.Name)
-		}
-		scheduleIDs, err := importSchedules(database, modes, fileBlocks, dry, say)
-		if err != nil {
-			return err
-		}
-		taken := map[string]bool{}
-		renamed := map[string]string{} // the file's block names -> created here
-		for _, c := range blocks {
-			name := c.in.Name
-			for n := 2; ; n++ {
-				if have, err := database.NameTaken(db.KindBlock, name); err == nil && !have && !taken[name] {
-					break
-				}
-				name = fmt.Sprintf("%s-%d", c.in.Name, n)
-			}
-			taken[name] = true
-			if name != c.in.Name {
-				say("add block '%s' as '%s', since that name is taken here (%d lists, %d apps, %d schedules)",
-					c.in.Name, name, len(c.lists), len(visibleApps(c.in.Apps)), len(c.windows))
-			} else {
-				say("add block '%s' (%d lists, %d apps, %d schedules)", name, len(c.lists), len(visibleApps(c.in.Apps)), len(c.windows))
-			}
-			renamed[c.in.Name] = name
-			c.in.Name = name
-			// Copies of a schedule that comes along: the schedule is
-			// applied instead (applyImportedSchedules).
-			var kept []schedule.Window
-			var keptIn []windowExport
-			for i, w := range c.windows {
-				if i < len(c.in.Schedules) && c.in.Schedules[i].Copy != "" && slices.Contains(c.in.AppliedSchedules, c.in.Schedules[i].Copy) {
-					continue
-				}
-				kept = append(kept, w)
-				if i < len(c.in.Schedules) {
-					keptIn = append(keptIn, c.in.Schedules[i])
-				}
-			}
-			c.windows, c.in.Schedules = kept, keptIn
-			if !dry {
-				if err := createBlock(database, c); err != nil {
-					return fmt.Errorf("block '%s': %w", name, err)
-				}
-			}
-			for _, group := range []string{db.TriggerApps, db.TriggerTitles} {
-				if actions, ok := c.in.Triggers[group]; ok && !dry {
-					if err := database.SetTriggerActions(name, group, actions); err != nil {
-						return err
-					}
-				}
-			}
-			for _, place := range c.in.Places {
-				id, ok := placeIDs[place]
-				if !ok {
-					fmt.Printf("Block '%s': the place '%s' isn't in the file or here, so its rule is left out.\n", name, place)
-					continue
-				}
-				say("let the place '%s' switch block '%s'", place, name)
-				if !dry {
-					if err := database.SetPlaceRule(name, id, true); err != nil {
-						return err
-					}
-				}
-			}
-			if a := c.in.Automation; a != nil {
-				say("block '%s': %s by default, switching needs %s", name, map[bool]string{true: "enabled", false: "disabled"}[a.DefaultOn],
-					map[bool]string{true: "both", false: "either"}[a.NeedBoth])
-				if !dry {
-					if err := database.SetAutomation(name, *a); err != nil {
-						return err
-					}
-				}
-			}
-			if err := applyImportedSchedules(database, name, c.in.AppliedSchedules, scheduleIDs, dry, say); err != nil {
-				return err
-			}
-		}
-		if err := importModes(database, modes, in, renamed, scheduleIDs, placeIDs, dry, say); err != nil {
-			return err
-		}
-		addedClusters := map[string]bool{}
-		for _, c := range clusters {
-			kind := map[bool]string{false: "list preset", true: "phrase set preset"}[c.c.Phrases]
-			if have, err := database.GetCluster(c.c.Name); err == nil && have.Phrases == c.c.Phrases &&
-				have.Where == c.where && slices.Equal(have.Entries, c.c.Entries) {
-				fmt.Printf("The %s '%s' is here already: left as it is.\n", kind, c.c.Name)
-				continue
-			}
-			name := freeName(c.c.Name, func(n string) bool {
-				exists, err := database.ClusterExists(n)
-				return err != nil || exists || addedClusters[strings.ToLower(n)]
-			})
-			addedClusters[strings.ToLower(name)] = true
-			if name != c.c.Name {
-				say("add the %s '%s' as '%s', since that name is taken here (%d entries)", kind, c.c.Name, name, len(c.c.Entries))
-			} else {
-				say("add the %s '%s' (%d entries)", kind, name, len(c.c.Entries))
-			}
-			if !dry {
-				create := database.CreateCluster
-				if c.c.Phrases {
-					create = database.CreatePhraseCluster
-				}
-				if err := create(name, c.where); err != nil {
-					return err
-				}
-				created, err := database.GetCluster(name)
-				if err != nil {
-					return err
-				}
-				if _, err := database.AddClusterEntries(created.ID, c.c.Entries); err != nil {
-					return err
-				}
-			}
-		}
-		if in.Browser[enforce.SafeSearchGroup] { // a file from before a setting per engine
-			for _, e := range enforce.SafeSearchEngines {
-				in.Browser[enforce.SafeSearchSetting(e)] = true
-			}
-		}
-		for _, name := range enforce.BrowserSettings {
-			if !in.Browser[name] || enforce.BrowserOn(database, name) {
-				continue
-			}
-			say("turn on the browser setting %s", name)
-			if !dry {
-				if err := database.SetSetting("browser."+name, "on"); err != nil {
-					return err
-				}
-			}
-		}
-		if in.Tamper["file-urls"] && !enforce.FileURLsOn(database) {
-			say("turn on file:// blocking")
-			if !dry {
-				if err := database.SetSetting(enforce.SettingFileURLs, "on"); err != nil {
-					return err
-				}
-			}
-		}
-		if (in.Tamper[db.UnsupportedBrowsers] || in.Browser[forceLibreWolfAlias]) && !enforce.UnsupportedBrowsersOn(database) {
-			if !extensionBrowserInstalled() {
-				fmt.Println("Block unsupported browsers is left off: no supported browser is installed here ('kc9k browsers').")
-			} else {
-				say("turn on block unsupported browsers")
-				if !dry {
-					if err := database.SetSetting(db.SettingUnsupportedBrowsers, "on"); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		for _, o := range enforce.Options {
-			if want, given := in.Options[o.Name]; given && want != enforce.OptionOn(database, o.Name) {
-				say("turn the behaviour setting %s %s", o.Name, map[bool]string{true: "on", false: "off"}[want])
-				if !dry {
-					if err := enforce.SetOption(database, o.Name, want); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		if in.Nepsis != nil && in.Nepsis.On() {
-			old, err := database.GlobalNepsis()
-			if err != nil {
-				return err
-			}
-			switch {
-			case !in.Nepsis.StricterThan(old):
-				fmt.Println("The bypass prevention here is stricter in some way: left as it is.")
-			default:
-				say("set the global bypass prevention (%d steps)", len(in.Nepsis.Steps))
-				if !dry {
-					if err := database.SetGlobalNepsis(*in.Nepsis); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		if in.Backup != nil {
-			if err := importBackupExtras(database, in.Backup, renamed, dry, say); err != nil {
-				return err
-			}
-		}
-		if err := importCircadian(database, in.Circadian, dry, say); err != nil {
-			return err
-		}
-		if err := importWallpaperSettings(database, in.Wallpaper, modes.pictures, dry, say); err != nil {
-			return err
-		}
-		templateNames := make([]string, 0, len(in.Templates))
-		for name := range in.Templates {
-			templateNames = append(templateNames, name)
-		}
-		slices.Sort(templateNames)
-		addedTemplates := map[string]bool{}
-		for _, name := range templateNames {
-			raw := in.Templates[name]
-			var check blockExport
-			if json.Unmarshal(raw, &check) != nil || name == "" {
-				fmt.Printf("Block preset '%s' in the file is damaged: left out.\n", name)
-				continue
-			}
-			if have, err := database.Template(name); err == nil && sameJSON([]byte(have), raw) {
-				fmt.Printf("Block preset '%s' is here already: left as it is.\n", name)
-				continue
-			}
-			newName := freeName(name, func(n string) bool {
-				_, err := database.Template(n)
-				return err == nil || addedTemplates[strings.ToLower(n)]
-			})
-			addedTemplates[strings.ToLower(newName)] = true
-			if newName != name {
-				say("add block preset '%s' as '%s', since that name is taken here", name, newName)
-			} else {
-				say("add block preset '%s'", name)
-			}
-			if !dry {
-				if err := database.SaveTemplate(newName, string(raw)); err != nil {
-					return err
-				}
-			}
-		}
-		if err := importPresets(database, in.Presets, dry, say); err != nil {
-			return err
-		}
-		if in.StrictUse && !enforce.StrictUseOn(database) {
-			say("turn on strict use counting")
-			if !dry {
-				if err := database.SetSetting(enforce.SettingStrictUse, "on"); err != nil {
-					return err
-				}
-			}
-		}
-		if n := in.Notifications; n != nil && len(n.Advance) > 0 {
-			if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
-				fmt.Println("Notification choices are set here already: left as they are.")
-			} else {
-				say("set the notification choices")
-				if !dry {
-					if err := enforce.SaveNoticeOptions(database, *n); err != nil {
-						return err
-					}
-				}
+			if l := c.in.ScheduleLock; l != nil {
+				locks = append(locks, lockToSet{"imported block '" + c.in.Name + "'", "schedule lock", leadLength(*l)})
 			}
 		}
 		for _, f := range newFreezes {
-			say("add a scheduled Frozen Chicken: %s (%s)", f.w, f.mode)
-			if !dry {
-				if err := database.AddFreezeSchedule(f.w, f.mode, f.lead); err != nil {
+			if f.lead >= 0 {
+				locks = append(locks, lockToSet{fmt.Sprintf("imported freeze schedule %s (%s mode)", f.w, f.mode), "schedule lock", leadLength(f.lead)})
+			}
+		}
+		if in.Backup != nil {
+			// Block names as they will be: rename like the loop below.
+			names, taken := map[string]string{}, map[string]bool{}
+			for _, c := range blocks {
+				name := c.in.Name
+				for n := 2; ; n++ {
+					if _, err := database.GetBlock(name); (o.replacing || err != nil) && !taken[name] {
+						break
+					}
+					name = fmt.Sprintf("%s-%d", c.in.Name, n)
+				}
+				taken[name], names[c.in.Name] = true, name
+			}
+			trusted, err := database.TrustedNow(time.Now())
+			if err != nil {
+				return err
+			}
+			locks = append(locks, in.Backup.backupLocks(names, database, trusted)...)
+		}
+		if o.locks != nil {
+			*o.locks = locks
+		}
+		if dry {
+			for _, l := range locks {
+				say("set a lock: %s", l)
+			}
+		} else if o.confirmed {
+			// The caller confirmed them (sync download, before replacing).
+		} else if err := confirmLocks(cmd, locks...); err != nil {
+			return err
+		}
+	}
+
+	if !dry && len(images) > 0 {
+		if err := os.MkdirAll(db.ImagesDir(), 0o755); err != nil {
+			return err
+		}
+		for name, raw := range images {
+			path := filepath.Join(db.ImagesDir(), name)
+			if _, err := os.Stat(path); err != nil {
+				if err := os.WriteFile(path, raw, 0o644); err != nil {
 					return err
 				}
 			}
 		}
+	}
+	// Places first, so the blocks' rules can name them.
+	placeIDs := map[string]int{}
+	if have, err := database.Places(); err != nil {
+		return err
+	} else {
+		for _, p := range have {
+			placeIDs[p.Name] = p.ID
+		}
+	}
+	for _, p := range in.Places {
+		if _, ok := placeIDs[p.Name]; ok {
+			fmt.Printf("Place '%s' exists already: left as it is.\n", p.Name)
+			continue
+		}
+		say("add place '%s' (%d networks)", p.Name, len(p.Networks))
 		if !dry {
-			if err := database.MigrateCombinations(); err != nil {
+			if _, err := database.SavePlace(p.Name, p.Networks); err != nil {
+				return fmt.Errorf("place '%s': %w", p.Name, err)
+			}
+			saved, err := database.GetPlace(p.Name)
+			if err != nil {
 				return err
 			}
-			if err := enforce.ApplyFromDB(database); err != nil {
+			if p.Need > 0 {
+				if err := database.SetPlaceNeed(saved.ID, min(p.Need, len(saved.Networks))); err != nil {
+					return err
+				}
+			}
+			placeIDs[p.Name] = saved.ID
+		} else {
+			placeIDs[p.Name] = -1
+		}
+	}
+	var fileBlocks []string
+	for _, c := range blocks {
+		fileBlocks = append(fileBlocks, c.in.Name)
+	}
+	scheduleIDs, err := importSchedules(database, modes, fileBlocks, dry, say)
+	if err != nil {
+		return err
+	}
+	taken := map[string]bool{}
+	renamed := map[string]string{} // the file's block names -> created here
+	for _, c := range blocks {
+		name := c.in.Name
+		for n := 2; ; n++ {
+			if have, err := database.NameTaken(db.KindBlock, name); err == nil && !have && !taken[name] {
+				break
+			}
+			name = fmt.Sprintf("%s-%d", c.in.Name, n)
+		}
+		taken[name] = true
+		if name != c.in.Name {
+			say("add block '%s' as '%s', since that name is taken here (%d lists, %d apps, %d schedules)",
+				c.in.Name, name, len(c.lists), len(visibleApps(c.in.Apps)), len(c.windows))
+		} else {
+			say("add block '%s' (%d lists, %d apps, %d schedules)", name, len(c.lists), len(visibleApps(c.in.Apps)), len(c.windows))
+		}
+		renamed[c.in.Name] = name
+		c.in.Name = name
+		// Copies of a schedule that comes along: the schedule is
+		// applied instead (applyImportedSchedules).
+		var kept []schedule.Window
+		var keptIn []windowExport
+		for i, w := range c.windows {
+			if i < len(c.in.Schedules) && c.in.Schedules[i].Copy != "" && slices.Contains(c.in.AppliedSchedules, c.in.Schedules[i].Copy) {
+				continue
+			}
+			kept = append(kept, w)
+			if i < len(c.in.Schedules) {
+				keptIn = append(keptIn, c.in.Schedules[i])
+			}
+		}
+		c.windows, c.in.Schedules = kept, keptIn
+		if !dry {
+			if err := createBlock(database, c); err != nil {
+				return fmt.Errorf("block '%s': %w", name, err)
+			}
+		}
+		for _, group := range []string{db.TriggerApps, db.TriggerTitles} {
+			if actions, ok := c.in.Triggers[group]; ok && !dry {
+				if err := database.SetTriggerActions(name, group, actions); err != nil {
+					return err
+				}
+			}
+		}
+		for _, place := range c.in.Places {
+			id, ok := placeIDs[place]
+			if !ok {
+				fmt.Printf("Block '%s': the place '%s' isn't in the file or here, so its rule is left out.\n", name, place)
+				continue
+			}
+			say("let the place '%s' switch block '%s'", place, name)
+			if !dry {
+				if err := database.SetPlaceRule(name, id, true); err != nil {
+					return err
+				}
+			}
+		}
+		if a := c.in.Automation; a != nil {
+			say("block '%s': %s by default, switching needs %s", name, map[bool]string{true: "enabled", false: "disabled"}[a.DefaultOn],
+				map[bool]string{true: "both", false: "either"}[a.NeedBoth])
+			if !dry {
+				if err := database.SetAutomation(name, *a); err != nil {
+					return err
+				}
+			}
+		}
+		if err := applyImportedSchedules(database, name, c.in.AppliedSchedules, scheduleIDs, dry, say); err != nil {
+			return err
+		}
+	}
+	if err := importModes(database, modes, in, renamed, scheduleIDs, placeIDs, dry, say); err != nil {
+		return err
+	}
+	addedClusters := map[string]bool{}
+	for _, c := range clusters {
+		kind := map[bool]string{false: "list preset", true: "phrase set preset"}[c.c.Phrases]
+		if have, err := database.GetCluster(c.c.Name); err == nil && have.Phrases == c.c.Phrases &&
+			have.Where == c.where && slices.Equal(have.Entries, c.c.Entries) {
+			fmt.Printf("The %s '%s' is here already: left as it is.\n", kind, c.c.Name)
+			continue
+		}
+		name := freeName(c.c.Name, func(n string) bool {
+			exists, err := database.ClusterExists(n)
+			return err != nil || exists || addedClusters[strings.ToLower(n)]
+		})
+		addedClusters[strings.ToLower(name)] = true
+		if name != c.c.Name {
+			say("add the %s '%s' as '%s', since that name is taken here (%d entries)", kind, c.c.Name, name, len(c.c.Entries))
+		} else {
+			say("add the %s '%s' (%d entries)", kind, name, len(c.c.Entries))
+		}
+		if !dry {
+			create := database.CreateCluster
+			if c.c.Phrases {
+				create = database.CreatePhraseCluster
+			}
+			if err := create(name, c.where); err != nil {
 				return err
 			}
+			created, err := database.GetCluster(name)
+			if err != nil {
+				return err
+			}
+			if _, err := database.AddClusterEntries(created.ID, c.c.Entries); err != nil {
+				return err
+			}
+		}
+	}
+	if in.Browser[enforce.SafeSearchGroup] { // a file from before a setting per engine
+		for _, e := range enforce.SafeSearchEngines {
+			in.Browser[enforce.SafeSearchSetting(e)] = true
+		}
+	}
+	for _, name := range enforce.BrowserSettings {
+		if !in.Browser[name] || enforce.BrowserOn(database, name) {
+			continue
+		}
+		say("turn on the browser setting %s", name)
+		if !dry {
+			if err := database.SetSetting("browser."+name, "on"); err != nil {
+				return err
+			}
+		}
+	}
+	if in.Tamper["file-urls"] && !enforce.FileURLsOn(database) {
+		say("turn on file:// blocking")
+		if !dry {
+			if err := database.SetSetting(enforce.SettingFileURLs, "on"); err != nil {
+				return err
+			}
+		}
+	}
+	if (in.Tamper[db.UnsupportedBrowsers] || in.Browser[forceLibreWolfAlias]) && !enforce.UnsupportedBrowsersOn(database) {
+		if !extensionBrowserInstalled() {
+			fmt.Println("Block unsupported browsers is left off: no supported browser is installed here ('kc9k browsers').")
+		} else {
+			say("turn on block unsupported browsers")
+			if !dry {
+				if err := database.SetSetting(db.SettingUnsupportedBrowsers, "on"); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	for _, o := range enforce.Options {
+		if want, given := in.Options[o.Name]; given && want != enforce.OptionOn(database, o.Name) {
+			say("turn the behaviour setting %s %s", o.Name, map[bool]string{true: "on", false: "off"}[want])
+			if !dry {
+				if err := enforce.SetOption(database, o.Name, want); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if in.Nepsis != nil && in.Nepsis.On() {
+		old, err := database.GlobalNepsis()
+		if err != nil {
+			return err
+		}
+		switch {
+		case !in.Nepsis.StricterThan(old):
+			fmt.Println("The bypass prevention here is stricter in some way: left as it is.")
+		default:
+			say("set the global bypass prevention (%d steps)", len(in.Nepsis.Steps))
+			if !dry {
+				if err := database.SetGlobalNepsis(*in.Nepsis); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if in.Backup != nil {
+		if err := importBackupExtras(database, in.Backup, renamed, dry, say); err != nil {
+			return err
+		}
+	}
+	if err := importCircadian(database, in.Circadian, dry, say); err != nil {
+		return err
+	}
+	if err := importWallpaperSettings(database, in.Wallpaper, modes.pictures, dry, say); err != nil {
+		return err
+	}
+	templateNames := make([]string, 0, len(in.Templates))
+	for name := range in.Templates {
+		templateNames = append(templateNames, name)
+	}
+	slices.Sort(templateNames)
+	addedTemplates := map[string]bool{}
+	for _, name := range templateNames {
+		raw := in.Templates[name]
+		var check blockExport
+		if json.Unmarshal(raw, &check) != nil || name == "" {
+			fmt.Printf("Block preset '%s' in the file is damaged: left out.\n", name)
+			continue
+		}
+		if have, err := database.Template(name); err == nil && sameJSON([]byte(have), raw) {
+			fmt.Printf("Block preset '%s' is here already: left as it is.\n", name)
+			continue
+		}
+		newName := freeName(name, func(n string) bool {
+			_, err := database.Template(n)
+			return err == nil || addedTemplates[strings.ToLower(n)]
+		})
+		addedTemplates[strings.ToLower(newName)] = true
+		if newName != name {
+			say("add block preset '%s' as '%s', since that name is taken here", name, newName)
+		} else {
+			say("add block preset '%s'", name)
+		}
+		if !dry {
+			if err := database.SaveTemplate(newName, string(raw)); err != nil {
+				return err
+			}
+		}
+	}
+	if err := importPresets(database, in.Presets, dry, say); err != nil {
+		return err
+	}
+	if in.StrictUse && !enforce.StrictUseOn(database) {
+		say("turn on strict use counting")
+		if !dry {
+			if err := database.SetSetting(enforce.SettingStrictUse, "on"); err != nil {
+				return err
+			}
+		}
+	}
+	if n := in.Notifications; n != nil && len(n.Advance) > 0 {
+		if v, _ := database.GetSetting(enforce.SettingNotices); v != "" {
+			fmt.Println("Notification choices are set here already: left as they are.")
+		} else {
+			say("set the notification choices")
+			if !dry {
+				if err := enforce.SaveNoticeOptions(database, *n); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	for _, f := range newFreezes {
+		say("add a scheduled Frozen Chicken: %s (%s)", f.w, f.mode)
+		if !dry {
+			if err := database.AddFreezeSchedule(f.w, f.mode, f.lead); err != nil {
+				return err
+			}
+		}
+	}
+	if !dry {
+		if err := database.MigrateCombinations(); err != nil {
+			return err
+		}
+		if err := enforce.ApplyFromDB(database); err != nil {
+			return err
+		}
+		if !o.confirmed {
 			fmt.Println("Import finished. Imported blocks are not started.")
 		}
-		return nil
-	},
+	}
+	return nil
 }
 
 func init() {

@@ -25,6 +25,7 @@ its bypass prevention).
 
 | ID | Item | SPEC | Notes | Needs |
 |---|---|---|---|---|
+| A16 | Linux CI `Test` red: `ci/integration.sh` can't run `kc9k` | — | testing | agent |
 | A1 | `no-images` GIFs: the owner's own site; pseudo-element GIFs left empty after address → text → unmatched page | §3.9 | extension | box, owner |
 | A2 | Looks from page text: real use on the laptop | §3.9 | extension | owner |
 | A4 | Brightness slider gone, night light off | §4.10 | circadian | box |
@@ -84,6 +85,17 @@ its bypass prevention).
 
 **Android is on hold until the Linux project is finished** (owner): its
 plan is SPEC §8, its items §3.1.
+
+- [ ] `A16` **Linux CI `Test` red** (found 2026-11-23, run 669; unit tests
+  pass). `ci/integration.sh:9` wraps every call as
+  `kc9k() { timeout 120 command kc9k "$@"; }`: `timeout` gets the shell
+  builtin `command` ("failed to execute process"), so every `kc9k` call
+  fails (51 failures). Fix: look the binary up once and export it, e.g.
+  `KC9K_BIN=$(command -v kc9k); export KC9K_BIN` and
+  `kc9k() { timeout 120 "$KC9K_BIN" "$@"; }`. Then fix what is left; seen
+  before: commands without `--yes` where a lock is now confirmed
+  (R-LOCK-12), unchecked since. Done when: the `Integration tests` step of
+  `.github/workflows/test.yml` is green on main.
 
 ### 0.1 Code contradicting `SPEC.md`
 
@@ -430,11 +442,7 @@ Never on a computer in use; the laptop runs only what is marked laptop.
 win-vm (Windows 11, snapshot, admin): `pwsh ci/windows_vm_test.ps1
 kc9k.exe`, then `-Reboots` from a fresh snapshot.
 
-Also seen: the Linux workflow `Test` fails in `ci/integration.sh`; unit
-tests pass. Since 2026-11-23 (run 669) every `kc9k` call there fails: the
-wrapper `timeout 120 command kc9k` hands `timeout` the shell builtin
-`command` ("failed to execute process"; 51 failures). Before that: commands
-without `--yes` where a lock is now confirmed (R-LOCK-12), unchecked since.
+Also seen: the Linux workflow `Test` fails in `ci/integration.sh` (`A16`, §0).
 
 ### 4.3 Owner report 2026-11-22: Windows GUI on the laptop
 

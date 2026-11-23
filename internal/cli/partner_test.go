@@ -196,6 +196,33 @@ func TestAccountabilityPartner(t *testing.T) {
 		t.Error("the settings password stayed")
 	}
 
+	// A mode's blocks locked with one password the partner holds, and a
+	// hotkey's password lock.
+	mustRun(t, "block", "create", "m1")
+	mustRun(t, "block", "add", "m1", "a.example")
+	mustRun(t, "mode", "create", "M")
+	mustRun(t, "mode", "add", "M", "m1")
+	mustRun(t, "mode", "lock", "M", "--password-stdin", "--partner-holds", "--yes")
+	if h, _ := blockHold(u, "m1", time.Now()); !h.active || !slices.Contains(h.layers, db.LayerPassword) {
+		t.Errorf("mode's block not password-locked: %+v", h.layers)
+	}
+	mustRun(t, "hotkey", "add", "ctrl+alt+p", "b", "--password-stdin", "--partner-holds", "--yes")
+	device("partner")
+	inbox = capture(t, "partner", "inbox")
+	if !strings.Contains(inbox, "block 'm1'") || strings.Count(inbox, "block 'b'") < 2 {
+		t.Errorf("partner doesn't hold the mode's or hotkey's password: %s", inbox)
+	}
+	u = device("user")
+	mustRun(t, "partner", "request", "m1")
+	device("partner")
+	if err := json.Unmarshal([]byte(capture(t, "partner", "requests", "--json")), &reqs); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "partner", "approve", reqs[0].ID)
+	u = device("user")
+	mustRun(t, "partner", "unlock", "m1")
+	mustRun(t, "stop", "m1")
+
 	// A browser setting's password lock, held by the partner.
 	mustRun(t, "browser", "web-only", "on", "--password-stdin", "--partner-holds", "--yes")
 	if l, _ := loadSettingLock(u, "web-only"); l.describe() == "" {
@@ -203,7 +230,7 @@ func TestAccountabilityPartner(t *testing.T) {
 	}
 	mustRun(t, "partner", "request", "web-only")
 	device("partner")
-	if err := json.Unmarshal([]byte(capture(t, "partner", "requests", "--json")), &reqs); err != nil || len(reqs) != 3 {
+	if err := json.Unmarshal([]byte(capture(t, "partner", "requests", "--json")), &reqs); err != nil || len(reqs) != 4 {
 		t.Fatalf("requests: %+v %v", reqs, err)
 	}
 	mustRun(t, "partner", "approve", reqs[0].ID)

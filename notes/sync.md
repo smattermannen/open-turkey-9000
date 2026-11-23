@@ -87,8 +87,10 @@
   first report a period after the first send; `partnerReport`: top sites
   and apps, times blocked, refused attempts and tamper events), outbox.
   Daemon: `daemon.EveryMinute` (`partnerTick`, quiet when signed out).
-- Held passwords (`--partner-holds` on `start`, `password set`,
-  `browser`/`tamper` setting locks via `requestedSettingLock`):
+- Held passwords (`--partner-holds` on `start`, `mode lock` (one
+  password, a message per block), `hotkey add` (target its block),
+  `password set`, `browser`/`tamper` setting locks via
+  `requestedSettingLock`):
   `partnerHeldPassword` makes 16 letters, sends them (kind password,
   target `block:<name>` / `setting:<name>` / `settings`) before locking,
   needs an active partner. `partner request` → partner `approve` (the newest password the

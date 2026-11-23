@@ -800,8 +800,23 @@ func lockMode(cmd *cobra.Command, m db.Mode, locks []string, passwordHash string
 		return err
 	}
 	if req.password && passwordHash == "" {
-		password, err := readPasswordStdin("Lock password")
-		if err != nil {
+		var password string
+		if held, _ := cmd.Flags().GetBool("partner-holds"); held && cmd.Flags().Lookup("partner-holds") != nil {
+			// §4.15: one password for the mode's blocks, held by the partners.
+			var targets []string
+			for _, b := range m.Blocks {
+				targets = append(targets, "block:"+b)
+			}
+			pdb, err := openDB()
+			if err != nil {
+				return err
+			}
+			password, err = partnerHeldPassword(pdb, targets...)
+			pdb.Close()
+			if err != nil {
+				return err
+			}
+		} else if password, err = readPasswordStdin("Lock password"); err != nil {
 			return err
 		}
 		if passwordHash, err = db.HashPassword(password); err != nil {
@@ -985,6 +1000,7 @@ var modeShowCmd = &cobra.Command{
 func init() {
 	addYesFlag(modeOnCmd, modeAddCmd)
 	addStartLockFlags(modeLockCmd)
+	modeLockCmd.Flags().Bool("partner-holds", false, "Password lock: KC9K makes the password up and sends it only to your accountability partners (§4.15)")
 	addYesFlag(modeLockCmd, modeRunCmd)
 	modeRunCmd.Flags().String("for", "", "How long it runs, locked (e.g. 45m, 2h)")
 	modeCmd.AddCommand(modeCreateCmd, modeRenameCmd, modeDeleteCmd, modeAddCmd, modeTakeOutCmd, modeOnCmd, modeOffCmd,

@@ -511,7 +511,7 @@ func targetWords(target string) string {
 // partnerHeldPassword makes up a password that only the user's active
 // partners get (--partner-holds): sent before anything is locked with it,
 // never shown or kept here.
-func partnerHeldPassword(database *db.DB, target string) (string, error) {
+func partnerHeldPassword(database *db.DB, targets ...string) (string, error) {
 	c, s, err := signedIn(database)
 	if err != nil {
 		return "", fmt.Errorf("--partner-holds needs your KC9K account: %w", err)
@@ -539,11 +539,15 @@ func partnerHeldPassword(database *db.DB, target string) (string, error) {
 		pw[i] = letters[n.Int64()]
 	}
 	password := string(pw)
-	if err := c.Send(s, []cloud.Message{{Kind: cloud.MessagePassword, Target: target,
-		Subject: "You hold a password for " + s.Email,
-		Body: s.Email + " locked " + targetWords(target) + " with a password only you have. They can ask you to unlock " +
-			"('kc9k partner requests'); approving hands it over for one use.",
-		Secret: password}}); err != nil {
+	var msgs []cloud.Message // one per lock it opens (a mode's blocks share one)
+	for _, target := range targets {
+		msgs = append(msgs, cloud.Message{Kind: cloud.MessagePassword, Target: target,
+			Subject: "You hold a password for " + s.Email,
+			Body: s.Email + " locked " + targetWords(target) + " with a password only you have. They can ask you to unlock " +
+				"('kc9k partner requests'); approving hands it over for one use.",
+			Secret: password})
+	}
+	if err := c.Send(s, msgs); err != nil {
 		return "", fmt.Errorf("the password couldn't reach your partners, so nothing was locked: %w", err)
 	}
 	fmt.Printf("The password went to %s; you won't see it.\n", strings.Join(to, ", "))

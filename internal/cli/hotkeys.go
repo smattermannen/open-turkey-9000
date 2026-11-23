@@ -171,7 +171,13 @@ func addHotkey(cmd *cobra.Command, database *db.DB, accel string, actions []db.H
 			return 0, err
 		}
 		if password {
-			p, err := readPasswordStdin("Password for the hotkey's password lock")
+			var p string
+			var err error
+			if held, _ := cmd.Flags().GetBool("partner-holds"); held && cmd.Flags().Lookup("partner-holds") != nil {
+				p, err = partnerHeldPassword(database, "block:"+h.Block) // §4.15
+			} else {
+				p, err = readPasswordStdin("Password for the hotkey's password lock")
+			}
 			if err != nil {
 				return 0, err
 			}
@@ -534,6 +540,7 @@ func syncHotkeys(database *db.DB) error {
 
 func init() {
 	addStartLockFlags(hotkeyAddCmd) // the locks each press sets
+	hotkeyAddCmd.Flags().Bool("partner-holds", false, "Password lock: KC9K makes the password up and sends it only to your accountability partners (§4.15)")
 	addYesFlag(hotkeyAddCmd)
 	hotkeyAddCmd.Flags().Bool("no-confirm", false, "Run without confirmation: pressing the hotkey sets its locks without asking (they are confirmed only now)")
 	hotkeyAddCmd.Flags().StringArray("do", nil, "An action, in order: start B, stop B, mode-on M, mode-off M, mode-run M 2h, monk 2h, freeze 2h lock, close-browser, lock-screen [D], logout [D], shutdown [D], custom \"open …\" \"run …\"")

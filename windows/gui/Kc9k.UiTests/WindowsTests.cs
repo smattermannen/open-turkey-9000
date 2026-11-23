@@ -36,6 +36,47 @@ public class WindowsTests
         gui.Invoke(gui.FindButton("OK"));
     }
 
+    // 2.12 (§3.13, §4.10): every browser kc9k lists is shown with whether its
+    // extension runs; one not on the computer has Install (one click, then
+    // kc9k's words); one found without the extension says so, naming the
+    // Chrome Web Store only for Chrome and Edge. Built against the fake until
+    // Core lists Firefox (ROADMAP 2.12).
+    [Fact]
+    public void EveryListedBrowserShowsItsExtension()
+    {
+        BrowserInfoNode[] browsers =
+        [
+            new("librewolf", "LibreWolf", true, true, 30), new("firefox", "Firefox", false, true, -1),
+            new("edge", "Microsoft Edge", false, true, -1), new("chrome", "Google Chrome", true, true, -1),
+            new("bing", "Microsoft Bing", false, false, -1),
+        ];
+        using var gui = new GuiApp("browsers-212", prepare: dir =>
+        {
+            GuiApp.EditState(dir, s => s["browsers"] = new JsonArray([.. browsers.Select(b => (JsonNode)b.Json())]));
+            GuiApp.Respond(dir, (["browsers", "install", "bing"], true, "Microsoft Bing installed; the extension is added the next time it starts."));
+        });
+        gui.Page("settings");
+        foreach (var b in browsers)
+        {
+            var info = new Kc9k.Core.BrowserInfo { Id = b.Id, Name = b.Name, Installed = b.Installed, Found = b.Found, CheckinSeconds = b.Checkin };
+            gui.FindName(b.Name);
+            gui.FindName(Kc9k.Core.Words.BrowserStatus(info));
+            Assert.Equal(!b.Installed && !b.Found, gui.ById("InstallBrowser_" + b.Id) is not null);
+        }
+        Assert.DoesNotContain("Chrome Web Store", Kc9k.Core.Words.BrowserStatus(new() { Id = "firefox", Found = true }));
+        gui.Shot("browsers-212");
+        gui.Invoke("InstallBrowser_bing");
+        gui.Invoke(gui.FindButton("Continue"));
+        gui.WaitFor(() => gui.Ran("browsers", "install", "bing"), "kc9k browsers install bing");
+        gui.FindName("Installed");
+        gui.Invoke(gui.FindButton("OK"));
+    }
+
+    sealed record BrowserInfoNode(string Id, string Name, bool Installed, bool Found, long Checkin)
+    {
+        public JsonObject Json() => new() { ["id"] = Id, ["name"] = Name, ["installed"] = Installed, ["found"] = Found, ["checkin_seconds"] = Checkin };
+    }
+
     // W31 (§4.1): break status and ladder positions on the Overview.
     [Fact]
     public void OverviewShowsBreaksAndLadderPositions()

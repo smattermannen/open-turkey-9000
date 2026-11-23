@@ -347,7 +347,9 @@ public static class Words
     public static string BrowserStatus(BrowserInfo b)
     {
         if (!b.Installed && b.Found)
-            return "Installed, but Killer Chicken 9000 can't give it the extension yet (its Chrome Web Store listing doesn't exist yet), so it counts as an unsupported browser: closed while anything is locked.";
+            return "Installed, but Killer Chicken 9000 can't give it the extension yet" +
+                   (b.Id is "chrome" or "edge" ? " (its Chrome Web Store listing doesn't exist yet)" : "") +
+                   ", so it counts as an unsupported browser: closed while anything is locked.";
         if (!b.Installed) return "Not installed.";
         var s = b.CheckinSeconds;
         if (s < 0) return "Installed. Extension not seen yet: open it once.";

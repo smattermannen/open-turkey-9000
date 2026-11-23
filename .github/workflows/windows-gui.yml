@@ -134,6 +134,13 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
       SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+      # Or Azure Artifact Signing (sign.ps1): the account and who may sign.
+      AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+      AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+      AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -162,7 +169,7 @@ jobs:
       # configured (secrets SIGNING_PFX_BASE64 and SIGNING_PFX_PASSWORD), the
       # programs and the MSI are signed; without it the build is unsigned.
       - name: Sign the programs
-        if: env.SIGNING_PFX_BASE64 != ''
+        if: env.SIGNING_PFX_BASE64 != '' || env.AZURE_SIGNING_ACCOUNT != ''
         shell: pwsh
         run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\kc9k\kc9k.exe" "$env:RUNNER_TEMP\gui\kc9k-gui.exe"
       - name: Build the MSIs
@@ -194,6 +201,7 @@ jobs:
           Copy-Item "$env:RUNNER_TEMP\kc9k\kc9k.exe", "$env:RUNNER_TEMP\gui\kc9k-gui.exe", "$env:RUNNER_TEMP\msi\KillerChicken9000-A.msi" $dir
           $env:SIGNING_PFX_BASE64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($pfx))
           $env:SIGNING_PFX_PASSWORD = $pw
+          $env:AZURE_SIGNING_ACCOUNT = "" # this check signs with the throwaway certificate only
           pwsh windows/installer/sign.ps1 (Get-ChildItem $dir | ForEach-Object FullName)
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $bad = 0
@@ -205,7 +213,7 @@ jobs:
           Remove-Item $cert.PSPath
           if ($bad -gt 0) { Write-Host "$bad file(s) not signed"; exit 1 }
       - name: Sign the MSI
-        if: env.SIGNING_PFX_BASE64 != ''
+        if: env.SIGNING_PFX_BASE64 != '' || env.AZURE_SIGNING_ACCOUNT != ''
         shell: pwsh
         run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\msi\KillerChicken9000-A.msi"
       - name: Install, remove, refuse while locked, upgrade, downgrade, repair

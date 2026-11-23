@@ -28,6 +28,13 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
       SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+      # Or Azure Artifact Signing (sign.ps1): the account and who may sign.
+      AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+      AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+      AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
     defaults:
       run:
         shell: pwsh
@@ -59,7 +66,7 @@ jobs:
           dotnet build windows/installer/Actions -c Release -o "$env:RUNNER_TEMP\actions"
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Sign the programs
-        if: env.SIGNING_PFX_BASE64 != ''
+        if: env.SIGNING_PFX_BASE64 != '' || env.AZURE_SIGNING_ACCOUNT != ''
         run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\kc9k\kc9k.exe" "$env:RUNNER_TEMP\gui\kc9k-gui.exe"
       - name: Build the MSI
         run: |
@@ -70,7 +77,7 @@ jobs:
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\out" | Out-Null
           Copy-Item $msi.FullName "$env:RUNNER_TEMP\out\KillerChicken9000-${{ steps.v.outputs.version }}.msi"
       - name: Sign the MSI
-        if: env.SIGNING_PFX_BASE64 != ''
+        if: env.SIGNING_PFX_BASE64 != '' || env.AZURE_SIGNING_ACCOUNT != ''
         run: pwsh windows/installer/sign.ps1 "$env:RUNNER_TEMP\out\KillerChicken9000-${{ steps.v.outputs.version }}.msi"
       - name: The MSI installs and answers
         run: |
@@ -98,6 +105,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $signed = if ($env:SIGNING_PFX_BASE64) { "Signed." } else { "Not code-signed yet: Windows SmartScreen will warn before it runs." }
+          $signed = if ($env:SIGNING_PFX_BASE64 -or $env:AZURE_SIGNING_ACCOUNT) { "Signed." } else { "Not code-signed yet: Windows SmartScreen will warn before it runs." }
           $notes = "Killer Chicken 9000 for Windows ${{ steps.v.outputs.version }}: one MSI with the service, kc9k.exe and the window. $signed The .sha256 file holds the MSI's SHA-256."
           gh release create "${{ github.ref_name }}" (Get-ChildItem "$env:RUNNER_TEMP\out" | ForEach-Object FullName) --title "Killer Chicken 9000 ${{ steps.v.outputs.version }}" --notes $notes

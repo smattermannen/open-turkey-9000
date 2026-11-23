@@ -98,6 +98,7 @@ public sealed class BlockView
             .Named("More: rename, duplicate, block preset, users, delete", "BlockMore").Tip("More: rename, duplicate, block preset, users, delete");
         var actions = Ui.Side(Ui.Wrap(6, startButton, stopButton, unlockButton, extendButton, automationButton), moreButton);
         actions.MainMin = 120;
+        actions.SideAtTop = true;
 
         // Websites tab ---------------------------------------------------
         testSwitch = Ui.Switch("Test mode", false, on => { if (block is not null) _ = C.Run(["list", "test", block.Name, on ? "on" : "off"]); }, "KeywordTest");

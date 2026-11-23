@@ -347,6 +347,10 @@ public sealed partial class SidePanel : Panel
         return new Size(width, height);
     }
 
+    /// <summary>The side at the top of a main part that wraps onto several
+    /// lines (a row of buttons), not in the middle of it.</summary>
+    public bool SideAtTop { get; set; }
+
     protected override Size ArrangeOverride(Size final)
     {
         var side = SideChild;
@@ -365,7 +369,7 @@ public sealed partial class SidePanel : Panel
         }
         var height = Math.Max(mh, sh);
         Main?.Arrange(new Rect(0, (height - mh) / 2, Math.Max(0, final.Width - sw - Spacing), mh));
-        side.Arrange(new Rect(final.Width - sw, (height - sh) / 2, sw, sh));
+        side.Arrange(new Rect(final.Width - sw, SideAtTop ? 0 : (height - sh) / 2, sw, sh));
         return final;
     }
 }

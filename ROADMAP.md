@@ -465,9 +465,11 @@ needs it and the Linux tests prove nothing changed.
   GUI; refuses removal, repair and downgrade while locked; upgrade over a
   lock, full-UI removal, release workflow (`windows-release.yml`) and
   throwaway-certificate signing checked in CI. Left (owner): the
-  code-signing certificate (`SIGNING_PFX_BASE64`/`SIGNING_PFX_PASSWORD`,
-  or Azure Artifact Signing steps in place of `sign.ps1`: not built) and
-  the first tag (`v0.1.0`). Unchecked (win-vm): install and removal from
+  code signing, either way `sign.ps1` takes (a PFX in `SIGNING_PFX_BASE64`/
+  `SIGNING_PFX_PASSWORD`, or an Azure Artifact Signing account in the
+  `AZURE_SIGNING_*` and `AZURE_TENANT_ID`/`_CLIENT_ID`/`_CLIENT_SECRET`
+  secrets; the Azure way built but never run with an account), and the
+  first tag (`v0.1.0`). Unchecked (win-vm): install and removal from
   Apps & features by a person.
 
 ### 4.1 Windows GUI: parity and release (W30–W49)

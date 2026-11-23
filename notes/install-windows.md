@@ -30,9 +30,13 @@
 - Version: `kc9k version` → `kc9k VERSION (os/arch)` (`-ldflags -X
   …/internal/cli.Version=1.2.3`, else "dev"; no access password). GUI:
   `-p:Version`, `-p:InformationalVersion`.
-- Signing (owner's certificate): `sign.ps1` (signtool, PFX from secrets
-  `SIGNING_PFX_BASE64`/`SIGNING_PFX_PASSWORD`) signs both exes and the MSI
-  when set. Azure Artifact Signing: Microsoft's trusted-signing action.
+- Signing (owner's): `sign.ps1` signs both exes and the MSI when set,
+  with signtool, one of two ways: a PFX (secrets `SIGNING_PFX_BASE64`/
+  `SIGNING_PFX_PASSWORD`), or Azure Artifact Signing (secrets
+  `AZURE_SIGNING_ENDPOINT`, `_ACCOUNT`, `_PROFILE` and the app
+  registration's `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`,
+  `AZURE_CLIENT_SECRET`; Microsoft.Trusted.Signing.Client's dlib from
+  nuget.org, timestamp.acs.microsoft.com), chosen when the account is set.
 - Release (`windows-release.yml`): tag `v1.2.3` builds, signs, test-installs,
   publishes MSI + `.sha256`
   (ProductVersion: numbers before `-`/`+`). `workflow_dispatch`: no publish.

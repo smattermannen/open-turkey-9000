@@ -69,7 +69,16 @@ state["rules"] = {"lists": LISTS}
 driver = librewolf({
     "network.proxy.type": 1, "network.proxy.http": "127.0.0.1", "network.proxy.http_port": proxy.server_address[1],
     "dom.security.https_only_mode": False, "network.stricttransportsecurity.preloadlist": False,
+    # LibreWolf's own uBlock Origin hides the engines' ads (and some
+    # results) by itself once its filter lists are in (CI runs 752, 756):
+    # only KC9K's extension is under test here.
+    "extensions.installDistroAddons": False,
 }, pack())
+try:
+    driver.uninstall_addon("uBlock0@raymondhill.net")
+    print("uBlock Origin removed from the test profile")
+except Exception:
+    pass  # not there
 try:
     for name, url in PAGES.items():
         state["rules"] = {"lists": LISTS}

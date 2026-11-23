@@ -137,3 +137,8 @@ Not fixed by `SPEC.md`; the code is the truth.
 - Guided setup (Core W15): unknown step IDs as plain steps;
   `other-admins`, `builtin-admin` get Do it… (`ms-settings:otherusers`);
   `safe-mode` is information.
+- Core's Windows-only behaviour in the GUI (W49, `WindowsTests.cs`):
+  guided setup steps (W15), help texts (W16), browser Install (W18),
+  Close guest profiles' help names Windows' Guest account (W14). Every
+  Windows-only setting in [windows](windows.md) has a control (audit
+  2026-11-23); a new Core `GUI:` line gets its place and a test here.

@@ -72,7 +72,7 @@ public static class Tables
             "Private windows are turned off in every browser (open ones close when it restarts) and Tor Browser is closed.",
             ["tamper", "private"], "tamper_private"),
         ("guest", "Close guest profiles",
-            "Guest browsing is turned off in every Chrome-like browser, Edge included.",
+            "Guest browsing is turned off in every Chrome-like browser, Edge included, and Windows' Guest account stays off.",
             ["tamper", "guest"], "tamper_guest"),
         ("extension-stop", "Close browsers if the extension stops",
             "A browser whose Killer Chicken extension stops checking in is closed while a block needs it. Off, only while something is locked.",

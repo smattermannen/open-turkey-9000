@@ -35,12 +35,14 @@ public class DesktopTests
         // From the card's empty part right of its name (the name is a link).
         var r = block.BoundingRectangle;
         gui.Front();
-        Drag(new(r.Right + 120, r.Top + r.Height / 2), Center(mode));
+        // Onto the mode card's empty part (its name is a link too).
+        System.Drawing.Point Target() { var m = gui.Find("ModeCard_Study").BoundingRectangle; return new(m.Right + 200, m.Top + m.Height / 2); }
+        Drag(new(r.Right + 120, r.Top + r.Height / 2), Target());
         if (FlaUI.Core.Tools.Retry.WhileNull(() => gui.DesktopByName("Put Reading into Study?"), TimeSpan.FromSeconds(6), TimeSpan.FromMilliseconds(200)).Result is null)
         {
             // A busy runner can drop the first drag's start: once more.
             gui.Front();
-            Drag(new(r.Right + 120, r.Top + r.Height / 2), Center(gui.Find("ModeCard_Study")));
+            Drag(new(r.Right + 120, r.Top + r.Height / 2), Target());
         }
         gui.FindName("Put Reading into Study?", 20);
         gui.Shot("dropped");

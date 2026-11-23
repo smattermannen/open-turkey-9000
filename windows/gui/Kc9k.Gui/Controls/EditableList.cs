@@ -190,7 +190,8 @@ public sealed partial class EditableList : StackPanel
             grip.ReleasePointerCapture(e.Pointer);
             Keep();
         }), true);
-        grip.DoubleTapped += (_, _) => Usual();
+        // A button takes the clicks for itself: the double-click is heard anyway.
+        grip.AddHandler(DoubleTappedEvent, new DoubleTappedEventHandler((_, _) => Usual()), true);
         grip.Click += (_, _) => { if (startY is null && grip.FocusState == FocusState.Keyboard) Usual(); };
         grip.KeyDown += (_, e) =>
         {

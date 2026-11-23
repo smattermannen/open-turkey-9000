@@ -358,12 +358,26 @@ public sealed class GuiApp : IDisposable
         Send(from, 0);
         Thread.Sleep(100);
         Send(from, Down);
-        Thread.Sleep(150);
+        Thread.Sleep(200);
+        // Past the drag threshold slowly first (a drag and drop starts there),
+        // then the way, then a moment over the target (it hears the drag).
+        for (var i = 1; i <= 4; i++)
+        {
+            Send(new(from.X + i * 3, from.Y + i * 3), 0);
+            Thread.Sleep(60);
+        }
+        var start = new System.Drawing.Point(from.X + 12, from.Y + 12);
         for (var i = 1; i <= steps; i++)
         {
-            Send(new(from.X + (to.X - from.X) * i / steps, from.Y + (to.Y - from.Y) * i / steps), 0);
-            Thread.Sleep(30);
+            Send(new(start.X + (to.X - start.X) * i / steps, start.Y + (to.Y - start.Y) * i / steps), 0);
+            Thread.Sleep(40);
         }
+        for (var i = 0; i < 4; i++)
+        {
+            Send(new(to.X + (i % 2 == 0 ? 2 : 0), to.Y), 0);
+            Thread.Sleep(80);
+        }
+        Send(to, 0);
         Thread.Sleep(150);
         Send(to, Up);
         Wait.UntilInputIsProcessed();

@@ -196,6 +196,23 @@ func TestAccountabilityPartner(t *testing.T) {
 		t.Error("the settings password stayed")
 	}
 
+	// A browser setting's password lock, held by the partner.
+	mustRun(t, "browser", "web-only", "on", "--password-stdin", "--partner-holds", "--yes")
+	if l, _ := loadSettingLock(u, "web-only"); l.describe() == "" {
+		t.Fatal("web-only not locked")
+	}
+	mustRun(t, "partner", "request", "web-only")
+	device("partner")
+	if err := json.Unmarshal([]byte(capture(t, "partner", "requests", "--json")), &reqs); err != nil || len(reqs) != 3 {
+		t.Fatalf("requests: %+v %v", reqs, err)
+	}
+	mustRun(t, "partner", "approve", reqs[0].ID)
+	u = device("user")
+	mustRun(t, "partner", "unlock", "web-only")
+	if l, _ := loadSettingLock(u, "web-only"); l.describe() != "" {
+		t.Errorf("web-only still locked: %s", l.describe())
+	}
+
 	// Nothing locked now (block b is on, unlocked): the partner may go, and
 	// hears it.
 	mustRun(t, "stop", "b")

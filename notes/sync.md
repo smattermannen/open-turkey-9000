@@ -87,13 +87,14 @@
   first report a period after the first send; `partnerReport`: top sites
   and apps, times blocked, refused attempts and tamper events), outbox.
   Daemon: `daemon.EveryMinute` (`partnerTick`, quiet when signed out).
-- Held passwords (`--partner-holds` on `start`, `password set`):
+- Held passwords (`--partner-holds` on `start`, `password set`,
+  `browser`/`tamper` setting locks via `requestedSettingLock`):
   `partnerHeldPassword` makes 16 letters, sends them (kind password,
-  target `block:<name>` / `settings`) before locking, needs an active
-  partner. `partner request` → partner `approve` (the newest password the
+  target `block:<name>` / `setting:<name>` / `settings`) before locking,
+  needs an active partner. `partner request` → partner `approve` (the newest password the
   user sent for that target) / `deny` → `partner unlock`: block via
-  `unlock` with it on stdin (settings password asked first), settings
-  password removed if it matches; request marked used, alert.
+  `unlock`, setting via `unlockBrowserSetting`, with it on stdin (settings
+  password asked first), settings password removed if it matches; request marked used, alert.
 - Weakening (`gatePartnerWeakening`: settings password, `refused()` while
   `AnyLock`): `partner remove` of an active partner (told first),
   `partner reports` less often. Free: invite, accept, leave, more reports.

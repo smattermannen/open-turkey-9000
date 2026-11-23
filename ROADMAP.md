@@ -360,9 +360,9 @@ Only rows not fully built.
   - [ ] Run the new part of `cloud/supabase/schema.sql`.
   To do, agent:
   - [ ] Windows GUI partner section (session B), Android (N-items).
-  - [ ] `--partner-holds` for browser and tamper setting locks, mode and
-    hotkey password locks, and the GTK settings password dialog (now:
-    `start` with the GTK block lock picker, CLI `password set`).
+  - [ ] `--partner-holds` for mode and hotkey password locks, and in the
+    GTK settings password and setting lock dialogs (now: `start` with the
+    GTK block lock picker, `password set`, `browser`, `tamper`).
 - **2.14 Website** (M; §4.16): Not built. Content per §4.16; hosting the
   owner's choice when built.
 - **2.15 Search results from blacklisted addresses** (M; R-PAGE-2): Built

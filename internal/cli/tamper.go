@@ -222,6 +222,7 @@ func init() {
 	tamperCmd.Flags().Bool("lock", false, "Text lock ('kc9k tamper unlock unsupported-browsers')")
 	tamperCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	tamperCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
+	tamperCmd.Flags().Bool("partner-holds", false, "Password locks: KC9K makes the password up and sends it only to your accountability partners (§4.15)")
 	tamperCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(tamperCmd)
 	addRelockFlag(tamperCmd)

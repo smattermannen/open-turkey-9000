@@ -480,20 +480,27 @@ var partnerInboxCmd = &cobra.Command{
 	}),
 }
 
-// partnerTarget turns "settings" or a block's name into a request target.
+// partnerTarget turns "settings", a block's name or a lockable setting's
+// (browser or tamper protection) into a request target.
 func partnerTarget(database *db.DB, arg string) (string, error) {
 	if arg == "settings" {
 		return "settings", nil
 	}
-	if _, err := database.GetBlock(arg); err != nil {
-		return "", err
+	if _, err := database.GetBlock(arg); err == nil {
+		return "block:" + arg, nil
 	}
-	return "block:" + arg, nil
+	if name := strings.TrimPrefix(arg, "setting:"); enforce.IsLockableSetting(name) {
+		return "setting:" + name, nil
+	}
+	return "", fmt.Errorf("no block or lockable setting %q (or 'settings' for the settings password)", arg)
 }
 
 func targetWords(target string) string {
 	if name, ok := strings.CutPrefix(target, "block:"); ok {
 		return "block '" + name + "' (password lock)"
+	}
+	if name, ok := strings.CutPrefix(target, "setting:"); ok {
+		return "setting " + name + " (password lock)"
 	}
 	if target == "settings" {
 		return "the settings password"
@@ -544,8 +551,8 @@ func partnerHeldPassword(database *db.DB, target string) (string, error) {
 }
 
 var partnerRequestCmd = &cobra.Command{
-	Use:   "request <block|settings>",
-	Short: "Ask your partners to unlock a block's password lock or lift the settings password they hold",
+	Use:   "request <block|setting|settings>",
+	Short: "Ask your partners to unlock a block's or setting's password lock, or lift the settings password, they hold",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		target, err := partnerTarget(database, args[0])
@@ -661,8 +668,8 @@ func decideCmd(approve bool) *cobra.Command {
 }
 
 var partnerUnlockCmd = &cobra.Command{
-	Use:   "unlock <block|settings>",
-	Short: "Use an approved unlock request: the block's password lock is unlocked, or the settings password removed",
+	Use:   "unlock <block|setting|settings>",
+	Short: "Use an approved unlock request: the block's or setting's password lock is unlocked, or the settings password removed",
 	Args:  cobra.ExactArgs(1),
 	RunE: withDB(func(cmd *cobra.Command, database *db.DB, args []string) error {
 		target, err := partnerTarget(database, args[0])
@@ -702,7 +709,11 @@ var partnerUnlockCmd = &cobra.Command{
 			}
 			old := stdinLines
 			stdinLines = newLineReader(q.Secret + "\n")
-			err := runQueued([]string{"unlock", args[0]})
+			if name, ok := strings.CutPrefix(target, "setting:"); ok {
+				err = unlockBrowserSetting(database, name)
+			} else {
+				err = runQueued([]string{"unlock", strings.TrimPrefix(target, "block:")})
+			}
 			stdinLines = old
 			if err != nil {
 				return err

@@ -304,7 +304,12 @@ func requestedSettingLock(cmd *cobra.Command, database *db.DB, name string) (db.
 			if count > 1 {
 				prompt = fmt.Sprintf("Setting password %d of %d", nth, count)
 			}
-			password, err := readPasswordStdin(prompt)
+			var password string
+			if held, _ := cmd.Flags().GetBool("partner-holds"); held {
+				password, err = partnerHeldPassword(database, "setting:"+name) // §4.15
+			} else {
+				password, err = readPasswordStdin(prompt)
+			}
 			if err != nil {
 				return want, err
 			}
@@ -816,6 +821,7 @@ func init() {
 	browserCmd.Flags().Bool("lock", false, "Text lock: a challenge to type to unlock ('kc9k browser unlock <setting>')")
 	browserCmd.Flags().Int("lock-chars", lock.DefaultLockChars, "Number of characters in the unlock challenge")
 	browserCmd.Flags().Bool("password-stdin", false, "Password lock: read the password from standard input")
+	browserCmd.Flags().Bool("partner-holds", false, "Password locks: KC9K makes the password up and sends it only to your accountability partners (§4.15)")
 	browserCmd.Flags().Bool("restart", false, "Restart lock: stays on until the computer restarts")
 	addTextLockFlags(browserCmd)
 	addRelockFlag(browserCmd)

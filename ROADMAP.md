@@ -361,8 +361,8 @@ Only rows not fully built.
   To do, agent:
   - [ ] Windows GUI partner section (session B), Android (N-items).
   - [ ] `--partner-holds` for browser and tamper setting locks, mode and
-    hotkey password locks, and in the GTK lock picker (now: CLI `start`
-    and `password set`).
+    hotkey password locks, and the GTK settings password dialog (now:
+    `start` with the GTK block lock picker, CLI `password set`).
 - **2.14 Website** (M; §4.16): Not built. Content per §4.16; hosting the
   owner's choice when built.
 - **2.15 Search results from blacklisted addresses** (M; R-PAGE-2): Built

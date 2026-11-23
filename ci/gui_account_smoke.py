@@ -151,6 +151,16 @@ try:
     account()
     rows = [c.get_children()[0].get_text() for c in win.partner_box.get_children()]
     check(any("pat@example.org (active)" in t for t in rows), f"active partner shown: {rows}")
+    # The lock picker's "my partner holds it": start's flags, no password typed.
+    picker = gui.LockPicker("stop", "stopped", gui.LockPicker.ALL_KINDS, relock_any=True, partner=True)
+    picker.partner_holds.set_active(True)
+    flags = [f for fl, _w in picker.chosen() for f in fl]
+    check(flags == ["--password-stdin", "--partner-holds"] and picker.secret() == "" and picker.is_valid(),
+          f"partner-held password lock: {flags}")
+    win.run(["start", "work", *flags, "--yes"])
+    pump(lambda: win.get_sensitive())
+    inbox = cli(C, "partner", "inbox").stdout
+    check("You hold the password of block 'work'" in inbox, "the partner holds it: " + inbox)
     msgs.clear()
     answers["confirm"] = True
     win.partner_remove("pat@example.org")

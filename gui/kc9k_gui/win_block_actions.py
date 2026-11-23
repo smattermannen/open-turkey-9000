@@ -137,7 +137,7 @@ class _BlockActions:
         active = block["active"]
         # R-LOCK-7: a running block takes any kind of lock, added after the
         # ones already on; those only get stronger.
-        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS, relock_any=True)
+        picker = LockPicker("stop", "stopped", LockPicker.ALL_KINDS, relock_any=True, partner=True)
         asked = self.lock_dialog(
             f"Add locks to {block['name']}" if active else f"Start {block['name']} with locks",
             "New locks come after the ones already on, unlocked last. A kind it already has is "

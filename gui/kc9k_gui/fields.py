@@ -693,9 +693,13 @@ class LockPicker(Gtk.Box):
 
     ALL_KINDS = ("timer", "password", "text", "restart", "delay", "range", "relock")
 
-    def __init__(self, verb="stop", done="stopped", kinds=ALL_KINDS, relock_any=False):
+    def __init__(self, verb="stop", done="stopped", kinds=ALL_KINDS, relock_any=False, partner=False):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.callbacks, self.verb, self.done, self.kinds = [], verb, done, tuple(kinds)
+        # §4.15: the password made up by KC9K and held by the accountability
+        # partner (kc9k start --partner-holds); only where the command takes it.
+        self.partner_holds = Gtk.CheckButton(label="My accountability partner holds it (I never see it)")
+        self.partner_holds.connect("toggled", self.changed)
         # §3.4: a block's re-lock brings back all its locks, so it goes with
         # any lock; a setting's re-lock only with a password or text lock.
         self.relock_any = relock_any
@@ -737,6 +741,9 @@ class LockPicker(Gtk.Box):
             more.attach(pw, 1, row, 1, 1)
             more.attach(dim(f"Needed to {verb} it. Give it to someone else to keep."), 1, row + 1, 1, 1)
             row += 2
+            if partner:
+                more.attach(self.partner_holds, 1, row, 1, 1)
+                row += 1
 
         self.typing = Gtk.CheckButton(label="Type a text to unlock")
         self.text_style = Gtk.ComboBoxText()
@@ -844,7 +851,7 @@ class LockPicker(Gtk.Box):
     def problem(self):
         if not self.timer.is_valid():
             return self.timer.problem()
-        if self.password.get_text() != self.password_again.get_text():
+        if self.password.get_text() != self.password_again.get_text() and not self.partner_holds.get_active():
             return "The two passwords differ."
         if self.typing.get_active():
             if self.text_style.get_active_id() == "custom" and not self.custom_text.get_text().strip():
@@ -875,7 +882,10 @@ class LockPicker(Gtk.Box):
         for widget in self.range_widgets:
             widget.set_sensitive(self.range_on.get_active())
         self.relock.set_sensitive(self.relock_allowed())
-        mark_problem(self.password_again, self.password.get_text() != self.password_again.get_text())
+        held = self.partner_holds.get_active()
+        self.password.set_sensitive(not held)
+        self.password_again.set_sensitive(not held)
+        mark_problem(self.password_again, not held and self.password.get_text() != self.password_again.get_text())
         problem = self.problem()
         self.problem_label.set_text(problem or "")
         self.problem_label.set_visible(bool(problem))
@@ -883,7 +893,8 @@ class LockPicker(Gtk.Box):
             callback(self)
 
     def secret(self):
-        return self.password.get_text()
+        """The password typed (none when the partner holds it)."""
+        return "" if self.partner_holds.get_active() else self.password.get_text()
 
     def text_flags(self):
         style = self.text_style.get_active_id()
@@ -894,7 +905,7 @@ class LockPicker(Gtk.Box):
 
     def relock_allowed(self):
         """Whether re-lock goes with the locks chosen."""
-        if self.typing.get_active() or self.secret():
+        if self.typing.get_active() or self.secret() or self.partner_holds.get_active():
             return True
         return self.relock_any and bool(
             self.timer.flags() or self.restart.get_active() or (self.delay is not None and self.delay.value)
@@ -918,7 +929,10 @@ class LockPicker(Gtk.Box):
                         "not even with a text lock; time the computer is off doesn't count)"))
         if self.restart.get_active():
             out.append((["--restart"], "restart lock, until the computer restarts"))
-        if self.secret():
+        if self.partner_holds.get_active():
+            out.append((["--password-stdin", "--partner-holds"],
+                        f"password lock, the password held by your accountability partner{relock_note}"))
+        elif self.secret():
             out.append((["--password-stdin"], f"password lock{relock_note}"))
         if self.typing.get_active():
             style = self.text_style.get_active_id()

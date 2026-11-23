@@ -212,3 +212,12 @@ clean:
 	@echo ">> Cleaning build artifacts..."
 	rm -f $(BINARY_NAME)
 	@echo ">> Cleanup complete!"
+
+# -------------------------------------------------------
+# chrome-store-zip: the extension as the Chrome Web Store takes it
+# (ROADMAP 2.17): Manifest V3, no key or update_url. Listing texts and
+# pictures: internal/webext/store/.
+# -------------------------------------------------------
+.PHONY: chrome-store-zip
+chrome-store-zip:
+	CGO_ENABLED=0 go run ./cmd/chrome-store-zip

@@ -1,6 +1,6 @@
 # Browser policies, extension guard, supported browsers, Chrome
 
-- Covers: `blocker/browser*.go`, `extguard.go`, `browserdetect.go`, `supported.go`, `remotecontrol*.go`, `librewolf*.go`, `chromesetup.go`, `webext/chrome.go`, `db/settinglocks.go`, `cli/browser*.go`, `cli/tamper.go`, `enforce/browser.go`, `enforce/tamper.go`, `enforce/tampersettings.go`, `blocker/guest.go`
+- Covers: `cmd/chrome-store-zip`, `webext/store/`, `blocker/browser*.go`, `extguard.go`, `browserdetect.go`, `supported.go`, `remotecontrol*.go`, `librewolf*.go`, `chromesetup.go`, `webext/chrome.go`, `db/settinglocks.go`, `cli/browser*.go`, `cli/tamper.go`, `enforce/browser.go`, `enforce/tamper.go`, `enforce/tampersettings.go`, `blocker/guest.go`
 - SPEC: §3.13, §4.10 Tamper protection / Browsers / Browser settings, R-LOCK-9
 - Connects to: [extension](extension.md), [locks](locks.md) (setting locks), [layers-net](layers-net.md), [device](device.md) (strict mode)
 
@@ -91,6 +91,13 @@ with `ExtensionHeader` (`/usage`: `X-KC9K-Usage`), no CORS, no secret
 - Worker state across restarts: `storage.session` (e.g.
   `kc9kDownloadPages`). A restarted worker may let the first page through
   (URL policy still blocks plain sites).
+- Chrome Web Store (2.17): `make chrome-store-zip` (`cmd/chrome-store-zip`,
+  `PackChromeStoreZip`: `PackChromeZip`'s files dated 2026-01-01, no `key`
+  or `update_url`; `TestChromeStoreZip`) → `kc9k-chrome-store-<version>.zip`.
+  Listing texts, permission reasons, data use and privacy policy:
+  `webext/store/listing.md`, `privacy-policy.md`; small tile and four
+  1280×800 screenshots drawn from the real pages by `webext/store/render.js`
+  (Playwright). The package loads unpacked in Chromium (worker runs).
 
 ## Tamper settings (`enforce/tampersettings.go`, `TamperOn`)
 

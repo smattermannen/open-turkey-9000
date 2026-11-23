@@ -298,26 +298,23 @@ Only rows not fully built.
   store ID (W2). Not built: Firefox (LibreWolf only), Edge on Linux, every
   browser on Android (IronFox only), Bing (Microsoft Bing browser app).
 - **2.17 Chrome Web Store listing** (S agent, owner's review wait;
-  §3.13, SPEC §6 2026-11-21): Not built. Chrome and Edge on Windows
-  force-install only store extensions (`blocker.ChromeStoreExtensionID`
-  empty: they get none, W2). Linux keeps its own signed `.crx` from the
-  daemon.
+  §3.13, SPEC §6 2026-11-21): Partial. Built (`notes/browsers.md`
+  Chrome): `make chrome-store-zip`, listing texts and privacy policy
+  (`internal/webext/store/`), small tile and four screenshots. Chrome and
+  Edge on Windows force-install only store extensions
+  (`blocker.ChromeStoreExtensionID` empty: they get none, W2). Linux keeps
+  its own signed `.crx` from the daemon.
   To do, agent:
-  - [ ] Store build: MV3 `.zip` from `webext.PackChrome`'s files, no `key`
-    or `update_url`; `make chrome-store-zip`.
-  - [ ] Listing texts: single purpose, a reason per permission, data use
-    (nothing leaves the device), privacy policy text (a repo file until
-    the website).
-  - [ ] Pictures: 128 px icon (have), screenshots 1280×800, small tile
-    440×280.
   - [ ] With the ID: set `ChromeStoreExtensionID`; release step uploading
     each new extension version (Chrome Web Store API; owner's OAuth client
     as GitHub secrets).
   To do, owner:
   - [ ] Chrome Web Store developer account (Google account with 2-step
     verification; one-time 5 USD).
-  - [ ] Upload the agent's `.zip`, visibility **Unlisted**, fill privacy
-    practices from the agent's texts, privacy policy URL, submit (review
+  - [ ] Upload `make chrome-store-zip`'s `.zip`, visibility **Unlisted**,
+    fill the listing and privacy practices from
+    `internal/webext/store/listing.md`, pictures from that folder, a
+    privacy policy URL (`privacy-policy.md` published), submit (review
     days to weeks; access to all sites makes it slower).
   - [ ] Give the agent the extension ID.
   - [ ] Optional later: Edge Add-ons listing (free; Edge takes Chrome

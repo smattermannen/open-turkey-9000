@@ -44,20 +44,35 @@ jobs:
         shell: pwsh
         run: pwsh ci/windows_desktop_test.ps1 (Resolve-Path kc9k.exe)
       - name: Soak, short (W50-W52; ci/windows_soak_test.ps1)
-        timeout-minutes: 20
-        # One minute a phase; idle must start no PowerShell and refresh no
-        # policy. The script must also parse in Windows PowerShell 5.1.
+        timeout-minutes: 25
+        # One minute a phase, idle six (past the service's once-a-minute and
+        # five-minute checks). -Strict: the process start trace must see a
+        # PowerShell the script starts, so "0" is a real count. The script
+        # must also parse in Windows PowerShell 5.1.
         shell: pwsh
         run: |
           powershell.exe -NoProfile -Command "[void][scriptblock]::Create((Get-Content -Raw ci/windows_soak_test.ps1)); 'parses in 5.1'"
           if ($LASTEXITCODE -ne 0) { throw 'the soak script does not parse in Windows PowerShell 5.1' }
-          pwsh ci/windows_soak_test.ps1 -Kc9k (Resolve-Path kc9k.exe) -Minutes 1 -Out (Join-Path $env:RUNNER_TEMP 'soak')
+          $out = Join-Path $env:RUNNER_TEMP 'soak'
+          pwsh ci/windows_soak_test.ps1 -Kc9k (Resolve-Path kc9k.exe) -Minutes 1 -IdleMinutes 6 -Strict -Out $out
+          $soak = $LASTEXITCODE
+          # W50, a check of its own: idle, the service starts no PowerShell.
+          $idle = @(Import-Csv (Join-Path $out 'summary.csv') | Where-Object { $_.Phase -eq 'idle' })
+          if ($idle.Count -ne 1) { throw 'W50: the soak has no idle phase' }
+          if ([double]$idle[0].Min -lt 5) { throw "W50: idle ran $($idle[0].Min) min, want 6" }
+          if ([int]$idle[0].PS -ne 0) { throw "W50: idle, the service started $($idle[0].PS) PowerShell (want 0)" }
+          if ([double]$idle[0].'GP/min' -ne 0) { throw 'W50: idle, a policy refresh' }
+          Write-Host "W50: idle $($idle[0].Min) min, 0 PowerShell by the service, 0 policy refreshes"
+          if ($soak -ne 0) { throw "soak test exited $soak" }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: kc9k-soak
           path: ${{ runner.temp }}/soak
           if-no-files-found: ignore
+      - name: Manifest and challenge window (kc9k.exe's manifest, ROADMAP §4.3)
+        shell: bash
+        run: CGO_ENABLED=0 go test -count=1 -v ./cmd/kc9k
       - name: Service, pipe, install and uninstall
         timeout-minutes: 12
         shell: pwsh

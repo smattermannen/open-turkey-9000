@@ -188,7 +188,9 @@ public sealed partial class EditableList : StackPanel
             if (startY is null) return;
             startY = null;
             grip.ReleasePointerCapture(e.Pointer);
-            Keep();
+            // Only a drag that changed the height is kept: a click (or a
+            // double-click's second release) leaves gui.json as it is.
+            if (Math.Abs(listHolder.Height - startHeight!.Value) >= 1) Keep();
         }), true);
         // A button takes the clicks for itself: the double-click is heard anyway.
         grip.AddHandler(DoubleTappedEvent, new DoubleTappedEventHandler((_, _) => Usual()), true);

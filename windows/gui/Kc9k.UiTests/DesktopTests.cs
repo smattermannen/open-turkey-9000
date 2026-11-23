@@ -35,14 +35,19 @@ public class DesktopTests
         // From the card's empty part right of its name (the name is a link).
         var r = block.BoundingRectangle;
         gui.Front();
-        // Onto the mode card's empty part (its name is a link too).
+        // Onto the mode card's empty part (its name is a link too). OLE drag
+        // and drop wants the window active by a click first; a busy runner
+        // can drop a drag's start, so up to three tries.
         System.Drawing.Point Target() { var m = gui.Find("ModeCard_Study").BoundingRectangle; return new(m.Right + 200, m.Top + m.Height / 2); }
-        Drag(new(r.Right + 120, r.Top + r.Height / 2), Target());
-        if (FlaUI.Core.Tools.Retry.WhileNull(() => gui.DesktopByName("Put Reading into Study?"), TimeSpan.FromSeconds(6), TimeSpan.FromMilliseconds(200)).Result is null)
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            // A busy runner can drop the first drag's start: once more.
             gui.Front();
-            Drag(new(r.Right + 120, r.Top + r.Height / 2), Target());
+            var title = gui.Window.FindFirstDescendant(c => c.ByName("Blocks").And(c.ByControlType(ControlType.Text)));
+            if (title is not null) Mouse.Click(Center(title));
+            Thread.Sleep(300);
+            var from = gui.Find("BlockCard_Reading").BoundingRectangle;
+            Drag(new(from.Right + 120, from.Top + from.Height / 2), Target());
+            if (FlaUI.Core.Tools.Retry.WhileNull(() => gui.DesktopByName("Put Reading into Study?"), TimeSpan.FromSeconds(6), TimeSpan.FromMilliseconds(200)).Result is not null) break;
         }
         gui.FindName("Put Reading into Study?", 20);
         gui.Shot("dropped");

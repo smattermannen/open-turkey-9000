@@ -22,7 +22,13 @@
   a progress bar (R-GUI-3); state re-read after each command, every 5 s
   (stats 30 s); refusals in a dialog in the CLI's words; "needs the
   settings/access password" asks and reruns; `access_unused` passwords
-  dropped; idle minutes forget access passwords.
+  dropped; idle minutes forget access passwords. Never stops the window
+  (§4.3 stability): kc9k is started off the window's thread; reads stop
+  after 120 s, changes after 30 min (a text lock's challenge may be
+  typing); output a child of kc9k holds open is read for 5 s after it
+  ends; one state and one stats read at a time (asked meanwhile: once more
+  after); a failed read shows the banner (its text also the banner's
+  HelpText) until the next good one.
 - **Drafts** (§4.3, `Core/Drafts.cs`, GTK's `DRAFT_EDITS`/`DRAFT_READS`):
   an edit to the opened block goes to `NAME (draft)`, the first making it.
 - **State** (`Core/State.cs`): typed `gui-state`/`stats --json`
@@ -37,7 +43,8 @@
   ContentDialogs show one at a time, so a dialog asking a second question
   hides, asks, and reopens with what was typed. `ConfirmLock` = R-LOCK-12.
   `Dialogs.Show` makes the primary button the default: Enter presses OK
-  (A15, `DialogKeyTests`).
+  once it can be used, also on a closed drop-down (A15, `DialogKeyTests`);
+  a box that takes Enter itself (Custom action's) keeps it.
 - **Pages** (`Pages/`, one per GTK sidebar entry, `Tables.Pages`; Settings
   last; covered while its access area is closed, §3.11): `OverviewPage`
   (no "Get started" card, owner), `BlocksPage` (drag a block card onto a
@@ -49,8 +56,11 @@
   with frame and filters; JSON export, GTK has none), `CircadianPage`,
   `SettingsPage` (Windows wording; `Startup`: Open at sign-in shortcut).
 - **Controls** (`Controls/`): `EditableList` (§4.3 keys: Enter adds,
-  Delete/Backspace removes, Ctrl+A, Ctrl+F, Enter/double-click edits;
-  height per list kind in gui.json), `ListCards.cs`, `Locks.cs`
+  Delete/Backspace removes, Ctrl+A, Ctrl+F, Enter/double-click edits; a
+  grip under it (`…_Grip`, as GTK's ResizeGrip): drag or Up/Down, 80 to
+  1400 DIP, kept per list kind in gui.json and given at once to every list
+  of that kind on screen; double-click or Enter: the usual 150, forgotten),
+  `ListCards.cs`, `Locks.cs`
   (`LockPicker`, `TimerLockField`), `LockDialogs.ChooseOrder` (R-LOCK-6),
   `NepsisDialog` (`--step-json`), `AppPicker` (Start menu shortcuts and
   running programs; adds the program file's name), `WeekCalendar`
@@ -84,14 +94,34 @@
   answers.
 - `ParityTests.cs` (W32): counterparts of the `ci/gui_*` GTK tests,
   including `gui_click_everything` (every button once, questions
-  cancelled, never "Something went wrong"). `WindowsTests.cs`: W30–W43.
+  cancelled, never "Something went wrong"). `ParityRealTests.cs` and
+  `ImportTests.cs`: the rest (`gui_actions`, `gui_trigger`,
+  `gui_list_resize`, `gui_phrase`, `gui_phrase_edit`, `gui_places`,
+  `gui_playlist`, `gui_wallpaper`, `gui_import`), each twice: against the
+  fake, and against the real kc9k.exe on a scratch database (`GuiApp(scratch:
+  true, setup:)`: the fake with `KC9K_FAKE_REAL` logs each command and runs
+  `KC9K_SCRATCH_EXE` with `KC9K_DB`, which applies nothing and needs no
+  service; `GuiApp.Cli`/`RealState` set up and check). No Wi-Fi on the
+  runner: places' real run checks the "no network in range" path.
+  `GuiApp.PickFile` answers Windows' own open dialog (#32770, File name,
+  Enter). `DesktopTests.cs` (W4): a block dragged onto a mode, a window
+  drawn on the week, the tray menu (its callback message posted), Open at
+  sign-in's shortcut, the challenge window opened by Unlock… (installed
+  kc9k.exe; leaves the runner's block locked). `WindowsTests.cs`: W30–W43.
   `ProjectImportTests.cs`. `AccessibilityTests.cs` (W33): every control
   named and focusable; screenshots in high contrast and 200 % text (the
   person's settings restored exactly). `GeometryTests.cs` (W53/W54):
   widths 400–1920 DIP × text 100/150/200 % on every page and block tab:
   nothing outside the client area, no horizontal scroll, no ☰, title at
   one place, Blocks switches in one right column. `StabilityTests.cs`
-  (W52). Tests are per-monitor DPI aware (`DpiAware.cs`): physical pixels,
+  (W52, §4.3): a slow command (pages still change, progress bar), slow
+  reads not piling up, kc9k.exe missing (banner, no dialogs), two
+  refusals one after the other; the fake waits `delay_ms` per answer
+  (`GuiApp.Slow`). The workflow also sets the runner's display itself to
+  150 % and 200 % (`tools/display-scale.ps1`: largest resolution, then the
+  scale as Settings sets it, live) and runs the geometry, page and
+  accessibility tests again there (screenshots `display-150/200`); a scale
+  the display can't reach is said in that step. Tests are per-monitor DPI aware (`DpiAware.cs`): physical pixels,
   as gui.json.
 
 ## Built behaviour
@@ -118,8 +148,10 @@ Not fixed by `SPEC.md`; the code is the truth.
   640 DIP (220 + `NarrowestPage` 420) icons only (`LeftCompact`, titles as
   tooltips), never over the page. A page shown from it starts at its top
   (`ScrollToTop`); Blocks pressed in a block returns to the cards.
-- Supported browsers (W30): `found` but not `installed` = unsupported, no
-  Install button; Install shows `browsers install`'s words as "Getting
+- Supported browsers (W30, 2.12): every entry of `browsers` is a row
+  (name, whether its extension runs); `found` but not `installed` =
+  unsupported, no Install button (the Chrome Web Store named only for
+  Chrome and Edge); Install shows `browsers install`'s words as "Getting
   NAME", not a refusal (`Controller.Run(refusalTitle:)`).
 - Overview (W31, §4.1): each block on says its break and bypass prevention
   ladder position (`nepsis_level`, `nepsis_count`); Device line the global

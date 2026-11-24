@@ -166,6 +166,12 @@ try:
     win.partner_remove("pat@example.org")
     check(pump(lambda: any("refused while" in m for m in msgs)), f"removing refused while locked: {msgs}")
     check(win.partner_reports.get_active_id() == "weekly", "reports weekly by default")
+    # Settings > Passwords: the settings password held by the partner.
+    answers["confirm"] = True
+    win.partner_settings_password(None)
+    pump(lambda: win.get_sensitive())
+    check(json.loads(cli(B, "gui-state").stdout).get("settings_password"), "settings password set")
+    check("the settings password" in cli(C, "partner", "inbox").stdout, "the partner holds the settings password")
 
     answers["confirm"] = True
     win.account_log_out(None)

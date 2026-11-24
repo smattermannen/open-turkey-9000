@@ -364,10 +364,10 @@ Only rows not fully built.
   - [ ] Run the new part of `cloud/supabase/schema.sql`.
   To do, agent:
   - [ ] Windows GUI partner section (session B), Android (N-items).
-  - [ ] "My partner holds it" in the GTK settings password, setting lock,
-    mode lock and hotkey dialogs (the CLI has `--partner-holds` on
-    `start`, `mode lock`, `hotkey add`, `password set`, `browser`,
-    `tamper`; GTK only in a block's Add locks…).
+  - [ ] "My partner holds it" in the GTK setting lock, mode lock and
+    hotkey dialogs (the CLI has `--partner-holds` on `start`, `mode lock`,
+    `hotkey add`, `password set`, `browser`, `tamper`; GTK in a block's
+    Add locks… and the settings password).
   - [x] `schema.sql` checked in a real Postgres (`ci/supabase_schema_test.sh`,
     in `test.yml`): found and fixed an accept that rewrote `owner_id`,
     making anyone a partner of anyone (2026-11-24).

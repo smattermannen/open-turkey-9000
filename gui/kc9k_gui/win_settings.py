@@ -263,7 +263,12 @@ class _SettingsPages:
         self.password_set_button.connect("clicked", self.set_settings_password)
         self.password_remove_button = Gtk.Button(label="Remove password…")
         self.password_remove_button.connect("clicked", self.remove_settings_password)
+        self.password_partner_button = Gtk.Button(label="Partner holds it…")
+        self.password_partner_button.set_tooltip_text(
+            "Killer Chicken makes the password up and sends it only to your accountability partners (§4.15)")
+        self.password_partner_button.connect("clicked", self.partner_settings_password)
         password_row.pack_start(self.password_set_button, False, False, 0)
+        password_row.pack_start(self.password_partner_button, False, False, 0)
         password_row.pack_start(self.password_remove_button, False, False, 0)
         self.password_locks = Gtk.CheckButton(label="Also needed to set a lock, so nobody else can lock me out")
         self.password_locks.connect("toggled", self.toggle_password_locks)
@@ -748,6 +753,15 @@ class _SettingsPages:
             return
         self.run(["password", "set"], new + "\n",
                  then=lambda _o: setattr(self, "settings_password", new))
+
+    def partner_settings_password(self, _button):
+        """§4.15: a settings password only the accountability partners get."""
+        if self.confirm("Let your accountability partner hold the settings password?",
+                        "Killer Chicken makes a new password up and sends it to your partners; you never see it. "
+                        "To weaken anything later, ask them (Account > Ask to unlock…).", "Send it to them"):
+            self.run(["password", "set", "--partner-holds"],
+                     then=lambda o: (setattr(self, "settings_password", None),
+                                     self.message(o, Gtk.MessageType.INFO)))
 
     def remove_settings_password(self, _button):
         if self.confirm("Remove the settings password?",

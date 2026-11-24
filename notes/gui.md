@@ -45,7 +45,9 @@
   date), `LockPicker` (every lock kind; `relock_any=True` for blocks,
   modes, hotkeys; setting locks: re-lock only with text/password;
   `partner=True`, a block's Add locks… only: "My accountability partner
-  holds it" → `--password-stdin --partner-holds`, no password typed).
+  holds it" → `--password-stdin --partner-holds`, no password typed;
+  Settings > Passwords "Partner holds it…" → `password set
+  --partner-holds`).
   CLI side `cli/duration.go` (`parseUserDuration` with d/w,
   `humanDuration`, `untilToday`).
 - Locks: Start runs `kc9k start` at once (`start_block`, D2); once on, Add

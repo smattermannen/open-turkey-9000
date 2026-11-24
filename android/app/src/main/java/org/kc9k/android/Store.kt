@@ -62,13 +62,10 @@ class Store(private val context: Context) {
     fun whySettingsLocked(): String? = if (lifted) null
         else Commands(System.currentTimeMillis(), bootCount).whySettingsLocked(Db.model(context))
 
-    fun isOn(o: Option) = p.getBoolean("opt." + o.key, o.default)
-    fun setOn(o: Option, on: Boolean) { p.edit().putBoolean("opt." + o.key, on).commit() }
-    fun lockedUntil(o: Option) = p.getLong("lock." + o.key, 0)
-    fun setLockedUntil(o: Option, t: Long) { p.edit().putLong("lock." + o.key, t).commit() }
+    /** Lifting: the browser settings' locks and the device protection's locks go. */
     fun clearLocks() {
-        Option.entries.forEach { p.edit().remove("lock." + it.key).commit() }
         settingLockNames.forEach(::clearSettingLock)
+        Db.update(context) { it.copy(device = it.device.copy(strictLock = SettingLock(), tamperLock = SettingLock())) }
     }
 
     /** What the last sync suspended, so a package a block named by hand is unpaused again. */
@@ -118,12 +115,21 @@ class Store(private val context: Context) {
     fun extensionRequired() = !lifted && (Enforce.plan(Db.model(context), System.currentTimeMillis()).web.isNotEmpty() ||
         isOn(BrowserSetting.SAFESEARCH) || isOn(BrowserSetting.WEB_ONLY))
 
+    private fun browserLocked(now: Long) = settingLockNames.any { settingLock(it).inForce(now, bootCount) }
+
     /**
-     * Whether anything is locked (a block, a browser setting, an option): trusted time then
-     * keeps date, time and time zone automatic and unchangeable (SPEC §8.3).
+     * Whether anything is locked (a block, a browser setting, strict mode, tamper
+     * protection): trusted time then keeps date, time and time zone automatic and
+     * unchangeable (SPEC §8.3), uninstalling is refused (R-LOCK-9).
      */
-    fun anythingLocked(now: Long = System.currentTimeMillis()): Boolean = !lifted && (
-        Enforce.anyLocked(Db.model(context), now, bootCount) ||
-            settingLockNames.any { settingLock(it).inForce(now, bootCount) } ||
-            Option.entries.any { lockedUntil(it) > now })
+    fun anythingLocked(now: Long = System.currentTimeMillis()): Boolean = !lifted &&
+        (Enforce.anythingLocked(Db.model(context), now, bootCount) || browserLocked(now))
+
+    /** Something locked but strict mode's own lock: strict mode then closes its ways out. */
+    fun lockdown(now: Long = System.currentTimeMillis()): Boolean = !lifted &&
+        (Enforce.lockdown(Db.model(context), now, bootCount) || browserLocked(now))
+
+    /** The device protection to apply now (DeviceRules.plan). */
+    fun devicePlan(now: Long = System.currentTimeMillis()) =
+        DeviceRules.plan(Db.model(context).device, lockdown(now), anythingLocked(now), lifted)
 }

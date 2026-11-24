@@ -23,7 +23,7 @@ import java.util.Date
 /**
  * The app's one screen (SPEC §8.5): bottom bar Overview · Blocks · Statistics · More; More
  * holds Schedules, Places and Settings. The GUI decides nothing: every change runs a
- * [Commands] method (blocks, places, schedules), [Options] or [WebSettings] (settings).
+ * [Commands] method (blocks, places, schedules, device protection) or [WebSettings] (browser settings).
  * The page sits in one ScrollView kept across renders, so a tap keeps the scroll position.
  */
 class MainActivity : Activity() {
@@ -40,7 +40,6 @@ class MainActivity : Activity() {
     }
 
     private lateinit var store: Store
-    private lateinit var options: Options
     private lateinit var web: WebSettings
     private lateinit var ui: Ui
     private lateinit var scroll: ScrollView
@@ -77,7 +76,6 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = Store(this)
-        options = Options(store)
         web = WebSettings(store)
         ui = Ui(this)
         savedInstanceState?.let {
@@ -726,22 +724,8 @@ class MainActivity : Activity() {
         root.addView(ui.help("While any block is locked, no setting on this page can be weakened."))
         passwordsSection(root)
 
-        root.addView(ui.heading("Protections"))
-        for (o in Option.entries) {
-            root.addView(CheckBox(this).apply {
-                text = o.label + if (o == Option.DEBUGGING && BuildConfig.DEBUG) " (ignored in debug builds)" else ""
-                isChecked = store.isOn(o)
-                setOnCheckedChangeListener { _, on ->
-                    val err = options.set(o, on)
-                    if (err == Commands.NEEDS_PASSWORD) askSettingsPassword { options.set(o, on)?.let(::toast); apply() }
-                    if (err != null) { if (err != Commands.NEEDS_PASSWORD) toast(err); render() } else apply()
-                }
-            })
-            if (options.locked(o)) root.addView(ui.help("  Locked until " + time(store.lockedUntil(o))))
-            if (o == Option.DATE_TIME && !store.isOn(o) && o.effective(store))
-                root.addView(ui.help("  On while anything is locked: locks trust the phone's clock."))
-            root.addView(ui.button("Lock \"${o.label}\"…") { askOptionLock(o) })
-        }
+        strictSection(root)
+        tamperSection(root)
 
         ironFoxSection(root)
         browserSection(root)
@@ -1096,11 +1080,20 @@ class MainActivity : Activity() {
     /** Password first (if any), then the typing challenge (if any), then the lock goes. */
     private fun startUnlock(key: String) {
         val isBlock = key.startsWith("block:")
+        val isDevice = key.startsWith("device:")
         val name = key.substringAfter(':')
-        val refusal = if (isBlock) cmd().refuseUnlock(model, name) else web.refuseUnlock(name)
+        val refusal = when {
+            isBlock -> cmd().refuseUnlock(model, name)
+            isDevice -> cmd().refuseDeviceUnlock(model, name)
+            else -> web.refuseUnlock(name)
+        }
         if (refusal == Commands.NEEDS_PASSWORD) return askSettingsPassword { startUnlock(key) }
         refusal?.let { return toast(it) }
-        val l = if (isBlock) model.block(name)!!.lock else store.settingLock(name)
+        val l = when {
+            isBlock -> model.block(name)!!.lock
+            isDevice -> if (name == Device.STRICT) model.device.strictLock else model.device.tamperLock
+            else -> store.settingLock(name)
+        }
         val challenge = {
             if (l.chars > 0) {
                 unlocking = key
@@ -1121,22 +1114,59 @@ class MainActivity : Activity() {
 
     private fun unlocked(key: String) {
         val name = key.substringAfter(':')
-        if (key.startsWith("block:")) run { c, m -> c.unlocked(m, name) } else result(web.unlocked(name)) { web.unlocked(name) }
+        when {
+            key.startsWith("block:") -> run { c, m -> c.unlocked(m, name) }
+            key.startsWith("device:") -> run { c, m -> c.deviceUnlocked(m, name) }
+            else -> result(web.unlocked(name)) { web.unlocked(name) }
+        }
     }
 
-    private fun askOptionLock(o: Option) {
-        val input = EditText(this).apply {
-            hint = "Hours"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-        }
-        AlertDialog.Builder(this).setTitle("Lock \"${o.label}\" for").setView(input)
-            .setPositiveButton("Lock…") { _, _ ->
-                val h = input.text.toString().toDoubleOrNull()
-                if (h == null || h <= 0) return@setPositiveButton toast("Invalid hours")
-                confirm("Lock \"${o.label}\"?", "For $h hours it can't be turned off.") {
-                    options.lock(o, (h * 3_600_000).toLong())?.let(::toast) ?: apply()
+    /** Strict mode (SPEC §8.4): off by default; on and something locked, it closes the chosen ways out. */
+    private fun strictSection(root: LinearLayout) {
+        val d = model.device
+        root.addView(ui.heading("Strict mode"))
+        root.addView(ui.help("While it is on and something else is locked, these ways out are closed. Leaving one out " +
+            "weakens it. Only its own lock and no weakening stop turning it off."))
+        root.addView(Switch(this).apply {
+            text = "Strict mode"; isChecked = d.strict
+            setOnCheckedChangeListener { _, on -> run { c, m -> c.setStrict(m, on) } }
+        })
+        if (d.strict && store.lockdown()) root.addView(ui.pill("closing its ways out now", Ui.Pill.LOCKED))
+        for (p in StrictPart.entries) root.addView(CheckBox(this).apply {
+            text = p.label + if (p == StrictPart.DEBUGGING && BuildConfig.DEBUG) " (ignored in debug builds)" else ""
+            isChecked = p.key !in d.leftOut; isEnabled = d.strict
+            setOnCheckedChangeListener { _, on -> run { c, m -> c.setStrictPart(m, p, !on) } }
+        })
+        deviceLockRow(root, Device.STRICT, d.strictLock, "Lock strict mode")
+    }
+
+    /** Tamper protection (SPEC §8.4): stays on while anything is locked; turning an item on asks first. */
+    private fun tamperSection(root: LinearLayout) {
+        val d = model.device
+        root.addView(ui.heading("Tamper protection"))
+        root.addView(ui.help("Can't be turned off while anything is locked, nor while its own lock holds. " +
+            "Uninstalling KC9K is refused while anything is locked, always."))
+        for (t in Tamper.entries) {
+            root.addView(CheckBox(this).apply {
+                text = t.label; isChecked = d.has(t)
+                setOnCheckedChangeListener { _, on ->
+                    if (on) AlertDialog.Builder(this@MainActivity).setTitle("Turn on \"${t.label}\"?").setMessage(t.help)
+                        .setPositiveButton("OK") { _, _ -> run { c, m -> c.setTamper(m, t, true) } }
+                        .setNegativeButton("Cancel") { _, _ -> render() }.show()
+                    else run { c, m -> c.setTamper(m, t, false) }
                 }
-            }
-            .setNegativeButton("Cancel", null).show()
+            })
+            root.addView(ui.help(t.help))
+        }
+        deviceLockRow(root, Device.TAMPER, d.tamperLock, "Lock tamper protection")
+    }
+
+    private fun deviceLockRow(root: LinearLayout, name: String, l: SettingLock, label: String) {
+        if (l.inForce(now, store.bootCount)) root.addView(ui.help("Locked: " + l.current(now, store.bootCount).describe(now, store.bootCount)))
+        val row = ui.row()
+        row.addView(ui.button("$label…") { askLock(label, schedule = false) { want, _ -> run { c, m -> c.lockDevice(m, name, want) } } })
+        if (l.chars > 0 || l.passwordHash.isNotEmpty()) row.addView(ui.button("Unlock…") { startUnlock("device:$name") })
+        root.addView(row)
     }
 
     @Deprecated("Deprecated in API")

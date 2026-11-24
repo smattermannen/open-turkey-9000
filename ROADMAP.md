@@ -460,7 +460,14 @@ tests need the owner.
   presets, link and word recording, projects (phone to phone). (M)
 - [ ] `N7` Tamper protection, strict mode, guided setup, circadian rhythm
   and wallpapers, optional accessibility layer (screen text entries,
-  R-ANDROID-4). (M)
+  R-ANDROID-4). (M) Built 2026-11-24: strict mode (parts, only while
+  something else is locked, own lock) and tamper protection (close IronFox,
+  other users/profiles/clones, installer, app controls, clock; own lock;
+  stays on while anything is locked) in the model, replacing the always-on
+  protections; uninstall refused while anything is locked. Left: private
+  tabs/unsupported browsers/inactive tabs/embedded content on the phone,
+  circadian rhythm; guided setup and the accessibility layer held back by
+  the owner; none of it seen on a phone yet.
 - [ ] `N8` Wide screens (rail), TalkBack and keyboard, the three phones
   end to end. (M)
 

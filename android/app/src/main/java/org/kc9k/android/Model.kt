@@ -121,6 +121,7 @@ data class Model(
     val lockNeedsPassword: Boolean = false,
     /** Access passwords by area (Access.AREAS): needed to view it. */
     val access: Map<String, String> = emptyMap(),
+    val device: Device = Device(),
 ) {
     fun block(name: String) = blocks.find { it.name == name }
     fun place(name: String) = places.find { it.name == name }
@@ -206,6 +207,14 @@ object Enforce {
 
     fun anyLocked(m: Model, now: Long, boot: Int, tz: TimeZone = TimeZone.getDefault()) =
         m.blocks.any { locked(m, it, now, boot, tz) }
+
+    /** A block or the tamper protection locked: starts strict mode (its own lock doesn't). */
+    fun lockdown(m: Model, now: Long, boot: Int, tz: TimeZone = TimeZone.getDefault()) =
+        anyLocked(m, now, boot, tz) || m.device.tamperLock.inForce(now, boot)
+
+    /** Anything in the model locked: blocks, tamper protection, strict mode. */
+    fun anythingLocked(m: Model, now: Long, boot: Int, tz: TimeZone = TimeZone.getDefault()) =
+        lockdown(m, now, boot, tz) || m.device.strictLock.inForce(now, boot)
 
     /** The union of the enabled blocks' layer inputs. */
     data class Plan(

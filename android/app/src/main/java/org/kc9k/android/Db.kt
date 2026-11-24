@@ -37,6 +37,9 @@ object Codec {
         "settings_password" to m.settingsPassword,
         "lock_needs_password" to m.lockNeedsPassword,
         "access" to m.access,
+        "device" to mapOf("strict" to m.device.strict, "left_out" to m.device.leftOut.sorted(),
+            "strict_lock" to lock(m.device.strictLock), "tamper" to m.device.tamper.sorted(),
+            "tamper_lock" to lock(m.device.tamperLock)),
     ))
 
     fun decode(text: String): Model {
@@ -67,6 +70,9 @@ object Codec {
             settingsPassword = o.str("settings_password"),
             lockNeedsPassword = o.bool("lock_needs_password"),
             access = o["access"].obj().mapValues { it.value as? String ?: "" }.filterValues { it.isNotEmpty() },
+            device = o["device"].obj().let { d -> if (d.isEmpty()) Device() else Device(d.bool("strict"),
+                d.strings("left_out").toSet(), lock(d["strict_lock"].obj()),
+                if (d.containsKey("tamper")) d.strings("tamper").toSet() else Tamper.DEFAULTS, lock(d["tamper_lock"].obj())) },
         )
     }
 

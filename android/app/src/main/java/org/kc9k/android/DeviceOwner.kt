@@ -27,7 +27,7 @@ class DeviceOwner(private val context: Context) {
 
     private val store = Store(context)
 
-    /** Applies each option as set (and lifts the ones that are off), plus permission grants. */
+    /** Applies the device protection's plan (Store.devicePlan; restrictions not in it cleared), plus permission grants. */
     fun applyBaseline() {
         if (!isOwner) return
         for (perm in listOf(
@@ -39,20 +39,21 @@ class DeviceOwner(private val context: Context) {
             dpm.setPermissionGrantState(admin, context.packageName, perm,
                 DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED)
         } catch (_: Exception) {}
-        // While lifted every option counts as off (Option.effective), so all are cleared.
-        for (o in Option.entries) {
-            val on = o.effective(store)
-            o.restrictions.forEach {
-                if (on) dpm.addUserRestriction(admin, it) else dpm.clearUserRestriction(admin, it)
-            }
-        }
-        if (Option.LOCATION.effective(store) && Build.VERSION.SDK_INT >= 30)
-            dpm.setLocationEnabled(admin, true)
-        if (Option.DATE_TIME.effective(store) && Build.VERSION.SDK_INT >= 30) {
+        val plan = store.devicePlan()
+        // Debug builds never block debugging, so adb can always remove Device Owner.
+        val on = if (BuildConfig.DEBUG) plan.restrictions - UserManager.DISALLOW_DEBUGGING_FEATURES else plan.restrictions
+        for (r in DeviceRules.ALL) try {
+            if (r in on) dpm.addUserRestriction(admin, r) else dpm.clearUserRestriction(admin, r)
+        } catch (_: Exception) { /* not known on this Android (clone profiles before 14) */ }
+        if (plan.location && Build.VERSION.SDK_INT >= 30) dpm.setLocationEnabled(admin, true)
+        if (plan.autoTime && Build.VERSION.SDK_INT >= 30) {
             dpm.setAutoTimeEnabled(admin, true)
             dpm.setAutoTimeZoneEnabled(admin, true)
         }
-        dpm.setUninstallBlocked(admin, context.packageName, Option.UNINSTALL.effective(store))
+        dpm.setUninstallBlocked(admin, context.packageName, plan.uninstallBlocked)
+        if (Build.VERSION.SDK_INT >= 30) try {
+            dpm.setUserControlDisabledPackages(admin, if (plan.appControls) listOf(context.packageName) else emptyList())
+        } catch (_: Exception) {}
     }
 
     /**
@@ -78,8 +79,9 @@ class DeviceOwner(private val context: Context) {
         check(BuildConfig.DEBUG)
         if (!isOwner) return
         DeviceOwnerEnforcer(context).sync(emptySet(), wifiOff = false)
-        Option.entries.flatMap { it.restrictions }.forEach { dpm.clearUserRestriction(admin, it) }
+        DeviceRules.ALL.forEach { try { dpm.clearUserRestriction(admin, it) } catch (_: Exception) {} }
         dpm.setUninstallBlocked(admin, context.packageName, false)
+        if (Build.VERSION.SDK_INT >= 30) try { dpm.setUserControlDisabledPackages(admin, emptyList()) } catch (_: Exception) {}
         store.clearLocks()
         @Suppress("DEPRECATION") dpm.clearDeviceOwnerApp(context.packageName)
     }

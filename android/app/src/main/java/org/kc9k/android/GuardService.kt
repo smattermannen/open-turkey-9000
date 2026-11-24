@@ -71,8 +71,8 @@ class GuardService : Service() {
     private var lastTick = 0L
     private var lastSync = 0L
     private var synced: Pair<Set<String>, Boolean>? = null
-    /** Whether trusted time was applied (Option.DATE_TIME effective), so a lock starting or ending re-applies it. */
-    private var trustedTime: Boolean? = null
+    /** The device protection applied last, so a lock starting or ending (or a change) re-applies it. */
+    private var device: DevicePlan? = null
 
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) = Session.end()
@@ -81,8 +81,8 @@ class GuardService : Service() {
     private val tick = object : Runnable {
         override fun run() {
             guardStep()
-            val t = Option.DATE_TIME.effective(store)
-            if (t != trustedTime) { trustedTime = t; DeviceOwner(this@GuardService).applyBaseline() }
+            val d = store.devicePlan()
+            if (d != device) { device = d; DeviceOwner(this@GuardService).applyBaseline() }
             sync(force = false)
             handler.postDelayed(this, TICK_MS)
         }
@@ -123,7 +123,8 @@ class GuardService : Service() {
         val now = System.currentTimeMillis()
         val elapsed = if (lastTick == 0L) 0L else (now - lastTick).coerceIn(0L, 2 * TICK_MS)
         lastTick = now
-        val required = store.extensionRequired() && IronFox.installed(this).isNotEmpty()
+        val required = store.extensionRequired() && IronFox.installed(this).isNotEmpty() &&
+            (device ?: store.devicePlan()).closeBrowsers
         val access = !required || foreground.hasAccess()
         val inFront = required && access && foreground.top(now) in IronFox.PACKAGES
         val problem = ExtensionGuard.problem(ExtensionStatus.last, now, minExtension)

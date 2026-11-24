@@ -34,7 +34,7 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
 - `Commands.kt` (pure, R-ANDROID-3): every change to blocks, places,
   schedules; weakening a locked block refused and logged (`Model.refused`);
   `whySettingsLocked` = no weakening while any block is locked (gates
-  `Options` and `WebSettings`). `Weakening.strengthens` judges automation
+  device protection and `WebSettings`). `Weakening.strengthens` judges automation
   changes. Modes: add/rename/delete, `putInMode`/`takeOut`,
   `setModeAutomation` (refused as a whole naming the locked blocks it
   weakens, R-MODE-1/2), `switchMode` (off leaves locked blocks on),
@@ -48,7 +48,7 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
 - Passwords (SPEC §3.11; `Session.kt`): `Commands(settingsUnlocked =
   Session.settingsUnlocked)`; with a settings password set every weakening
   path (`whyLocked`, so also modes, schedules, places, unlock,
-  `whySettingsLocked` for `Options`/`WebSettings`) stops with
+  `whySettingsLocked` for device protection/`WebSettings`) stops with
   `Outcome.needsPassword` / `Commands.NEEDS_PASSWORD`, unlogged; the GUI
   asks and reruns (`run`, `result(err, retry)`). New password free;
   change/remove weakens. `lockNeedsPassword`: `lock`/`lockMode` need it
@@ -73,12 +73,23 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   `removeNetwork`: on a place a locked block uses, wider (more networks,
   fewer needed) is allowed only where the place turns the block on,
   narrower only where it lifts it; else refused and logged.
-- `Options.kt`: protections as `Option` (on free; off needs it unlocked and
-  no weakening; trusted time: date/time and time zone automatic and
-  unchangeable while anything is locked, `Store.anythingLocked`, re-applied
-  by `GuardService` when that changes): block safe
-  mode, USB debugging (default off; ignored in debug builds), users,
-  location, date/time, factory reset, uninstall.
+- `Device.kt` (pure, `DeviceTest`): `Model.device` = strict mode (off by
+  default, R-STRICT-1; `StrictPart`s safe mode, USB debugging (ignored in
+  debug builds), users, location, factory reset; `leftOut` weakens) and
+  tamper protection (`Tamper`: close IronFox without the extension (on;
+  off = only while anything is locked), other users/work profiles/clones,
+  installer (no unknown sources while anything is locked; Android itself
+  refuses an older KC9K), app controls (`setUserControlDisabledPackages`),
+  clock), each with its own `SettingLock`. `DeviceRules.plan(device,
+  lockdown, anything, lifted)`: strict parts only while `lockdown`
+  (something locked but strict mode's own lock, `Enforce.lockdown`);
+  uninstall blocked and trusted time (automatic date/time/zone,
+  unchangeable) while anything is locked (`Enforce.anythingLocked` +
+  browser setting locks = `Store.anythingLocked`). Commands `setStrict`,
+  `setStrictPart`, `setTamper` (off refused while anything is locked,
+  R-LOCK-9), `lockDevice`, `refuseDeviceUnlock`/`deviceUnlocked` (judged
+  with that lock set aside). `GuardService` re-applies when
+  `Store.devicePlan()` changes.
 - `DeviceOwner.kt`: `AdminReceiver`; `applyBaseline()`;
   `DeviceOwnerEnforcer` resolves entries (`*` = launchable apps, roles =
   system default holders), `never()` = essentials + default launcher,

@@ -46,7 +46,7 @@ class Commands(
      * anything is locked, if no weakening is on; else it needs the settings password if set.
      */
     fun whySettingsLocked(m: Model): String? =
-        if (m.noWeakening && Enforce.anyLocked(m, now, boot, tz)) "No weakening while a block is locked" else passwordWhy(m)
+        if (m.noWeakening && Enforce.anythingLocked(m, now, boot, tz)) "No weakening while anything is locked" else passwordWhy(m)
 
     private fun edit(m: Model, name: String, weakens: Boolean, what: String, change: (Block) -> Block): Outcome {
         val b = m.block(name) ?: return Outcome(m, "No block $name")
@@ -509,6 +509,61 @@ class Commands(
     /** A block password hides the block's contents until typed (viewing only, locks unaffected). */
     fun setBlockPassword(m: Model, block: String, hash: String) =
         edit(m, block, false, "block password") { it.copy(viewPassword = hash) }
+
+    // Device protection (SPEC §8.4): strict mode and tamper protection, each with its own setting lock.
+    private fun device(m: Model, d: Device) = ok(m.copy(device = d))
+
+    /** Why the device setting [name] (Device.STRICT, Device.TAMPER) can't be weakened now, or null. */
+    private fun whyDeviceLocked(m: Model, name: String): String? {
+        val l = if (name == Device.STRICT) m.device.strictLock else m.device.tamperLock
+        if (l.inForce(now, boot)) return "Locked: " + l.current(now, boot).describe(now, boot)
+        // R-LOCK-9: tamper protection can't be turned off while anything is locked.
+        if (name == Device.TAMPER && Enforce.anythingLocked(m, now, boot, tz)) return "Tamper protection stays on while anything is locked"
+        return whySettingsLocked(m)
+    }
+
+    /** Strict mode on is free; off is refused only by its own lock and no weakening (R-STRICT-1, R-WEAK-4). */
+    fun setStrict(m: Model, on: Boolean): Outcome {
+        if (!on && m.device.strict) whyDeviceLocked(m, Device.STRICT)?.let { return refuse(m, it, "turn off strict mode") }
+        return device(m, m.device.copy(strict = on))
+    }
+
+    /** Leaving a part of strict mode out weakens; taking it back in is free. */
+    fun setStrictPart(m: Model, part: StrictPart, leftOut: Boolean): Outcome {
+        if (leftOut && part.key !in m.device.leftOut) whyDeviceLocked(m, Device.STRICT)?.let { return refuse(m, it, "leave ${part.label} out of strict mode") }
+        return device(m, m.device.copy(leftOut = if (leftOut) m.device.leftOut + part.key else m.device.leftOut - part.key))
+    }
+
+    /** A tamper protection item on is free (the GUI asks OK first); off weakens. */
+    fun setTamper(m: Model, item: Tamper, on: Boolean): Outcome {
+        if (!on && m.device.has(item)) whyDeviceLocked(m, Device.TAMPER)?.let { return refuse(m, it, "turn off ${item.label}") }
+        return device(m, m.device.copy(tamper = if (on) m.device.tamper + item.key else m.device.tamper - item.key))
+    }
+
+    /** Locks strict mode (only while on) or the tamper protection, only ever stronger. */
+    fun lockDevice(m: Model, name: String, want: SettingLock): Outcome {
+        if (m.lockNeedsPassword) passwordWhy(m)?.let { return Outcome(m, it, needsPassword = true) }
+        if (name == Device.STRICT && !m.device.strict) return Outcome(m, "Turn strict mode on first")
+        if (name == Device.TAMPER && m.device.tamper.isEmpty()) return Outcome(m, "Turn some tamper protection on first")
+        val cur = if (name == Device.STRICT) m.device.strictLock else m.device.tamperLock
+        val r = SettingLock.strengthen(cur, want, now, boot)
+        r.error?.let { return Outcome(m, it) }
+        return device(m, if (name == Device.STRICT) m.device.copy(strictLock = r.lock) else m.device.copy(tamperLock = r.lock))
+    }
+
+    /** Why the device setting's lock can't be opened by challenge/password now, or null. */
+    fun refuseDeviceUnlock(m: Model, name: String): String? {
+        val l = if (name == Device.STRICT) m.device.strictLock else m.device.tamperLock
+        // Judged with this lock set aside: it must not hold itself (no weakening counts other locks).
+        val without = m.copy(device = if (name == Device.STRICT) m.device.copy(strictLock = SettingLock()) else m.device.copy(tamperLock = SettingLock()))
+        return l.refuseUnlock(now, boot) ?: whySettingsLocked(without)
+    }
+
+    /** After the password and challenge: the device setting's lock goes. */
+    fun deviceUnlocked(m: Model, name: String): Outcome {
+        refuseDeviceUnlock(m, name)?.let { return if (it == NEEDS_PASSWORD) Outcome(m, it, needsPassword = true) else Outcome(m, it) }
+        return device(m, if (name == Device.STRICT) m.device.copy(strictLock = SettingLock()) else m.device.copy(tamperLock = SettingLock()))
+    }
 
     fun setNoWeakening(m: Model, on: Boolean): Outcome {
         if (!on && m.noWeakening) whySettingsLocked(m)?.let { return refuse(m, it, "turn off no weakening") }

@@ -120,6 +120,13 @@ class DeviceOwnerEnforcer(private val context: Context) : Enforcer {
         return pm.queryIntentActivities(i, PackageManager.MATCH_ALL).map { it.activityInfo.packageName }
     }
 
+    override fun browsers(): Set<String> {
+        // An address no app claims for itself: only real browsers answer it.
+        val i = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://kc9k.invalid/")).addCategory(Intent.CATEGORY_BROWSABLE)
+        return pm.queryIntentActivities(i, PackageManager.MATCH_ALL).map { it.activityInfo.packageName }
+            .filter { it != "android" && it != context.packageName && it !in IronFox.PACKAGES }.toSet()
+    }
+
     private fun defaultHome(): String? {
         val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         return pm.resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName

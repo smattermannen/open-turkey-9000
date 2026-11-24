@@ -77,7 +77,10 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   default, R-STRICT-1; `StrictPart`s safe mode, USB debugging (ignored in
   debug builds), users, location, factory reset; `leftOut` weakens) and
   tamper protection (`Tamper`: close IronFox without the extension (on;
-  off = only while anything is locked), other users/work profiles/clones,
+  off = only while anything is locked), block unsupported browsers (off by
+  default; while the extension is needed every app opening an unclaimed
+  https address, `Enforcer.browsers`, but IronFox is paused via
+  `Plan.suspend`; in-app web views aren't browsers), other users/work profiles/clones,
   installer (no unknown sources while anything is locked; Android itself
   refuses an older KC9K), app controls (`setUserControlDisabledPackages`),
   clock), each with its own `SettingLock`. `DeviceRules.plan(device,

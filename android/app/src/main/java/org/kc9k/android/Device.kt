@@ -19,6 +19,8 @@ enum class Tamper(val key: String, val label: String, val help: String, val defa
         "A clone or another user would escape app pausing.", false),
     INSTALLER("installer", "Block the installer",
         "While anything is locked, no apps from unknown sources; an older KC9K never installs.", false),
+    BROWSERS("browsers", "Block unsupported browsers",
+        "While the extension is needed, every browser but IronFox is paused. Apps that show web pages inside themselves aren't browsers.", false),
     APP_CONTROLS("app-controls", "App controls",
         "KC9K can't be force-stopped or its data cleared.", false),
     CLOCK("clock", "Clock: block date, time and time zone changes",
@@ -61,6 +63,8 @@ data class DevicePlan(
     val appControls: Boolean,
     /** IronFox is paused while it runs without the extension. */
     val closeBrowsers: Boolean,
+    /** Other browsers paused while the extension is needed. */
+    val blockBrowsers: Boolean = false,
 )
 
 object DeviceRules {
@@ -82,7 +86,7 @@ object DeviceRules {
         val autoTime = d.has(Tamper.CLOCK) || anything
         if (autoTime) r += UserManager.DISALLOW_CONFIG_DATE_TIME
         return DevicePlan(r, StrictPart.LOCATION in parts, autoTime, anything, d.has(Tamper.APP_CONTROLS),
-            d.has(Tamper.CLOSE_BROWSERS) || anything)
+            d.has(Tamper.CLOSE_BROWSERS) || anything, d.has(Tamper.BROWSERS))
     }
 
     /** Every restriction KC9K may set, so the ones not in a plan are cleared. */

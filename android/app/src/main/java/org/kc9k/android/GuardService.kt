@@ -72,6 +72,22 @@ class GuardService : Service() {
     private var lastTick = 0L
     private var lastSync = 0L
     private var synced: Pair<Set<String>, Boolean>? = null
+    private var browsersAt = 0L
+    private var browserSet: Set<String> = emptySet()
+    private var neverSet: Set<String> = emptySet()
+    private var neverAt = 0L
+
+    /** The installed browsers, looked up at most once a minute. */
+    private fun cachedBrowsers(now: Long): Set<String> {
+        if (now - browsersAt > 60_000L) { browserSet = enforcer.browsers(); browsersAt = now }
+        return browserSet
+    }
+
+    private fun neverCached(now: Long): Set<String> {
+        if (now - neverAt > 60_000L) { neverSet = enforcer.never(); neverAt = now }
+        return neverSet
+    }
+
     /** The block-paused apps at the last sync, for the "apps are paused" notice. */
     private var resolvedBefore: Set<String>? = null
     /** The device protection applied last, so a lock starting or ending (or a change) re-applies it. */
@@ -203,8 +219,9 @@ class GuardService : Service() {
         val cached = resolved
         val targets = if (cached != null && cached.first == plan && now - resolvedAt < 60_000L) cached.second
             else Enforce.suspend(plan, enforcer::resolve, enforcer.never()).also { resolved = plan to it; resolvedAt = now }
+        val browsers = if ((device ?: store.devicePlan()).blockBrowsers && store.extensionRequired()) cachedBrowsers(now) else emptySet()
         val wanted = Plan.suspend(targets, if (Picker.open(now)) Picker.packages else emptySet(),
-            if (paused) IronFox.installed(this) else emptyList())
+            if (paused) IronFox.installed(this) else emptyList(), browsers, neverCached(now))
         val state = wanted to plan.wifiOff
         if (!force && state == synced && now - lastSync < 60_000L) return
         // Apps a block newly pauses (not at start, not IronFox's or the picker's own pauses).

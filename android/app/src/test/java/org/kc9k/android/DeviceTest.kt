@@ -38,13 +38,15 @@ class DeviceRulesTest {
         assertTrue(DeviceRules.NO_CLONE_PROFILE in idle.restrictions)
         assertFalse("installer only while locked", DeviceRules.NO_UNKNOWN_SOURCES in idle.restrictions)
         assertTrue(idle.appControls && idle.autoTime && idle.closeBrowsers)
+        assertTrue(idle.blockBrowsers)
+        assertFalse(DeviceRules.plan(Device(), true, true, false).blockBrowsers) // off by default
         assertTrue(DeviceRules.NO_UNKNOWN_SOURCES in DeviceRules.plan(all, false, true, false).restrictions)
         // Close browsers off: IronFox paused only while anything is locked.
         val none = Device(tamper = emptySet())
         assertFalse(DeviceRules.plan(none, false, false, false).closeBrowsers)
         assertTrue(DeviceRules.plan(none, false, true, false).closeBrowsers)
         // Lifted: nothing at all.
-        assertEquals(DevicePlan(emptySet(), false, false, false, false, false), DeviceRules.plan(all, true, true, true))
+        assertEquals(DevicePlan(emptySet(), false, false, false, false, false, false), DeviceRules.plan(all, true, true, true))
         assertTrue(DeviceRules.ALL.containsAll(DeviceRules.plan(all, true, true, false).restrictions))
     }
 }

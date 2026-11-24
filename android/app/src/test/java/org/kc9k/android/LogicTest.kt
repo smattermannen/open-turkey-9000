@@ -242,5 +242,8 @@ class PlanTest {
     @Test fun nothingOnOnlyIronFoxPause() {
         assertEquals(emptySet<String>(), Plan.suspend(emptySet(), emptySet(), emptyList()))
         assertEquals(setOf("org.ironfoxoss.ironfox"), Plan.suspend(emptySet(), emptySet(), listOf("org.ironfoxoss.ironfox")))
+        // Unsupported browsers: paused, but never IronFox, the picker or an essential.
+        assertEquals(setOf("com.android.chrome"), Plan.suspend(emptySet(), setOf("com.android.documentsui"), emptyList(),
+            setOf("com.android.chrome", "org.ironfoxoss.ironfox", "com.android.documentsui", "launcher"), setOf("launcher")))
     }
 }

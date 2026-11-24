@@ -438,9 +438,11 @@ tests need the owner.
   unsupported browsers suspended. (L) Built 2026-11-24: phrase sets
   (desktop grammar, shared cases with Go, scope, threshold, test mode,
   weakening refused) and social media settings per block, served to the
-  extension (`ci/android_rules_test.js`). Left: test mode for site lists,
-  phrase set export/import, Firefox, certificates, block page for apps,
-  unsupported browsers; the VPN layer is held back by the owner.
+  extension (`ci/android_rules_test.js`); unsupported browsers paused while
+  the extension is needed (tamper protection, off by default as on the
+  desktop). Left: test mode for site lists, phrase set export/import,
+  Firefox, certificates, block page for apps; the VPN layer is held back by
+  the owner.
 - [ ] `N3` Locks: every kind, layered, re-lock, extend, confirmation
   (R-LOCK-12), setting locks, settings/access/block passwords, text lock
   refusing multi-character input, trusted time. (M) Built 2026-11-24: text

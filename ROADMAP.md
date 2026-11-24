@@ -433,7 +433,12 @@ tests need the owner.
 - [ ] `N2` Blocks, lists, phrase sets, social media settings, exceptions
   through the extension (IronFox, Firefox); VPN layer; apps (All apps,
   app exceptions, roles, certificates), app suspension and block page;
-  unsupported browsers suspended. (L)
+  unsupported browsers suspended. (L) Built 2026-11-24: phrase sets
+  (desktop grammar, shared cases with Go, scope, threshold, test mode,
+  weakening refused) and social media settings per block, served to the
+  extension (`ci/android_rules_test.js`). Left: test mode for site lists,
+  phrase set export/import, Firefox, certificates, block page for apps,
+  unsupported browsers; the VPN layer is held back by the owner.
 - [ ] `N3` Locks: every kind, layered, re-lock, extend, confirmation
   (R-LOCK-12), setting locks, settings/access/block passwords, text lock
   refusing multi-character input, trusted time. (M) Built 2026-11-24: text

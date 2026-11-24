@@ -325,6 +325,8 @@ class MainActivity : Activity() {
             if (st == Enforce.State.PAUSED) append(" · paused until " + time(b.pausedUntil))
             val parts = mutableListOf<String>()
             if (b.sites.isNotEmpty()) parts += "${b.sites.size} sites"
+            if (b.phraseSets.isNotEmpty()) parts += "${b.phraseSets.size} phrase sets"
+            if (b.social.isNotEmpty()) parts += "${b.social.size} social media settings"
             if (b.apps.isNotEmpty()) parts += "${b.apps.size} apps"
             if (b.wifiOff) parts += "Wi-Fi off"
             if (parts.isNotEmpty()) append(" · " + parts.joinToString(", "))
@@ -379,6 +381,70 @@ class MainActivity : Activity() {
         listFiles(root, b, true)
         root.addView(ui.help("Files: one entry per line, # for comments, as the computer's kc9k list export/import. " +
             "Importing adds to the list; lines that aren't addresses are skipped."))
+        phraseSets(root, b)
+        socialSettings(root, b)
+    }
+
+    /** Phrase sets (SPEC §3.2): phrases matched in the address, title or text; the block's exceptions spare pages. */
+    private fun phraseSets(root: LinearLayout, b: Block) {
+        root.addView(ui.heading("Phrase sets (${b.phraseSets.size})"))
+        root.addView(ui.help("A phrase is word sets in brackets, one term from each: [online, live] [casino, poker] " +
+            "matches \"live poker\". [today]? is optional; :3 sets how many terms; big- … -jackpot bridges up to 20 words."))
+        for (s in b.phraseSets) root.addView(ui.card().apply {
+            val head = ui.row()
+            head.addView(ui.grow(ui.text(s.name, 16f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) }))
+            if (s.test) head.addView(ui.pill("test mode", Ui.Pill.WARNING))
+            addView(head)
+            val where = ui.row()
+            for ((label, on) in listOf("Address" to s.inUrl, "Title" to s.inTitle, "Text" to s.inText)) where.addView(CheckBox(this@MainActivity).apply {
+                text = label; isChecked = on
+                setOnCheckedChangeListener { _, v ->
+                    val u = if (label == "Address") v else s.inUrl; val t = if (label == "Title") v else s.inTitle
+                    val x = if (label == "Text") v else s.inText
+                    run { c, m -> c.setPhraseScope(m, b.name, s.name, u, t, x) }
+                }
+            })
+            addView(where)
+            addView(ui.button("Blocks the page at ${s.threshold} different phrase${if (s.threshold == 1) "" else "s"}…") {
+                ask("Different phrases needed", "1 or more", s.threshold.toString()) { t ->
+                    val n = t.trim().toIntOrNull() ?: return@ask toast("A number, 1 or more")
+                    run { c, m -> c.setPhraseThreshold(m, b.name, s.name, n) }
+                }
+            })
+            addView(CheckBox(this@MainActivity).apply {
+                text = "Test mode: show what it finds instead of blocking"; isChecked = s.test
+                setOnCheckedChangeListener { _, v -> run { c, m -> c.setPhraseTest(m, b.name, s.name, v) } }
+            })
+            for (p in s.phrases) addView(removable(p.toString()) { run { c, m -> c.removePhrase(m, b.name, s.name, p) } }.apply {
+                setOnClickListener {
+                    ask("Change the phrase", "[a, b] [c]", p.toString()) { t -> run { c, m -> c.replacePhrase(m, b.name, s.name, p, t) } }
+                }
+            })
+            val input = EditText(this@MainActivity).apply { hint = "One phrase per line: [eat, nice] [hello, grandpa]"; minLines = 2 }
+            addView(input)
+            addView(ui.button("Add phrases") { run { c, m -> c.addPhrases(m, b.name, s.name, input.text.toString()) } })
+            val actions = ui.row()
+            actions.addView(ui.button("Rename…") {
+                ask("Rename ${s.name}", "Name", s.name) { n -> run { c, m -> c.renamePhraseSet(m, b.name, s.name, n) } }
+            })
+            actions.addView(ui.button("Delete…") {
+                confirm("Delete the phrase set ${s.name}?", "Its phrases go with it.") { run { c, m -> c.deletePhraseSet(m, b.name, s.name) } }
+            })
+            addView(actions)
+        })
+        root.addView(ui.button("New phrase set…") { ask("New phrase set", "Name") { n -> run { c, m -> c.addPhraseSet(m, b.name, n) } } })
+    }
+
+    /** Social media settings: parts of sites taken away while the block is on (by the extension). */
+    private fun socialSettings(root: LinearLayout, b: Block) {
+        root.addView(ui.heading("Social media settings"))
+        for ((site, presets) in Social.PRESETS.groupBy { it.site }) {
+            root.addView(ui.text(site, 15f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
+            for (p in presets) root.addView(CheckBox(this).apply {
+                text = p.title; isChecked = p.name in b.social
+                setOnCheckedChangeListener { _, v -> run { c, m -> c.setSocial(m, b.name, p.name, v) } }
+            })
+        }
     }
 
     private fun appsTab(root: LinearLayout, b: Block) {
@@ -780,8 +846,8 @@ class MainActivity : Activity() {
     }
 
     // Dialogs (bottom of the screen where Android allows; plain dialogs for now).
-    private fun ask(title: String, hint: String, done: (String) -> Unit) {
-        val input = EditText(this).apply { this.hint = hint; setSingleLine() }
+    private fun ask(title: String, hint: String, text: String = "", done: (String) -> Unit) {
+        val input = EditText(this).apply { this.hint = hint; setSingleLine(); setText(text) }
         AlertDialog.Builder(this).setTitle(title).setView(input)
             .setPositiveButton("OK") { _, _ -> done(input.text.toString()) }
             .setNegativeButton("Cancel", null).show()

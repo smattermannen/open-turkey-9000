@@ -8,7 +8,13 @@ class SampleRules {
     @Test fun write() {
         val blocked = listOf("https://www.Reddit.com/", "youtube.com/shorts", "*casino*", "*.xxx")
             .map { Entries.normalize(it)!! }
-        val json = Rules.json(blocked, listOf(Entries.normalize("reddit.com/r/programming")!!), true, true, true)
+        val exceptions = listOf(Entries.normalize("reddit.com/r/programming")!!)
+        val phrases = PhraseSet("Gambling", listOf("[online, live] [casino, poker]", "[big-] [-jackpot]").map { Phrase.parse(it).first!! })
+        val json = Rules.json(listOf(
+            WebRule("Websites", blocked, exceptions),
+            WebRule("Words", phraseSets = listOf(phrases, PhraseSet("Unused")), social = listOf("youtube:no-shorts")),
+            WebRule("More", social = listOf("youtube:no-shorts", "reddit:no-home")),
+        ), true, true)
         File(System.getProperty("java.io.tmpdir"), "kc9k-android-rules.json").writeText(json)
     }
 }

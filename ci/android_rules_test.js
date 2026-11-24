@@ -20,6 +20,15 @@ const cases = [
   ["https://web.archive.org/web/2024/https://reddit.com/", true],
   ["https://example.com/", false],
 ];
+// Phrase sets: [url, page text, taken away].
+const pages = [
+  ["https://news.example/a", "Play at the online casino tonight.", true],
+  ["https://news.example/b", "A big jackpot was won.", true],
+  ["https://news.example/c", "A big and very shiny jackpot.", true],
+  ["https://news.example/d", "Casino online.", true],
+  ["https://news.example/f", "An online, fun casino.", false],
+  ["https://news.example/e", "Online. Casino.", false],
+];
 let failed = 0;
 for (const [url, want] of cases) {
   const got = kc9kTakesAway(kc9kOutcome(kc9kListMatches(lists, { url })));
@@ -28,6 +37,17 @@ for (const [url, want] of cases) {
     failed++;
   }
 }
+for (const [url, text, want] of pages) {
+  const got = kc9kTakesAway(kc9kOutcome(kc9kListMatches(lists, { url, title: "", text })));
+  if (got !== want) {
+    console.error("FAIL", url, JSON.stringify(text), "got", got, "want", want);
+    failed++;
+  }
+}
+if (JSON.stringify(rules.social) !== JSON.stringify(["youtube:no-shorts", "reddit:no-home"])) {
+  console.error("FAIL social", rules.social);
+  failed++;
+}
 if (!rules.safesearch || !rules.web_only) {
   console.error("FAIL safesearch/web_only flags", rules.safesearch, rules.web_only);
   failed++;
@@ -35,4 +55,4 @@ if (!rules.safesearch || !rules.web_only) {
 if (failed) {
   process.exit(1);
 }
-console.log("android rules: all " + cases.length + " passed");
+console.log("android rules: all " + (cases.length + pages.length) + " passed");

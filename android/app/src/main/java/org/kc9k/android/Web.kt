@@ -101,20 +101,41 @@ object ListFile {
 object Rules {
     fun json(blocked: List<String>, exceptions: List<String>, websitesOn: Boolean,
              safeSearch: Boolean, webOnly: Boolean): String =
-        json(if (websitesOn) listOf(Triple(WebBlock.NAME, blocked, exceptions)) else emptyList(), safeSearch, webOnly)
+        json(if (websitesOn) listOf(WebRule(WebBlock.NAME, blocked, exceptions)) else emptyList(), safeSearch, webOnly)
 
-    /** One blacklist per enabled block (name, sites, that block's own exceptions). */
-    fun json(blocks: List<Triple<String, List<String>, List<String>>>, safeSearch: Boolean, webOnly: Boolean): String {
-        val lists = blocks.filter { it.second.isNotEmpty() }.mapIndexed { i, (block, blocked, exceptions) ->
-            "{\"id\":${WebBlock.BLOCKED_ID + i},\"block\":${str(block)},\"name\":${str(WebBlock.BLOCKED)}," +
-                "\"url\":${arr(blocked)},\"title\":[],\"text\":[]," +
+    /**
+     * As the desktop's enforce.Rules: one blacklist per enabled block with sites, one rule
+     * per phrase set (negative id, as the desktop's), each with its block's own exceptions
+     * (R-LIST-1); the social media settings of the blocks in force.
+     */
+    fun json(blocks: List<WebRule>, safeSearch: Boolean, webOnly: Boolean): String {
+        val lists = mutableListOf<String>()
+        var phraseId = 0
+        for ((i, r) in blocks.filter { it.sites.isNotEmpty() }.withIndex()) {
+            lists += "{\"id\":${WebBlock.BLOCKED_ID + i},\"block\":${str(r.block)},\"name\":${str(WebBlock.BLOCKED)}," +
+                "\"url\":${arr(r.sites)},\"title\":[],\"text\":[]," +
                 "\"actions\":[{\"action\":\"block\",\"distinct\":1,\"hits\":1}]," +
-                "\"except\":{\"url\":${arr(exceptions)},\"title\":[],\"text\":[]}}"
+                "\"except\":${except(r)}}"
         }
+        for (r in blocks) for (s in r.phraseSets.filter(WebRule::usable)) {
+            lists += "{\"id\":${--phraseId},\"block\":${str(r.block)},\"name\":${str(s.name)}," +
+                "\"url\":[],\"title\":[],\"text\":[]," +
+                "\"actions\":[{\"action\":\"block\",\"distinct\":${s.threshold},\"hits\":1}]," +
+                "\"except\":${except(r)},\"test\":${s.test}," +
+                "\"phrases\":[${s.phrases.joinToString(",") { phrase(it) }}],\"phrase_scope\":${arr(s.scope)}}"
+        }
+        val social = blocks.flatMap { it.social }.distinct()
         return "{\"lists\":[${lists.joinToString(",")}],\"quota\":[],\"block\":[],\"exceptions\":[]," +
             "\"web_only\":$webOnly,\"safesearch\":$safeSearch,\"titles\":[],\"recording\":false," +
-            "\"details\":false,\"ends\":{},\"soon\":[],\"blocks\":[],\"social\":[]}"
+            "\"details\":false,\"ends\":{},\"soon\":[],\"blocks\":[],\"social\":${arr(social)}}"
     }
+
+    private fun except(r: WebRule) = "{\"url\":${arr(r.exceptions)},\"title\":[],\"text\":[]}"
+
+    /** As the desktop's db.Phrase JSON (length left out when 0). */
+    private fun phrase(p: Phrase) = "{\"sets\":[" + p.sets.joinToString(",") {
+        "{\"terms\":${arr(it.terms)},\"necessary\":${it.necessary}}" } + "]" +
+        (if (p.length != 0) ",\"length\":${p.length}" else "") + "}"
 
     /** Whether IronFox needs the extension, like the desktop's enforce.ExtensionRequired. */
     fun extensionRequired(blocked: List<String>, websitesOn: Boolean, safeSearch: Boolean, webOnly: Boolean) =

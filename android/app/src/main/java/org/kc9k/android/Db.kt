@@ -21,7 +21,11 @@ object Codec {
             "name" to b.name, "active" to b.active, "sites" to b.sites, "site_exceptions" to b.siteExceptions,
             "apps" to b.apps, "app_exceptions" to b.appExceptions, "wifi_off" to b.wifiOff,
             "automation" to auto(b.automation), "lock" to lock(b.lock), "schedule_lock" to b.scheduleLock,
-            "paused_until" to b.pausedUntil, "mode" to b.mode) },
+            "paused_until" to b.pausedUntil, "mode" to b.mode, "social" to b.social,
+            "phrase_sets" to b.phraseSets.map { s -> mapOf("name" to s.name, "url" to s.inUrl, "title" to s.inTitle,
+                "text" to s.inText, "threshold" to s.threshold, "test" to s.test,
+                "phrases" to s.phrases.map { p -> mapOf("length" to p.length,
+                    "sets" to p.sets.map { w -> mapOf("terms" to w.terms, "necessary" to w.necessary) }) }) }) },
         "modes" to m.modes.map { md -> mapOf("name" to md.name, "automation" to auto(md.automation)) },
         "places" to m.places.map { p -> mapOf(
             "name" to p.name, "lat" to p.lat, "lon" to p.lon, "radius" to p.radius.toDouble(),
@@ -39,7 +43,12 @@ object Codec {
                 siteExceptions = b.strings("site_exceptions"), apps = b.strings("apps"),
                 appExceptions = b.strings("app_exceptions"), wifiOff = b.bool("wifi_off"),
                 automation = auto(b["automation"].obj()), lock = lock(b["lock"].obj()),
-                scheduleLock = b.bool("schedule_lock"), pausedUntil = b.long("paused_until"), mode = b.str("mode")) },
+                scheduleLock = b.bool("schedule_lock"), pausedUntil = b.long("paused_until"), mode = b.str("mode"),
+                social = b.strings("social"),
+                phraseSets = b["phrase_sets"].list().map { it.obj() }.map { s -> PhraseSet(s.str("name"),
+                    s["phrases"].list().map { it.obj() }.map { p -> Phrase(p["sets"].list().map { it.obj() }.map { w ->
+                        WordSet(w.strings("terms"), w.bool("necessary", true)) }, p.int("length")) },
+                    s.bool("url"), s.bool("title"), s.bool("text", true), s.int("threshold", 1), s.bool("test")) }) },
             modes = o["modes"].list().map { it.obj() }.map { md -> Mode(md.str("name"), auto(md["automation"].obj())) },
             places = o["places"].list().map { it.obj() }.map { p -> Place(
                 p.str("name"), p.double("lat"), p.double("lon"), p.double("radius", 150.0).toFloat(),

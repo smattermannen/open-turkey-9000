@@ -82,7 +82,7 @@ class EnforceTest {
         val off = Block("off", active = false, apps = listOf("com.other"))
         val p = Enforce.plan(m(a, b, off), at(3), UTC)
         assertTrue(p.wifiOff)
-        assertEquals(listOf(Triple("a", listOf("x.com"), listOf("x.com/ok"))), p.web)
+        assertEquals(listOf(WebRule("a", listOf("x.com"), listOf("x.com/ok"))), p.web)
         val all = setOf("com.phone", "com.game", "com.other", "org.kc9k.android")
         val resolve = { e: List<String> -> e.flatMap { if (it == "*") all else setOf(it) }.toSet() }
         // a's exception spares com.phone from a only; b blocks it.
@@ -295,7 +295,9 @@ class CodecTest {
         val m = Model(
             blocks = listOf(Block("Nokia \"mode\"", sites = listOf("a.com"), apps = listOf("*"), appExceptions = listOf("role:sms"),
                 wifiOff = true, automation = Automation(true, listOf(Window(2, 60, 120)), listOf("S"), listOf("Home"), true),
-                lock = SettingLock(5, 300, "pbkdf2\$1\$aa\$bb", 3), scheduleLock = true, pausedUntil = 9, mode = "M")),
+                lock = SettingLock(5, 300, "pbkdf2\$1\$aa\$bb", 3), scheduleLock = true, pausedUntil = 9, mode = "M",
+                social = listOf("youtube:no-shorts"),
+                phraseSets = listOf(PhraseSet("P", listOf(Phrase.parse("[a, b] [c]? [d]? :3").first!!), true, false, true, 2, true)))),
             modes = listOf(Mode("M", Automation(false, listOf(Window(1, 0, 60)), places = listOf("Home")))),
             places = listOf(Place("Home", 52.1, -4.25, 150f, true, 7, 12.5f, 20f, 8)),
             schedules = listOf(Schedule("S", listOf(Window(6, 0, 1440)))),

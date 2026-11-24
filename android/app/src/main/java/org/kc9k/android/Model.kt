@@ -51,6 +51,9 @@ data class Block(
     val active: Boolean = true,
     val sites: List<String> = emptyList(),
     val siteExceptions: List<String> = emptyList(),
+    val phraseSets: List<PhraseSet> = emptyList(),
+    /** Social media settings ([Social.PRESETS] names). */
+    val social: List<String> = emptyList(),
     val apps: List<String> = emptyList(),
     val appExceptions: List<String> = emptyList(),
     val wifiOff: Boolean = false,
@@ -108,6 +111,22 @@ data class WeekTime(val day: Int, val minute: Int) {
     }
 }
 
+/** One enabled block's part of the extension's rules: sites with its own exceptions, phrase sets, social media settings. */
+data class WebRule(
+    val block: String,
+    val sites: List<String> = emptyList(),
+    val exceptions: List<String> = emptyList(),
+    val phraseSets: List<PhraseSet> = emptyList(),
+    val social: List<String> = emptyList(),
+) {
+    val empty get() = sites.isEmpty() && phraseSets.isEmpty() && social.isEmpty()
+
+    companion object {
+        /** A phrase set that can match: phrases and a scope. */
+        fun usable(s: PhraseSet) = s.phrases.isNotEmpty() && s.scope.isNotEmpty()
+    }
+}
+
 /** What is enforced now: the single source of truth for the service and the GUI (as `enforce`). */
 object Enforce {
     /** Why a block is or isn't enforcing now, for the GUI. */
@@ -158,8 +177,8 @@ object Enforce {
         /** Per enabled block: its apps and its own app exceptions. */
         val apps: List<Pair<List<String>, List<String>>>,
         val wifiOff: Boolean,
-        /** Per enabled block with sites: name, sites, its own exceptions. */
-        val web: List<Triple<String, List<String>, List<String>>>,
+        /** Per enabled block with something for the extension: its sites, phrase sets, social media settings. */
+        val web: List<WebRule>,
     ) {
         val empty get() = apps.isEmpty() && !wifiOff && web.isEmpty()
     }
@@ -169,7 +188,8 @@ object Enforce {
         return Plan(
             apps = on.filter { it.apps.isNotEmpty() }.map { it.apps to it.appExceptions },
             wifiOff = on.any { it.wifiOff },
-            web = on.filter { it.sites.isNotEmpty() }.map { Triple(it.name, it.sites, it.siteExceptions) },
+            web = on.map { WebRule(it.name, it.sites, it.siteExceptions, it.phraseSets.filter(WebRule::usable), it.social) }
+                .filter { !it.empty },
         )
     }
 

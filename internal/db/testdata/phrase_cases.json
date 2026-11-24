@@ -1,0 +1,37 @@
+{
+  "_": "Phrase grammar cases shared by Go (db.ParsePhrase, TestSharedPhraseCases) and the Android app (Phrases.parse, PhrasesTest) (R-ANDROID-3). key: Phrase.Key; widens: [old, new, whether new widens old].",
+  "parse": [
+    {"text": "[eat, nice] [hello, grandpa]", "key": "[eat, nice] [hello, grandpa]"},
+    {"text": "  [Eat ,  NICE] [hello   grandpa]  ", "key": "[eat, nice] [hello grandpa]"},
+    {"text": "[a] [b]? [c]? :3", "key": "[a] [b]? [c]? :3"},
+    {"text": "[a] [b]? [c]? :2", "key": "[a] [b]? [c]?"},
+    {"text": "[a] [b] :2", "key": "[a] [b]"},
+    {"text": "[a]? [b]?", "key": "[a]? [b]?"},
+    {"text": "[big-, strong] [-gorilla, cat]", "key": "[big-, strong] [-gorilla, cat]"},
+    {"text": "[big-] [-strong-] [-gorilla]", "key": "[big-] [-strong-] [-gorilla]"},
+    {"text": "[a, , b] [c]", "key": "[a, b] [c]"},
+    {"text": "[a, -] [c]", "key": "[a] [c]"},
+    {"text": "[only]", "error": true},
+    {"text": "", "error": true},
+    {"text": "eat nice", "error": true},
+    {"text": "[a] [b", "error": true},
+    {"text": "[a] [b] :x", "error": true},
+    {"text": "[a] [b] :0", "error": true},
+    {"text": "[a] [b] :3", "error": true},
+    {"text": "[a] [b] [c] :1", "error": true},
+    {"text": "[] [b]", "error": true},
+    {"text": "[-gorilla, cat] [jumping, river]", "error": true},
+    {"text": "[big-] [cat]", "error": true},
+    {"text": "[big-] [-strong-]", "error": true},
+    {"text": "[big-, -gorilla] [cat]", "error": true}
+  ],
+  "widens": [
+    ["[a] [b]", "[a, x] [b]", true],
+    ["[a] [b]", "[a] [b]", true],
+    ["[a, x] [b]", "[a] [b]", false],
+    ["[a] [b]", "[a] [b]?", false],
+    ["[a] [b]", "[a] [b] [c]", false],
+    ["[a]? [b]? [c]?", "[a]? [b]? [c]? :3", false],
+    ["[a] [b]? [c]? :2", "[a, z] [b]? [c]?", true]
+  ]
+}

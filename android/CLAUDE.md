@@ -14,14 +14,19 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
 
 - `Model.kt` (pure): `Window` (day 0 = Monday, minutes, 5-minute steps),
   `Automation` (default enabled/disabled, own windows, schedules, places,
-  both/either), `Block` (sites + own exceptions, apps `*`/roles/packages +
+  both/either), `Block` (sites + own exceptions, phrase sets, social media settings, apps `*`/roles/packages +
   own app exceptions, Wi-Fi off, `lock: SettingLock`, `scheduleLock` =
   locked while its automation has it on, pause, `mode`), `Mode` (name +
   one automation for its blocks), `Place` (area + decided state),
   `Schedule`, `Model` (+ `noWeakening`, refused log; `automation(b)` = the
   mode's while in one, its own kept unused, R-MODE-1).
-  `Enforce` is the single source of truth: `state`/`enabled`/`locked`,
-  `plan` (union of enabled blocks), `suspend` (each block's apps minus its
+  `Phrases.kt` (pure): `Phrase` (the desktop's grammar `[a, b] [c]? :N`,
+  bridges, `check`/`key`/`widens`, held to Go by the shared
+  `internal/db/testdata/phrase_cases.json`, `PhrasesTest` and Go's
+  `TestSharedPhraseCases`), `PhraseSet` (scope url/title/text, threshold,
+  test mode; action: block), `Social.PRESETS` (as `db/social.go`, test
+  compares). `Enforce` is the single source of truth: `state`/`enabled`/`locked`,
+  `plan` (union of enabled blocks; `WebRule` per block for the extension), `suspend` (each block's apps minus its
   own exceptions, minus essentials).
 - `Commands.kt` (pure, R-ANDROID-3): every change to blocks, places,
   schedules; weakening a locked block refused and logged (`Model.refused`);
@@ -33,7 +38,10 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   `lockMode` (every block at once), `modeLocked` (all blocks locked,
   R-MODE-3); schedule/place checks see blocks through their mode. Tests:
   `ModelTest.kt` (`CommandsTest.weakeningRefusedAndLogged` and
-  `ModesTest.weakeningThroughAModeRefused` list every weakening command).
+  `ModesTest.weakeningThroughAModeRefused`,
+  `PhraseSetCommandsTest.weakeningRefusedAndLogged` list every weakening
+  command). Phrase sets: adding/widening phrases, wider scope, lower
+  threshold, test off strengthen; social media setting on strengthens.
 - `Db.kt`: `Codec` (JSON via `Json.kt`, own reader/writer since org.json
   is stubbed in unit tests), `Codec.migrate` (0.2 prefs to blocks), `Db`:
   one file `kc9k.json` in device-protected storage, atomic write, cached.
@@ -82,7 +90,9 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   `WebSettings.kt`, `Locks.kt`, `ChallengeActivity.kt`): desktop extension
   from `internal/webext/files`, packed by Gradle `packExtension`.
   `RulesServer` on 127.0.0.1:47613 serves `/rules` (`enforce.Rules` format:
-  one list per enabled block with sites, with that block's exceptions,
+  one list per enabled block with sites, one rule per usable phrase set
+  (negative id, `phrases`, `phrase_scope`, `test`), each with that block's
+  exceptions; `social` = union of the enabled blocks' settings,
   `safesearch` without `safesearch_engines` = every engine, `web_only`) and
   `/kc9k.xpi`. Check-in valid if fresh (15 s), not older than bundled,
   private tabs allowed. `ExtensionGuard.step` suspends IronFox after 60 s
@@ -111,7 +121,8 @@ Needs Android SDK (`local.properties` or `ANDROID_HOME`), JDK 17+. Cloud
 container: tools in `/opt/android-sdk`, `sdkmanager "platforms;android-36"
 "build-tools;35.0.0" "platform-tools"`, then `ANDROID_HOME=/opt/android-sdk
 ./gradlew --no-daemon testDebugUnitTest assembleDebug`. `node
-ci/android_rules_test.js` (served rules with `match.js`), `node
+ci/android_rules_test.js` (served rules with `match.js`: sites,
+phrase sets on page text, social), `node
 ci/android_background_test.js` (`background.js` as in IronFox). Never run
 on a phone yet.
 

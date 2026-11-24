@@ -106,6 +106,87 @@ class Commands(
         return if (o.error != null) o else ok(o.model, ListFile.summary(list, new.size, r.entries.size - new.size, r.skipped))
     }
 
+    // Phrase sets (SPEC §3.2): adding phrases strengthens; removing, narrowing, a higher threshold or test mode weakens.
+    private fun editSet(m: Model, block: String, set: String, weakens: Boolean, what: String, change: (PhraseSet) -> PhraseSet): Outcome {
+        val b = m.block(block) ?: return Outcome(m, "No block $block")
+        b.phraseSets.find { it.name == set } ?: return Outcome(m, "No phrase set $set in $block")
+        return edit(m, block, weakens, "$what in phrase set $set") { bb ->
+            bb.copy(phraseSets = bb.phraseSets.map { if (it.name == set) change(it) else it }) }
+    }
+
+    fun addPhraseSet(m: Model, block: String, name: String): Outcome {
+        val n = name.trim()
+        if (n.isEmpty()) return Outcome(m, "Give the phrase set a name")
+        val b = m.block(block) ?: return Outcome(m, "No block $block")
+        if (b.phraseSets.any { it.name == n }) return Outcome(m, "$block has a phrase set named $n")
+        return edit(m, block, false, "add phrase set") { it.copy(phraseSets = it.phraseSets + PhraseSet(n)) }
+    }
+
+    fun renamePhraseSet(m: Model, block: String, name: String, to: String): Outcome {
+        val n = to.trim()
+        if (n.isEmpty()) return Outcome(m, "Give the phrase set a name")
+        if (n != name && m.block(block)?.phraseSets?.any { it.name == n } == true) return Outcome(m, "$block has a phrase set named $n")
+        return editSet(m, block, name, false, "rename") { it.copy(name = n) }
+    }
+
+    fun deletePhraseSet(m: Model, block: String, name: String): Outcome {
+        val b = m.block(block) ?: return Outcome(m, "No block $block")
+        b.phraseSets.find { it.name == name } ?: return Outcome(m, "No phrase set $name in $block")
+        return edit(m, block, true, "delete phrase set $name") { bb -> bb.copy(phraseSets = bb.phraseSets.filter { it.name != name }) }
+    }
+
+    /** One phrase per line, each checked (R-PHRASE-1, R-PHRASE-8); phrases it has already are skipped. */
+    fun addPhrases(m: Model, block: String, set: String, text: String): Outcome {
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        if (lines.isEmpty()) return Outcome(m, "No phrases given")
+        val add = mutableListOf<Phrase>()
+        for (l in lines) {
+            val (p, err) = Phrase.parse(l)
+            if (p == null) return Outcome(m, "$l: $err")
+            add += p.canonical()
+        }
+        return editSet(m, block, set, false, "add phrases") { s ->
+            s.copy(phrases = s.phrases + add.distinctBy { it.key() }.filter { a -> s.phrases.none { it.key() == a.key() } }) }
+    }
+
+    fun removePhrase(m: Model, block: String, set: String, phrase: Phrase) =
+        editSet(m, block, set, true, "remove $phrase") { s -> s.copy(phrases = s.phrases.filter { it.key() != phrase.key() }) }
+
+    /** A change that only widens the phrase (more terms) is a strengthening (R-WEAK-5). */
+    fun replacePhrase(m: Model, block: String, set: String, old: Phrase, text: String): Outcome {
+        val (p, err) = Phrase.parse(text)
+        if (p == null) return Outcome(m, err)
+        val n = p.canonical()
+        return editSet(m, block, set, !n.widens(old), "change $old") { s ->
+            if (s.phrases.any { it.key() == n.key() }) s.copy(phrases = s.phrases.filter { it.key() != old.key() })
+            else s.copy(phrases = s.phrases.map { if (it.key() == old.key()) n else it })
+        }
+    }
+
+    fun setPhraseScope(m: Model, block: String, set: String, url: Boolean, title: Boolean, text: Boolean): Outcome {
+        val s = m.block(block)?.phraseSets?.find { it.name == set } ?: return Outcome(m, "No phrase set $set in $block")
+        val weakens = (s.inUrl && !url) || (s.inTitle && !title) || (s.inText && !text)
+        return editSet(m, block, set, weakens, "narrow where it looks") { it.copy(inUrl = url, inTitle = title, inText = text) }
+    }
+
+    /** How many different phrases must match before it blocks (R-PHRASE-9): lower strengthens. */
+    fun setPhraseThreshold(m: Model, block: String, set: String, n: Int): Outcome {
+        if (n < 1) return Outcome(m, "At least 1 phrase")
+        val s = m.block(block)?.phraseSets?.find { it.name == set } ?: return Outcome(m, "No phrase set $set in $block")
+        return editSet(m, block, set, n > s.threshold, "raise the threshold") { it.copy(threshold = n) }
+    }
+
+    /** Test mode only reports matches: turning it on weakens. */
+    fun setPhraseTest(m: Model, block: String, set: String, on: Boolean) =
+        editSet(m, block, set, on, "test mode") { it.copy(test = on) }
+
+    // Social media settings: on strengthens, off weakens.
+    fun setSocial(m: Model, block: String, preset: String, on: Boolean): Outcome {
+        if (!Social.valid(preset)) return Outcome(m, "No social media setting $preset")
+        return edit(m, block, !on, "turn off $preset") {
+            it.copy(social = if (on) (it.social + preset).distinct() else it.social - preset) }
+    }
+
     private fun entries(text: String): List<String>? {
         val raw = Entries.split(text)
         if (raw.isEmpty() || raw.any { Entries.normalize(it) == null }) return null

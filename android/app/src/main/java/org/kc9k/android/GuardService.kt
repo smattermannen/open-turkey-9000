@@ -55,6 +55,7 @@ class GuardService : Service() {
     }
 
     private lateinit var places: PlaceWatcher
+    private lateinit var wifi: WifiWatcher
     private lateinit var enforcer: Enforcer
     private lateinit var store: Store
     private lateinit var server: RulesServer
@@ -104,6 +105,8 @@ class GuardService : Service() {
         sync(force = true)
         places = PlaceWatcher(this)
         places.start { sync(force = false) }
+        wifi = WifiWatcher(this)
+        wifi.start { sync(force = false) }
         handler.post(tick)
         running = true
         instance = this
@@ -166,6 +169,7 @@ class GuardService : Service() {
         handler.removeCallbacks(tick)
         server.stop()
         places.stop()
+        wifi.stop()
         super.onDestroy()
     }
 

@@ -17,7 +17,9 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   both/either), `Block` (sites + own exceptions, phrase sets, social media settings, apps `*`/roles/packages +
   own app exceptions, Wi-Fi off, `lock: SettingLock`, `scheduleLock` =
   locked while its automation has it on, pause, `mode`), `Mode` (name +
-  one automation for its blocks), `Place` (area + decided state),
+  one automation for its blocks), `Place` (area, or Wi-Fi `networks` with
+  `needed` in range; decided state), `WifiPlace.step` (there while `need`
+  of its networks are in a scan; a scan with no networks changes nothing),
   `Schedule`, `Model` (+ `noWeakening`, refused log; `automation(b)` = the
   mode's while in one, its own kept unused, R-MODE-1).
   `Phrases.kt` (pure): `Phrase` (the desktop's grammar `[a, b] [c]? :N`,
@@ -49,7 +51,13 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   10 min with the accuracy circle fully outside; no fix changes nothing; no
   fix yet = not inside. `PlaceWatcher.kt` feeds every place GPS, network
   and fused fixes (last known at start; registers again each minute while
-  no fix comes); `MapMath.distance` (haversine).
+  no fix comes; skips Wi-Fi places); `MapMath.distance` (haversine).
+  `WifiWatcher` (same file, run by `GuardService`): scan results every
+  30 s, a scan asked every 2 min; `inRange` for the GUI. Commands
+  `setWifiPlace` (new, or networks in range added), `setPlaceNeeded`,
+  `removeNetwork`: on a place a locked block uses, wider (more networks,
+  fewer needed) is allowed only where the place turns the block on,
+  narrower only where it lifts it; else refused and logged.
 - `Options.kt`: protections as `Option` (on free; off needs it unlocked and
   no weakening; trusted time: date/time and time zone automatic and
   unchangeable while anything is locked, `Store.anythingLocked`, re-applied

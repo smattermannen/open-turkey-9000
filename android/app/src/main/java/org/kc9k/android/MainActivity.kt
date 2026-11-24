@@ -189,6 +189,9 @@ class MainActivity : Activity() {
 
     private fun placeLine(p: Place): String {
         val state = if (p.inside) "here" else "not here"
+        if (p.wifi) return if (p.lastFix == 0L) "$state (no scan with networks yet; needs ${p.need} of ${p.networks.size})"
+            else "$state (${p.lastSeen} of its ${p.networks.size} networks in range at " +
+                DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(p.lastFix)) + "; needs ${p.need})"
         if (p.lastFix == 0L) return "$state (no location fix yet)"
         val t = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(p.lastFix))
         return "$state (at $t ${p.lastDistance.toInt()} m from its centre, ±${p.lastAccuracy.toInt()} m; radius ${p.radius.toInt()} m)"
@@ -620,26 +623,48 @@ class MainActivity : Activity() {
     private fun placesPage(root: LinearLayout) {
         backTo(root, "Places")
         val m = model
-        root.addView(ui.help("A place is an area on the map. The phone is there when a location fix is inside it; it " +
-            "has left when the fix's accuracy circle has been fully outside for 10 minutes."))
+        root.addView(ui.help("A place is an area on the map or Wi-Fi networks. An area: the phone is there when a " +
+            "location fix is inside it, and has left when the fix's accuracy circle has been fully outside for 10 minutes. " +
+            "Wi-Fi: there while the chosen number of its networks are in range (works with Wi-Fi off while Wi-Fi " +
+            "scanning is on). No fix or no networks at all changes nothing."))
         for (p in m.places) root.addView(ui.card().apply {
             val top = ui.row()
             top.addView(ui.grow(ui.text(p.name, 17f)))
             top.addView(ui.pill(if (p.inside) "here" else "not here", if (p.inside) Ui.Pill.ON else Ui.Pill.OFF))
             addView(top)
             addView(ui.help(placeLine(p)))
-            val users = m.blocks.filter { p.name in it.automation.places }.map { it.name }
+            val users = m.blocks.filter { p.name in m.automation(it).places }.map { it.name }
             if (users.isNotEmpty()) addView(ui.help("Used by " + users.joinToString(", ")))
+            if (p.wifi) {
+                for (n in p.networks) addView(removable(n.ssid.ifEmpty { "(hidden)" } + " · " + n.bssid) {
+                    run { c, mm -> c.removeNetwork(mm, p.name, n.bssid) } })
+                addView(ui.button("Networks needed: ${p.need}…") {
+                    ask("Networks of ${p.name} needed in range", "1 to ${p.networks.size}", p.needed.toString()) { t ->
+                        val n = t.trim().toIntOrNull() ?: return@ask toast("A number")
+                        run { c, mm -> c.setPlaceNeeded(mm, p.name, n) }
+                    }
+                })
+            }
             val row = ui.row()
-            row.addView(ui.button("Edit on the map…") { openMap(p.name) })
+            if (p.wifi) row.addView(ui.button("Add networks in range") {
+                run { c, mm -> c.setWifiPlace(mm, p.name, WifiWatcher.inRange(this@MainActivity)) } })
+            else row.addView(ui.button("Edit on the map…") { openMap(p.name) })
             row.addView(ui.button("Delete") { confirm("Delete ${p.name}?", "Blocks using it lose it.") { run { c, mm -> c.deletePlace(mm, p.name) } } })
             addView(row)
         })
-        root.addView(ui.button("New place…") {
+        root.addView(ui.button("New place on the map…") {
             ask("New place", "Name, e.g. Home") { n ->
                 if (n.isBlank()) return@ask toast("Give the place a name")
                 if (model.place(n.trim()) != null) return@ask toast("A place named ${n.trim()} exists")
                 openMap(n.trim())
+            }
+        })
+        root.addView(ui.button("New Wi-Fi place where I am…") {
+            val nets = WifiWatcher.inRange(this)
+            if (nets.isEmpty()) return@button toast("No Wi-Fi networks in range: switch Wi-Fi (or Wi-Fi scanning) on")
+            ask("New Wi-Fi place (${nets.size} networks in range: ${nets.take(3).joinToString { it.ssid.ifEmpty { "hidden" } }})", "Name, e.g. Home") { n ->
+                if (model.place(n.trim()) != null) return@ask toast("A place named ${n.trim()} exists")
+                run { c, mm -> c.setWifiPlace(mm, n, nets) }
             }
         })
     }

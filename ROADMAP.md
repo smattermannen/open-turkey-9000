@@ -448,7 +448,8 @@ tests need the owner.
   mode (VPN drops all, Wi-Fi off), Frozen Chicken (lock screen, allowed
   apps only); week view and list editor. (L) Built 2026-11-24: modes of
   blocks (one automation, put in/take out, switch, lock all, R-MODE-1–3;
-  Kotlin tests). Left: Wi-Fi places, monk mode, Frozen Chicken, week view,
+  Kotlin tests); Wi-Fi places (networks in range, number needed, changes
+  judged per locked block; `WifiPlaceTest`). Left: monk mode, Frozen Chicken, week view,
   drag into a mode, mode wallpapers; the mode pages not yet seen on a phone.
 - [ ] `N5` Breaks, Pomodoro, allowance, reward, session limit, pause,
   autostart, use, statistics, notifications. (M)

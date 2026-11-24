@@ -1,6 +1,7 @@
 package org.kc9k.android
 
 import android.annotation.SuppressLint
+import android.net.wifi.WifiManager
 import android.content.Context
 import android.location.Location
 import android.location.LocationListener
@@ -66,7 +67,8 @@ class PlaceWatcher(private val context: Context) : LocationListener {
     private fun evaluate(fix: Location) {
         val now = System.currentTimeMillis()
         lastFixAt = now
-        Db.update(context) { m -> m.copy(places = m.places.map { p -> Places.step(p, now, fix.latitude, fix.longitude, fix.accuracy) }) }
+        Db.update(context) { m -> m.copy(places = m.places.map { p ->
+            if (p.wifi) p else Places.step(p, now, fix.latitude, fix.longitude, fix.accuracy) }) }
         onChange?.invoke()
     }
 
@@ -81,5 +83,52 @@ object Places {
         val d = MapMath.distance(p.lat, p.lon, lat, lon).toFloat()
         val s = Area.step(Area.State(p.inside, p.outsideSince), now, p.radius, d, accuracy)
         return p.copy(inside = s.inside, outsideSince = s.outsideSince, lastDistance = d, lastAccuracy = accuracy, lastFix = now)
+    }
+}
+
+/**
+ * Decides the Wi-Fi places (WifiPlace.step) from Android's scan results every
+ * [READ_MS], asking for a scan every [SCAN_MS] (Android throttles more). Works with Wi-Fi
+ * off while Wi-Fi scanning (Settings > Location > Wi-Fi scanning) is on.
+ */
+class WifiWatcher(private val context: Context) {
+    companion object {
+        private const val READ_MS = 30_000L
+        private const val SCAN_MS = 2 * 60_000L
+
+        /** The networks in range now, strongest first. */
+        @SuppressLint("MissingPermission")
+        fun inRange(context: Context): List<Network> = try {
+            context.getSystemService(WifiManager::class.java).scanResults
+                .sortedByDescending { it.level }
+                .map { r -> Network(r.BSSID.lowercase(), @Suppress("DEPRECATION") r.SSID ?: "") }
+                .distinctBy { it.bssid }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var onChange: (() -> Unit)? = null
+    private var lastScan = 0L
+    private val tick = object : Runnable {
+        override fun run() {
+            step()
+            handler.postDelayed(this, READ_MS)
+        }
+    }
+
+    fun start(onChange: () -> Unit) { this.onChange = onChange; handler.post(tick) }
+    fun stop() { handler.removeCallbacks(tick); onChange = null }
+
+    private fun step() {
+        val now = System.currentTimeMillis()
+        if (Db.model(context).places.none { it.wifi }) return
+        if (now - lastScan >= SCAN_MS) {
+            lastScan = now
+            @Suppress("DEPRECATION") try { context.getSystemService(WifiManager::class.java).startScan() } catch (_: Exception) {}
+        }
+        val seen = inRange(context).map { it.bssid }.toSet()
+        val before = Db.model(context).places
+        val after = Db.update(context) { m -> m.copy(places = m.places.map { WifiPlace.step(it, now, seen) }) }.places
+        if (before.map { it.inside } != after.map { it.inside }) onChange?.invoke()
     }
 }

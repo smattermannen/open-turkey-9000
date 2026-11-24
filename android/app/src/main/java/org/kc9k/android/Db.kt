@@ -30,7 +30,8 @@ object Codec {
         "places" to m.places.map { p -> mapOf(
             "name" to p.name, "lat" to p.lat, "lon" to p.lon, "radius" to p.radius.toDouble(),
             "inside" to p.inside, "outside_since" to p.outsideSince, "last_distance" to p.lastDistance.toDouble(),
-            "last_accuracy" to p.lastAccuracy.toDouble(), "last_fix" to p.lastFix) },
+            "last_accuracy" to p.lastAccuracy.toDouble(), "last_fix" to p.lastFix, "needed" to p.needed,
+            "last_seen" to p.lastSeen, "networks" to p.networks.map { mapOf("bssid" to it.bssid, "ssid" to it.ssid) }) },
         "schedules" to m.schedules.map { s -> mapOf("name" to s.name, "windows" to s.windows.map(::win)) },
         "refused" to m.refused,
     ))
@@ -53,7 +54,9 @@ object Codec {
             places = o["places"].list().map { it.obj() }.map { p -> Place(
                 p.str("name"), p.double("lat"), p.double("lon"), p.double("radius", 150.0).toFloat(),
                 p.bool("inside"), p.long("outside_since"), p.double("last_distance", -1.0).toFloat(),
-                p.double("last_accuracy", -1.0).toFloat(), p.long("last_fix")) },
+                p.double("last_accuracy", -1.0).toFloat(), p.long("last_fix"),
+                p["networks"].list().map { it.obj() }.map { Network(it.str("bssid"), it.str("ssid")) },
+                p.int("needed", 2), p.int("last_seen")) },
             schedules = o["schedules"].list().map { it.obj() }.map { s ->
                 Schedule(s.str("name"), s["windows"].list().map { win(it.obj()) }) },
             noWeakening = o.bool("no_weakening", true),

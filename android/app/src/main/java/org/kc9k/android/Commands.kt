@@ -376,9 +376,58 @@ class Commands(
         if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return Outcome(m, "Invalid position")
         if (radius !in 50f..2000f) return Outcome(m, "The radius must be 50 to 2000 m")
         val old = m.place(n)
+        if (old != null && old.wifi) return Outcome(m, "$n is a Wi-Fi place")
         if (old != null) usedByLocked(m) { n in m.automation(it).places }?.let { return refuse(m, it, "move place $n") }
         val p = Place(n, lat, lon, radius)
         return ok(m.copy(places = if (old == null) m.places + p else m.places.map { if (it.name == n) p else it }))
+    }
+
+    /**
+     * A Wi-Fi place: new, or [seen] networks added to it and [needed] set. A change to a place
+     * a locked block uses must strengthen each such block (placeStrengthens).
+     */
+    fun setWifiPlace(m: Model, name: String, seen: List<Network>, needed: Int? = null): Outcome {
+        val n = name.trim()
+        if (n.isEmpty()) return Outcome(m, "Give the place a name")
+        val old = m.place(n)
+        if (old != null && !old.wifi) return Outcome(m, "$n is an area on the map")
+        val nets = ((old?.networks ?: emptyList()) + seen.map { Network(it.bssid.lowercase(), it.ssid) }).distinctBy { it.bssid }
+        if (nets.isEmpty()) return Outcome(m, "No Wi-Fi networks in range: switch Wi-Fi (or Wi-Fi scanning) on")
+        val need = needed ?: old?.needed ?: 2
+        if (need < 1 || need > nets.size) return Outcome(m, "Networks needed: 1 to ${nets.size}")
+        val p = (old ?: Place(n)).copy(networks = nets, needed = need)
+        if (old != null) placeWeakens(m, old, p)?.let { return refuse(m, it, "change place $n") }
+        return ok(m.copy(places = if (old == null) m.places + p else m.places.map { if (it.name == n) p else it }))
+    }
+
+    fun setPlaceNeeded(m: Model, name: String, needed: Int): Outcome {
+        val p = m.place(name) ?: return Outcome(m, "No place $name")
+        if (!p.wifi) return Outcome(m, "$name is an area on the map")
+        return setWifiPlace(m, name, emptyList(), needed)
+    }
+
+    /** Forgets one network of a Wi-Fi place (the place stays with at least one). */
+    fun removeNetwork(m: Model, name: String, bssid: String): Outcome {
+        val p = m.place(name) ?: return Outcome(m, "No place $name")
+        val nets = p.networks.filter { it.bssid != bssid }
+        if (nets.isEmpty()) return Outcome(m, "A Wi-Fi place keeps at least one network; delete the place instead")
+        val np = p.copy(networks = nets, needed = minOf(p.needed, nets.size))
+        placeWeakens(m, p, np)?.let { return refuse(m, it, "remove a network from $name") }
+        return ok(m.copy(places = m.places.map { if (it.name == name) np else it }))
+    }
+
+    /**
+     * Why changing [old] to [new] weakens a locked block using it, or null. A wider place
+     * (more networks, fewer needed) is there more often: stronger for a block it turns on
+     * (disabled by default), weaker for one it lifts; a narrower one the other way round.
+     */
+    private fun placeWeakens(m: Model, old: Place, new: Place): String? {
+        val wider = new.networks.containsAll(old.networks) && new.need <= old.need
+        val narrower = old.networks.containsAll(new.networks) && new.need >= old.need
+        return usedByLocked(m) { b ->
+            val a = m.automation(b)
+            old.name in a.places && !(if (a.defaultEnabled) narrower else wider)
+        }
     }
 
     fun deletePlace(m: Model, name: String): Outcome {

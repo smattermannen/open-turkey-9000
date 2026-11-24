@@ -68,12 +68,39 @@ data class Block(
 /** A mode (SPEC §3.2): a named group of blocks with one automation for all. */
 data class Mode(val name: String, val automation: Automation = Automation())
 
-/** An area (SPEC §8.2) with its last decided state (Area.step). */
+/**
+ * A place (SPEC §8.2): an area, or Wi-Fi networks ([networks] not empty: their BSSIDs,
+ * [needed] of them in range, §3.6), with its last decided state (Area.step, WifiPlace.step).
+ */
 data class Place(
-    val name: String, val lat: Double, val lon: Double, val radius: Float,
+    val name: String, val lat: Double = 0.0, val lon: Double = 0.0, val radius: Float = 0f,
     val inside: Boolean = false, val outsideSince: Long = 0,
     val lastDistance: Float = -1f, val lastAccuracy: Float = -1f, val lastFix: Long = 0,
-)
+    val networks: List<Network> = emptyList(),
+    val needed: Int = 2,
+    /** Known networks in range at the last scan, for the GUI. */
+    val lastSeen: Int = 0,
+) {
+    val wifi get() = networks.isNotEmpty()
+    /** How many must be in range: [needed], but no more than it knows. */
+    val need get() = minOf(needed, networks.size).coerceAtLeast(1)
+}
+
+/** A Wi-Fi access point: BSSID (lowercase) and the network's name, for showing. */
+data class Network(val bssid: String, val ssid: String = "")
+
+/** Deciding a Wi-Fi place (SPEC §3.6) from one scan. */
+object WifiPlace {
+    /**
+     * There while [Place.need] of its networks are in range; a scan that found no networks
+     * at all changes nothing (as an area with no fix, Area.step).
+     */
+    fun step(p: Place, now: Long, seen: Set<String>): Place {
+        if (!p.wifi || seen.isEmpty()) return p
+        val n = p.networks.count { it.bssid in seen }
+        return p.copy(inside = n >= p.need, outsideSince = 0, lastSeen = n, lastFix = now)
+    }
+}
 
 data class Schedule(val name: String, val windows: List<Window> = emptyList())
 

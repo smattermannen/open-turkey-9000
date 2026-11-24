@@ -42,7 +42,7 @@ its bypass prevention).
 | 2.7 | Text lock's challenge window on a real desktop | R-LOCK-5, §4.6 | locks | box |
 | 2.8 | Every Partial/Not built row of §1 | see §1 | see §1 | agent |
 | 2.9 | Tamper settings: LibreWolf parts (box); `ci/tamper_vm_test.sh` (never run) | §4.10 | browsers, extension, install | box, vm |
-| 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
+| 2.10 | Cross-device sync: Windows GUI, Android, the real Supabase project (CLI, GTK, fake built) | §4.14, §6 2026-11-23 | sync, db-project | agent, owner |
 | 2.11 | One-click installer: `.deb` built (clean Mint VM left), MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, vm, owner |
 | 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere (Windows, Linux: waiting for 2.17 and Mozilla's signature) | §3.13, §4.10 | browsers, windows-layers | agent, owner, win-vm |
 | 2.13 | Accountability partner: email provider, Windows GUI, more lock kinds | §4.15 | sync | owner, agent |

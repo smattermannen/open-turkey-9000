@@ -13,12 +13,14 @@ import android.widget.TextView
 import android.widget.Toast
 
 /**
- * Picks the home on a map (owner, 2026-11-16: no looking up coordinates elsewhere): tap
- * the map to put the home there, set the radius with the slider, save. Like the fields in
- * Settings, only while away from home (at home it would loosen Nokia mode).
+ * Picks a place's area on a map (owner, 2026-11-16: no looking up coordinates elsewhere):
+ * tap the map to put the centre there, set the radius with the slider, save. Saving goes
+ * through Commands.setPlace (refused while a locked block uses the place). Opened with
+ * [EXTRA_NAME]: the place to edit, or a new one's name.
  */
 class MapPickerActivity : Activity() {
-    private lateinit var store: Store
+    companion object { const val EXTRA_NAME = "name" }
+    private lateinit var name: String
     private lateinit var map: MapView
     private lateinit var radiusLabel: TextView
     private var picked: Pair<Double, Double>? = null
@@ -28,13 +30,13 @@ class MapPickerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        store = Store(this)
+        name = intent.getStringExtra(EXTRA_NAME) ?: "Home"
         map = MapView(this)
-        radius = store.radiusM
-        if (store.homeSet) picked = store.lat to store.lon
+        val old = Db.model(this).place(name)
+        if (old != null) { radius = old.radius; picked = old.lat to old.lon }
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(TextView(this).apply {
-            text = "Tap the map where home is. Drag to move, pinch or double-tap to zoom."
+            text = "$name: tap the map at the place's centre. Drag to move, pinch or double-tap to zoom."
             setPadding(24, 16, 24, 8)
         })
         root.addView(map, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -54,7 +56,7 @@ class MapPickerActivity : Activity() {
         buttons.addView(Button(this).apply { text = "−"; setOnClickListener { map.zoomBy(-1) } })
         buttons.addView(Button(this).apply { text = "+"; setOnClickListener { map.zoomBy(1) } })
         buttons.addView(Button(this).apply { text = "Where I am"; setOnClickListener { goToMe() } })
-        buttons.addView(Button(this).apply { text = "Save home"; setOnClickListener { save() } })
+        buttons.addView(Button(this).apply { text = "Save place"; setOnClickListener { save() } })
         root.addView(buttons)
         setContentView(root)
 
@@ -93,13 +95,21 @@ class MapPickerActivity : Activity() {
     private fun save() {
         val p = picked
         when {
-            p == null -> toast("Tap the map where home is first")
-            store.nokiaMode -> toast("At home: not editable")
-            radius < 50f -> toast("The radius is at least 50 m")
+            p == null -> toast("Tap the map at the place first")
             else -> {
-                store.lat = p.first; store.lon = p.second; store.radiusM = radius
-                toast("Home saved")
-                finish()
+                val o = Commands(System.currentTimeMillis(), Store(this).bootCount)
+                    .setPlace(Db.model(this), name, p.first, p.second, radius)
+                Db.save(this, o.model)
+                if (o.error != null) toast(o.error) else {
+                    // Decide it at once from the newest fix, so the GUI shows where the phone is.
+                    PlaceWatcher(this).newest()?.let { f ->
+                        Db.update(this) { m -> m.copy(places = m.places.map {
+                            if (it.name == name) Places.step(it, System.currentTimeMillis(), f.latitude, f.longitude, f.accuracy) else it }) }
+                    }
+                    GuardService.resync(this)
+                    toast("$name saved")
+                    finish()
+                }
             }
         }
     }

@@ -217,21 +217,13 @@ class ListFileTest {
 class PlanTest {
     private val targets = setOf("com.android.settings", "org.example.game", "com.android.documentsui")
 
-    @Test fun nokiaPausesSettings() =
-        assertTrue("com.android.settings" in Plan.suspend(true, targets, emptySet(), emptyList()))
-
     @Test fun pickerLetThrough() {
-        val s = Plan.suspend(true, targets, setOf("com.android.documentsui"), emptyList())
+        val s = Plan.suspend(targets, setOf("com.android.documentsui"), emptyList())
         assertEquals(setOf("com.android.settings", "org.example.game"), s)
     }
 
-    @Test fun awayOrLiftedOnlyIronFoxPause() {
-        assertEquals(emptySet<String>(), Plan.suspend(false, targets, emptySet(), emptyList()))
-        assertEquals(setOf("org.ironfoxoss.ironfox"), Plan.suspend(false, targets, emptySet(), listOf("org.ironfoxoss.ironfox")))
-    }
-
-    @Test fun nokiaPolicyBlocksSettings() {
-        assertTrue(Policies.SETTINGS in Policies.NOKIA.blacklist)
-        assertFalse(Policies.SETTINGS in Policies.NOKIA.whitelist)
+    @Test fun nothingOnOnlyIronFoxPause() {
+        assertEquals(emptySet<String>(), Plan.suspend(emptySet(), emptySet(), emptyList()))
+        assertEquals(setOf("org.ironfoxoss.ironfox"), Plan.suspend(emptySet(), emptySet(), listOf("org.ironfoxoss.ironfox")))
     }
 }

@@ -17,9 +17,10 @@ import android.os.Looper
 import android.os.SystemClock
 
 /**
- * Runs the trigger and enforces Nokia mode at home, serves the IronFox extension its rules
- * (RulesServer) and pauses IronFox while it runs without it (ExtensionGuard). The DO
- * exemption allows background FGS starts.
+ * Enforces the enabled blocks (Enforce.plan: their apps suspended, Wi-Fi off), decides the
+ * places (PlaceWatcher), serves the IronFox extension its rules (RulesServer) and pauses
+ * IronFox while it runs without it (ExtensionGuard). The DO exemption allows background FGS
+ * starts.
  */
 class GuardService : Service() {
     companion object {
@@ -36,7 +37,7 @@ class GuardService : Service() {
          */
         fun resync(context: Context) {
             val s = instance ?: return start(context)
-            s.handler.post { DeviceOwner(s).applyBaseline(); s.onHome(s.store.atHome) }
+            s.handler.post { DeviceOwner(s).applyBaseline(); s.sync(force = true) }
         }
 
         fun start(context: Context) {
@@ -53,7 +54,7 @@ class GuardService : Service() {
         }
     }
 
-    private lateinit var trigger: Trigger
+    private lateinit var places: PlaceWatcher
     private lateinit var enforcer: Enforcer
     private lateinit var store: Store
     private lateinit var server: RulesServer
@@ -61,8 +62,9 @@ class GuardService : Service() {
     private lateinit var minExtension: String
     private val handler = Handler(Looper.getMainLooper())
 
-    private var home = true
-    private var homeTargets: Set<String> = emptySet()
+    /** The resolved packages (`*` is costly), redone each minute or when the plan changes. */
+    private var resolved: Pair<Enforce.Plan, Set<String>>? = null
+    private var resolvedAt = 0L
     private var guard = ExtensionGuard.State()
     private var paused = false
     private var lastTick = 0L
@@ -93,20 +95,14 @@ class GuardService : Service() {
         server = RulesServer(this).also { it.start() }
         foreground = Foreground(this)
         minExtension = RulesServer.bundledVersion(this)
+        Db.model(this) // migrates the 0.2 settings into blocks on first start
         // Re-apply the persisted state at once, before any fix arrives.
-        onHome(store.atHome)
-        trigger = GeofenceTrigger(this)
-        // Called on every evaluation (each minute), so drift is corrected (Wi-Fi, new apps).
-        trigger.start { onHome(it) }
+        sync(force = true)
+        places = PlaceWatcher(this)
+        places.start { sync(force = false) }
         handler.post(tick)
         running = true
         instance = this
-    }
-
-    private fun onHome(atHome: Boolean) {
-        home = atHome
-        homeTargets = if (atHome && store.homeSet) enforcer.targets(Policies.NOKIA) else emptySet()
-        sync(force = true)
     }
 
     /** The extension guard (ExtensionGuard): pauses IronFox while it runs without the extension. */
@@ -132,7 +128,7 @@ class GuardService : Service() {
     private fun notifyPause(text: String?) {
         val nm = getSystemService(NotificationManager::class.java)
         if (text == null) { nm.cancel(2); return }
-        val open = PendingIntent.getActivity(this, 0, Intent(this, SettingsActivity::class.java),
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE)
         nm.notify(2, Notification.Builder(this, IRONFOX_CHANNEL)
             .setContentTitle("IronFox is paused").setContentText(text)
@@ -142,10 +138,13 @@ class GuardService : Service() {
 
     private fun sync(force: Boolean) {
         val now = System.currentTimeMillis()
-        val nokia = home && store.homeSet && !store.lifted
-        val wanted = Plan.suspend(nokia, homeTargets, if (Picker.open(now)) Picker.packages else emptySet(),
+        val plan = if (store.lifted) Enforce.Plan(emptyList(), false, emptyList()) else Enforce.plan(Db.model(this), now)
+        val cached = resolved
+        val targets = if (cached != null && cached.first == plan && now - resolvedAt < 60_000L) cached.second
+            else Enforce.suspend(plan, enforcer::resolve, enforcer.never()).also { resolved = plan to it; resolvedAt = now }
+        val wanted = Plan.suspend(targets, if (Picker.open(now)) Picker.packages else emptySet(),
             if (paused) IronFox.installed(this) else emptyList())
-        val state = wanted to (nokia && Policies.NOKIA.wifiOff)
+        val state = wanted to plan.wifiOff
         if (!force && state == synced && now - lastSync < 60_000L) return
         enforcer.sync(state.first, state.second)
         synced = state
@@ -162,7 +161,7 @@ class GuardService : Service() {
         instance = null
         handler.removeCallbacks(tick)
         server.stop()
-        trigger.stop()
+        places.stop()
         super.onDestroy()
     }
 

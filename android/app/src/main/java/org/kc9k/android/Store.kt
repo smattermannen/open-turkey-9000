@@ -58,8 +58,9 @@ class Store(private val context: Context) {
         get() = p.getBoolean("lifted", false)
         set(v) { p.edit().putBoolean("lifted", v).commit() }
 
-    /** Nokia mode: at home, so calls and texts only. Off while no home is set or while lifted. */
-    val nokiaMode get() = homeSet && atHome && !lifted
+    /** Why settings outside blocks can't be weakened now (Commands.whySettingsLocked), or null. */
+    fun whySettingsLocked(): String? = if (lifted) null
+        else Commands(System.currentTimeMillis(), bootCount).whySettingsLocked(Db.model(context))
 
     fun isOn(o: Option) = p.getBoolean("opt." + o.key, o.default)
     fun setOn(o: Option, on: Boolean) { p.edit().putBoolean("opt." + o.key, on).commit() }
@@ -69,6 +70,11 @@ class Store(private val context: Context) {
         Option.entries.forEach { p.edit().remove("lock." + it.key).commit() }
         settingLockNames.forEach(::clearSettingLock)
     }
+
+    /** What the last sync suspended, so a package a block named by hand is unpaused again. */
+    var suspended: Set<String>
+        get() = p.getStringSet("suspended", emptySet()) ?: emptySet()
+        set(v) { if (v != suspended) p.edit().putStringSet("suspended", v).commit() }
 
     // Browser settings (Web.kt) and their locks.
     fun isOn(b: BrowserSetting) = p.getBoolean("browser." + b.key, false)
@@ -89,7 +95,7 @@ class Store(private val context: Context) {
             .remove("slock.$name.boot").commit()
     }
     /** Every setting lock's name, for the date/time protection (time locks trust the clock). */
-    val settingLockNames get() = BrowserSetting.entries.map { it.key } + WebBlock.LOCK
+    val settingLockNames get() = BrowserSetting.entries.map { it.key }
 
     // The website block (WebBlock).
     var websitesOn: Boolean
@@ -103,9 +109,15 @@ class Store(private val context: Context) {
         set(v) { p.edit().putString("web.exceptions", v.distinct().joinToString("\n")).commit() }
     private fun lines(key: String) = (p.getString(key, "") ?: "").split("\n").filter { it.isNotEmpty() }
 
-    // While lifted the extension gets empty rules and isn't required.
-    fun rulesJson() = Rules.json(blocked, exceptions, websitesOn && !lifted,
-        isOn(BrowserSetting.SAFESEARCH) && !lifted, isOn(BrowserSetting.WEB_ONLY) && !lifted)
-    fun extensionRequired() = !lifted && Rules.extensionRequired(blocked, websitesOn,
-        isOn(BrowserSetting.SAFESEARCH), isOn(BrowserSetting.WEB_ONLY))
+    // While lifted the extension gets empty rules and isn't required. The website lists are
+    // the enabled blocks' (Enforce.plan); the old web.* keys are only read by Db's migration.
+    fun rulesJson(): String {
+        val web = if (lifted) emptyList() else Enforce.plan(Db.model(context), System.currentTimeMillis()).web
+        return Rules.json(web, isOn(BrowserSetting.SAFESEARCH) && !lifted, isOn(BrowserSetting.WEB_ONLY) && !lifted)
+    }
+    fun extensionRequired() = !lifted && (Enforce.plan(Db.model(context), System.currentTimeMillis()).web.isNotEmpty() ||
+        isOn(BrowserSetting.SAFESEARCH) || isOn(BrowserSetting.WEB_ONLY))
+
+    /** Whether a block's time lock runs (the date/time protection stays on while one does). */
+    fun anyBlockTimeLock() = Db.model(context).blocks.any { it.lock.timeLocked(System.currentTimeMillis()) }
 }

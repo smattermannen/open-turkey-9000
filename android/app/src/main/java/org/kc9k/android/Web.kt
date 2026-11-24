@@ -100,13 +100,17 @@ object ListFile {
 /** The rules the extension fetches from /rules, in the desktop daemon's format (enforce.Rules). */
 object Rules {
     fun json(blocked: List<String>, exceptions: List<String>, websitesOn: Boolean,
-             safeSearch: Boolean, webOnly: Boolean): String {
-        val lists = if (websitesOn && blocked.isNotEmpty()) listOf(
-            "{\"id\":${WebBlock.BLOCKED_ID},\"block\":${str(WebBlock.NAME)},\"name\":${str(WebBlock.BLOCKED)}," +
+             safeSearch: Boolean, webOnly: Boolean): String =
+        json(if (websitesOn) listOf(Triple(WebBlock.NAME, blocked, exceptions)) else emptyList(), safeSearch, webOnly)
+
+    /** One blacklist per enabled block (name, sites, that block's own exceptions). */
+    fun json(blocks: List<Triple<String, List<String>, List<String>>>, safeSearch: Boolean, webOnly: Boolean): String {
+        val lists = blocks.filter { it.second.isNotEmpty() }.mapIndexed { i, (block, blocked, exceptions) ->
+            "{\"id\":${WebBlock.BLOCKED_ID + i},\"block\":${str(block)},\"name\":${str(WebBlock.BLOCKED)}," +
                 "\"url\":${arr(blocked)},\"title\":[],\"text\":[]," +
                 "\"actions\":[{\"action\":\"block\",\"distinct\":1,\"hits\":1}]," +
                 "\"except\":{\"url\":${arr(exceptions)},\"title\":[],\"text\":[]}}"
-        ) else emptyList()
+        }
         return "{\"lists\":[${lists.joinToString(",")}],\"quota\":[],\"block\":[],\"exceptions\":[]," +
             "\"web_only\":$webOnly,\"safesearch\":$safeSearch,\"titles\":[],\"recording\":false," +
             "\"details\":false,\"ends\":{},\"soon\":[],\"blocks\":[],\"social\":[]}"

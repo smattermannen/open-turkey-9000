@@ -4,7 +4,7 @@ import android.os.UserManager
 
 /**
  * Device protections. Each is optional and can be time-locked; turning one on is always
- * allowed, turning one off needs it unlocked and the phone away from home.
+ * allowed, turning one off needs it unlocked and no block locked (no weakening).
  */
 enum class Option(val key: String, val label: String, val restrictions: List<String>, val default: Boolean) {
     SAFE_BOOT("safe_boot", "Block safe mode", listOf(UserManager.DISALLOW_SAFE_BOOT), true),
@@ -28,10 +28,10 @@ class Options(private val store: Store) {
     fun refuseOff(o: Option): String? = when {
         !store.isOn(o) -> null
         locked(o) -> "Locked"
-        store.nokiaMode -> "Not in Nokia mode"
+        store.whySettingsLocked() != null -> store.whySettingsLocked()
         // Time locks trust the clock, so the clock stays protected while any lock runs.
         o == Option.DATE_TIME && (Option.entries.any { it != o && locked(it) } ||
-            WebSettings(store).anyTimeLock()) -> "Other options are locked"
+            WebSettings(store).anyTimeLock() || store.anyBlockTimeLock()) -> "Other options are locked"
         else -> null
     }
 

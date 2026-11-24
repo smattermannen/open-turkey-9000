@@ -1,11 +1,10 @@
 package org.kc9k.android
 
 /**
- * Changes to the browser settings and the website block. As on the desktop, what
- * strengthens is always allowed; what loosens (turning a setting or the block off,
- * removing a blocked entry, adding an exception) is refused while a lock holds, and,
- * like every loosening in this app, while the phone is at home. Each method returns
- * why it refused, or null.
+ * Changes to the browser settings. As on the desktop, what strengthens is always allowed;
+ * turning a setting off is refused while its lock holds, and while any block is locked
+ * (no weakening, Commands.whySettingsLocked). Each method returns why it refused, or null.
+ * Websites are in blocks (Commands).
  */
 class WebSettings(private val store: Store, private val now: () -> Long = System::currentTimeMillis) {
     private val boot get() = store.bootCount
@@ -17,7 +16,7 @@ class WebSettings(private val store: Store, private val now: () -> Long = System
         val l = lock(name)
         return when {
             l.inForce(now(), boot) -> "Locked: " + l.describe(now(), boot)
-            store.nokiaMode -> "Not in Nokia mode"
+            store.whySettingsLocked() != null -> store.whySettingsLocked()
             else -> null
         }
     }
@@ -55,7 +54,7 @@ class WebSettings(private val store: Store, private val now: () -> Long = System
 
     /** Why [name]'s lock can't be opened (time and restart locks are waited out), or null. */
     fun refuseUnlock(name: String): String? {
-        if (store.nokiaMode) return "Not in Nokia mode"
+        store.whySettingsLocked()?.let { return it }
         return store.settingLock(name).refuseUnlock(now(), boot)
     }
 
@@ -64,62 +63,6 @@ class WebSettings(private val store: Store, private val now: () -> Long = System
         refuseUnlock(name)?.let { return it }
         store.clearSettingLock(name)
         BrowserSetting.entries.find { it.key == name }?.let { store.setOn(it, false) }
-        return null
-    }
-
-    // The website block.
-    fun setWebsitesOn(on: Boolean): String? {
-        if (!on && store.websitesOn) refuseLoosen(WebBlock.LOCK)?.let { return it }
-        store.websitesOn = on
-        return null
-    }
-
-    /** Adds blocked entries (always allowed). Returns the entries that aren't addresses, if any. */
-    fun addBlocked(text: String): String? = add(text) { store.blocked = store.blocked + it }
-
-    fun removeBlocked(entry: String): String? {
-        refuseLoosen(WebBlock.LOCK)?.let { return it }
-        store.blocked = store.blocked - entry
-        return null
-    }
-
-    fun addExceptions(text: String): String? {
-        refuseLoosen(WebBlock.LOCK)?.let { return it }
-        return add(text) { store.exceptions = store.exceptions + it }
-    }
-
-    fun removeException(entry: String): String? {
-        store.exceptions = store.exceptions - entry
-        return null
-    }
-
-    /**
-     * Imports a list file (ListFile) into Blocked or Exceptions, added to what is there, as
-     * the desktop's `kc9k list import`. Into Blocked is always allowed; into Exceptions only
-     * when adding exceptions is. Lines that aren't addresses are skipped, not fatal.
-     * Returns the error, or null and the summary in [done].
-     */
-    fun importList(list: String, text: String, done: (String) -> Unit): String? {
-        val r = ListFile.read(text)
-        if (r.entries.isEmpty()) return if (r.skipped.isEmpty()) "The file has no entries"
-            else "No addresses in the file (e.g. ${r.skipped.first()})"
-        val cur = when (list) {
-            WebBlock.BLOCKED -> store.blocked
-            WebBlock.EXCEPTIONS -> { refuseLoosen(WebBlock.LOCK)?.let { return it }; store.exceptions }
-            else -> return "No list $list"
-        }
-        val new = r.entries.filter { it !in cur }
-        if (list == WebBlock.BLOCKED) store.blocked = cur + new else store.exceptions = cur + new
-        done(ListFile.summary(list, new.size, r.entries.size - new.size, r.skipped))
-        return null
-    }
-
-    private fun add(text: String, save: (List<String>) -> Unit): String? {
-        val raw = Entries.split(text)
-        if (raw.isEmpty()) return "No entries given"
-        val bad = raw.filter { Entries.normalize(it) == null }
-        if (bad.isNotEmpty()) return "Not an address or pattern: " + bad.joinToString(" ")
-        save(raw.mapNotNull(Entries::normalize))
         return null
     }
 

@@ -83,7 +83,7 @@ class DeviceOwner(private val context: Context) {
     }
 }
 
-/** Applies policies with Device Owner APIs: package suspension and Wi-Fi. */
+/** Applies the plan with Device Owner APIs: package suspension and Wi-Fi. */
 class DeviceOwnerEnforcer(private val context: Context) : Enforcer {
     private val owner = DeviceOwner(context)
     private val dpm = context.getSystemService(DevicePolicyManager::class.java)
@@ -91,7 +91,7 @@ class DeviceOwnerEnforcer(private val context: Context) : Enforcer {
 
     /**
      * Never suspended: our app, system UI and emergency-call components. Settings isn't
-     * here: Nokia mode pauses it (Policies.NOKIA).
+     * here: a block may pause it (the Nokia mode block does).
      */
     private val essential = setOf(
         context.packageName, "com.android.systemui",
@@ -100,16 +100,16 @@ class DeviceOwnerEnforcer(private val context: Context) : Enforcer {
         "com.android.permissioncontroller",
     )
 
-    private fun resolve(entries: List<String>): Set<String> = entries.flatMap { e ->
+    override fun resolve(entries: List<String>): Set<String> = entries.flatMap { e ->
         when (e) {
-            "*.*" -> launchable()
+            "*", "*.*" -> launchable()
             // Only system apps count, so making another app the default can't unblock it.
             "role:dialer" -> listOfNotNull(context.getSystemService(TelecomManager::class.java)
                 ?.defaultDialerPackage?.takeIf(::isSystem))
             "role:sms" -> listOfNotNull(Telephony.Sms.getDefaultSmsPackage(context)?.takeIf(::isSystem))
             else -> listOf(e)
         }
-    }.toSet()
+    }.filter(::installed).toSet()
 
     private fun launchable(): List<String> {
         val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -126,9 +126,19 @@ class DeviceOwnerEnforcer(private val context: Context) : Enforcer {
         pm.getApplicationInfo(pkg, 0).flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0
     } catch (_: PackageManager.NameNotFoundException) { false }
 
-    override fun targets(policy: Policy): Set<String> =
-        resolve(policy.blacklist).filter(::installed).toSet() - resolve(policy.whitelist) - essential -
-            setOfNotNull(defaultHome())
+    override fun never(): Set<String> = essential + setOfNotNull(defaultHome())
+
+    /** Launchable apps with their labels, for the app picker. */
+    fun apps(): List<Pair<String, String>> {
+        val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        return pm.queryIntentActivities(i, PackageManager.MATCH_ALL)
+            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+            .distinctBy { it.first }.filter { it.first !in essential }.sortedBy { it.second.lowercase() }
+    }
+
+    fun label(pkg: String): String? = try {
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    } catch (_: PackageManager.NameNotFoundException) { null }
 
     override fun sync(suspend: Set<String>, wifiOff: Boolean) {
         if (!owner.isOwner) return
@@ -137,7 +147,10 @@ class DeviceOwnerEnforcer(private val context: Context) : Enforcer {
             else dpm.setPackagesSuspended(owner.admin, suspend.toTypedArray(), true).toSet()
         // Unsuspend anything that left the set (away from home, IronFox's pause over, a new
         // default SMS app).
-        val stale = (launchable() + IronFox.PACKAGES + Policies.SETTINGS).distinct().filter { it !in suspend && isSuspended(it) }
+        val store = Store(context)
+        val stale = (launchable() + IronFox.PACKAGES + Policies.SETTINGS + store.suspended).distinct()
+            .filter { it !in suspend && isSuspended(it) }
+        store.suspended = suspend
         if (stale.isNotEmpty()) dpm.setPackagesSuspended(owner.admin, stale.toTypedArray(), false)
         if (wifiOff) {
             dpm.addUserRestriction(owner.admin, UserManager.DISALLOW_CONFIG_WIFI)

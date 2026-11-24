@@ -19,6 +19,15 @@ object MapMath {
     const val MIN_ZOOM = 2
     const val MAX_ZOOM = 19
 
+    /** Great-circle distance in metres (haversine), as Location.distanceBetween to within 0.5 %. */
+    fun distance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6_371_008.8
+        val p1 = Math.toRadians(lat1); val p2 = Math.toRadians(lat2)
+        val dp = p2 - p1; val dl = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dp / 2).let { it * it } + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2).let { it * it }
+        return 2 * r * Math.asin(Math.sqrt(a.coerceIn(0.0, 1.0)))
+    }
+
     fun worldSize(zoom: Int): Double = TILE * (1 shl zoom).toDouble()
 
     /** The world pixel of a place at [zoom]. */

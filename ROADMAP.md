@@ -421,7 +421,15 @@ tests need the owner.
   with the Go tests (weakening audit, unlock order, schedules); Nokia
   mode and IronFox settings moved into blocks; Compose design layer and
   navigation (bottom bar / rail). Code words to the glossary
-  (`whitelist`, `loosen`, `Option`). (L)
+  (`whitelist`, `loosen`, `Option`). (L) Built 2026-11-24 (0.3): `Model`,
+  `Enforce`, `Commands` (weakening refused and logged), blocks with
+  sites/apps/app exceptions/Wi-Fi, automation (windows, schedules, places,
+  both/either, pause), block locks (timer, challenge, password, restart,
+  schedule lock), places as areas, Nokia mode and the website block
+  migrated into blocks, bottom bar GUI with plain Views (`Ui.kt`). Left:
+  storage is a JSON file, not SQLite; test cases not yet shared with Go
+  (Kotlin-only `ModelTest`); Compose; rail on wide screens; browser
+  settings still outside blocks; an emulator UI test in CI (C3).
 - [ ] `N2` Blocks, lists, phrase sets, social media settings, exceptions
   through the extension (IronFox, Firefox); VPN layer; apps (All apps,
   app exceptions, roles, certificates), app suspension and block page;

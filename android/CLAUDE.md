@@ -104,8 +104,10 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
 - `GuardService.kt`: location foreground service; boot (locked) and 15-min
   AlarmManager watchdog; every 5 s `Enforce.plan` (resolved apps cached a
   minute) plus paused IronFox into one `Enforcer.sync`.
-- `Store.kt`: device-protected prefs for protections, browser settings and
-  their locks, `lifted`; the 0.2 keys (home, `web.*`) only for migration.
+- `Store.kt`: device-protected prefs for browser settings and their locks,
+  `lifted`, notification choices, preferences; `anythingLocked`,
+  `lockdown`, `devicePlan`; the 0.2 keys (home, `web.*`) only for
+  migration (the 0.2 `opt.*` protections are no longer read).
 - `Autostart.kt` (pure, `AutostartTest`; as the desktop's
   `db.AutostartDue`/`runAutostarts`): `Block.autostarts` once / at a time
   of day on days (within 10 min, once a day) / phone unlocked / next block
@@ -162,9 +164,16 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   swipe, suggestions undone, R-LOCK-5).
 
 Not built yet (`ROADMAP.md` §3.1): mode wallpapers and custom actions,
-drag into a mode, layered locks and the other lock
-kinds, breaks/allowance/statistics, VPN layer, monk mode, Frozen Chicken,
-presets, actions, circadian, guided setup, accessibility layer, Compose.
+drag into a mode, week view, layered locks and the other lock kinds,
+re-lock, breaks/allowance/Pomodoro/statistics/use counting, VPN layer,
+monk mode, Frozen Chicken, presets, actions and bypass prevention, test
+mode for site lists, phrase set export/import, recording, projects,
+Firefox, circadian rhythm, guided setup, accessibility layer, SQLite,
+Compose, rail. The owner held back (2026-11-24): allowance, Pomodoro,
+statistics, Frozen Chicken, layered locks and other lock kinds, presets,
+actions and bypass prevention, guided setup, VPN layer, accessibility
+layer, breaks. Unit tests only: no emulator here (no KVM); nothing of the
+GUI seen on a phone.
 "Lift everything" waits for SPEC §7 (Android recovery).
 
 ## Build and provision

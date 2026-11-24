@@ -93,8 +93,11 @@ class _AccountPage:
         """Read `kc9k account status --json` in the background (it asks the
         cloud for the last upload)."""
         if getattr(self, "account_busy", False):
+            # One is running and may have read before the change that asks
+            # for this one: read again once it is done.
+            self.account_again = True
             return
-        self.account_busy = True
+        self.account_busy, self.account_again = True, False
         passwords = list(self.access_passwords)
 
         def work():
@@ -122,6 +125,8 @@ class _AccountPage:
         except ValueError:
             self.account_state = {"available": True, "error": output}
         self.update_account()
+        if getattr(self, "account_again", False):
+            self.refresh_account()
         return False
 
     def update_account(self):

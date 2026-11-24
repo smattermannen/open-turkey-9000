@@ -65,7 +65,9 @@
   Delete phrase asks, then empties the editor (`remove_loaded`).
 - Account page (`win_account.py`, §4.14, area settings): `account status
   --json` read in the background when shown and after each command
-  (`refresh_account`); email + Log in / Sign up (password asked, twice
+  (`refresh_account`; one asked while another runs runs again after it,
+  `account_again`: the running one may have read before the change);
+  email + Log in / Sign up (password asked, twice
   for sign-up; `account signup|login` with it on stdin), Log out (asks).
   Upload all (`sync upload`; asks when an upload would be replaced).
   Download all: `sync download --dry-run` first, its lines and the locks

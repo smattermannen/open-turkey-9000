@@ -156,6 +156,38 @@ create policy "requests: use" on public.unlock_requests
   using (owner_id = (select auth.uid()) and status = 'approved')
   with check (status = 'used' and secret = '');
 
+-- An update changes only what its policy is for: accepting sets
+-- partner_id and status, deciding sets status, secret and who decided;
+-- nobody rewrites whose row it is or what it is about. (Policies check the
+-- new row, not which columns changed: without this, accepting an
+-- invitation with owner_id set to anyone's made one their partner, able to
+-- read their held passwords; ci/supabase_schema_test.sql.)
+create or replace function public.keep_partner_row() returns trigger
+  language plpgsql set search_path = public as $$
+begin
+  if new.id <> old.id or new.owner_id <> old.owner_id or new.owner_email <> old.owner_email
+     or lower(new.partner_email) <> lower(old.partner_email) or new.created_at <> old.created_at then
+    raise exception 'only partner_id and status change';
+  end if;
+  return new;
+end $$;
+drop trigger if exists keep_partner_row on public.partners;
+create trigger keep_partner_row before update on public.partners
+  for each row execute function public.keep_partner_row();
+
+create or replace function public.keep_request_row() returns trigger
+  language plpgsql set search_path = public as $$
+begin
+  if new.id <> old.id or new.owner_id <> old.owner_id or new.owner_email <> old.owner_email
+     or new.target <> old.target or new.reason <> old.reason or new.created_at <> old.created_at then
+    raise exception 'only the decision changes';
+  end if;
+  return new;
+end $$;
+drop trigger if exists keep_request_row on public.unlock_requests;
+create trigger keep_request_row before update on public.unlock_requests
+  for each row execute function public.keep_request_row();
+
 -- Each device's last sign of life; a scheduled function (owner step)
 -- alerts the partners of a device not heard from for a day.
 create table if not exists public.heartbeats (

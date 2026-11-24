@@ -368,6 +368,9 @@ Only rows not fully built.
     mode lock and hotkey dialogs (the CLI has `--partner-holds` on
     `start`, `mode lock`, `hotkey add`, `password set`, `browser`,
     `tamper`; GTK only in a block's Add locks…).
+  - [x] `schema.sql` checked in a real Postgres (`ci/supabase_schema_test.sh`,
+    in `test.yml`): found and fixed an accept that rewrote `owner_id`,
+    making anyone a partner of anyone (2026-11-24).
 - **2.14 Website** (M; §4.16): Not built. Content per §4.16; hosting the
   owner's choice when built.
 - **2.15 Search results from blacklisted addresses** (M; R-PAGE-2): Built

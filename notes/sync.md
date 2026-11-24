@@ -1,6 +1,6 @@
 # KC9K account, cross-device sync, accountability partner
 
-- Covers: `internal/cloud/` (client, `partner.go`, `cloudtest/` fake), `cli/sync.go`, `cli/partner*.go`, `db/syncclear.go`, `db/partner.go`, `cloud/supabase/schema.sql`, `ci/cloudfake/`
+- Covers: `internal/cloud/` (client, `partner.go`, `cloudtest/` fake), `cli/sync.go`, `cli/partner*.go`, `db/syncclear.go`, `db/partner.go`, `cloud/supabase/schema.sql`, `ci/cloudfake/`, `ci/supabase_schema_test.*`, `ci/supabase_stub.sql`
 - SPEC: §4.14, §4.15, principle 6, §6 2026-11-23 (Supabase)
 - Connects to: [db-project](db-project.md) (the setup file is a backup, `buildProject`), [locks](locks.md), [windows](windows.md) (commands run in the service)
 
@@ -20,6 +20,12 @@
   both so an account touches only its own; run once in the SQL editor.
 - `cloudtest.New()`: in-memory Auth/Storage/rows with the same RLS checks;
   `Expire()` stales access tokens.
+- `ci/supabase_schema_test.sh` (in `test.yml`): `schema.sql` twice (it
+  must re-run) in a throwaway Postgres with `ci/supabase_stub.sql`
+  (Supabase's `auth.uid()`/`auth.email()` from JWT claims, its table
+  grants, `storage`), then `ci/supabase_schema_test.sql` tries every
+  account's rights as role `authenticated`, strangers and a rewritten
+  accept included.
 
 ## CLI (`cli/sync.go`)
 
@@ -72,7 +78,11 @@
   `partner_messages` (report/alert/password; sent by the user; read by
   the user except passwords, and by active partners: `active_partner()`),
   `unlock_requests` (pending → approved/denied by a partner → used by the
-  user, secret cleared), `heartbeats` (user, device, seen_at). Email: the
+  user, secret cleared), `heartbeats` (user, device, seen_at). Triggers
+  `keep_partner_row`/`keep_request_row`: an update changes only partner_id
+  and status, or the decision (policies check only the new row: accepting
+  with owner_id rewritten made anyone a partner of anyone, found
+  2026-11-24); the fake refuses the same (`TestAcceptCantRewriteOwner`). Email: the
   cloud's job (owner step), `cloud.Mailer`; `cloudtest` records `Mail`.
 - Local: `db/partner.go` outbox `partner_outbox` (≤ 500), queued only
   while setting `partner.active` (refreshed from the cloud by `partner`,

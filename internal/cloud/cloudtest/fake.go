@@ -293,8 +293,10 @@ func (s *Server) partnerTables(w http.ResponseWriter, r *http.Request, uid strin
 			if p.ID != id {
 				continue
 			}
-			// Only the invited partner accepts, as themselves.
-			if !strings.EqualFold(p.PartnerEmail, email) || change["partner_id"] != uid || change["status"] != cloud.PartnerActive {
+			// Only the invited partner accepts, as themselves, changing
+			// nothing else (schema.sql's keep_partner_row).
+			if !strings.EqualFold(p.PartnerEmail, email) || change["partner_id"] != uid || change["status"] != cloud.PartnerActive ||
+				len(change) != 2 {
 				denied()
 				return
 			}
@@ -380,6 +382,12 @@ func (s *Server) partnerTables(w http.ResponseWriter, r *http.Request, uid strin
 				continue
 			}
 			status, _ := change["status"].(string)
+			for k := range change { // only the decision changes (schema.sql's keep_request_row)
+				if k != "status" && k != "secret" && k != "decided_by" && k != "decided_at" {
+					denied()
+					return
+				}
+			}
 			switch {
 			case s.partnerOf(uid, q.OwnerID) && q.Status == cloud.RequestPending &&
 				(status == cloud.RequestApproved || status == cloud.RequestDenied):

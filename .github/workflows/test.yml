@@ -15,6 +15,8 @@ jobs:
           go-version-file: go.mod
       - name: Unit tests
         run: CGO_ENABLED=0 go test ./...
+      - name: Cloud schema's row-level security in a real Postgres (2.10, 2.13)
+        run: bash ci/supabase_schema_test.sh
       - name: Check the interface syntax
         run: for f in gui/kc9k-gui.py gui/kc9k_gui/*.py; do python3 -m py_compile "$f" || exit 1; done
       - name: Extension matching

@@ -459,8 +459,8 @@ tests need the owner.
 - [ ] `N5` Breaks, Pomodoro, allowance, reward, session limit, pause,
   autostart, use, statistics, notifications. (M) Built 2026-11-24:
   notifications (window start/end, timer lock end, apps paused; advance
-  minutes). Breaks, Pomodoro, allowance, statistics held back by the owner;
-  autostart and use left.
+  minutes); autostart (once, time of day, unlock, next window). Breaks,
+  Pomodoro, allowance, statistics held back by the owner; use left.
 - [ ] `N6` Actions and consequences, bypass prevention, custom actions,
   presets, link and word recording, projects (phone to phone). (M)
 - [ ] `N7` Tamper protection, strict mode, guided setup, circadian rhythm

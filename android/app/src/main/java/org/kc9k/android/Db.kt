@@ -22,6 +22,8 @@ object Codec {
             "apps" to b.apps, "app_exceptions" to b.appExceptions, "wifi_off" to b.wifiOff,
             "automation" to auto(b.automation), "lock" to lock(b.lock), "schedule_lock" to b.scheduleLock,
             "paused_until" to b.pausedUntil, "mode" to b.mode, "social" to b.social, "view_password" to b.viewPassword,
+            "autostarts" to b.autostarts.map { a -> mapOf("kind" to a.kind, "at" to a.at, "days" to a.days,
+                "minute" to a.minute, "last_day" to a.lastDay) },
             "phrase_sets" to b.phraseSets.map { s -> mapOf("name" to s.name, "url" to s.inUrl, "title" to s.inTitle,
                 "text" to s.inText, "threshold" to s.threshold, "test" to s.test,
                 "phrases" to s.phrases.map { p -> mapOf("length" to p.length,
@@ -52,6 +54,8 @@ object Codec {
                 automation = auto(b["automation"].obj()), lock = lock(b["lock"].obj()),
                 scheduleLock = b.bool("schedule_lock"), pausedUntil = b.long("paused_until"), mode = b.str("mode"),
                 social = b.strings("social"), viewPassword = b.str("view_password"),
+                autostarts = b["autostarts"].list().map { it.obj() }.map { a -> Autostart(a.str("kind"), a.long("at"),
+                    a["days"].list().mapNotNull { (it as? Number)?.toInt() }, a.int("minute"), a.str("last_day")) },
                 phraseSets = b["phrase_sets"].list().map { it.obj() }.map { s -> PhraseSet(s.str("name"),
                     s["phrases"].list().map { it.obj() }.map { p -> Phrase(p["sets"].list().map { it.obj() }.map { w ->
                         WordSet(w.strings("terms"), w.bool("necessary", true)) }, p.int("length")) },

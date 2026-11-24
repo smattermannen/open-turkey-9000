@@ -581,7 +581,47 @@ class MainActivity : Activity() {
                 .setItems(modes.map { it.name }.toTypedArray()) { _, i -> run { c, mm -> c.putInMode(mm, b.name, modes[i].name) } }
                 .setNegativeButton("Cancel", null).show()
         })
+        autostartSection(root, b)
         pauseAndDelete(root, b)
+    }
+
+    /** Autostart (SPEC §3.6): switches the block on; adding is free, removing weakens. */
+    private fun autostartSection(root: LinearLayout, b: Block) {
+        root.addView(ui.heading("Autostart"))
+        root.addView(ui.help("Switches the block on: once, at a time of day, when the phone is unlocked, or when its next window opens."))
+        for (a in b.autostarts) root.addView(removable(a.describe()) { run { c, m -> c.removeAutostart(m, b.name, a) } })
+        val add = { a: Autostart -> run { c, m -> c.addAutostart(m, b.name, a) } }
+        root.addView(ui.button("Add autostart…") {
+            AlertDialog.Builder(this).setTitle("Switch ${b.name} on")
+                .setItems(arrayOf("Once, at a date and time", "At a time of day", "When the phone is unlocked", "When its next block window opens")) { _, i ->
+                    when (i) {
+                        0 -> ask("Once at", "YYYY-MM-DD HH:MM") { t ->
+                            val ms = try { java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.ROOT).apply { isLenient = false }.parse(t.trim())?.time }
+                                catch (_: Exception) { null } ?: return@ask toast("Write it as 2026-12-01 08:00")
+                            add(Autostart(Autostart.ONCE, at = ms))
+                        }
+                        1 -> {
+                            val box = ui.column(16)
+                            val days = Window.DAYS.map { d -> CheckBox(this).apply { text = d; isChecked = true } }
+                            val dayRow = ui.row()
+                            Fmt.days().forEach { dayRow.addView(days[it]) }
+                            box.addView(android.widget.HorizontalScrollView(this).apply { addView(dayRow) })
+                            val time = EditText(this).apply { hint = "HH:MM"; inputType = InputType.TYPE_CLASS_DATETIME }
+                            box.addView(time)
+                            AlertDialog.Builder(this).setTitle("At a time of day").setView(box)
+                                .setPositiveButton("Add") { _, _ ->
+                                    val m = Window.parse(time.text.toString())
+                                    if (m == null || m >= 1440) return@setPositiveButton toast("Invalid time (HH:MM)")
+                                    add(Autostart(Autostart.AT, days = days.indices.filter { days[it].isChecked }, minute = m))
+                                }
+                                .setNegativeButton("Cancel", null).show()
+                        }
+                        2 -> add(Autostart(Autostart.UNLOCK))
+                        else -> add(Autostart(Autostart.WINDOW))
+                    }
+                }
+                .setNegativeButton("Cancel", null).show()
+        })
     }
 
     /** Default, windows, schedules, places and both/either, for a block or a mode. */

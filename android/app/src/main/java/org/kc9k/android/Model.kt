@@ -65,6 +65,7 @@ data class Block(
     val mode: String = "",
     /** Block password (Passwords hash, "" = none): hides its contents until typed (SPEC §3.11). */
     val viewPassword: String = "",
+    val autostarts: List<Autostart> = emptyList(),
 )
 
 /** A mode (SPEC §3.2): a named group of blocks with one automation for all. */

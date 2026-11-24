@@ -119,6 +119,17 @@ class Commands(
         return if (o.error != null) o else ok(o.model, ListFile.summary(list, new.size, r.entries.size - new.size, r.skipped))
     }
 
+    // Autostart (SPEC §3.6): adding switches it on more often (free); removing weakens.
+    fun addAutostart(m: Model, block: String, a: Autostart): Outcome {
+        a.valid(now)?.let { return Outcome(m, it) }
+        val b = m.block(block) ?: return Outcome(m, "No block $block")
+        if (b.autostarts.any { it.rule() == a.rule() }) return Outcome(m, "It has that autostart")
+        return edit(m, block, false, "add autostart") { it.copy(autostarts = it.autostarts + a.copy(lastDay = "")) }
+    }
+
+    fun removeAutostart(m: Model, block: String, a: Autostart) =
+        edit(m, block, true, "remove autostart ${a.kind}") { b -> b.copy(autostarts = b.autostarts.filter { it.rule() != a.rule() }) }
+
     // Phrase sets (SPEC §3.2): adding phrases strengthens; removing, narrowing, a higher threshold or test mode weakens.
     private fun editSet(m: Model, block: String, set: String, weakens: Boolean, what: String, change: (PhraseSet) -> PhraseSet): Outcome {
         val b = m.block(block) ?: return Outcome(m, "No block $block")

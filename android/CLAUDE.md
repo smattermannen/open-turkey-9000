@@ -103,6 +103,13 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   minute) plus paused IronFox into one `Enforcer.sync`.
 - `Store.kt`: device-protected prefs for protections, browser settings and
   their locks, `lifted`; the 0.2 keys (home, `web.*`) only for migration.
+- `Autostart.kt` (pure, `AutostartTest`; as the desktop's
+  `db.AutostartDue`/`runAutostarts`): `Block.autostarts` once / at a time
+  of day on days (within 10 min, once a day) / phone unlocked / next block
+  window; `Autostarts.step` switches due blocks on (first look only
+  records; once and window rules go). `GuardService` looks once a minute
+  and on `ACTION_USER_PRESENT`, notifies "'X' is on". `addAutostart` free,
+  `removeAutostart` weakens.
 - `Notices.kt` (pure, `NoticesTest`; as the desktop's `enforce/notices.go`):
   window start/end of active blocks switched by time (mode and schedule
   windows count, places can't be foreseen), timer lock end, apps paused;

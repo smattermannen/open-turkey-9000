@@ -81,6 +81,25 @@ class GuardService : Service() {
         override fun onReceive(context: Context, intent: Intent) = Session.end()
     }
 
+    /** The phone was unlocked since the last autostart look (sign-in/wake on a phone, SPEC §8.3). */
+    @Volatile private var unlocked = false
+    private var inWindow: Map<String, Boolean>? = null
+    private val userPresent = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) { unlocked = true; handler.post { autostarts() } }
+    }
+
+    /** Switches on blocks whose autostart is due (Autostarts.step); the first look only records. */
+    private fun autostarts() {
+        if (store.lifted) return
+        val now = System.currentTimeMillis()
+        val was = unlocked
+        unlocked = false
+        var fired: List<Pair<String, Autostart>> = emptyList()
+        Db.update(this) { m -> Autostarts.step(m, now, was, inWindow).also { inWindow = it.inWindow; fired = it.fired }.model }
+        for ((block, a) in fired) notice(Notices.Notice("autostart $block $now", "'$block' is on", "Its autostart (${a.describe()}) switched it on."))
+        if (fired.isNotEmpty()) sync(force = true)
+    }
+
     /** Notices shown (key to when), so each shows once (Notices). */
     private val shown = mutableMapOf<String, Long>()
     private var noticeMinute = 0L
@@ -89,6 +108,7 @@ class GuardService : Service() {
         val now = System.currentTimeMillis()
         if (now / 60_000 == noticeMinute || store.lifted) return
         noticeMinute = now / 60_000
+        autostarts()
         shown.entries.removeAll { now - it.value > 2 * 86_400_000L }
         Notices.of(Db.model(this), store.notices, now).forEach(::notice)
     }
@@ -140,6 +160,7 @@ class GuardService : Service() {
         handler.post(tick)
         // The passwords typed in KC9K (Session) hold until the screen turns off.
         registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF))
+        registerReceiver(userPresent, android.content.IntentFilter(Intent.ACTION_USER_PRESENT))
         running = true
         instance = this
     }
@@ -205,6 +226,7 @@ class GuardService : Service() {
         instance = null
         handler.removeCallbacks(tick)
         try { unregisterReceiver(screenOff) } catch (_: Exception) {}
+        try { unregisterReceiver(userPresent) } catch (_: Exception) {}
         server.stop()
         places.stop()
         wifi.stop()

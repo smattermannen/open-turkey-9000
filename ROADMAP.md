@@ -623,6 +623,10 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- FOR THE OWNER (By claude) 2026-11-24: on 2026-11-23 two cloud sessions
+  ran the same Linux item list (A17, A18, 2.10–2.15) at once; main has
+  one session's version of each, and the other session's duplicates were
+  not merged. Give each session its own items, so work isn't done twice.
 - DECIDED (By claude) 2026-11-23 (`2.13`): a partner holds a password by
   KC9K making it up (`--partner-holds`) and sending it only to the active
   partners through the cloud (row-level security: the user's own account

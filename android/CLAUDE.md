@@ -16,8 +16,10 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   `Automation` (default enabled/disabled, own windows, schedules, places,
   both/either), `Block` (sites + own exceptions, apps `*`/roles/packages +
   own app exceptions, Wi-Fi off, `lock: SettingLock`, `scheduleLock` =
-  locked while its automation has it on, pause), `Place` (area + decided
-  state), `Schedule`, `Model` (+ `noWeakening`, refused log).
+  locked while its automation has it on, pause, `mode`), `Mode` (name +
+  one automation for its blocks), `Place` (area + decided state),
+  `Schedule`, `Model` (+ `noWeakening`, refused log; `automation(b)` = the
+  mode's while in one, its own kept unused, R-MODE-1).
   `Enforce` is the single source of truth: `state`/`enabled`/`locked`,
   `plan` (union of enabled blocks), `suspend` (each block's apps minus its
   own exceptions, minus essentials).
@@ -25,8 +27,13 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   schedules; weakening a locked block refused and logged (`Model.refused`);
   `whySettingsLocked` = no weakening while any block is locked (gates
   `Options` and `WebSettings`). `Weakening.strengthens` judges automation
-  changes. Tests: `ModelTest.kt` (`CommandsTest.weakeningRefusedAndLogged`
-  lists every weakening command).
+  changes. Modes: add/rename/delete, `putInMode`/`takeOut`,
+  `setModeAutomation` (refused as a whole naming the locked blocks it
+  weakens, R-MODE-1/2), `switchMode` (off leaves locked blocks on),
+  `lockMode` (every block at once), `modeLocked` (all blocks locked,
+  R-MODE-3); schedule/place checks see blocks through their mode. Tests:
+  `ModelTest.kt` (`CommandsTest.weakeningRefusedAndLogged` and
+  `ModesTest.weakeningThroughAModeRefused` list every weakening command).
 - `Db.kt`: `Codec` (JSON via `Json.kt`, own reader/writer since org.json
   is stubbed in unit tests), `Codec.migrate` (0.2 prefs to blocks), `Db`:
   one file `kc9k.json` in device-protected storage, atomic write, cached.
@@ -56,8 +63,10 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   their locks, `lifted`; the 0.2 keys (home, `web.*`) only for migration.
 - `MainActivity.kt` + `Ui.kt` (design layer: cards, pills): bottom bar
   Overview · Blocks · Statistics (not built) · More (Schedules, Places,
-  Settings, Refused changes). Block page: card, tabs Websites · Apps ·
-  Automation (+ pause, delete) · Lock (timer, challenge, password, restart,
+  Settings, Refused changes). Blocks: modes above blocks (`modeCard`,
+  switch = its blocks; mode page `sub = "mode:<name>"`, tabs Blocks ·
+  Automation · Lock, rename, delete). Block page: card, tabs Websites · Apps ·
+  Automation (in a mode: open it / take out; Move to mode…; pause, delete) · Lock (timer, challenge, password, restart,
   schedule lock; confirmed first, R-LOCK-12). Every change runs `Commands`.
   One `ScrollView` kept across renders: same page keeps its position.
 - Place map (`MapPickerActivity.kt` with `EXTRA_NAME`, `MapView.kt`,
@@ -86,7 +95,8 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   characters typed one by one count (`Challenge.typedOneByOne`: paste,
   swipe, suggestions undone, R-LOCK-5).
 
-Not built yet (`ROADMAP.md` §3.1): modes, layered locks and the other lock
+Not built yet (`ROADMAP.md` §3.1): mode wallpapers and custom actions,
+drag into a mode, layered locks and the other lock
 kinds, breaks/allowance/statistics, VPN layer, monk mode, Frozen Chicken,
 presets, actions, circadian, guided setup, accessibility layer, Compose.
 "Lift everything" waits for SPEC §7 (Android recovery).

@@ -21,7 +21,8 @@ object Codec {
             "name" to b.name, "active" to b.active, "sites" to b.sites, "site_exceptions" to b.siteExceptions,
             "apps" to b.apps, "app_exceptions" to b.appExceptions, "wifi_off" to b.wifiOff,
             "automation" to auto(b.automation), "lock" to lock(b.lock), "schedule_lock" to b.scheduleLock,
-            "paused_until" to b.pausedUntil) },
+            "paused_until" to b.pausedUntil, "mode" to b.mode) },
+        "modes" to m.modes.map { md -> mapOf("name" to md.name, "automation" to auto(md.automation)) },
         "places" to m.places.map { p -> mapOf(
             "name" to p.name, "lat" to p.lat, "lon" to p.lon, "radius" to p.radius.toDouble(),
             "inside" to p.inside, "outside_since" to p.outsideSince, "last_distance" to p.lastDistance.toDouble(),
@@ -38,7 +39,8 @@ object Codec {
                 siteExceptions = b.strings("site_exceptions"), apps = b.strings("apps"),
                 appExceptions = b.strings("app_exceptions"), wifiOff = b.bool("wifi_off"),
                 automation = auto(b["automation"].obj()), lock = lock(b["lock"].obj()),
-                scheduleLock = b.bool("schedule_lock"), pausedUntil = b.long("paused_until")) },
+                scheduleLock = b.bool("schedule_lock"), pausedUntil = b.long("paused_until"), mode = b.str("mode")) },
+            modes = o["modes"].list().map { it.obj() }.map { md -> Mode(md.str("name"), auto(md["automation"].obj())) },
             places = o["places"].list().map { it.obj() }.map { p -> Place(
                 p.str("name"), p.double("lat"), p.double("lon"), p.double("radius", 150.0).toFloat(),
                 p.bool("inside"), p.long("outside_since"), p.double("last_distance", -1.0).toFloat(),

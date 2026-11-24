@@ -142,15 +142,121 @@ class Commands(
         edit(m, name, !on, "allow Wi-Fi") { it.copy(wifiOff = on) }
 
     // Automation.
-    fun setAutomation(m: Model, name: String, a: Automation): Outcome {
-        a.windows.firstOrNull { !it.valid() }?.let { return Outcome(m, "Invalid window ${it.describe()} (5-minute steps)") }
+    private fun badAutomation(m: Model, a: Automation): String? {
+        a.windows.firstOrNull { !it.valid() }?.let { return "Invalid window ${it.describe()} (5-minute steps)" }
         for (i in a.windows.indices) for (j in i + 1 until a.windows.size)
-            if (a.windows[i].overlaps(a.windows[j])) return Outcome(m, "Windows overlap: ${a.windows[i].describe()} and ${a.windows[j].describe()}")
-        a.schedules.firstOrNull { m.schedule(it) == null }?.let { return Outcome(m, "No schedule $it") }
-        a.places.firstOrNull { m.place(it) == null }?.let { return Outcome(m, "No place $it") }
+            if (a.windows[i].overlaps(a.windows[j])) return "Windows overlap: ${a.windows[i].describe()} and ${a.windows[j].describe()}"
+        a.schedules.firstOrNull { m.schedule(it) == null }?.let { return "No schedule $it" }
+        a.places.firstOrNull { m.place(it) == null }?.let { return "No place $it" }
+        return null
+    }
+
+    fun setAutomation(m: Model, name: String, a: Automation): Outcome {
+        badAutomation(m, a)?.let { return Outcome(m, it) }
         val b = m.block(name) ?: return Outcome(m, "No block $name")
+        if (b.mode.isNotEmpty()) return Outcome(m, "$name is in the mode ${b.mode}: change the mode's automation, or take it out")
         if (b.automation == a) return ok(m)
         return edit(m, name, !Weakening.strengthens(b.automation, a), "change automation") { it.copy(automation = a) }
+    }
+
+    // Modes (SPEC §3.2, R-MODE-1–3): a group of blocks with one automation for all.
+    fun addMode(m: Model, name: String): Outcome {
+        val n = name.trim()
+        if (n.isEmpty()) return Outcome(m, "Give the mode a name")
+        if (m.mode(n) != null) return Outcome(m, "A mode named $n exists")
+        return ok(m.copy(modes = m.modes + Mode(n)))
+    }
+
+    fun renameMode(m: Model, name: String, to: String): Outcome {
+        val n = to.trim()
+        m.mode(name) ?: return Outcome(m, "No mode $name")
+        if (n.isEmpty()) return Outcome(m, "Give the mode a name")
+        if (n != name && m.mode(n) != null) return Outcome(m, "A mode named $n exists")
+        return ok(m.copy(modes = m.modes.map { if (it.name == name) it.copy(name = n) else it },
+            blocks = m.blocks.map { if (it.mode == name) it.copy(mode = n) else it }))
+    }
+
+    /** Locked blocks for which [after] (block name to its new automation) weakens, named; null if none. */
+    private fun weakenedLocked(m: Model, after: Map<String, Automation>): String? {
+        val hit = after.mapNotNull { (n, a) ->
+            val b = m.block(n) ?: return@mapNotNull null
+            val why = whyLocked(m, b) ?: return@mapNotNull null
+            if (Weakening.strengthens(Weakening.flatten(m, m.automation(b)), Weakening.flatten(m, a))) null else "$n: $why"
+        }
+        return if (hit.isEmpty()) null else hit.joinToString("; ")
+    }
+
+    /** One change for all the mode's blocks, refused as a whole if it weakens any locked one (R-MODE-2). */
+    fun setModeAutomation(m: Model, name: String, a: Automation): Outcome {
+        badAutomation(m, a)?.let { return Outcome(m, it) }
+        val mode = m.mode(name) ?: return Outcome(m, "No mode $name")
+        if (mode.automation == a) return ok(m)
+        weakenedLocked(m, m.blocksIn(name).associate { it.name to a })?.let { return refuse(m, it, "change automation of mode $name") }
+        return ok(m.copy(modes = m.modes.map { if (it.name == name) it.copy(automation = a) else it }))
+    }
+
+    /** A block gets the mode's automation (from another mode too); refused if that weakens it while locked (R-MODE-1). */
+    fun putInMode(m: Model, block: String, mode: String): Outcome {
+        val b = m.block(block) ?: return Outcome(m, "No block $block")
+        val md = m.mode(mode) ?: return Outcome(m, "No mode $mode")
+        if (b.mode == mode) return ok(m)
+        weakenedLocked(m, mapOf(block to md.automation))?.let { return refuse(m, it, "put $block into mode $mode") }
+        return ok(m.copy(blocks = m.blocks.map { if (it.name == block) it.copy(mode = mode) else it }))
+    }
+
+    /** The block's own automation comes back; refused if that weakens it while locked (R-MODE-1). */
+    fun takeOut(m: Model, block: String): Outcome {
+        val b = m.block(block) ?: return Outcome(m, "No block $block")
+        if (b.mode.isEmpty()) return ok(m)
+        weakenedLocked(m, mapOf(block to b.automation))?.let { return refuse(m, it, "take $block out of mode ${b.mode}") }
+        return ok(m.copy(blocks = m.blocks.map { if (it.name == block) it.copy(mode = "") else it }))
+    }
+
+    /** Its blocks are taken out, each getting its own automation back; refused as a whole if that weakens a locked one. */
+    fun deleteMode(m: Model, name: String): Outcome {
+        val mode = m.mode(name) ?: return Outcome(m, "No mode $name")
+        weakenedLocked(m, m.blocksIn(name).associate { it.name to it.automation })?.let { return refuse(m, it, "delete mode $name") }
+        return ok(m.copy(modes = m.modes - mode, blocks = m.blocks.map { if (it.mode == name) it.copy(mode = "") else it }))
+    }
+
+    /** Switches the mode's blocks on or off; switching off leaves locked ones on (R-MODE-3), refused and logged. */
+    fun switchMode(m: Model, name: String, on: Boolean): Outcome {
+        m.mode(name) ?: return Outcome(m, "No mode $name")
+        val blocks = m.blocksIn(name)
+        if (blocks.isEmpty()) return Outcome(m, "The mode $name has no blocks")
+        var cur = m
+        val stayed = mutableListOf<String>()
+        for (b in blocks) {
+            val o = setActive(cur, b.name, on)
+            if (o.error != null) stayed += b.name
+            cur = o.model
+        }
+        return if (stayed.isEmpty()) ok(cur)
+        else Outcome(cur, "Locked, so still on: " + stayed.joinToString(", "))
+    }
+
+    /** Locks every block of the mode at once (R-MODE-3); each gets what it can take. */
+    fun lockMode(m: Model, name: String, want: SettingLock, scheduleLock: Boolean): Outcome {
+        m.mode(name) ?: return Outcome(m, "No mode $name")
+        val blocks = m.blocksIn(name)
+        if (blocks.isEmpty()) return Outcome(m, "The mode $name has no blocks")
+        var cur = m
+        val errors = mutableListOf<String>()
+        for (b in blocks) {
+            val o = lock(cur, b.name, want, scheduleLock)
+            if (o.error != null) errors += "${b.name}: ${o.error}" else cur = o.model
+        }
+        return when {
+            errors.size == blocks.size -> Outcome(m, errors.joinToString("; "))
+            errors.isNotEmpty() -> Outcome(cur, null, "Locked, except " + errors.joinToString("; "))
+            else -> ok(cur)
+        }
+    }
+
+    /** The mode is locked while all its blocks are (R-MODE-3). */
+    fun modeLocked(m: Model, name: String): Boolean {
+        val blocks = m.blocksIn(name)
+        return blocks.isNotEmpty() && blocks.all { locked(m, it) }
     }
 
     // Locks (each confirmed by the GUI before this runs, R-LOCK-12).
@@ -189,16 +295,17 @@ class Commands(
         if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return Outcome(m, "Invalid position")
         if (radius !in 50f..2000f) return Outcome(m, "The radius must be 50 to 2000 m")
         val old = m.place(n)
-        if (old != null) usedByLocked(m) { n in it.automation.places }?.let { return refuse(m, it, "move place $n") }
+        if (old != null) usedByLocked(m) { n in m.automation(it).places }?.let { return refuse(m, it, "move place $n") }
         val p = Place(n, lat, lon, radius)
         return ok(m.copy(places = if (old == null) m.places + p else m.places.map { if (it.name == n) p else it }))
     }
 
     fun deletePlace(m: Model, name: String): Outcome {
         val p = m.place(name) ?: return Outcome(m, "No place $name")
-        usedByLocked(m) { name in it.automation.places }?.let { return refuse(m, it, "delete place $name") }
+        usedByLocked(m) { name in m.automation(it).places }?.let { return refuse(m, it, "delete place $name") }
         return ok(m.copy(places = m.places - p,
-            blocks = m.blocks.map { it.copy(automation = it.automation.copy(places = it.automation.places - name)) }))
+            blocks = m.blocks.map { it.copy(automation = it.automation.copy(places = it.automation.places - name)) },
+            modes = m.modes.map { it.copy(automation = it.automation.copy(places = it.automation.places - name)) }))
     }
 
     // Schedules.
@@ -213,10 +320,10 @@ class Commands(
         val s = m.schedule(name) ?: return Outcome(m, "No schedule $name")
         windows.firstOrNull { !it.valid() }?.let { return Outcome(m, "Invalid window ${it.describe()} (5-minute steps)") }
         // Each locked block using it must take the change as a strengthening.
-        for (b in m.blocks.filter { name in it.automation.schedules }) {
+        for (b in m.blocks.filter { name in m.automation(it).schedules }) {
             val why = whyLocked(m, b) ?: continue
-            val before = Weakening.flatten(m, b.automation)
-            val after = Weakening.flatten(m.copy(schedules = m.schedules.map { if (it.name == name) Schedule(name, windows) else it }), b.automation)
+            val before = Weakening.flatten(m, m.automation(b))
+            val after = Weakening.flatten(m.copy(schedules = m.schedules.map { if (it.name == name) Schedule(name, windows) else it }), m.automation(b))
             if (!Weakening.strengthens(before, after)) return refuse(m, why, "change schedule $name (used by ${b.name})")
         }
         return ok(m.copy(schedules = m.schedules.map { if (it.name == name) s.copy(windows = windows) else it }))
@@ -224,9 +331,10 @@ class Commands(
 
     fun deleteSchedule(m: Model, name: String): Outcome {
         val s = m.schedule(name) ?: return Outcome(m, "No schedule $name")
-        usedByLocked(m) { name in it.automation.schedules }?.let { return refuse(m, it, "delete schedule $name") }
+        usedByLocked(m) { name in m.automation(it).schedules }?.let { return refuse(m, it, "delete schedule $name") }
         return ok(m.copy(schedules = m.schedules - s,
-            blocks = m.blocks.map { it.copy(automation = it.automation.copy(schedules = it.automation.schedules - name)) }))
+            blocks = m.blocks.map { it.copy(automation = it.automation.copy(schedules = it.automation.schedules - name)) },
+            modes = m.modes.map { it.copy(automation = it.automation.copy(schedules = it.automation.schedules - name)) }))
     }
 
     fun setNoWeakening(m: Model, on: Boolean): Outcome {

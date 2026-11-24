@@ -441,7 +441,10 @@ tests need the owner.
   (automatic date/time/zone while anything is locked).
 - [ ] `N4` Automation: schedules, places (Wi-Fi and areas), modes, monk
   mode (VPN drops all, Wi-Fi off), Frozen Chicken (lock screen, allowed
-  apps only); week view and list editor. (L)
+  apps only); week view and list editor. (L) Built 2026-11-24: modes of
+  blocks (one automation, put in/take out, switch, lock all, R-MODE-1–3;
+  Kotlin tests). Left: Wi-Fi places, monk mode, Frozen Chicken, week view,
+  drag into a mode, mode wallpapers; the mode pages not yet seen on a phone.
 - [ ] `N5` Breaks, Pomodoro, allowance, reward, session limit, pause,
   autostart, use, statistics, notifications. (M)
 - [ ] `N6` Actions and consequences, bypass prevention, custom actions,

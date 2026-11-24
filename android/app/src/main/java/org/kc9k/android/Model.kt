@@ -58,7 +58,12 @@ data class Block(
     val lock: SettingLock = SettingLock(),
     val scheduleLock: Boolean = false,
     val pausedUntil: Long = 0,
+    /** The mode it is in, or ""; in a mode its own [automation] is kept, unused (R-MODE-1). */
+    val mode: String = "",
 )
+
+/** A mode (SPEC §3.2): a named group of blocks with one automation for all. */
+data class Mode(val name: String, val automation: Automation = Automation())
 
 /** An area (SPEC §8.2) with its last decided state (Area.step). */
 data class Place(
@@ -73,6 +78,7 @@ data class Model(
     val blocks: List<Block> = emptyList(),
     val places: List<Place> = emptyList(),
     val schedules: List<Schedule> = emptyList(),
+    val modes: List<Mode> = emptyList(),
     /** "No weakening during active locks" (SPEC §3.5), on by default. */
     val noWeakening: Boolean = true,
     /** Refused weakenings, newest last (R-WEAK-3), at most [LOG_MAX]. */
@@ -81,6 +87,12 @@ data class Model(
     fun block(name: String) = blocks.find { it.name == name }
     fun place(name: String) = places.find { it.name == name }
     fun schedule(name: String) = schedules.find { it.name == name }
+    fun mode(name: String) = modes.find { it.name == name }
+    fun blocksIn(mode: String) = blocks.filter { it.mode == mode }
+
+    /** The automation that switches [b]: its mode's while in one, else its own (R-MODE-1). */
+    fun automation(b: Block): Automation =
+        if (b.mode.isEmpty()) b.automation else mode(b.mode)?.automation ?: b.automation
 
     companion object { const val LOG_MAX = 100 }
 }
@@ -120,12 +132,15 @@ object Enforce {
         }
     }
 
-    fun state(m: Model, b: Block, now: Long, tz: TimeZone = TimeZone.getDefault()): State = when {
-        !b.active -> State.INACTIVE
-        b.pausedUntil > now -> State.PAUSED
-        b.automation.continuous -> State.ENABLED
-        triggered(m, b.automation, WeekTime.of(now, tz)) != b.automation.defaultEnabled -> State.ENABLED
-        else -> State.LIFTED
+    fun state(m: Model, b: Block, now: Long, tz: TimeZone = TimeZone.getDefault()): State {
+        val a = m.automation(b)
+        return when {
+            !b.active -> State.INACTIVE
+            b.pausedUntil > now -> State.PAUSED
+            a.continuous -> State.ENABLED
+            triggered(m, a, WeekTime.of(now, tz)) != a.defaultEnabled -> State.ENABLED
+            else -> State.LIFTED
+        }
     }
 
     fun enabled(m: Model, b: Block, now: Long, tz: TimeZone = TimeZone.getDefault()) =

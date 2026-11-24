@@ -203,12 +203,100 @@ class CommandsTest {
     }
 }
 
+class ModesTest {
+    private val now = at(10)
+    private val c = Commands(now, 1, UTC)
+    private val locked = SettingLock(until = now + 3_600_000)
+    private val work = Window(0, 9 * 60, 17 * 60)
+    private val evening = Window(0, 18 * 60, 22 * 60)
+
+    @Test fun blockInModeUsesTheModesAutomation() {
+        val own = Automation(windows = listOf(evening))
+        val mm = Model(blocks = listOf(Block("x", automation = own, mode = "Work")),
+            modes = listOf(Mode("Work", Automation(windows = listOf(work)))))
+        val b = mm.block("x")!!
+        assertTrue(Enforce.enabled(mm, b, at(10), UTC))
+        assertFalse(Enforce.enabled(mm, b, at(19), UTC))
+        // Its own automation is kept, unused, and can't be changed while in the mode.
+        assertNotNull(c.setAutomation(mm, "x", Automation()).error)
+        val out = c.takeOut(mm, "x").model
+        assertEquals(own, out.block("x")!!.automation)
+        assertTrue(Enforce.enabled(out, out.block("x")!!, at(19), UTC))
+    }
+
+    @Test fun createRenameDelete() {
+        var mm = c.addMode(Model(blocks = listOf(Block("x"))), "Work").model
+        assertNotNull(c.addMode(mm, "Work").error)
+        mm = c.putInMode(mm, "x", "Work").model
+        mm = c.renameMode(mm, "Work", "Job").model
+        assertEquals("Job", mm.block("x")!!.mode)
+        mm = c.deleteMode(mm, "Job").model
+        assertTrue(mm.modes.isEmpty())
+        assertEquals("", mm.block("x")!!.mode)
+    }
+
+    /** R-MODE-1/2/3: weakening a locked block through its mode is refused as a whole and logged. */
+    @Test fun weakeningThroughAModeRefused() {
+        val modeAuto = Automation(windows = listOf(work))
+        val mm = Model(
+            blocks = listOf(Block("x", lock = locked, mode = "Work", automation = Automation(windows = listOf(Window(0, 540, 570)))),
+                Block("y", mode = "Work")),
+            modes = listOf(Mode("Work", modeAuto)))
+        val refused = listOf(
+            c.setModeAutomation(mm, "Work", Automation(windows = listOf(Window(0, 540, 600)))),
+            c.takeOut(mm, "x"),
+            c.deleteMode(mm, "Work"),
+        )
+        for ((i, o) in refused.withIndex()) {
+            assertNotNull("command $i", o.error)
+            assertEquals("command $i", mm.blocks, o.model.blocks)
+            assertEquals("command $i", mm.modes, o.model.modes)
+            assertEquals("command $i", 1, o.model.refused.size)
+        }
+        // Strengthening the mode is allowed; the unlocked block can leave.
+        assertNull(c.setModeAutomation(mm, "Work", Automation(windows = listOf(work, evening))).error)
+        assertNull(c.takeOut(mm, "y").error)
+        // Into a weaker mode: refused while locked.
+        val two = mm.copy(blocks = mm.blocks.map { it.copy(mode = "") }.map { if (it.name == "x") it.copy(automation = Automation()) else it },
+            modes = listOf(Mode("Weak", modeAuto)))
+        assertNotNull(c.putInMode(two, "x", "Weak").error)
+        assertNull(c.putInMode(two, "y", "Weak").error)
+    }
+
+    @Test fun switchOffLeavesLockedBlocksOn() {
+        val mm = Model(blocks = listOf(Block("x", lock = locked, mode = "M"), Block("y", mode = "M")), modes = listOf(Mode("M")))
+        val o = c.switchMode(mm, "M", false)
+        assertNotNull(o.error)
+        assertTrue(o.model.block("x")!!.active)
+        assertFalse(o.model.block("y")!!.active)
+        assertTrue(c.switchMode(o.model, "M", true).model.blocks.all { it.active })
+    }
+
+    @Test fun lockingAModeLocksEveryBlock() {
+        val mm = Model(blocks = listOf(Block("x", mode = "M"), Block("y", mode = "M"), Block("z")), modes = listOf(Mode("M")))
+        assertFalse(c.modeLocked(mm, "M"))
+        val o = c.lockMode(mm, "M", locked, false)
+        assertNull(o.error)
+        assertTrue(c.modeLocked(o.model, "M"))
+        assertFalse(c.locked(o.model, o.model.block("z")!!))
+    }
+
+    @Test fun scheduleChangeSeesBlocksThroughModes() {
+        val s = Schedule("Work", listOf(work))
+        val mm = Model(blocks = listOf(Block("x", lock = locked, mode = "M")), schedules = listOf(s),
+            modes = listOf(Mode("M", Automation(schedules = listOf("Work")))))
+        assertNotNull(c.setScheduleWindows(mm, "Work", emptyList()).error)
+        assertNotNull(c.deleteSchedule(mm, "Work").error)
+    }
+}
+
 class CodecTest {
     @Test fun roundTrip() {
         val m = Model(
             blocks = listOf(Block("Nokia \"mode\"", sites = listOf("a.com"), apps = listOf("*"), appExceptions = listOf("role:sms"),
                 wifiOff = true, automation = Automation(true, listOf(Window(2, 60, 120)), listOf("S"), listOf("Home"), true),
-                lock = SettingLock(5, 300, "pbkdf2\$1\$aa\$bb", 3), scheduleLock = true, pausedUntil = 9)),
+                lock = SettingLock(5, 300, "pbkdf2\$1\$aa\$bb", 3), scheduleLock = true, pausedUntil = 9, mode = "M")),
+            modes = listOf(Mode("M", Automation(false, listOf(Window(1, 0, 60)), places = listOf("Home")))),
             places = listOf(Place("Home", 52.1, -4.25, 150f, true, 7, 12.5f, 20f, 8)),
             schedules = listOf(Schedule("S", listOf(Window(6, 0, 1440)))),
             noWeakening = false, refused = listOf("x\ny"),

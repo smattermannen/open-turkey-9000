@@ -28,6 +28,8 @@ import java.util.Date
  */
 class MainActivity : Activity() {
     companion object {
+        /** [sub] prefix for a mode's page on the Blocks tab. */
+        private const val MODE = "mode:"
         private const val PICK_APK = 1
         private const val SAVE_XPI = 2
         private const val CHALLENGE = 3
@@ -123,7 +125,11 @@ class MainActivity : Activity() {
         renderBar()
         val content = ui.column(16)
         when (page) {
-            "blocks" -> if (sub != null && model.block(sub!!) != null) blockPage(content, sub!!) else { sub = null; blocksPage(content) }
+            "blocks" -> when {
+                sub?.startsWith(MODE) == true && model.mode(sub!!.removePrefix(MODE)) != null -> modePage(content, sub!!.removePrefix(MODE))
+                sub != null && model.block(sub!!) != null -> blockPage(content, sub!!)
+                else -> { sub = null; blocksPage(content) }
+            }
             "stats" -> statsPage(content)
             "more" -> when (sub) {
                 "schedules" -> schedulesPage(content)
@@ -188,16 +194,113 @@ class MainActivity : Activity() {
         return "$state (at $t ${p.lastDistance.toInt()} m from its centre, ±${p.lastAccuracy.toInt()} m; radius ${p.radius.toInt()} m)"
     }
 
-    // Blocks.
+    // Blocks: modes above blocks (SPEC §8.5).
     private fun blocksPage(root: LinearLayout) {
         root.addView(ui.title("Blocks"))
         val m = model
         val c = cmd()
+        if (m.modes.isNotEmpty()) {
+            root.addView(ui.heading("Modes"))
+            for (md in m.modes) root.addView(modeCard(m, md, c))
+        }
+        if (m.modes.isNotEmpty()) root.addView(ui.heading("Blocks"))
         if (m.blocks.isEmpty()) root.addView(ui.help("No blocks yet."))
         for (b in m.blocks) root.addView(blockCard(m, b, c))
         root.addView(ui.button("New block…") {
             ask("New block", "Name") { name -> run { c2, m2 -> c2.addBlock(m2, name) }; if (model.block(name.trim()) != null) go("blocks", name.trim()) }
         })
+        root.addView(ui.button("New mode…") {
+            ask("New mode (a group of blocks with one automation)", "Name") { name ->
+                run { c2, m2 -> c2.addMode(m2, name) }
+                if (model.mode(name.trim()) != null) go("blocks", MODE + name.trim())
+            }
+        })
+    }
+
+    /** Two-line card: name and switch (its blocks on or off); then type, state, blocks and lock. */
+    private fun modeCard(m: Model, md: Mode, c: Commands): View = ui.card().apply {
+        val blocks = m.blocksIn(md.name)
+        val top = ui.row()
+        top.addView(ui.grow(ui.text(md.name, 17f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) }))
+        top.addView(Switch(this@MainActivity).apply {
+            isChecked = blocks.isNotEmpty() && blocks.all { it.active }
+            isEnabled = blocks.isNotEmpty()
+            contentDescription = "Switch the mode ${md.name} on or off"
+            setOnCheckedChangeListener { _, on -> run { c2, m2 -> c2.switchMode(m2, md.name, on) } }
+        })
+        addView(top)
+        val pills = ui.row()
+        val on = blocks.count { Enforce.enabled(m, it, now) }
+        pills.addView(if (on > 0) ui.pill("on", Ui.Pill.ON) else ui.pill("off", Ui.Pill.OFF))
+        if (c.modeLocked(m, md.name)) pills.addView(ui.pill("locked", Ui.Pill.LOCKED))
+        addView(pills)
+        addView(ui.help((if (md.automation.continuous) "Continuous mode" else "Automated mode") + " · " +
+            (if (blocks.isEmpty()) "no blocks" else blocks.joinToString(", ") { it.name })))
+        setOnClickListener { go("blocks", MODE + md.name) }
+    }
+
+    // A mode: its blocks, one automation for all, lock (R-MODE-1–3).
+    private fun modePage(root: LinearLayout, name: String) {
+        val m = model
+        val md = m.mode(name)!!
+        val c = cmd()
+        val head = ui.row()
+        head.addView(ui.button("‹ Blocks") { go("blocks") })
+        head.addView(ui.grow(ui.title(md.name)))
+        root.addView(head)
+        root.addView(modeCard(m, md, c).apply { setOnClickListener(null) })
+        val tabs = ui.row()
+        for ((key, label) in listOf("websites" to "Blocks", "automation" to "Automation", "lock" to "Lock")) {
+            tabs.addView(ui.grow(ui.button(label) { tab = key; render() }.apply { if (key == tab) setTextColor(ui.accent) }))
+        }
+        root.addView(tabs)
+        val blocks = m.blocksIn(name)
+        when (tab) {
+            "automation" -> {
+                root.addView(ui.help("One automation for all the mode's blocks; each block's own is kept, unused, " +
+                    "until it is taken out. Refused as a whole if it weakens a locked block."))
+                automationEditor(root, m, md.automation) { n -> run { c2, mm -> c2.setModeAutomation(mm, name, n) } }
+            }
+            "lock" -> {
+                root.addView(ui.help("Locking the mode locks each of its blocks at once. Locked, the mode can't be " +
+                    "switched off or weakened (its automation, a block taken out)."))
+                for (b in blocks) root.addView(ui.text("${b.name}: " + lockText(m, b).ifEmpty { "not locked" }))
+                if (blocks.isNotEmpty()) root.addView(ui.button("Lock all its blocks…") {
+                    askLock("Lock the mode $name", schedule = !md.automation.continuous) { want, sched ->
+                        run { c2, m2 -> c2.lockMode(m2, name, want, sched) }
+                    }
+                })
+            }
+            else -> {
+                root.addView(ui.help("A block is in at most one mode and takes its automation."))
+                if (blocks.isEmpty()) root.addView(ui.help("No blocks in this mode yet."))
+                for (b in blocks) root.addView(removable(b.name) { run { c2, mm -> c2.takeOut(mm, b.name) } })
+                val others = m.blocks.filter { it.mode != name }
+                if (others.isNotEmpty()) root.addView(ui.button("Put blocks in…") {
+                    val picked = BooleanArray(others.size)
+                    AlertDialog.Builder(this).setTitle("Put into $name")
+                        .setMultiChoiceItems(others.map { it.name + if (it.mode.isNotEmpty()) " (in ${it.mode})" else "" }.toTypedArray(), picked) { _, i, on -> picked[i] = on }
+                        .setPositiveButton("Put in") { _, _ ->
+                            run { c2, m2 -> others.filterIndexed { i, _ -> picked[i] }.fold(Commands.Outcome(m2)) { o, b ->
+                                if (o.error != null) o else c2.putInMode(o.model, b.name, name) } }
+                        }
+                        .setNegativeButton("Cancel", null).show()
+                })
+                root.addView(ui.heading("Mode"))
+                root.addView(ui.button("Rename…") {
+                    ask("Rename $name", "New name") { n ->
+                        run { c2, m2 -> c2.renameMode(m2, name, n) }
+                        if (model.mode(n.trim()) != null) { sub = MODE + n.trim(); render() }
+                    }
+                })
+                root.addView(ui.button("Delete $name…") {
+                    confirm("Delete the mode $name?", "Its blocks stay, each with its own automation back.") {
+                        run { c2, mm -> c2.deleteMode(mm, name) }
+                        if (model.mode(name) == null) go("blocks")
+                    }
+                })
+            }
+        }
     }
 
     /** Two-line card: name and switch; then type, state and lock, opening the block. */
@@ -217,7 +320,8 @@ class MainActivity : Activity() {
         if (c.locked(m, b)) pills.addView(ui.pill("locked", Ui.Pill.LOCKED))
         addView(pills)
         addView(ui.help(buildString {
-            append(if (b.automation.continuous) "Continuous block" else "Automated block")
+            append(if (m.automation(b).continuous) "Continuous block" else "Automated block")
+            if (b.mode.isNotEmpty()) append(" · in ${b.mode}")
             if (st == Enforce.State.PAUSED) append(" · paused until " + time(b.pausedUntil))
             val parts = mutableListOf<String>()
             if (b.sites.isNotEmpty()) parts += "${b.sites.size} sites"
@@ -310,9 +414,25 @@ class MainActivity : Activity() {
     }
 
     private fun automationTab(root: LinearLayout, m: Model, b: Block) {
-        val a = b.automation
-        fun set(n: Automation) = run { c, mm -> c.setAutomation(mm, b.name, n) }
-        root.addView(ui.help("No windows, schedules or places: a continuous block, on whenever it is switched on. " +
+        if (b.mode.isNotEmpty()) {
+            root.addView(ui.text("In the mode ${b.mode}: its automation switches this block. Its own is kept until it is taken out."))
+            root.addView(ui.button("Open ${b.mode}") { go("blocks", MODE + b.mode) })
+            root.addView(ui.button("Take out of ${b.mode}") { run { c, mm -> c.takeOut(mm, b.name) } })
+        } else {
+            automationEditor(root, m, b.automation) { n -> run { c, mm -> c.setAutomation(mm, b.name, n) } }
+        }
+        val modes = m.modes.filter { it.name != b.mode }
+        if (modes.isNotEmpty()) root.addView(ui.button("Move to mode…") {
+            AlertDialog.Builder(this).setTitle("Move ${b.name} to")
+                .setItems(modes.map { it.name }.toTypedArray()) { _, i -> run { c, mm -> c.putInMode(mm, b.name, modes[i].name) } }
+                .setNegativeButton("Cancel", null).show()
+        })
+        pauseAndDelete(root, b)
+    }
+
+    /** Default, windows, schedules, places and both/either, for a block or a mode. */
+    private fun automationEditor(root: LinearLayout, m: Model, a: Automation, set: (Automation) -> Unit) {
+        root.addView(ui.help("No windows, schedules or places: continuous, on whenever it is switched on. " +
             "Otherwise they switch it from its default while it is switched on."))
         root.addView(RadioGroup(this).apply {
             val off = RadioButton(this@MainActivity).apply { id = View.generateViewId(); text = "Disabled by default: windows and places turn it on" }
@@ -346,6 +466,9 @@ class MainActivity : Activity() {
                 setOnCheckedChangeListener { _, id -> if ((id == both.id) != a.both) set(a.copy(both = id == both.id)) }
             })
         }
+    }
+
+    private fun pauseAndDelete(root: LinearLayout, b: Block) {
         root.addView(ui.heading("Pause"))
         if (b.pausedUntil > now) {
             root.addView(ui.text("Paused until " + time(b.pausedUntil)))
@@ -372,7 +495,7 @@ class MainActivity : Activity() {
         root.addView(ui.text(if (desc.isEmpty()) "Not locked." else "Locks: $desc"))
         if (c.locked(m, b)) root.addView(ui.pill("locked now", Ui.Pill.LOCKED))
         root.addView(ui.button("Lock…") {
-            askLock("Lock ${b.name}", schedule = !b.automation.continuous) { want, sched ->
+            askLock("Lock ${b.name}", schedule = !m.automation(b).continuous) { want, sched ->
                 run { c2, m2 -> c2.lock(m2, b.name, want, sched) }
             }
         })

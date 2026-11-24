@@ -100,7 +100,9 @@
   (`LIBREWOLF_MINUTES`, default 15), removes.
 
 - Timing checks on shared runners (A17): a time judged by its fastest of
-  several rounds (a pause hits one round, too much work every round);
+  several rounds (a pause hits one round, too much work every round;
+  `match_test.js`, `TestInputsKeptForTheSameBlocks`,
+  `TestPolicySetsFollowThePolicy`);
   servers in unit tests bind port 0 (fixed ports in 32768–60999 get
   taken: Android `RulesServerTest`).
 - `test.yml` runs, before KC9K is installed: `ci/background_test.js`,

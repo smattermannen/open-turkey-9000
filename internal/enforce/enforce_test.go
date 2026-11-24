@@ -383,9 +383,19 @@ func TestInputsKeptForTheSameBlocks(t *testing.T) {
 	}
 	big := []db.ActiveBlockDetail{{BlockName: "big", Lists: db.Lists{blacklist("Blocked", db.Where{URL: true}, sites...)}}}
 	Inputs(big)
-	start := time.Now()
-	hosts, _, _ := Inputs(big)
-	if took := time.Since(start); took > 100*time.Millisecond || len(hosts) != len(sites) {
+	// Timed as the fastest of 5 rounds: one round on a loaded CI runner
+	// (other packages' tests at once) once took 108 ms (A17, run 748).
+	fastest := func(round func()) time.Duration {
+		best := time.Hour
+		for range 5 {
+			start := time.Now()
+			round()
+			best = min(best, time.Since(start))
+		}
+		return best
+	}
+	var hosts []string
+	if took := fastest(func() { hosts, _, _ = Inputs(big) }); took > 100*time.Millisecond || len(hosts) != len(sites) {
 		t.Errorf("the same blocks again: %d hosts in %s", len(hosts), took)
 	}
 	hosts[0] = "changed.by.a.caller"
@@ -418,13 +428,11 @@ func TestInputsKeptForTheSameBlocks(t *testing.T) {
 	// set is kept.
 	fileURLsOn.Store(false)
 	both := append(append([]db.ActiveBlockDetail{}, big...), small...)
-	for range 2 {
-		start = time.Now()
+	if took := fastest(func() {
 		Inputs(both)
 		Inputs(big)
 		Inputs(small)
-	}
-	if took := time.Since(start); took > 100*time.Millisecond {
+	}); took > 100*time.Millisecond {
 		t.Errorf("all blocks, then each alone, again: %s", took)
 	}
 }

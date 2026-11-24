@@ -90,7 +90,11 @@ plan is SPEC §8, its items §3.1.
   Linux and Android part done: `ci/match_test.js` (fastest of 3 rounds)
   and Android `RulesServerTest` (port 0) passed 48 `Test` runs in a row
   (698–745); the runs' other failures before 698 were work in progress,
-  each fixed by a later commit (none flaky). Left, Windows: seen (Windows run 215,
+  each fixed by a later commit (none flaky). Later found and fixed
+  (2026-11-24): `TestInputsKeptForTheSameBlocks` took 108 ms against 100 in
+  one round on a loaded runner (branch run 748); it and
+  `TestPolicySetsFollowThePolicy` judge by the fastest of 5 rounds, same
+  bound. Left, Windows: seen (Windows run 215,
   no Windows change): `ci/windows_desktop_test.ps1`'s "the challenge typed
   in the window unlocks the block" got 50 % accuracy (a posted key lost),
   so `ci-lock` stayed locked and "uninstall" failed after it; passed in

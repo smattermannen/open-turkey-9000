@@ -103,6 +103,13 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   minute) plus paused IronFox into one `Enforcer.sync`.
 - `Store.kt`: device-protected prefs for protections, browser settings and
   their locks, `lifted`; the 0.2 keys (home, `web.*`) only for migration.
+- `Notices.kt` (pure, `NoticesTest`; as the desktop's `enforce/notices.go`):
+  window start/end of active blocks switched by time (mode and schedule
+  windows count, places can't be foreseen), timer lock end, apps paused;
+  kinds and advance minutes in `Store.notices` (default 5, each advance
+  once, key = kind, name, minute, advance). `GuardService` checks once a
+  minute and shows each key once (channel "Coming up"); "apps are paused"
+  when a sync pauses apps it didn't before (not at start).
 - Preferences (`Store` `pref.*`, interface only): theme (phone's, light,
   dark; `Ui(theme, darkness)` mixes dark grey to black, activity theme set
   before `onCreate`, change = `recreate`), clock and first weekday into

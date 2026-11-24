@@ -26,6 +26,7 @@ class GuardService : Service() {
     companion object {
         private const val CHANNEL = "guard"
         private const val IRONFOX_CHANNEL = "ironfox"
+        private const val NOTICE_CHANNEL = "notices"
         private const val TICK_MS = 5_000L
         private const val WATCHDOG_MS = 15 * 60_000L
         @Volatile var running = false
@@ -71,6 +72,8 @@ class GuardService : Service() {
     private var lastTick = 0L
     private var lastSync = 0L
     private var synced: Pair<Set<String>, Boolean>? = null
+    /** The block-paused apps at the last sync, for the "apps are paused" notice. */
+    private var resolvedBefore: Set<String>? = null
     /** The device protection applied last, so a lock starting or ending (or a change) re-applies it. */
     private var device: DevicePlan? = null
 
@@ -78,8 +81,30 @@ class GuardService : Service() {
         override fun onReceive(context: Context, intent: Intent) = Session.end()
     }
 
+    /** Notices shown (key to when), so each shows once (Notices). */
+    private val shown = mutableMapOf<String, Long>()
+    private var noticeMinute = 0L
+
+    private fun notices() {
+        val now = System.currentTimeMillis()
+        if (now / 60_000 == noticeMinute || store.lifted) return
+        noticeMinute = now / 60_000
+        shown.entries.removeAll { now - it.value > 2 * 86_400_000L }
+        Notices.of(Db.model(this), store.notices, now).forEach(::notice)
+    }
+
+    private fun notice(n: Notices.Notice) {
+        if (shown.containsKey(n.key)) return
+        shown[n.key] = System.currentTimeMillis()
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        getSystemService(NotificationManager::class.java).notify(n.key.hashCode(), Notification.Builder(this, NOTICE_CHANNEL)
+            .setContentTitle(n.title).setContentText(n.body).setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentIntent(open).setAutoCancel(true).build())
+    }
+
     private val tick = object : Runnable {
         override fun run() {
+            notices()
             guardStep()
             val d = store.devicePlan()
             if (d != device) { device = d; DeviceOwner(this@GuardService).applyBaseline() }
@@ -93,6 +118,7 @@ class GuardService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "KC9K", NotificationManager.IMPORTANCE_LOW))
         nm.createNotificationChannel(NotificationChannel(IRONFOX_CHANNEL, "IronFox paused", NotificationManager.IMPORTANCE_DEFAULT))
+        nm.createNotificationChannel(NotificationChannel(NOTICE_CHANNEL, "Coming up", NotificationManager.IMPORTANCE_DEFAULT))
         val n = Notification.Builder(this, CHANNEL)
             .setContentTitle("KC9K is guarding").setSmallIcon(android.R.drawable.ic_lock_lock)
             .setOngoing(true).build()
@@ -160,6 +186,10 @@ class GuardService : Service() {
             if (paused) IronFox.installed(this) else emptyList())
         val state = wanted to plan.wifiOff
         if (!force && state == synced && now - lastSync < 60_000L) return
+        // Apps a block newly pauses (not at start, not IronFox's or the picker's own pauses).
+        val before = resolvedBefore
+        if (before != null) Notices.paused(store.notices, (targets - before).map { (enforcer as? DeviceOwnerEnforcer)?.label(it) ?: it })?.let(::notice)
+        resolvedBefore = targets
         enforcer.sync(state.first, state.second)
         synced = state
         lastSync = now

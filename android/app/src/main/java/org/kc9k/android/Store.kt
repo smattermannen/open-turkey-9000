@@ -62,6 +62,12 @@ class Store(private val context: Context) {
     fun whySettingsLocked(): String? = if (lifted) null
         else Commands(System.currentTimeMillis(), bootCount).whySettingsLocked(Db.model(context))
 
+    /** Notification choices (Notices.Options): kinds turned off, minutes ahead. */
+    var notices: Notices.Options
+        get() = Notices.Options(p.getStringSet("notice.off", emptySet()) ?: emptySet(),
+            Notices.Options.parseAdvance(p.getString("notice.advance", "5") ?: "5") ?: listOf(5))
+        set(v) { p.edit().putStringSet("notice.off", v.off).putString("notice.advance", v.advance.joinToString(",")).commit() }
+
     // Preferences (interface only, never locked).
     var theme: String
         get() = p.getString("pref.theme", Ui.SYSTEM) ?: Ui.SYSTEM

@@ -457,7 +457,10 @@ tests need the owner.
   judged per locked block; `WifiPlaceTest`). Left: monk mode, Frozen Chicken, week view,
   drag into a mode, mode wallpapers; the mode pages not yet seen on a phone.
 - [ ] `N5` Breaks, Pomodoro, allowance, reward, session limit, pause,
-  autostart, use, statistics, notifications. (M)
+  autostart, use, statistics, notifications. (M) Built 2026-11-24:
+  notifications (window start/end, timer lock end, apps paused; advance
+  minutes). Breaks, Pomodoro, allowance, statistics held back by the owner;
+  autostart and use left.
 - [ ] `N6` Actions and consequences, bypass prevention, custom actions,
   presets, link and word recording, projects (phone to phone). (M)
 - [ ] `N7` Tamper protection, strict mode, guided setup, circadian rhythm

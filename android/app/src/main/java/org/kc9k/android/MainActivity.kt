@@ -370,6 +370,22 @@ class MainActivity : Activity() {
         Fmt.firstDay = store.firstDay
     }
 
+    /** Notifications (SPEC §4.10): kinds and advance warnings in minutes. */
+    private fun noticesSection(root: LinearLayout) {
+        val o = store.notices
+        root.addView(ui.heading("Notifications"))
+        for (k in Notices.KINDS) root.addView(CheckBox(this).apply {
+            text = Notices.LABELS[k]; isChecked = o.on(k)
+            setOnCheckedChangeListener { _, on -> store.notices = store.notices.let { it.copy(off = if (on) it.off - k else it.off + k) } }
+        })
+        root.addView(ui.button("Warn ahead: ${o.advance.joinToString(", ")} minutes…") {
+            ask("Minutes ahead, e.g. 2,5", "2,5", o.advance.joinToString(",")) { t ->
+                val a = Notices.Options.parseAdvance(t) ?: return@ask toast("Minutes from 1 to 1440, separated by commas")
+                store.notices = store.notices.copy(advance = a); render()
+            }
+        })
+    }
+
     /** Preferences (SPEC §4.10): theme with darkness slider, clock, first weekday. Interface only. */
     private fun preferencesSection(root: LinearLayout) {
         root.addView(ui.heading("Preferences"))
@@ -769,6 +785,7 @@ class MainActivity : Activity() {
         root.addView(ui.help("While any block is locked, no setting on this page can be weakened."))
         passwordsSection(root)
         preferencesSection(root)
+        noticesSection(root)
 
         strictSection(root)
         tamperSection(root)

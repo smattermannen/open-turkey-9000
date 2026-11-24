@@ -5,35 +5,48 @@ import java.util.TimeZone
 /**
  * The command layer (R-ANDROID-3): every change to blocks, places and schedules goes
  * through here, and here alone weakening is decided. Strengthening is always allowed;
- * weakening a locked block is refused and logged (R-WEAK-1–3). Pure: the caller saves
- * [Outcome.model] (refusals change the model too: the log).
+ * weakening a locked block is refused and logged (R-WEAK-1–3). With a settings password
+ * set (SPEC §3.11), every weakening also needs it: [settingsUnlocked] says it was typed
+ * (Session); without it the command stops with [Outcome.needsPassword], unlogged. Pure:
+ * the caller saves [Outcome.model] (refusals change the model too: the log).
  */
 class Commands(
     private val now: Long,
     private val boot: Int,
     private val tz: TimeZone = TimeZone.getDefault(),
+    private val settingsUnlocked: Boolean = Session.settingsUnlocked,
 ) {
-    data class Outcome(val model: Model, val error: String? = null, val note: String? = null)
+    data class Outcome(val model: Model, val error: String? = null, val note: String? = null,
+                       val needsPassword: Boolean = false)
+
+    companion object { const val NEEDS_PASSWORD = "Needs the settings password" }
 
     private fun ok(m: Model, note: String? = null) = Outcome(m, null, note)
 
+    /** Why weakening needs the settings password now, or null. */
+    private fun passwordWhy(m: Model) = if (m.settingsPassword.isNotEmpty() && !settingsUnlocked) NEEDS_PASSWORD else null
+
     private fun refuse(m: Model, why: String, what: String): Outcome {
+        if (why.contains(NEEDS_PASSWORD)) return Outcome(m, NEEDS_PASSWORD, needsPassword = true)
         val line = "${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.ROOT).apply { timeZone = tz }.format(now)} refused: $what ($why)"
         return Outcome(m.copy(refused = (m.refused + line).takeLast(Model.LOG_MAX)), why)
     }
 
     fun locked(m: Model, b: Block) = Enforce.locked(m, b, now, boot, tz)
 
-    /** Why [b] can't be weakened now, or null. */
+    /** Why [b] can't be weakened now (its locks, else the settings password), or null. */
     private fun whyLocked(m: Model, b: Block): String? {
         if (b.lock.inForce(now, boot)) return "Locked: " + b.lock.current(now, boot).describe(now, boot)
         if (b.scheduleLock && b.active && Enforce.enabled(m, b, now, tz)) return "Locked while it is on (schedule lock)"
-        return null
+        return passwordWhy(m)
     }
 
-    /** Settings outside blocks (protections, browser settings): refused while anything is locked, if no weakening is on. */
+    /**
+     * Settings outside blocks (protections, browser settings): weakening refused while
+     * anything is locked, if no weakening is on; else it needs the settings password if set.
+     */
     fun whySettingsLocked(m: Model): String? =
-        if (m.noWeakening && Enforce.anyLocked(m, now, boot, tz)) "No weakening while a block is locked" else null
+        if (m.noWeakening && Enforce.anyLocked(m, now, boot, tz)) "No weakening while a block is locked" else passwordWhy(m)
 
     private fun edit(m: Model, name: String, weakens: Boolean, what: String, change: (Block) -> Block): Outcome {
         val b = m.block(name) ?: return Outcome(m, "No block $name")
@@ -309,6 +322,7 @@ class Commands(
         val stayed = mutableListOf<String>()
         for (b in blocks) {
             val o = setActive(cur, b.name, on)
+            if (o.needsPassword) return Outcome(m, o.error, needsPassword = true)
             if (o.error != null) stayed += b.name
             cur = o.model
         }
@@ -321,6 +335,7 @@ class Commands(
         m.mode(name) ?: return Outcome(m, "No mode $name")
         val blocks = m.blocksIn(name)
         if (blocks.isEmpty()) return Outcome(m, "The mode $name has no blocks")
+        if (m.lockNeedsPassword) passwordWhy(m)?.let { return Outcome(m, it, needsPassword = true) }
         var cur = m
         val errors = mutableListOf<String>()
         for (b in blocks) {
@@ -343,6 +358,7 @@ class Commands(
     // Locks (each confirmed by the GUI before this runs, R-LOCK-12).
     fun lock(m: Model, name: String, want: SettingLock, scheduleLock: Boolean): Outcome {
         val b = m.block(name) ?: return Outcome(m, "No block $name")
+        if (m.lockNeedsPassword) passwordWhy(m)?.let { return Outcome(m, it, needsPassword = true) }
         if (want == SettingLock() && !scheduleLock) return Outcome(m, "Choose at least one lock")
         var lock = b.lock
         if (want != SettingLock()) {
@@ -356,7 +372,7 @@ class Commands(
     /** Why [name]'s own lock can't be opened by challenge/password now, or null. */
     fun refuseUnlock(m: Model, name: String): String? {
         val b = m.block(name) ?: return "No block $name"
-        return b.lock.refuseUnlock(now, boot)
+        return b.lock.refuseUnlock(now, boot) ?: passwordWhy(m)
     }
 
     /** After the password and challenge were passed: the lock goes. */
@@ -466,6 +482,33 @@ class Commands(
             blocks = m.blocks.map { it.copy(automation = it.automation.copy(schedules = it.automation.schedules - name)) },
             modes = m.modes.map { it.copy(automation = it.automation.copy(schedules = it.automation.schedules - name)) }))
     }
+
+    // Passwords (SPEC §3.11): hashes made by the caller (Passwords.hash); "" = none.
+    /** A new settings password is free; changing or removing one weakens. */
+    fun setSettingsPassword(m: Model, hash: String): Outcome {
+        if (m.settingsPassword.isNotEmpty()) whySettingsLocked(m)?.let {
+            return refuse(m, it, if (hash.isEmpty()) "remove the settings password" else "change the settings password") }
+        return ok(m.copy(settingsPassword = hash, lockNeedsPassword = m.lockNeedsPassword && hash.isNotEmpty()))
+    }
+
+    /** Whether setting a lock needs the settings password too: on free, off weakens. */
+    fun setLockNeedsPassword(m: Model, on: Boolean): Outcome {
+        if (on && m.settingsPassword.isEmpty()) return Outcome(m, "Set a settings password first")
+        if (!on && m.lockNeedsPassword) whySettingsLocked(m)?.let { return refuse(m, it, "let locks be set without the settings password") }
+        return ok(m.copy(lockNeedsPassword = on))
+    }
+
+    /** An access password for an area (Access.AREAS): a new one is free; changing or removing one needs the settings password. */
+    fun setAccessPassword(m: Model, area: String, hash: String): Outcome {
+        if (area !in Access.AREAS) return Outcome(m, "No area $area")
+        if (m.access[area].isNullOrEmpty() && hash.isEmpty()) return ok(m)
+        if (!m.access[area].isNullOrEmpty()) passwordWhy(m)?.let { return Outcome(m, it, needsPassword = true) }
+        return ok(m.copy(access = if (hash.isEmpty()) m.access - area else m.access + (area to hash)))
+    }
+
+    /** A block password hides the block's contents until typed (viewing only, locks unaffected). */
+    fun setBlockPassword(m: Model, block: String, hash: String) =
+        edit(m, block, false, "block password") { it.copy(viewPassword = hash) }
 
     fun setNoWeakening(m: Model, on: Boolean): Outcome {
         if (!on && m.noWeakening) whySettingsLocked(m)?.let { return refuse(m, it, "turn off no weakening") }

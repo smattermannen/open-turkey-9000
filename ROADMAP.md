@@ -443,7 +443,10 @@ tests need the owner.
   (R-LOCK-12), setting locks, settings/access/block passwords, text lock
   refusing multi-character input, trusted time. (M) Built 2026-11-24: text
   lock refuses any input of several characters at once; trusted time
-  (automatic date/time/zone while anything is locked).
+  (automatic date/time/zone while anything is locked); settings password
+  (every weakening; optionally setting locks), access passwords per area,
+  block passwords. Left: layered locks and the other lock kinds (held back
+  by the owner), re-lock, a forgotten password's recovery (SPEC §7).
 - [ ] `N4` Automation: schedules, places (Wi-Fi and areas), modes, monk
   mode (VPN drops all, Wi-Fi off), Frozen Chicken (lock screen, allowed
   apps only); week view and list editor. (L) Built 2026-11-24: modes of

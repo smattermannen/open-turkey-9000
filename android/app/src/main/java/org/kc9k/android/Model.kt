@@ -63,6 +63,8 @@ data class Block(
     val pausedUntil: Long = 0,
     /** The mode it is in, or ""; in a mode its own [automation] is kept, unused (R-MODE-1). */
     val mode: String = "",
+    /** Block password (Passwords hash, "" = none): hides its contents until typed (SPEC §3.11). */
+    val viewPassword: String = "",
 )
 
 /** A mode (SPEC §3.2): a named group of blocks with one automation for all. */
@@ -113,6 +115,12 @@ data class Model(
     val noWeakening: Boolean = true,
     /** Refused weakenings, newest last (R-WEAK-3), at most [LOG_MAX]. */
     val refused: List<String> = emptyList(),
+    /** Settings password (Passwords hash, "" = none): needed to weaken anything (SPEC §3.11). */
+    val settingsPassword: String = "",
+    /** Setting a lock needs the settings password too. */
+    val lockNeedsPassword: Boolean = false,
+    /** Access passwords by area (Access.AREAS): needed to view it. */
+    val access: Map<String, String> = emptyMap(),
 ) {
     fun block(name: String) = blocks.find { it.name == name }
     fun place(name: String) = places.find { it.name == name }

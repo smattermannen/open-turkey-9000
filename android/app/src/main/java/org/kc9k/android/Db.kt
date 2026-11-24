@@ -21,7 +21,7 @@ object Codec {
             "name" to b.name, "active" to b.active, "sites" to b.sites, "site_exceptions" to b.siteExceptions,
             "apps" to b.apps, "app_exceptions" to b.appExceptions, "wifi_off" to b.wifiOff,
             "automation" to auto(b.automation), "lock" to lock(b.lock), "schedule_lock" to b.scheduleLock,
-            "paused_until" to b.pausedUntil, "mode" to b.mode, "social" to b.social,
+            "paused_until" to b.pausedUntil, "mode" to b.mode, "social" to b.social, "view_password" to b.viewPassword,
             "phrase_sets" to b.phraseSets.map { s -> mapOf("name" to s.name, "url" to s.inUrl, "title" to s.inTitle,
                 "text" to s.inText, "threshold" to s.threshold, "test" to s.test,
                 "phrases" to s.phrases.map { p -> mapOf("length" to p.length,
@@ -34,6 +34,9 @@ object Codec {
             "last_seen" to p.lastSeen, "networks" to p.networks.map { mapOf("bssid" to it.bssid, "ssid" to it.ssid) }) },
         "schedules" to m.schedules.map { s -> mapOf("name" to s.name, "windows" to s.windows.map(::win)) },
         "refused" to m.refused,
+        "settings_password" to m.settingsPassword,
+        "lock_needs_password" to m.lockNeedsPassword,
+        "access" to m.access,
     ))
 
     fun decode(text: String): Model {
@@ -45,7 +48,7 @@ object Codec {
                 appExceptions = b.strings("app_exceptions"), wifiOff = b.bool("wifi_off"),
                 automation = auto(b["automation"].obj()), lock = lock(b["lock"].obj()),
                 scheduleLock = b.bool("schedule_lock"), pausedUntil = b.long("paused_until"), mode = b.str("mode"),
-                social = b.strings("social"),
+                social = b.strings("social"), viewPassword = b.str("view_password"),
                 phraseSets = b["phrase_sets"].list().map { it.obj() }.map { s -> PhraseSet(s.str("name"),
                     s["phrases"].list().map { it.obj() }.map { p -> Phrase(p["sets"].list().map { it.obj() }.map { w ->
                         WordSet(w.strings("terms"), w.bool("necessary", true)) }, p.int("length")) },
@@ -61,6 +64,9 @@ object Codec {
                 Schedule(s.str("name"), s["windows"].list().map { win(it.obj()) }) },
             noWeakening = o.bool("no_weakening", true),
             refused = o.strings("refused"),
+            settingsPassword = o.str("settings_password"),
+            lockNeedsPassword = o.bool("lock_needs_password"),
+            access = o["access"].obj().mapValues { it.value as? String ?: "" }.filterValues { it.isNotEmpty() },
         )
     }
 

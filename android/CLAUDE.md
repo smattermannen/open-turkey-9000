@@ -20,7 +20,8 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   one automation for its blocks), `Place` (area, or Wi-Fi `networks` with
   `needed` in range; decided state), `WifiPlace.step` (there while `need`
   of its networks are in a scan; a scan with no networks changes nothing),
-  `Schedule`, `Model` (+ `noWeakening`, refused log; `automation(b)` = the
+  `Schedule`, `Model` (+ `noWeakening`, refused log, `settingsPassword`,
+  `lockNeedsPassword`, `access` hashes by area; `Block.viewPassword`; `automation(b)` = the
   mode's while in one, its own kept unused, R-MODE-1).
   `Phrases.kt` (pure): `Phrase` (the desktop's grammar `[a, b] [c]? :N`,
   bridges, `check`/`key`/`widens`, held to Go by the shared
@@ -44,6 +45,20 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   `PhraseSetCommandsTest.weakeningRefusedAndLogged` list every weakening
   command). Phrase sets: adding/widening phrases, wider scope, lower
   threshold, test off strengthen; social media setting on strengthens.
+- Passwords (SPEC §3.11; `Session.kt`): `Commands(settingsUnlocked =
+  Session.settingsUnlocked)`; with a settings password set every weakening
+  path (`whyLocked`, so also modes, schedules, places, unlock,
+  `whySettingsLocked` for `Options`/`WebSettings`) stops with
+  `Outcome.needsPassword` / `Commands.NEEDS_PASSWORD`, unlogged; the GUI
+  asks and reruns (`run`, `result(err, retry)`). New password free;
+  change/remove weakens. `lockNeedsPassword`: `lock`/`lockMode` need it
+  too. Access passwords per `Access.AREAS` (app, overview, blocks, stats,
+  more): `render` shows `accessPage` until typed; changing one needs the
+  settings password. Block password hides the card and the block page
+  until typed. `Session` (typed passwords, areas, revealed blocks) ends on
+  screen off (`GuardService` receiver), app closed, "Lock KC9K now".
+  Tests: `PasswordsTest.kt`. Forgotten settings password: SPEC §7
+  (Android recovery) still open; debug builds `releaseForDebug`.
 - `Db.kt`: `Codec` (JSON via `Json.kt`, own reader/writer since org.json
   is stubbed in unit tests), `Codec.migrate` (0.2 prefs to blocks), `Db`:
   one file `kc9k.json` in device-protected storage, atomic write, cached.

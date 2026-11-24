@@ -66,6 +66,7 @@ class MainActivity : Activity() {
     /** Runs a command on the model, saves it, re-applies, and shows the refusal if any. */
     private fun run(op: (Commands, Model) -> Commands.Outcome) {
         val o = op(cmd(), model)
+        if (o.needsPassword) return askSettingsPassword { run(op) }
         Db.save(this, o.model)
         GuardService.resync(this)
         o.error?.let(::toast)
@@ -102,6 +103,11 @@ class MainActivity : Activity() {
         out.putString("page", page); out.putString("sub", sub); out.putString("tab", tab)
     }
 
+    override fun onDestroy() {
+        if (isFinishing) Session.end()
+        super.onDestroy()
+    }
+
     // Drawn on every return, so the state (places, update result) is current.
     override fun onResume() {
         super.onResume()
@@ -124,7 +130,9 @@ class MainActivity : Activity() {
     private fun render() {
         renderBar()
         val content = ui.column(16)
-        when (page) {
+        val area = when (page) { "overview", "blocks", "stats" -> page; else -> "more" }
+        val shut = listOf(Access.APP, area).firstOrNull { !model.access[it].isNullOrEmpty() && it !in Session.areas }
+        if (shut != null) accessPage(content, shut) else when (page) {
             "blocks" -> when {
                 sub?.startsWith(MODE) == true && model.mode(sub!!.removePrefix(MODE)) != null -> modePage(content, sub!!.removePrefix(MODE))
                 sub != null && model.block(sub!!) != null -> blockPage(content, sub!!)
@@ -322,6 +330,11 @@ class MainActivity : Activity() {
             Enforce.State.ENABLED -> Ui.Pill.ON; Enforce.State.INACTIVE -> Ui.Pill.OFF; else -> Ui.Pill.LIFTED }))
         if (c.locked(m, b)) pills.addView(ui.pill("locked", Ui.Pill.LOCKED))
         addView(pills)
+        if (hidden(b)) {
+            addView(ui.help("Contents hidden (block password)" + lockText(m, b).takeIf { it.isNotEmpty() }?.let { "\nLocked: $it" }.orEmpty()))
+            setOnClickListener { go("blocks", b.name) }
+            return@apply
+        }
         addView(ui.help(buildString {
             append(if (m.automation(b).continuous) "Continuous block" else "Automated block")
             if (b.mode.isNotEmpty()) append(" · in ${b.mode}")
@@ -345,6 +358,9 @@ class MainActivity : Activity() {
         return parts.joinToString(", ")
     }
 
+    /** Whether [b]'s contents stay hidden: a block password not typed this session. */
+    private fun hidden(b: Block) = b.viewPassword.isNotEmpty() && b.name !in Session.revealed
+
     private fun time(t: Long) = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(t))
 
     // The block editor: tabs Websites · Apps · Automation · Lock.
@@ -357,6 +373,16 @@ class MainActivity : Activity() {
         head.addView(ui.grow(ui.title(b.name)))
         root.addView(head)
         root.addView(blockCard(m, b, c).apply { setOnClickListener(null) })
+        if (hidden(b)) {
+            root.addView(ui.text("This block's contents are hidden by its block password."))
+            val input = passwordField("Block password")
+            root.addView(input)
+            root.addView(ui.button("Show") {
+                if (Passwords.check(b.viewPassword, input.text.toString())) { Session.revealed += b.name; render() }
+                else { input.setText(""); toast("Wrong password") }
+            })
+            return
+        }
         val tabs = ui.row()
         for ((key, label) in listOf("websites" to "Websites", "apps" to "Apps", "automation" to "Automation", "lock" to "Lock")) {
             tabs.addView(ui.grow(ui.button(label) { tab = key; render() }.apply {
@@ -570,6 +596,14 @@ class MainActivity : Activity() {
         })
         if (b.lock.chars > 0 || b.lock.passwordHash.isNotEmpty()) root.addView(ui.button("Unlock…") { startUnlock("block:${b.name}") })
         if (b.scheduleLock) root.addView(ui.button("Remove the schedule lock") { run { c2, m2 -> c2.removeScheduleLock(m2, b.name) } })
+        root.addView(ui.heading("Block password"))
+        root.addView(ui.help("Hides this block's contents until typed. Viewing only: it doesn't lock anything."))
+        val row = ui.row()
+        row.addView(ui.button(if (b.viewPassword.isEmpty()) "Set…" else "Change…") {
+            askNewPassword("Block password: ${b.name}") { h -> run { c2, m2 -> c2.setBlockPassword(m2, b.name, h) }; Session.revealed += b.name }
+        })
+        if (b.viewPassword.isNotEmpty()) row.addView(ui.button("Remove") { run { c2, m2 -> c2.setBlockPassword(m2, b.name, "") } })
+        root.addView(row)
     }
 
     // Statistics.
@@ -690,6 +724,7 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, on -> run { c, m -> c.setNoWeakening(m, on) } }
         })
         root.addView(ui.help("While any block is locked, no setting on this page can be weakened."))
+        passwordsSection(root)
 
         root.addView(ui.heading("Protections"))
         for (o in Option.entries) {
@@ -698,7 +733,8 @@ class MainActivity : Activity() {
                 isChecked = store.isOn(o)
                 setOnCheckedChangeListener { _, on ->
                     val err = options.set(o, on)
-                    if (err != null) { toast(err); render() } else apply()
+                    if (err == Commands.NEEDS_PASSWORD) askSettingsPassword { options.set(o, on)?.let(::toast); apply() }
+                    if (err != null) { if (err != Commands.NEEDS_PASSWORD) toast(err); render() } else apply()
                 }
             })
             if (options.locked(o)) root.addView(ui.help("  Locked until " + time(store.lockedUntil(o))))
@@ -749,7 +785,11 @@ class MainActivity : Activity() {
         catch (e: Exception) { Picker.done(this); toast("No file picker: ${e.message}") }
     }
 
-    private fun result(err: String?) { err?.let(::toast); render() }
+    /** Shows why a change was refused; one needing the settings password asks for it and runs [retry]. */
+    private fun result(err: String?, retry: (() -> String?)? = null) {
+        if (err == Commands.NEEDS_PASSWORD && retry != null) return askSettingsPassword { result(retry()) }
+        err?.let(::toast); render()
+    }
 
     // IronFox: the extension is installed by hand once, then checks in every few seconds.
     private fun ironFoxSection(root: LinearLayout) {
@@ -791,7 +831,7 @@ class MainActivity : Activity() {
             root.addView(CheckBox(this).apply {
                 text = b.label
                 isChecked = store.isOn(b)
-                setOnCheckedChangeListener { _, on -> result(if (on) web.turnOn(b, null) else web.turnOff(b)) }
+                setOnCheckedChangeListener { _, on -> result(if (on) web.turnOn(b, null) else web.turnOff(b)) { web.turnOff(b) } }
             })
             root.addView(ui.help(b.help))
             val l = web.lock(b.key)
@@ -871,6 +911,80 @@ class MainActivity : Activity() {
     }
 
     // Dialogs (bottom of the screen where Android allows; plain dialogs for now).
+    private fun passwordField(h: String) = EditText(this).apply {
+        hint = h; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; setSingleLine()
+    }
+
+    /** Asks for the settings password; once right it holds until the session ends (Session), then [then] runs. */
+    private fun askSettingsPassword(then: () -> Unit) {
+        val input = passwordField("Settings password")
+        AlertDialog.Builder(this).setTitle("Settings password").setMessage("Weakening needs the settings password.").setView(input)
+            .setPositiveButton("OK") { _, _ ->
+                if (Passwords.check(model.settingsPassword, input.text.toString())) { Session.settingsUnlocked = true; then() }
+                else { toast("Wrong password"); render() }
+            }
+            .setNegativeButton("Cancel") { _, _ -> render() }.show()
+    }
+
+    /** Asks for a new password twice; [done] gets its hash. */
+    private fun askNewPassword(title: String, done: (String) -> Unit) {
+        val a = passwordField("New password"); val b = passwordField("Again")
+        val col = ui.column(16).apply { addView(a); addView(b) }
+        AlertDialog.Builder(this).setTitle(title).setView(col)
+            .setPositiveButton("OK") { _, _ ->
+                val p = a.text.toString()
+                when {
+                    p.isEmpty() -> toast("Type a password")
+                    p != b.text.toString() -> toast("The two don't match")
+                    else -> done(Passwords.hash(p))
+                }
+            }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    /** The access password page for [area] (SPEC §3.11): nothing of it is shown until typed. */
+    private fun accessPage(root: LinearLayout, area: String) {
+        root.addView(ui.title("Locked"))
+        root.addView(ui.text("Type the access password for ${Access.LABELS[area]}."))
+        val input = passwordField("Access password")
+        root.addView(input)
+        root.addView(ui.button("Open") {
+            if (Passwords.check(model.access[area] ?: "", input.text.toString())) { Session.areas += area; render() }
+            else { input.setText(""); toast("Wrong password") }
+        })
+    }
+
+    private fun passwordsSection(root: LinearLayout) {
+        val m = model
+        root.addView(ui.heading("Passwords"))
+        root.addView(ui.help("Settings password: needed to weaken anything (switching off, removing, unlocking, " +
+            "protections off). Typed once, it holds until the screen turns off or you lock KC9K."))
+        if (m.settingsPassword.isEmpty()) root.addView(ui.button("Set a settings password…") {
+            askNewPassword("Settings password") { h -> run { c, mm -> c.setSettingsPassword(mm, h) } }
+        }) else {
+            val row = ui.row()
+            row.addView(ui.button("Change…") { askNewPassword("New settings password") { h -> run { c, mm -> c.setSettingsPassword(mm, h) } } })
+            row.addView(ui.button("Remove") { run { c, mm -> c.setSettingsPassword(mm, "") } })
+            root.addView(row)
+            root.addView(CheckBox(this).apply {
+                text = "Also needed to set locks"; isChecked = m.lockNeedsPassword
+                setOnCheckedChangeListener { _, on -> run { c, mm -> c.setLockNeedsPassword(mm, on) } }
+            })
+        }
+        root.addView(ui.help("Access passwords: needed to see an area. Changing or removing one needs the settings password."))
+        for (area in Access.AREAS) {
+            val row = ui.row()
+            val set = !m.access[area].isNullOrEmpty()
+            row.addView(ui.grow(ui.text(Access.LABELS[area] + if (set) ": password set" else "")))
+            row.addView(ui.button(if (set) "Change…" else "Set…") {
+                askNewPassword("Access password: ${Access.LABELS[area]}") { h -> run { c, mm -> c.setAccessPassword(mm, area, h) }; Session.areas += area }
+            })
+            if (set) row.addView(ui.button("Remove") { run { c, mm -> c.setAccessPassword(mm, area, "") } })
+            root.addView(row)
+        }
+        root.addView(ui.button("Lock KC9K now (ask the passwords again)") { Session.end(); go("overview") })
+    }
+
     private fun ask(title: String, hint: String, text: String = "", done: (String) -> Unit) {
         val input = EditText(this).apply { this.hint = hint; setSingleLine(); setText(text) }
         AlertDialog.Builder(this).setTitle(title).setView(input)
@@ -984,6 +1098,7 @@ class MainActivity : Activity() {
         val isBlock = key.startsWith("block:")
         val name = key.substringAfter(':')
         val refusal = if (isBlock) cmd().refuseUnlock(model, name) else web.refuseUnlock(name)
+        if (refusal == Commands.NEEDS_PASSWORD) return askSettingsPassword { startUnlock(key) }
         refusal?.let { return toast(it) }
         val l = if (isBlock) model.block(name)!!.lock else store.settingLock(name)
         val challenge = {
@@ -1006,7 +1121,7 @@ class MainActivity : Activity() {
 
     private fun unlocked(key: String) {
         val name = key.substringAfter(':')
-        if (key.startsWith("block:")) run { c, m -> c.unlocked(m, name) } else result(web.unlocked(name))
+        if (key.startsWith("block:")) run { c, m -> c.unlocked(m, name) } else result(web.unlocked(name)) { web.unlocked(name) }
     }
 
     private fun askOptionLock(o: Option) {

@@ -74,6 +74,10 @@ class GuardService : Service() {
     /** Whether trusted time was applied (Option.DATE_TIME effective), so a lock starting or ending re-applies it. */
     private var trustedTime: Boolean? = null
 
+    private val screenOff = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = Session.end()
+    }
+
     private val tick = object : Runnable {
         override fun run() {
             guardStep()
@@ -108,6 +112,8 @@ class GuardService : Service() {
         wifi = WifiWatcher(this)
         wifi.start { sync(force = false) }
         handler.post(tick)
+        // The passwords typed in KC9K (Session) hold until the screen turns off.
+        registerReceiver(screenOff, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF))
         running = true
         instance = this
     }
@@ -167,6 +173,7 @@ class GuardService : Service() {
         running = false
         instance = null
         handler.removeCallbacks(tick)
+        try { unregisterReceiver(screenOff) } catch (_: Exception) {}
         server.stop()
         places.stop()
         wifi.stop()

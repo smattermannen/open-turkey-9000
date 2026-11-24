@@ -62,6 +62,21 @@ class Store(private val context: Context) {
     fun whySettingsLocked(): String? = if (lifted) null
         else Commands(System.currentTimeMillis(), bootCount).whySettingsLocked(Db.model(context))
 
+    // Preferences (interface only, never locked).
+    var theme: String
+        get() = p.getString("pref.theme", Ui.SYSTEM) ?: Ui.SYSTEM
+        set(v) { p.edit().putString("pref.theme", v).commit() }
+    var darkness: Int
+        get() = p.getInt("pref.darkness", 0)
+        set(v) { p.edit().putInt("pref.darkness", v.coerceIn(0, 100)).commit() }
+    /** "24", "12" or "" (the phone's setting). */
+    var clock: String
+        get() = p.getString("pref.clock", "") ?: ""
+        set(v) { p.edit().putString("pref.clock", v).commit() }
+    var firstDay: Int
+        get() = p.getInt("pref.first_day", 0)
+        set(v) { p.edit().putInt("pref.first_day", v.coerceIn(0, 6)).commit() }
+
     /** Lifting: the browser settings' locks and the device protection's locks go. */
     fun clearLocks() {
         settingLockNames.forEach(::clearSettingLock)

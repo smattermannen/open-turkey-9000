@@ -103,6 +103,11 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   minute) plus paused IronFox into one `Enforcer.sync`.
 - `Store.kt`: device-protected prefs for protections, browser settings and
   their locks, `lifted`; the 0.2 keys (home, `web.*`) only for migration.
+- Preferences (`Store` `pref.*`, interface only): theme (phone's, light,
+  dark; `Ui(theme, darkness)` mixes dark grey to black, activity theme set
+  before `onCreate`, change = `recreate`), clock and first weekday into
+  `Fmt.kt` (pure, `FmtTest`: `clock`, `window`, `sorted`, `time`, `hm`;
+  `SettingLock.describe` uses it).
 - `MainActivity.kt` + `Ui.kt` (design layer: cards, pills): bottom bar
   Overview · Blocks · Statistics (not built) · More (Schedules, Places,
   Settings, Refused changes). Blocks: modes above blocks (`modeCard`,

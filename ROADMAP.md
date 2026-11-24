@@ -430,6 +430,8 @@ tests need the owner.
   storage is a JSON file, not SQLite; test cases not yet shared with Go
   (Kotlin-only `ModelTest`); Compose; rail on wide screens; browser
   settings still outside blocks; an emulator UI test in CI (C3).
+  Preferences (theme with darkness slider, clock, first weekday) built
+  2026-11-24.
 - [ ] `N2` Blocks, lists, phrase sets, social media settings, exceptions
   through the extension (IronFox, Firefox); VPN layer; apps (All apps,
   app exceptions, roles, certificates), app suspension and block page;

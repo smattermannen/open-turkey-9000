@@ -1,8 +1,6 @@
 package org.kc9k.android
 
 import java.security.SecureRandom
-import java.text.DateFormat
-import java.util.Date
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
@@ -36,7 +34,7 @@ data class SettingLock(
     /** "until 12 Nov 17:00, typing challenge (300 characters)", or "" when unlocked. */
     fun describe(now: Long, boot: Int): String {
         val parts = mutableListOf<String>()
-        if (timeLocked(now)) parts += "until " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(until))
+        if (timeLocked(now)) parts += "until " + Fmt.time(until)
         if (restartLocked(boot)) parts += "until the phone restarts"
         if (chars > 0) parts += "typing challenge ($chars characters)"
         if (passwordHash.isNotEmpty()) parts += "password"

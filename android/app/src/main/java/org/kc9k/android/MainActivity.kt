@@ -74,10 +74,12 @@ class MainActivity : Activity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         store = Store(this)
+        ui = Ui(this, store.theme, store.darkness)
+        setTheme(if (ui.dark) android.R.style.Theme_Material else android.R.style.Theme_Material_Light)
+        super.onCreate(savedInstanceState)
+        applyPrefs()
         web = WebSettings(store)
-        ui = Ui(this)
         savedInstanceState?.let {
             page = it.getString("page", page); sub = it.getString("sub"); tab = it.getString("tab", tab)
         }
@@ -197,9 +199,9 @@ class MainActivity : Activity() {
         val state = if (p.inside) "here" else "not here"
         if (p.wifi) return if (p.lastFix == 0L) "$state (no scan with networks yet; needs ${p.need} of ${p.networks.size})"
             else "$state (${p.lastSeen} of its ${p.networks.size} networks in range at " +
-                DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(p.lastFix)) + "; needs ${p.need})"
+                Fmt.hm(p.lastFix) + "; needs ${p.need})"
         if (p.lastFix == 0L) return "$state (no location fix yet)"
-        val t = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(p.lastFix))
+        val t = Fmt.hm(p.lastFix)
         return "$state (at $t ${p.lastDistance.toInt()} m from its centre, ±${p.lastAccuracy.toInt()} m; radius ${p.radius.toInt()} m)"
     }
 
@@ -359,7 +361,50 @@ class MainActivity : Activity() {
     /** Whether [b]'s contents stay hidden: a block password not typed this session. */
     private fun hidden(b: Block) = b.viewPassword.isNotEmpty() && b.name !in Session.revealed
 
-    private fun time(t: Long) = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(t))
+    private fun time(t: Long) = Fmt.time(t)
+
+    /** The clock and first weekday preferences into [Fmt]. */
+    private fun applyPrefs() {
+        Fmt.systemH24 = android.text.format.DateFormat.is24HourFormat(this)
+        Fmt.h24 = when (store.clock) { "24" -> true; "12" -> false; else -> null }
+        Fmt.firstDay = store.firstDay
+    }
+
+    /** Preferences (SPEC §4.10): theme with darkness slider, clock, first weekday. Interface only. */
+    private fun preferencesSection(root: LinearLayout) {
+        root.addView(ui.heading("Preferences"))
+        fun choice(title: String, options: List<Pair<String, String>>, cur: String, set: (String) -> Unit) {
+            root.addView(ui.text(title))
+            root.addView(RadioGroup(this).apply {
+                orientation = RadioGroup.HORIZONTAL
+                for ((key, label) in options) {
+                    val r = RadioButton(this@MainActivity).apply { id = View.generateViewId(); text = label }
+                    addView(r)
+                    if (key == cur) check(r.id)
+                    r.setOnCheckedChangeListener { _, on -> if (on && key != cur) set(key) }
+                }
+            })
+        }
+        choice("Theme", listOf(Ui.SYSTEM to "Phone's", Ui.LIGHT to "Light", Ui.DARK to "Dark"), store.theme) { store.theme = it; recreate() }
+        if (ui.dark) {
+            root.addView(ui.text("Darkness: dark grey to black"))
+            root.addView(android.widget.SeekBar(this).apply {
+                max = 100; progress = store.darkness
+                contentDescription = "Darkness"
+                setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(s: android.widget.SeekBar, v: Int, fromUser: Boolean) {}
+                    override fun onStartTrackingTouch(s: android.widget.SeekBar) {}
+                    override fun onStopTrackingTouch(s: android.widget.SeekBar) { store.darkness = s.progress; recreate() }
+                })
+            })
+        }
+        choice("Clock", listOf("" to "Phone's", "24" to "24-hour", "12" to "12-hour"), store.clock) { store.clock = it; applyPrefs(); render() }
+        root.addView(ui.button("First weekday: ${Fmt.DAY_NAMES[store.firstDay]}…") {
+            AlertDialog.Builder(this).setTitle("First weekday")
+                .setItems(Fmt.DAY_NAMES.toTypedArray()) { _, i -> store.firstDay = i; applyPrefs(); render() }
+                .setNegativeButton("Cancel", null).show()
+        })
+    }
 
     // The block editor: tabs Websites · Apps · Automation · Lock.
     private fun blockPage(root: LinearLayout, name: String) {
@@ -535,7 +580,7 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, id -> if ((id == on.id) != a.defaultEnabled) set(a.copy(defaultEnabled = id == on.id)) }
         })
         root.addView(ui.heading(if (a.defaultEnabled) "Allow windows" else "Block windows"))
-        for (w in a.windows) root.addView(removable(w.describe()) { set(a.copy(windows = a.windows - w)) })
+        for (w in Fmt.sorted(a.windows)) root.addView(removable(Fmt.window(w)) { set(a.copy(windows = a.windows - w)) })
         root.addView(ui.button("Add window…") { askWindows { ws -> set(a.copy(windows = a.windows + ws)) } })
         root.addView(ui.heading("Schedules"))
         if (m.schedules.isEmpty()) root.addView(ui.help("No schedules yet (More > Schedules)."))
@@ -643,7 +688,7 @@ class MainActivity : Activity() {
             addView(ui.text(s.name, 17f))
             val users = m.blocks.filter { s.name in it.automation.schedules }.map { it.name }
             if (users.isNotEmpty()) addView(ui.help("Used by " + users.joinToString(", ")))
-            for (w in s.windows) addView(removable(w.describe()) { run { c, mm -> c.setScheduleWindows(mm, s.name, s.windows - w) } })
+            for (w in Fmt.sorted(s.windows)) addView(removable(Fmt.window(w)) { run { c, mm -> c.setScheduleWindows(mm, s.name, s.windows - w) } })
             val row = ui.row()
             row.addView(ui.button("Add window…") { askWindows { ws -> run { c, mm -> c.setScheduleWindows(mm, s.name, s.windows + ws) } } })
             row.addView(ui.button("Delete") { confirm("Delete ${s.name}?", "Blocks using it lose its windows.") { run { c, mm -> c.deleteSchedule(mm, s.name) } } })
@@ -723,6 +768,7 @@ class MainActivity : Activity() {
         })
         root.addView(ui.help("While any block is locked, no setting on this page can be weakened."))
         passwordsSection(root)
+        preferencesSection(root)
 
         strictSection(root)
         tamperSection(root)
@@ -986,7 +1032,7 @@ class MainActivity : Activity() {
         val box = ui.column(16)
         val days = Window.DAYS.map { d -> CheckBox(this).apply { text = d } }
         val dayRow = ui.row()
-        days.forEach(dayRow::addView)
+        Fmt.days().forEach { dayRow.addView(days[it]) }
         box.addView(android.widget.HorizontalScrollView(this).apply { addView(dayRow) })
         val from = EditText(this).apply { hint = "From, HH:MM (5-minute steps)"; inputType = InputType.TYPE_CLASS_DATETIME }
         val to = EditText(this).apply { hint = "To, HH:MM (24:00 = midnight)"; inputType = InputType.TYPE_CLASS_DATETIME }

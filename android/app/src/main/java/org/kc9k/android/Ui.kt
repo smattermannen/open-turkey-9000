@@ -15,14 +15,30 @@ import android.widget.TextView
  * The design layer (SPEC §8.5): cards with 12 dp corners and a thin outline, status pills
  * (on green, locked red, lifted blue, warning amber), section titles. KC9K's own colours.
  */
-class Ui(private val c: Context) {
+class Ui(private val c: Context, theme: String = SYSTEM, darkness: Int = 0) {
+    companion object {
+        const val SYSTEM = "system"; const val LIGHT = "light"; const val DARK = "dark"
+
+        /** [t] of the way from [a] to [b]. */
+        fun mix(a: Int, b: Int, t: Float) = Color.rgb(
+            (Color.red(a) + (Color.red(b) - Color.red(a)) * t).toInt(),
+            (Color.green(a) + (Color.green(b) - Color.green(a)) * t).toInt(),
+            (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t).toInt())
+    }
+
     private val density = c.resources.displayMetrics.density
     fun dp(v: Int) = (v * density).toInt()
-    val dark = (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    val dark = when (theme) {
+        LIGHT -> false
+        DARK -> true
+        else -> (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    }
+    /** The darkness slider: 0 dark grey … 1 black. */
+    private val black = darkness.coerceIn(0, 100) / 100f
 
-    val outline = if (dark) Color.rgb(70, 70, 76) else Color.rgb(214, 214, 220)
-    val surface = if (dark) Color.rgb(30, 30, 34) else Color.WHITE
-    val background = if (dark) Color.rgb(18, 18, 20) else Color.rgb(246, 246, 248)
+    val outline = if (dark) mix(Color.rgb(70, 70, 76), Color.rgb(44, 44, 48), black) else Color.rgb(214, 214, 220)
+    val surface = if (dark) mix(Color.rgb(30, 30, 34), Color.rgb(10, 10, 10), black) else Color.WHITE
+    val background = if (dark) mix(Color.rgb(18, 18, 20), Color.BLACK, black) else Color.rgb(246, 246, 248)
     val muted = if (dark) Color.rgb(170, 170, 178) else Color.rgb(96, 96, 104)
     val accent = Color.rgb(196, 64, 32)
 

@@ -9,14 +9,13 @@ import android.os.Handler
 import android.os.Looper
 
 /**
- * Active while at home. Entering is immediate; leaving needs [LEAVE_MS] outside the radius;
- * no fix for [NO_FIX_MS] counts as home (fail closed). Wall-clock times are safe because
- * DISALLOW_CONFIG_DATE_TIME is always set.
+ * Active while at home, decided by [Area.step]: entering is immediate; leaving needs
+ * [Area.LEAVE_MS] with the accuracy circle outside; no fix changes nothing. Listens to GPS,
+ * network and fused fixes, takes the last known fix at start, and registers again each
+ * minute while no fix comes (a permission granted later, a provider switched on).
  */
 class GeofenceTrigger(context: Context) : Trigger, LocationListener {
     companion object {
-        const val LEAVE_MS = 10 * 60_000L
-        const val NO_FIX_MS = 15 * 60_000L
         private const val TICK_MS = 60_000L
         private const val INTERVAL_MS = 30_000L
     }
@@ -26,21 +25,36 @@ class GeofenceTrigger(context: Context) : Trigger, LocationListener {
     private val handler = Handler(Looper.getMainLooper())
     private var onChange: ((Boolean) -> Unit)? = null
     private val tick = object : Runnable {
-        override fun run() { evaluate(null); handler.postDelayed(this, TICK_MS) }
+        override fun run() {
+            if (System.currentTimeMillis() - store.lastFix > 2 * TICK_MS) listen()
+            evaluate(null); handler.postDelayed(this, TICK_MS)
+        }
     }
 
-    @SuppressLint("MissingPermission")
     override fun start(onChange: (active: Boolean) -> Unit) {
         this.onChange = onChange
-        if (store.lastFix == 0L) store.lastFix = System.currentTimeMillis()
-        for (prov in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
-            try {
-                lm.requestLocationUpdates(prov, INTERVAL_MS, 0f, this, Looper.getMainLooper())
-            } catch (_: Exception) { /* provider missing or permission not yet granted */ }
-        }
-        onChange(store.atHome)
+        store.migrateArea()
+        listen()
+        newest()?.let { evaluate(it) } ?: onChange(store.atHome)
         handler.post(tick)
     }
+
+    private val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, "fused")
+
+    @SuppressLint("MissingPermission")
+    private fun listen() {
+        try { lm.removeUpdates(this) } catch (_: Exception) {}
+        for (prov in providers) try {
+            if (lm.allProviders.contains(prov))
+                lm.requestLocationUpdates(prov, INTERVAL_MS, 0f, this, Looper.getMainLooper())
+        } catch (_: Exception) { /* permission not yet granted */ }
+    }
+
+    /** The newest last-known fix, if any is younger than ten minutes. */
+    @SuppressLint("MissingPermission")
+    private fun newest(): Location? = (providers + LocationManager.PASSIVE_PROVIDER).mapNotNull {
+        try { lm.getLastKnownLocation(it) } catch (_: Exception) { null }
+    }.filter { System.currentTimeMillis() - it.time < Area.LEAVE_MS }.maxByOrNull { it.time }
 
     override fun stop() {
         handler.removeCallbacks(tick)
@@ -53,26 +67,22 @@ class GeofenceTrigger(context: Context) : Trigger, LocationListener {
     @Synchronized
     private fun evaluate(fix: Location?) {
         val now = System.currentTimeMillis()
-        var home = store.atHome
         if (!store.homeSet) {
-            home = false
-        } else if (fix != null) {
+            store.atHome = false; store.outsideSince = 0
+            onChange?.invoke(false); return
+        }
+        var distance: Float? = null
+        if (fix != null) {
             store.lastFix = now
             val d = FloatArray(1)
             Location.distanceBetween(store.lat, store.lon, fix.latitude, fix.longitude, d)
+            distance = d[0]
             store.lastDistance = d[0]; store.lastAccuracy = fix.accuracy
-            // Only count as outside when even the accuracy circle is outside.
-            if (d[0] <= store.radiusM) {
-                home = true; store.outsideSince = 0
-            } else if (d[0] - fix.accuracy > store.radiusM) {
-                if (store.outsideSince == 0L) store.outsideSince = now
-                if (now - store.outsideSince >= LEAVE_MS) home = false
-            }
-        } else if (now - store.lastFix >= NO_FIX_MS) {
-            home = true; store.outsideSince = 0
         }
-        store.atHome = home
-        onChange?.invoke(home)
+        val s = Area.step(Area.State(store.atHome, store.outsideSince), now, store.radiusM,
+            distance, fix?.accuracy ?: 0f)
+        store.atHome = s.inside; store.outsideSince = s.outsideSince
+        onChange?.invoke(s.inside)
     }
 
     override fun onProviderEnabled(provider: String) {}

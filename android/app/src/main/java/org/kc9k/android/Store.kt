@@ -24,10 +24,18 @@ class Store(private val context: Context) {
         get() = p.getFloat("radius", 150f)
         set(v) { p.edit().putFloat("radius", v).commit() }
 
-    /** Last decided state; defaults to home so a fresh or wiped state fails closed. */
+    /** Last decided state (Area.step); not at home until a fix says so. */
     var atHome: Boolean
-        get() = p.getBoolean("atHome", true)
+        get() = p.getBoolean("atHome", false)
         set(v) { p.edit().putBoolean("atHome", v).commit() }
+    /**
+     * Before 0.3 a phone with no fix for 15 minutes counted as home and the state started at
+     * home, so it could stay "at home" forever; drop that once and decide from fixes.
+     */
+    fun migrateArea() {
+        if (p.getBoolean("areaV2", false)) return
+        p.edit().putBoolean("atHome", false).putLong("outsideSince", 0).putBoolean("areaV2", true).commit()
+    }
     var outsideSince: Long
         get() = p.getLong("outsideSince", 0)
         set(v) { p.edit().putLong("outsideSince", v).commit() }

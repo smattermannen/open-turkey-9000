@@ -83,8 +83,9 @@ its bypass prevention).
 
 ## 0. Fix what exists
 
-**Android is on hold until the Linux project is finished** (owner): its
-plan is SPEC §8, its items §3.1.
+**Android resumed** (owner, 2026-11-24: "take all functionality from the
+Windows app and put it in the Android app"): its plan is SPEC §8, its
+items §3.1.
 
 - [ ] `A17` **Flaky CI checks** (found 2026-11-23 while fixing A16).
   Linux and Android part done: `ci/match_test.js` (fastest of 3 rounds)
@@ -397,7 +398,10 @@ is built.
   master password stays with the owner).
 - [ ] `C2` Remove `ci/vm.sh`; on the laptop remove `/etc/sudoers.d/99-claude-test`.
 - [ ] `C3` **Android app like the computer's GUI** (R-GUI-3): every tap
-  scrolls the page back to the top; it must stay. Beyond that the app
+  scrolled the page back to the top; fixed 2026-11-24 (one kept
+  `ScrollView`, position restored, no focus jump), no automated UI test yet
+  (needs an emulator in CI). Also fixed: the phone counted as at home
+  without a GPS fix (15 minutes without one = home; `Area.kt`, `AreaTest`). Beyond that the app
   works as the computer's (same pages and behaviour). Done when: tapping
   on a long page keeps its scroll position (test), and pages match the
   GTK GUI's except where Android differs (`C4`).
@@ -406,7 +410,7 @@ is built.
 
 ### 3.1 The Android app (SPEC §8)
 
-Not started: waits until Linux is finished. Each phase tested on
+Started 2026-11-24 (owner). Each phase tested on
 GrapheneOS, stock Android (Pixel), One UI (Samsung) (R-ANDROID-1); phone
 tests need the owner.
 

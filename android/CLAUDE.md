@@ -1,6 +1,8 @@
 # KC9K Android
 
-**On hold until the Linux project is finished (owner).** No Android work until then.
+Owner, 2026-11-24: Android work resumed; the app gets the Windows app's
+functions (`ROADMAP.md` §3.1). No setting for Nokia mode on its own: it
+becomes an ordinary block.
 
 At home (GPS geofence) the phone is in **Nokia mode**: only default dialer
 and SMS app; everything else (Settings included) suspended; Wi-Fi off.
@@ -12,8 +14,11 @@ third-party libraries, no Play Services.
 - `Core.kt`: `Trigger`, `Policy` (blacklist/whitelist: `*.*`, `role:dialer`,
   `role:sms`, packages), `Enforcer`. `Policies.NOKIA` only (adds
   `com.android.settings`). `Plan.suspend` pure, tested.
-- `GeofenceTrigger.kt`: GPS + network. Enter immediate; leave after 10 min
-  with accuracy circle fully outside; no fix 15 min = home.
+- `Area.kt` (pure, `AreaTest`): enter at once on a fix inside; leave after
+  10 min with the accuracy circle fully outside; no fix changes nothing; no
+  fix yet = not inside. `GeofenceTrigger.kt` feeds it GPS, network and
+  fused fixes (last known at start; registers again each minute while no
+  fix comes).
 - `Options.kt`: protections as `Option` (on free; off needs unlocked and
   away; date/time stays on while any lock runs): block safe mode, USB
   debugging (default off; ignored in debug builds), users, location,
@@ -27,10 +32,12 @@ third-party libraries, no Play Services.
 - `GuardService.kt`: location foreground service; boot (locked) and 15-min
   AlarmManager watchdog; reapplies every minute; unions home targets and
   paused IronFox into one `Enforcer.sync`.
-- `Store.kt`: device-protected prefs; `atHome` defaults true;
+- `Store.kt`: device-protected prefs; `atHome` defaults false (once reset
+  by `migrateArea`: before 0.3 no fix for 15 min counted as home);
   `nokiaMode` = home set && at home && !lifted (the "loosening refused" test).
 - `SettingsActivity.kt`: home, options/locks, lists, updater, lift; no
-  loosening in Nokia mode.
+  loosening in Nokia mode. One `ScrollView` kept across renders (scroll
+  position restored, no focus jump).
 - Home map (`MapPickerActivity.kt`, `MapView.kt`, `MapMath.kt`; refused in
   Nokia mode): OSM tiles (User-Agent `KC9K-Android/<version>`), tap sets
   home, radius 50–2000 m.

@@ -32,6 +32,8 @@ class SettingsActivity : Activity() {
     private lateinit var store: Store
     private lateinit var options: Options
     private lateinit var web: WebSettings
+    /** Kept across renders so a tap doesn't scroll the page back to the top. */
+    private lateinit var scroll: ScrollView
     /** The lock a running typing challenge opens. */
     private var unlocking: String? = null
 
@@ -43,6 +45,13 @@ class SettingsActivity : Activity() {
         store = Store(this)
         options = Options(store)
         web = WebSettings(store)
+        scroll = ScrollView(this).apply {
+            id = android.R.id.content + 1
+            // The first text field would take focus and scroll itself into view on every render.
+            descendantFocusability = android.view.ViewGroup.FOCUS_BEFORE_DESCENDANTS
+            isFocusableInTouchMode = true
+        }
+        setContentView(scroll)
         GuardService.start(this)
     }
 
@@ -155,14 +164,23 @@ class SettingsActivity : Activity() {
             text = "DEBUG: lift everything and remove Device Owner"
             setOnClickListener { owner.releaseForDebug(); toast("Released"); render() }
         })
-        setContentView(ScrollView(this).apply { addView(root) })
+        show(root)
+    }
+
+    /** Swaps the page's content in place and keeps where the user had scrolled to. */
+    private fun show(root: LinearLayout) {
+        val y = scroll.scrollY
+        scroll.removeAllViews()
+        scroll.addView(root)
+        scroll.requestFocus()
+        scroll.post { scroll.scrollTo(0, y) }
     }
 
     private fun apply() { DeviceOwner(this).applyBaseline(); render() }
 
     /** "Last location 12:03: 230 m from home (±20 m)", or why there is none. */
     private fun locationLine(): String {
-        if (store.lastDistance < 0) return "No location fix yet (15 minutes without one counts as home)"
+        if (store.lastDistance < 0) return "No location fix yet (not at home until one says so)"
         val t = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(store.lastFix))
         return "Last location $t: ${store.lastDistance.toInt()} m from home (±${store.lastAccuracy.toInt()} m, " +
             "radius ${store.radiusM.toInt()} m)"

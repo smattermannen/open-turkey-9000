@@ -118,6 +118,12 @@ class Store(private val context: Context) {
     fun extensionRequired() = !lifted && (Enforce.plan(Db.model(context), System.currentTimeMillis()).web.isNotEmpty() ||
         isOn(BrowserSetting.SAFESEARCH) || isOn(BrowserSetting.WEB_ONLY))
 
-    /** Whether a block's time lock runs (the date/time protection stays on while one does). */
-    fun anyBlockTimeLock() = Db.model(context).blocks.any { it.lock.timeLocked(System.currentTimeMillis()) }
+    /**
+     * Whether anything is locked (a block, a browser setting, an option): trusted time then
+     * keeps date, time and time zone automatic and unchangeable (SPEC §8.3).
+     */
+    fun anythingLocked(now: Long = System.currentTimeMillis()): Boolean = !lifted && (
+        Enforce.anyLocked(Db.model(context), now, bootCount) ||
+            settingLockNames.any { settingLock(it).inForce(now, bootCount) } ||
+            Option.entries.any { lockedUntil(it) > now })
 }

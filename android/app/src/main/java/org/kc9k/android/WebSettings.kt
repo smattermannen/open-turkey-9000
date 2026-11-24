@@ -21,9 +21,8 @@ class WebSettings(private val store: Store, private val now: () -> Long = System
         }
     }
 
-    /** Adds locks (only ever stronger). Time locks need the date/time protection on. */
+    /** Adds locks (only ever stronger). */
     fun addLock(name: String, want: SettingLock): String? {
-        if (want.until != 0L && !store.isOn(Option.DATE_TIME)) return "Turn on \"${Option.DATE_TIME.label}\" first"
         val r = SettingLock.strengthen(store.settingLock(name), want, now(), boot)
         r.error?.let { return it }
         store.setSettingLock(name, r.lock)
@@ -33,8 +32,7 @@ class WebSettings(private val store: Store, private val now: () -> Long = System
     // Browser settings.
     fun turnOn(b: BrowserSetting, want: SettingLock?): String? {
         if (want != null) {
-            if (want.until != 0L && !store.isOn(Option.DATE_TIME)) return "Turn on \"${Option.DATE_TIME.label}\" first"
-            val r = SettingLock.strengthen(store.settingLock(b.key), want, now(), boot)
+                val r = SettingLock.strengthen(store.settingLock(b.key), want, now(), boot)
             r.error?.let { return it }
             store.setOn(b, true)
             store.setSettingLock(b.key, r.lock)
@@ -65,7 +63,4 @@ class WebSettings(private val store: Store, private val now: () -> Long = System
         BrowserSetting.entries.find { it.key == name }?.let { store.setOn(it, false) }
         return null
     }
-
-    /** Whether any setting's time lock runs (the date/time protection stays on while one does). */
-    fun anyTimeLock() = store.settingLockNames.any { store.settingLock(it).timeLocked(now()) }
 }

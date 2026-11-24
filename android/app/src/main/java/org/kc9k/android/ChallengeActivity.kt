@@ -19,8 +19,8 @@ import android.widget.Toast
 
 /**
  * The typing challenge that opens a challenge lock (see [Challenge]). Paste-resistant like
- * the desktop's: no copy or paste menus, an edit that adds more than a few characters at
- * once is undone, no keyboard suggestions, no screenshots, and leaving the screen ends the
+ * the desktop's: no copy or paste menus, only characters typed one by one count (any edit
+ * adding or replacing several at once is undone, [Challenge.typedOneByOne]), no keyboard suggestions, no screenshots, and leaving the screen ends the
  * attempt. Returns RESULT_OK when typed well enough.
  */
 class ChallengeActivity : Activity() {
@@ -68,11 +68,11 @@ class ChallengeActivity : Activity() {
                 override fun onTextChanged(s: CharSequence, start: Int, removed: Int, added: Int) {}
                 override fun afterTextChanged(s: Editable) {
                     if (undoing) return
-                    if (s.length - before.length > Challenge.PASTE_BURST) {
+                    if (!Challenge.typedOneByOne(before, s.toString())) {
                         undoing = true
                         s.replace(0, s.length, before)
                         undoing = false
-                        Toast.makeText(this@ChallengeActivity, "Pasting doesn't work here", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@ChallengeActivity, "Type one character at a time: pasting, swiping and suggestions don't count", Toast.LENGTH_SHORT).show()
                     }
                 }
             })

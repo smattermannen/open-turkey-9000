@@ -13,12 +13,19 @@ enum class Option(val key: String, val label: String, val restrictions: List<Str
     USERS("users", "Block adding/switching users",
         listOf(UserManager.DISALLOW_ADD_USER, UserManager.DISALLOW_USER_SWITCH), true),
     LOCATION("location", "Keep location on", listOf(UserManager.DISALLOW_CONFIG_LOCATION), true),
-    DATE_TIME("date_time", "Block date/time changes", listOf(UserManager.DISALLOW_CONFIG_DATE_TIME), true),
+    DATE_TIME("date_time", "Block date/time changes (always while anything is locked)",
+        listOf(UserManager.DISALLOW_CONFIG_DATE_TIME), true),
     FACTORY_RESET("factory_reset", "Block factory reset", listOf(UserManager.DISALLOW_FACTORY_RESET), true),
     UNINSTALL("uninstall", "Block uninstalling KC9K", emptyList(), true);
 
-    /** Debug builds never block debugging, so adb can always remove Device Owner. Lifted: nothing applies. */
-    fun effective(store: Store) = store.isOn(this) && !store.lifted && !(this == DEBUGGING && BuildConfig.DEBUG)
+    /**
+     * Debug builds never block debugging, so adb can always remove Device Owner. Lifted: nothing
+     * applies. Trusted time (SPEC §8.3): date/time stays automatic while anything is locked.
+     */
+    fun effective(store: Store) = effective(store.isOn(this), store.lifted, this == DATE_TIME && store.anythingLocked())
+
+    fun effective(on: Boolean, lifted: Boolean, trustedTime: Boolean) =
+        (on || trustedTime) && !lifted && !(this == DEBUGGING && BuildConfig.DEBUG)
 }
 
 class Options(private val store: Store) {
@@ -29,9 +36,6 @@ class Options(private val store: Store) {
         !store.isOn(o) -> null
         locked(o) -> "Locked"
         store.whySettingsLocked() != null -> store.whySettingsLocked()
-        // Time locks trust the clock, so the clock stays protected while any lock runs.
-        o == Option.DATE_TIME && (Option.entries.any { it != o && locked(it) } ||
-            WebSettings(store).anyTimeLock() || store.anyBlockTimeLock()) -> "Other options are locked"
         else -> null
     }
 
@@ -44,8 +48,6 @@ class Options(private val store: Store) {
     /** Locks only extend, and only an option that is on. */
     fun lock(o: Option, ms: Long): String? {
         if (!store.isOn(o)) return "Turn it on first"
-        // Locks trust the clock; without this they could be skipped by changing the time.
-        if (!store.isOn(Option.DATE_TIME)) return "Turn on \"${Option.DATE_TIME.label}\" first"
         val until = System.currentTimeMillis() + ms
         if (until > store.lockedUntil(o)) store.setLockedUntil(o, until)
         return null

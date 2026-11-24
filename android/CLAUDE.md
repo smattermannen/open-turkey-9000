@@ -36,7 +36,9 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   and fused fixes (last known at start; registers again each minute while
   no fix comes); `MapMath.distance` (haversine).
 - `Options.kt`: protections as `Option` (on free; off needs it unlocked and
-  no weakening; date/time stays on while any time lock runs): block safe
+  no weakening; trusted time: date/time and time zone automatic and
+  unchangeable while anything is locked, `Store.anythingLocked`, re-applied
+  by `GuardService` when that changes): block safe
   mode, USB debugging (default off; ignored in debug builds), users,
   location, date/time, factory reset, uninstall.
 - `DeviceOwner.kt`: `AdminReceiver`; `applyBaseline()`;
@@ -80,7 +82,9 @@ schedule lock). Device Owner. GrapheneOS/Pixel, Android 16, Kotlin, minSdk
   access = paused. SafeSearch: Google, Bing, DDG, Brave, Yahoo, SearXNG
   strict (POST too), YouTube Restricted; Startpage, Mojeek, Marginalia,
   Ecosia, Yandex blocked. `SettingLock`s (time, challenge 10–5000 chars at
-  98%, password, restart; strengthen only).
+  98%, password, restart; strengthen only). Challenge screen: only
+  characters typed one by one count (`Challenge.typedOneByOne`: paste,
+  swipe, suggestions undone, R-LOCK-5).
 
 Not built yet (`ROADMAP.md` §3.1): modes, layered locks and the other lock
 kinds, breaks/allowance/statistics, VPN layer, monk mode, Frozen Chicken,

@@ -373,7 +373,6 @@ class MainActivity : Activity() {
         if (c.locked(m, b)) root.addView(ui.pill("locked now", Ui.Pill.LOCKED))
         root.addView(ui.button("Lock…") {
             askLock("Lock ${b.name}", schedule = !b.automation.continuous) { want, sched ->
-                if (want.until != 0L && !store.isOn(Option.DATE_TIME)) return@askLock toast("Turn on \"${Option.DATE_TIME.label}\" first (More > Settings)")
                 run { c2, m2 -> c2.lock(m2, b.name, want, sched) }
             }
         })
@@ -489,6 +488,8 @@ class MainActivity : Activity() {
                 }
             })
             if (options.locked(o)) root.addView(ui.help("  Locked until " + time(store.lockedUntil(o))))
+            if (o == Option.DATE_TIME && !store.isOn(o) && o.effective(store))
+                root.addView(ui.help("  On while anything is locked: locks trust the phone's clock."))
             root.addView(ui.button("Lock \"${o.label}\"…") { askOptionLock(o) })
         }
 

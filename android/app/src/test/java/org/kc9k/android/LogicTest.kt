@@ -72,6 +72,23 @@ class ChallengeTest {
         assertFalse(Challenge.passed(c, ""))
         assertEquals(3, Challenge.editDistance("kitten", "sitting"))
     }
+
+    /** R-LOCK-5: only characters typed one by one count. */
+    @Test fun typedOneByOne() {
+        assertTrue(Challenge.typedOneByOne("", "a"))
+        assertTrue(Challenge.typedOneByOne("abc", "abcd"))
+        assertTrue(Challenge.typedOneByOne("abc", "aXbc"))
+        assertTrue(Challenge.typedOneByOne("abcd", "abc"))
+        assertTrue(Challenge.typedOneByOne("abcd", "ad"))
+        assertTrue(Challenge.typedOneByOne("abcd", ""))
+        assertFalse("paste", Challenge.typedOneByOne("abc", "abcde"))
+        assertFalse("paste", Challenge.typedOneByOne("", "xy"))
+        assertFalse("suggestion replaces a word", Challenge.typedOneByOne("ab cde", "ab cdf"))
+        assertFalse("suggestion lengthens a word", Challenge.typedOneByOne("ab cd", "ab cdef "))
+        assertFalse("swipe", Challenge.typedOneByOne("ab", "ab word"))
+        assertFalse("replaced by one longer", Challenge.typedOneByOne("abc", "xyzw"))
+        assertFalse("removed and changed", Challenge.typedOneByOne("abcd", "xd"))
+    }
 }
 
 class EntriesTest {

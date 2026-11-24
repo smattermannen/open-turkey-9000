@@ -48,8 +48,10 @@ class DeviceOwner(private val context: Context) {
         }
         if (Option.LOCATION.effective(store) && Build.VERSION.SDK_INT >= 30)
             dpm.setLocationEnabled(admin, true)
-        if (Option.DATE_TIME.effective(store) && Build.VERSION.SDK_INT >= 30)
+        if (Option.DATE_TIME.effective(store) && Build.VERSION.SDK_INT >= 30) {
             dpm.setAutoTimeEnabled(admin, true)
+            dpm.setAutoTimeZoneEnabled(admin, true)
+        }
         dpm.setUninstallBlocked(admin, context.packageName, Option.UNINSTALL.effective(store))
     }
 

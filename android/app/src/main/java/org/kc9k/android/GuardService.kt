@@ -70,10 +70,14 @@ class GuardService : Service() {
     private var lastTick = 0L
     private var lastSync = 0L
     private var synced: Pair<Set<String>, Boolean>? = null
+    /** Whether trusted time was applied (Option.DATE_TIME effective), so a lock starting or ending re-applies it. */
+    private var trustedTime: Boolean? = null
 
     private val tick = object : Runnable {
         override fun run() {
             guardStep()
+            val t = Option.DATE_TIME.effective(store)
+            if (t != trustedTime) { trustedTime = t; DeviceOwner(this@GuardService).applyBaseline() }
             sync(force = false)
             handler.postDelayed(this, TICK_MS)
         }

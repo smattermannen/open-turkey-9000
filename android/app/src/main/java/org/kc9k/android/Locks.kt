@@ -120,8 +120,6 @@ object Challenge {
     const val MIN_CHARS = 10
     const val MAX_CHARS = 5000
     const val MIN_ACCURACY = 0.98
-    /** The most characters one edit may add before it counts as a paste. */
-    const val PASTE_BURST = 4
 
     private const val LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     private const val DIGITS = "0123456789"
@@ -147,6 +145,25 @@ object Challenge {
     }
 
     fun passed(challenge: String, typed: String) = accuracy(challenge, typed) >= MIN_ACCURACY
+
+    /**
+     * Whether an edit of the typed text counts (R-LOCK-5, SPEC §8.3): only characters typed
+     * one by one. Allowed: one character inserted, or one run of characters deleted. Paste,
+     * swipe typing, a suggestion or any input of several characters at once is refused.
+     */
+    fun typedOneByOne(before: String, after: String): Boolean {
+        if (after.length == before.length + 1) {
+            var i = 0
+            while (i < before.length && before[i] == after[i]) i++
+            return before.substring(i) == after.substring(i + 1)
+        }
+        if (after.length < before.length) {
+            var i = 0
+            while (i < after.length && before[i] == after[i]) i++
+            return before.endsWith(after.substring(i))
+        }
+        return after == before
+    }
 
     fun editDistance(a: String, b: String): Int {
         var prev = IntArray(b.length + 1) { it }

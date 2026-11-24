@@ -106,6 +106,7 @@ var commandAreas = map[string][]string{
 	"access":        {areaSettings},
 	"account":       {areaSettings}, // §4.14: the Account page
 	"sync":          {areaSettings},
+	"partner":       {areaSettings}, // §4.15
 }
 
 // accessExempt are the commands that never ask: the daemon, a hotkey press

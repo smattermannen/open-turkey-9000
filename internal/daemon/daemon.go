@@ -33,6 +33,10 @@ func reportCrash(database *db.DB) {
 	}
 }
 
+// PartnerTick is the accountability partners' work (cli/partner.go sets
+// it; nil: none): run every 5 minutes and once at a clean stop.
+var PartnerTick func(database *db.DB, now time.Time)
+
 // Run starts the enforcement loop and blocks until a shutdown signal arrives.
 func Run() error {
 	stop := make(chan struct{})
@@ -118,6 +122,20 @@ func RunUntil(stop <-chan struct{}) error {
 		enforce.RunCircadian(database)
 	}()
 
+	// The accountability partners (§4.15): alerts, heartbeat, reports.
+	if PartnerTick != nil {
+		go func() {
+			defer reportCrash(database)
+			time.Sleep(time.Minute) // let the network come up after boot
+			PartnerTick(database, time.Now())
+			tick := time.NewTicker(5 * time.Minute)
+			defer tick.Stop()
+			for now := range tick.C {
+				PartnerTick(database, now)
+			}
+		}()
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -135,6 +153,15 @@ func RunUntil(stop <-chan struct{}) error {
 				log.Printf("daemon: error in enforcement cycle: %v", err)
 			}
 		case <-stop:
+			if PartnerTick != nil { // §4.15: KC9K stopped is an alert
+				_ = database.QueuePartnerAlert("Killer Chicken 9000 was stopped", "")
+				done := make(chan struct{})
+				go func() { PartnerTick(database, time.Now()); close(done) }()
+				select {
+				case <-done:
+				case <-time.After(10 * time.Second):
+				}
+			}
 			return nil
 		}
 	}

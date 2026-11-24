@@ -3,7 +3,8 @@
 # (imports and every other part's names are there; see notes/gui.md).
 
 class Window(_SchedulesPlacesPages, _DashboardPage, _BlocksPage, _ModesAndBlockView, _BlockActions,
-             _ClustersPage, _DevicePage, _StatsPage, _SettingsPages, _AccountPage, Gtk.ApplicationWindow):
+             _ClustersPage, _DevicePage, _StatsPage, _SettingsPages, _AccountPage, _PartnersPage,
+             Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="Killer Chicken 9000")
         self.set_default_size(980, 680)

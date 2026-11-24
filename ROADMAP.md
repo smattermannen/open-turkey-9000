@@ -45,7 +45,7 @@ its bypass prevention).
 | 2.10 | Cross-device sync (Supabase) | §4.14, §6 2026-11-23 | db-project | agent, owner |
 | 2.11 | One-click installer: `.deb` built (clean Mint VM left), MSI; Android open | §4.11, §6 2026-11-23, §7 | install, install-windows | agent, vm, owner |
 | 2.12 | Chrome, Edge, Firefox, Bing as supported browsers everywhere (Windows: waiting for 2.17 and Mozilla's signature) | §3.13, §4.10 | browsers, windows-layers | agent, owner, win-vm |
-| 2.13 | Accountability partner | §4.15 | — | agent |
+| 2.13 | Accountability partner: built on Linux; email provider, Windows GUI, Android | §4.15 | sync | agent, owner |
 | 2.14 | Website | §4.16 | — | agent, owner |
 | 2.15 | Search results from blacklisted addresses: the engines' real pages | R-PAGE-2 | extension | box |
 | 2.16 | "Show dark web pages while dark mode is on": real sites, LibreWolf's window and Chrome on the desktop | §4.10 | circadian, browsers | box |
@@ -201,7 +201,7 @@ Only rows not fully built.
 | §4.11 One-click installer, every platform | Partial | `2.11` |
 | §3.13 Chrome, Edge, Firefox, Bing on every platform | Partial | `2.12` |
 | §4.14 Cross-device sync | Partial | `2.10` |
-| §4.15 Accountability partner | Not built | `2.13` |
+| §4.15 Accountability partner | Partial | `2.13` |
 | §4.16 Website | Not built | `2.14` |
 
 ## 2. Next features (after §0)
@@ -346,9 +346,26 @@ Only rows not fully built.
     Web Store extensions by policy anyway).
   Done when: on the laptop Chrome and Edge get the extension by policy,
   pinned, the guard sees their check-ins (W2).
-- **2.13 Accountability partner** (L; §4.15): Not built. Needs the KC9K
-  account (`2.10`): invites, reports, alerts, partner holding password
-  locks and the settings password, unlock approval; no screenshots.
+- **2.13 Accountability partner** (L; §4.15): Partial. Built on Linux
+  (`notes/sync.md`): invites, daily/weekly reports, alerts (block off,
+  unlocked, deleted, locks ended early, bypass prevention, tamper and
+  workaround events, KC9K stopped or uninstalled, a heartbeat for "not
+  heard from"), partner-held password locks and settings password, unlock
+  requests approved or denied, removal as weakening; schema and functions
+  in `cloud/supabase/schema.sql` (checked in a real Postgres), the fake,
+  CLI, daemon, GTK. Email queued in the cloud, sent by `cmd/kc9k-mailer`.
+  To do, owner:
+  - [ ] An email provider (SMTP: the Supabase project's SMTP, or Resend,
+    Postmark, Brevo…) and where `kc9k-mailer` runs (a small server, or a
+    scheduled job) with the service role key; or ask the agent for a
+    Supabase Edge Function instead.
+  - [ ] The "not heard from" email itself: the partner sees the last
+    heartbeat in their KC9K now; an email after N hours of silence needs
+    a scheduled job on the cloud side (with the sender).
+  To do, agent:
+  - [ ] Windows GUI and Android partner pages (Windows: its session; Android
+    with N-items).
+  - [ ] Check against the real project once it exists (2.10's owner steps).
 - **2.14 Website** (M; §4.16): Not built. Content per §4.16; hosting the
   owner's choice when built.
 - **2.15 Search results from blacklisted addresses** (M; R-PAGE-2): Built
@@ -600,6 +617,20 @@ Still open from the report (built and in CI; what was built is in
 
 ## 5. Proposed, not agreed
 
+- DECIDED (By claude) 2026-11-23 (`2.13`): a partner holds a password KC9K
+  makes (24 random characters) and sends only to them; the user never sees
+  it. An approved request for a block's lock unlocks that lock with it,
+  never shown; an approved request for the settings password shows it to
+  the user once (as the partner telling it), and it is no longer held.
+  Removing a partner, fewer reports and alerts off are refused while
+  anything is locked (as tamper settings off); removing the holder of the
+  settings password is refused until it is given back (else a lockout).
+  Partners get alerts and reports through the cloud only while an
+  accepted partner exists; otherwise queued alerts are dropped unsent.
+  Defaults: weekly reports, alerts on. Email is sent from a queue in the
+  cloud by one sender (`cmd/kc9k-mailer`), never from devices. All partner
+  data goes through Postgres functions that check the caller; tables are
+  closed to direct access. Owner may overturn.
 - DECIDED (By claude) 2026-11-23 (`2.12`): on Linux Microsoft Edge takes
   the extension from the Chrome Web Store as on Windows (waits for 2.17's
   ID), not from KC9K's own `.crx` like Chrome and Chromium: one source for

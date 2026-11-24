@@ -45,6 +45,7 @@ class _AccountPage:
         self.sync_note.get_style_context().add_class("kc9k-note")
         box.pack_start(section("Your setup", self.sync_note, sync_row), False, False, 0)
         self.account_state = None
+        self.build_partner_sections(box)  # §4.15, win_partners.py
         self.show_account({"available": False}, loading=True)
         return scroll
 
@@ -64,6 +65,10 @@ class _AccountPage:
             if state is None:
                 state = {"available": False, "error": output or "No answer."}
             GLib.idle_add(self.show_account, state)
+            partners = inbox = None
+            if state.get("email"):
+                partners, inbox = self.read_partners(passwords)
+            GLib.idle_add(self.show_partners, partners, inbox)
 
         threading.Thread(target=work, daemon=True).start()
 

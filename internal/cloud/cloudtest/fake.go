@@ -16,6 +16,9 @@ import (
 
 const AnonKey = "anon-test-key"
 
+// ServiceKey stands for the project's service role key (the mail sender's).
+const ServiceKey = "service-test-key"
+
 // Server is a running fake.
 type Server struct {
 	*httptest.Server
@@ -28,6 +31,7 @@ type Server struct {
 	Requests []string // "METHOD path" of each request
 	// ExpiresIn is the life of new access tokens (seconds).
 	ExpiresIn int64
+	partnerStore
 }
 
 type user struct{ id, email, password string }
@@ -35,7 +39,8 @@ type user struct{ id, email, password string }
 // New starts a fake; Close it when done.
 func New() *Server {
 	s := &Server{users: map[string]user{}, access: map[string]string{}, refresh: map[string]string{},
-		objects: map[string][]byte{}, rows: map[string]json.RawMessage{}, ExpiresIn: 3600}
+		objects: map[string][]byte{}, rows: map[string]json.RawMessage{}, ExpiresIn: 3600,
+		partnerStore: newPartnerStore()}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.serve))
 	return s
 }
@@ -77,8 +82,17 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Requests = append(s.Requests, r.Method+" "+r.URL.Path)
-	if r.Header.Get("apikey") != AnonKey {
+	if k := r.Header.Get("apikey"); k != AnonKey && k != ServiceKey {
 		fail(w, 401, "Invalid API key")
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/rest/v1/rpc/outbox_") {
+		// The mail sender's functions: the service role key only.
+		if r.Header.Get("Authorization") != "Bearer "+ServiceKey {
+			fail(w, 403, "permission denied")
+			return
+		}
+		s.rpc(w, r, "")
 		return
 	}
 	var body map[string]string
@@ -156,6 +170,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_, _ = w.Write(data)
+	case strings.HasPrefix(r.URL.Path, "/rest/v1/rpc/"):
+		s.rpc(w, r, uid)
 	case r.URL.Path == "/rest/v1/setups":
 		if r.Method == "POST" {
 			var row map[string]any

@@ -64,6 +64,14 @@ func (d *DB) RecordEventFor(kind string, blocks []string, detail string) error {
 	if len(blocks) == 0 {
 		blocks = []string{""}
 	}
+	// §4.15: tamper events and blocked sites reached another way are
+	// alerts for the accountability partners.
+	switch kind {
+	case EventTamper:
+		_ = d.QueuePartnerAlert("Tamper protection", detail)
+	case EventWorkaround:
+		_ = d.QueuePartnerAlert("A blocked site was reached another way", detail)
+	}
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to log an event: %w", err)

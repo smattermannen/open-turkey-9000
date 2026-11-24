@@ -124,6 +124,61 @@ names = [b["name"] for b in json.loads(cli(B, "gui-state").stdout).get("blocks",
 check("work" in names and "old" not in names, "second device has the upload's setup: %s" % names)
 check(not [m for m in msgs if "rror" in m or "refused" in m], "no error said: %s" % msgs)
 
+# §4.15: the first device invites Anna, who accepts on her own (a third
+# device); a password lock only she knows; she approves the unlock request.
+choices = []
+win.choose = lambda title, detail, names: choices.pop(0) if choices else (names[0] if names else None)
+def clicked(box, label):
+    """Presses the first button labelled label in box's rows."""
+    for row in box.get_children():
+        for child in row.get_children() if isinstance(row, Gtk.Box) else []:
+            if isinstance(child, Gtk.Button) and child.get_label() == label:
+                child.clicked()
+                return True
+    return False
+def partners_shown(cond):
+    win.partners = None
+    account()
+    return pump(lambda: win.partners is not None and cond())
+
+C = wrapper("device-c")
+gui.CLI = A
+cli(A, "block", "create", "games"); cli(A, "block", "add-app", "games", "steam")
+partners_shown(lambda: True)
+check(win.partner_buttons["invite"].get_sensitive() and not win.partner_buttons["lock"].get_sensitive(),
+      "Invite on, Lock off without an accepted partner")
+asked[:] = ["anna@example.org"]; choices[:] = ["daily", "on"]
+win.partner_invite(None); done()
+check(partners_shown(lambda: [p["email"] for p in win.partners] == ["anna@example.org"]),
+      "anna invited: %s" % win.partners)
+gui.CLI = C
+asked[:] = ["anna@example.org", "secret456", "secret456"]
+win.account_signup(None); done()
+check(partners_shown(lambda: bool(win.partner_inbox.get("invitations"))), "anna sees the invitation")
+check(clicked(win.watch_rows, "Accept"), "an Accept button"); done()
+gui.CLI = A
+check(partners_shown(lambda: win.partners and win.partners[0].get("accepted")), "anna accepted: %s" % win.partners)
+def blocks_read():
+    pump(lambda: win.get_sensitive() and not win.busy)  # a refresh running may have read the state before
+    win.state = None; win.state_json = None; win.refresh()  # the window's own refresh, as every few seconds
+    return pump(lambda: win.state is not None and "games" in win.blocks)
+check(blocks_read(), "the window reads the new block")
+lock_asks.clear(); choices[:] = ["games", "anna@example.org"]
+win.partner_lock(None); done()
+check(lock_asks and "password lock only anna@example.org knows" in lock_asks[-1][0], "the lock is confirmed: %s" % lock_asks)
+check(partners_shown(lambda: win.partners[0].get("holds") == ["lock:games"]), "anna holds the lock: %s" % win.partners)
+choices[:] = ["lock of block 'games'"]; asked[:] = ["done for today"]
+win.partner_request(None); done()
+gui.CLI = C
+check(partners_shown(lambda: bool(win.partner_inbox.get("requests"))), "anna sees the request")
+check(clicked(win.watch_rows, "Approve"), "an Approve button"); done()
+gui.CLI = A
+msgs.clear()
+win.partner_check_requests(None); done()
+check(any("block 'games' unlocked" in m for m in msgs), "the approved request unlocks: %s" % msgs)
+extras = cli(A, "status", "games").stdout
+check("password" not in extras.lower() or "unlocked" in extras.lower(), "no password lock left: " + extras[:200])
+
 cloud.terminate()
 print("account page: " + ("all passed" if not fails else f"{len(fails)} failed"))
 sys.exit(1 if fails else 0)

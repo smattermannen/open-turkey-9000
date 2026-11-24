@@ -41,8 +41,10 @@ func Execute() {
 	if code, forwarded := forwardIfNeeded(); forwarded {
 		os.Exit(code)
 	}
-	if err := rootCmd.Execute(); err != nil {
+	c, err := rootCmd.ExecuteC()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	noteForPartners(c, c.Flags().Args()) // §4.15 alerts
 }

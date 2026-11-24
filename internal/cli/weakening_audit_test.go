@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/smattermannen/kc9k/internal/cloud"
 	"github.com/smattermannen/kc9k/internal/cloud/cloudtest"
 	"github.com/smattermannen/kc9k/internal/db"
 	"github.com/smattermannen/kc9k/internal/enforce"
@@ -69,9 +70,20 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustRun(t, "sync", "upload")
+	// §4.15: an accepted accountability partner, who gets reports and alerts.
+	mustRun(t, "partner", "invite", "p@example.org", "--reports", "daily")
+	partnerClient := cloud.New(cloudFake.URL, cloudtest.AnonKey)
+	partnerSession, _ := partnerClient.SignUp("p@example.org", "secret123")
+	if in, err := partnerClient.PartnerInbox(partnerSession); err != nil || len(in.Invitations) != 1 ||
+		partnerClient.AcceptInvitation(partnerSession, in.Invitations[0].ID) != nil {
+		t.Fatalf("the partner can't accept: %+v %v", in, err)
+	}
 
 	for _, args := range [][]string{
 		{"sync", "download", "--yes"},
+		{"partner", "remove", "p@example.org"},
+		{"partner", "set", "p@example.org", "--alerts=false"},
+		{"partner", "set", "p@example.org", "--reports", "weekly"},
 		{"stop", "b"},
 		{"toggle", "b"},
 		{"block", "remove", "b"},
@@ -152,6 +164,11 @@ func TestLockedBlockRefusesEveryWeakening(t *testing.T) {
 	after, err := d.GetBlock("b")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if ownerSession, err := cloud.New(cloudFake.URL, cloudtest.AnonKey).Login("audit@example.org", "secret123"); err == nil {
+		if ps, _ := partnerClient.Partners(ownerSession); len(ps) != 1 || ps[0].Reports != "daily" || !ps[0].Alerts {
+			t.Errorf("the partner was removed or gets less: %+v", ps)
+		}
 	}
 	if !after.Active || !after.Locked {
 		t.Fatalf("the block is no longer on and locked: %+v", after)
